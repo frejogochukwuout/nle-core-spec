@@ -6,6 +6,8 @@ Implementation specification for a browser-based NLE (Non-Linear Editor) — rou
 
 This repo contains the **architectural and implementation specification** for a browser-based NLE. It is NOT a code project — it's the design document set that an implementation team (human or AI) would build from.
 
+NOTE: ui-mock added under ./ui-mock
+
 ### Spec set
 
 | File | Subject |
