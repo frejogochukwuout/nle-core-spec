@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DaVinci Resolve — Edit Page UI Mock</title>
+<style>
+/* ============================================================
+   RESET / BASE
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+    height: 100%;
+    width: 100%;
+    background: #000;
+    color: #b3b3b3;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    overflow: hidden;
+}
+
+.mono { font-family: 'SF Mono', Menlo, Consolas, 'Courier New', monospace; }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: #141414; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3f3f3f; }
+
+button {
+    font-family: inherit;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: default;
+    -webkit-tap-highlight-color: transparent;
+}
+button:focus, input:focus, select:focus { outline: none; }
+select { font-family: inherit; cursor: default; }
+
+svg { display: block; flex-shrink: 0; }
+
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.grow { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.hairline-r { border-right: 1px solid #0a0a0a; }
+.hairline-b { border-bottom: 1px solid #0a0a0a; }
+.hairline-t { border-top: 1px solid #0a0a0a; }
+
+/* ============================================================
+   APP SHELL
+   ============================================================ */
+body.shell-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 2048px;
+    height: 1232px;
+    max-height: 96vh;
+    background: #1c1c1e;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+    overflow: hidden;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   TOP MENU BAR
+   ============================================================ */
+#menubar {
+    height: 30px;
+    min-height: 30px;
+    background: #19191b;
+    padding: 0 14px;
+    gap: 20px;
+    font-size: 12.5px;
+    font-weight: 500;
+    border-bottom: 1px solid #0a0a0a;
+}
+.menu-item {
+    color: #c2c2c4;
+    padding: 5px 7px;
+    border-radius: 4px;
+    cursor: default;
+    white-space: nowrap;
+}
+.menu-item:hover { color: #fff; background: #2e2e31; }
+.menu-item.brand { color: #e8e8e8; font-weight: 600; }
+.menubar-spacer { flex: 1 1 auto; }
+.menu-status-icons { display: flex; align-items: center; gap: 13px; color: #9a9a9c; margin-left: 8px; }
+.menu-status-icons .clock { font-family: inherit; font-size: 11.5px; color: #d4d4d6; white-space: nowrap; margin-left: 2px; }
+.gradient-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: conic-gradient(from 180deg, #7b5cff, #ff5c8a, #ffd24c, #5cffb0, #7b5cff);
+}
+
+/* ============================================================
+   SECONDARY TOOLBAR
+   ============================================================ */
+#toolbar2 {
+    height: 34px;
+    min-height: 34px;
+    background: #1c1c1e;
+    padding: 0 10px;
+    gap: 2px;
+    border-bottom: 1px solid #0a0a0a;
+}
+.window-dots { display: flex; align-items: center; gap: 7px; margin-right: 12px; }
+.wdot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.wdot.red { background: #fd5f4d; }
+.wdot.yellow { background: #fdbb2e; }
+.wdot.green { background: #28c83f; }
+
+.vsep { width: 1px; height: 18px; background: #2c2c2e; margin: 0 8px; flex-shrink: 0; }
+
+.toolbtn {
+    display: flex; align-items: center; gap: 6px;
+    color: #b8b8ba;
+    padding: 5px 9px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: background-color .08s ease, color .08s ease;
+    white-space: nowrap;
+}
+.toolbtn:hover { background: #2c2c2e; color: #f0f0f0; }
+.toolbtn.active { color: #fff; background: #34343a; }
+
+.icon-btn {
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px;
+    color: #9a9a9c;
+    transition: background-color .08s ease, color .08s ease;
+    flex-shrink: 0;
+}
+.icon-btn:hover { background: #2e2e30; color: #f2f2f2; }
+.icon-btn.toggled { color: #fff; background: #3a3a3e; }
+.icon-btn.boxed.toggled { background: transparent; border: 1.4px solid #e8e8e8; border-radius: 3px; }
+.icon-btn.disabled { opacity: .35; pointer-events: none; }
+
+.project-title-wrap {
+    flex: 1 1 auto;
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; min-width: 0; padding: 0 12px;
+}
+.project-title {
+    color: #e8e8e8; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 220px;
+}
+.project-sep { color: #5e5e60; }
+.project-status { color: #7a7a7c; }
+
+/* ============================================================
+   MAIN BODY: VIEWER + INSPECTOR
+   ============================================================ */
+#mainbody {
+    height: 460px;
+    min-height: 460px;
+    flex-shrink: 0;
+    display: flex;
+    border-bottom: 1px solid #0a0a0a;
+    overflow: hidden;
+}
+
+/* ---- Viewer panel ---- */
+#viewer-panel {
+    flex: 1 1 auto;
+    display: flex; flex-direction: column;
+    background: #1c1c1e;
+    border-right: 1px solid #0a0a0a;
+    min-width: 0; min-height: 0;
+}
+#viewer-toolbar {
+    height: 28px; min-height: 28px;
+    display: flex; align-items: center;
+    padding: 0 10px; gap: 10px;
+    border-bottom: 1px solid #0a0a0a;
+    font-size: 11px;
+    position: relative;
+}
+#zoom-select {
+    background: transparent;
+    color: #c8c8c8;
+    font-size: 11px;
+    border: none;
+    appearance: none;
+    padding-right: 14px;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: 10px;
+}
+#zoom-select option { background: #2a2a2c; color: #ddd; }
+.tc-chip {
+    font-size: 11.5px; color: #d6d6d6;
+    background: #141416; border: 1px solid #2c2c2e;
+    border-radius: 2px; padding: 2px 7px;
+}
+.dot-sm { width: 6px; height: 6px; border-radius: 50%; background: #555; flex-shrink: 0; }
+.viewer-center-label {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex; align-items: center; gap: 6px;
+    color: #d0d0d0; font-weight: 500; letter-spacing: .3px;
+}
+
+#video-frame {
+    flex: 1 1 auto;
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+}
+#video-frame .frame-inner {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    background: #050505;
+    min-height: 0; min-width: 0;
+}
+#video-frame svg { width: 100%; height: 100%; }
+
+.scrub-row {
+    height: 22px; min-height: 22px;
+    display: flex; align-items: center;
+    padding: 0 12px;
+    border-top: 1px solid #0a0a0a;
+}
+.scrub-row input[type=range] { width: 100%; }
+
+#transport-row {
+    height: 34px; min-height: 34px;
+    display: flex; align-items: center;
+    padding: 0 12px;
+    border-top: 1px solid #0a0a0a;
+    position: relative;
+    gap: 10px;
+}
+.transport-side { display: flex; align-items: center; gap: 8px; flex: 1 1 0; }
+.transport-side.right { justify-content: flex-end; }
+.transport-center {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex; align-items: center; gap: 12px;
+}
+.transport-btn {
+    display: flex; align-items: center; justify-content: center;
+    color: #c4c4c6;
+    width: 20px; height: 20px;
+    border-radius: 3px;
+}
+.transport-btn:hover { color: #fff; }
+.transport-btn.active-toggle { color: #fff; background: #303032; }
+
+/* ---- Inspector panel ---- */
+#inspector-panel {
+    width: 420px; min-width: 420px;
+    display: flex; flex-direction: column;
+    background: #1c1c1e;
+    min-height: 0;
+}
+#inspector-toolbar {
+    height: 28px; min-height: 28px;
+    display: flex; align-items: center;
+    padding: 0 12px; gap: 8px;
+    border-bottom: 1px solid #0a0a0a;
+}
+.pxy-chip {
+    display: flex; align-items: center; gap: 4px;
+    background: #5a2a86; color: #fff;
+    font-size: 9.5px; font-weight: 700;
+    padding: 2px 6px; border-radius: 2px;
+    letter-spacing: .3px;
+}
+#inspector-header {
+    height: 30px; min-height: 30px;
+    display: flex; align-items: center;
+    padding: 0 12px;
+    border-bottom: 1px solid #0a0a0a;
+}
+#inspector-header .title { color: #e2e2e2; font-weight: 600; font-size: 12.5px; }
+
+#inspector-tabs {
+    height: 64px; min-height: 64px;
+    display: flex; align-items: center; justify-content: space-around;
+    padding: 0 10px;
+    border-bottom: 1px solid #0a0a0a;
+    flex-shrink: 0;
+}
+.icon-tab {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    color: #777;
+    padding: 4px 6px;
+    border-radius: 4px;
+}
+.icon-tab span { font-size: 10px; color: inherit; }
+.icon-tab:hover { color: #ccc; }
+.icon-tab.active { color: #ddd; }
+
+#inspector-content {
+    flex: 1 1 auto;
+    display: flex; align-items: center; justify-content: center;
+    color: #5a5a5c;
+    font-size: 14px;
+    min-height: 0;
+}
+
+/* ============================================================
+   TIMELINE TOOLBAR
+   ============================================================ */
+#timeline-toolbar {
+    height: 34px; min-height: 34px;
+    display: flex; align-items: center;
+    padding: 0 10px; gap: 3px;
+    background: #1c1c1e;
+    border-bottom: 1px solid #0a0a0a;
+    flex-shrink: 0;
+}
+.tool-group { display: flex; align-items: center; gap: 2px; }
+.marker-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 6px;
+    border-radius: 4px;
+}
+.marker-btn:hover { background: #2c2c2e; }
+.tool-zoom-label {
+    font-size: 15px; color: #9a9a9c; width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center; border-radius: 3px;
+}
+.tool-zoom-label:hover { background: #2e2e30; color: #fff; }
+.dim-chip {
+    font-size: 10px; color: #888;
+    border: 1px solid #3a3a3c; border-radius: 2px;
+    padding: 1px 5px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   TIMELINE TABS
+   ============================================================ */
+#timeline-tabs {
+    height: 26px; min-height: 26px;
+    display: flex; align-items: stretch;
+    background: #161618;
+    border-bottom: 1px solid #0a0a0a;
+    overflow: hidden;
+    font-size: 11.5px;
+    flex-shrink: 0;
+}
+.tab-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 10px 0 14px;
+    color: #9c9c9e;
+    border-right: 1px solid #0c0c0d;
+    position: relative;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.tab-item:hover { background: #232325; }
+.tab-item.active { color: #fa6a4a; background: #1c1c1e; }
+.tab-item.active::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: #fa6a4a;
+}
+.tab-close {
+    width: 13px; height: 13px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 2px; color: #777; flex-shrink: 0;
+}
+.tab-item:hover .tab-close { color: #ccc; }
+.tab-close:hover { background: #3a3a3d; color: #fff; }
+.tab-add {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; color: #888; flex-shrink: 0;
+}
+.tab-add:hover { color: #fff; background: #232325; }
+
+/* ============================================================
+   TIMELINE AREA
+   ============================================================ */
+#timeline-area {
+    flex: 1 1 auto;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+    min-height: 0;
+}
+
+#track-headers {
+    width: 160px; min-width: 160px;
+    display: flex; flex-direction: column;
+    background: #202022;
+    border-right: 1px solid #0a0a0a;
+    overflow-y: auto;
+    z-index: 20;
+}
+.big-tc-readout {
+    height: 44px; min-height: 44px;
+    display: flex; align-items: center;
+    padding: 0 12px;
+    background: #1c1c1e;
+    border-bottom: 1px solid #0a0a0a;
+    flex-shrink: 0;
+}
+.big-tc-readout span {
+    color: #e8e8e8; font-size: 19px; font-weight: 600; letter-spacing: -0.3px;
+}
+.v1-header-row {
+    height: 34px; min-height: 34px;
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 7px;
+    background: #202022;
+    border-bottom: 1px solid #0a0a0a;
+    flex-shrink: 0;
+}
+.v1-badge {
+    border: 1px solid #fa6a4a; color: #fa6a4a;
+    border-radius: 2px; font-size: 10.5px; font-weight: 600;
+    width: 30px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.audio-header-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 7px;
+    border-bottom: 1px solid #0a0a0a;
+    flex-shrink: 0;
+}
+.track-id-label {
+    width: 26px; flex-shrink: 0;
+    color: #c4c4c6; font-weight: 600; font-size: 11px;
+    text-align: center;
+}
+.track-stretch { flex: 1 1 auto; min-width: 0; }
+.track-ratio {
+    font-size: 10.5px; color: #8c8c8e;
+    margin-left: auto; padding-right: 2px;
+    flex-shrink: 0;
+}
+
+.rsm-btn {
+    width: 18px; height: 18px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9.5px; font-weight: 700;
+    background: #2b2b2e; border: 1px solid #3a3a3d;
+    border-radius: 2px; color: #9b9b9d; line-height: 1;
+}
+.rsm-btn:hover { background: #34343a; }
+.rsm-btn.armed { background: #fa1024; border-color: #fa1024; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+.rsm-btn.solo-on { background: #e8c331; border-color: #e8c331; color: #1a1a1a; }
+.rsm-btn.mute-on { background: #d9913a; border-color: #d9913a; color: #1a1a1a; }
+
+#timeline-scroll {
+    flex: 1 1 auto;
+    position: relative;
+    overflow-x: auto; overflow-y: auto;
+    background: #1a1a1c;
+    min-height: 0;
+}
+#timeline-content { position: relative; width: 2600px; }
+
+#ruler {
+    height: 44px; min-height: 44px;
+    position: sticky; top: 0;
+    background: #1c1c1e;
+    border-bottom: 1px solid #0a0a0a;
+    z-index: 30;
+    position: relative;
+}
+.ruler-tick-bg {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 12px;
+    background-image: repeating-linear-gradient(to right, transparent, transparent 9px, #3c3c3e 9px, #3c3c3e 10px);
+    opacity: .55;
+}
+.ruler-label {
+    position: absolute; top: 6px;
+    color: #9a9a9c; font-size: 10.5px;
+}
+.ruler-tick {
+    position: absolute; bottom: 0; width: 1px; height: 12px; background: #666;
+}
+.ruler-extent-bar {
+    position: absolute; top: 0; left: 0; height: 3px; background: #2a8fb0;
+}
+
+#v1-track {
+    height: 34px; min-height: 34px;
+    border-bottom: 1px solid #0a0a0a;
+    position: relative;
+    background: #3a4f63;
+}
+.v1-clip {
+    position: absolute; top: 2px; bottom: 2px;
+    display: flex; align-items: center;
+    padding: 0 6px;
+    border-right: 1px solid #1b2733;
+    background: #3d5870;
+    border-radius: 2px;
+    overflow: hidden;
+}
+.v1-clip.big { background: #4a6b85; }
+.v1-clip span { color: #dce8ef; font-size: 10px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v1-clip .clip-icons {
+    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    display: flex; align-items: center; gap: 4px; opacity: .8;
+}
+
+.audio-lane {
+    position: relative;
+    border-bottom: 1px solid #0a0a0a;
+    background: #222224;
+    flex-shrink: 0;
+}
+.audio-clip {
+    position: absolute; top: 5px; bottom: 5px;
+    background: linear-gradient(to bottom, #4a9c69, #357a4d);
+    border: 1px solid #5cb87f;
+    border-radius: 2px;
+}
+.clip-block { cursor: default; }
+.clip-block.selected { outline: 1.5px solid #fff; outline-offset: 0; z-index: 5; }
+
+#playhead {
+    position: absolute; top: 0; bottom: 0;
+    z-index: 40; pointer-events: none;
+}
+.playhead-line {
+    position: absolute; top: 14px; bottom: 0; width: 1.5px;
+    background: #fa1024; transform: translateX(-50%);
+}
+.playhead-head {
+    position: absolute; top: 2px; transform: translateX(-50%);
+}
+
+#hscrollbar-row {
+    height: 14px; min-height: 14px;
+    background: #1c1c1e;
+    border-bottom: 1px solid #0a0a0a;
+    position: relative;
+    flex-shrink: 0;
+}
+.hscrollbar-track {
+    position: absolute; left: 160px; right: 0; top: 50%; transform: translateY(-50%);
+    height: 6px; margin: 0 8px;
+    background: #0e0e0f; border-radius: 4px;
+}
+.hscrollbar-thumb {
+    position: absolute; height: 100%; background: #444; border-radius: 4px;
+}
+
+/* ============================================================
+   BOTTOM APP DOCK
+   ============================================================ */
+#app-dock {
+    height: 42px; min-height: 42px;
+    display: flex; align-items: center;
+    background: #171719;
+    border-top: 1px solid #0a0a0a;
+    padding: 0 12px;
+    flex-shrink: 0;
+}
+.dock-brand { display: flex; align-items: center; gap: 8px; margin-right: 16px; flex-shrink: 0; }
+.dock-brand span { color: #cfcfcf; font-size: 12px; font-weight: 500; white-space: nowrap; }
+#page-dock { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; height: 100%; gap: 0; }
+.dock-tab {
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 18px; height: 100%;
+    color: #888; position: relative;
+}
+.dock-tab:hover { color: #ddd; }
+.dock-tab.active { color: #fff; }
+.dock-tab.active::after {
+    content: ''; position: absolute; left: 14px; right: 14px; bottom: 0; height: 2px; background: #fa6a4a;
+}
+.dock-right { display: flex; align-items: center; gap: 6px; margin-left: 16px; flex-shrink: 0; }
+
+/* ============================================================
+   RANGE SLIDERS
+   ============================================================ */
+input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    height: 14px;
+    flex-shrink: 0;
+}
+input[type=range]::-webkit-slider-runnable-track {
+    height: 3px;
+    background: #4a4a4c;
+    border-radius: 2px;
+}
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px; height: 11px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: #d8d8d8;
+    box-shadow: 0 0 2px rgba(0,0,0,.6);
+    border: none;
+}
+input[type=range].green-fill::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, #2fae46 0%, #2fae46 var(--fill,55%), #4a4a4c var(--fill,55%), #4a4a4c 100%);
+}
+input[type=range]::-moz-range-track { height: 3px; background: #4a4a4c; border-radius: 2px; }
+input[type=range]::-moz-range-thumb {
+    width: 11px; height: 11px; border-radius: 50%; background: #d8d8d8; border: none;
+}
+</style>
+</head>
+<body class="shell-wrap">
+
+<!-- ============================================================ -->
+<!-- MAIN APPLICATION WINDOW                                       -->
+<!-- ============================================================ -->
+<div id="app">
+
+    <!-- TOP MENU BAR -->
+    <div id="menubar" class="row">
+        <span class="menu-item brand">DaVinci Resolve</span>
+        <span class="menu-item">File</span>
+        <span class="menu-item">Edit</span>
+        <span class="menu-item">Trim</span>
+        <span class="menu-item">Timeline</span>
+        <span class="menu-item">Clip</span>
+        <span class="menu-item">Mark</span>
+        <span class="menu-item">View</span>
+        <span class="menu-item">Playback</span>
+        <span class="menu-item">Fusion</span>
+
+        <div class="menubar-spacer"></div>
+
+        <span class="menu-item">Color</span>
+        <span class="menu-item">Fairlight</span>
+        <span class="menu-item">Workspace</span>
+        <span class="menu-item">Help</span>
+    </div>
+
+    <!-- SECONDARY TOOLBAR -->
+    <div id="toolbar2" class="row">
+        <div class="window-dots">
+            <span class="wdot red"></span><span class="wdot yellow"></span><span class="wdot green"></span>
+        </div>
+
+        <button class="icon-btn" style="width:26px;height:24px;" title="Toggle Fullscreen Viewer">
+            <svg width="15" height="13" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 16 L9 4 L22 4"/><polyline points="2 16 22 16 22 4"/></svg>
+        </button>
+
+        <div class="vsep"></div>
+
+        <button class="toolbtn" id="btn-mediapool">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="14" rx="1.5"/><circle cx="8" cy="9.5" r="1.5" fill="currentColor" stroke="none"/><path d="M3 16l5-4 4 3 5-5 4 4"/></svg>
+            <span>Media Pool</span>
+        </button>
+        <button class="toolbtn" id="btn-effects">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M15 4l1.5 3 3 1.5-3 1.5L15 13l-1.5-3-3-1.5 3-1.5z"/><path d="M5 14l1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/></svg>
+            <span>Effects</span>
+        </button>
+        <button class="toolbtn" id="btn-index">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+            <span>Index</span>
+        </button>
+        <button class="toolbtn" id="btn-soundlib">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><line x1="4" y1="7" x2="16" y2="7"/><line x1="4" y1="12" x2="13" y2="12"/><line x1="4" y1="17" x2="16" y2="17"/><circle cx="19" cy="7" r="1.6" fill="currentColor" stroke="none"/><circle cx="16" cy="17" r="1.6" fill="currentColor" stroke="none"/></svg>
+            <span>Sound Library</span>
+        </button>
+
+        <div class="project-title-wrap">
+            <span class="project-title" title="Enriche...wedding & ceremony highlight reel">Enric...anice</span>
+            <span class="project-sep">|</span>
+            <span class="project-status">Edited</span>
+        </div>
+
+        <button class="toolbtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12"/><polyline points="7 8 12 3 17 8"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+            <span>Quick Export</span>
+        </button>
+        <button class="toolbtn" id="btn-mixer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><line x1="6" y1="4" x2="6" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="18" y1="4" x2="18" y2="20"/><rect x="4" y="13" width="4" height="3" fill="currentColor" stroke="none"/><rect x="10" y="7" width="4" height="3" fill="currentColor" stroke="none"/><rect x="16" y="10" width="4" height="3" fill="currentColor" stroke="none"/></svg>
+            <span>Mixer</span>
+        </button>
+        <button class="toolbtn" id="btn-metadata">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 17l6-9 4 5 3-3 5 7"/><circle cx="8" cy="6" r="2"/></svg>
+            <span>Metadata</span>
+        </button>
+        <button class="toolbtn active" id="btn-inspector">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4l7 16 2-7 7-2z"/></svg>
+            <span>Inspector</span>
+        </button>
+        <button class="icon-btn" style="width:22px;height:22px;margin-left:4px;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+    </div>
+
+    <!-- MAIN BODY -->
+    <div id="mainbody">
+
+        <!-- VIEWER PANEL -->
+        <div id="viewer-panel">
+            <div id="viewer-toolbar">
+                <select id="zoom-select">
+                    <option>60%</option>
+                    <option>50%</option>
+                    <option>100%</option>
+                    <option>Fit</option>
+                </select>
+                <span class="tc-chip mono" id="viewer-tc-current">00:01:16:19</span>
+                <span class="dot-sm"></span>
+
+                <div class="viewer-center-label">
+                    <span>CLIP</span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+            </div>
+
+            <div id="video-frame">
+                <div class="frame-inner">
+                    <svg viewBox="0 0 400 230" preserveAspectRatio="xMidYMid slice">
+                        <rect width="400" height="230" fill="#0a0a0c"/>
+                        <circle cx="232" cy="95" r="55" fill="#eef0e6" opacity="0.95"/>
+                        <circle cx="232" cy="95" r="90" fill="#cfe0e8" opacity="0.18"/>
+                        <path d="M120 230 L150 110 L210 100 L225 230 Z" fill="#e7dccd" opacity="0.9"/>
+                        <path d="M255 230 L260 95 L300 90 L320 230 Z" fill="#11151a" opacity="0.92"/>
+                        <path d="M320 230 L330 100 L370 110 L380 230 Z" fill="#171a1d" opacity="0.9"/>
+                        <g opacity="0.5">
+                            <circle cx="100" cy="40" r="2" fill="#fff"/>
+                            <circle cx="340" cy="35" r="1.5" fill="#fff"/>
+                            <circle cx="60" cy="70" r="1.2" fill="#fff"/>
+                            <circle cx="370" cy="60" r="1.6" fill="#fff"/>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="scrub-row">
+                <input type="range" min="0" max="100" value="14" id="scrub-bar">
+            </div>
+
+            <div id="transport-row">
+                <div class="transport-side">
+                    <button class="icon-btn" style="width:22px;height:20px;" title="Viewer mode">
+                        <svg width="15" height="12" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="1" y="1" width="22" height="16" rx="1.5"/></svg>
+                    </button>
+                    <button class="icon-btn" style="width:16px;height:20px;">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                </div>
+
+                <div class="transport-center">
+                    <button class="transport-btn" title="Loop range start"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="11 19 11 5 2 12"/><rect x="12" y="5" width="2.2" height="14"/></svg></button>
+                    <button class="transport-btn" title="Mark in"><svg width="11" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 5 19 19 5 12"/></svg></button>
+                    <button class="transport-btn" id="btn-play" title="Play/Pause">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" id="play-icon"><polygon points="6 4 20 12 6 20"/></svg>
+                    </button>
+                    <button class="transport-btn" title="Mark out"><svg width="11" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 5 5 19 19 12"/></svg></button>
+                    <button class="transport-btn" title="Loop range end"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 19 13 5 22 12"/><rect x="9.8" y="5" width="2.2" height="14"/></svg></button>
+                    <button class="transport-btn" id="btn-loop" title="Loop" style="margin-left:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2.1l4 4-4 4"/><path d="M3 12.6V12a9 9 0 019-9h9"/><path d="M7 21.9l-4-4 4-4"/><path d="M21 11.4v.6a9 9 0 01-9 9H3"/></svg></button>
+                </div>
+
+                <div class="transport-side right">
+                    <button class="icon-btn" style="width:20px;height:20px;" title="Mark clip"><svg width="13" height="11" viewBox="0 0 24 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="22" height="18" rx="2"/><line x1="7" y1="1" x2="7" y2="19"/><line x1="17" y1="1" x2="17" y2="19"/></svg></button>
+                    <button class="icon-btn" style="width:20px;height:20px;" title="Next edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="4 5 4 19 15 12"/><rect x="16" y="5" width="3" height="14"/></svg></button>
+                    <button class="icon-btn" style="width:20px;height:20px;" title="Go to start"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="20 5 20 19 9 12"/><rect x="5" y="5" width="3" height="14"/></svg></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- INSPECTOR PANEL -->
+        <div id="inspector-panel">
+            <div id="inspector-toolbar" class="row">
+                <span class="tc-chip mono">01:00:15:22</span>
+                <span class="pxy-chip">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="20" height="20" rx="2"/></svg>PXY
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                <button class="icon-btn" style="width:20px;height:20px;margin-left:2px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="url(#g1)" stroke-width="2">
+                        <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7b5cff"/><stop offset="50%" stop-color="#ff5c8a"/><stop offset="100%" stop-color="#ffd24c"/></linearGradient></defs>
+                        <path d="M21 12a9 9 0 11-2.6-6.4"/><polyline points="21 3 21 9 15 9"/>
+                    </svg>
+                </button>
+                <div class="grow"></div>
+                <button class="icon-btn" style="width:18px;height:18px;">
+                    <svg width="13" height="3" viewBox="0 0 24 6" fill="currentColor"><circle cx="3" cy="3" r="2.6"/><circle cx="12" cy="3" r="2.6"/><circle cx="21" cy="3" r="2.6"/></svg>
+                </button>
+            </div>
+
+            <div id="inspector-header" class="row">
+                <span class="title">Effect - Adjustment Clip</span>
+                <div class="grow"></div>
+                <button class="icon-btn" style="width:18px;height:18px;">
+                    <svg width="13" height="3" viewBox="0 0 24 6" fill="currentColor"><circle cx="3" cy="3" r="2.6"/><circle cx="12" cy="3" r="2.6"/><circle cx="21" cy="3" r="2.6"/></svg>
+                </button>
+            </div>
+
+            <div id="inspector-tabs">
+                <button class="icon-tab" data-tab="video">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="5" width="14" height="14" rx="1.5"/><polygon points="16 9 22 6 22 18 16 15" fill="currentColor" stroke="none"/></svg>
+                    <span>Video</span>
+                </button>
+                <button class="icon-tab" data-tab="audio">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                    <span>Audio</span>
+                </button>
+                <button class="icon-tab active" data-tab="effects">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 4l1.5 3 3 1.5-3 1.5L15 13l-1.5-3-3-1.5 3-1.5z"/><path d="M6 13l1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/></svg>
+                    <span>Effects</span>
+                </button>
+                <button class="icon-tab" data-tab="transition">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="5" width="9" height="14" rx="1"/><rect x="13" y="5" width="9" height="14" rx="1" opacity="0.5"/></svg>
+                    <span>Transition</span>
+                </button>
+                <button class="icon-tab" data-tab="image">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="1.5"/><circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" stroke="none"/><path d="M3 16l5-4 4 3 5-5 4 4"/></svg>
+                    <span>Image</span>
+                </button>
+                <button class="icon-tab" data-tab="file">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/></svg>
+                    <span>File</span>
+                </button>
+            </div>
+
+            <div id="inspector-content">Nothing to inspect</div>
+        </div>
+    </div>
+
+    <!-- TIMELINE TOOLBAR -->
+    <div id="timeline-toolbar" class="row">
+        <button class="icon-btn" style="width:26px;height:24px;" title="Timeline view options">
+            <svg width="16" height="13" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="1" width="22" height="4"/><rect x="1" y="7" width="22" height="4"/><rect x="1" y="13" width="22" height="4"/></svg>
+        </button>
+
+        <div class="grow"></div>
+
+        <div class="tool-group">
+            <button class="icon-btn toggled" style="width:26px;height:24px;" data-tool="arrow" title="Selection (A)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#fa6a4a" stroke="#fa6a4a" stroke-width="0.5"><polygon points="4 2 4 20 9 16 12 22 15 20.5 12 14.5 19 14"/></svg>
+            </button>
+            <button class="icon-btn" style="width:26px;height:24px;" data-tool="trim" title="Trim (T)">
+                <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 2 L9 10 L3 18"/><path d="M21 2 L15 10 L21 18"/></svg>
+            </button>
+            <button class="icon-btn" style="width:26px;height:24px;" data-tool="dyntrim" title="Dynamic Trim">
+                <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 2 L9 10 L3 18"/><path d="M21 2 L15 10 L21 18"/><line x1="9" y1="2" x2="9" y2="18" stroke-dasharray="2 2"/><line x1="15" y1="2" x2="15" y2="18" stroke-dasharray="2 2"/></svg>
+            </button>
+            <button class="icon-btn" style="width:26px;height:24px;" data-tool="blade" title="Blade (B)">
+                <svg width="13" height="15" viewBox="0 0 20 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="10" y1="1" x2="10" y2="23" stroke-dasharray="3 3"/><polygon points="6 1 14 1 10 7" fill="currentColor" stroke="none"/></svg>
+            </button>
+        </div>
+
+        <div class="vsep"></div>
+
+        <div class="tool-group">
+            <button class="icon-btn" style="width:26px;height:24px;" title="Sync bin">
+                <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="3" width="10" height="14" rx="1"/><rect x="13" y="3" width="10" height="14" rx="1"/></svg>
+            </button>
+            <button class="icon-btn" style="width:26px;height:24px;" title="Linked selection">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="2" width="9" height="9" rx="1.5"/><rect x="13" y="13" width="9" height="9" rx="1.5"/></svg>
+            </button>
+            <button class="icon-btn" style="width:26px;height:24px;" title="Auto sync audio/video">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/><path d="M11 9h2M11 15h2"/></svg>
+            </button>
+        </div>
+
+        <div class="vsep"></div>
+
+        <button class="icon-btn toggled" style="width:26px;height:24px;" id="btn-magnet" title="Snapping (N)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 4v8a6 6 0 0012 0V4"/><path d="M6 4h4M14 4h4"/></svg>
+        </button>
+        <button class="icon-btn" style="width:26px;height:24px;" id="btn-linklock" title="Link toggle">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 17H7a5 5 0 010-10h2"/><path d="M15 7h2a5 5 0 010 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </button>
+        <button class="icon-btn" style="width:26px;height:24px;" id="btn-track-lock" title="Lock all tracks">
+            <svg width="13" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg>
+        </button>
+
+        <div class="vsep"></div>
+
+        <div class="tool-group">
+            <button class="marker-btn" title="Marker presets">
+                <svg width="13" height="14" viewBox="0 0 18 20" fill="#3a9bf0" stroke="#3a9bf0" stroke-width="0.5"><path d="M1 1h16v18l-8-5-8 5z"/></svg>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <button class="marker-btn" title="Marker color">
+                <span style="width:13px;height:13px;border-radius:50%;background:#28a3e0;display:inline-block;"></span>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+        </div>
+
+        <div class="vsep"></div>
+
+        <div class="tool-group">
+            <button class="icon-btn" style="width:26px;height:24px;" title="Zoom to fit">
+                <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="22" height="16" rx="1.5" stroke-dasharray="2 2"/><circle cx="17" cy="14" r="4.2"/><line x1="20" y1="17" x2="23" y2="20"/></svg>
+            </button>
+            <button class="icon-btn" style="width:26px;height:24px;" title="Zoom to selection">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/><circle cx="11" cy="12" r="5"/><line x1="14.5" y1="15.5" x2="19" y2="20"/></svg>
+            </button>
+            <button class="icon-btn" style="width:26px;height:24px;" title="Timeline zoom">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            </button>
+        </div>
+
+        <button class="tool-zoom-label" id="zoom-minus">−</button>
+        <input type="range" min="0" max="100" value="42" style="width:90px;margin:0 4px;" id="zoom-slider">
+        <button class="tool-zoom-label" id="zoom-plus">+</button>
+
+        <div class="vsep"></div>
+
+        <button class="icon-btn" style="width:20px;height:20px;" title="Mute" id="btn-mute-master">
+            <svg width="14" height="13" viewBox="0 0 24 22" fill="currentColor"><path d="M3 8h4l6-6v18l-6-6H3z"/><path d="M16 8a4 4 0 010 6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+        </button>
+        <input type="range" min="0" max="100" value="78" class="green-fill" style="width:80px;margin:0 4px;--fill:78%;" id="vol-slider">
+        <span class="dim-chip">DIM</span>
+
+        <div class="vsep"></div>
+        <button class="icon-btn" style="width:22px;height:22px;" title="Toggle audio meters">
+            <svg width="13" height="14" viewBox="0 0 18 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="1" width="7" height="18" rx="1"/><rect x="10" y="1" width="7" height="18" rx="1"/></svg>
+        </button>
+    </div>
+
+    <!-- TIMELINE TABS -->
+    <div id="timeline-tabs"><!-- populated by JS --></div>
+
+    <!-- TIMELINE AREA -->
+    <div id="timeline-area">
+
+        <div id="track-headers">
+            <div class="big-tc-readout">
+                <span class="mono" id="timeline-tc">01:00:15:22</span>
+            </div>
+
+            <div class="v1-header-row">
+                <span class="v1-badge">V1</span>
+                <button class="icon-btn" style="width:20px;height:20px;"><svg width="11" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg></button>
+                <button class="icon-btn boxed toggled" style="width:20px;height:20px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 4 12 9 18"/><polyline points="15 6 20 12 15 18"/></svg></button>
+                <button class="icon-btn" style="width:20px;height:20px;"><svg width="13" height="11" viewBox="0 0 24 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="22" height="18" rx="2"/><circle cx="8" cy="10" r="2.4" fill="currentColor" stroke="none"/><path d="M2 16l5-4 4 3 5-5 5 4"/></svg></button>
+            </div>
+
+            <div id="audio-track-headers" class="col"></div>
+        </div>
+
+        <div id="timeline-scroll">
+            <div id="timeline-content">
+
+                <div id="ruler"><!-- generated by JS --></div>
+
+                <div id="v1-track"><!-- generated by JS --></div>
+
+                <div id="audio-tracks" class="col"></div>
+
+                <div id="playhead" style="left:120px;">
+                    <div class="playhead-line"></div>
+                    <div class="playhead-head">
+                        <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                            <path d="M1 0h11v6.2L6.5 11.5 1 6.2V0z" fill="#fa1024"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TIMELINE H-SCROLLBAR -->
+    <div id="hscrollbar-row">
+        <div class="hscrollbar-track">
+            <div class="hscrollbar-thumb" id="hscroll-thumb" style="left:8%;width:28%;"></div>
+        </div>
+    </div>
+
+    <!-- BOTTOM APP DOCK -->
+    <div id="app-dock" class="row">
+        <div class="dock-brand">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="11" stroke="#3a3a3c" stroke-width="1.5"/>
+                <circle cx="12" cy="12" r="4" fill="#5b8ee0"/>
+            </svg>
+            <span>DaVinci Resolve Studio 18.6</span>
+        </div>
+
+        <div id="page-dock">
+            <button class="dock-tab" data-page="media" title="Media">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="5" width="20" height="15" rx="1.5"/><circle cx="8" cy="11" r="2" fill="currentColor" stroke="none"/><path d="M2 18l6-5 5 4 4-4 5 4"/></svg>
+            </button>
+            <button class="dock-tab" data-page="cut" title="Cut">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><line x1="20" y1="4" x2="8" y2="16"/><line x1="8" y1="8" x2="20" y2="20"/></svg>
+            </button>
+            <button class="dock-tab active" data-page="edit" title="Edit">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/><circle cx="9" cy="7" r="1.8" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="11" cy="17" r="1.8" fill="currentColor" stroke="none"/></svg>
+            </button>
+            <button class="dock-tab" data-page="fusion" title="Fusion">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="9" r="4"/><circle cx="15" cy="15" r="4"/></svg>
+            </button>
+            <button class="dock-tab" data-page="color" title="Color">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="12" r="6"/><circle cx="16" cy="12" r="6"/></svg>
+            </button>
+            <button class="dock-tab" data-page="fairlight" title="Fairlight">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="4" y1="3" x2="4" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="20" y1="3" x2="20" y2="21"/><rect x="2" y="13" width="4" height="4" fill="currentColor" stroke="none"/><rect x="10" y="6" width="4" height="4" fill="currentColor" stroke="none"/><rect x="18" y="10" width="4" height="4" fill="currentColor" stroke="none"/></svg>
+            </button>
+            <button class="dock-tab" data-page="deliver" title="Deliver">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>
+            </button>
+        </div>
+
+        <div class="dock-right">
+            <button class="icon-btn" style="width:26px;height:26px;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg></button>
+            <button class="icon-btn" style="width:26px;height:26px;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a7.97 7.97 0 000-6l1.7-1.3-2-3.4-2 .8a8 8 0 00-2.1-1.2L14.6 2H9.4l-.4 2.1a8 8 0 00-2.1 1.2l-2-.8-2 3.4L4.6 9a7.97 7.97 0 000 6l-1.7 1.3 2 3.4 2-.8a8 8 0 002.1 1.2l.4 2.1h5.2l.4-2.1a8 8 0 002.1-1.2l2 .8 2-3.4z"/></svg></button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+/* ============================================================
+   DATA MODEL
+   ============================================================ */
+const state = {
+    playing: false,
+    loop: false,
+    activePage: "edit",
+    activeTool: "arrow",
+    snapping: true,
+    inspectorTab: "effects",
+    zoom: 42,
+    volume: 78,
+    activeTab: "CLIP",
+    masterMuted: false,
+};
+
+const audioTracks = [
+    { id: "A1" },
+    { id: "A2" },
+    { id: "A3" },
+    { id: "A4" },
+    { id: "A5" },
+];
+const AUDIO_ROW_HEIGHT = 34;
+
+const v1Clips = [
+    {label:"DI...", x:0,   w:40},
+    {label:"DIT...", x:42, w:40},
+    {label:"DI...", x:84, w:30},
+    {label:"DIT7309.MP4", x:118, w:170, big:true},
+    {label:"DIT0...", x:600, w:60},
+    {label:"DIT...", x:760, w:50},
+    {label:"DIT0...", x:840, w:60},
+    {label:"DIT...", x:920, w:50},
+    {label:"DIT...", x:1180, w:60},
+    {label:"DI...", x:1640, w:50},
+    {label:"DIT...", x:1740, w:60},
+    {label:"DIT...", x:2300, w:60},
+];
+
+const audioClips = {
+    A1: [ {x:0, w:480}, {x:530, w:130}, {x:1640, w:160} ],
+    A2: [ {x:650, w:130}, {x:830, w:110}, {x:1000, w:35}, {x:1170, w:170}, {x:1420, w:200} ],
+    A3: [ {x:330, w:90}, {x:870, w:90}, {x:1080, w:200}, {x:1500, w:90}, {x:1850, w:90} ],
+    A4: [ {x:0, w:2600} ],
+    A5: [],
+};
+
+/* ============================================================
+   RULER
+   ============================================================ */
+function buildRuler() {
+    const ruler = document.getElementById('ruler');
+    ruler.innerHTML = '';
+
+    const tickWrap = document.createElement('div');
+    tickWrap.className = 'ruler-tick-bg';
+    ruler.appendChild(tickWrap);
+
+    const bar = document.createElement('div');
+    bar.className = 'ruler-extent-bar';
+    bar.style.width = '1300px';
+    ruler.appendChild(bar);
+
+    const labels = [
+        {tc:"00:12:00", x:0},
+        {tc:"01:00:18:00", x:430},
+        {tc:"01:00:24:00", x:790},
+        {tc:"01:00:30:00", x:1150},
+        {tc:"01:00:36:00", x:1510},
+        {tc:"01:00:42:00", x:1870},
+        {tc:"01:00:48:00", x:2230},
+    ];
+    labels.forEach(l => {
+        const el = document.createElement('div');
+        el.className = 'ruler-label mono';
+        el.style.left = l.x + 'px';
+        el.textContent = l.tc;
+        ruler.appendChild(el);
+
+        const tick = document.createElement('div');
+        tick.className = 'ruler-tick';
+        tick.style.left = l.x + 'px';
+        ruler.appendChild(tick);
+    });
+}
+
+/* ============================================================
+   V1 VIDEO TRACK
+   ============================================================ */
+function buildV1Track() {
+    const track = document.getElementById('v1-track');
+    track.innerHTML = '';
+    v1Clips.forEach((c, i) => {
+        const clip = document.createElement('div');
+        clip.className = 'clip-block v1-clip' + (c.big ? ' big' : '');
+        clip.style.left = c.x + 'px';
+        clip.style.width = c.w + 'px';
+        clip.dataset.index = i;
+        clip.innerHTML = `<span>${c.label}</span>`;
+        if (c.big) {
+            const icons = document.createElement('div');
+            icons.className = 'clip-icons';
+            icons.innerHTML = `
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#cfe3ee" stroke-width="2"><path d="M3 17l4 4 12-12-4-4z"/></svg>
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="#cfe3ee"><polygon points="12 2 22 12 12 22 2 12"/></svg>
+            `;
+            clip.appendChild(icons);
+        }
+        clip.addEventListener('click', (e) => { e.stopPropagation(); selectClip(clip); });
+        track.appendChild(clip);
+    });
+}
+
+function selectClip(el) {
+    document.querySelectorAll('.clip-block.selected').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+}
+
+/* ============================================================
+   AUDIO TRACK HEADERS + LANES
+   ============================================================ */
+function buildAudioHeaders() {
+    const wrap = document.getElementById('audio-track-headers');
+    wrap.innerHTML = '';
+    audioTracks.forEach(t => {
+        const row = document.createElement('div');
+        row.className = 'audio-header-row';
+        row.style.height = AUDIO_ROW_HEIGHT + 'px';
+        row.style.minHeight = AUDIO_ROW_HEIGHT + 'px';
+        row.innerHTML = `
+            <span class="track-id-label">${t.id}</span>
+            <button class="icon-btn" style="width:18px;height:18px;" title="Lock track">
+                <svg width="10" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg>
+            </button>
+            <button class="icon-btn boxed toggled" style="width:18px;height:18px;" title="Waveform/clip view">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 4 12 9 18"/><polyline points="15 6 20 12 15 18"/></svg>
+            </button>
+            <button class="rsm-btn solo-btn" data-track="${t.id}" title="Solo">S</button>
+            <button class="rsm-btn mute-btn" data-track="${t.id}" title="Mute">M</button>
+            <span class="track-ratio mono">2.0</span>
+        `;
+        wrap.appendChild(row);
+    });
+}
+
+function buildAudioLanes() {
+    const wrap = document.getElementById('audio-tracks');
+    wrap.innerHTML = '';
+    audioTracks.forEach(t => {
+        const lane = document.createElement('div');
+        lane.className = 'audio-lane';
+        lane.style.height = AUDIO_ROW_HEIGHT + 'px';
+        lane.style.minHeight = AUDIO_ROW_HEIGHT + 'px';
+        lane.dataset.track = t.id;
+
+        (audioClips[t.id] || []).forEach((c, i) => {
+            const clip = document.createElement('div');
+            clip.className = 'clip-block audio-clip';
+            clip.style.left = c.x + 'px';
+            clip.style.width = c.w + 'px';
+            clip.dataset.track = t.id;
+            clip.dataset.index = i;
+            clip.addEventListener('click', (e) => { e.stopPropagation(); selectClip(clip); });
+            lane.appendChild(clip);
+        });
+        wrap.appendChild(lane);
+    });
+}
+
+/* ============================================================
+   RSM (Solo / Mute) BUTTON LOGIC
+   ============================================================ */
+function wireRSM() {
+    document.querySelectorAll('.solo-btn').forEach(btn => {
+        btn.addEventListener('click', () => btn.classList.toggle('solo-on'));
+    });
+    document.querySelectorAll('.mute-btn').forEach(btn => {
+        btn.addEventListener('click', () => btn.classList.toggle('mute-on'));
+    });
+}
+
+/* ============================================================
+   TIMELINE TABS
+   ============================================================ */
+const tabsData = ["CLIP","GRID 1","GRID 2","GRID 3","GRID 5","GRID 6","GRID 7","GRID 8","COMPILE","CLIP copy"];
+
+function buildTabs() {
+    const wrap = document.getElementById('timeline-tabs');
+    wrap.innerHTML = '';
+    tabsData.forEach(name => {
+        const tab = document.createElement('div');
+        tab.className = 'tab-item' + (name === state.activeTab ? ' active' : '');
+        tab.innerHTML = `
+            <button class="tab-close">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg>
+            </button>
+            <span>${name}</span>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+        `;
+        tab.addEventListener('click', (e) => {
+            if (e.target.closest('.tab-close')) return;
+            state.activeTab = name;
+            buildTabs();
+        });
+        tab.querySelector('.tab-close').addEventListener('click', (e) => {
+            e.stopPropagation();
+            tab.remove();
+        });
+        wrap.appendChild(tab);
+    });
+    const addBtn = document.createElement('button');
+    addBtn.className = 'tab-add';
+    addBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></svg>`;
+    wrap.appendChild(addBtn);
+}
+
+/* ============================================================
+   TOP TOOLBAR ACTIVE STATES
+   ============================================================ */
+function wireToolbar() {
+    ['btn-mediapool','btn-effects','btn-index','btn-soundlib','btn-mixer','btn-metadata','btn-inspector'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.addEventListener('click', () => btn.classList.toggle('active'));
+    });
+}
+
+function wireTools() {
+    document.querySelectorAll('[data-tool]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('toggled'));
+            btn.classList.add('toggled');
+            state.activeTool = btn.dataset.tool;
+        });
+    });
+}
+
+function wireMagnet() {
+    const magnet = document.getElementById('btn-magnet');
+    magnet.addEventListener('click', () => {
+        state.snapping = !state.snapping;
+        magnet.classList.toggle('toggled', state.snapping);
+    });
+    const link = document.getElementById('btn-linklock');
+    link.addEventListener('click', () => link.classList.toggle('toggled'));
+    const lock = document.getElementById('btn-track-lock');
+    lock.addEventListener('click', () => lock.classList.toggle('toggled'));
+}
+
+/* ============================================================
+   INSPECTOR TABS
+   ============================================================ */
+function wireInspectorTabs() {
+    const tabs = document.querySelectorAll('.icon-tab');
+    const content = document.getElementById('inspector-content');
+    const labelMap = {
+        video: "Nothing to inspect",
+        audio: "Nothing to inspect",
+        effects: "Nothing to inspect",
+        transition: "No transition selected",
+        image: "No image selected",
+        file: "No file info",
+    };
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            state.inspectorTab = tab.dataset.tab;
+            content.textContent = labelMap[state.inspectorTab] || "Nothing to inspect";
+        });
+    });
+}
+
+/* ============================================================
+   TRANSPORT CONTROLS
+   ============================================================ */
+function wireTransport() {
+    const playBtn = document.getElementById('btn-play');
+    const playIcon = document.getElementById('play-icon');
+    playBtn.addEventListener('click', () => {
+        state.playing = !state.playing;
+        playBtn.classList.toggle('active-toggle', state.playing);
+        if (state.playing) {
+            playIcon.innerHTML = `<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>`;
+        } else {
+            playIcon.innerHTML = `<polygon points="6 4 20 12 6 20"/>`;
+        }
+    });
+
+    const loopBtn = document.getElementById('btn-loop');
+    loopBtn.addEventListener('click', () => {
+        state.loop = !state.loop;
+        loopBtn.classList.toggle('active-toggle', state.loop);
+    });
+
+    const muteBtn = document.getElementById('btn-mute-master');
+    muteBtn.addEventListener('click', () => {
+        state.masterMuted = !state.masterMuted;
+        muteBtn.classList.toggle('toggled', state.masterMuted);
+    });
+}
+
+/* ============================================================
+   ZOOM + VOLUME SLIDERS
+   ============================================================ */
+function wireSliders() {
+    const zoomSlider = document.getElementById('zoom-slider');
+    function applyZoom() {
+        state.zoom = +zoomSlider.value;
+        const content = document.getElementById('timeline-content');
+        const newWidth = 1800 + (state.zoom * 12);
+        content.style.width = newWidth + 'px';
+    }
+    zoomSlider.addEventListener('input', applyZoom);
+    document.getElementById('zoom-minus').addEventListener('click', () => {
+        zoomSlider.value = Math.max(0, +zoomSlider.value - 10);
+        applyZoom();
+    });
+    document.getElementById('zoom-plus').addEventListener('click', () => {
+        zoomSlider.value = Math.min(100, +zoomSlider.value + 10);
+        applyZoom();
+    });
+
+    const volSlider = document.getElementById('vol-slider');
+    volSlider.addEventListener('input', (e) => {
+        state.volume = +e.target.value;
+        volSlider.style.setProperty('--fill', state.volume + '%');
+    });
+}
+
+/* ============================================================
+   PAGE DOCK SWITCHING
+   ============================================================ */
+function wirePageDock() {
+    document.querySelectorAll('.dock-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.dock-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            state.activePage = tab.dataset.page;
+        });
+    });
+}
+
+/* ============================================================
+   PLAYHEAD DRAG (click ruler/track area to move playhead)
+   ============================================================ */
+function wirePlayhead() {
+    const scrollArea = document.getElementById('timeline-scroll');
+    const playhead = document.getElementById('playhead');
+    scrollArea.addEventListener('click', (e) => {
+        if (e.target.closest('.clip-block')) return;
+        const rect = document.getElementById('timeline-content').getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        playhead.style.left = Math.max(0, x) + 'px';
+    });
+}
+
+/* ============================================================
+   HORIZONTAL SCROLLBAR <-> TIMELINE SCROLL SYNC
+   ============================================================ */
+function wireHScrollSync() {
+    const scrollArea = document.getElementById('timeline-scroll');
+    const content = document.getElementById('timeline-content');
+    const thumb = document.getElementById('hscroll-thumb');
+    const track = document.querySelector('.hscrollbar-track');
+
+    function updateThumb() {
+        const maxScroll = content.scrollWidth - scrollArea.clientWidth;
+        const trackWidth = track.clientWidth;
+        const visibleRatio = Math.min(1, scrollArea.clientWidth / content.scrollWidth);
+        const thumbWidth = Math.max(30, visibleRatio * trackWidth);
+        const scrollRatio = maxScroll > 0 ? scrollArea.scrollLeft / maxScroll : 0;
+        const thumbLeft = scrollRatio * (trackWidth - thumbWidth);
+        thumb.style.width = thumbWidth + 'px';
+        thumb.style.left = thumbLeft + 'px';
+    }
+    scrollArea.addEventListener('scroll', updateThumb);
+    window.addEventListener('resize', updateThumb);
+    updateThumb();
+
+    let dragging = false, dragStartX = 0, dragStartScroll = 0;
+    thumb.addEventListener('mousedown', (e) => {
+        dragging = true;
+        dragStartX = e.clientX;
+        dragStartScroll = scrollArea.scrollLeft;
+        e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const maxScroll = content.scrollWidth - scrollArea.clientWidth;
+        const trackWidth = track.clientWidth;
+        const deltaPx = e.clientX - dragStartX;
+        const deltaScroll = (deltaPx / trackWidth) * content.scrollWidth;
+        scrollArea.scrollLeft = Math.max(0, Math.min(maxScroll, dragStartScroll + deltaScroll));
+    });
+    window.addEventListener('mouseup', () => { dragging = false; });
+}
+
+/* ============================================================
+   LIVE CLOCK (purely cosmetic — keeps "Thu 4 Sept 23:23" feel but ticks)
+   ============================================================ */
+function wireClock() {
+    // Static display retained to match reference screenshot exactly.
+    // (Left intentionally static; uncomment below to make live.)
+    // const el = document.getElementById('clock-display');
+    // setInterval(() => { el.textContent = new Date().toLocaleString(); }, 1000);
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+function init() {
+    buildRuler();
+    buildV1Track();
+    buildAudioHeaders();
+    buildAudioLanes();
+    buildTabs();
+    wireRSM();
+    wireToolbar();
+    wireTools();
+    wireMagnet();
+    wireInspectorTabs();
+    wireTransport();
+    wireSliders();
+    wirePageDock();
+    wirePlayhead();
+    wireHScrollSync();
+    wireClock();
+}
+
+init();
+</script>
+
+</body>
+</html>
