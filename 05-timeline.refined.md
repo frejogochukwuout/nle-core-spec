@@ -1,11 +1,11 @@
 # 05 — Timeline: UI, Data Model, Virtualization, Interactions
 
 **Stream:** Timeline component (DOM-based, virtualized)
-**Status:** Refined by sub-agent scout (SCOUT-05) — open questions answered with source code references
+**Status:** Refined by sub-agent scout (SCOUT-05) — open questions answered with source code references. Round-8 amendments: §5.2 zoom reworded (implementable multiplier model), §8.3 drag contract notes + canonical move shape, §9 screen-space snap threshold, §14.5A magnetic zero-anchor (all absorbed from the opencut-timeline reference), §16.5 opencut-timeline code-reference table
 **Primary teacher:** OpenCut-classic DOM approach + FreeCut's per-element NLE op UI
 **Seed spec:** `05-timeline.md`
 **Refined spec:** `05-timeline.refined.md` (this file)
-**Reference repos audited:** `/tmp/opencut-classic` (archived MIT), `/tmp/freecut` (MIT); and a forthcoming **timeline-distill** repo (OpenCut-classic's timeline — components, controllers, placement, snapping — distilled minus the NLE core) will serve as the working code reference for this stream; see spec 19 §3.2.
+**Reference repos audited:** `/tmp/opencut-classic` (archived MIT), `/tmp/freecut` (MIT); **opencut-timeline** (github.com/bearachprema/opencut-timeline, landed Round 8) is the live executable code reference for this stream's algorithmic core (components pending its W4); see spec 19 §3.2 and §16.5 below.
 
 ---
 
@@ -137,9 +137,14 @@ const useTimelineViewStore = create<TimelineViewState>((set, get) => ({
 
 ### 5.2 Zoom levels
 
-- Min: 1 pixel per second (overview)
-- Max: 100 pixels per frame (frame-accurate)
-- Default: 50 pixels per second (rough cut zoom)
+**Round-8 rewording:** the previous formulation ("Min: 1 pixel per second … Max: 100 pixels per frame") is not implementable as a zoom-multiplier bound — a px/frame cap is a derived quantity, not a zoom input. The implementable model (verified executable in opencut-timeline `view/scale.ts` + `view/zoom-utils.ts`, our reference for this section — see §16.5):
+
+- Zoom is a multiplier over `BASE_TIMELINE_PIXELS_PER_SECOND = 50` (so default zoom = 1.0 ≡ the old "50 pixels per second" rough-cut default)
+- `TIMELINE_ZOOM_MIN` is **dynamic** — the zoom-to-fit level of the current scene (never larger than the content, so the whole timeline is always reachable); the static floor is `0.1` (5 px/s)
+- `TIMELINE_ZOOM_MAX = 100` (5,000 px/s ≈ 208 px/frame at 24 fps — comfortably frame-accurate; the old "100 px/frame" intent)
+- The zoom slider maps to the multiplier **exponentially** (`sliderToZoom`/`zoomToSlider`), not linearly, so perceived zoom speed is uniform across the range
+- Playhead-anchored zoom above a 15% slider position, scroll-anchored below (OpenCut-classic `zoom-controller.ts` pattern, §16.1)
+- Derived invariant: at any zoom, `pixelToTime(timeToPixel(t))` round-trips to the same frame after DPR snapping (`snapPixelToDeviceGrid`, §16.5) — this is the frame-accuracy guarantee the old formulation was reaching for
 
 ### 5.3 Time ↔ pixel conversion
 
@@ -337,20 +342,29 @@ function handleClick(e: React.MouseEvent, element: TimelineElement) {
 
 ### 8.3 Drag → move
 
-Implemented via the `useTimelineDrag` hook (adapted from FreeCut's `hooks/use-timeline-drag.ts`):
+**Round-8 contract notes (absorbed from opencut-timeline — §16.5, its three-round review cadence, and the M11/M16 boundary tests):**
+
+1. **Coordinate-space discipline.** `e.clientX/clientY` are viewport-space; any element-relative math (edge hit-zones, `elementRectLeft`) must use `getBoundingClientRect().left` of the track-content element, NOT the scroll-adjusted offset. Mixing the two spaces is the single most common drag-bug class (opencut-timeline SKILL gotcha #3; their controllers inject `elementRectLeft` as a config value for exactly this reason).
+2. **Drag threshold: `TIMELINE_DRAG_THRESHOLD_PX = 5`, strict `>`.** A pointer-down + up below the threshold is a **click** (selection), not a drag. The boundary is tested at exactly 5px (must NOT fire the drag) — the `>=` vs `>` distinction is load-bearing.
+3. **Mixed audio+video drag groups are rejected entirely** (no partial application — either the whole group moves or none), per spec 15 §4.3.3's cross-section constraint and opencut-timeline's group-level rejection (M16).
+4. **Main-track zero-anchor is enforced on the commit path** — a group-move that would push the sole main-track element off time 0 is clamped (see §14.5A); the raw `move` command remains the escape hatch for programmatic callers.
+
+The canonical wire shape for a same-track drag commit is `move` with `elementIds + delta + targetTrackId: null` (spec 15 §4.3.3); a cross-track group drag uses `movePlan: PlannedElementMove[]` — one entry per element, exact shape in spec 15. The commit below shows both:
 
 ```ts
 function useTimelineDrag() {
   const [dragState, setDragState] = useState<DragState | null>(null);
   
   function startDrag(e: React.MouseEvent, elementIds: string[]) {
-    const startX = e.clientX;
+    const startX = e.clientX;  // viewport space (contract note 1)
     const startTime = getSelectedStartTime();
     
-    setDragState({ elementIds, startX, startTime, currentDelta: 0 });
+    setDragState({ elementIds, startX, startTime, currentDelta: 0, threshold: 5 });
     
     const onMove = (e: MouseEvent) => {
       const delta = e.clientX - startX;
+      // Below threshold: still a pending click, not a drag (contract note 2)
+      if (Math.abs(delta) <= 5) return;
       const deltaTime = pixelToTime(delta, pixelsPerSecond);
       
       // Snap
@@ -362,19 +376,16 @@ function useTimelineDrag() {
     
     const onUp = () => {
       if (dragState && dragState.currentDelta !== 0) {
-        // Commit via the canonical dispatcher (spec 15 §4.2: the `move` command
-        // maps to engine.timeline.moveElements, which takes a `moves` array of
-        // {trackId, elementId, startTime, duration} — see spec 01 §3.3 / §14.5).
+        // Commit via the canonical dispatcher (spec 15 §4.3.3).
+        // Same-track group drag: delta form. engine.timeline.moveElements
+        // (the manager method, spec 01 §3.3) takes the movePlan internally —
+        // the WIRE command is the single-element family + delta below.
         engine.command.apply({
           type: 'move',
           params: {
-            moves: dragState.elementIds.map(id => ({
-              trackId: dragState.trackId,
-              elementId: id,
-              startTime: dragState.startTimes[id] + dragState.currentDelta,
-              duration: dragState.durations[id],
-            })),
-            createTracks: false,
+            elementIds: dragState.elementIds,
+            delta: dragState.currentDelta,
+            targetTrackId: null,  // same-track drag; cross-track → movePlan instead
           },
         });
       }
@@ -390,6 +401,8 @@ function useTimelineDrag() {
   return { dragState, startDrag };
 }
 ```
+
+> Preview during drag goes through `previewElements` (spec 06 §4.6) — no per-frame command pushes; exactly one `move` command lands on the undo stack per gesture (one undo step per user intent).
 
 ### 8.4 Trim handles
 
@@ -599,6 +612,8 @@ function computeSnapPoints(state: SceneState, viewport: TimeRange): SnapPoint[] 
 ```
 
 **FreeCut reference:** `src/features/timeline/utils/timeline-snap-utils.ts`, `src/features/timeline/utils/razor-snap.ts`, `src/features/timeline/preview/components/snap-guides.tsx`. ✅ All three read — see §14.6 and §14.12.
+
+**Round-8 threshold rule (canonical):** the snap threshold is defined in **screen space** and converted to time via zoom, exactly as OpenCut-classic and the opencut-timeline port do: `thresholdTicks = (SNAP_THRESHOLD_PX / pixelsPerSecond) × TICKS_PER_SECOND` with `SNAP_THRESHOLD_PX = 10` (`snapping/threshold.ts`, §14.6/§16.5). This replaces any fixed `SNAP_THRESHOLD_SECONDS` reading: a constant-time threshold would feel magnetic at high zoom and dead at low zoom. Closest snap point wins (`resolveTimelineSnap` linear scan, §14.6); ties resolve to the earlier time. Snap sources are lazy iterables recomputed per query, with the dragged element's own edges excluded.
 
 ---
 
@@ -824,6 +839,17 @@ A simple lookup table — `ELEMENT_TRACK_MAP` (`:3-11`): `audio→audio`, `text�
 
 **`apply.ts`** (`placement/apply.ts:17-76`): given a `PlacementResult`, either appends `elements` to the existing track's `elements` array (`:35-44`) or builds a fresh track via `buildPlacedAudioTrack`/`buildPlacedOverlayTrack` (`:114-158`) and splices it into `tracks.overlay` or `tracks.audio` at `insertIndex` (`:78-112`).
 
+### 14.5A Magnetic main-track zero-anchor (Round-8 amendment — opencut-timeline, VERIFIED LOAD-BEARING)
+
+> opencut-timeline's port of `placement/main-track.ts` (`enforceMainTrackStart`, `placement/index.ts:167-197`) surfaced semantics that §14.5 names but never spelled out. Three review rounds and the M5/M16 test fixtures encode them as load-bearing behavior; implementers without this section rediscover it painfully. **We adopt these as normative:**
+
+1. **Empty main track → first element lands at exactly ZERO.** Not "at the requested startTime" — the main track's left edge is pinned to time 0 whenever it was empty.
+2. **Requested start ≤ earliest existing element → clamped to ZERO.** Placing before the current earliest main-track element shifts the REQUEST, not the timeline — the main track never starts later than 0 and never has a leading gap.
+3. **A sole main-track element cannot group-move away from time 0.** The group-move clamp applies (the drag feels "magnetic" at position 0); the raw `move` command is the programmatic escape hatch when a caller genuinely wants a leading gap.
+4. **Insert startTime-override:** for multi-element inserts, the FIRST element lands at the requested start (subject to rules 1-2), later elements keep their relative offsets, and the batch may then be re-anchored as a whole. The element's own `startTime` field is IGNORED on the insert path — the command's placement parameters govern (this is the #2 hard-won gotcha in the reference repo's SKILL.md).
+
+Test anchors: opencut-timeline M5 (placement) + M16 (boundary cases); spec 17 §13 carries the T1 fixtures. Main-track insert results must surface the ACTUAL landed start time in `CommandResult.data` when the anchor clamps (pairs with spec 15 §6.3's `MAIN_TRACK_CONSTRAINT` error code for the rejected variant).
+
 ### 14.6 OpenCut-classic `timeline/snapping/` — snap point computation (VERIFIED)
 
 **Files (5 total, ~93 LOC of core logic):**
@@ -1022,7 +1048,7 @@ The function `drawTimelineRulerViewportCanvas({ canvas, scrollLeft, viewportWidt
 
 ## 16. Code References
 
-Every file path below is absolute within its reference repo. **OC** = `/tmp/opencut-classic/apps/web/src/timeline/`; **OC-App** = `/tmp/opencut-classic/apps/web/src/app/editor/[project_id]/`; **OC-Actions** = `/tmp/opencut-classic/apps/web/src/actions/`; **FC** = `/tmp/freecut/src/features/timeline/`. **TD** = forthcoming timeline-distill repo (OpenCut-classic timeline distilled; paths will mirror `timeline/{components,controllers,placement,snapping}`). Note: nle-engine has **no React timeline** (player harness only — see §16.4); it contributes the data model (timeline.ts) but zero UI code for this stream.
+Every file path below is absolute within its reference repo. **OC** = `/tmp/opencut-classic/apps/web/src/timeline/`; **OC-App** = `/tmp/opencut-classic/apps/web/src/app/editor/[project_id]/`; **OC-Actions** = `/tmp/opencut-classic/apps/web/src/actions/`; **FC** = `/tmp/freecut/src/features/timeline/`. **OT** = opencut-timeline (`github.com/bearachprema/opencut-timeline` @ `d3b2163`, root `src/lib/timeline/`) — the live clean-room OpenCut-classic timeline port, landed Round 8; it is the executable counterpart of OC's algorithmic core (types/placement/ripple/snapping/controllers/view-math) plus a spec-15-shaped headless API, but has **no React components yet** (W4 pending). Note: nle-engine has **no React timeline** (player harness only — see §16.4); it contributes the data model (timeline.ts) but zero UI code for this stream.
 
 ### 16.1 OpenCut-classic — timeline
 
@@ -1133,7 +1159,7 @@ Every file path below is absolute within its reference repo. **OC** = `/tmp/open
 
 ### 16.4. Code References — nle-engine (reference, NOT canon)
 
-> nle-engine (github.com/bearachprema/nle-engine) has **no React timeline** — no components, no controllers, no virtualization; the timeline UI is entirely greenfield (the forthcoming timeline-distill repo is the code reference; see spec 19 §3.2). The engine contributes the data model and ordering contracts below. Where engine code conflicts with this spec, **the spec wins**.
+> nle-engine (github.com/bearachprema/nle-engine) has **no React timeline** — no components, no controllers, no virtualization; the timeline UI is entirely greenfield (opencut-timeline §16.5 is the timeline-side code reference — algorithms + controllers, components pending W4; see spec 19 §3.2). The engine contributes the data model and ordering contracts below. Where engine code conflicts with this spec, **the spec wins**.
 
 | Spec section | Engine file:line | Verified quote | Status | Note |
 |---|---|---|---|---|
@@ -1147,6 +1173,39 @@ Every file path below is absolute within its reference repo. **OC** = `/tmp/open
 | §8.3/§8.4 drag coalescing | — | COULD-NOT-VERIFY (no previewElements/commitPreview) | ENGINE-GAP | spec 06 §4.6 pattern has no counterpart |
 | §6 virtualization / §5 zoom | — | COULD-NOT-VERIFY | SPEC-ONLY | Engine is frame-based; time↔px lives at UI boundary |
 | op entry surface | `src/lib/nle/headless/api.ts:804` | `case 'split': {` | CORRECTIVE | 19-op JSON-RPC vs spec 15 dispatcher; spec wins |
+
+### 16.5. Code References — opencut-timeline (reference, NOT canon)
+
+> opencut-timeline (`github.com/bearachprema/opencut-timeline` @ `d3b2163`, 11,375 LOC under `src/lib/timeline/`, 136/136 tests) is a clean-room OpenCut-classic timeline port **built with this spec set in hand** (its README cites Decision-2 types and the spec-15 wire protocol). It is the executable reference for this stream's algorithmic core — the OC tables in §16.1 describe the ORIGINAL; OT is the running, tested, framework-free version of the same algorithms. React components are its W4 (pending) — until they land, §4's component hierarchy stays greenfield with OC as shape-teacher. Where OT code conflicts with this spec, **the spec wins** (the known deltas: prefixed headless command names, 5-kind TrackType taxonomy, `TIMELINE_INDICATOR_LINE_WIDTH_PX = 2` vs OC's 3px — OC's verified read wins for the visual constant, pending an OT-side correction).
+
+| Spec section | OT file:line | Key exports / behavior | Status | Note |
+|---|---|---|---|---|
+| Data model / Decision 2 (spec 06 §4.7) | `types/index.ts:95-99` | `SceneTracks {overlay[], main singleton, audio[]}`; 5 track kinds `:43`; 7-way `TimelineElement` union `:155-162` | ALIGNED | The spec-06 §4.7 shape, executable; 5-kind taxonomy maps to our 3 at the wire boundary (Decision 11.5) |
+| §5.2 zoom | `view/scale.ts:6-8` | `BASE_TIMELINE_PIXELS_PER_SECOND = 50`; `TIMELINE_ZOOM_MIN = 0.1` (dynamic via `view/zoom-utils.ts:20-35`); `TIMELINE_ZOOM_MAX = 100` | ALIGNED | Reference for the Round-8 §5.2 rewording |
+| §5.3 px math | `view/pixel-utils.ts:43/:53/:63` | `timelineTimeToPixels`/`timelinePixelsToTime`/`snapPixelToDeviceGrid` (DPR) | ALIGNED | Frame-round-trip invariant tested in M10 |
+| §5.2 zoom slider | `view/zoom-utils.ts:72/:88` | `sliderToZoom`/`zoomToSlider` exponential mapping | ALIGNED | |
+| Ruler (§14.3 cross-ref) | `view/ruler-utils.ts:21-43` | `LABEL_FRAME_INTERVALS = [2,3,5,10,15]`, `TICK_FRAME_INTERVALS = [1,2,3,5,10,15]`, `MIN_LABEL_SPACING_PX = 120`, `MIN_TICK_SPACING_PX = 18`, `getRulerConfig` | ALIGNED | OpenCut's interval-selection tables — reference for our ruler; values not yet verified against OC source, treat as OT-normalized |
+| Layout constants | `view/layout.ts:10/:18/:22-24` | `TIMELINE_TRACK_HEIGHTS_PX`; `KEYFRAME_LANE_HEIGHT_PX = 20`; ruler 22px; labels column 112px | ALIGNED | Matches OC `components/layout.ts` (§16.1) |
+| §8.3 drag threshold | `controllers/element-interaction-controller.ts:51/:169` | `TIMELINE_DRAG_THRESHOLD_PX = 5`, strict `>` | ALIGNED | M16 boundary test at exactly 5px |
+| §8.3 coordinate space | `controllers/*` (config injection) | `elementRectLeft` = `getBoundingClientRect().left` injected per session | ALIGNED | Their SKILL gotcha #3 — now our §8.3 contract note 1 |
+| §8.3/8.4 interaction | `controllers/element-interaction-controller.ts:201` | `ElementInteractionController` (690 LOC): pending→dragging machine, drop-target, group-move commit | ALIGNED | Spec 05 §14.4's six-point pattern 1:1 (verified by scout R8-A §5.1) |
+| §8.4 trim | `controllers/resize-controller.ts:82` | `ResizeController` (302 LOC): trim-drag machine, preview/commit | ALIGNED | Consumes `ops/group-resize.ts` |
+| §8.6 playhead | `controllers/playhead-controller.ts:102` | `PlayheadController` (312 LOC): scrub machine | ALIGNED | Arrow-key frame-nudge NOT ported yet (W4/W5) — spec 16 §3.1 stays SPEC-ONLY |
+| §5.2 zoom gesture | `controllers/zoom-controller.ts:42` | `ZoomController` (157 LOC): Ctrl-wheel exponential, anchor scroll-keep | ALIGNED | |
+| §8.3 drop targeting | `controllers/drop-target.ts:109/:272` | `computeDropTarget`, `getDropLineY` | ALIGNED | Vertical drop resolution (new-track vs existing) |
+| §14.5 placement | `placement/index.ts:43-54/:381` | `PlacementStrategy` 5 variants; `resolveTrackPlacement`; reject-not-shift | ALIGNED | Faithful port of OC §14.5 |
+| §14.5A zero-anchor | `placement/index.ts:167-197` | `enforceMainTrackStart` — the magnetic clamp semantics | ALIGNED | **The source of §14.5A** (Round-8 absorption) |
+| Placement mutation | `placement/apply.ts:39-74/:117/:159` | `buildEmptyTrack` ×7 overloads; `updateTrackInSceneTracks`; `applyPlacement` | ALIGNED | |
+| §14.6 snapping | `snapping/index.ts:23/:48/:73` | 6 `SnapPointType`s; `getTimelineSnapThresholdInTicks` (10px/pps); `resolveTimelineSnap` closest-wins | ALIGNED | Keyframe source replaced by an open seam in OT — we snap to keyframes via that seam |
+| Ripple (spec 06 §5.4) | `ripple/index.ts:16/:40/:121` | `rippleShiftElements`/`applyRippleAdjustments`/`computeRippleAdjustments` | ALIGNED | The diff-based algorithm spec 06 adopts |
+| Split (spec 06 §5.1) | `ops/split.ts:28/:39` | `SplitElementsParams` (retainSide); `splitElementsOnTracks` | ALIGNED | Snap-once source spans |
+| Group resize (spec 06 §5.2) | `ops/group-resize.ts:41/:54/:147` | `ResizeSide`/`buildResizeMembers`/`computeGroupResize` | ALIGNED | Trim with snap-once + min 1 frame |
+| Group move (spec 15 §4.3.3) | `ops/group-move.ts:63/:69/:163/:258` | `PlannedTrackCreation`/`PlannedElementMove`/`buildMoveGroup`/`resolveGroupMove` | ALIGNED | `PlannedElementMove` matches spec 15 field-for-field (scout VC5) |
+| Core engine | `ops/timeline-core.ts:209` | `TimelineCore`: insert/move/trim/split/delete/rippleDelete/duplicate/updateElements + preview/commit + snapshot undo (986 LOC) | ALIGNED | Accidentally implements spec 15 §4.2's manager-method names 1:1 |
+| Waveform | `render/waveform.ts:26/:90/:118` | `computeWaveformPeaks`/`drawWaveform`/`measureDrawnColumnHeight` | ALIGNED | Feeds §7.2 |
+| Compositor seam | `render/placeholder-compositor.ts:116` | `setTracks()/renderFrame(t)` Canvas2D contract | ALIGNED | Decision 11.4's render seam — engine's WebGPU compositor plugs in behind |
+| Virtual media | `media/virtual-media.ts:39-135` | `TEST_COLORS`/`TEST_TONES_HZ`/`MediaRegistry`/`goertzelPower` | REFERENCE | Test-only media (mirrors nle-engine pattern) |
+| Headless API | `headless/api.ts:38-102` | 18-type prefixed union; `CommandResult {ok, code…}`; `apply`/`applyBatch` atomic | CORRECTIVE | C7 rename pass chartered (spec 19 §6): `timeline.*`/`track.*` prefixes are NOT spec-15 shape |
 
 ---
 

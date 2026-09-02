@@ -1,7 +1,7 @@
 # 14 — Implementation Phases: From Playback Spike to Full NLE
 
 **Stream:** Phased implementation plan
-**Status:** Plan for executing the spec (Round-7 update: engine-aware build strategy, §2.1)
+**Status:** Plan for executing the spec (Round-8 update: two-repo build strategy + Decision-11 seam, §2.1; P1 gains the seam adapter as a mandatory deliverable)
 **Spec file:** `14-implementation-phases.md`
 
 ---
@@ -14,25 +14,27 @@ Define the implementation order. Each phase produces a shippable milestone. Phas
 
 ## 2. Phase Overview
 
-### 2.1 Engine-aware build strategy (Round 7)
+### 2.1 Two-repo build strategy (Round 8 — supersedes the Round-7 engine-only strategy)
 
-The phases below were written greenfield; the nle-engine reference changes the *cost* of several of them without changing their order or exit criteria. Per `19-code-references.md` §8's per-subsystem ROI table:
+The phases below were written greenfield; TWO reference repos now change the *cost* of several of them without changing their order or exit criteria. Per `19-code-references.md` §8's per-subsystem ROI table and the Decision-11 seam (00-master §2):
 
-- **Graft from the engine** (adapt, don't adopt): NLE op algorithms (~20 families, spec 06's §10.4 maps them method-by-method), the transition planner/handles/27 presentations (spec 07 §6.1A now matches the engine's model by construction), the Clock + six sync plans (spec 03 §13E), the audio mixer/EQ/pitch worklet. All grafted code passes through the spec 15 command layer — the engine's class-API and JSON-RPC+$ref surface are the adapter target, never the architecture.
-- **Rebuild fresh**: media pipeline (mediabunny+WebCodecs), persistence (OPFS per spec 09), FCPXML export (spec 10 — pure JSON→XML, no engine dependency), workers (spec 02), UI shell + timeline UI (specs 18/05), and the three-tier test harness (spec 17).
-- **Correct, don't copy**: the 8-bit sRGB pipeline (re-texture per Decision 5), singleton texture returns (spec 04 §7.1's pool discipline), render-loop item-type skip (spec 07 §12.2).
+- **Graft from nle-engine** (adapt, don't adopt): NLE op algorithms (~20 families, spec 06's §10.4 maps them method-by-method — now the roll/slip/slide/rateStretch/insert-edit/sync-lock home), the transition planner/handles/27 presentations (spec 07 §6.1A now matches the engine's model by construction), the Clock + six sync plans (spec 03 §13E), the audio mixer/EQ/pitch worklet, **and the Wave-4B persistence semantics via the C8 adapter** (migrate/normalize/warnings kept; JSON shape re-targeted to spec 09 ProjectJSON). All grafted code passes through the spec 15 command layer — the engine's class-API and JSON-RPC+$ref surface are the adapter target, never the architecture.
+- **Graft from opencut-timeline** (the timeline-side algorithm home): placement/5-strategy/zero-anchor (spec 05 §14.5, spec 06 §5.9), the ripple-diff algorithm (spec 06 §5.4), split-snap-once (§5.1), group-move + `PlannedElementMove` (spec 15 §4.3.3 exact), the interaction controllers (spec 05 §14.4, verified 1:1), view math + ruler intervals (spec 05 §14.3), the transaction-discipline undo (absorbed as spec 15 §7.1A), and — after its C7 rename pass — the headless command layer's batch machinery. Its W4 React components (pending) become the timeline-UI reference for P1.
+- **Rebuild fresh**: media pipeline (mediabunny+WebCodecs), the ProjectJSON serializer shape (spec 09 — the C8 adapter is thin, but the shape is ours), FCPXML export (spec 10 — pure JSON→XML, no engine dependency), workers (spec 02), UI shell (spec 18 v1.1), and the three-tier test harness (spec 17) though both repos' suites re-tier into it (engine 144 tests → T1/T2; opencut-timeline M1-M16 → T1/T2/T3-equivalent).
+- **Correct, don't copy**: the 8-bit sRGB pipeline (re-texture per Decision 5; the engine's pool discipline is now landed and pixel-verified — only the format half remains), opencut-timeline's prefixed command names (C7 rename), the engine's persistence shape (C8).
+- **Mandatory seam work (new in P1)**: the `SceneTracks ↔ flat TimelineData` adapter (`src/scene/scene-adapter.ts`, Decision 11.1) is a P1 deliverable with its own tests (round-trip property: `flat(adapt(tracks))` preserves order/sections; `adapt(flat(state))` is idempotent).
 
-The engine's own wave plan (its `gaps/audit/MASTER.md`, waves 4A→7) is converging on the same contracts from its side; the seal round re-baselines (spec 19 §9). The timeline-distill repo, when it lands, becomes the timeline-UI code reference for P1.
+The engine's own wave plan (its `gaps/audit/MASTER.md`, waves 4D-B→7) and opencut-timeline's W4/W5/W6 are converging on the same contracts from their sides; the seal round re-baselines (spec 19 §9).
 
-| Phase | Goal | Exit Criteria | Estimated Effort | Engine contribution |
+| Phase | Goal | Exit Criteria | Estimated Effort | Reference contribution (engine / opencut-timeline) |
 |---|---|---|---|---|
-| **P0: Playback spike** | Single clip, play/pause/seek, frame-accurate | User loads a video file, plays it smoothly | 1-2 weeks | Reference only (clock + sync plans graft; media path rebuilt fresh — engine is procedural-only) |
-| **P1: Multi-track + UI shell** | Multiple clips on a timeline, basic composition, shell scaffold | User arranges 5 clips on 3 tracks, previews the composite | 2-3 weeks | Scene assembly + compositor structure graft (8-bit→10-bit corrective); shell is greenfield (spec 18) |
-| **P2: NLE ops** | Cut/split/trim/ripple/move/snap | User performs a real rough cut | 3-4 weeks | **Biggest accelerator** — ~20 op families already implemented + tested in the engine; wrap in the command layer |
-| **P3: Composition & transitions** | Crossfades, blends, basic effects | User adds transitions between clips | 2-3 weeks | 27 presentations + planner + handle math graft; effects pipeline math ports, pipeline discipline rebuilds |
-| **P4: Color grading** | Wheels, curves, LUT, qualifier, scopes (10-bit) | User grades a clip with 10-bit precision | 3-4 weeks | Effect algorithms port; 8-bit→10-bit + linear-light is the corrective core |
+| **P0: Playback spike** | Single clip, play/pause/seek, frame-accurate | User loads a video file, plays it smoothly | 1-2 weeks | Engine: clock + sync plans graft; media path rebuilt fresh (engine is procedural-only) |
+| **P1: Multi-track + UI shell + SEAM** | Multiple clips on a timeline, basic composition, shell scaffold, SceneTracks↔flat adapter | User arranges 5 clips on 3 tracks, previews the composite | 2-3 weeks | Engine: scene assembly + compositor structure (8-bit→10-bit corrective). opencut-timeline: placement/ripple/controllers/view math graft + **the seam adapter (Decision 11.1, mandatory)**; W4 components when landed; shell greenfield (spec 18 v1.1) |
+| **P2: NLE ops** | Cut/split/trim/ripple/move/snap | User performs a real rough cut | 3-4 weeks | **Biggest accelerator, split across both repos**: engine's ~20 op families (roll/slip/slide/rateStretch/sync-lock) + opencut-timeline's placement/ripple-diff/split-snap-once/group-move; both wrapped in the command layer (engine C2 adapter + ot C7 rename) |
+| **P3: Composition & transitions** | Crossfades, blends, basic effects | User adds transitions between clips | 2-3 weeks | Engine: 27 presentations + planner + handle math graft; effects pipeline math ports, pipeline discipline (now landed, pixel-verified) keeps |
+| **P4: Color grading** | Wheels, curves, LUT, qualifier, scopes (10-bit) | User grades a clip with 10-bit precision | 3-4 weeks | Engine: effect algorithms port; 8-bit→10-bit + linear-light is the corrective core |
 | **P5: FCPXML export** | Round-trip to FCP/DaVinci | User exports and re-opens in FCP | 1-2 weeks | Zero engine surface — build fresh from spec 10; can start early (no GPU/media dependency) |
-| **P6: Cloud render** (optional) | Headless Chrome + ffmpeg pipeline | User requests a ProRes master render | 2-3 weeks | Xvfb infra reference (engine Decision 12); pipeline itself fresh |
+| **P6: Cloud render** (optional) | Headless Chrome + ffmpeg pipeline | User requests a ProRes master render | 2-3 weeks | Engine: Xvfb infra reference (its Decision 12); pipeline itself fresh |
 
 **Total estimate: 14-21 weeks (3.5-5 months)** for a single developer. With 2-3 developers, can compress to ~2-3 months.
 
@@ -168,11 +170,17 @@ Multiple clips arranged on a multi-track timeline. Basic composition (overlay tr
 
 ### 4.3 Deliverables
 
-1. **SceneTracks type system:**
+1. **SceneTracks type system** (reference: opencut-timeline `src/lib/timeline/types/index.ts` — the Decision-2 adoptions, executable):
    - `SceneTracks = { overlay: OverlayTrack[]; main: VideoTrack; audio: AudioTrack[] }`
    - `Track`, `TimelineElement` types
 
-2. **Timeline UI (minimal — spec 05 + shell regions from spec 18):**
+2. **Seam adapter (Decision 11.1 — mandatory, blocks P1 exit):**
+   - `src/scene/scene-adapter.ts` — `SceneTracks ↔ flat TimelineData` both directions
+   - `toFlat(tracks)` preserves element order and section membership; `fromFlat(data)` rebuilds the singleton main + overlay/audio sections
+   - Property tests: `flat(fromFlat(data))` is identity (modulo stable ids); `fromFlat(toFlat(tracks))` is identity; unknown track kinds map to `overlay` with a warning (C8/Decision-11 taxonomy rule)
+   - Consumed by: the compositor (flat render tasks), the persistence layer (spec 09 ProjectJSON), the FCPXML exporter (spec 10) — none of them ever see SceneTracks directly
+
+3. **Timeline UI (minimal — spec 05 + shell regions from spec 18):**
    - Track headers (with mute/solo/lock buttons — spec 18 §4.7's 160px column)
    - Track bodies (DOM-based, with virtualization)
    - Clip rendering (color rectangles with name labels — no filmstrip yet)
@@ -181,29 +189,30 @@ Multiple clips arranged on a multi-track timeline. Basic composition (overlay tr
    - Zoom (pixels per second slider)
    - MediaPool + Inspector panels mount (spec 18 §4.2/§4.4 — 4 inspector tabs, model-backed params only)
 
-3. **Composition runtime:**
+4. **Composition runtime:**
    - `buildFrameDescriptor(state, frame)` — basic version
    - Layer ordering (main → overlays → audio)
    - Active element resolution
    - Transform application (center + size + rotation + flip — quad-only)
 
-4. **Renderer extensions:**
+5. **Renderer extensions:**
    - Multi-layer compositing (ping-pong textures)
    - Blend modes (at least normal, but ideally all 17 from OpenCut's blend.wgsl)
    - Opacity per layer
 
-5. **Audio mixing:**
+6. **Audio mixing:**
    - Multiple audio sources → master mix
    - Per-clip volume
    - Per-track mute/solo
 
-6. **Workers (additions):**
+7. **Workers (additions):**
    - `waveform.worker.ts` — for audio clips (display waveforms)
    - `filmstrip.worker.ts` — for video clips (display thumbnails)
    - `opfs.worker.ts` — for media storage
 
-7. **Tests:**
+8. **Tests:**
    - Multi-track render test (3 tracks, 5 clips)
+   - **Seam adapter round-trip properties (T1, Vitest — the two identity laws + warning-path fixtures)**
    - Blend mode tests (use solid-color test clips: red, green, blue)
    - Layer ordering test (overlay on top of main)
    - Audio mix test (two tones mixed)
@@ -212,6 +221,7 @@ Multiple clips arranged on a multi-track timeline. Basic composition (overlay tr
 
 - User can import multiple video/audio files
 - User can arrange clips on 3 tracks (main + 1 overlay + 1 audio)
+- **Seam adapter round-trips are property-tested green (T1)** — SceneTracks and flat TimelineData never drift apart
 - User can preview the composite (overlay on top of main, audio mixed)
 - Multi-track blend is mathematically correct (50/50 blend produces expected linear-light result)
 - Scrubbing works on all tracks simultaneously
@@ -265,20 +275,20 @@ User can perform a real rough cut: cut/split clips, trim them, ripple delete, mo
    - Transaction grouping (for multi-step ops)
    - Coalescing (for continuous drag)
 
-2. **NLE ops (pure functions):**
-   - Split (razor)
-   - Trim (start/end, with constraints)
-   - Move (single + multi-select, with track change)
-   - Ripple (shift subsequent clips)
-   - Roll (trim adjacent together)
-   - Slip (shift source in/out)
-   - Slide (move + shift neighbors)
-   - Delete (with optional ripple)
-   - Insert (from media library)
-   - Duplicate
-   - Rate Stretch
-   - Retime (with pitch preservation)
-   - Range Removal (across tracks)
+2. **NLE ops (pure functions — two reference homes per Decision 11.3; each family cites its executable reference):**
+   - Split (razor) — opencut-timeline `ops/split.ts` (snap-once source spans)
+   - Trim (start/end, with constraints) — opencut-timeline `ops/group-resize.ts` (UI/group shape) + spec 15 §4.3.2 (wire/single shape; the layer mapping is spec 06 §5.2A)
+   - Move (single + multi-select, with track change) — opencut-timeline `ops/group-move.ts` (`PlannedElementMove` = spec 15 §4.3.3 exact)
+   - Ripple (shift subsequent clips) — opencut-timeline `ripple/index.ts` (diff algorithm, spec 06 §5.4)
+   - Roll (trim adjacent together) — nle-engine `timeline.ts:2998 rollingTrimItems`
+   - Slip (shift source in/out) — nle-engine `timeline.ts:4045`
+   - Slide (move + shift neighbors) — nle-engine `timeline.ts:4133`
+   - Delete (with optional ripple) — both adequate; spec 15 §4.3.8/4.3.4
+   - Insert (from media library) — opencut-timeline `placement/index.ts` (5 strategies); nle-engine's insert/overwrite 3-point edits (`timeline.ts:4574/:4705`) are a spec-06-amendment candidate, not v1
+   - Duplicate — opencut-timeline (OpenCut semantics, spec 06 §5.10)
+   - Rate Stretch — nle-engine `timeline.ts:3153`
+   - Retime (with pitch preservation) — opencut-timeline `ops/retime.ts` (math) + nle-engine (command surface); audio half spec 03
+   - Range Removal (across tracks) — spec-only (no reference implements it)
 
 3. **Snap system:**
    - Snap point computation (other clips' edges, playhead, markers, frame boundaries)
@@ -297,6 +307,7 @@ User can perform a real rough cut: cut/split clips, trim them, ripple delete, mo
 5. **Sync-lock:**
    - Track-level sync-lock toggle
    - When sync-locked tracks ripple together
+   - Reference: nle-engine `timeline/timeline.ts:3484 applySyncLockRipplePatch` + `sync-lock.ts` (636 LOC — the only implementation in either repo; spec 06 §6)
 
 6. **Tests:**
    - Unit test per op (with property-based testing)

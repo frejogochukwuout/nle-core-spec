@@ -1,9 +1,9 @@
 # Master Specification — Browser-Based NLE (Rough-Cut Editor with FCPXML Handoff)
 
-**Status:** v3.0 (Rounds 1-6 complete: seed → scout-refined → audited → integrated → testability layer; Round 7 adds the code-reference architecture (spec 19), the UI shell (spec 18), the export-command amendment (spec 15), and the nle-engine reconciliation. One seal round remains after the engine's current gap-closure waves land — see spec 19 §12.)
-**Date:** 2026-09-02 (v1 seed 2026-08-22; v2 testability 2026-08-30; v3 Round 7 2026-09-02)
+**Status:** v4.0 (Rounds 1-6 complete: seed → scout-refined → audited → integrated → testability layer; Round 7: code-reference architecture (spec 19), UI shell (spec 18), export-command amendment (spec 15), engine reconciliation. Round 8: three-repo architecture — opencut-timeline landed (Decision 11 seam), engine Waves 4A-4D re-baselined, cloudcut UX-spec integrated (spec 18 v1.1 + NFRs §6A), testability coverage matrix (spec 17/12). One seal round remains — see spec 19 §12.)
+**Date:** 2026-09-02 (v1 seed 2026-08-22; v2 testability 2026-08-30; v3 Round 7 2026-09-02; v4 Round 8 2026-09-02)
 **Owner:** Architect (this conversation)
-**Consumers:** Implementation team, scout sub-agents, code reviewers, the nle-engine and timeline-distill workstreams
+**Consumers:** Implementation team, scout sub-agents, code reviewers, the nle-engine and opencut-timeline workstreams
 
 ---
 
@@ -13,8 +13,9 @@ This master spec captures **every architectural decision** reached across the de
 
 - **FreeCut** (`github.com/walterlow/freecut`, MIT) — the primary *system-level* teacher (workers, threading, sync, audio-clock, lifecycle, grading toolset)
 - **OpenCut-classic** (`github.com/opencut-app/opencut-classic`, archived MIT) — the primary *type-design* teacher (`MediaTime`, `FrameRate`, `SceneTracks`, `EditorCore`, `mediabunny`+WebCodecs decode path)
-- **nle-engine** (`github.com/bearachprema/nle-engine`, private) — an in-between clean-room FreeCut port used as a de-risking code reference, NOT canon (see Decision 10 and spec 19)
-- **timeline-distill** (forthcoming) — a distillation of OpenCut-classic's timeline minus the NLE core, the UI-region counterpart to nle-engine (see spec 19 §3.2)
+- **nle-engine** (`github.com/bearachprema/nle-engine`, private) — an in-between clean-room FreeCut port used as a de-risking code reference for the ENGINE side, NOT canon (see Decision 10/11 and spec 19)
+- **opencut-timeline** (`github.com/bearachprema/opencut-timeline`, private) — an in-between clean-room OpenCut-classic port, the TIMELINE/multi-track engine-core reference (landed Round 8; see Decision 11)
+- **cloudcut UX-spec** (`github.com/frejogochukwuout/cloudcut-nle` branch `ux-spec`) — the prior iteration's app-layer UX spec; integrated Round 8 with an ours-wins contradiction policy (see spec 18 §8 and SCOUT-R8-C)
 
 This is **not** a copy spec. We are rebuilding from scratch in pure TypeScript, using both repos as reference designs. Each downstream stream spec (files `01` through `12`) refines a single concern; the sub-agent scout plan (`13`) defines how those refinements are produced; the testing strategy (`12`) and implementation phases (`14`) define execution.
 
@@ -41,7 +42,7 @@ This is **not** a copy spec. We are rebuilding from scratch in pure TypeScript, 
 | `16-keyboard-shortcuts.md` | ~180 keyboard bindings, every one mapping to an `EngineCommand` |
 | `17-test-plan.md` | Three-tier testing methodology + per-module template |
 | `18-ui-shell.md` | Application shell: DaVinci-derived layout (from `ui-mock/`), panel inventory, gesture→command contracts |
-| `19-code-references.md` | Canon hierarchy, reference-repo map (nle-engine + forthcoming timeline-distill), insight-preservation ledger, corrective mapping, ROI table |
+| `19-code-references.md` | Canon hierarchy, reference-repo map (nle-engine + opencut-timeline + cloudcut UX-spec), insight-preservation ledger (33 rows), corrective mapping (C1-C8), ROI table, seam resolution |
 | `ui-mock/davinci_resolve_ui_mock.html` | Visual reference for spec 18 (DaVinci Resolve layout clone — layout/identity only, not code) |
 
 ---
@@ -283,14 +284,28 @@ Three consumers use **identical JSON interfaces** against the same engine:
 
 ### Decision 10: Code-Reference Architecture — the spec set is canon; reference implementations are de-risking references (Round 7)
 
-**Decision:** The spec set (00-18) is the single source of truth. Two private reference repos orbit it: **nle-engine** (clean-room FreeCut port; 37,958 LOC, 124 tests; actively closing its own gap charter) and the forthcoming **timeline-distill** (OpenCut-classic timeline minus NLE core). They de-risk implementation and operationalize the specs with concrete code, but they inherit legacy patterns the spec set explicitly corrects (8-bit sRGB, JSON-RPC+$ref wire protocol, class-API mutation surface, single-tier tests, procedural media, zero workers — see spec 19 §6). **Where reference code and the spec conflict, the spec wins; the delta is documented, not adopted.**
+**Decision:** The spec set (00-18) is the single source of truth. Private reference repos orbit it: **nle-engine** (clean-room FreeCut port; ~41k LOC after Waves 4A-4D, 144 tests reported; actively closing its own gap charter) and **opencut-timeline** (clean-room OpenCut-classic timeline engine core; landed Round 8 — see Decision 11). They de-risk implementation and operationalize the specs with concrete code, but they inherit legacy patterns the spec set explicitly corrects (8-bit sRGB, JSON-RPC+$ref wire protocol, class-API mutation surface, single-tier tests, procedural media, zero workers, engine-native persistence shape — see spec 19 §6, C1-C8). **Where reference code and the spec conflict, the spec wins; the delta is documented, not adopted.**
 
 **Reasoning:**
 - The spec workstream and the engine workstream began in parallel (both 2026-08-22); cross-pollination was real but shallow — an early spec snapshot was handed over mid-build, after much of the engine code was written. The engine is therefore NOT spec-conformant and cannot be treated as canon, but it is extremely valuable: it proves the engine architecture is buildable, ports the hardest subsystems (clock, sync plans, 102 NLE-op methods, 43-44 GPU effects, 27 transitions), and surfaces — via its own audit — the exact failure modes the spec's discipline rules prevent.
-- Years of FreeCut iterations plus six rounds of distillation produced implementation insights that must not be lost when specs link to reference code instead of inlining it. Spec 19 §5's insight-preservation ledger (25 crown-jewel rows) is the enforcement mechanism: any future pass that slims a spec must relocate each ledger row, not delete it.
+- Years of FreeCut/OpenCut iterations plus seven rounds of distillation produced implementation insights that must not be lost when specs link to reference code instead of inlining it. Spec 19 §5's insight-preservation ledger (33 crown-jewel rows) is the enforcement mechanism: any future pass that slims a spec must relocate each ledger row, not delete it.
 - Link-plus-distilled-callout is the default reference style (every stream spec gained a "Code References — nle-engine (reference, NOT canon)" table in Round 7); corrections of FreeCut patterns and contract-critical shapes stay inline.
 
-**Implication:** The engine converges toward the spec, never the reverse. Spec 19 §7 answers the engine's own five blocking decisions (D1-D5) from the spec side — the cross-pollination the workstreams never had. The engine's active waves (4A→7) are watched (spec 19 §9) and the final verdict on its state is deferred to the seal round.
+**Implication:** The engine converges toward the spec, never the reverse. Spec 19 §7 answers the engine's own five blocking decisions (D1-D5) from the spec side — the cross-pollination the workstreams never had (Round 8 escalated D1: the engine's Wave 4B resolved it against the spec answer; convergence is an adapter task, see spec 19 §7/C8). The engine's waves are watched (spec 19 §9) and the final verdict on its state is deferred to the seal round.
+
+### Decision 11: The Two-Repo Seam — one state model, one wire protocol, two algorithm homes, one render seam (Round 8)
+
+**Decision:** opencut-timeline landed (Round 8) as a **timeline/multi-track engine core** — not the UI-only distill originally recommended — and its overlap with nle-engine is resolved by a binding seam architecture (spec 19 §2.4, the full contract):
+
+1. **One state model:** `SceneTracks {overlay[], main (singleton), audio[]}` (opencut-timeline `types/index.ts:95-99`, = Decision 2 / spec 06 §4.7 executable) is the **runtime SceneState of record**; nle-engine's flat `TimelineData` is the persistence/composition-facing shape. The seam is an explicit `SceneTracks ↔ flat` adapter — the models are not merged.
+2. **One wire protocol:** spec 15's bare 78-type `EngineCommand` is the only protocol. opencut-timeline renames its 18 prefixed types to canon (its DECISIONS #9 premise — "00-master shows prefixed names" — is refuted: 00-master:234/:562 are bare; it mistook spec 15 §4.2's manager-method column for the command union); nle-engine retires JSON-RPC+$ref.
+3. **Two algorithm homes:** opencut-timeline owns placement/zero-anchor/ripple-diff/split-snap-once/group-move + interaction controllers (specs 05 §14.4-14.6, 06 §5.1-5.4/5.9-5.10); nle-engine owns roll/slip/slide/rateStretch/retime/insert-edit-3-point/sync-lock (specs 06 §5.5-5.8/§5.11-5.14, §6).
+4. **One render seam:** `setTracks()/renderFrame(t)` (opencut-timeline placeholder-compositor.ts:116) is the compositor contract; the engine's WebGPU compositor plugs in behind it.
+5. **One undo family:** both snapshot-based (spec 15 §6.2 strategy 2); opencut-timeline's transaction discipline (eviction-suspended batches, depth-anchored rollback, redo clear) is absorbed into spec 15 §7 (Round-8 amendment).
+
+**Reasoning:** Both repos now implement timeline ops + snapshot undo + headless JSON surfaces — unbridged, that is two engines and two protocols. The seam keeps each repo's strength where it is strongest (OpenCut's interaction math vs FreeCut's edit-op breadth) while forcing exactly one state model and one protocol at the boundaries the spec owns. The user's framing: opencut-timeline is "more like timeline / multi-track engine core" than UI; the overlap is where the spec + implementation plan arbitrate.
+
+**Implication:** Implementation starts from TWO reference repos with a mandatory adapter layer (spec 14 P1 gains the seam-integration phase). opencut-timeline's W4 (components) + W5/W6 (60 absent commands) + the C7 rename pass are its convergence path; the engine's C8 persistence adapter is its highest-priority one. Neither repo's headless surface is spec-15-conformant yet — both converge per spec 19 §6.
 
 ---
 
@@ -426,6 +441,24 @@ These are **accepted** constraints. We do not try to solve them:
 7. **No native desktop app** — deferred; if needed later, rebuild engine in Rust (Decision 7)
 8. **GPU device loss** — handled via try/catch + "renderer lost, please reload" UI (same as both reference repos)
 
+## 6A. Non-Functional Requirements (Round 8)
+
+Testable budgets adopted from the cloudcut UX-spec (ux-spec 21 §4.2 — the prior iteration's production-derived numbers; integrated per the ours-wins policy, SCOUT-R8-C §6 item 7). These are CI-observable targets, not aspirations — spec 17 §5.6 carries the test recipes:
+
+| NFR | Budget | Verified by |
+|---|---|---|
+| First contentful paint (empty project) | < 1 s on mid-tier laptop | T3 smoke, PerformanceObserver `paint` timings |
+| Time-to-interactive (empty project) | < 3 s | T3 smoke, `performance.now()` at first command dispatch |
+| Timeline interaction frame budget | 60 fps @ 1080p, 50 clips, drag in progress | T2 frame-time sampling during scripted drag (spec 17 §13) |
+| Viewer render latency (scrub) | < 2 frames from seek to presented frame | T2 seek-to-present measurement |
+| Keyboard shortcut dispatch | < 16 ms (one frame) from keydown to engine.command.apply resolution | T3 timing assertion |
+| Memory ceiling | < 4 GB per renderer process (Decision 6 constraint) | T2 heap sampling at 50-clip project |
+| Accessibility floor | WCAG 2.2 AA: full keyboard operability, F6 panel cycling, visible focus, 4.5:1 contrast minimum on text/UI, ARIA roles for regions/tabs/notifications, 1 Hz canvas-descendant label updates, reduced-motion honored globally | T3 a11y spot suite (axe-core + manual F6/roving-tabindex assertions — spec 17 §13A) |
+| Error-path discipline | Every CommandError code has at least one test that triggers it | T1 error-path census (spec 17 §2.5 rule) |
+| Persistence robustness | Corrupted/migrating/sanitized project files hydrate with warnings, never crash | T1 fixture battery (spec 09 §11 fixtures) |
+
+**Explicitly rejected NFR-adjacent items** (from the ux-spec, out of our scope — see the rejection register): LUFS loudness compliance, broadcast audio routing, cloud sync latency budgets, multi-cam switching latency, AI-feature latency.
+
 ---
 
 ## 7. The WYSIWYG Contract
@@ -480,7 +513,7 @@ Each stream has its own spec file. The breakdown is designed so sub-agents can w
 | 14 | Keyboard shortcuts | `16-keyboard-shortcuts.md` | FreeCut + OpenCut-classic shortcut maps; every shortcut → `EngineCommand` | Decision 9 |
 | 15 | Test plan | `17-test-plan.md` | Three-tier testing methodology (Tier 1 engine / Tier 2 render / Tier 3 UI) | Decision 9 |
 | 16 | UI shell | `18-ui-shell.md` | `ui-mock/davinci_resolve_ui_mock.html` (DaVinci Resolve layout clone, simplified) + spec 05/16 contracts | Decision 9 |
-| 17 | Code references | `19-code-references.md` | nle-engine + forthcoming timeline-distill; canon hierarchy | Decision 10 |
+| 17 | Code references | `19-code-references.md` | nle-engine + opencut-timeline + ux-spec; canon hierarchy + seam | Decision 10/11 |
 
 ---
 

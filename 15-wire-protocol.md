@@ -2823,6 +2823,7 @@ export interface CommandError {
    * - 'TIME_OUT_OF_RANGE' — exportFrame time outside [0, totalDuration]
    * - 'PROJECT_NOT_FOUND' — renameProject/deleteProject target does not exist (§4.3.77-78)
    * - 'PROJECT_ACTIVE' — deleteProject called on the active project (§4.3.78)
+   * - 'NOOP' — command semantically valid but clamped to a no-op at current bounds — e.g. a trim whose delta is fully absorbed by the source-bounds clamp, a move whose delta snaps back to the same position. Distinct from ELEMENT_NOT_FOUND (Round 8, adopted from opencut-timeline api.ts:198-208: "NOOP is not NOT_FOUND"; tests assert the distinction)
    * - 'INTERNAL_ERROR' — unexpected exception (see `message` for details)
    */
   code: string;
@@ -2929,6 +2930,18 @@ When `atomic: false`:
 1. Apply each command in order. If any returns `ok: false`, stop and return that error (previously-applied commands are NOT rolled back).
 2. Each successful command is pushed to undo history independently.
 3. Return the last command's `CommandResult` (or an aggregated `stateChange` if all succeeded).
+
+### 7.1A Transaction discipline (Round-8 amendment — adopted from opencut-timeline, 3 review rounds)
+
+Beyond all-or-nothing atomicity, `applyBatch` implementations MUST honor five transaction invariants (source: opencut-timeline DECISIONS #10 addendum + applyBatch :346-381, verified by its M16 hardening suite; each invariant closed a real bug class):
+
+1. **Eviction suspended during transactions.** Undo-history eviction (the 100-entry cap, spec 06 §4.6) must NOT run mid-batch — a batch of 150 commands must not evict the beforeState it may need to roll back to. Eviction resumes after commit/rollback.
+2. **Depth-anchored rollback.** On partial failure, restore the depth-anchored beforeState captured at batch start — NOT `undo()` the already-applied commands one by one (which drains history and can stop early on a NOOP). Depth-anchoring also makes nested batches safe: an inner rollback restores to the inner anchor without touching the outer batch's entries.
+3. **Redo stack cleared after rollback.** A rolled-back batch invalidates every redo entry that referenced post-batch state; keeping them would let `redo()` resurrect a state that was just rejected.
+4. **Undo/redo rejected inside batches.** `undo`/`redo` commands inside a batch return `{ ok: false, error: 'INTERNAL_ERROR', message: 'undo/redo not allowed inside a batch' }` — batching an undo with other commands is semantically incoherent (which history entry would the batch label point at?).
+5. **Intra-batch overlap guard.** Insert/move commands within one batch are validated against the *evolving* intermediate state (command 2 sees command 1's result), not the batch-start state — otherwise a batch that moves A out of the way and inserts B at A's old position would spuriously fail (or worse, pass and produce an overlap).
+
+**Test hooks:** each invariant has a dedicated error-path test (spec 17 §2.5; opencut-timeline M16 provides the reference cases — cap-crossing batch rollback, batch-of-150, undo-in-batch rejection, move-then-insert-at-vacated-position).
 
 ### 7.2 Nesting
 
@@ -4802,6 +4815,25 @@ nle-engine (github.com/bearachprema/nle-engine, 37,958 LOC) is a clean-room Free
 | §4.3.73 SnapshotCommand | `timeline/timeline.ts:5292` | `snapshot(label: string = 'snapshot'): TimelineSnapshot {` | ALIGNED | Same pattern, protocol-shaped |
 | §4.2 mapping (adapter surface) | `timeline/timeline.ts:2275` | `splitClip(` | ALIGNED | The 102-method class surface is the manager layer `apply()` dispatches to |
 | §13.8 playback commands | `playback/player.ts:1889` | `ratechange: { playbackRate: number };` | ENGINE-GAP | Zero playback ops on the engine's wire surface despite Player rate support |
+
+### 13.15 Code References — opencut-timeline (reference, NOT canon) — added Round 8
+
+The timeline-side headless surface (`src/lib/timeline/headless/api.ts`). It is **structurally the spec-15 skeleton** (same `EngineCommand`/`CommandResult` envelope idea, same single-dispatcher design, atomic `applyBatch`) with two systemic deltas: **prefixed command names (C7)** and **coarse error codes**. Full command-by-command table: SCOUT-R8-A §3.2.
+
+| Spec 15 contract | opencut-timeline (file:line) | Status | Delta |
+|---|---|---|---|
+| §4.1 bare type discriminator | `headless/api.ts:38-87` — 18 types, all `timeline.*`/`track.*`-prefixed | **CORRECTIVE (C7)** | Premise refuted (00-master:234/:562 are bare — the repo mistook §4.2's manager-method column for the command union). Rename pass: `timeline.insert`→`insert`, `timeline.trim`→`trim`, `timeline.split`→`split`, `timeline.delete`→`delete`, `timeline.move`→`move`, `timeline.duplicate`→`duplicate`, `timeline.updateElements`→`updateElements`, `timeline.seek/play/pause/selectElements/undo/redo`→bare, `track.toggleMute/toggleVisibility`→`toggleTrackMute/toggleTrackVisibility`, `track.add`→`addTrack`, `track.remove`→`deleteTrack` |
+| §4.3.3 MoveCommand | `ops/group-move.ts:69-74` — `PlannedElementMove {elementId, sourceTrackId, targetTrackId, newStartTime}` | **ALIGNED (exact)** | Field-for-field match incl. `PlannedTrackCreation`; repo implements only the movePlan form — add the simple `{elementIds, delta, targetTrackId}` form |
+| §4.3.1 SplitCommand | `headless/api.ts:60` — `{elements, splitTimeTicks, retainSide}` | CONVERGENT | Element-addressing + retainSide match; spec's `time`/`trackIds` (split-at-time across tracks) is the superset; repo lacks `rightElementIdSeed` (internal counter instead — align to `idSeed` at wire) |
+| §4.3.2 TrimCommand | `headless/api.ts:52` — `{elements: ElementRef[], side: 'left'\|'right', deltaTicks}` | CONVERGENT | Group+side is the controller-layer shape; wire shape stays single-element+edge (spec 06 §5.2 documents the mapping) |
+| §4.3.9 InsertCommand | `headless/api.ts:40` — `{element, startTimeTicks, strategy 2-value, trackId}` | CONVERGENT | 5-strategy placement is `ops/placement`; wire needs full `PlacementStrategy` + `ripple` + `idSeed`; returns actual landed time on zero-anchor clamp (`api.ts:169-172`) — spec's `data` should carry it |
+| §6.3 error codes | `headless/api.ts:89-102` — 5 codes: INVALID_PARAMS/NOT_FOUND/CONFLICT/NOOP/INTERNAL_ERROR | PARTIAL | NOOP absorbed into §6.3 (R8); the other 4 map to ~24 spec codes — expand |
+| §6.1 StateChange | absent — out-of-band readouts (`getTracks/getScene/getSelection/getPlayhead` :385-403) | CORRECTIVE | Add `stateChange` to results OR spec-note that readouts serve T1 tests (in-protocol `snapshot` is the spec-15 way) |
+| §7 batch semantics | `headless/api.ts:346-381` — `applyBatch` | **AHEAD** | The five transaction invariants (eviction-suspended, depth-anchored rollback, redo clear, undo/redo-in-batch rejection, intra-batch overlap guard) EXCEED spec §7.1's atomicity — absorbed as §7.1A (R8) |
+| §4.3.4 ripple | `timeline.rippleDelete` (:69) | CONVERGENT | Documented convenience wrapper — spec keeps `delete{ripple:true}`/RippleCommand as canonical (spec 06 §5.4 note) |
+| command coverage | 17 of 18 have spec-15 counterparts; 60 of 78 spec-15 commands absent (roll/slip/slide/rateStretch/retime/freezeFrame/rangeRemoval/sync-lock/scenes/bookmarks/effects/masks/transitions/keyframes/clipboard/export/…) | ENGINE-GAP | Its own gaps doc charts W5/W6 for these; the C7 rename is the prerequisite |
+
+**The binding convergence statement (Decision 11.2):** spec 15's bare `EngineCommand` is the **only** wire protocol. Both reference repos converge to it — opencut-timeline via the C7 rename + param alignment (this table is the worklist), nle-engine via the C2 dispatcher adapter (§13.14). Neither repo's current surface is spec-conformant; both are executable evidence of what the dispatcher must handle.
 
 ---
 

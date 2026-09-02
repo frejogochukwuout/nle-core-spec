@@ -1,7 +1,7 @@
 # 06 — NLE Operations: Cut / Split / Trim / Ripple / Roll / Slip / Slide / Move / Lock / Snap (REFINED)
 
 **Stream:** NLE operation logic (pure functions over timeline state)
-**Status:** Refined (SCOUT-06). Every claim tagged with file:line evidence.
+**Status:** Refined (SCOUT-06). Every claim tagged with file:line evidence. Round-8 amendments: §5.2A trim-shape layer mapping + NOOP code, §5.4 ripple modeling notes + OT as executable reference, §5.9 intra-batch overlap guard, §10.4 engine re-baseline @ 8ac91d9 (all citations re-verified, P0.6 fixed), §10.5 opencut-timeline op-coverage (Decision 11.3 division of labor).
 **Primary teacher:** FreeCut `stores/actions/edit/*` (algorithm-level reference) + OpenCut-classic `ripple/` + `retime/` + `commands/` + `timeline/placement/` + `timeline/group-move/` + `timeline/group-resize/` (architecture-level reference)
 **Spec file:** `06-nle-ops.refined.md` (supersedes `06-nle-ops.md`)
 
@@ -752,6 +752,19 @@ export function computeGroupResize({
 
 **Command:** FreeCut wraps in `execute('TRIM_ITEM_START' | 'TRIM_ITEM_END', ...)`. OpenCut wraps in `UpdateElementsCommand` (`commands/timeline/element/update-elements.ts:10-75`) for the patch application; the resize delta computation happens in `computeGroupResize` (pure function).
 
+### 5.2A Trim shape per layer (Round 8 — the two legitimate forms)
+
+Two trim shapes coexist in the ecosystem, and both are correct **at their own layer**. The spec pins which is canonical where, so implementers stop trying to force one shape on both layers:
+
+| Layer | Shape | Where defined | Who implements it |
+|---|---|---|---|
+| **Wire protocol** (spec 15) | Single element: `{elementId, edge: 'start'\|'end', delta, ripple, syncLinked?, skipAdjacentClamp?}` | spec 15 §4.3.2 | The command dispatcher; the only shape tests may submit over the wire |
+| **UI/controller path** (this spec, spec 05) | Multi-element group: `{elements: ElementRef[], side: 'left'\|'right', deltaTicks}` — the resize controller trims a whole selection as one gesture | spec 05 §8.4; opencut-timeline `ops/group-resize.ts` (`ResizeSide`, `buildResizeMembers`, `computeGroupResize`) | The interaction controller (drag → preview → commit) |
+
+**The mapping:** the controller's group trim reduces to N wire `trim` commands inside ONE `CommandBatch` (spec 15 §7) — tightest-delta pre-clamped via `applySynchronizedTrim`'s keep-tightest discipline (above), so each member's individual clamp is consistent. The batch is atomic (all members commit or none) and produces ONE undo step (one undo step per user intent). The controller path may also coalesce via `previewElements` during the drag and emit the batch only at commit (§4.6).
+
+**NOOP vs rejection (Round 8, absorbed from opencut-timeline):** a trim whose delta clamps to zero (valid input, no-op output) returns `ok: false` with the **`NOOP`** error code — NOT `TRIM_BEYOND_SOURCE`, NOT `ok: true` with a silent no-op. A test that cannot distinguish "rejected as invalid" from "clamped to nothing" is a test that will miss the fake-commit bug class (opencut-timeline's split-once returned the original object so withUndo saw no change — same family as nle-engine's retired fake `editProject`). Spec 15 §6.3 carries the code; spec 17 §2.5's error-path census requires at least one triggering test per code including `NOOP`.
+
 ### 5.3 Move
 
 **Description:** Change an element's `startTime` and/or `trackId`.
@@ -938,6 +951,11 @@ useEffect(() => {
 ```
 
 **Full quoted source: see §12 below.**
+
+**Round-8 notes (executable reference + modeling):**
+
+1. **Executable reference:** opencut-timeline ports this exact diff algorithm (`ripple/index.ts:121 computeRippleAdjustments` / `:16 rippleShiftElements` / `:40 applyRippleAdjustments`, 395 LOC, tested in M6) — use it as the running version of §12's quoted OpenCut source.
+2. **Ripple modeling stays compositional at the wire:** spec 15 §4.3.4 models ripple as the `RippleCommand` meta-wrapper / `delete` with `ripple: true` — NOT a distinct wire command type. Implementations MAY expose a `rippleDeleteElements` convenience on the manager surface (opencut-timeline's `TimelineCore.rippleDeleteElements` at `timeline-core.ts:620`, exercised via its `timeline.rippleDelete` headless alias in M14) — the convenience decomposes to `delete {ripple: true}` at the wire boundary and MUST NOT become a 79th union member. Both surfaces are tested in the reference; ours keeps one wire shape.
 
 ### 5.5 Roll
 
@@ -1390,6 +1408,8 @@ export class DeleteElementsCommand extends Command {
 ### 5.9 Insert
 
 **Description:** Add a new element to the timeline from the media library.
+
+**Round-8 constraint (absorbed from opencut-timeline DECISIONS #10):** an insert `CommandBatch` (spec 15 §7) must pass an **intra-batch overlap guard** — the batch's own inserts are validated against each OTHER, not just against pre-batch state. Without it, a batch inserting two elements at overlapping times on the same track can pass per-command validation and still produce an invalid final state (atomicity checks the pre-image and post-image; the guard checks the intermediate trajectory). The reference repo hit this in review round 3; our spec 15 §7.1A now states it as batch semantics.
 
 **OpenCut insert (`commands/timeline/element/insert-element.ts:32-297`, key body):**
 
@@ -2344,38 +2364,64 @@ For multi-select move architecture, **OpenCut-classic's `group-move/` is the can
 | `src/features/timeline/stores/commands/types.ts` | 53 | `TimelineSnapshot`, `TimelineCommand` (`{type, payload}`), `CommandEntry` |
 | `src/features/timeline/stores/timeline-command-store.ts` | 286 | `useTimelineCommandStore` — snapshot-based undo/redo with per-context stacks |
 
-### 10.4. nle-engine op-coverage (reference, NOT canon)
+### 10.4. nle-engine op-coverage (reference, NOT canon — Round-8 re-baseline @ `8ac91d9`)
 
-> nle-engine (github.com/bearachprema/nle-engine) implements ~20 of this spec's op families as public methods on its `Timeline` class (timeline/timeline.ts, 6,436 LOC, 102 public methods) with 124 passing tests — the strongest ALIGNED subsystem in the reference repo. The deltas are architectural (class-based mutating manager vs this spec's pure-op + command layer; flat N-track array vs `SceneTracks`; 19-op JSON-RPC wire surface vs spec 15's 78-type union) plus three absent families (track-state toggles, snap, splitAndRemove). Where engine code conflicts, **the spec wins**; see `19-code-references.md`.
+> nle-engine (github.com/bearachprema/nle-engine) implements ~20 of this spec's op families as public methods on its `Timeline` class (timeline/timeline.ts, now 6,794 LOC, 102 public methods) with **144 passing tests (reported)** after Waves 4A-4D-A — the strongest ALIGNED subsystem in the reference repo. The deltas are architectural (class-based mutating manager vs this spec's pure-op + command layer; flat N-track array vs `SceneTracks`; 19-op JSON-RPC wire surface vs spec 15's 78-type union) plus three absent families (track-state toggles, snap, splitAndRemove). Where engine code conflicts, **the spec wins**; see `19-code-references.md`. Per Decision 11.3, the engine is the **executable home of the FreeCut-side op families** (roll/slip/slide/rateStretch/retime/insert-edit-3-point/sync-lock) that opencut-timeline (§10.5) lacks.
 
 | Spec 06 op (§) | nle-engine timeline.ts:line | verified signature | status |
 |---|---|---|---|
-| §5.1 Split | :2275 | `splitClip(` | ALIGNED |
-| §5.1 Split-all | :2460 | `splitAllItemsAtFrame(frame: number, options: { linked?: boolean } = {}): number {` | ALIGNED |
-| §5.2 Trim head | :2521 | `trimHead(` | ALIGNED |
-| §5.2 Trim tail | :2598 | `trimTail(` | ALIGNED |
-| §5.2/§5.4 Ripple trim | :2679 | `rippleTrimItem(` | ALIGNED |
-| §5.5 Roll | :2810 | `rollingTrimItems(` | ALIGNED |
-| §5.11 Rate stretch | :2965 / :5500 | `rateStretchItem(` / `rateStretchWithRipple(` | ALIGNED |
-| §5.4 Ripple delete | :3359 / :3385 | `rippleDelete(clipId: string): void {` / `rippleDeleteItems(` | ALIGNED |
-| §5.8 Delete | :3527 | `removeItems(clipIds: string[], options: { linked?: boolean } = {}): void {` | ALIGNED |
-| §5.10 Duplicate | :3573 | `duplicateItems(` | ALIGNED |
-| §5.3 Move | :3681 / :3760 | `moveClip(` / `moveItems(` | ALIGNED |
-| §5.6 Slip | :3858 | `slip(clipId: string, deltaFrames: number, options: { linked?: boolean } = {}): void {` | ALIGNED |
-| §5.7 Slide | :3944 | `slideItem(` | ALIGNED |
-| §5.9 Insert / Overwrite | :4379 / :4510 | `performInsertEdit(` / `performOverwriteEdit(` | ALIGNED |
-| §5.14 Range removal family | :5954 / :6089 / :6118 / :6134 | `removeRangesFromClip(` / `removeSilenceFromItems(` / `removeFillerWordsFromItems(` / `removeTranscriptRangesFromItems(` | ALIGNED |
-| §5.13 Freeze frame | :6185 | `freezeFrameAtPosition(` | ALIGNED |
-| Join (spec 16 composite) | :6329 | `joinItems(clipIds: string[]): string \| null {` | ALIGNED |
-| Close gap | :5344 / :5440 | `closeGapAtPosition(` / `closeAllGapsOnTrack(` | ALIGNED |
-| §6 Sync-lock | timeline/sync-lock.ts:480 + timeline.ts:3296 | `propagateRemovedIntervalsToSyncLockedTracks(` + `applySyncLockRipplePatch(` | ALIGNED |
-| Undo/redo/snapshot | :5247 / :5261 / :5292 | `undo(): boolean {` / `snapshot(label: string = 'snapshot'): TimelineSnapshot {` | ALIGNED-with-caveat (zero callers; keyframe-blind equality — engine P0.6) |
+| §5.1 Split | :2461 | `splitClip(` | ALIGNED |
+| §5.1 Split-all | :2648 | `splitAllItemsAtFrame(frame: number, options: { linked?: boolean } = {}): number {` | ALIGNED |
+| §5.2 Trim head | :2709 | `trimHead(` | ALIGNED |
+| §5.2 Trim tail | :2786 | `trimTail(` | ALIGNED |
+| §5.2/§5.4 Ripple trim | :2867 | `rippleTrimItem(` | ALIGNED |
+| §5.5 Roll | :2998 | `rollingTrimItems(` | ALIGNED |
+| §5.11 Rate stretch | :3153 / :5835 | `rateStretchItem(` / `rateStretchWithRipple(` | ALIGNED |
+| §5.4 Ripple delete | :3547 / :3573 | `rippleDelete(clipId: string): void {` / `rippleDeleteItems(` | ALIGNED |
+| §5.8 Delete | :3715 | `removeItems(clipIds: string[], options: { linked?: boolean } = {}): void {` | ALIGNED |
+| §5.10 Duplicate | :3761 | `duplicateItems(` | ALIGNED |
+| §5.3 Move | :3868 / :3947 | `moveClip(` / `moveItems(` | ALIGNED |
+| §5.6 Slip | :4045 | `slip(clipId: string, deltaFrames: number, options: { linked?: boolean } = {}): void {` | ALIGNED |
+| §5.7 Slide | :4133 | `slideItem(` | ALIGNED |
+| §5.9 Insert / Overwrite | :4574 / :4705 | `performInsertEdit(` / `performOverwriteEdit(` | ALIGNED |
+| §5.14 Range removal family | :6289 / :6424 / :6453 / :6469 | `removeRangesFromClip(` / `removeSilenceFromItems(` / `removeFillerWordsFromItems(` / `removeTranscriptRangesFromItems(` | ALIGNED |
+| §5.13 Freeze frame | :6520 | `freezeFrameAtPosition(` | ALIGNED |
+| Join (spec 16 composite) | :6664 | `joinItems(clipIds: string[]): string \| null {` | ALIGNED |
+| Close gap | :5679 / :5775 | `closeGapAtPosition(` / `closeAllGapsOnTrack(` | ALIGNED |
+| §6 Sync-lock | timeline.ts:3484 + sync-lock.ts:500 | `applySyncLockRipplePatch(` + `propagateRemovedIntervalsToSyncLockedTracks(` | ALIGNED |
+| Undo/redo/snapshot | :5582 / :5627 | `undo(): boolean {` / `snapshot(label: string = 'snapshot'): TimelineSnapshot {` | ALIGNED (P0.6 keyframe-blind equality FIXED @ :1772 `snapshotsEqual` — now keyframe/composition/backgroundColor-aware, verified by m20 20.7/20.8) |
 | §5.15 Mute/Solo/Lock/Visibility | (absent) | fields only, no public mutators | ENGINE-GAP |
-| §5.16 Snap + razor snap | (absent) | no snap code in src/lib/nle | SPEC-ONLY |
-| §4.6 pure-Op + command wrap | timeline.ts:6417 | `private _commit(next: TimelineData): void {` | CORRECTIVE (class-based mutating manager; spec's layer wins) |
-| §4.7 SceneTracks model | core/types.ts:760 | `export type TrackKind = 'video' \| 'audio';` | CORRECTIVE (flat N-track; spec's main-singleton wins) |
+| §5.16 Snap + razor snap | (absent) | no snap code in src/lib/nle | SPEC-ONLY (opencut-timeline §10.5 owns the reference) |
+| §4.6 pure-Op + command wrap | timeline.ts:2084 (and 20+ sites) | `_commit({...this._data, …})` | CORRECTIVE (class-based mutating manager; spec's layer wins) |
+| §4.7 SceneTracks model | core/types.ts (Clip union @ :995) | flat `TimelineData`; `TrackKind = 'video' \| 'audio'` | CORRECTIVE (flat N-track; spec's main-singleton wins — the Decision-11 seam adapter owns the bridge) |
 
-§7 note (Round 7): the snapshot stored by a drag-coalesced `TracksSnapshotCommand` must cover the full field set incl. keyframes (the engine's `snapshotsEqual` at timeline.ts:1746 ignores them — keyframe-only edits stop being undoable; engine P0.6).
+§7 note (Round 7, updated Round 8): the snapshot stored by a drag-coalesced `TracksSnapshotCommand` must cover the full field set incl. keyframes — the engine's `snapshotsEqual` ignored them (keyframe-only edits stopped being undoable; engine P0.6). **Fixed in Wave 4A** (timeline.ts:1772-1803, now compares keyframes + compositions + backgroundColor via JSON-deep; m20 20.7 regression-tested). The counter-example stays in spec 19 §6 as documentation. Residual field-gap: `busAudioEq` exists in FreeCut's 17-field equality but not in the engine model — our spec 06 §7 / spec 15 §14.1 full-field bar covers it by construction.
+
+### 10.5. opencut-timeline op-coverage (reference, NOT canon — landed Round 8 @ `d3b2163`)
+
+> opencut-timeline (github.com/bearachprema/opencut-timeline, `src/lib/timeline/`, 136/136 tests) implements the OpenCut-side op families — the other half of Decision 11.3's division. Where it conflicts with this spec, **the spec wins** (known deltas: prefixed headless command names — C7 rename; 5-kind TrackType taxonomy; group-shape trim — correctly so, per §5.2A).
+
+| Spec 06 op (§) | OT file:line | Verified export | Status | Note |
+|---|---|---|---|---|
+| §5.1 Split | `ops/split.ts:28/:39` | `SplitElementsParams` (retainSide) / `splitElementsOnTracks` | ALIGNED | Snap-once source spans; M8 |
+| §5.2 Trim (UI/group shape) | `ops/group-resize.ts:41/:54/:147` | `ResizeSide` / `buildResizeMembers` / `computeGroupResize` | ALIGNED | The §5.2A controller-side shape; snap-once, neighbor/source bounds, min 1 frame; M7 |
+| §5.3 Move (group) | `ops/group-move.ts:63/:69/:163/:258` | `PlannedTrackCreation` / `PlannedElementMove` / `buildMoveGroup` / `resolveGroupMove` | ALIGNED | `PlannedElementMove` = spec 15 §4.3.3 field-for-field (scout R8-A VC5); mixed A/V groups rejected |
+| §5.4 Ripple (diff algorithm) | `ripple/index.ts:16/:40/:121` | `rippleShiftElements` / `applyRippleAdjustments` / `computeRippleAdjustments` | ALIGNED | The adopted OpenCut diff (§12); M6 |
+| §5.9 Insert (placement) | `placement/index.ts:43-54/:381` | 5 `PlacementStrategy`s / `resolveTrackPlacement` | ALIGNED | Reject-not-shift + zero-anchor (spec 05 §14.5A); M5 |
+| §5.10 Duplicate | `ops/timeline-core.ts:652` | `duplicateElements(` | ALIGNED | OpenCut new-track semantics; M14 |
+| §5.11 Retime math | `ops/retime.ts:12-13/:15` | `MIN/MAX_RETIME_RATE` 0.01/5, `clampRetimeRate` | ALIGNED (math only) | Pure maps; no command surface — wire side is spec-15/`rateStretch` (engine reference) |
+| §5.12 Retime pitch | — | (absent) | OT-GAP | Audio half lives in spec 03 / nle-engine |
+| §5.5 Roll / §5.6 Slip / §5.7 Slide | — | (absent — OpenCut never had them) | OT-GAP | **nle-engine is the executable reference** (§10.4 :2998/:4045/:4133) — Decision 11.3 |
+| §5.11 Rate-stretch command | — | (absent) | OT-GAP | nle-engine :3153 |
+| §5.13 Freeze frame | — | (absent) | OT-GAP | nle-engine :6520 |
+| §5.14 Range removal | — | (absent) | OT-GAP | Spec-only; nle-engine family :6289-6469 |
+| §6 Sync-lock | — | (absent) | OT-GAP | nle-engine sync-lock.ts (636 LOC) is the only implementation |
+| §5.4 Ripple delete convenience | `ops/timeline-core.ts:620` | `rippleDeleteElements(` | ALIGNED | Decomposes to `delete {ripple: true}` per §5.4 note 2; M14 |
+| §4.4-4.6 preview/commit | `ops/timeline-core.ts:795/:814` | `previewElements(` / `commitElements(` | ALIGNED | The §4.6 coalescing pattern, executable |
+| Undo (snapshot + transactions) | `ops/timeline-core.ts:102-207` | `UndoStack` w/ `beginTransaction`, suspended eviction, 100-cap | ALIGNED+ | Transaction discipline absorbed into spec 15 §7.1A (Round 8) |
+| Core class | `ops/timeline-core.ts:209-907` | `TimelineCore` (986 LOC) | ALIGNED | Manager-method names match spec 15 §4.2 1:1 |
+
+**Division of labor (Decision 11.3, summary):** OT owns split/trim-group/move-group/ripple-diff/insert-placement/duplicate + interaction controllers; nle-engine owns roll/slip/slide/rateStretch/retime-command/freezeFrame/range-removal/sync-lock. Both wrap in the spec 15 command layer (OT via C7 rename; engine via C2 adapter).
 
 ---
 
