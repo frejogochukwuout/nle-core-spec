@@ -1,7 +1,7 @@
 # 14 — Implementation Phases: From Playback Spike to Full NLE
 
 **Stream:** Phased implementation plan
-**Status:** Plan for executing the spec (Round-8 update: two-repo build strategy + Decision-11 seam, §2.1; P1 gains the seam adapter as a mandatory deliverable)
+**Status:** Round-9 rewrite of §2.1: the two-repo graft strategy + bidirectional seam adapter is superseded by the **three-repo code baseline** (Decision 12/14) — one-way projection instead of a bidirectional adapter, per-repo postures, and the audio wiring phase (spec 20). Phase order and exit criteria below the strategy layer are unchanged.
 **Spec file:** `14-implementation-phases.md`
 
 ---
@@ -14,29 +14,39 @@ Define the implementation order. Each phase produces a shippable milestone. Phas
 
 ## 2. Phase Overview
 
-### 2.1 Two-repo build strategy (Round 8 — supersedes the Round-7 engine-only strategy)
+### 2.1 Three-repo code baseline — inherit, don't rebuild (Round 9, supersedes the R8 two-repo graft strategy)
 
-The phases below were written greenfield; TWO reference repos now change the *cost* of several of them without changing their order or exit criteria. Per `19-code-references.md` §8's per-subsystem ROI table and the Decision-11 seam (00-master §2):
+The phases below were written greenfield; **that posture is retired.** Three production-grade codebases now exist (nle-engine 202/202 · opencut-timeline 297/297 · web-daw-core 737/737), produced by the same inherit-distill-test pattern this workstream exists to run. Discarding ~55k LOC of tested code to re-derive it from prose maximizes trial-and-error — the failure mode the OSS-derivation strategy exists to avoid. The spec set's role over that baseline is CONTRACT + GAP + ACCEPTANCE (00-master Decision 14). The per-repo postures:
 
-- **Graft from nle-engine** (adapt, don't adopt): NLE op algorithms (~20 families, spec 06's §10.4 maps them method-by-method — now the roll/slip/slide/rateStretch/insert-edit/sync-lock home), the transition planner/handles/27 presentations (spec 07 §6.1A now matches the engine's model by construction), the Clock + six sync plans (spec 03 §13E), the audio mixer/EQ/pitch worklet, **and the Wave-4B persistence semantics via the C8 adapter** (migrate/normalize/warnings kept; JSON shape re-targeted to spec 09 ProjectJSON). All grafted code passes through the spec 15 command layer — the engine's class-API and JSON-RPC+$ref surface are the adapter target, never the architecture.
-- **Graft from opencut-timeline** (the timeline-side algorithm home): placement/5-strategy/zero-anchor (spec 05 §14.5, spec 06 §5.9), the ripple-diff algorithm (spec 06 §5.4), split-snap-once (§5.1), group-move + `PlannedElementMove` (spec 15 §4.3.3 exact), the interaction controllers (spec 05 §14.4, verified 1:1), view math + ruler intervals (spec 05 §14.3), the transaction-discipline undo (absorbed as spec 15 §7.1A), and — after its C7 rename pass — the headless command layer's batch machinery. Its W4 React components (pending) become the timeline-UI reference for P1.
-- **Rebuild fresh**: media pipeline (mediabunny+WebCodecs), the ProjectJSON serializer shape (spec 09 — the C8 adapter is thin, but the shape is ours), FCPXML export (spec 10 — pure JSON→XML, no engine dependency), workers (spec 02), UI shell (spec 18 v1.1), and the three-tier test harness (spec 17) though both repos' suites re-tier into it (engine 144 tests → T1/T2; opencut-timeline M1-M16 → T1/T2/T3-equivalent).
-- **Correct, don't copy**: the 8-bit sRGB pipeline (re-texture per Decision 5; the engine's pool discipline is now landed and pixel-verified — only the format half remains), opencut-timeline's prefixed command names (C7 rename), the engine's persistence shape (C8).
-- **Mandatory seam work (new in P1)**: the `SceneTracks ↔ flat TimelineData` adapter (`src/scene/scene-adapter.ts`, Decision 11.1) is a P1 deliverable with its own tests (round-trip property: `flat(adapt(tracks))` preserves order/sections; `adapt(flat(state))` is idempotent).
-
-The engine's own wave plan (its `gaps/audit/MASTER.md`, waves 4D-B→7) and opencut-timeline's W4/W5/W6 are converging on the same contracts from their sides; the seal round re-baselines (spec 19 §9).
-
-| Phase | Goal | Exit Criteria | Estimated Effort | Reference contribution (engine / opencut-timeline) |
+| Repo | Domain (Decision 12) | Posture | New code allowed | Tests |
 |---|---|---|---|---|
-| **P0: Playback spike** | Single clip, play/pause/seek, frame-accurate | User loads a video file, plays it smoothly | 1-2 weeks | Engine: clock + sync plans graft; media path rebuilt fresh (engine is procedural-only) |
-| **P1: Multi-track + UI shell + SEAM** | Multiple clips on a timeline, basic composition, shell scaffold, SceneTracks↔flat adapter | User arranges 5 clips on 3 tracks, previews the composite | 2-3 weeks | Engine: scene assembly + compositor structure (8-bit→10-bit corrective). opencut-timeline: placement/ripple/controllers/view math graft + **the seam adapter (Decision 11.1, mandatory)**; W4 components when landed; shell greenfield (spec 18 v1.1) |
-| **P2: NLE ops** | Cut/split/trim/ripple/move/snap | User performs a real rough cut | 3-4 weeks | **Biggest accelerator, split across both repos**: engine's ~20 op families (roll/slip/slide/rateStretch/sync-lock) + opencut-timeline's placement/ripple-diff/split-snap-once/group-move; both wrapped in the command layer (engine C2 adapter + ot C7 rename) |
-| **P3: Composition & transitions** | Crossfades, blends, basic effects | User adds transitions between clips | 2-3 weeks | Engine: 27 presentations + planner + handle math graft; effects pipeline math ports, pipeline discipline (now landed, pixel-verified) keeps |
+| **nle-engine** | runtime (player/GPU/transitions/export/media/fonts) | **inherit + converge** | runtime command subset (C2 scoped down), M1.5 wiring, P1.8 corner-pin, text-motion D-phase; **no new editing-semantics surface** | inherit 202; port expectations forward |
+| **opencut-timeline** | editing (SceneTracks/ops/controllers/React UI) | **inherit + absorb ports** | C7 rename, engine op-family ports (below), W7 MIDI shapes when MIDI editing is real; P3 polish on request | inherit 297; ported engine tests become OT milestones |
+| **web-daw-core** | audio (strips/DSP/PDC/offline render) | **inherit + sync** | bridge growth only (sidechain/PDC/automation helpers); zero hand-edits to copy files (file-class law) | inherit 737; upstream drops gated by the same suite |
+| **App shell** | UI (the one greenfield surface) | **build to spec 18** | full shell; timeline UI wired via OT's `TimelineView` + controllers | new T3 real-mouse suite; cloudcut-nle suites as reference |
+
+**The projector (replaces R8's bidirectional adapter):** a P1 deliverable, `src/scene/scene-projector.ts` (Decision 12.1) — `project(scene) → TimelineData`, deterministic and idempotent. Editing NEVER reads back from engine state (the engine store is a derived cache). Its tests are smaller than the retired adapter's: idempotence + projection determinism + coverage of the engine-only constructs (transitions, linked groups, sync-lock) as projection targets — no round-trip fidelity through them, because nothing travels back.
+
+**The op-family port (the algorithm-home merge, Decision 12.3):** nle-engine's roll/slip/slide/rateStretch/retime/freezeFrame/insert-edit-3-point/rangeRemoval/sync-lock (spec 06 §5.5-5.14's method-by-method map) port INTO opencut-timeline's ops layer as pure functions over SceneTracks. Acceptance = OT's 297-test suite + the ported engine tests (the port pipeline proves out on ONE family first — `roll`, smallest and fully specified — per ARCH-R9 §7.3). Until a family lands, the engine's implementation is its internal fallback; the editing wire never routes through it. Transitions/linked-groups/sync-lock take SceneTracks shapes per specs 06/07 — the port defines them, the spec arbites.
+
+**The audio wiring (Decision 13 / spec 20):** a PARALLEL phase (P-A below, independent of P0-P3 because the audio seam shares only `trackId`): vendor submodule, bridge routing, export offline mixdown, then the retirement gate (AudioMixer 2,426 LOC + pre-baked EQ + 22,050 Hz bins + export/audio-mix.ts per corrective C9) — freecut audio stays as fallback until the gate passes.
+
+**Correct, don't copy (unchanged in spirit, re-scoped):** the 8-bit sRGB pipeline (re-texture per Decision 5; the engine's pool discipline is landed and pixel-verified), opencut-timeline's prefixed command names (C7), the engine's persistence shape (persistence follows SceneTracks per Decision 12.1 — the old C8 persistence adapter is re-typed as the projector), the engine's JSON-RPC+$ref headless surface (C2, now runtime-subset only).
+
+The engine's own wave plan (its `gaps/audit/MASTER.md`) and opencut-timeline's W5/W6 are converging on the same contracts from their sides; the seal round re-baselines (spec 19 §9 + ARCH-R9 §7).
+
+| Phase | Goal | Exit Criteria | Estimated Effort | Baseline contribution (engine / opencut-timeline / web-daw-core) |
+|---|---|---|---|---|
+| **P0: Playback spike** | Single clip, play/pause/seek, frame-accurate | User loads a video file, plays it smoothly | **≈ satisfied by the engine baseline** (202/202, real A/V export decode-verified) — remaining: real-file import path (D6 keeps it programmatic-first) | Engine: clock + sync plans + player + compositor, AS-IS; media path stays virtual-first per its D6 |
+| **P1: Multi-track + UI shell + PROJECTOR** | Multiple clips on a timeline, basic composition, shell scaffold, one-way SceneTracks→TimelineData projector | User arranges 5 clips on 3 tracks, previews the composite | 1-2 weeks (down from 2-3: the UI exists) | Engine: scene assembly + compositor structure (8-bit→10-bit corrective). opencut-timeline: `TimelineView` + controllers + view math AS-IS + **the projector (Decision 12.1, mandatory)**; shell per spec 18 v1.1 (greenfield) |
+| **P-A: Audio core wiring (PARALLEL — start anytime after P1; independent domain)** | DAW-grade audio on the timeline; offline mixdown export | Mixed-down BGM plays through strips; export audio null-matches realtime ≥60 dB; AudioMixer retired | 2-3 weeks | web-daw-core: bridge + strips + offline render AS-IS (737/737); engine: M1.5 wiring (submodule, player routing, export Stage-2); retirement gate per spec 20 §6 |
+| **P2: NLE ops** | Cut/split/trim/ripple/move/snap | User performs a real rough cut | 1-2 weeks of porting (down from 3-4: both halves exist, tested) | **The op-family port (Decision 12.3)**: engine's ~9 op families (roll/slip/slide/rateStretch/retime/freezeFrame/insert-edit/sync-lock) port into OT's ops layer over SceneTracks; OT's placement/ripple-diff/split-snap-once/group-move stay as-is; C7 rename makes the whole set wire-ready (spec 15) |
+| **P3: Composition & transitions** | Crossfades, blends, basic effects | User adds transitions between clips | 1-2 weeks (engine's stack is 202/202-tested; the work is SceneTracks shapes + projector coverage) | Engine: 27 presentations + planner + handle math as the port source, WebGPU compositor as the render-seam implementation; transitions/linked-groups take SceneTracks shapes (spec 06/07) |
 | **P4: Color grading** | Wheels, curves, LUT, qualifier, scopes (10-bit) | User grades a clip with 10-bit precision | 3-4 weeks | Engine: effect algorithms port; 8-bit→10-bit + linear-light is the corrective core |
 | **P5: FCPXML export** | Round-trip to FCP/DaVinci | User exports and re-opens in FCP | 1-2 weeks | Zero engine surface — build fresh from spec 10; can start early (no GPU/media dependency) |
 | **P6: Cloud render** (optional) | Headless Chrome + ffmpeg pipeline | User requests a ProRes master render | 2-3 weeks | Engine: Xvfb infra reference (its Decision 12); pipeline itself fresh |
 
-**Total estimate: 14-21 weeks (3.5-5 months)** for a single developer. With 2-3 developers, can compress to ~2-3 months.
+**Total estimate: 8-13 weeks** for a single developer (down from 14-21: P0 ~free, P1/P2/P3 shrink to porting + shell; P-A runs parallel). With 2-3 developers, ~1.5-2 months. The dominant remaining costs are the app shell (greenfield) and the op-family port.
 
 Each phase is detailed below with:
 - Goal
