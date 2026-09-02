@@ -481,6 +481,34 @@ opencut-timeline says the playhead line is 2px; OpenCut-classic (read directly i
 
 ---
 
+## Round-9 Meta-Learnings (architecture challenge rounds & document governance)
+
+### 13. Bridge code is product debt — a bidirectional adapter between two same-level models is a permanent tax
+
+Round 8's Decision 11 chartered a `SceneTracks ↔ flat` bidirectional adapter + dual algorithm homes. The user's Round-9 challenge exposed the cost: the adapter, its round-trip property tests, the C2 full-protocol adapter, and the C8 persistence re-shaping were ALL bridge code with zero product value. The fix (Decision 12) wasn't a better bridge — it was eliminating the need: single state model with persistence, one-way projection, ops port-scheduled to one home. **Lesson:** when two repos overlap, first ask "is this ONE domain duplicated (→ merge/port, kill the bridge) or TWO domains that each need a home (→ layered seam, no bridge)?" Round 8 answered "two homes" for timeline semantics (wrong — duplicated domain) and the audio seam answered correctly by construction (S/G/E share one key; nothing flows back).
+
+### 14. "Significantly better to justify" is measured has-vs-has-not, not cleaner-vs-dirtier
+
+The user's bar for adopting a second core was "truly functionally or architecturally significantly better." The discriminating evidence for web-daw-core was categorical (reverb/sends/sidechain/PDC/WAM: freecut has NONE of them) — not qualitative (code quality, cleanliness). For opencut-timeline as a SECOND op-semantics home, no categorical gap existed (engine ops cover the families) — so it failed the bar there; but as the editing domain it holds a categorical asset (the only interaction+UI layer in the workstream, 6.8k LOC that would otherwise be greenfield). **Lesson:** build the capability matrix before the verdict; adoption arguments that cite code cleanliness are dead on arrival when a cleaned-up baseline already exists.
+
+### 15. Dual-version documents are a fragmentation tax — collapse to one file, let git hold history
+
+Twelve specs existed as `.md` seed + `.refined.md` pairs (342 cross-references across 25 files, "which one do I read?" ambiguity every session). The fix: git-rm seeds, git-mv refined→bare name, header note records the rename, 18 live docs re-pointed in one scripted pass; six historical round records keep point-in-time paths BY DESIGN (rewriting history documents corrupts their evidentiary value). **Lesson:** version suffixes are state that must be synced; git already versions files — one filename, in-place edits, status-header ledgers. The battery gains a standing check so the suffix era can't regress.
+
+### 16. Cite the code, inline only the contract — inline code copies rot, citations refresh
+
+The user's observation ("in-line gets stale quickly, the code ref is always there and up to date — why not just point to the code?") became 00-master §2.5.2: inline code is legal ONLY as (a) protocol payloads/data shapes that ARE the contract, (b) prescriptive pseudo-code differing from every implementation, (c) labeled corrective shapes. Everything else cites `repo file:symbol` under the fresh-grep discipline. The R9 sampled audit (spec 05 §16.6) showed the corpus mostly complies (skeletons were written pre-implementation, so they're class (b) contracts, not stale copies) — but attached a falsifiable expectation for the seal-round full audit (01/06 are the likelier carriers). **Lesson:** write the rule, sample-audit against it, and record the predicted outcome so the full audit can actually fail.
+
+### 17. Exempt-window checks must look BEFORE AND AFTER the hit
+
+The battery's "two algorithm homes must only appear in superseded context" check failed on a legitimate hit: the R9 marker sat ~240 chars AFTER the phrase, outside the look-BEHIND window. Same class of bug as the `.refined.md` self-referencing canon notes (the mention IS the rule statement). **Lesson:** context-exemption logic needs a window spanning both directions, and self-describing mentions (a governance rule naming the pattern it bans) are always legitimate — whitelist them explicitly, then verify the whitelist isn't a hole by debugging the actual hit's full context before widening it.
+
+### 18. A global sed in a rename pass will eat your own constants
+
+The rename script's CANON_NOTE contained the literal `.refined.md`, which the subsequent global `.refined.md → .md` path rewrite then mangled into "renamed from `.md`" — a self-inflicted corruption of the very note explaining the rename. Caught by spot-check. **Lesson:** in any scripted rewrite, either run the constant-writing step AFTER the global substitution, or escape/exclude your own boilerplate from the substitution set. Always spot-check the output of mechanical rewrites for the strings you yourself introduced.
+
+---
+
 ## GitHub Operations
 
 When pushing a large spec set to a new GitHub repo:
