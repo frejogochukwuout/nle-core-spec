@@ -893,9 +893,11 @@ for (let index = 0; index < target.length; index += 1) {
 
 ## 9. Audio Pipeline — REFINED
 
+> **Round-9 domain note (Decision 13 / spec 20):** this section owns the PLAYBACK side of audio — clock law (§3), streaming chunking (§9.2), scrub behavior, varispeed playback semantics (§8). The MIXING GRAPH (channel strips, DSP effects, PDC, aux sends, sidechain, WAM hosting, offline render) is the audio domain's own spec: **`20-audio-core.md`** (web-daw-core is the normative core; the engine's AudioMixer retires at the M1.5 parity gate). Where §9.1's graph description and spec 20 conflict, spec 20 wins; this section's clock/streaming facts stand as the playback contract.
+
 ### 9.1 The audio graph
 
-(unchanged from seed spec §9.1 diagram)
+(unchanged from seed spec §9.1 diagram — for the DAW-grade replacement graph, see spec 20 §4.3)
 
 ### 9.2 Streaming audio chunks — verified pattern
 

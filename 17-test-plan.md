@@ -2262,14 +2262,16 @@ Vitest fixtures pinning the Round-8 absorbed semantics (spec 05 §8.3 contract n
 5. **Determinism replay (T1)**: same `(ProjectJSON, EngineCommand[])` → byte-identical `SceneState` across two runs with `idSeed` fixed (spec 15 §1.1 / §10.4); the engine's deterministic-id counter is reset between runs (the OT `resetIdCounterForTests` pattern is the approved mechanism).
 6. **State-change envelope (T2)**: every mutating command's success result carries a `stateChange` payload consistent with the post-state snapshot (the delta IS the spec's multi-consumer sync mechanism — asserted, not assumed).
 
-### 13A.5 Seam adapter property tests (T1 — spec 14 P1's mandatory deliverable)
+### 13A.5 Projector property tests (T1 — spec 14 P1's mandatory deliverable; re-typed R9 from the retired bidirectional adapter per Decision 12.1)
 
 Properties (fast-check, 1,000 runs each in the nightly, 100 in PR-scope):
 
-- `fromFlat(toFlat(tracks))` ≡ `tracks` (modulo stable ids) — section membership, order, and the singleton-main invariant preserved
-- `toFlat(fromFlat(data))` ≡ `data` (modulo stable ids) — flat ordering preserved
+- `project(scene)` is **deterministic** — same scene in, byte-identical `TimelineData` out (no timestamp/id-counter leakage)
+- `project(project(scene))` ≡ `project(scene)` — **idempotence** (the replacement for the retired round-trip property: nothing travels back, so fidelity-through-engine-constructs is no longer on the test critical path)
+- **Never-loss invariant**: total element count is preserved through projection (the cheap oracle that catches silent drops — the engine's pre-4D-A persistence silently dropped image/adjustment clips; this property is the regression test for that class)
+- **No-readback invariant**: no editing op consumes engine-state output (a static-architecture check: the editing-wire dispatcher's dependency graph contains no path from the projection back into SceneTracks)
 - **Taxonomy warning path**: 5-kind TrackType input maps to the 3-kind wire taxonomy with `text/graphic/effect → overlay` + a warning recorded (never data loss, never a crash)
-- **Never-loss invariant**: total element count is preserved through every round-trip (the cheap oracle that catches silent drops — the engine's pre-4D-A persistence silently dropped image/adjustment clips; this property is the regression test for that class)
+- **Audio-domain seam properties (spec 20 §5, web-daw-core's suites as the executable reference)**: merge laws (same-media adjacent segments merge phase-continuously; fades block; rate boundaries never merge), null-parity ≥60 dB offline-vs-realtime, canonical send/return (no dry leak), pan law −3 dB at strip level — pinned by `nle-audio-core-derisk.test.ts` H0-H7 + `nle-bridge.test.ts` C1/H8-H12 (737/737)
 
 ### 13A.6 UI shell v1.1 facet tests (T3 — spec 18 v1.1)
 
@@ -2317,7 +2319,7 @@ Every facet added or materially amended in Rounds 7-8, with its verification. (L
 | NFR: a11y floor | 00 §6A, 18 §11 | NF | T3 | §13A.2 | zero critical/serious + spot assertions |
 | NFR: error-path discipline | 00 §6A | NF | T1 | §13A.4.2 | census green |
 | NFR: persistence robustness | 00 §6A, 09 §11 | NF | T1 | §13A.1 fixture battery | hydrate-with-warnings, never crash |
-| Reference-repo re-tiering (engine 144, OT 136) | 19 §12 | NF (process) | — | both suites re-tier into T1/T2 per §2.1; count discipline (declared == scraped) | zero count drift |
+| Reference-repo re-tiering (engine 202, OT 297, web-daw-core 737) | 19 §12, 00 D14 | NF (process) | — | all three suites re-tier per §2.1 (engine 202 → T1/T2; OT 297 → T1/T2/T3; web-daw-core 737 → T1/T2 with null-test gates as the audio T1); count discipline (declared == scraped) | zero count drift |
 
 **Coverage-gap check (the enforcement rule):** a spec facet introduced by any future round must land in this matrix (or §3.1) in the same PR that introduces it — the §14.4 author checklist gains this as step 0. The 00-master §6A NFR table and this matrix cross-reference each other bidirectionally; neither may gain a row without the other.
 
