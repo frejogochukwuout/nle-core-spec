@@ -453,6 +453,34 @@ Stage Summary:
 
 ---
 
+## Round-8 Meta-Learnings (new-input integration & interruption recovery)
+
+### 7. A reference repo's stated rationale may itself be wrong — verify before honoring it
+
+opencut-timeline's DECISIONS #9 claimed "00-master shows prefixed command names" as its reason for prefixing its headless API. Reading the canon refuted the premise: 00-master uses BARE type names; the repo had conflated spec 15 §4.2's *manager-method* column with the command *type* discriminator. **Lesson:** when a downstream repo justifies a deviation from your spec, verify the cited premise against the spec text before accepting the deviation's rationale (the deviation may still stand for other reasons, but the false premise must be corrected in the repo's docs, not the spec). The name-conflict they intended to file becomes a correction TO THEM.
+
+### 8. New-reference integration = applicability matrix + numbered contradiction register + rejection register
+
+When absorbing a large external spec/source (the cloudcut ux-spec, 28 files): (a) produce a per-file ADOPT/ADAPT/REJECT matrix with named gaps it fills; (b) number every contradiction and resolve each with an explicit ours-wins (or documented adoption) line; (c) keep a rejection register so future PRs cite it instead of re-litigating. This made a 25-contradiction integration fully auditable in one pass — and the register doubles as the anti-regression list.
+
+### 9. Citation freshness is a grep away — never trust moved line numbers
+
+When a reference repo advances (engine Waves 4A-4D), every previously-verified file:line citation may be stale. The cheap loop: `grep -n "methodName(" <file>` in the local clone for each table row, then patch the spec's numbers. Round 8 re-baselined 30+ citations this way in minutes. Also flip the battery's stale-line checks from presence to absence after fixing (a check calibrated to the broken state silently inverts its meaning).
+
+### 10. Testability needs an enforcement rule, not just a matrix
+
+A coverage matrix without enforcement decays. The working pattern: (a) facet rows tagged F/NF with tier + programmatic verification + pass criterion; (b) bidirectional cross-refs between the NFR table (master) and the recipe table (test plan) so neither gains a row without the other; (c) a step-0 author-checklist rule: "a facet with no row anywhere is a spec bug." Plus concrete NFR recipes (median-of-N, named runner class, pass/fail budgets) — a budget without a measurement hook is aspiration.
+
+### 11. Session-interruption recovery: verify file state before continuing
+
+A tool call aborted mid-edit (spec 14's P1 section) left partial edits in the working tree. Recovery protocol: `git diff <file>` to see exactly what landed; grep the file for the aborted edit's target anchor to decide re-apply vs continue; run a corruption check (the edit tool's "Review the changes" output noise is NOT file content — grep the actual file for artifacts before assuming corruption). Zero-loss recovery is routine if the pre-abort work was committed at its own milestone.
+
+### 12. When two references disagree on a constant, record the divergence and pick provenance
+
+opencut-timeline says the playhead line is 2px; OpenCut-classic (read directly in earlier rounds) says 3px. The spec keeps 3px (verified provenance wins — a port can drift) and records the divergence in the code-ref table's note column with the resolution rule. Unrecorded divergences become future "which is right?" debates; recorded ones become one-line decisions.
+
+---
+
 ## GitHub Operations
 
 When pushing a large spec set to a new GitHub repo:
