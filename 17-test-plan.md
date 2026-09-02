@@ -1,7 +1,7 @@
 # 17 — Overall Test Plan: Methodology, Test Matrix, Per-Module Template
 
 **Stream:** Test methodology (umbrella)
-**Status:** v1.1 (Round 8 — §13A added: facet coverage matrix, NFR verification recipes, a11y spot suite, absorbed-semantics fixtures, wire-protocol conformance suite, seam property tests, UI-shell v1.1 facet tests; §2.5 gains the error-path-census + NFR-recipe rules). Supersedes the methodology portions of `12-testing-strategy.refined.md`
+**Status:** v1.1 (Round 8 — §13A added: facet coverage matrix, NFR verification recipes, a11y spot suite, absorbed-semantics fixtures, wire-protocol conformance suite, seam property tests, UI-shell v1.1 facet tests; §2.5 gains the error-path-census + NFR-recipe rules). Supersedes the methodology portions of `12-testing-strategy.md`
 **Spec file:** `17-test-plan.md`
 **Owner:** Test architecture (this stream)
 **Consumers:** Every per-spec author (01–12), CI engineering, QA lead, implementation team
@@ -28,7 +28,7 @@ the *single source of truth* for:
 10. Manual test matrix (tests requiring human verification)
 
 This spec **does not duplicate** the test *infrastructure* documentation in
-`12-testing-strategy.refined.md`. The split is documented in §1.4 below. Where
+`12-testing-strategy.md`. The split is documented in §1.4 below. Where
 this spec needs infrastructure details, it cross-references spec 12.
 
 This spec is *informed by* Decision 9 (data-driven engine architecture), which
@@ -77,16 +77,16 @@ params) and the return shape comes from spec 15 §6 (`CommandResult`).
 ### 1.2 What this spec does NOT define
 
 - Test runner config (`vitest.config.ts`, `playwright.config.ts`) — see
-  `12-testing-strategy.refined.md` §17.4 and §17.5
+  `12-testing-strategy.md` §17.4 and §17.5
 - Chrome launch args for WebGPU (`--enable-unsafe-webgpu`, lavapipe setup) —
-  see `12-testing-strategy.refined.md` §3.2, §14.A
+  see `12-testing-strategy.md` §3.2, §14.A
 - Self-hosted GPU runner install steps — see
-  `12-testing-strategy.refined.md` §17.2
+  `12-testing-strategy.md` §17.2
 - `pixelmatch` / `pngjs` API details — see
-  `12-testing-strategy.refined.md` §5
+  `12-testing-strategy.md` §5
 - ffmpeg asset generation command details — see
-  `12-testing-strategy.refined.md` §15
-- npm package version pinning — see `12-testing-strategy.refined.md` §14
+  `12-testing-strategy.md` §15
+- npm package version pinning — see `12-testing-strategy.md` §14
 - The specific test cases for each module — those live in each per-spec's
   `## Testing` section (see §4 below for the template)
 
@@ -95,7 +95,7 @@ params) and the return shape comes from spec 15 §6 (`CommandResult`).
 Before this spec, testing was scattered:
 
 - `00-master-spec.md` §9 has a 6-bullet summary that points at spec 12
-- `12-testing-strategy.refined.md` is a 2,363-line document that interleaves
+- `12-testing-strategy.md` is a 2,363-line document that interleaves
   *methodology* (what to test, why) with *infrastructure* (how to configure
   Playwright, what npm versions, what ffmpeg commands)
 - Every per-spec (01–11) has its own `## Testing` section, written ad-hoc,
@@ -119,7 +119,7 @@ The fix: spec 17 is the *methodology umbrella*; spec 12 remains the
 *infrastructure reference*. Both stay in the spec set; their responsibilities
 are cleanly split (see §1.4).
 
-### 1.4 Relationship to `12-testing-strategy.refined.md`
+### 1.4 Relationship to `12-testing-strategy.md`
 
 **Decision:** spec 17 (this file) is the umbrella methodology. Spec 12 stays
 focused on test *infrastructure*. Specifically:
@@ -1110,7 +1110,7 @@ compile options, different texture formats, different color pipeline —
 the user's preview will not match their final export. Pixel WYSIWYG is
 the test that *proves* the two entry points share the same code path.
 
-**Test:** see `12-testing-strategy.refined.md` §7 for the canonical
+**Test:** see `12-testing-strategy.md` §7 for the canonical
 implementation. The test loops over every test project (§5.3) and every
 test frame (§5.4), renders via both engines, and asserts 0% pixel diff.
 
@@ -1691,7 +1691,7 @@ on: workflow_dispatch (manual)
 
 ### 9.3 GitHub Actions workflow structure
 
-The concrete YAML lives in `12-testing-strategy.refined.md` §17.1 (the
+The concrete YAML lives in `12-testing-strategy.md` §17.1 (the
 canonical source for the workflow file). This spec defines the *structure*
 of that workflow — which jobs, what scheduling, what runner labels, what
 artifacts to upload on failure.
@@ -2343,18 +2343,18 @@ exempt from the §4 template.
 
 | Spec | Module | Matrix rows (from §3) | Per-spec `## Testing` location |
 |---|---|---|---|
-| 01 | Core engine | Undo/redo, Project save/load, Worker lifecycle | `01-core-engine.refined.md` `## Testing` (≈2108) |
-| 02 | Workers & threading | Worker lifecycle, OPFS persistence | `02-workers-threading.refined.md` `## Testing` (≈2493) |
-| 03 | Playback engine | Playback frame accuracy, Scrub latency, Varispeed | `03-playback-engine.refined.md` `## Testing` (≈2371) |
-| 04 | Renderer & color | Color space conversion, Transfer functions, YUV/RGB, Multi-track blend, Opacity, Masks | `04-renderer-color.refined.md` `## 17. Testing` (≈2084) |
-| 05 | Timeline | Keyboard shortcuts, Mouse interactions, Drag-and-drop | `05-timeline.refined.md` `## Testing` (≈1428) |
-| 06 | NLE ops | Split, Trim, Ripple, Roll, Slip, Slide, Delete, Insert, Rate stretch, Retime, Freeze frame, Range removal | `06-nle-ops.refined.md` `## Testing` (≈2908) |
-| 07 | Composition | Multi-track blend, Transitions, Masks | `07-composition.refined.md` `## Testing` (≈1655) |
-| 08 | Color grading | Color wheels, Curves, LUT, Qualifier, Scopes | `08-color-grading.refined.md` `## 19. Testing` (≈2056) |
-| 09 | Project model | Project save/load, Project schema migration, OPFS persistence | `09-project-model.refined.md` `## Testing` (≈2465) |
-| 10 | FCPXML export | FCPXML export, FCPXML import (manual) | `10-fcpxml-export.refined.md` `## Testing` (≈1863) |
-| 11 | Cloud render | Cloud render WYSIWYG, Memory ceiling (8K), Render time (4K, 8K) | `11-cloud-render.refined.md` `## Testing` (≈2385) |
-| 12 | Testing infrastructure | (this spec references 12; 12 references this spec) | `12-testing-strategy.refined.md` `## Testing` (≈2362) |
+| 01 | Core engine | Undo/redo, Project save/load, Worker lifecycle | `01-core-engine.md` `## Testing` (≈2108) |
+| 02 | Workers & threading | Worker lifecycle, OPFS persistence | `02-workers-threading.md` `## Testing` (≈2493) |
+| 03 | Playback engine | Playback frame accuracy, Scrub latency, Varispeed | `03-playback-engine.md` `## Testing` (≈2371) |
+| 04 | Renderer & color | Color space conversion, Transfer functions, YUV/RGB, Multi-track blend, Opacity, Masks | `04-renderer-color.md` `## 17. Testing` (≈2084) |
+| 05 | Timeline | Keyboard shortcuts, Mouse interactions, Drag-and-drop | `05-timeline.md` `## Testing` (≈1428) |
+| 06 | NLE ops | Split, Trim, Ripple, Roll, Slip, Slide, Delete, Insert, Rate stretch, Retime, Freeze frame, Range removal | `06-nle-ops.md` `## Testing` (≈2908) |
+| 07 | Composition | Multi-track blend, Transitions, Masks | `07-composition.md` `## Testing` (≈1655) |
+| 08 | Color grading | Color wheels, Curves, LUT, Qualifier, Scopes | `08-color-grading.md` `## 19. Testing` (≈2056) |
+| 09 | Project model | Project save/load, Project schema migration, OPFS persistence | `09-project-model.md` `## Testing` (≈2465) |
+| 10 | FCPXML export | FCPXML export, FCPXML import (manual) | `10-fcpxml-export.md` `## Testing` (≈1863) |
+| 11 | Cloud render | Cloud render WYSIWYG, Memory ceiling (8K), Render time (4K, 8K) | `11-cloud-render.md` `## Testing` (≈2385) |
+| 12 | Testing infrastructure | (this spec references 12; 12 references this spec) | `12-testing-strategy.md` `## Testing` (≈2362) |
 | 18 | UI shell | UI shell panels (row above) | `18-ui-shell.md` §12 (Tier 3 shell suite) |
 
 ### 14.3 Cross-references

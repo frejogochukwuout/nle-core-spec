@@ -4,7 +4,7 @@
 **Status:** v1.0 (NEW — authored under task TEST-03)
 **Primary teacher:** FCP/Premiere/DaVinci Resolve muscle-memory conventions + FreeCut `config/hotkeys.ts` + OpenCut-classic `OC-Actions/definitions.ts`
 **Consumers:** UI keyboard handler (`src/ui/keyboard/`), test harness (`tests/e2e/keyboard.spec.ts`), cheat-sheet modal (`src/ui/cheat-sheet/`)
-**Predecessor:** `05-timeline.refined.md` §19 (unified shortcut table — ~50 actions)
+**Predecessor:** `05-timeline.md` §19 (unified shortcut table — ~50 actions)
 **Forward reference:** `15-wire-protocol.md` (TEST-02, shipped) — defines the canonical `EngineCommand` discriminated union that this spec consumes. Spec 16's §3 binding tables and §8.3 resolver are aligned to spec 15 §4 (canonical union) + §4.2 (canonical manager-method mapping). Spec-16-only UI-layer extensions are explicitly marked below (§0.2).
 
 ---
@@ -23,7 +23,7 @@
 
 ### 0.1 Why a dedicated spec
 
-`05-timeline.refined.md` §19 documented the *union* of shortcuts across FreeCut and OpenCut-classic as a discovery exercise. That table answers "what do the reference repos do?" This spec answers the different question: **"what is the complete, consistent, test-enumerable keyboard contract for OUR NLE?"** Concretely:
+`05-timeline.md` §19 documented the *union* of shortcuts across FreeCut and OpenCut-classic as a discovery exercise. That table answers "what do the reference repos do?" This spec answers the different question: **"what is the complete, consistent, test-enumerable keyboard contract for OUR NLE?"** Concretely:
 
 1. §19 is descriptive (catalogs 2 existing apps); this spec is **prescriptive** (defines 1 canonical map).
 2. §19 left 5 conflicts unresolved at the recommendation level; this spec resolves **18 conflicts** (§6) — 12 original plus 6 audit-flagged direct conflicts resolved in §6.1 #13–#18 — with explicit precedence rules and `Cmd+`/`Option+`/4-key-chord fallbacks.
@@ -320,7 +320,7 @@ Organized by category. For each shortcut:
 | `Cmd+Option+Z` | Step backward in history (open history panel + step) | (UI: opens history panel, then ArrowUp/Down steps) | Always | (none) |
 | `Cmd+Shift+Option+Z` | Step forward in history | (UI: history panel forward) | Always | (none) |
 
-**Coalescing note:** per `06-nle-ops.refined.md` §4.4, drag-ops coalesce at the manager layer via `previewElements()` → `commitPreview()` — a single drag is one undo step, not 50. Keyboard nudge (`,` / `.`) does NOT coalesce by default: each press is a discrete `move` command and a discrete undo step. **Hold `Option` while nudging** to coalesce: the first press begins a coalesced group, subsequent presses within 400 ms merge into the same undo step, releasing for 400 ms commits. This matches the `previewElements`/`commitPreview` pattern but with a keyboard-driven commit timer.
+**Coalescing note:** per `06-nle-ops.md` §4.4, drag-ops coalesce at the manager layer via `previewElements()` → `commitPreview()` — a single drag is one undo step, not 50. Keyboard nudge (`,` / `.`) does NOT coalesce by default: each press is a discrete `move` command and a discrete undo step. **Hold `Option` while nudging** to coalesce: the first press begins a coalesced group, subsequent presses within 400 ms merge into the same undo step, releasing for 400 ms commits. This matches the `previewElements`/`commitPreview` pattern but with a keyboard-driven commit timer.
 
 ### 3.11 Effects / Color
 
@@ -2036,7 +2036,7 @@ Each `EngineCommand` type maps to one or more manager methods on `EditorCore` **
 | `exportFrame` | via `engine.command.apply({type:'exportFrame'})` → `engine.renderer.saveSnapshot({format, time})` | RendererManager | No | Spec 15 §4.3.76 — artifact handle `data.frameArtifact` |
 | `batch` | (recursive resolution → `BatchCommand`) | CommandManager | Yes | Composite (spec 15 §7 transaction) |
 
-**Spec 01 + spec 15 cross-check:** method names verified against `01-core-engine.refined.md` §3.1–§3.7 + §14.5–§14.12, and `15-wire-protocol.md` §4.2. Greenfield methods (`toggleTrackSolo`, `toggleTrackLock`, `setActiveTool`, `setRate`, `setLoop`, `exportFCPXML`) confirmed as additions per spec 01 §14 and spec 15 §4.2. The `(UI)` tag marks spec-16 UI-layer extensions routed to `uiStore` (Zustand) instead of `engine.*` — see §0.2 for the rationale (UI state is a separate layer from EditorCore).
+**Spec 01 + spec 15 cross-check:** method names verified against `01-core-engine.md` §3.1–§3.7 + §14.5–§14.12, and `15-wire-protocol.md` §4.2. Greenfield methods (`toggleTrackSolo`, `toggleTrackLock`, `setActiveTool`, `setRate`, `setLoop`, `exportFCPXML`) confirmed as additions per spec 01 §14 and spec 15 §4.2. The `(UI)` tag marks spec-16 UI-layer extensions routed to `uiStore` (Zustand) instead of `engine.*` — see §0.2 for the rationale (UI state is a separate layer from EditorCore).
 
 ---
 

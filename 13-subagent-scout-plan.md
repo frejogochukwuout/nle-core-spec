@@ -56,7 +56,7 @@ Each scout:
    - Quoted code snippets where relevant
    - Verification of seed spec assumptions
    - Corrections to the seed spec where the actual code differs
-7. Appends the refined spec to a new file: `01-core-engine.refined.md` (etc.)
+7. Appends the refined spec to a new file: `01-core-engine.md` (etc.)
 8. Appends a worklog entry to `/home/z/my-project/worklog.md`
 
 ### 3.2 Phase 2: Audit pass (revision)
@@ -110,7 +110,7 @@ Specifically, answer every "Open Question for Sub-Agent Scout" in §7 of the see
 4. Verify or correct the seed spec's claims
 5. Document any subtleties the seed spec missed
 
-Output: /home/z/my-project/download/nle-spec/01-core-engine.refined.md
+Output: /home/z/my-project/download/nle-spec/01-core-engine.md
   - Copy the seed spec
   - Fill in the "Open Questions" section with concrete answers
   - Add a new "Code References" section with all file paths and line numbers
@@ -134,7 +134,7 @@ Stage Summary:
 - Verified initialization order: [list]
 - Documented X contracts in deps/
 - Corrected seed spec assumption about Y
-- Produced 01-core-engine.refined.md
+- Produced 01-core-engine.md
 
 Key files to investigate (in order):
 1. OpenCut-classic: apps/web/src/editor/editor-store.ts (or wherever EditorCore is defined)
@@ -208,7 +208,7 @@ For the AudioWorklet:
 - Document the port.onmessage command protocol
 - Document buffer management
 
-Output: /home/z/my-project/download/nle-spec/02-workers-threading.refined.md
+Output: /home/z/my-project/download/nle-spec/02-workers-threading.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -269,7 +269,7 @@ For mediabunny:
 - Verify whether VideoSampleSink exists and returns raw VideoFrames (we need this for 10-bit)
 - Document how to configure pixelFormat: 'P010' for 10-bit decode
 
-Output: /home/z/my-project/download/nle-spec/03-playback-engine.refined.md
+Output: /home/z/my-project/download/nle-spec/03-playback-engine.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -330,7 +330,7 @@ For mediabunny P010:
 - Verify VideoFrame objects expose P010 data correctly
 - Research how to upload P010 to WebGPU textures (copyExternalImageToTexture vs writeTexture)
 
-Output: /home/z/my-project/download/nle-spec/04-renderer-color.refined.md
+Output: /home/z/my-project/download/nle-spec/04-renderer-color.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -388,7 +388,7 @@ For FreeCut timeline:
 - Document the per-element UI components (trim handles, stretch handles, audio fade handles, etc.)
 - Document the canvas-based ruler (we're considering DOM)
 
-Output: /home/z/my-project/download/nle-spec/05-timeline.refined.md
+Output: /home/z/my-project/download/nle-spec/05-timeline.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -457,7 +457,7 @@ For OpenCut-classic's retime:
 - Document the audio pitch preservation (SoundTouch integration)
 - Document the retime presets
 
-Output: /home/z/my-project/download/nle-spec/06-nle-ops.refined.md
+Output: /home/z/my-project/download/nle-spec/06-nle-ops.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -514,7 +514,7 @@ For OpenCut-classic:
 - Document the TS-side frame descriptor building (frame-descriptor.ts, scene-builder.ts)
 - Document the render node tree (nodes/)
 
-Output: /home/z/my-project/download/nle-spec/07-composition.refined.md
+Output: /home/z/my-project/download/nle-spec/07-composition.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -573,7 +573,7 @@ For the UI panels:
 - Document the slider ranges
 - Document the wheel/picker components
 
-Output: /home/z/my-project/download/nle-spec/08-color-grading.refined.md
+Output: /home/z/my-project/download/nle-spec/08-color-grading.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -627,7 +627,7 @@ For OPFS:
 - Verify browser support (Chromium 86+, Firefox 111+, Safari 16.4+)
 - Verify worker-context access works
 
-Output: /home/z/my-project/download/nle-spec/09-project-model.refined.md
+Output: /home/z/my-project/download/nle-spec/09-project-model.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -682,7 +682,7 @@ Tasks:
    - How to embed a 3D LUT as an <effect> in FCPXML
    - Verify the structure
 
-Output: /home/z/my-project/download/nle-spec/10-fcpxml-export.refined.md
+Output: /home/z/my-project/download/nle-spec/10-fcpxml-export.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -739,7 +739,7 @@ Research tasks (web search + experimentation):
    - Verify page.exposeFunction works for our onFrame callback
    - Test piping large ArrayBuffers from page to Node.js
 
-Output: /home/z/my-project/download/nle-spec/11-cloud-render.refined.md
+Output: /home/z/my-project/download/nle-spec/11-cloud-render.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -805,7 +805,7 @@ This scout is mostly research (no reference repo to read). Tasks:
    - Invariant list (no overlaps, no negative durations, etc.)
    - Test runner config (how many cases per property?)
 
-Output: /home/z/my-project/download/nle-spec/12-testing-strategy.refined.md
+Output: /home/z/my-project/download/nle-spec/12-testing-strategy.md
 Worklog: append to /home/z/my-project/worklog.md
 ```
 
@@ -874,18 +874,18 @@ After the full scout process, the final spec set is:
 ```
 /home/z/my-project/download/nle-spec/
 ├── 00-master-spec.md (or 00-master-spec.v2.md if updated)
-├── 01-core-engine.refined.md → renamed to 01-core-engine.md
-├── 02-workers-threading.refined.md → renamed to 02-workers-threading.md
-├── 03-playback-engine.refined.md → renamed to 03-playback-engine.md
-├── 04-renderer-color.refined.md → renamed to 04-renderer-color.md
-├── 05-timeline.refined.md → renamed to 05-timeline.md
-├── 06-nle-ops.refined.md → renamed to 06-nle-ops.md
-├── 07-composition.refined.md → renamed to 07-composition.md
-├── 08-color-grading.refined.md → renamed to 08-color-grading.md
-├── 09-project-model.refined.md → renamed to 09-project-model.md
-├── 10-fcpxml-export.refined.md → renamed to 10-fcpxml-export.md
-├── 11-cloud-render.refined.md → renamed to 11-cloud-render.md
-├── 12-testing-strategy.refined.md → renamed to 12-testing-strategy.md
+├── 01-core-engine.md → renamed to 01-core-engine.md
+├── 02-workers-threading.md → renamed to 02-workers-threading.md
+├── 03-playback-engine.md → renamed to 03-playback-engine.md
+├── 04-renderer-color.md → renamed to 04-renderer-color.md
+├── 05-timeline.md → renamed to 05-timeline.md
+├── 06-nle-ops.md → renamed to 06-nle-ops.md
+├── 07-composition.md → renamed to 07-composition.md
+├── 08-color-grading.md → renamed to 08-color-grading.md
+├── 09-project-model.md → renamed to 09-project-model.md
+├── 10-fcpxml-export.md → renamed to 10-fcpxml-export.md
+├── 11-cloud-render.md → renamed to 11-cloud-render.md
+├── 12-testing-strategy.md → renamed to 12-testing-strategy.md
 ├── 14-implementation-phases.md (already written — see next file)
 └── audits/ (audit reports, kept for reference)
     ├── 01-core-engine.audit.md
@@ -919,7 +919,7 @@ Stage Summary:
 - Verified [X] claims in the seed spec
 - Corrected [Y] assumptions
 - Added [Z] code references (file paths, line numbers, code snippets)
-- Produced /home/z/my-project/download/nle-spec/XX-stream.refined.md
+- Produced /home/z/my-project/download/nle-spec/XX-stream.md
 ```
 
 The architect can read the worklog to track progress across all scouts.

@@ -3,8 +3,8 @@
 **Stream:** Data-driven engine protocol (the unifying abstraction)
 **Status:** NEW (TEST-02). Defines the runtime-operations layer that makes the engine fully data-driven.
 **Primary teacher:** OpenCut-classic `commands/` (class-based `Command`/`BatchCommand`/`TracksSnapshotCommand` architecture) + FreeCut `headless/contract.test.mjs` (Zod schema in test pattern) + the architect's decision that the engine must be drivable without a UI (master spec §3 "Architecture", §2 Decision 6 "One engine, two entry points").
-**Predecessor specs:** `01-core-engine.refined.md` (manager API), `06-nle-ops.refined.md` (op inventory), `09-project-model.refined.md` (ProjectJSON — Layer 1).
-**Successor specs:** `12-testing-strategy.refined.md` (tier 1 infrastructure; methodology superseded by 17), `16-keyboard-shortcuts.md` (TEST-03, shipped — every shortcut maps to an `EngineCommand`, see §13.5), `17-test-plan.md` (TEST-04, shipped — Tier 1 tests use this protocol, see §13.6), `18-ui-shell.md` (UI shell panels dispatch `EngineCommand`s via this protocol, see §13.12), `19-code-references.md` (reference-repo map and nle-engine reconciliation, see §13.13).
+**Predecessor specs:** `01-core-engine.md` (manager API), `06-nle-ops.md` (op inventory), `09-project-model.md` (ProjectJSON — Layer 1).
+**Successor specs:** `12-testing-strategy.md` (tier 1 infrastructure; methodology superseded by 17), `16-keyboard-shortcuts.md` (TEST-03, shipped — every shortcut maps to an `EngineCommand`, see §13.5), `17-test-plan.md` (TEST-04, shipped — Tier 1 tests use this protocol, see §13.6), `18-ui-shell.md` (UI shell panels dispatch `EngineCommand`s via this protocol, see §13.12), `19-code-references.md` (reference-repo map and nle-engine reconciliation, see §13.13).
 
 ---
 
@@ -106,7 +106,7 @@ This is what Ken Imoto's "automation-ready by accident" observation in spec 01 �
 
 ### 3.1 Layer 1 — Static Project State (`ProjectJSON`)
 
-**Defined in:** `09-project-model.refined.md` §3.1.
+**Defined in:** `09-project-model.md` §3.1.
 
 `ProjectJSON` is the static, on-disk representation of a project — the schema that gets saved to OPFS, loaded back, and round-tripped through migrations. It is a pure JSON object: no class instances, no functions, no `Date` objects (timestamps are ISO strings), no `MediaTime` branded types (they serialize as plain numbers).
 
@@ -127,9 +127,9 @@ This is what Ken Imoto's "automation-ready by accident" observation in spec 01 �
 ### 3.3 Layer 3 — Render Output
 
 **Defined in:**
-- `04-renderer-color.refined.md` §7 — `FrameDescriptor` interface and `renderer.renderFrame()` API.
-- `07-composition.refined.md` §4 — `buildFrameDescriptor(state, n)` pure function (the composition runtime that converts `SceneState` + frame number → `FrameDescriptor`).
-- `03-playback-engine.refined.md` — `audio.renderAudio()` API (audio PCM rendering via `OfflineAudioContext`).
+- `04-renderer-color.md` §7 — `FrameDescriptor` interface and `renderer.renderFrame()` API.
+- `07-composition.md` §4 — `buildFrameDescriptor(state, n)` pure function (the composition runtime that converts `SceneState` + frame number → `FrameDescriptor`).
+- `03-playback-engine.md` — `audio.renderAudio()` API (audio PCM rendering via `OfflineAudioContext`).
 
 **How Layer 2 interacts with Layer 3:** Layer 2 commands mutate `SceneState`; Layer 3 reads `SceneState` and produces output. They are decoupled — applying a command does NOT trigger a render. The render is triggered separately, either by the rAF loop (interactive), by sequential frame iteration (render), or by an explicit `engine.renderer.renderFrame(n)` call (test).
 

@@ -24,18 +24,18 @@ This is **not** a copy spec. We are rebuilding from scratch in pure TypeScript, 
 | File | Subject |
 |---|---|
 | `00-master-spec.md` | **This file** — executive summary, decisions, architecture, scope |
-| `01-core-engine.refined.md` | Engine architecture, `EditorCore` pattern, contract seams, two entry points |
-| `02-workers-threading.refined.md` | Worker pool, `ManagedWorker` abstraction, AudioWorklet, threading discipline |
-| `03-playback-engine.refined.md` | Clock, decode, sync plans, scrubbing, varispeed |
-| `04-renderer-color.refined.md` | WebGPU layer, 10-bit pipeline, scene-linear color management |
-| `05-timeline.refined.md` | Timeline UI, DOM rendering, virtualization, data model |
-| `06-nle-ops.refined.md` | Cut / split / trim / ripple / roll / slip / slide / move / lock / snap |
-| `07-composition.refined.md` | Composition runtime, layer model, blend modes, scene graph |
-| `08-color-grading.refined.md` | Wheels, curves, LUT, qualifier, power window, scopes |
-| `09-project-model.refined.md` | Project schema, persistence, migrations, your own storage |
-| `10-fcpxml-export.refined.md` | FCPXML format, element mappings, handoff contract |
-| `11-cloud-render.refined.md` | Headless Chrome, real GPU, ffmpeg at edges, WYSIWYG contract |
-| `12-testing-strategy.refined.md` | Virtual framebuffer, pixel verification, audio waveform checks |
+| `01-core-engine.md` | Engine architecture, `EditorCore` pattern, contract seams, two entry points |
+| `02-workers-threading.md` | Worker pool, `ManagedWorker` abstraction, AudioWorklet, threading discipline |
+| `03-playback-engine.md` | Clock, decode, sync plans, scrubbing, varispeed |
+| `04-renderer-color.md` | WebGPU layer, 10-bit pipeline, scene-linear color management |
+| `05-timeline.md` | Timeline UI, DOM rendering, virtualization, data model |
+| `06-nle-ops.md` | Cut / split / trim / ripple / roll / slip / slide / move / lock / snap |
+| `07-composition.md` | Composition runtime, layer model, blend modes, scene graph |
+| `08-color-grading.md` | Wheels, curves, LUT, qualifier, power window, scopes |
+| `09-project-model.md` | Project schema, persistence, migrations, your own storage |
+| `10-fcpxml-export.md` | FCPXML format, element mappings, handoff contract |
+| `11-cloud-render.md` | Headless Chrome, real GPU, ffmpeg at edges, WYSIWYG contract |
+| `12-testing-strategy.md` | Virtual framebuffer, pixel verification, audio waveform checks |
 | `13-subagent-scout-plan.md` | Stream breakdown, scout prompts, audit pass, deliverables |
 | `14-implementation-phases.md` | Phased rollout: playback → multitrack → ops → grading → export |
 | `15-wire-protocol.md` | JSON wire protocol: 78 `EngineCommand` types, Zod schemas, HTTP API, export commands (§4.3.74-76) |
@@ -395,7 +395,7 @@ Three consumers use **identical JSON interfaces** against the same engine:
 | UI components | **Radix UI + shadcn-style** | Same as both reference repos |
 | Validation | **Zod** | For project schema, FCPXML schema |
 | Engine wire protocol | **JSON (Zod-validated)** | `ProjectJSON` for static project state, `EngineCommand[]` for runtime ops, `CommandResult` for outputs — see `15-wire-protocol.md`. Drives the browser UI, cloud render, and test harness from one identical protocol (Decision 9). |
-| Video decode | **mediabunny** (WebCodecs wrapper) — **MPL-2.0** license | 10-bit decode via the browser's `VideoDecoder` (formats like `I420P10`/`I422P10`/`I444P10` are emitted based on source codec; we configure the decoder with `hardwareAcceleration: 'prefer-hardware'` — mediabunny does NOT expose a `pixelFormat: 'P010'` option). **License note:** MPL-2.0 is weak file-level copyleft. Using mediabunny as-is (via npm) does **not** impose copyleft on our code; modifications to mediabunny source files must be redistributed under MPL-2.0 (file-level, not project-level — softer than GPL). See `03-playback-engine.refined.md` §13.C for full implications. |
+| Video decode | **mediabunny** (WebCodecs wrapper) — **MPL-2.0** license | 10-bit decode via the browser's `VideoDecoder` (formats like `I420P10`/`I422P10`/`I444P10` are emitted based on source codec; we configure the decoder with `hardwareAcceleration: 'prefer-hardware'` — mediabunny does NOT expose a `pixelFormat: 'P010'` option). **License note:** MPL-2.0 is weak file-level copyleft. Using mediabunny as-is (via npm) does **not** impose copyleft on our code; modifications to mediabunny source files must be redistributed under MPL-2.0 (file-level, not project-level — softer than GPL). See `03-playback-engine.md` §13.C for full implications. |
 | GPU | **WebGPU** (no WebGL2 fallback) | Chromium 113+ basic; Chromium 118+ for 10-bit canvas (`rgba10a2unorm`) — see §5 |
 | Shaders | **WGSL** | Compiled by browser, no Rust |
 | Audio DSP | **SoundTouch** (via AudioWorklet) | For varispeed preview |
@@ -497,18 +497,18 @@ Each stream has its own spec file. The breakdown is designed so sub-agents can w
 
 | # | Stream | Spec file | Primary teacher | Key decisions |
 |---|---|---|---|---|
-| 1 | Core engine | `01-core-engine.refined.md` | OpenCut-classic `EditorCore` + FreeCut `deps/` contracts | Decision 1, 2, 6 |
-| 2 | Workers & threading | `02-workers-threading.refined.md` | FreeCut `ManagedWorker*` + worker files | Decision 1 |
-| 3 | Playback engine | `03-playback-engine.refined.md` | FreeCut `Clock.ts` + OpenCut-classic `PlaybackManager` | Decision 1, 2 |
-| 4 | Renderer & color | `04-renderer-color.refined.md` | FreeCut `gpu-*` infrastructure (ported to 10-bit linear) | Decision 4, 5 |
-| 5 | Timeline | `05-timeline.refined.md` | OpenCut-classic DOM approach + FreeCut NLE op UI | Decision 2 |
-| 6 | NLE ops | `06-nle-ops.refined.md` | FreeCut `stores/actions/edit/*` + OpenCut-classic `lib/ripple/` | Decision 1, 2 |
-| 7 | Composition | `07-composition.refined.md` | FreeCut `composition-runtime/` + OpenCut-classic `compositor/` | Decision 1, 2 |
-| 8 | Color grading | `08-color-grading.refined.md` | FreeCut `gpu-effects/effects/color.ts` (ported to linear) | Decision 5 |
-| 9 | Project model | `09-project-model.refined.md` | OpenCut-classic types + your own schema | Decision 2 |
-| 10 | FCPXML export | `10-fcpxml-export.refined.md` | FCPXML 1.10 spec + project model mapping | Decision 6 |
-| 11 | Cloud render | `11-cloud-render.refined.md` | FreeCut `headless/main.ts` + ffmpeg pattern | Decision 6, 8 |
-| 12 | Testing | `12-testing-strategy.refined.md` | Playwright + virtual framebuffer | All decisions |
+| 1 | Core engine | `01-core-engine.md` | OpenCut-classic `EditorCore` + FreeCut `deps/` contracts | Decision 1, 2, 6 |
+| 2 | Workers & threading | `02-workers-threading.md` | FreeCut `ManagedWorker*` + worker files | Decision 1 |
+| 3 | Playback engine | `03-playback-engine.md` | FreeCut `Clock.ts` + OpenCut-classic `PlaybackManager` | Decision 1, 2 |
+| 4 | Renderer & color | `04-renderer-color.md` | FreeCut `gpu-*` infrastructure (ported to 10-bit linear) | Decision 4, 5 |
+| 5 | Timeline | `05-timeline.md` | OpenCut-classic DOM approach + FreeCut NLE op UI | Decision 2 |
+| 6 | NLE ops | `06-nle-ops.md` | FreeCut `stores/actions/edit/*` + OpenCut-classic `lib/ripple/` | Decision 1, 2 |
+| 7 | Composition | `07-composition.md` | FreeCut `composition-runtime/` + OpenCut-classic `compositor/` | Decision 1, 2 |
+| 8 | Color grading | `08-color-grading.md` | FreeCut `gpu-effects/effects/color.ts` (ported to linear) | Decision 5 |
+| 9 | Project model | `09-project-model.md` | OpenCut-classic types + your own schema | Decision 2 |
+| 10 | FCPXML export | `10-fcpxml-export.md` | FCPXML 1.10 spec + project model mapping | Decision 6 |
+| 11 | Cloud render | `11-cloud-render.md` | FreeCut `headless/main.ts` + ffmpeg pattern | Decision 6, 8 |
+| 12 | Testing | `12-testing-strategy.md` | Playwright + virtual framebuffer | All decisions |
 | 13 | Wire protocol | `15-wire-protocol.md` | OpenCut-classic `EditorCore` method shapes + Zod schemas | Decision 9 |
 | 14 | Keyboard shortcuts | `16-keyboard-shortcuts.md` | FreeCut + OpenCut-classic shortcut maps; every shortcut → `EngineCommand` | Decision 9 |
 | 15 | Test plan | `17-test-plan.md` | Three-tier testing methodology (Tier 1 engine / Tier 2 render / Tier 3 UI) | Decision 9 |
@@ -550,7 +550,7 @@ Each phase is independently shippable. P0-P5 are the v1 product. P6 is the v2 ex
 
 ## 11. Open Questions (For Sub-Agent Scouts to Resolve)
 
-> **Round-7 status note:** Questions 1-11 were resolved by the SCOUT agents during Rounds 2-6 (answers live in each `.refined.md` spec's "Open Questions — Resolved" / §14 sections, verified by the `audits/` reports). Questions 12-14 are implementation-time verifications that remain open by design (they need real hardware/services). New Round-7+ open items are tracked in spec 18 §15, spec 19 §12, and spec 15 §14.
+> **Round-7 status note:** Questions 1-11 were resolved by the SCOUT agents during Rounds 2-6 (answers live in each `.md` spec's "Open Questions — Resolved" / §14 sections, verified by the `audits/` reports). Questions 12-14 are implementation-time verifications that remain open by design (they need real hardware/services). New Round-7+ open items are tracked in spec 18 §15, spec 19 §12, and spec 15 §14.
 
 These are the questions sub-agent scouts should investigate against the actual source code:
 

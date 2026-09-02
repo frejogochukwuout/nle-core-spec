@@ -11,18 +11,18 @@ This repo contains the **architectural and implementation specification** for a 
 | File | Subject |
 |---|---|
 | `00-master-spec.md` | Executive summary, 10 architectural decisions (incl. Round-7's code-reference architecture), tech stack, WYSIWYG contract |
-| `01-core-engine.refined.md` | `EditorCore` singleton, 12 managers, contract seams, two entry points |
-| `02-workers-threading.refined.md` | 10 Web Workers + 1 AudioWorklet, `ManagedWorker` abstraction, memory discipline |
-| `03-playback-engine.refined.md` | `AudioContext.currentTime` clock, `MediaTime`/`FrameRate`, 6 sync plans, varispeed |
-| `04-renderer-color.refined.md` | WebGPU, 10-bit P010/I420P10 pipeline, scene-linear color management, WGSL shaders |
-| `05-timeline.refined.md` | DOM-based timeline, virtualization, all interactions |
-| `06-nle-ops.refined.md` | Full NLE op inventory (split/trim/move/ripple/roll/slip/slide/etc.) |
-| `07-composition.refined.md` | `FrameDescriptor` builder, layer/transition/effect/mask resolution |
-| `08-color-grading.refined.md` | Resolve-style wheels/curves/LUT/qualifier/power window/scopes |
-| `09-project-model.refined.md` | Pure JSON schema, OPFS storage, kimdogyeom bug hardening |
-| `10-fcpxml-export.refined.md` | FCPXML 1.10 DTD mapping, colorSpace triplets, round-trip |
-| `11-cloud-render.refined.md` | Headless Chrome + real GPU + ffmpeg at edges, WYSIWYG |
-| `12-testing-strategy.refined.md` | Test infrastructure (Playwright, pixelmatch, virtual framebuffer) |
+| `01-core-engine.md` | `EditorCore` singleton, 12 managers, contract seams, two entry points |
+| `02-workers-threading.md` | 10 Web Workers + 1 AudioWorklet, `ManagedWorker` abstraction, memory discipline |
+| `03-playback-engine.md` | `AudioContext.currentTime` clock, `MediaTime`/`FrameRate`, 6 sync plans, varispeed |
+| `04-renderer-color.md` | WebGPU, 10-bit P010/I420P10 pipeline, scene-linear color management, WGSL shaders |
+| `05-timeline.md` | DOM-based timeline, virtualization, all interactions |
+| `06-nle-ops.md` | Full NLE op inventory (split/trim/move/ripple/roll/slip/slide/etc.) |
+| `07-composition.md` | `FrameDescriptor` builder, layer/transition/effect/mask resolution |
+| `08-color-grading.md` | Resolve-style wheels/curves/LUT/qualifier/power window/scopes |
+| `09-project-model.md` | Pure JSON schema, OPFS storage, kimdogyeom bug hardening |
+| `10-fcpxml-export.md` | FCPXML 1.10 DTD mapping, colorSpace triplets, round-trip |
+| `11-cloud-render.md` | Headless Chrome + real GPU + ffmpeg at edges, WYSIWYG |
+| `12-testing-strategy.md` | Test infrastructure (Playwright, pixelmatch, virtual framebuffer) |
 | `13-subagent-scout-plan.md` | How the specs were refined (process documentation) |
 | `14-implementation-phases.md` | Phased rollout: P0 (playback) → P6 (cloud render) |
 | `15-wire-protocol.md` | JSON wire protocol: 78 `EngineCommand` types (incl. export commands), Zod schemas, HTTP API |
