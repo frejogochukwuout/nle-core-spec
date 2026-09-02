@@ -4,7 +4,8 @@
    Density: pro (spec/mock metrics) | comfortable (roomier web-native)
    Clip rendering: filmstrip (spec 05 §7) | blocks (davinci mock compact)
    Track headers: readout (160px + big TC) | slim (112px, OpenCut teacher)
-   Accent: gold | ember | violet  (drives selection / playhead / active tab)
+   Accent: gold | ember | violet  (state: selection + active tab + CTA)
+   Playhead: dedicated token (mock-authentic red #fa1024) — time ≠ state
    ============================================================ */
 
 :root {
@@ -33,17 +34,33 @@
   --border-strong: #3a3a3d;
   --text-primary: #e6e6e6;
   --text-muted: #9a9a9e;
-  --text-faint: #6a6a6e;
+  --text-faint: #6a6a6e;        /* decorative hints only — NEVER body text (18 §9) */
   --hover-overlay: #2c2c2e;
   --active-overlay: #34343a;
 
-  /* accent ramps — data-accent picks one */
-  --accent-gold: #e8b34b;       /* mock playhead gold → spec 18 --accent-selection */
-  --accent-ember: #fa6a4a;      /* mock's actual tab/selection orange */
-  --accent-violet: #7b5cff;     /* mock inspector gradient start → spec 18 --accent-focus */
+  /* radii — resolve keeps the mock's near-sharp corners */
+  --radius: 2px;
+  --radius-sm: 2px;
+
+  /* elevation (studio direction) */
+  --shadow-panel: none;
+
+  /* accent ramps — data-accent picks one; state ONLY (selection, active tab, CTA) */
+  --accent-gold: #e8b34b;
+  --accent-ember: #fa6a4a;
+  --accent-violet: #7b5cff;
   --accent-selection: var(--accent-gold);
-  --accent-focus: #7b5cff;
+  --accent-focus: #7b5cff;      /* focus rings + primary buttons (spec §9) */
   --accent-contrast: #1a1a1a;   /* text on accent chips */
+
+  /* time indicators — dedicated (the mock's playhead is #fa1024 red) */
+  --playhead: #fa1024;
+  --inout-band: rgba(232, 179, 75, 0.22);
+
+  /* type ramp (track badges / media badges — 18 §9 "one hue ramp") */
+  --type-video: #7d9cc0;
+  --type-audio: #5cb87f;
+  --type-overlay: #a78bda;
 
   /* tracks & clips */
   --lane-video: #3a4f63;
@@ -52,8 +69,8 @@
   --clip-video: #3d5870;
   --clip-video-strong: #4a6b85;
   --clip-video-edge: #1b2733;
-  --clip-audio-a: #4a9c69;
-  --clip-audio-b: #357a4d;
+  --clip-audio-a: #3f8a5c;
+  --clip-audio-b: #2c6a44;
   --clip-audio-edge: #5cb87f;
   --clip-text: #5a2a86;
   --waveform: #4ade80;          /* spec 05 §7.2 */
@@ -83,7 +100,7 @@
   --bg-shell: #1a1a21;
   --bg-panel: #1e1e26;
   --bg-raised: #23232c;
-  --bg-timeline: #16161c;
+  --bg-timeline: #15151b;
   --bg-inset: #101015;
   --bg-frame: #08080a;
   --border-hairline: #26262f;
@@ -95,11 +112,22 @@
   --hover-overlay: #262630;
   --active-overlay: #2e2e3a;
 
+  --radius: 8px;
+  --radius-sm: 4px;
+
+  --shadow-panel: 0 10px 28px rgba(0, 0, 0, 0.38), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+
   --accent-gold: #f2bd62;
   --accent-ember: #ff7a5c;
   --accent-violet: #8f74ff;
   --accent-focus: #9d86ff;
   --accent-contrast: #16121f;
+
+  --playhead: #fa3d55;
+
+  --type-video: #8fb3d9;
+  --type-audio: #6cc794;
+  --type-overlay: #9aa7e8;      /* indigo — deliberately off the accent hue */
 
   --lane-video: #2e3a52;
   --lane-audio: #1e2027;
@@ -110,7 +138,7 @@
   --clip-audio-a: #3f9c68;
   --clip-audio-b: #2d7a50;
   --clip-audio-edge: #55b57f;
-  --clip-text: #6a3ea8;
+  --clip-text: #4a5680;         /* slate-indigo, off accent hue */
   --waveform: #52e08a;
   --clip-label-text: #e2ecf5;
 }
@@ -123,17 +151,22 @@
   --bg-shell: #f7f7fa;
   --bg-panel: #fdfdfe;
   --bg-raised: #ffffff;
-  --bg-timeline: #f0f0f4;
+  --bg-timeline: #eceef1;
   --bg-inset: #e8e8ee;
-  --bg-frame: #dcdfe5;
-  --border-hairline: #e0e0e7;
+  --bg-frame: #101114;          /* monitor surround stays near-black — content is never "light themed" */
+  --border-hairline: #dededf;
   --border-soft: #d4d4dd;
   --border-strong: #bfbfcc;
   --text-primary: #1d1d23;
-  --text-muted: #676773;
+  --text-muted: #5f5f6b;
   --text-faint: #9c9ca8;
   --hover-overlay: #ebebf2;
   --active-overlay: #e2e2eb;
+
+  --radius: 8px;
+  --radius-sm: 4px;
+
+  --shadow-panel: 0 1px 3px rgba(20, 20, 30, 0.08), 0 8px 24px rgba(20, 20, 30, 0.07);
 
   --accent-gold: #a6721c;
   --accent-ember: #e5484d;
@@ -141,17 +174,23 @@
   --accent-focus: #6e56cf;
   --accent-contrast: #fffdf7;
 
-  --lane-video: #dce4ee;
-  --lane-audio: #eaecef;
-  --lane-overlay: #e7e5f0;
+  --playhead: #e5484d;
+
+  --type-video: #5a7ba6;
+  --type-audio: #3d9e66;
+  --type-overlay: #8a6fc9;
+
+  --lane-video: #dbe3ed;        /* banded against timeline bg for structure */
+  --lane-audio: #e6e9ed;
+  --lane-overlay: #e6e3f0;
   --clip-video: #b4c6da;
   --clip-video-strong: #a1bad7;
   --clip-video-edge: #93a9c2;
-  --clip-audio-a: #9ed3b1;
-  --clip-audio-b: #7cbd98;
+  --clip-audio-a: #b7dcc6;      /* light fill, waveform pops on top */
+  --clip-audio-b: #a3d0b6;
   --clip-audio-edge: #58a67c;
   --clip-text: #c9b4ea;
-  --waveform: #2f9e5f;
+  --waveform: #1e9e58;          /* dark green — data must punch on light fill */
   --clip-label-text: #232830;
 
   --rec: #e5484d;

@@ -32,7 +32,6 @@ export function Timeline() {
   // snap targets: all clip edges + playhead + sequence ends (spec 05 §9)
   const snapTargets = scene.tracks.flatMap((t) => t.elements.flatMap((e) => [e.startTime, e.startTime + e.duration]));
   snapTargets.push(playhead, 0, duration);
-
   const onScrollSync = () => {
     if (headersRef.current && scrollRef.current) {
       headersRef.current.scrollTop = scrollRef.current.scrollTop;
@@ -80,7 +79,7 @@ export function Timeline() {
         onScroll={onScrollSync}
       >
         <div id="timeline-content" className="relative" style={{ width: contentW }}>
-          <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} />
+          <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} playhead={playhead} />
 
           {scene.tracks.map((track) => {
             const h = laneHeight(track.kind);
@@ -93,15 +92,42 @@ export function Timeline() {
                 {track.elements.map((el) => (
                   <Clip key={el.id} el={el} track={track} pxPerSec={pxPerSec} laneHeight={h} snapTargets={snapTargets} />
                 ))}
+
+                {/* transition markers — Resolve-style box straddling the cut */}
+                {track.elements.filter((e) => e.transitionOut).map((e) => {
+                  const cut = (e.startTime + e.duration) * pxPerSec;
+                  const w = e.transitionOut!.duration * pxPerSec;
+                  return (
+                    <div
+                      key={`tr-${e.id}`}
+                      className="absolute top-[3px] z-[7] flex items-center justify-center overflow-hidden rounded-[2px]"
+                      style={{
+                        left: cut - w / 2,
+                        width: Math.max(w, 14),
+                        height: h - 8,
+                        background: 'linear-gradient(135deg, var(--transition-mark), color-mix(in srgb, var(--transition-mark) 45%, #000))',
+                        border: '1px solid var(--transition-mark)',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.35)',
+                      }}
+                      title={`Crossfade · ${e.transitionOut!.presentation} · ${e.transitionOut!.duration}s`}
+                      aria-label={`Crossfade transition, ${e.transitionOut!.duration} seconds`}
+                      data-testid={`transition-${e.id}`}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                        <path d="M3 3 L11 11 M11 3 L3 11" stroke="white" strokeWidth="1.6" strokeLinecap="round" opacity="0.95" />
+                      </svg>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
 
-          {/* ---- playhead (3px line + head, spec 05 §14.3) ---- */}
+          {/* ---- playhead (3px line + head, spec 05 §14.3; dedicated time token) ---- */}
           <div className="pointer-events-none absolute bottom-0 top-0 z-40" style={{ left: playhead * pxPerSec }} aria-hidden="true">
             <div
               className="absolute bottom-0 top-0 -translate-x-1/2"
-              style={{ width: 3, background: 'var(--accent-selection)', boxShadow: '0 0 1px rgba(0,0,0,0.8)' }}
+              style={{ width: 3, background: 'var(--playhead)', boxShadow: '0 0 1px rgba(0,0,0,0.8)' }}
             />
             <div
               className="pointer-events-auto absolute -translate-x-1/2 cursor-col-resize"
@@ -126,7 +152,7 @@ export function Timeline() {
               }}
             >
               <svg width="14" height="13" viewBox="0 0 13 13" className="mt-[1px]">
-                <path d="M1 0h11v6.2L6.5 11.5 1 6.2V0z" fill="var(--accent-selection)" stroke="rgba(0,0,0,0.35)" strokeWidth="0.5" />
+                <path d="M1 0h11v6.2L6.5 11.5 1 6.2V0z" fill="var(--playhead)" stroke="rgba(0,0,0,0.35)" strokeWidth="0.5" />
               </svg>
             </div>
           </div>

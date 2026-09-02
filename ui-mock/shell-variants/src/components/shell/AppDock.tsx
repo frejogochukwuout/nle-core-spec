@@ -1,14 +1,15 @@
 /* AppDock — spec 18 §4.8: brand left, THREE-page dock center (Edit / Color /
    Deliver — mock's 7 pages collapsed), cheat-sheet + settings right.
-   Icon-only in resolve theme, icon+label in studio/light (density signal). */
+   Icon-only in resolve theme, icon+label in studio/light; aria-label keeps
+   the accessible name regardless of visible label. */
 
-import { ScissorsLineDashed, Circle, Package, Keyboard, Settings2, House } from 'lucide-react';
+import { ScissorsLineDashed, Palette, Send, Keyboard, Settings2, House } from 'lucide-react';
 import { useUi, type Page } from '../../state/useUiStore';
 
 const PAGES: { id: Page; label: string; icon: typeof ScissorsLineDashed; tip: string }[] = [
   { id: 'edit', label: 'Edit', icon: ScissorsLineDashed, tip: 'Edit — rough cut (⌘1)' },
-  { id: 'color', label: 'Color', icon: Circle, tip: 'Color — grading (⌘2)' },
-  { id: 'deliver', label: 'Deliver', icon: Package, tip: 'Deliver — export & handoff (⌘3)' },
+  { id: 'color', label: 'Color', icon: Palette, tip: 'Color — grading (⌘2)' },
+  { id: 'deliver', label: 'Deliver', icon: Send, tip: 'Deliver — export & handoff (⌘3)' },
 ];
 
 export function AppDock() {
@@ -25,10 +26,10 @@ export function AppDock() {
       <div className="mr-4 flex shrink-0 items-center gap-2">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <circle cx="12" cy="12" r="11" stroke="var(--border-strong)" strokeWidth="1.5" />
-          <circle cx="12" cy="12" r="4" fill="var(--accent-selection)" />
+          <circle cx="12" cy="12" r="4" fill="var(--type-video)" />
         </svg>
         <span className="whitespace-nowrap text-[12px] font-medium text-tprimary">
-          nle-core <span className="text-tfaint">· shell study</span>
+          nle-core <span className="text-tmuted">· shell study</span>
         </span>
       </div>
 
@@ -42,6 +43,7 @@ export function AppDock() {
               onClick={() => setPage(p.id)}
               data-testid={`shell-dock-page-${p.id}`}
               data-tip={p.tip}
+              aria-label={p.label}
               aria-current={active ? 'page' : undefined}
               className={`dock-tab relative flex h-full items-center gap-1.5 px-4 ${active ? 'text-tprimary' : 'text-tfaint hover:text-tmuted'}`}
             >

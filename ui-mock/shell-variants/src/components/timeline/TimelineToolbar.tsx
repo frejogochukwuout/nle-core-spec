@@ -2,7 +2,7 @@
    snap/link/lock toggles, marker cluster, zoom cluster, master audio.
    Mock's sync-bin/auto-sync/dyntrim dropped (§8.10 / §8.9). */
 
-import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, Plus, Minus } from 'lucide-react';
+import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX } from 'lucide-react';
 import { useUi, type ToolId } from '../../state/useUiStore';
 
 const BladeIcon = () => (
@@ -16,13 +16,21 @@ const RollIcon = () => (
     <path d="M3 2 L9 10 L3 18" /><path d="M21 2 L15 10 L21 18" />
   </svg>
 );
+const RippleIcon = () => (
+  <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <path d="M8 2 L14 10 L8 18" /><path d="M16 6 L20 10 L16 14" />
+    <path d="M4 10h4" /><path d="M20 10h0" />
+  </svg>
+);
 
 const TOOLS: { id: ToolId; tip: string; icon: React.ReactNode }[] = [
   { id: 'select', tip: 'Selection (V)', icon: <MousePointer2 size={14} strokeWidth={1.8} /> },
   { id: 'blade', tip: 'Blade (B)', icon: <BladeIcon /> },
   { id: 'roll', tip: 'Roll (T)', icon: <RollIcon /> },
+  { id: 'ripple', tip: 'Ripple (R)', icon: <RippleIcon /> },
   { id: 'slip', tip: 'Slip (Y)', icon: <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M2 10h20" /><path d="M7 5l-5 5 5 5" /><path d="M17 5l5 5-5 5" /></svg> },
   { id: 'slide', tip: 'Slide (U)', icon: <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="8" y="4" width="8" height="12" rx="1" /><path d="M3 10h3" /><path d="M18 10h3" /></svg> },
+  { id: 'stretch', tip: 'Rate stretch', icon: <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 3v14" strokeDasharray="2 2" /><path d="M20 3v14" strokeDasharray="2 2" /><path d="M7 10h10" /><path d="M14 7l3 3-3 3" /><path d="M10 7l-3 3 3 3" /></svg> },
 ];
 
 const MIN_PPS = 8, MAX_PPS = 240;
@@ -152,7 +160,7 @@ export function TimelineToolbar() {
         className="w-[90px]"
       />
       <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomStep(1.5)} data-tip="Zoom in (+)" aria-label="Zoom in">+</button>
-      <span className="mono hidden shrink-0 pl-1 text-[10px] text-tfaint xl:inline">{Math.round(pxPerSec)} px/s</span>
+      <span className="mono hidden shrink-0 pl-1 text-[11px] text-tmuted xl:inline">{Math.round(pxPerSec)} px/s</span>
 
       <div className="vsep" />
 
@@ -176,7 +184,7 @@ export function TimelineToolbar() {
         style={{ ['--fill' as string]: `${Math.round(masterVolume * 100)}%` }}
         aria-label="Master volume"
       />
-      <span className="shrink-0 rounded-[2px] border border-strong px-1.5 py-px text-[10px] text-tfaint">DIM</span>
+      <span className="shrink-0 rounded-[var(--radius-sm)] border border-strong px-1.5 py-px text-[11px] text-tmuted">DIM</span>
     </div>
   );
 }

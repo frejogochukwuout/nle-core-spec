@@ -97,18 +97,30 @@ input, select { font-family: inherit; }
   background: transparent;
   border: 1.4px solid var(--text-primary);
 }
-.icon-btn.disabled { opacity: .35; pointer-events: none; }
+.icon-btn.disabled { opacity: .4; pointer-events: auto; cursor: not-allowed; }
 .icon-btn svg { pointer-events: none; }
 
 .tc-chip {
   font-family: var(--tc-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-primary);
   background: var(--bg-inset);
   border: 1px solid var(--border-soft);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   padding: 2px 7px;
   font-variant-numeric: tabular-nums;
+}
+
+/* elevation for studio/light panels */
+.panel-shadow { box-shadow: var(--shadow-panel); }
+
+/* locked clips — stripes, not opacity (stays legible in every theme) */
+.locked-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    rgba(0, 0, 0, 0.18) 6px 12px
+  );
 }
 
 /* tooltip (CSS-only, 500ms delay per spec 18 §9) */
@@ -161,25 +173,26 @@ input[type="range"]::-webkit-slider-thumb {
   border: none;
 }
 input[type="range"].green-fill::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, #2fae46 0%, #2fae46 var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
+  background: linear-gradient(to right, var(--type-audio) 0%, var(--type-audio) var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
 }
 [data-theme="light"] input[type="range"]::-webkit-slider-thumb { background: #4a4a52; }
 [data-theme="light"] input[type="range"].green-fill::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, #2f9e5f 0%, #2f9e5f var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
+  background: linear-gradient(to right, var(--type-audio) 0%, var(--type-audio) var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
 }
 
 /* text inputs */
 .field {
   background: var(--bg-inset);
   border: 1px solid var(--border-soft);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: 3px 7px;
   font-size: 11.5px;
 }
 .field:focus { border-color: var(--accent-focus); }
 
-/* dock tabs — icon-only in resolve, icon+label in studio/light */
+/* dock tabs — icon-only in resolve, icon+label in studio/light;
+   the accessible name survives display:none via aria-label */
 [data-theme="resolve"] .dock-tab .dock-label { display: none; }
 .dock-tab .dock-label { font-size: 11px; }
 
@@ -190,6 +203,12 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
 .window-too-small { display: none; }
 @media (max-width: 1279px), (max-height: 799px) {
   .window-too-small { display: flex; }
+}
+
+/* F6 region focus targets — spec 18 §11.5 (2px region outline when focused) */
+.shell-region:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: -2px;
 }
 
 /* selection-safe text */

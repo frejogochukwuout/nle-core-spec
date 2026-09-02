@@ -3,7 +3,7 @@
    commit-on-release semantics (mock: local state only). Tab visibility:
    hidden-not-disabled per §4.4. */
 
-import { AudioWaveform, Video, ArrowLeftRight } from 'lucide-react';
+import { AudioWaveform, Video, ArrowLeftRight, MoreHorizontal, History } from 'lucide-react';
 import { useUi, type InspectorTab } from '../../state/useUiStore';
 import { findElement, mediaById, type ElementJSON } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
@@ -40,9 +40,12 @@ function ParamRow({ label, value, min = 0, max = 100, step = 1, unit = '', decim
         onChange={() => { /* mock — no-op, value display only */ }}
         className="min-w-0 flex-1"
       />
-      <span className="mono w-[52px] shrink-0 text-right text-[10.5px] text-tprimary">
-        {value.toFixed(decimals)}{unit}
-      </span>
+      <input
+        className="mono w-[58px] shrink-0 rounded-[var(--radius-sm)] border border-soft bg-inset px-1 py-[2px] text-right text-[11px] text-tprimary focus:border-[var(--accent-focus)] focus:outline-none"
+        defaultValue={`${value.toFixed(decimals)}${unit}`}
+        aria-label={`${label} value`}
+        title="Accepts TC (HH:MM:SS:FF), seconds, or frames (123f) — spec 18 §4.4"
+      />
     </div>
   );
 }
@@ -51,12 +54,12 @@ function Group({ title, children, onReset }: { title: string; children: React.Re
   return (
     <div className="border-b border-hairline px-3 py-2.5">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tfaint">{title}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">{title}</span>
         {onReset && (
           <button
             onClick={onReset}
             data-tip="Reset group to spec 09 defaults"
-            className="text-[10px] text-tfaint hover:text-accent"
+            className="text-[11px] text-tfaint hover:text-accent"
             aria-label={`Reset ${title}`}
           >
             Reset
@@ -76,12 +79,12 @@ function SourceCard({ el }: { el: ElementJSON }) {
         {m?.thumbnail ? (
           <img src={m.thumbnail} alt="" aria-hidden="true" className={`h-full w-full object-cover ${m.offline ? 'opacity-40 grayscale' : ''}`} />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-[9px] text-tfaint">{m ? 'AUDIO' : 'TEXT'}</div>
+          <div className="flex h-full w-full items-center justify-center text-[11px] text-tfaint">{m ? 'AUDIO' : 'TEXT'}</div>
         )}
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-[11.5px] font-medium text-tprimary">{el.name}</span>
-        <span className="mono text-[10px] text-tfaint">
+        <span className="mono text-[11px] text-tmuted">
           {m ? `${m.width ?? '—'}×${m.height ?? '—'} · ${m.fps ?? '—'}p · ${m.duration !== null ? tc(m.duration) : '—'}` : 'text element'}
         </span>
       </div>
@@ -94,7 +97,6 @@ export function Inspector() {
   const scenes = useUi((s) => s.scenes);
   const tab = useUi((s) => s.inspectorTab);
   const setTab = useUi((s) => s.setInspectorTab);
-  const playhead = useUi((s) => s.playhead);
 
   const found = selection.length === 1 ? findElement(scenes, selection[0]) : null;
   const el = found?.element ?? null;
@@ -113,23 +115,14 @@ export function Inspector() {
 
   return (
     <div data-testid="shell-inspector" className="flex h-full min-h-0 flex-col border-l border-hairline bg-shell">
-      {/* inspector toolbar */}
-      <div className="flex items-center gap-2 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
-        <span className="tc-chip">{tc(playhead)}</span>
-        <span className="flex items-center gap-1 rounded-[2px] bg-[#5a2a86] px-1.5 py-0.5 text-[9.5px] font-bold tracking-[0.03em] text-white">PXY</span>
-        <div className="grow" />
+      {/* inspector toolbar — actions only (chrome trimmed per review) */}
+      <div className="flex items-center gap-1.5 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
         <button className="icon-btn !h-[18px] !w-[18px]" data-tip="Inspector history" aria-label="Inspector history">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="url(#ig)" strokeWidth="2">
-            <defs>
-              <linearGradient id="ig" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#7b5cff" /><stop offset="50%" stopColor="#ff5c8a" /><stop offset="100%" stopColor="#ffd24c" />
-              </linearGradient>
-            </defs>
-            <path d="M21 12a9 9 0 11-2.6-6.4" /><polyline points="21 3 21 9 15 9" />
-          </svg>
+          <History size={12} strokeWidth={1.7} />
         </button>
+        <div className="grow" />
         <button className="icon-btn !h-[18px] !w-[18px]" data-tip="More" aria-label="More inspector actions">
-          <svg width="13" height="3" viewBox="0 0 24 6" fill="currentColor"><circle cx="3" cy="3" r="2.6" /><circle cx="12" cy="3" r="2.6" /><circle cx="21" cy="3" r="2.6" /></svg>
+          <MoreHorizontal size={13} strokeWidth={1.7} />
         </button>
       </div>
 
@@ -153,22 +146,24 @@ export function Inspector() {
           return (
             <button
               key={t.id}
+              id={`tab-${t.id}`}
               role="tab"
               aria-selected={active}
               aria-controls={`insp-${t.id}`}
               data-testid={`shell-inspector-tab-${t.id}`}
               onClick={() => setTab(t.id)}
-              className={`flex flex-col items-center gap-1.5 rounded-[var(--radius)] px-2 py-1 transition-colors ${active ? 'text-tprimary' : 'text-tfaint hover:text-tmuted'}`}
+              className={`relative flex flex-col items-center gap-1.5 rounded-[var(--radius)] px-2.5 py-1 transition-colors ${active ? 'bg-[var(--active-overlay)] text-tprimary' : 'text-tfaint hover:text-tmuted'}`}
             >
               <Icon size={20} strokeWidth={1.6} />
-              <span className="text-[10px]">{t.label}</span>
+              <span className="text-[11px]">{t.label}</span>
+              {active && <span className="absolute inset-x-2 bottom-0 h-[2px] rounded-full" style={{ background: 'var(--accent-selection)' }} />}
             </button>
           );
         })}
       </div>
 
       {/* content */}
-      <div id={`insp-${activeTab}`} role="tabpanel" className="scroll-y min-h-0 flex-1">
+      <div id={`insp-${activeTab}`} role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="scroll-y min-h-0 flex-1">
         {!el ? (
           <div className="flex h-full items-center justify-center text-[13px] text-tfaint" data-testid="shell-inspector-state-empty">
             Nothing to inspect

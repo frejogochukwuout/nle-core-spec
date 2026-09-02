@@ -50,8 +50,8 @@ export const PRESETS: Preset[] = [
     id: 'C',
     name: 'Editorial Light',
     tagline: 'web-first light surface — approachable, editorial, review-friendly',
-    variant: { theme: 'light', density: 'comfortable', clipStyle: 'blocks', accent: 'gold', headerStyle: 'slim' },
-    specNote: 'Deviates from spec 18 §8.14 (light theme rejected for v1) and §9 (single dark theme). Exists so the rejection can be reacted to with eyes on it.',
+    variant: { theme: 'light', density: 'comfortable', clipStyle: 'filmstrip', accent: 'gold', headerStyle: 'slim' },
+    specNote: 'Deviates from spec 18 §8.14 (light theme rejected for v1) and §9 (single dark theme). Exists so the rejection can be reacted to with eyes on it — grey-lifted chrome, near-black monitor surround, banded lanes.',
   },
 ];
 

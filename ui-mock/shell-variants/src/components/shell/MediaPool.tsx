@@ -10,9 +10,9 @@ import { tc, totalDuration } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
 
 const typeBadge = (m: MediaRecord) =>
-  m.type === 'video' ? { t: 'V', cls: 'border-accent/70 text-accent' }
-  : m.type === 'audio' ? { t: 'A', cls: 'border-wave/70 text-wave' }
-  : { t: 'I', cls: 'border-focus/70 text-focus' };
+  m.type === 'video' ? { t: 'V', cls: 'border-[var(--type-video)] text-[var(--type-video)]' }
+  : m.type === 'audio' ? { t: 'A', cls: 'border-[var(--type-audio)] text-[var(--type-audio)]' }
+  : { t: 'I', cls: 'border-[var(--type-overlay)] text-[var(--type-overlay)]' };
 
 function Thumb({ m, small = false }: { m: MediaRecord; small?: boolean }) {
   if (m.type === 'audio') {
@@ -50,55 +50,62 @@ function Thumb({ m, small = false }: { m: MediaRecord; small?: boolean }) {
   );
 }
 
-function MediaCard({ m, onSelect }: { m: MediaRecord; onSelect: () => void }) {
+function MediaCard({ m, selected, onSelect }: { m: MediaRecord; selected: boolean; onSelect: () => void }) {
   const badge = typeBadge(m);
   return (
     <button
       role="option"
+      aria-selected={selected}
       aria-label={`${m.name}, ${m.duration !== null ? tc(m.duration) : 'still'}`}
+      onClick={onSelect}
       onDoubleClick={onSelect}
-      className="group flex flex-col overflow-hidden rounded-[var(--radius)] border border-soft bg-inset text-left transition-colors hover:border-strong"
+      className={`group flex flex-col overflow-hidden rounded-[var(--radius)] border bg-inset text-left transition-colors ${
+        selected ? 'border-accent shadow-[inset_0_0_0_1px_var(--accent-selection)]' : 'border-soft hover:border-strong'
+      }`}
       data-testid="shell-mediapool-card"
     >
       <div className="relative aspect-video w-full overflow-hidden border-b border-hairline">
         <Thumb m={m} />
-        <span className="mono absolute bottom-1 right-1 rounded-sm bg-black/70 px-1 py-0.5 text-[9.5px] text-white">
+        <span className="mono absolute bottom-1 right-1 rounded-sm bg-black/70 px-1 py-0.5 text-[11px] text-white">
           {m.duration !== null ? tc(m.duration) : 'STILL'}
         </span>
         {m.offline && (
-          <span className="absolute left-1 top-1 flex items-center gap-1 rounded-sm bg-[var(--danger)]/90 px-1.5 py-0.5 text-[9px] font-bold text-white">
-            <TriangleAlert size={9} /> Media offline
+          <span className="absolute left-1 top-1 flex items-center gap-1 rounded-sm bg-[var(--danger)]/90 px-1.5 py-0.5 text-[11px] font-bold text-white">
+            <TriangleAlert size={11} /> Media offline
           </span>
         )}
       </div>
       <div className="flex flex-col gap-0.5 px-2 py-1.5">
         <span className="truncate text-[11px] text-tprimary">{m.name}</span>
-        <span className="flex items-center gap-1.5 text-[10px] text-tfaint">
+        <span className="flex items-center gap-1.5 text-[11px] text-tfaint">
           <span className={`mono rounded border px-1 font-bold ${badge.cls}`}>{badge.t}</span>
           {m.width ? <span className="mono">{m.width}×{m.height}</span> : <span>audio</span>}
-          {m.fps && m.fps !== project.settings.fps && <span className="mono rounded-sm border border-soft px-1 text-[9px] text-tmuted">{m.fps}p</span>}
+          {m.fps && m.fps !== project.settings.fps && <span className="mono rounded-sm border border-soft px-1 text-[11px] text-tmuted">{m.fps}p</span>}
         </span>
       </div>
     </button>
   );
 }
 
-function MediaRow({ m, onSelect }: { m: MediaRecord; onSelect: () => void }) {
+function MediaRow({ m, selected, onSelect }: { m: MediaRecord; selected: boolean; onSelect: () => void }) {
   const badge = typeBadge(m);
   return (
     <button
       role="option"
+      aria-selected={selected}
       aria-label={m.name}
-      onDoubleClick={onSelect}
-      className="flex items-center gap-2.5 rounded-[var(--radius)] border border-transparent px-2 py-1.5 text-left transition-colors hover:border-soft hover:bg-[var(--hover-overlay)]"
+      onClick={onSelect}
+      className={`flex items-center gap-2.5 rounded-[var(--radius)] border px-2 py-1.5 text-left transition-colors ${
+        selected ? 'border-accent bg-[color-mix(in_srgb,var(--accent-selection)_10%,transparent)]' : 'border-transparent hover:border-soft hover:bg-[var(--hover-overlay)]'
+      }`}
     >
-      <div className="h-[26px] w-[46px] shrink-0 overflow-hidden rounded-sm border border-hairline">
+      <div className="h-[26px] w-[46px] shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-hairline">
         <Thumb m={m} small />
       </div>
       <span className="min-w-0 flex-1 truncate text-[11px] text-tprimary">{m.name}</span>
       {m.offline && <TriangleAlert size={11} className="shrink-0 text-[var(--danger)]" aria-label="Media offline" />}
-      <span className={`mono shrink-0 rounded border px-1 text-[9.5px] font-bold ${badge.cls}`}>{badge.t}</span>
-      <span className="mono w-[74px] shrink-0 text-right text-[10px] text-tmuted">
+      <span className={`mono shrink-0 rounded border px-1 text-[11px] font-bold ${badge.cls}`}>{badge.t}</span>
+      <span className="mono w-[74px] shrink-0 text-right text-[11px] text-tmuted">
         {m.duration !== null ? tc(m.duration) : '—'}
       </span>
     </button>
@@ -112,6 +119,8 @@ export function MediaPool() {
   const setMediaView = useUi((s) => s.setMediaView);
   const setSortBy = useUi((s) => s.setSortBy);
   const setPlayhead = useUi((s) => s.setPlayhead);
+  const mediaSelection = useUi((s) => s.mediaSelection);
+  const setMediaSelection = useUi((s) => s.setMediaSelection);
   const activeScene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
 
   // 200ms debounce class (spec 18 §4.2) — mock-level: commit on idle
@@ -144,12 +153,17 @@ export function MediaPool() {
     if (el) setPlayhead(el.startTime + 0.1);
   };
 
+  const select = (m: MediaRecord) => {
+    setMediaSelection(m.id);
+    revealFirstUse(m);
+  };
+
   return (
     <div
       data-testid="shell-mediapool"
-      className="flex h-full min-h-0 flex-col border-r border-hairline bg-shell"
+      className="panel-shadow flex h-full min-h-0 flex-col border-r border-hairline bg-shell"
     >
-      {/* pool header */}
+      {/* pool header — search + sort + view in one row */}
       <div className="flex items-center gap-1.5 border-b border-hairline px-2 py-1.5">
         <div className="relative flex min-w-0 flex-1 items-center">
           <Search size={11} className="absolute left-1.5 text-tfaint" />
@@ -166,12 +180,25 @@ export function MediaPool() {
             </button>
           )}
         </div>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          aria-label="Sort media"
+          className="field w-[74px] shrink-0 cursor-pointer"
+          title="Sort media"
+        >
+          <option value="name">Name</option>
+          <option value="duration">Dur.</option>
+          <option value="date">Date</option>
+          <option value="type">Type</option>
+        </select>
         <div className="flex shrink-0 items-center gap-0.5">
           <button
             className={`icon-btn !h-[22px] !w-[22px] ${mediaView === 'grid' ? 'toggled' : ''}`}
             onClick={() => setMediaView('grid')}
             data-tip="Grid view"
             aria-label="Grid view"
+            aria-pressed={mediaView === 'grid'}
           >
             <LayoutGrid size={12} />
           </button>
@@ -180,26 +207,11 @@ export function MediaPool() {
             onClick={() => setMediaView('list')}
             data-tip="List view"
             aria-label="List view"
+            aria-pressed={mediaView === 'list'}
           >
             <List size={12} />
           </button>
         </div>
-      </div>
-
-      {/* sort row */}
-      <div className="flex items-center gap-2 border-b border-hairline px-2 py-1">
-        <span className="text-[10px] uppercase tracking-wide text-tfaint">Sort</span>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-          aria-label="Sort media"
-          className="field flex-1 cursor-pointer"
-        >
-          <option value="name">Name</option>
-          <option value="duration">Duration</option>
-          <option value="date">Import date</option>
-          <option value="type">Type</option>
-        </select>
       </div>
 
       {/* import CTA */}
@@ -207,7 +219,7 @@ export function MediaPool() {
         <button className="flex w-full items-center justify-center gap-2 rounded-[var(--radius)] border border-dashed border-strong px-2 py-2 text-[11px] text-tmuted transition-colors hover:border-accent hover:text-tprimary">
           <Upload size={12} />
           Import media
-          <span className="mono rounded border border-soft px-1 text-[9.5px] text-tfaint">⌘I</span>
+          <span className="mono rounded border border-soft px-1 text-[11px] text-tfaint">⌘I</span>
         </button>
       </div>
 
@@ -223,11 +235,11 @@ export function MediaPool() {
           </div>
         ) : mediaView === 'grid' ? (
           <div className="grid grid-cols-2 gap-2">
-            {items.map((m) => <MediaCard key={m.id} m={m} onSelect={() => revealFirstUse(m)} />)}
+            {items.map((m) => <MediaCard key={m.id} m={m} selected={mediaSelection === m.id} onSelect={() => select(m)} />)}
           </div>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {items.map((m) => <MediaRow key={m.id} m={m} onSelect={() => revealFirstUse(m)} />)}
+            {items.map((m) => <MediaRow key={m.id} m={m} selected={mediaSelection === m.id} onSelect={() => select(m)} />)}
           </div>
         )}
       </div>
@@ -235,9 +247,9 @@ export function MediaPool() {
       {/* footer — live counts (spec 18 §4.2) */}
       <div
         aria-live="polite"
-        className="flex items-center gap-2 border-t border-hairline px-2.5 py-1 text-[10.5px] text-tfaint"
+        className="flex items-center gap-2 border-t border-hairline px-2.5 py-1 text-[11px] text-tmuted"
       >
-        <Clock3 size={10} />
+        <Clock3 size={11} />
         <span>{items.length} clips · {totalDuration(totalSec)} total</span>
         <span className="grow" />
         <span className="mono">{project.settings.fps} fps</span>

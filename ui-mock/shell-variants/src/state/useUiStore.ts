@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import { project, type SceneJSON, type ElementJSON, type TrackJSON, type Marker } from '../lib/mockData';
 import { clamp, snapToFrame } from '../lib/timecode';
 
-export type ToolId = 'select' | 'blade' | 'roll' | 'slip' | 'slide';
+export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch';
 export type Page = 'edit' | 'color' | 'deliver';
 export type InspectorTab = 'video' | 'audio' | 'effects' | 'transition';
 
@@ -38,6 +38,7 @@ interface UiState {
   mainBodyH: number;
   cheatOpen: boolean;
   scenes: SceneJSON[];
+  mediaSelection: string | null;
 
   // actions
   setPage: (p: Page) => void;
@@ -70,6 +71,7 @@ interface UiState {
   setInspectorW: (w: number) => void;
   setMainBodyH: (h: number) => void;
   setCheatOpen: (v: boolean) => void;
+  setMediaSelection: (id: string | null) => void;
   moveElement: (id: string, startTime: number) => void;
   trimElement: (id: string, edge: 'l' | 'r', newStart: number, newDur: number) => void;
   splitElement: (id: string, time: number) => void;
@@ -104,6 +106,7 @@ export const useUi = create<UiState>((set, get) => ({
   mainBodyH: 0, // 0 = auto (40% of viewport per spec 18 §3.2)
   cheatOpen: false,
   scenes: clone(project.scenes),
+  mediaSelection: 'm-02',
 
   setPage: (p) => set({ page: p }),
   setActiveScene: (id) => set((s) => ({ activeSceneId: id, selection: [] })),
@@ -145,6 +148,7 @@ export const useUi = create<UiState>((set, get) => ({
   setInspectorW: (w) => set({ inspectorW: clamp(w, 280, 560) }),
   setMainBodyH: (h) => set({ mainBodyH: clamp(h, 320, 900) }),
   setCheatOpen: (v) => set({ cheatOpen: v }),
+  setMediaSelection: (id) => set({ mediaSelection: id }),
 
   // ---- document mutations (mock-level; real shell = EngineCommand) ----
   moveElement: (id, startTime) => set((s) => {

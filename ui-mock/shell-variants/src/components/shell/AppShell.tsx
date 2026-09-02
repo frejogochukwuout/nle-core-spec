@@ -151,8 +151,7 @@ export function AppShell() {
         case 'ArrowLeft': e.preventDefault(); s.nudgePlayhead(e.shiftKey ? -10 : -1); break;
         case 'ArrowRight': e.preventDefault(); s.nudgePlayhead(e.shiftKey ? 10 : 1); break;
         case 'Home': s.setPlayhead(0); break;
-        case 'End': s.setPlayhead(duration); break;
-        case 'PageUp': case 'PageDown': {
+        case 'End': s.setPlayhead(duration); break;        case 'PageUp': case 'PageDown': {
           e.preventDefault();
           const main = scene.tracks.find((tr) => tr.kind === 'main');
           const edges = (main?.elements ?? []).flatMap((el) => [el.startTime, el.startTime + el.duration]).sort((a, b) => a - b);
@@ -169,6 +168,7 @@ export function AppShell() {
         case 't': case 'T': s.setTool('roll'); break;
         case 'y': case 'Y': s.setTool('slip'); break;
         case 'u': case 'U': s.setTool('slide'); break;
+        case 'r': case 'R': s.setTool('ripple'); break;
         case 'n': case 'N': s.toggleSnap(); break;
         case '?': s.setCheatOpen(!s.cheatOpen); break;
         case 'Escape': s.setSelection([]); break;
@@ -177,6 +177,25 @@ export function AppShell() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [duration, scene]);
+
+  /* F6 panel-focus cycling — spec 18 §11.5 (normative) */
+  const regionsRef = useRef<(HTMLElement | null)[]>([]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'F6') return;
+      e.preventDefault();
+      const regions = regionsRef.current.filter(Boolean) as HTMLElement[];
+      if (regions.length === 0) return;
+      const focusedIdx = regions.findIndex((r) => r.contains(document.activeElement));
+      const next = e.shiftKey
+        ? (focusedIdx <= 0 ? regions.length - 1 : focusedIdx - 1)
+        : (focusedIdx === regions.length - 1 ? 0 : focusedIdx + 1);
+      const el = regions[next === -1 || focusedIdx === -1 ? (e.shiftKey ? regions.length - 1 : 0) : next];
+      el.focus({ preventScroll: false });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const rightPanel: ReactNode =
     page === 'color' ? <div className="flex h-full min-h-0 w-[340px] shrink-0"><ColorPage /></div>
@@ -189,7 +208,9 @@ export function AppShell() {
         Skip to timeline
       </a>
 
-      <Toolbar2 />
+      <div ref={(el) => { regionsRef.current[0] = el; }} tabIndex={-1} className="shell-region">
+        <Toolbar2 />
+      </div>
 
       {/* ---- main body ---- */}
       <div
@@ -197,7 +218,7 @@ export function AppShell() {
         style={{ height: mainBodyH || '40%', minHeight: 320 }}
       >
         {panels.mediaPool && (
-          <div className="flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
+          <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
             <MediaPool />
           </div>
         )}
@@ -206,13 +227,15 @@ export function AppShell() {
         )}
         {panels.effects && <EffectsPanel />}
 
-        <Viewer duration={duration} />
+        <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region flex min-h-0 min-w-0 flex-1">
+          <Viewer duration={duration} />
+        </div>
 
         {panels.inspector && (
           <VSplitter onDrag={(dx) => setInspectorW(dx === 0 ? 340 : useUi.getState().inspectorW + dx)} />
         )}
         {panels.inspector && (
-          <div className="flex h-full min-h-0 shrink-0" style={{ width: inspectorW }}>
+          <div ref={(el) => { regionsRef.current[3] = el; }} tabIndex={-1} className="shell-region panel-shadow z-10 flex h-full min-h-0 shrink-0" style={{ width: inspectorW }}>
             {rightPanel}
           </div>
         )}
@@ -221,12 +244,16 @@ export function AppShell() {
       <HSplitter onDrag={(dy) => setMainBodyH(dy === 0 ? 0 : (useUi.getState().mainBodyH || window.innerHeight * 0.4) + dy)} />
 
       {/* ---- timeline block ---- */}
-      <TimelineToolbar />
-      <SceneTabs />
-      <Timeline />
+      <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
+        <TimelineToolbar />
+        <SceneTabs />
+        <Timeline />
+      </div>
 
       <StatusStrip />
-      <AppDock />
+      <div ref={(el) => { regionsRef.current[5] = el; }} tabIndex={-1} className="shell-region">
+        <AppDock />
+      </div>
     </div>
   );
 }

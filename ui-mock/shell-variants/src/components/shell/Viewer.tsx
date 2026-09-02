@@ -19,9 +19,9 @@ function overlayElementAt(scene: SceneJSON, time: number): ElementJSON | null {
   return t?.elements.find((e) => time >= e.startTime && time < e.startTime + e.duration) ?? null;
 }
 
-function MarkIcon({ dir, label }: { dir: 'l' | 'r'; label: string }) {
+function MarkIcon({ dir }: { dir: 'l' | 'r' }) {
   return (
-    <svg width="11" height="14" viewBox="0 0 24 24" fill="currentColor" aria-label={label}>
+    <svg width="11" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       {dir === 'l' ? <polygon points="19 5 19 19 5 12" /> : <polygon points="5 5 5 19 19 12" />}
     </svg>
   );
@@ -57,7 +57,7 @@ export function Viewer({ duration }: { duration: number }) {
     setPlayhead(((clientX - box.left) / box.width) * duration);
   };
 
-  const zoomOptions = ['Fit', '50%', '75%', '100%'];
+  const zoomOptions = ['Fit', '50%', '100%', '200%'];
 
   return (
     <div data-testid="shell-viewer" className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-shell">
@@ -72,8 +72,8 @@ export function Viewer({ duration }: { duration: number }) {
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 12 15 18 9" /></svg>
         </div>
         <div className="grow" />
-        <span className="tc-chip !py-0.5 !text-[10.5px]">1920×1080</span>
-        <span className="tc-chip !py-0.5 !text-[10.5px]">24 fps</span>
+        <span className="tc-chip">1920×1080</span>
+        <span className="tc-chip">24 fps</span>
         <button className="icon-btn !h-[20px]" data-tip="Safe area guides (UI pref)" aria-label="Toggle safe area guides">
           <Frame size={13} strokeWidth={1.6} />
         </button>
@@ -136,21 +136,21 @@ export function Viewer({ duration }: { duration: number }) {
         <div className="relative h-full w-full">
           {/* track */}
           <div className="absolute left-0 right-0 top-1/2 h-[3px] -translate-y-1/2 rounded-sm bg-[var(--border-soft)]" />
-          {/* in/out + loop range band */}
+          {/* in/out + loop range band — dimmed, never erased */}
           <div
             className="absolute top-1/2 h-[3px] -translate-y-1/2 rounded-sm"
-            style={{ left: pct(loop.start), width: `calc(${pct(loop.end)} - ${pct(loop.start)})`, background: 'var(--accent-selection)', opacity: loopEnabled ? 0.85 : 0.35 }}
+            style={{ left: pct(loop.start), width: `calc(${pct(loop.end)} - ${pct(loop.start)})`, background: 'var(--accent-selection)', opacity: loopEnabled ? 0.85 : 0.3 }}
           />
           {/* clip boundary ticks */}
           {boundaries.map((b) => (
             <div key={b.id} className="absolute top-1/2 h-[7px] w-px -translate-y-1/2 bg-tfaint" style={{ left: pct(b.startTime) }} />
           ))}
-          {/* playhead marker */}
-          <div className="absolute top-1/2 h-[11px] w-[3px] -translate-y-1/2 rounded-sm" style={{ left: pct(playhead), background: 'var(--accent-selection)', transform: 'translate(-50%, -50%)' }} />
+          {/* playhead marker — dedicated time color */}
+          <div className="absolute top-1/2 h-[11px] w-[3px] -translate-y-1/2 rounded-sm" style={{ left: pct(playhead), background: 'var(--playhead)' }} />
           {/* hover TC tooltip */}
           {hoverX !== null && (
             <span
-              className="mono pointer-events-none absolute -top-[9px] -translate-x-1/2 rounded-sm border border-strong bg-inset px-1 py-px text-[9.5px] text-tmuted"
+              className="mono pointer-events-none absolute -top-[9px] -translate-x-1/2 rounded-sm border border-strong bg-inset px-1 py-px text-[11px] text-tmuted"
               style={{ left: hoverX }}
             >
               {tc((hoverX / (scrubRef.current?.clientWidth || 1)) * duration)}
@@ -159,8 +159,8 @@ export function Viewer({ duration }: { duration: number }) {
         </div>
       </div>
 
-      {/* transport-row */}
-      <div className="relative flex shrink-0 items-center gap-2.5 border-t border-hairline px-3" style={{ height: 34, minHeight: 34 }} data-testid="shell-viewer-transport">
+      {/* transport-row (32px, spec 18 §4.3) */}
+      <div className="relative flex shrink-0 items-center gap-2.5 border-t border-hairline px-3" style={{ height: 32, minHeight: 32 }} data-testid="shell-viewer-transport">
         <div className="flex items-center gap-1">
           <button className="icon-btn !h-[20px]" data-tip="Viewer mode" aria-label="Viewer mode">
             <svg width="15" height="12" viewBox="0 0 24 18" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="1" width="22" height="16" rx="1.5" /></svg>
@@ -170,7 +170,7 @@ export function Viewer({ duration }: { duration: number }) {
           </button>
         </div>
 
-        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-3">
+        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2.5">
           <button className="icon-btn !h-[20px] !w-[20px]" onClick={() => setPlayhead(0)} data-tip="Go to start (Home)" aria-label="Go to start">
             <SkipBack size={13} strokeWidth={1.6} />
           </button>
@@ -178,14 +178,18 @@ export function Viewer({ duration }: { duration: number }) {
             <ChevronLeft size={14} strokeWidth={2} />
           </button>
           <button
-            className="icon-btn !h-[22px] !w-[22px] !rounded-[var(--radius)]"
+            className="flex h-[24px] w-[28px] items-center justify-center rounded-[var(--radius)] transition-colors"
             onClick={togglePlay}
             data-testid="shell-viewer-btn-play"
             data-tip="Play / Pause (Space)"
             aria-label="Play or pause"
-            style={{ color: 'var(--text-primary)' }}
+            style={{
+              color: playing ? 'var(--text-primary)' : 'var(--text-primary)',
+              background: playing ? 'var(--active-overlay)' : 'var(--bg-inset)',
+              border: `1px solid ${playing ? 'var(--border-strong)' : 'var(--border-soft)'}`,
+            }}
           >
-            {playing ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+            {playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-[2px]" />}
           </button>
           <button className="icon-btn !h-[20px] !w-[20px]" onClick={() => nudge(1)} data-tip="Step forward 1 frame (→)" aria-label="Step forward one frame">
             <ChevronRight size={14} strokeWidth={2} />
@@ -194,19 +198,20 @@ export function Viewer({ duration }: { duration: number }) {
             <SkipForward size={13} strokeWidth={1.6} />
           </button>
 
-          <div className="mx-1 h-4 w-px bg-[var(--border-soft)]" />
+          <div className="mx-0.5 h-4 w-px bg-[var(--border-soft)]" />
 
           <button className="icon-btn !h-[20px] !w-[20px]" onClick={markIn} data-tip="Mark in (I)" aria-label="Mark in">
-            <MarkIcon dir="l" label="Mark in" />
+            <MarkIcon dir="l" />
           </button>
           <button className="icon-btn !h-[20px] !w-[20px]" onClick={markOut} data-tip="Mark out (O)" aria-label="Mark out">
-            <MarkIcon dir="r" label="Mark out" />
+            <MarkIcon dir="r" />
           </button>
           <button
             className={`icon-btn !h-[20px] !w-[20px] ${loopEnabled ? 'toggled' : ''}`}
             onClick={() => setLoopEnabled(!loopEnabled)}
             data-tip="Loop playback (L)"
             aria-label="Toggle loop playback"
+            aria-pressed={loopEnabled}
           >
             <Repeat size={13} strokeWidth={2} />
           </button>

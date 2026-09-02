@@ -1,10 +1,12 @@
 /* Clip — spec 05 §7.3 anatomy: position:absolute, timeToPx geometry,
-   filmstrip / waveform / label children, trim handles (12px hit), transition
-   indicator, fade triangles, linked badge. Two render modes:
-   filmstrip (spec 05 canonical) | blocks (davinci mock compact). */
+   filmstrip / waveform / label children, trim handles (12px hit), fade
+   triangles (§9), linked badge. Two render modes:
+   filmstrip (spec 05 canonical) | blocks (davinci mock compact).
+   Selected = accent outline + tint; locked = stripes (legible, not faded);
+   drag = optimistic preview + live TC bubble; commit on release (18 §5). */
 
 import { useRef, useState } from 'react';
-import { Link2, Scissors } from 'lucide-react';
+import { Link2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { useVariantClipStyle } from '../../state/variantHooks';
 import { mediaById, type ElementJSON, type TrackJSON } from '../../lib/mockData';
@@ -98,7 +100,6 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   const onClick = (e: React.MouseEvent) => {
     if (locked) return;
     if (tool === 'blade') {
-      // split at click position (spec 06 §5.1)
       const rect = ref.current?.getBoundingClientRect();
       if (!rect) return;
       const local = e.clientX - rect.left;
@@ -113,37 +114,66 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
 
   const fadeLeftW = (el.audioFadeIn ?? 0) * pxPerSec;
   const fadeRightW = (el.audioFadeOut ?? 0) * pxPerSec;
-  const transW = el.transitionOut ? el.transitionOut.duration * pxPerSec : 0;
+
+  const clipLabel = (color: string, align: 'left' | 'center' = 'left') => (
+    <span
+      className="pointer-events-none absolute bottom-0 left-0 right-0 truncate px-1.5 pb-[3px] font-medium"
+      style={{ fontSize: 11, color, textAlign: align, textShadow: '0 1px 2px rgba(0,0,0,0.6)', lineHeight: 1.2 }}
+    >
+      {el.name}
+      {el.speed && el.speed !== 1 && <span className="mono ml-1 opacity-70">{Math.round(el.speed * 100)}%</span>}
+    </span>
+  );
 
   /* ---------- clip body by mode/type ---------- */
   let body: React.ReactNode;
   if (clipStyle === 'blocks') {
     body = (
-      <div className="flex h-full items-center overflow-hidden px-1.5" style={{ background: isAudio ? 'linear-gradient(to bottom, var(--clip-audio-a), var(--clip-audio-b))' : isText ? 'var(--clip-text)' : 'var(--clip-video)' }}>
-        {clipLabel(10, '#fff')}
+      <div
+        className="flex h-full items-center overflow-hidden px-1.5"
+        style={{
+          background: isAudio ? 'linear-gradient(to bottom, var(--clip-audio-a), var(--clip-audio-b))' : isText ? 'var(--clip-text)' : 'var(--clip-video)',
+          borderRight: `1px solid var(--clip-audio-edge)`,
+        }}
+      >
+        {clipLabel(isAudio ? '#eafff0' : 'var(--clip-label-text)')}
       </div>
     );
   } else if (isAudio) {
     const bars = getWaveform(el.id, Math.max(8, Math.floor(geo.width / 4)), { amplitude: 1 });
-    const h = laneHeight - 10;
+    const h = laneHeight - 12;
     body = (
       <div className="relative h-full w-full" style={{ background: 'linear-gradient(to bottom, var(--clip-audio-a), var(--clip-audio-b))' }}>
-        <svg className="absolute inset-0" width="100%" height={h + 4} preserveAspectRatio="none" aria-hidden="true">
+        <svg className="absolute inset-x-0 bottom-[2px]" width="100%" height={h} preserveAspectRatio="none" aria-hidden="true">
           {bars.map((b, i) => (
-            <rect key={i} x={`${i * (100 / bars.length)}%`} y={(h + 4) / 2 - b.max * (h / 2)} width={`${100 / bars.length - 0.4}%`} height={Math.max(1, (b.max + b.min) * (h / 2) * 0.5)} fill="var(--waveform)" opacity={0.75} />
+            <rect key={i} x={`${i * (100 / bars.length)}%`} y={h / 2 - b.max * (h / 2)} width={`${100 / bars.length - 0.4}%`} height={Math.max(1, (b.max + b.min) * (h / 2) * 0.5)} fill="var(--waveform)" opacity={0.9} />
           ))}
         </svg>
-        {fadeLeftW > 4 && (
-          <div className="absolute inset-y-0 left-0" style={{ width: fadeLeftW, background: 'linear-gradient(to right, rgba(0,0,0,0.55), transparent)' }} />
+        {/* fade triangles (spec 18 §9 / spec 05 §14.10) */}
+        {fadeLeftW > 6 && (
+          <svg className="pointer-events-none absolute inset-y-0 left-0" width={fadeLeftW} height="100%" aria-hidden="true">
+            <line x1="1" y1="0" x2={fadeLeftW - 1} y2="100%" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" />
+            <circle cx="2" cy="2" r="2.2" fill="#fff" />
+          </svg>
         )}
-        {fadeRightW > 4 && (
-          <div className="absolute inset-y-0 right-0" style={{ width: fadeRightW, background: 'linear-gradient(to left, rgba(0,0,0,0.55), transparent)' }} />
+        {fadeRightW > 6 && (
+          <svg className="pointer-events-none absolute inset-y-0 right-0" width={fadeRightW} height="100%" aria-hidden="true">
+            <line x1={fadeRightW - 2} y1="0" x2="1" y2="100%" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" />
+            <circle cx={fadeRightW - 3} cy="2" r="2.2" fill="#fff" />
+          </svg>
         )}
-        {clipLabel(9.5, '#eafff0')}
+        {clipLabel('#eafff0')}
       </div>
     );
   } else if (isText) {
-    body = <div className="flex h-full items-center justify-center overflow-hidden" style={{ background: 'var(--clip-text)' }}>{clipLabel(10.5, '#fff', 'center')}</div>;
+    body = (
+      <div
+        className="flex h-full items-center justify-center overflow-hidden"
+        style={{ background: 'var(--clip-text)', borderRight: '1px solid rgba(0,0,0,0.25)' }}
+      >
+        {clipLabel('#fff', 'center')}
+      </div>
+    );
   } else {
     // filmstrip video clip (spec 05 §7.1: 80px-wide thumbs, 60px strip in 80px lane)
     const stripH = Math.min(60, laneHeight - 18);
@@ -161,23 +191,11 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
             }}
           />
         )}
-        {clipLabel(9.5, 'var(--clip-label-text)')}
+        {clipLabel('var(--clip-label-text)')}
         {media?.offline && (
-          <span className="absolute right-1.5 top-1 rounded-sm bg-[var(--danger)]/90 px-1 py-px text-[8.5px] font-bold text-white">OFFLINE</span>
+          <span className="mono absolute right-1.5 top-1 rounded-sm bg-[var(--danger)]/90 px-1 py-px text-[11px] font-bold text-white">OFFLINE</span>
         )}
       </div>
-    );
-  }
-
-  function clipLabel(fontSize: number, color: string, align: 'left' | 'center' = 'left') {
-    return (
-      <span
-        className="pointer-events-none absolute bottom-0 left-0 right-0 truncate px-1.5 pb-[3px] font-medium"
-        style={{ fontSize, color, textAlign: align, textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}
-      >
-        {el.name}
-        {el.speed && el.speed !== 1 && <span className="mono ml-1 opacity-70">{Math.round(el.speed * 100)}%</span>}
-      </span>
     );
   }
 
@@ -187,16 +205,19 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       role="button"
       aria-label={`${el.name}, ${tc(el.startTime)}`}
       data-testid={`clip-${el.id}`}
-      className={`absolute top-[2px] bottom-[2px] overflow-hidden rounded-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''}`}
+      className={`absolute top-[2px] bottom-[2px] overflow-visible rounded-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''} ${locked ? 'locked-stripes' : ''}`}
       style={{
         left: geo.left,
         width: Math.max(6, geo.width),
         cursor,
-        opacity: drag ? 0.75 : locked ? 0.5 : 1,
         pointerEvents: locked ? 'none' : 'auto',
         outline: selected ? '1.5px solid var(--accent-selection)' : hover ? '1px solid var(--border-strong)' : 'none',
         outlineOffset: 0,
-        boxShadow: drag ? '0 4px 12px rgba(0,0,0,0.4)' : 'none',
+        boxShadow: selected
+          ? 'inset 0 0 0 999px color-mix(in srgb, var(--accent-selection) 12%, transparent)'
+          : drag
+            ? '0 4px 12px rgba(0,0,0,0.45)'
+            : 'none',
       }}
       onPointerDown={onPointerDownBody}
       onPointerMove={onPointerMove}
@@ -205,13 +226,25 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      {body}
+      {/* inner clipping box (label + body clip; badges overflow) */}
+      <div className="absolute inset-0 overflow-hidden rounded-[2px]">{body}</div>
+
+      {/* live trim/move TC bubble (spec 06 §8 overlay pattern) */}
+      {drag && (
+        <span
+          className="mono pointer-events-none absolute -top-[22px] left-0 whitespace-nowrap rounded-[var(--radius-sm)] border border-strong bg-inset px-1.5 py-px text-[11px] text-tprimary shadow-lg"
+          data-testid="clip-drag-tc"
+        >
+          {tc(drag.mode === 'move' ? drag.cur : drag.mode === 'l' ? drag.cur : el.startTime)}
+          {drag.mode !== 'move' && ` · ${tc(drag.cur - (drag.mode === 'l' ? drag.cur : el.startTime))}`}
+        </span>
+      )}
 
       {/* trim handles — 12px hit strips, ew-resize (spec 05 §14.2) */}
-      {clipStyle === 'filmstrip' && !locked && (
+      {!locked && (
         <>
           <div
-            className="absolute inset-y-0 left-0 w-3"
+            className="absolute inset-y-0 left-0 w-3 rounded-l-[2px]"
             style={{ cursor: 'ew-resize' }}
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -223,7 +256,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
             onPointerUp={onPointerUp}
           />
           <div
-            className="absolute inset-y-0 right-0 w-3"
+            className="absolute inset-y-0 right-0 w-3 rounded-r-[2px]"
             style={{ cursor: 'ew-resize' }}
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -237,27 +270,20 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         </>
       )}
 
-      {/* transition indicator (crossfade at out-boundary) */}
-      {el.transitionOut && (
-        <div
-          className="absolute inset-y-0 right-0 flex items-center justify-center border-l"
-          style={{ width: transW, background: 'linear-gradient(135deg, var(--transition-mark) 0%, rgba(0,0,0,0.25) 100%)', borderColor: 'var(--transition-mark)' }}
-          title={`Crossfade · ${el.transitionOut.presentation} · ${el.transitionOut.duration}s`}
-        >
-          <Scissors size={9} className="opacity-80" aria-hidden="true" />
-        </div>
-      )}
-
       {/* linked A/V badge (spec 05 §12.3) */}
       {el.linkedTo && (
-        <span className="absolute right-1 top-1 flex items-center rounded-sm bg-black/40 px-1 text-tprimary" title="Linked A/V">
-          <Link2 size={9} strokeWidth={2.2} />
+        <span
+          className="absolute right-1 top-1 flex items-center rounded-sm bg-black/55 px-1 py-px text-tprimary"
+          title="Linked A/V"
+          aria-label="Linked audio and video"
+        >
+          <Link2 size={10} strokeWidth={2.2} />
         </span>
       )}
 
       {/* effect badges (F/T/S/♪ — spec 18 §9) */}
       {el.effects?.some((f) => f.enabled) && (
-        <span className="mono absolute left-1 top-1 rounded-sm bg-black/50 px-1 text-[8.5px] font-bold text-white">F</span>
+        <span className="mono absolute left-1 top-1 rounded-sm bg-black/55 px-1 text-[11px] font-bold text-white">F</span>
       )}
     </div>
   );

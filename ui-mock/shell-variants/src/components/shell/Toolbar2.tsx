@@ -2,7 +2,7 @@
    inspector/fullscreen/quick-export right. Mock's Index/Sound Library/
    Mixer/Metadata dropped per §8 chrome-removal ledger. */
 
-import { PanelLeft, Sparkles, Upload, SlidersHorizontal, Maximize2, ChevronDown } from 'lucide-react';
+import { PanelLeft, Sparkles, SlidersHorizontal, Maximize2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { project } from '../../lib/mockData';
 
@@ -24,15 +24,12 @@ export function Toolbar2() {
         <span className="h-[11px] w-[11px] rounded-full bg-[#28c83f]" />
       </div>
 
-      <button className="icon-btn" data-tip="Toggle fullscreen viewer" aria-label="Toggle fullscreen viewer">
-        <Maximize2 size={13} strokeWidth={1.6} />
-      </button>
-
       <div className="vsep" />
 
       <button
         className={`toolbtn ${panels.mediaPool ? 'active' : ''}`}
         data-testid="shell-toolbar-btn-mediapool"
+        aria-pressed={panels.mediaPool}
         onClick={() => togglePanel('mediaPool')}
       >
         <PanelLeft size={14} strokeWidth={1.7} />
@@ -41,6 +38,7 @@ export function Toolbar2() {
       <button
         className={`toolbtn ${panels.effects ? 'active' : ''}`}
         data-testid="shell-toolbar-btn-effects"
+        aria-pressed={panels.effects}
         onClick={() => togglePanel('effects')}
       >
         <Sparkles size={14} strokeWidth={1.7} />
@@ -55,20 +53,17 @@ export function Toolbar2() {
         <span className="text-tmuted">{project.metadata.status}</span>
       </div>
 
-      <button className="toolbtn" data-testid="shell-toolbar-btn-export">
-        <Upload size={13} strokeWidth={1.8} />
-        <span>Quick Export</span>
-      </button>
       <button
         className={`toolbtn ${panels.inspector ? 'active' : ''}`}
         data-testid="shell-toolbar-btn-inspector"
+        aria-pressed={panels.inspector}
         onClick={() => togglePanel('inspector')}
       >
         <SlidersHorizontal size={14} strokeWidth={1.8} />
         <span>Inspector</span>
       </button>
-      <button className="icon-btn" data-tip="Viewer options" aria-label="Viewer options">
-        <ChevronDown size={11} strokeWidth={2.5} />
+      <button className="icon-btn" data-tip="Toggle fullscreen viewer" aria-label="Toggle fullscreen viewer">
+        <Maximize2 size={13} strokeWidth={1.6} />
       </button>
     </div>
   );

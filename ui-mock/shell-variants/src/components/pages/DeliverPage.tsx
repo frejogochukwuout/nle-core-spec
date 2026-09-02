@@ -60,7 +60,7 @@ export function DeliverPage() {
         </div>
 
         {/* render settings */}
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.07em] text-tfaint">Render settings</div>
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Render settings</div>
         <div className="mb-3 flex flex-col gap-1.5 rounded-[var(--radius)] border border-soft px-3 py-2.5">
           <div className="flex items-center gap-2">
             <span className="w-[92px] shrink-0 text-[11px] text-tmuted">Range</span>
@@ -87,18 +87,18 @@ export function DeliverPage() {
           </div>
         </div>
 
-        {/* export CTA */}
+        {/* export CTA — primary buttons use --accent-focus (spec 18 §9) */}
         <button
           data-testid="shell-deliver-btn-export-fcpxml"
-          className="mb-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius)] px-3 py-2.5 text-[12px] font-semibold"
-          style={{ background: 'var(--accent-selection)', color: 'var(--accent-contrast)' }}
+          className="mb-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius)] px-3 py-2.5 text-[12px] font-semibold transition-opacity hover:opacity-90"
+          style={{ background: 'var(--accent-focus)', color: '#fff' }}
         >
           <Download size={13} />
           Export {PRESETS.find((p) => p.id === preset)?.name}
         </button>
 
         {/* job list */}
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.07em] text-tfaint">Jobs</div>
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Jobs</div>
         <div className="flex flex-col gap-1.5">
           {JOBS.map((j) => (
             <div key={j.id} className="flex items-center gap-2.5 rounded-[var(--radius)] border border-soft px-2.5 py-2" data-testid="shell-deliver-job">
@@ -110,7 +110,7 @@ export function DeliverPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="truncate text-[11.5px] text-tprimary">{j.name}</span>
-                  <span className="mono shrink-0 text-[10px] text-tfaint">{j.state === 'done' ? j.time : `${j.progress}%`}</span>
+                  <span className="mono shrink-0 text-[11px] text-tmuted">{j.state === 'done' ? j.time : `${j.progress}%`}</span>
                 </div>
                 {j.state === 'running' && (
                   <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-[var(--border-soft)]">

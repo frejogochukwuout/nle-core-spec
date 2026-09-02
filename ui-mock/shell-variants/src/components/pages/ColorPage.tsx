@@ -8,18 +8,18 @@ function Wheel({ label, tint }: { label: string; tint: string }) {
   return (
     <div className="flex flex-col items-center gap-1.5">
       <div
-        className="relative h-[86px] w-[86px] rounded-full border border-strong"
+        className="relative h-[78px] w-[78px] rounded-full border border-strong"
         style={{ background: `radial-gradient(circle at 42% 38%, ${tint} 0%, var(--bg-inset) 72%)` }}
         role="slider"
         aria-label={`${label} color wheel`}
         aria-valuetext="centered"
       >
         <div className="absolute left-1/2 top-1/2 h-[4px] w-[4px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-tprimary" />
-        <div className="absolute left-1/2 top-1/2 h-[1.5px] w-[26px] -translate-x-1/2 -translate-y-1/2 bg-tfaint" />
-        <div className="absolute left-1/2 top-1/2 h-[26px] w-[1.5px] -translate-x-1/2 -translate-y-1/2 bg-tfaint" />
-        <div className="absolute left-[62%] top-[40%] h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-[#e8b34b]" />
+        <div className="absolute left-1/2 top-1/2 h-[1.5px] w-[24px] -translate-x-1/2 -translate-y-1/2 bg-tfaint" />
+        <div className="absolute left-1/2 top-1/2 h-[24px] w-[1.5px] -translate-x-1/2 -translate-y-1/2 bg-tfaint" />
+        <div className="absolute left-[62%] top-[40%] h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-accent" />
       </div>
-      <span className="text-[10px] uppercase tracking-wide text-tfaint">{label}</span>
+      <span className="text-[11px] uppercase tracking-wide text-tmuted">{label}</span>
     </div>
   );
 }
@@ -39,12 +39,12 @@ export function ColorPage() {
     <div data-testid="shell-color" className="flex h-full min-h-0 flex-col bg-panel">
       <div className="flex items-center gap-2 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
         <span className="text-[12px] font-semibold text-tprimary">Color</span>
-        <span className="text-[10.5px] text-tfaint">single-column simplified stack (spec 18 §4.8)</span>
+        <span className="text-[11px] text-tfaint">single-column simplified stack (spec 18 §4.8)</span>
       </div>
 
       <div className="scroll-y min-h-0 flex-1">
-        {/* wheels */}
-        <div className="flex items-start justify-around border-b border-hairline px-3 py-4">
+        {/* wheels — 2×2 grid so nothing clips at 340px rail width */}
+        <div className="grid grid-cols-2 gap-x-2 gap-y-4 border-b border-hairline px-3 py-4">
           <Wheel label="Lift" tint="rgba(70,110,200,0.35)" />
           <Wheel label="Gamma" tint="rgba(120,200,150,0.30)" />
           <Wheel label="Gain" tint="rgba(230,180,75,0.32)" />
@@ -53,19 +53,18 @@ export function ColorPage() {
 
         {/* primaries */}
         <div className="flex flex-col gap-2 border-b border-hairline px-3 py-3">
-          <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-tfaint">
+          <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">
             <Contrast size={11} /> Primaries
           </div>
           <Slider label="Contrast" value={12} />
           <Slider label="Pivot" value={35} />
           <Slider label="Saturation" value={-8} />
-          <Slider label="Hue" value={0} unit="°" />
         </div>
 
         {/* curves mini */}
         <div className="flex items-center gap-3 border-b border-hairline px-3 py-3">
           <div className="flex flex-col gap-1">
-            <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-tfaint">
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">
               <Spline size={11} /> Curves
             </span>
             <svg width="180" height="100" className="rounded-[var(--radius)] border border-soft bg-inset" aria-label="Curves editor">
@@ -77,7 +76,7 @@ export function ColorPage() {
           </div>
           {/* scopes */}
           <div className="ml-auto flex flex-col gap-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-tfaint">Scopes</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Scopes</span>
             <svg width="120" height="62" className="rounded-[var(--radius)] border border-soft bg-inset" aria-label="Waveform scope">
               {Array.from({ length: 24 }).map((_, i) => (
                 <rect key={i} x={i * 5} y={62 - (10 + ((i * 37) % 40))} width="3" height={10 + ((i * 37) % 40)} fill="var(--waveform)" opacity="0.7" />
@@ -106,7 +105,7 @@ export function ColorPage() {
               <Circle size={13} strokeWidth={1.6} />
             </button>
           </div>
-          <p className="pt-1 text-[10px] leading-snug text-tfaint">
+          <p className="pt-1 text-[11px] leading-snug text-tmuted">
             Node-graph layout deferred — single-column per spec 18 §15.3 (seal-round question).
           </p>
         </div>

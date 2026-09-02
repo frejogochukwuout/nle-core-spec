@@ -1,6 +1,7 @@
 /* CheatSheet — spec 16 §7.3 modal opened via "?". Single ShortcutMap source
    (SCOUT-R8-C 10-take), platform-aware glyphs. */
 
+import { useEffect } from 'react';
 import { X, FolderOpen } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 
@@ -54,6 +55,16 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
 export function CheatSheet() {
   const open = useUi((s) => s.cheatOpen);
   const close = useUi((s) => s.setCheatOpen);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close(false); }
+    };
+    window.addEventListener('keydown', onKey, true); // capture — beats the shell deselect handler
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [open, close]);
+
   if (!open) return null;
   return (
     <div
@@ -69,7 +80,7 @@ export function CheatSheet() {
       >
         <div className="flex items-center gap-2 border-b border-hairline bg-raised px-4 py-2.5">
           <span className="text-[14px] font-semibold text-tprimary">Keyboard cheat sheet</span>
-          <span className="text-[10.5px] text-tfaint">spec 16 · ~180 bindings · showing core set</span>
+          <span className="text-[11px] text-tfaint">spec 16 · ~180 bindings · showing core set</span>
           <div className="grow" />
           <button onClick={() => close(false)} aria-label="Close cheat sheet" className="icon-btn !h-7 !w-7"><X size={14} /></button>
         </div>
@@ -80,7 +91,7 @@ export function CheatSheet() {
               <div className="flex flex-col gap-1">
                 {g.rows.map(([k, d]) => (
                   <div key={k} className="flex items-baseline justify-between gap-3">
-                    <span className="mono rounded border border-soft bg-inset px-1.5 py-0.5 text-[10.5px] text-tprimary">{k}</span>
+                    <span className="mono rounded border border-soft bg-inset px-1.5 py-0.5 text-[11px] text-tprimary">{k}</span>
                     <span className="text-[11px] text-tmuted">{d}</span>
                   </div>
                 ))}
@@ -88,7 +99,7 @@ export function CheatSheet() {
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-2 border-t border-hairline bg-raised px-4 py-2.5 text-[10.5px] text-tfaint">
+        <div className="flex items-center gap-2 border-t border-hairline bg-raised px-4 py-2.5 text-[11px] text-tmuted">
           <FolderOpen size={12} />
           Footer: load the 30s sample project (spec 18 §4.10) — doubles as the test fixture.
           <button className="ml-auto text-accent underline-offset-2 hover:underline">Load sample project</button>
