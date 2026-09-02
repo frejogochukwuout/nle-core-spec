@@ -1,9 +1,9 @@
 # Master Specification — Browser-Based NLE (Rough-Cut Editor with FCPXML Handoff)
 
-**Status:** v4.0 (Rounds 1-6 complete: seed → scout-refined → audited → integrated → testability layer; Round 7: code-reference architecture (spec 19), UI shell (spec 18), export-command amendment (spec 15), engine reconciliation. Round 8: three-repo architecture — opencut-timeline landed (Decision 11 seam), engine Waves 4A-4D re-baselined, cloudcut UX-spec integrated (spec 18 v1.1 + NFRs §6A), testability coverage matrix (spec 17/12). One seal round remains — see spec 19 §12.)
-**Date:** 2026-09-02 (v1 seed 2026-08-22; v2 testability 2026-08-30; v3 Round 7 2026-09-02; v4 Round 8 2026-09-02)
+**Status:** v5.0 (Rounds 1-8 see prior ledger. Round 9: **three-domain architecture** — single editing core + render projection (Decision 12), web-daw-core audio adoption (Decision 13, new spec 20), contract/gap/acceptance spec re-typing (Decision 14), doc governance (single-file canon, code-reference rule, §2.5). One seal round remains — see spec 19 §12 + ARCH-R9 §7.)
+**Date:** 2026-09-02 (v1 seed 2026-08-22; v2 testability 2026-08-30; v3 Round 7 2026-09-02; v4 Round 8 2026-09-02; v5 Round 9 2026-09-02)
 **Owner:** Architect (this conversation)
-**Consumers:** Implementation team, scout sub-agents, code reviewers, the nle-engine and opencut-timeline workstreams
+**Consumers:** Implementation team, scout sub-agents, code reviewers, the nle-engine / opencut-timeline / web-daw-core workstreams
 
 ---
 
@@ -13,11 +13,13 @@ This master spec captures **every architectural decision** reached across the de
 
 - **FreeCut** (`github.com/walterlow/freecut`, MIT) — the primary *system-level* teacher (workers, threading, sync, audio-clock, lifecycle, grading toolset)
 - **OpenCut-classic** (`github.com/opencut-app/opencut-classic`, archived MIT) — the primary *type-design* teacher (`MediaTime`, `FrameRate`, `SceneTracks`, `EditorCore`, `mediabunny`+WebCodecs decode path)
-- **nle-engine** (`github.com/bearachprema/nle-engine`, private) — an in-between clean-room FreeCut port used as a de-risking code reference for the ENGINE side, NOT canon (see Decision 10/11 and spec 19)
-- **opencut-timeline** (`github.com/bearachprema/opencut-timeline`, private) — an in-between clean-room OpenCut-classic port, the TIMELINE/multi-track engine-core reference (landed Round 8; see Decision 11)
+- **nle-engine** (`github.com/bearachprema/nle-engine`, private) — clean-room FreeCut port, **202/202 tests, ~47k LOC, real A/V export decode-verified**; the RUNTIME-domain core (player/GPU/transitions/export/media/fonts) per Decision 12
+- **opencut-timeline** (`github.com/bearachprema/opencut-timeline`, private) — clean-room OpenCut-classic distill, **297/297 tests, "FINAL as a distilled opencut timeline"** (its own HANDOFF); the EDITING-domain core (SceneTracks/ops/controllers/React UI) per Decision 12
+- **web-daw-core** (`github.com/bearachprema/web-daw-core`, private) — the AUDIO-domain core extracted from web-daw `main@913d0d7`: channel strips, 20+ DSP effects, PDC, aux/sidechain, WAM hosting, offline render, null-test harness, **737/737 tests**, plus the NLE bridge (three-layer track model — Decision 13 / spec 20)
 - **cloudcut UX-spec** (`github.com/frejogochukwuout/cloudcut-nle` branch `ux-spec`) — the prior iteration's app-layer UX spec; integrated Round 8 with an ours-wins contradiction policy (see spec 18 §8 and SCOUT-R8-C)
+- **web-daw** (`github.com/bearachprema/web-daw`, private, upstream of web-daw-core) — the only LIVING ancestor; web-daw-core re-syncs from it by manifest (`sync-from-upstream`), so audio improvements flow in continuously rather than by snapshot
 
-This is **not** a copy spec. We are rebuilding from scratch in pure TypeScript, using both repos as reference designs. Each downstream stream spec (files `01` through `12`) refines a single concern; the sub-agent scout plan (`13`) defines how those refinements are produced; the testing strategy (`12`) and implementation phases (`14`) define execution.
+The implementation posture (Decision 14): **the three private repos are the code baseline — inherited, not rewritten.** This is **not** a from-scratch rebuild (that posture was superseded in Round 9: the OSS-derivation strategy exists precisely to avoid trial-and-error, and the three distillations have already succeeded under test gates). The spec set is their **contract + gap + acceptance layer**: it defines what the code must satisfy (shapes, protocol, seams, invariants, NFR floors), what still differs (the corrective register + gap tables), and how every facet is programmatically proven (spec 17 §13A). The one genuinely greenfield surface is the app shell (spec 18). Each downstream stream spec refines a single concern; the scout plan (`13`) defines how refinements are produced; the testing strategy (`12`/`17`) and implementation phases (`14`) define execution.
 
 ### Companion files in this directory
 
@@ -293,7 +295,7 @@ Three consumers use **identical JSON interfaces** against the same engine:
 
 **Implication:** The engine converges toward the spec, never the reverse. Spec 19 §7 answers the engine's own five blocking decisions (D1-D5) from the spec side — the cross-pollination the workstreams never had (Round 8 escalated D1: the engine's Wave 4B resolved it against the spec answer; convergence is an adapter task, see spec 19 §7/C8). The engine's waves are watched (spec 19 §9) and the final verdict on its state is deferred to the seal round.
 
-### Decision 11: The Two-Repo Seam — one state model, one wire protocol, two algorithm homes, one render seam (Round 8)
+### Decision 11: The Two-Repo Seam — one state model, one wire protocol, two algorithm homes, one render seam (Round 8) — **superseded in part by Decision 12 (Round 9)**
 
 **Decision:** opencut-timeline landed (Round 8) as a **timeline/multi-track engine core** — not the UI-only distill originally recommended — and its overlap with nle-engine is resolved by a binding seam architecture (spec 19 §2.4, the full contract):
 
@@ -306,6 +308,56 @@ Three consumers use **identical JSON interfaces** against the same engine:
 **Reasoning:** Both repos now implement timeline ops + snapshot undo + headless JSON surfaces — unbridged, that is two engines and two protocols. The seam keeps each repo's strength where it is strongest (OpenCut's interaction math vs FreeCut's edit-op breadth) while forcing exactly one state model and one protocol at the boundaries the spec owns. The user's framing: opencut-timeline is "more like timeline / multi-track engine core" than UI; the overlap is where the spec + implementation plan arbitrate.
 
 **Implication:** Implementation starts from TWO reference repos with a mandatory adapter layer (spec 14 P1 gains the seam-integration phase). opencut-timeline's W4 (components) + W5/W6 (60 absent commands) + the C7 rename pass are its convergence path; the engine's C8 persistence adapter is its highest-priority one. Neither repo's headless surface is spec-15-conformant yet — both converge per spec 19 §6.
+
+> **R9 supersession note:** the "two algorithm homes" clause and the bidirectional `SceneTracks ↔ flat` adapter proved to be permanent bridge-code cost without a corresponding product gain (user challenge, Round 9 — ARCH-R9 §1.2/§1.3). Decision 12 replaces them with a single editing core and a one-way projection. The state-model, wire-protocol, render-seam, and undo clauses survive unchanged in intent.
+
+### Decision 12: Three-Domain Architecture — one editing core, one runtime core, one audio core; the engine timeline becomes a one-way projection (Round 9)
+
+**Decision:** the workstream's runtime reality is three production-grade codebases, each normative in its own domain, cross-linked by seam contracts instead of duplicated semantics:
+
+| Domain | Normative core | Owns | Does NOT own |
+|---|---|---|---|
+| **Editing** | opencut-timeline | SceneTracks state of record (incl. persistence `toJSON/fromJSON`), ops + snapshot undo + transaction discipline, interaction controllers, React timeline UI, headless EDITING command family (spec-15 subset, C7) | rendering, playback, export, media decode |
+| **Runtime** | nle-engine | player, WebGPU compositor, transitions/effects/text stacks, export (WebCodecs+mediabunny), media registry, fonts, headless RUNTIME command family (spec-15 subset, C2 scoped down) | editing semantics, editing UI, the wire protocol's editing subset |
+| **Audio** | web-daw-core | channel-strip graph, DSP effects, PDC, aux/sidechain, WAM hosting, offline render, NLE bridge (S/G/E) — Decision 13 | timeline structure, editing ops, video |
+
+**The five seam clauses (amending Decision 11):**
+
+1. **One state model — single truth.** `SceneTracks` is the editing state of record INCLUDING persistence. nle-engine's flat `TimelineData` is re-specified as a **one-way derived projection** for render scheduling: `project(scene) → TimelineData` is deterministic and idempotent; the engine state is a cache, **never an editing input — editing never reads back from engine state.** The R8 bidirectional adapter and its round-trip property tests are replaced by the projector's idempotence property (a strictly smaller test surface: no fidelity round-trip through engine-only constructs).
+2. **One wire protocol — C2 scoped down.** spec 15's bare 78-type union stays the only protocol. C7 (opencut rename/param alignment) unchanged. **nle-engine's convergence duty narrows to the RUNTIME command subset** (render/export/media/scenes); the editing subset is opencut-timeline's to implement. The JSON-RPC+$ref retirement stands.
+3. **One algorithm home — was two.** opencut-timeline's ops layer is the normative editing-algorithm home. nle-engine's op families (roll/slip/slide/rateStretch/retime/freezeFrame/insert-edit-3-point/rangeRemoval/sync-lock — spec 06 §5.5-5.14's map) are **port-scheduled into it** under the workstream's standing port discipline (acceptance = OT's 297-test suite + the ported engine tests). Until a family's port lands, the engine's implementation remains its internal fallback, but the EDITING wire never routes through it. Transitions/linked-groups/sync-lock take SceneTracks shapes per specs 06/07 — spec work, not repo improvisation.
+4. **One render seam — unchanged, strengthened.** `setTracks()/renderFrame(t)` (OT placeholder-compositor contract); the engine's WebGPU compositor implements it; the projector feeds `setTracks`.
+5. **One undo family — OT's.** Snapshot undo with OT's transaction discipline (spec 15 §7.1A). The engine's `UndoStack` retires with the op-family port.
+
+**Reasoning (the user's challenge, answered):** nle-engine ships a tested timeline, so opencut-timeline must justify itself functionally or architecturally — "cleaner codebase" is irrelevant since freecut is already cleaned. It does, but ONLY as the editing domain: (a) it is the executable form of spec 05/15's editing half; (b) it holds the workstream's ONLY interaction+UI asset (controllers 2,996 LOC + React 3,773 LOC, real-mouse-verified — nle-engine has zero timeline UI, so retiring OT means writing ~6.8k LOC of unverifiable new interaction code, the maximum-risk path); (c) its 297-test suite is the port acceptance harness. As a SECOND op-semantics home it fails that bar — hence the merge into one home (clause 3). See ARCH-R9 §2 for the full cost/benefit ledger.
+
+**Implication:** spec 14 re-plans implementation from the three-repo baseline (code-first posture per Decision 14); the corrective register re-scopes (C2 narrowed, C8 becomes the projector, new C9: engine `export/audio-mix.ts` is transitional until the M1.5 parity gate, then reduced to mux-adapter or deleted). The seal round verifies the op-port kickoff (ARCH-R9 §7.3).
+
+### Decision 13: web-daw-core is the audio-domain core (Round 9)
+
+**Decision:** adopt `web-daw-core` as the normative audio engine (spec 20). The engine's audio path converges onto it per its own M1.5 plan: submodule `vendor/web-daw-core`, player routing through the bridge, export Stage-2 offline mixdown through `SceneMixer`. **The three-layer track model is spec law** (S = `StructuralAudioSource`, G = `MixerTrackSettings`/`MixerSceneSettings`, E = ChannelStrip graph; layers share ONLY `trackId`). The timeline's `TrackType` must NOT grow signal fields (sidecar keyed by trackId; a `midi` track section is deferred until MIDI *editing* is real — opencut W7).
+
+**Reasoning:** freecut's `AudioMixer` is a scalar mix — no reverb, sends, sidechain, live EQ, PDC, or mixdown export; web-daw-core has all of them, null-test-hardened (≥60 dB offline/realtime parity, 737/737). This is a has-vs-has-not gap, which clears the "significantly better" bar. The user's risk concern (another two-core pairing) is answered structurally: unlike the timeline duplicate (two same-level semantics + a bidirectional bridge), the audio seam is a layered contract sharing one key, the NLE semantics already live core-side (the bridge implements nle-engine's Wave-5A split-merge laws), and the legacy mixer is scheduled for deletion at a measured parity gate — nothing bidirectional exists to maintain.
+
+**Retirement with teeth (the convergence gates):** at M1.5's parity gate — offline-vs-realtime ≥60 dB null + m23 ported expectations — `AudioMixer` (2,426 LOC), the pre-baked EQ path, and the 22,050 Hz preview-bin conventions retire, and `export/audio-mix.ts` (Wave-5B's transitional offline mix, 275 LOC) is reduced to a mux-side adapter or deleted (C9). Fallback discipline mirrors Decision 12: freecut audio stays until the gate passes.
+
+**Implication:** new spec `20-audio-core.md` (the audio-domain contract: three layers, M1.5/M2/M3 roadmap, facet rows for spec 17 §13A, web-daw-core code-reference table). spec 03 keeps the playback clock/streaming/varispeed behavior; its mixing-graph content re-points to spec 20. The upstream sync (web-daw is the only LIVING ancestor) is the audio side's standing refresh mechanism — the lock file + 737-test gate make drift loud.
+
+### Decision 14: The spec set is CONTRACT + GAP + ACCEPTANCE over a three-repo code baseline (Round 9)
+
+**Decision:** the spec set's type changes from "prescriptive blueprint driving a from-scratch implementation" to a three-layer instrument over inherited code:
+
+1. **CONTRACT (normative; code converges to it):** type shapes (`SceneTracks`, the 78-type `EngineCommand` union, `StructuralAudioSource`/`MixerTrackSettings`), wire-protocol semantics, domain boundaries and seam laws (projector, render seam, S/G/E), invariants, error/undo/batch semantics, NFR floors. Where code and contract conflict, the contract wins and the delta is documented (Decision 10's rule, unchanged).
+2. **GAP (worklist):** the corrective register (re-scoped this round), the missing-command table (60 of 78 with the port plan), per-repo P1/P2 backlogs, and the app-shell build (spec 18 stays fully prescriptive — the one greenfield surface, with cloudcut-nle as UX/app reference).
+3. **ACCEPTANCE (proof):** spec 17 §13A's facet matrix across all three domains; the three repo suites re-tiered onto the three-tier methodology (engine 202 → T1/T2; OT 297 → T1/T2/T3; web-daw-core 737 → T1/T2 with null-test gates as the audio T1); new work lands with tier assignments from day one.
+
+**Reasoning (the user's implementation-strategy question, answered):** all three repos were produced by the same inherit-distill-test pattern and are production-grade; discarding ~55k LOC of tested code to re-derive it from prose would maximize trial-and-error — the exact failure mode the OSS-derivation strategy exists to avoid. But "no new code at all" is also false: the shell, the op-family port, M1.5 wiring, and the command-family completion are real work needing normative shape. The practical posture: **inherit all three repos as the baseline; the spec is their contract, their gap list, and their acceptance harness; the only greenfield code is the shell.** Per-repo postures ("inherit + converge" / "inherit + absorb ports" / "inherit + sync" / "build to spec") are tabulated in spec 14 §2.1.
+
+### 2.5 Document Governance (Round 9 — binding)
+
+1. **Single-file canon.** One file per spec: `NN-name.md`. Edits happen IN PLACE; the status header carries the revision ledger. No `.refined.md` suffixes, no parallel variants (the 12 dual-file pairs were collapsed in R9 — seeds recoverable in git history; historical round records keep their point-in-time paths by design). Future sessions read exactly `NN-name.md`.
+2. **Code-reference vs inline-code rule.** Default: **cite the code** (`repo file:symbol`; line numbers are secondary aids, refreshed by grep at every revision — the fresh-grep discipline). The code is always present and current; inline copies of it can only rot. Inline code is permitted in exactly three cases: **(a) protocol payloads and data shapes** (JSON command examples, type definitions that ARE the contract — spec content, not citations); **(b) prescriptive pseudo-code** for algorithms that differ from every existing implementation (the "should be" form); **(c) corrective shapes** — the spec's corrected version of something a repo does differently (labeled as the correction, with the repo's current shape cited beside it). **Forbidden:** inline duplication of code that exists in a reference repo — replace with a citation. Enforcement: the mechanical battery's inline-block check classifies sampled blocks; full retro-classification of the ~180 legacy blocks is a seal-round checklist item.
+3. **Repo-side canon adjacency.** opencut-timeline's `SEAMS.md` and web-daw-core's `docs/track-model.md` are normative-adjacent: the seal round verifies this spec set's seam statements match them exactly (no silent drift between repo docs and canon).
 
 ---
 
@@ -513,7 +565,8 @@ Each stream has its own spec file. The breakdown is designed so sub-agents can w
 | 14 | Keyboard shortcuts | `16-keyboard-shortcuts.md` | FreeCut + OpenCut-classic shortcut maps; every shortcut → `EngineCommand` | Decision 9 |
 | 15 | Test plan | `17-test-plan.md` | Three-tier testing methodology (Tier 1 engine / Tier 2 render / Tier 3 UI) | Decision 9 |
 | 16 | UI shell | `18-ui-shell.md` | `ui-mock/davinci_resolve_ui_mock.html` (DaVinci Resolve layout clone, simplified) + spec 05/16 contracts | Decision 9 |
-| 17 | Code references | `19-code-references.md` | nle-engine + opencut-timeline + ux-spec; canon hierarchy + seam | Decision 10/11 |
+| 17 | Code references | `19-code-references.md` | nle-engine + opencut-timeline + web-daw-core + ux-spec; canon hierarchy + seam | Decision 10/11/12 |
+| 18 | Audio core | `20-audio-core.md` | web-daw-core (channel strips, DSP, PDC, WAM) + the S/G/E three-layer bridge | Decision 13 |
 
 ---
 
