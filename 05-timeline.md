@@ -1206,6 +1206,10 @@ Every file path below is absolute within its reference repo. **OC** = `/tmp/open
 | Virtual media | `media/virtual-media.ts:39-135` | `TEST_COLORS`/`TEST_TONES_HZ`/`MediaRegistry`/`goertzelPower` | REFERENCE | Test-only media (mirrors nle-engine pattern) |
 | Headless API | `headless/api.ts:38-102` | 18-type prefixed union; `CommandResult {ok, code…}`; `apply`/`applyBatch` atomic | CORRECTIVE | C7 rename pass chartered (spec 19 §6): `timeline.*`/`track.*` prefixes are NOT spec-15 shape |
 
+### 16.6. Inline-code classification (R9 sampled audit — 00-master §2.5.2 enforcement)
+
+This spec carries 42 inline TS blocks. The R9 sampled classification (15 blocks, stratified by section): **(a) data/protocol shapes** — `TimelineViewState` (BLOCK-1), `ToolMode` (BLOCK-8) — legitimate spec content, stays; **(b) prescriptive UI/interaction skeletons** — the component skeletons (`ClipFilmstrip`/`ClipWaveform`/`TimelineElement`/`TrimHandles`), the interaction hooks (`useVisibleElements`/`useTimelineDrag`/`useTrim`/`useMarquee`), the handlers (`handleClick`/`handleRazorClick`/`TimelinePlayhead`) — these were written BEFORE opencut-timeline's W4 landed and remain this spec's own component-hierarchy contract ("should be" form); they are not copies of repo code, so they are not class (d) violations. **Where OT now has the real component/controller, §16.5's table row is the citation of record and the skeleton is the shape summary — the two coexist by design (skeleton = contract, table = implementation pointer), not redundancy.** Full-block classification (all 42, plus 01's 67 and 06's 68) is the seal-round audit item (19 §12 item 6); the expected finding per this sample is few-to-zero class (d) blocks in this spec, with 01/06 (engine-side, written against freecut source with quoting-style scouts) the likelier carriers.
+
 ---
 
 ## 17. Corrections to Seed Spec

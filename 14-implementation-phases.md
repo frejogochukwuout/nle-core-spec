@@ -184,20 +184,15 @@ Multiple clips arranged on a multi-track timeline. Basic composition (overlay tr
    - `SceneTracks = { overlay: OverlayTrack[]; main: VideoTrack; audio: AudioTrack[] }`
    - `Track`, `TimelineElement` types
 
-2. **Seam adapter (Decision 11.1 — mandatory, blocks P1 exit):**
-   - `src/scene/scene-adapter.ts` — `SceneTracks ↔ flat TimelineData` both directions
-   - `toFlat(tracks)` preserves element order and section membership; `fromFlat(data)` rebuilds the singleton main + overlay/audio sections
-   - Property tests: `flat(fromFlat(data))` is identity (modulo stable ids); `fromFlat(toFlat(tracks))` is identity; unknown track kinds map to `overlay` with a warning (C8/Decision-11 taxonomy rule)
-   - Consumed by: the compositor (flat render tasks), the persistence layer (spec 09 ProjectJSON), the FCPXML exporter (spec 10) — none of them ever see SceneTracks directly
+2. **Scene projector (Decision 12.1 — mandatory, blocks P1 exit; re-typed R9 from the retired bidirectional adapter):**
+   - `src/scene/scene-projector.ts` — `project(scene) → flat TimelineData`, ONE direction only (the engine store is a derived render-scheduling cache; **editing never reads back**)
+   - `project(scene)` preserves element order and section membership; deterministic and idempotent; unknown track kinds map to `overlay` with a warning (taxonomy rule)
+   - Property tests: determinism, idempotence, never-loss element count, no-readback dependency check (spec 17 §13A.5)
+   - Consumed by: the compositor via `setTracks()` (render seam), the FCPXML exporter's flat view (spec 10), the engine's render pipeline — none of them ever feed it back into SceneTracks. **Persistence follows SceneTracks directly (OT's `toJSON/fromJSON`; the app shell owns storage) — the projector has no persistence duty.**
 
-3. **Timeline UI (minimal — spec 05 + shell regions from spec 18):**
-   - Track headers (with mute/solo/lock buttons — spec 18 §4.7's 160px column)
-   - Track bodies (DOM-based, with virtualization)
-   - Clip rendering (color rectangles with name labels — no filmstrip yet)
-   - Playhead (draggable)
-   - Ruler (DOM-based, time markers)
-   - Zoom (pixels per second slider)
-   - MediaPool + Inspector panels mount (spec 18 §4.2/§4.4 — 4 inspector tabs, model-backed params only)
+3. **Timeline UI (mount opencut-timeline's LANDED components — spec 05 §4 + shell regions from spec 18):**
+   - **`TimelineView` + the W4 component set + controllers are inherited AS-IS** (Decision 12; real-mouse-verified at 297/297) — this deliverable is WIRING, not building: embed `TimelineView` in the shell's timeline region, feed it the `TimelineCore`, provide the app-shell props (`core`, `fps`, `dragSource`, `mediaAssets`)
+   - Track headers (mute/solo/lock — spec 18 §4.7's 160px column), virtualized track bodies, clip rendering, draggable playhead, ruler, zoom slider — all in the inherited component set; the shell owns persistence, menus, undo chrome (OT SEAMS.md §6)
 
 4. **Composition runtime:**
    - `buildFrameDescriptor(state, frame)` — basic version
