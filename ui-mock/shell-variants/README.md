@@ -59,6 +59,23 @@ tests can target the same surface.
 - Tool keys follow spec 16 (V/B/T/Y/U, N=snap). Note: spec 18 §4.5's parenthetical keys (A/','/S) disagree with spec 16 §3.2 — flagged as a spec-consistency finding.
 - Playback, media decode, and all engine behavior are fake — this is a UI/UX artifact, not an engine (see specs 01-07 for the real thing).
 
+## Review process
+
+The mockup went through three sub-agent UX peer-review rounds (pro-editor,
+product-designer, and a11y/spec-compliance personas) with VLM screenshot
+analysis, live interaction tests, and code greps. Round 3 verdict:
+**"NO MAJORS REMAIN — direction study is valid for user review."**
+Findings from the rounds that belong to the SPEC (not this mock):
+
+1. **18 §9 provenance error** — `--accent-selection #e8b34b (mock playhead gold)`:
+   the davinci mock's playhead is actually **red** (#fa1024, `.playhead-line`).
+   This mock follows the mock (red playhead, gold = state/selection only).
+2. **18 §4.5 vs 16 §3.2 tool-key conflict** (A/','/S vs V/B/T/Y/U + N).
+3. **`--accent-focus` has no AA text pair** in resolve/studio (≈3.9-4.0:1 both
+   ways) — spec 18 §9 assigns primary buttons to it; needs a decision.
+4. **Status strip 12px vs the 11px type floor** (§3.1 vs §11.12) — this mock
+   uses 14px; the spec values are in tension.
+
 ## Layout
 
 ```

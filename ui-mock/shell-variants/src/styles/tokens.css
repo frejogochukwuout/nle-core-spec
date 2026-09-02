@@ -99,7 +99,7 @@
 
 /* ---- studio theme: modern elevated dark (exploratory direction B) ---- */
 [data-theme="studio"] {
-  --bg-app: #121216;
+  --bg-app: #0e0e12;
   --bg-shell: #1a1a21;
   --bg-panel: #1e1e26;
   --bg-raised: #23232c;
@@ -118,7 +118,7 @@
   --radius: 8px;
   --radius-sm: 4px;
 
-  --shadow-panel: 0 10px 28px rgba(0, 0, 0, 0.38), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --shadow-panel: 0 12px 32px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.045) inset;
 
   --accent-gold: #f2bd62;
   --accent-ember: #ff7a5c;

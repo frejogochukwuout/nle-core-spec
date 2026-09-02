@@ -6,6 +6,24 @@
 
 ---
 
+## UI/UX direction track (NEW 2026-09-03, pushed through `390fd48`+)
+
+`ui-mock/shell-variants/` — interactive TSX mockup of the spec-18 shell (React 19 + Vite per 00 §4) with a ctrl+` Variant Explorer: direction presets **A Resolve Classic** (spec-canonical), **B Modern Studio** (elevated dark, violet), **C Editorial Light** (tests the 18 §8.14 rejection). Three sub-agent review rounds (pro-editor / product-designer / a11y+spec) → R3 verdict: **NO MAJORS REMAIN — valid for user review**. Mock-level interactions live (drag/trim/split with snap, playhead, search, variants persist + share links).
+
+**Next steps (in order):**
+1. **USER REACTION** — the user tours the three presets (preview panel or `npm run dev` in `ui-mock/shell-variants/`); the direction decision (A/B/C or a hybrid) is the gate for everything below.
+2. Feed the decision into the shell-variants token layer; optionally tune B's elevation further (cosmetic carry-over from R3).
+3. P1 wiring (spec 14) then inherits the chosen token set + component structure + `shell-*` testids — the mockup is the design-side blueprint for the one greenfield surface.
+4. Fold the four spec findings from the review rounds into the SEAL round (items 10-13 above).
+
+**Seal additions from the mockup reviews (spec-side findings, not mock bugs):**
+10. **18 §9 playhead provenance error** — table says `--accent-selection #e8b34b (mock playhead gold)` but the davinci mock's playhead is RED (#fa1024, `.playhead-line`); spec must decide the canonical playhead treatment (mock follows the actual mock: red time indicators, gold = state/selection).
+11. **18 §4.5 tool-key conflict vs 16 §3.2** (A/','/S vs V/B/T/Y/U + N) — pick one, amend the other.
+12. **`--accent-focus` has no AA text pair** in resolve/studio (≈3.9-4.0:1 both directions) though 18 §9 assigns primary buttons to it — needs an `--accent-focus-contrast`-class decision.
+13. **18 §3.1 12px status strip vs §11.12 11px type floor** — internally in tension; mock used 14px.
+
+---
+
 ## Round history (completed)
 
 | Round | What landed | Tip commit |

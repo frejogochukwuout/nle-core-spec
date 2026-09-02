@@ -509,6 +509,30 @@ The rename script's CANON_NOTE contained the literal `.refined.md`, which the su
 
 ---
 
+## Round-10 Meta-Learnings (UI/UX direction-study sessions — 2026-09-03, ui-mock/shell-variants)
+
+### 19. Direction studies need variants as data, not branches
+
+When the open question is "which visual direction," build ONE app with a variant dimension system: token blocks keyed by `data-theme`/`data-density`/etc. attributes, presets as plain data, an overlay (Ctrl + `) to switch them live, persistence + URL-hash share links so the reviewer can send an exact state back. The spec-canonical direction must be preset A (default), and every non-canonical option carries an inline "Spec position" note — deviations are surfaced, never hidden. This turns a subjective debate into a toggleable artifact.
+
+### 20. Peer review of UI needs LIVE interaction tests, not just screenshots
+
+Three review rounds over the same mockup: the two worst bugs (clip-drag preview teleporting clips because seconds were used as pixels; an entire floating-panel CSS treatment that matched zero DOM elements) were INVISIBLE in screenshots and only catchable by dragging elements in the running app and reading computed styles. VLM screenshot critique reliably catches contrast/legibility/hierarchy issues but hallucinates states (claimed trim handles that don't exist, "white border" that was gold) and misses dead code. The working loop: 3 personas (pro-domain user, product designer, a11y/spec compliance) × (VLM on screenshots + live agent-browser interaction tests + code greps), each returning an explicit severity-ranked findings list, iterate until an explicit "NO MAJORS REMAIN" verdict, then RESUME the same reviewer agent for gate re-checks (cheap, keeps context).
+
+### 21. Unlayered author CSS silently defeats Tailwind 4's @layer utilities
+
+A plain `button { background:none; border:none }` written outside any cascade layer outranks every Tailwind `bg-*`/`border-*` utility (utilities live in `@layer utilities`; unlayered author CSS beats all layers). Symptom: buttons that ignore their classes — invisible selection states, borderless cards, dead hovers — while divs render fine. Proven only via computed styles + isolated repro. **Rule:** every hand-written reset/base rule goes in `@layer base` when Tailwind 4 is in play.
+
+### 22. The sandbox reaps background processes between tool calls
+
+`vite` started with nohup/setsid/disown dies anyway when the bash tool call ends; only the platform's own dev.sh survives. Keep a `vite-up.sh` (idempotent start-if-down + curl health loop) and re-run it at the head of any command that needs the server. Related gotchas: agent-browser screenshots need ABSOLUTE paths (relative paths resolve in the daemon's cwd, silently dropping files elsewhere); set the browser viewport ABOVE the app's minimum before testing or the window-too-small overlay intercepts every interaction; hash-only URL changes on an SPA don't reload — force `agent-browser reload` after variant-URL navigation.
+
+### 23. Mock-level ≠ sloppy: the mock's fidelity IS the review surface
+
+A UI mock for direction validation must still honor the target spec's testids, type floor, contrast rules, and panel inventory — reviewers (rightly) treat violations as findings even in a "fake" app, and the mock doubles as the blueprint the real shell will be wired from. Keep mock-scope honest by listing intentional deviations in the README (with spec refs) and routing spec-side discoveries to the tracker instead of editing canon in passing.
+
+---
+
 ## GitHub Operations
 
 When pushing a large spec set to a new GitHub repo:
