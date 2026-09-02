@@ -83,7 +83,7 @@ export function DeliverPage() {
           <div className="flex items-center gap-2">
             <span className="w-[92px] shrink-0 text-[11px] text-tmuted">Bundle media</span>
             <input type="checkbox" defaultChecked className="accent-[var(--accent-focus)]" aria-label="Bundle media with FCPXML" />
-            <span className="text-[11px] text-tfaint">sidecar files for round-trip (spec 10)</span>
+            <span className="text-[11px] text-tmuted">sidecar files for round-trip (spec 10)</span>
           </div>
         </div>
 

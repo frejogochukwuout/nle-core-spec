@@ -152,7 +152,7 @@ export function Inspector() {
               aria-controls={`insp-${t.id}`}
               data-testid={`shell-inspector-tab-${t.id}`}
               onClick={() => setTab(t.id)}
-              className={`relative flex flex-col items-center gap-1.5 rounded-[var(--radius)] px-2.5 py-1 transition-colors ${active ? 'bg-[var(--active-overlay)] text-tprimary' : 'text-tfaint hover:text-tmuted'}`}
+              className={`relative flex flex-col items-center gap-1.5 rounded-[var(--radius)] px-2.5 py-1 transition-colors ${active ? 'bg-[var(--active-overlay)] text-tprimary' : 'text-tmuted hover:text-tprimary'}`}
             >
               <Icon size={20} strokeWidth={1.6} />
               <span className="text-[11px]">{t.label}</span>
@@ -202,7 +202,7 @@ export function Inspector() {
               <div key={fx.id} className="flex items-center justify-between gap-2 rounded-[var(--radius)] border border-soft px-2 py-1.5">
                 <span className="text-[11.5px] text-tprimary">{fx.name}</span>
                 <span className="flex items-center gap-2">
-                  <span className="text-[11px] text-tfaint">{fx.enabled ? 'on' : 'off'}</span>
+                  <span className="text-[11px] text-tmuted">{fx.enabled ? 'on' : 'off'}</span>
                   <input
                     type="checkbox"
                     checked={fx.enabled}

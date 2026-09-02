@@ -214,11 +214,11 @@ export function AppShell() {
 
       {/* ---- main body ---- */}
       <div
-        className="flex shrink-0 overflow-hidden border-b border-hairline"
+        className="mainbody flex shrink-0 overflow-hidden border-b border-hairline"
         style={{ height: mainBodyH || '40%', minHeight: 320 }}
       >
         {panels.mediaPool && (
-          <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
+          <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
             <MediaPool />
           </div>
         )}
@@ -227,7 +227,7 @@ export function AppShell() {
         )}
         {panels.effects && <EffectsPanel />}
 
-        <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region flex min-h-0 min-w-0 flex-1">
+        <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region panel-shadow flex min-h-0 min-w-0 flex-1">
           <Viewer duration={duration} />
         </div>
 

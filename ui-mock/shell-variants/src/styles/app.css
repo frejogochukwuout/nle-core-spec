@@ -128,8 +128,8 @@ body {
   padding: 8px;
   background: var(--bg-app);
 }
-[data-theme="studio"] .mainbody > .shell-region,
-[data-theme="light"] .mainbody > .shell-region {
+[data-theme="studio"] .mainbody > *:not([role="separator"]),
+[data-theme="light"] .mainbody > *:not([role="separator"]) {
   border-radius: var(--radius);
   overflow: hidden;
 }

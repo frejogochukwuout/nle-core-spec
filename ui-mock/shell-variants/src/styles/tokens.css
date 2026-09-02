@@ -174,7 +174,7 @@
 
   --shadow-panel: 0 1px 3px rgba(20, 20, 30, 0.08), 0 8px 24px rgba(20, 20, 30, 0.07);
 
-  --accent-gold: #a6721c;
+  --accent-gold: #8a5f14;        /* darkened for 4.5:1+ text pairs on light */
   --accent-ember: #e5484d;
   --accent-violet: #6e56cf;
   --accent-focus: #6e56cf;
