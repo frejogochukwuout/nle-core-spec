@@ -443,13 +443,13 @@ These are **accepted** constraints. We do not try to solve them:
 
 ## 6A. Non-Functional Requirements (Round 8)
 
-Testable budgets adopted from the cloudcut UX-spec (ux-spec 21 §4.2 — the prior iteration's production-derived numbers; integrated per the ours-wins policy, SCOUT-R8-C §6 item 7). These are CI-observable targets, not aspirations — spec 17 §5.6 carries the test recipes:
+Testable budgets adopted from the cloudcut UX-spec (ux-spec 21 §4.2 — the prior iteration's production-derived numbers; integrated per the ours-wins policy, SCOUT-R8-C §6 item 7). These are CI-observable targets, not aspirations — spec 17 §13A.1 carries the test recipes:
 
 | NFR | Budget | Verified by |
 |---|---|---|
 | First contentful paint (empty project) | < 1 s on mid-tier laptop | T3 smoke, PerformanceObserver `paint` timings |
 | Time-to-interactive (empty project) | < 3 s | T3 smoke, `performance.now()` at first command dispatch |
-| Timeline interaction frame budget | 60 fps @ 1080p, 50 clips, drag in progress | T2 frame-time sampling during scripted drag (spec 17 §13) |
+| Timeline interaction frame budget | 60 fps @ 1080p, 50 clips, drag in progress | T2 frame-time sampling during scripted drag (spec 17 §13A.1) |
 | Viewer render latency (scrub) | < 2 frames from seek to presented frame | T2 seek-to-present measurement |
 | Keyboard shortcut dispatch | < 16 ms (one frame) from keydown to engine.command.apply resolution | T3 timing assertion |
 | Memory ceiling | < 4 GB per renderer process (Decision 6 constraint) | T2 heap sampling at 50-clip project |

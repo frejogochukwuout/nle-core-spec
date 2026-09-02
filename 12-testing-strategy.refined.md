@@ -1,7 +1,7 @@
 # 12 — Testing Strategy: Virtual Framebuffer, Pixel Verification, Audio Waveform Checks
 
 **Stream:** Test infrastructure & verification strategy
-**Status:** Refined (SCOUT-12) — open questions resolved (§12), corrections verified (§14), CI/runner configs + asset scripts audited (audits/12-testing-strategy.audit.md — PASS-WITH-CAVEAT, issues applied)
+**Status:** Refined (SCOUT-12) — open questions resolved (§12), corrections verified (§14), CI/runner configs + asset scripts audited (audits/12-testing-strategy.audit.md — PASS-WITH-CAVEAT, issues applied). Round-8 note: the umbrella methodology (tier definitions, facet coverage matrix, NFR verification recipes, error-path census, a11y spot suite) lives in `17-test-plan.md` v1.1 §13A — this spec owns the INFRASTRUCTURE layer (virtual framebuffer, pixel/audio verification mechanics, CI configs) that 17's recipes execute on; NFR measurements per 00-master §6A run through the jobs defined here.
 **Spec file:** `12-testing-strategy.refined.md` (this file)
 **Seed:** `12-testing-strategy.md` (935 LOC)
 

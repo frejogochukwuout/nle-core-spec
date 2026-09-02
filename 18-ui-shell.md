@@ -202,7 +202,7 @@ Cross-track-type drags already fail at placement (spec 06 §5.9) — the menus a
 
 ### 4.10 Sample project (v1.1)
 
-A built-in 30-second demo project (3 video clips + 1 text + 1 audio + one crossfade) ships as a `ProjectJSON` fixture (spec 09) + committed media manifests, loadable from the media-pool empty state and the cheat-sheet modal's footer. It doubles as the Tier-2/3 test fixture (spec 17 §13 committed-assets rule — the same file the tests load, never a fork), and it is the onboarding path: "the empty state teaches" (source principle 7). No tour, no settings modal, no help menu (§8.12 stands).
+A built-in 30-second demo project (3 video clips + 1 text + 1 audio + one crossfade) ships as a `ProjectJSON` fixture (spec 09) + committed media manifests, loadable from the media-pool empty state and the cheat-sheet modal's footer. It doubles as the Tier-2/3 test fixture (spec 17 §5.3's committed-asset rule + §13A.6 — the same file the tests load, never a fork), and it is the onboarding path: "the empty state teaches" (source principle 7). No tour, no settings modal, no help menu (§8.12 stands).
 
 ## 5. Interaction Contracts (gesture → `EngineCommand`)
 
@@ -405,7 +405,7 @@ Contrast floors are §9's table; the 4.5:1 body-text and 3:1 non-text minimums a
 
 ## 12. Testing (per spec 17 §4 template)
 
-**Performance budget (v1.1 preamble — the budgets are 00-master §6A's; the test hooks are here):** first paint < 1 s and TTI < 3 s on an empty project are asserted by the Tier-3 shell-mount smoke (PerformanceObserver `paint` timings + `performance.now()` at first command dispatch); 60 fps @ 1080p with 50 clips during drag is a Tier-2 frame-time sample (spec 17 §13); the perf-UX implementation list (React.memo on TrackHeader/clip cards, memoized derived selectors, 200 ms search debounce, code-split heavy modals, skeleton states) is advisory technique, not contract — the budgets are the contract.
+**Performance budget (v1.1 preamble — the budgets are 00-master §6A's; the test hooks are here):** first paint < 1 s and TTI < 3 s on an empty project are asserted by the Tier-3 shell-mount smoke (PerformanceObserver `paint` timings + `performance.now()` at first command dispatch); 60 fps with 50 clips during drag is a Tier-2 frame-time sample (spec 17 §13A.1); the perf-UX implementation list (React.memo on TrackHeader/clip cards, memoized derived selectors, 200 ms search debounce, code-split heavy modals, skeleton states) is advisory technique, not contract — the budgets are the contract.
 
 **Tier 1 (Vitest, no browser)** — none shell-specific: the shell's logic (selector layer, command-constructor helpers, coalescing wrappers) is pure and testable headless; those tests live beside the components.
 
@@ -421,7 +421,7 @@ Contrast floors are §9's table; the 4.5:1 body-text and 3:1 non-text minimums a
 - **A11y floor**: roving tabindex, tablist arrow keys, slider `aria-valuetext` spot checks, **F6 cycling, `aria-activedescendant` grid navigation, Shift+F10 menus, state-row presence per panel, save-chip event pairing** (the §13A a11y spot suite; axe-core pass in CI).
 - **Context menus**: every §4.9 menu opens via both right-click and Shift+F10; every item emits its mapped command (or (UI) store mutation).
 - **Cursor grammar**: the §5A cursor table asserts via computed style on synthetic hover (a spot-check row per class, not all 16 in CI).
-Mouse-drag tests are reserved for the translation layer itself (hit-testing, thresholds) — everything else asserts through commands, per the UI-interaction-tax rules (spec 17 §13.2 / SKILL.md).
+Mouse-drag tests are reserved for the translation layer itself (hit-testing, thresholds) — everything else asserts through commands, per the UI-interaction-tax rules (spec 17 §2.5 / SKILL.md).
 
 ```bash
 # Run Tier 3 shell tests only

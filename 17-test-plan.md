@@ -1,7 +1,7 @@
 # 17 — Overall Test Plan: Methodology, Test Matrix, Per-Module Template
 
 **Stream:** Test methodology (umbrella)
-**Status:** v1.0 — supersedes the methodology portions of `12-testing-strategy.refined.md`
+**Status:** v1.1 (Round 8 — §13A added: facet coverage matrix, NFR verification recipes, a11y spot suite, absorbed-semantics fixtures, wire-protocol conformance suite, seam property tests, UI-shell v1.1 facet tests; §2.5 gains the error-path-census + NFR-recipe rules). Supersedes the methodology portions of `12-testing-strategy.refined.md`
 **Spec file:** `17-test-plan.md`
 **Owner:** Test architecture (this stream)
 **Consumers:** Every per-spec author (01–12), CI engineering, QA lead, implementation team
@@ -413,6 +413,14 @@ the feature is tested. Concretely:
 6. If the feature has a performance implication: add a perf test per §8.
 7. If the feature has a manual verification aspect (FCPXML export, HDR
    display): add a row to §12.
+8. **Error-path census (Round 8)**: every `CommandError` code the feature
+   can emit — including `NOOP` (spec 15 §6.3) — must have at least one
+   test that *triggers* it (asserting the code, not just `ok: false`).
+   A code that can be emitted but never triggered in the suite is a
+   coverage hole, not a nicety.
+9. **Non-functional facets (Round 8)**: every NFR row in 00-master §6A
+   gains a verification recipe in §13A.1 — budgets are contract, and a
+   budget without a measurement hook is aspiration.
 
 A feature is **not done** until all matrix cells for its row are green
 (or explicitly marked "—" with a justification in the per-spec `## Testing`
@@ -2201,6 +2209,120 @@ Test failed.
 
 ---
 
+## 13A. Round-8 Testability Additions — Facet Coverage & NFR Recipes (v1.1)
+
+> This section is the Round-8 answer to the umbrella requirement: **every spec facet — functional and non-functional — has a tier assignment, a programmatic verification method, and a pass criterion.** The §3.1 matrix covers the feature-level view (Rounds 1-6); this section covers the Round-7/8 facet additions (wire protocol, seam, absorbed timeline semantics, UI shell v1.1) and the NFR verification recipes (00-master §6A). Together: §3.1 + §13A.7 + each per-spec `## Testing` section = the complete coverage contract. **A facet with no row anywhere is a spec bug** — the per-spec author checklist (§14.4) enforces this at authoring time.
+
+### 13A.1 NFR verification recipes (00-master §6A's test hooks)
+
+Each NFR budget → a concrete, CI-runnable measurement. NFR tests run in the nightly job (§9.3) + the shell-mount smoke subset per-PR; budgets are pass/fail, not advisory.
+
+| NFR (00 §6A) | Recipe | Tier / job | Pass criterion |
+|---|---|---|---|
+| First contentful paint < 1 s (empty project) | Playwright: `page.goto('/empty')` → collect `PerformanceObserver` `paint` entries (`first-contentful-paint`) | T3 smoke, per-PR | median of 5 runs < 1,000 ms on the CI runner class (documented baseline; local numbers are diagnostic) |
+| Time-to-interactive < 3 s | Same page; `performance.now()` at the first successfully dispatched no-op command after `window.__engineReady` | T3 smoke, per-PR | median of 5 < 3,000 ms |
+| Timeline interaction 60 fps @ 1080p, 50 clips, drag in progress | Scripted drag (spec 16 Pattern 4 mechanics): dispatch synthetic mousemove at 60 Hz for 3 s; sample `requestAnimationFrame` delta histogram | T2 frame-sampling, nightly | p95 frame delta < 20 ms AND zero frames > 100 ms (dropped-frame census, not average FPS) |
+| Viewer render latency (scrub) < 2 frames | `seek` → await presented-frame callback; measure ticks between dispatch and presentation | T2, nightly | median < 2 × frame duration at project fps |
+| Keyboard dispatch < 16 ms | T3: keydown → `apply()` resolution timing via the command-middleware hook | T3, per-PR (smoke subset) | p95 < 16 ms on the runner class |
+| Memory ceiling < 4 GB @ 50-clip project | `page.evaluate(() => performance.memory.usedJSHeapSize())` sampled after load + 60 s of scripted scrubbing (Chromium-only API; gate on availability) | T2, nightly | usedJSHeapSize < 4 GB (Decision 6's renderer-process budget is the hard ceiling) |
+| Accessibility floor (WCAG 2.2 AA) | §13A.2 | T3, per-PR (axe) + per-release (manual) | zero axe violations on `critical`/`serious` + spot assertions pass |
+| Error-path discipline | §13A.4 error-path census (T1) | T1, per-PR | every `CommandError` code in spec 15 §6.3's registry has ≥ 1 triggering test; a coverage script (codelist × grep of test IDs) enforces it |
+| Persistence robustness | Fixture battery: for each of spec 09 §11's fixtures (corrupted / old-version / sanitized), `loadProject` → assert `{ok:true}` + warnings array (never throws) | T1, per-PR | all fixtures hydrate with expected warning sets |
+
+**Reliability rules:** NFR tests follow §8.5's discipline (median-of-N, documented runner class, no timing-fragile single runs). A budget regression is triaged as a **real bug** (§13.4), not flakiness, unless the run-to-run variance itself exceeds 20% (then the measurement is the bug).
+
+### 13A.2 Accessibility spot suite (T3 — spec 18 §11's floor)
+
+- **Automated (per-PR)**: `@axe-core/playwright` against the shell with (a) empty project, (b) sample project loaded (§13A.6's fixture), (c) mid-drag state (frozen overlays). Fail on any `critical`/`serious` violation. Contrast checks sample the §18 §9 token pairs (computed styles vs their backgrounds), not just DOM roles.
+- **Spot assertions (per-PR, plain Playwright — no SR required)**: F6 cycles the six regions and Shift+F6 reverses (focus-trace assertion); inspector/scene tablists pair `aria-controls`/`role=tabpanel`; media-pool grid moves focus via arrow keys with `aria-activedescendant`; every §18 §4.9 menu opens via Shift+F10 and restores focus on Escape; slider controls expose `aria-valuetext` in TC format; the viewer canvas `aria-label` updates at ≤ 1 Hz during playback (sampled 2 s); `prefers-reduced-motion: reduce` emulation zeroes computed transition durations; state rows per panel are reachable and announced.
+- **Manual (per release)**: NVDA + VoiceOver smoke pass over the §18 §11 checklist (checklist lives in the release runbook; failures file issues, not waivers).
+
+### 13A.3 Absorbed timeline-semantics fixtures (T1 — opencut-timeline M5/M16 distilled)
+
+Vitest fixtures pinning the Round-8 absorbed semantics (spec 05 §8.3 contract notes, §9, §14.5A; spec 06 §5.2A):
+
+| Fixture | Asserts | Source evidence |
+|---|---|---|
+| Zero-anchor: empty main | first element lands at exactly ZERO (requested start ignored) | spec 05 §14.5A rule 1; OT M5 |
+| Zero-anchor: earlier-than-earliest | requested start < earliest element → clamped to ZERO; timeline never gains a leading gap | rule 2 |
+| Zero-anchor: sole-element group-move | clamped at 0; raw `move` escapes | rule 3 |
+| Insert startTime-override | first element at requested start, others keep relative offsets, element's own `startTime` field ignored; `CommandResult.data` carries the ACTUAL landed start | rule 4 |
+| Drag threshold boundary | pointer delta of exactly 5 px does NOT start a drag (strict `>`); 6 px does | spec 05 §8.3 note 2; OT M16 |
+| Snap threshold screen-space | threshold ticks = `(10 px / pps) × 120,000`; closest-wins with earlier-time tie-break; dragged element's own edges excluded | spec 05 §9; OT M4 |
+| Coordinate-space | `elementRectLeft` injected from `getBoundingClientRect().left`; viewport-space pointer math never mixes with scroll-space | spec 05 §8.3 note 1 |
+| Mixed A/V drag group | rejected atomically (no partial move) | note 3 |
+| Trim NOOP vs rejection | clamped-to-zero delta → `ok:false` + `NOOP` code (not TRIM_BEYOND_SOURCE, not silent success) | spec 06 §5.2A |
+
+### 13A.4 Wire-protocol conformance suite (T1/T2 — spec 15's programmatic gate)
+
+1. **Schema sweep (T1)**: for each of the 78 union members — a valid example round-trips through the spec 15 §11 Zod schemas; a deliberately-invalid variant fails with the expected issue path. The 78 examples are generated from spec 15 §5's example table (single source, no test-local forks).
+2. **Error-path census (T1)**: every code in §6.3's registry (including `NOOP`, the Round-8 addition) is triggered by at least one test; the census script fails if a registered code has zero triggering tests (§2.5 rule 8).
+3. **Transaction semantics (T1)**: `CommandBatch` atomicity — mid-batch failure rolls back to the pre-batch snapshot exactly; eviction is suspended during the batch; undo/redo are rejected inside a batch; a rolled-back batch clears the redo stack (spec 15 §7.1A, absorbed from opencut-timeline's three-round-verified behavior).
+4. **Intra-batch overlap guard (T1)**: an insert batch whose members overlap each other fails with `OVERLAP_REJECTED` even though each member alone would pass (spec 06 §5.9's Round-8 constraint).
+5. **Determinism replay (T1)**: same `(ProjectJSON, EngineCommand[])` → byte-identical `SceneState` across two runs with `idSeed` fixed (spec 15 §1.1 / §10.4); the engine's deterministic-id counter is reset between runs (the OT `resetIdCounterForTests` pattern is the approved mechanism).
+6. **State-change envelope (T2)**: every mutating command's success result carries a `stateChange` payload consistent with the post-state snapshot (the delta IS the spec's multi-consumer sync mechanism — asserted, not assumed).
+
+### 13A.5 Seam adapter property tests (T1 — spec 14 P1's mandatory deliverable)
+
+Properties (fast-check, 1,000 runs each in the nightly, 100 in PR-scope):
+
+- `fromFlat(toFlat(tracks))` ≡ `tracks` (modulo stable ids) — section membership, order, and the singleton-main invariant preserved
+- `toFlat(fromFlat(data))` ≡ `data` (modulo stable ids) — flat ordering preserved
+- **Taxonomy warning path**: 5-kind TrackType input maps to the 3-kind wire taxonomy with `text/graphic/effect → overlay` + a warning recorded (never data loss, never a crash)
+- **Never-loss invariant**: total element count is preserved through every round-trip (the cheap oracle that catches silent drops — the engine's pre-4D-A persistence silently dropped image/adjustment clips; this property is the regression test for that class)
+
+### 13A.6 UI shell v1.1 facet tests (T3 — spec 18 v1.1)
+
+- **State rows**: per panel, drive to empty/loading/error/noresult states (fixture-driven) and assert `shell-<panel>-state-<s>` presence + CTA wiring (the CTA click emits the mapped command).
+- **Context menus**: each of the five menus opens via right-click AND Shift+F10; every item emits its mapped command (or UI-store mutation); focus restores on Escape.
+- **Save chip**: simulate spec 09 §6.1's autosave events (dirty → flushing → flushed → failed) and assert the chip's four presentations + retry emits `saveProject`.
+- **Toast conventions**: success auto-dismisses in ~4 s (assert removal), error persists; max-3 stacking; `role` correctness per class.
+- **Cursor grammar**: one spot-check per §18 §5A class via computed style on synthetic hover.
+- **Perf smoke**: the §13A.1 per-PR subset (first paint, TTI, keyboard dispatch).
+- **Sample project**: loads via one command path (`loadProject` with the committed fixture); doubles as the T3 fixture for most rows above (§5.3's committed-asset rule).
+
+### 13A.7 Round-8 facet coverage matrix
+
+Every facet added or materially amended in Rounds 7-8, with its verification. (Legend and tier columns as §3.1; "F/NF" = functional / non-functional.)
+
+| Facet | Source spec | F/NF | Tier | Programmatic verification | Pass criterion |
+|---|---|---|---|---|---|
+| 78-command union (schema validity) | 15 §4 | F | T1 | §13A.4.1 schema sweep | 78/78 round-trip; invalid variants fail |
+| Error-path registry (incl. NOOP) | 15 §6.3 | F | T1 | §13A.4.2 census | zero untriggered codes |
+| Batch transactions (atomic/rollback/redo-clear) | 15 §7.1A | F | T1 | §13A.4.3 | all four semantics asserted |
+| Intra-batch overlap guard | 06 §5.9 | F | T1 | §13A.4.4 | overlapping batch rejected |
+| Determinism replay | 15 §1.1 | F | T1 | §13A.4.5 | byte-identical states |
+| stateChange envelope | 15 §6 | F | T2 | §13A.4.6 | payload ≡ post-snapshot delta |
+| Export commands (FCPXML/master/frame) | 15 §4.3.74-76 | F | T1/T3 | artifact in `CommandResult.data` + Deliver-page button test (spec 18 §12) | round-trip file + button-emits-command |
+| RenameProject/DeleteProject | 15 §4.3.77/78 | F | T1 | schema sweep + manager round-trip | project list state consistent |
+| TransitionSpec 2-layer model | 07 §6.1A, 15 §11 | F | T1 | Zod schema + TS interface conformance | both layers validate independently |
+| SceneTracks ↔ flat seam | 14 P1, 00 D11 | F | T1 | §13A.5 property tests | both identity laws + never-loss |
+| Zero-anchor semantics (4 rules) | 05 §14.5A | F | T1 | §13A.3 fixtures | all four rules pinned |
+| Drag threshold / coordinate-space / mixed-group | 05 §8.3 | F | T1/T3 | §13A.3 + boundary test at 5 px | strict-`>` boundary holds |
+| Snap threshold (screen-space, closest-wins) | 05 §9 | F | T1 | §13A.3 fixture | formula + tie-break pinned |
+| Trim shape per layer (wire single / UI group) | 06 §5.2A | F | T1/T3 | wire: schema; UI: controller emits batch-of-N trims as one undo step | layer mapping asserted both sides |
+| Ripple decomposition (convenience → delete{ripple}) | 06 §5.4 | F | T1 | convenience op emits exactly the wire decomposition | one wire shape only |
+| Sync-lock propagation | 06 §6 | F | T1 | engine-reference port tests (property: locked tracks' deltas preserved) | invariant holds across ripple ops |
+| UI shell panels + gestures | 18 §4/§5 | F | T3 | §18 §12 suite (~60 tests) | contract rows green |
+| Context menus (5) | 18 §4.9 | F | T3 | §13A.6 | both open routes + command mapping |
+| Per-panel state rows | 18 §4.2 table | F | T3 | §13A.6 | all rows render + CTA wired |
+| Error & toast presentation | 18 §6.4 | F | T3 | §13A.6 | class → presentation asserted |
+| Save-status chip | 18 §6.3 | F | T3 | §13A.6 | event-paired |
+| Cursor grammar (16 classes) | 18 §5A | F | T3 | §13A.6 spot rows | spot checks green |
+| Fallback source-preview | 18 §4.3 | F | T3 | double-click pool asset → `<video>` swap + program canvas restore | no timeline state touched (zero commands) |
+| Sample project | 18 §4.10 | F | T1/T3 | loads via `loadProject`; shared fixture | one fixture, tests never fork it |
+| Keyboard bindings (~180) | 16 §3 | F | T3 | per-binding Pattern-1/2 tests (existing §3.1 row) | parity + schema equality |
+| Ins/out-as-setLoop-halves | 16 §3.4 note | F | T3 | mark-in/out/clear emit `setLoop` halves; clear-out clears `end` | the reference-bug regression case |
+| NFR: first paint / TTI / dispatch / fps / latency / memory | 00 §6A | NF | T2/T3 | §13A.1 recipes | budgets met on runner class |
+| NFR: a11y floor | 00 §6A, 18 §11 | NF | T3 | §13A.2 | zero critical/serious + spot assertions |
+| NFR: error-path discipline | 00 §6A | NF | T1 | §13A.4.2 | census green |
+| NFR: persistence robustness | 00 §6A, 09 §11 | NF | T1 | §13A.1 fixture battery | hydrate-with-warnings, never crash |
+| Reference-repo re-tiering (engine 144, OT 136) | 19 §12 | NF (process) | — | both suites re-tier into T1/T2 per §2.1; count discipline (declared == scraped) | zero count drift |
+
+**Coverage-gap check (the enforcement rule):** a spec facet introduced by any future round must land in this matrix (or §3.1) in the same PR that introduces it — the §14.4 author checklist gains this as step 0. The 00-master §6A NFR table and this matrix cross-reference each other bidirectionally; neither may gain a row without the other.
+
+---
+
 ## 14. Relationship to Per-Spec Testing Sections
 
 ### 14.1 The contract
@@ -2258,6 +2380,7 @@ exempt from the §4 template.
 
 When writing the `## Testing` section for a per-spec:
 
+- [ ] **Step 0 (Round 8): every facet your spec introduces — functional or non-functional — has a row in §3.1 or §13A.7 (or you add one in the same PR). A facet with no row anywhere is a spec bug.**
 - [ ] Read this spec (17) §2 (methodology) and §3 (matrix)
 - [ ] Identify the matrix row(s) that apply to your module
 - [ ] Copy the §4.1 template into your spec
@@ -2271,6 +2394,8 @@ When writing the `## Testing` section for a per-spec:
   justification) before using it
 - [ ] If you believe a tier doesn't apply to your module, propose a
   matrix change in §3 (with justification) before writing the per-spec
+- [ ] If your module emits `CommandError` codes: every code has a
+  triggering test (§2.5 rule 8)
 
 ---
 
