@@ -1,0 +1,29 @@
+{
+  "name": "nle-shell-variants",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Interactive TSX mockup of the spec-18 UI shell with toggleable visual/UX direction variants (ctrl+` debug overlay). Source of truth lives in this repo; a static build is synced to the platform preview app.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.39.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}

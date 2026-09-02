@@ -46,6 +46,7 @@ Reference codebases are **domain cores** orbiting the spec's contracts (mapped a
 - **web-daw-core** (`github.com/bearachprema/web-daw-core`, private — landed Round 9) — web-daw's DAW-grade engine extracted as a package (**737/737 tests, null-test-hardened ≥60 dB**): channel strips, 20+ DSP effects, PDC, aux/sidechain, WAM hosting, offline render, plus the NLE bridge (three-layer track model). The **AUDIO-domain core** per Decision 13 — contract in spec 20; continuously re-synced from the living web-daw upstream.
 - **cloudcut-nle** (`github.com/frejogochukwuout/cloudcut-nle`, public — main branch) — the UX/app-scope reference codebase from the prior iteration (messier, lower quality; used only for UX-surface patterns per spec 18 §13) + the `ux-spec` branch's 28-file UX spec integrated into spec 18 v1.1 under the ours-wins policy.
 - **ui-mock/davinci_resolve_ui_mock.html** — the visual/layout reference for spec 18 (DaVinci Resolve Edit-page clone, deliberately simplified).
+- **ui-mock/shell-variants/** — the interactive TSX successor: a React 19 + Vite mockup of the spec-18 shell with three toggleable UI/UX direction variants (Ctrl + \` variant explorer) for validating the visual direction before implementation. See its own README.
 
 **Reading order for future sessions:** `00-master-spec.md` → `19-code-references.md` → `20-audio-core.md` → the stream specs (01-18) as needed. **One file per spec — the `.refined.md` era ended in Round 9** (00-master §2.5: edits happen in place; historical round records keep their point-in-time paths by design).
 

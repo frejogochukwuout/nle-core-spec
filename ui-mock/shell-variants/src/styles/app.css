@@ -1,0 +1,196 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Map runtime CSS vars into Tailwind's theme so utilities like
+   bg-shell / text-muted / border-hairline re-skin with data-attrs */
+@theme inline {
+  --color-app: var(--bg-app);
+  --color-shell: var(--bg-shell);
+  --color-panel: var(--bg-panel);
+  --color-raised: var(--bg-raised);
+  --color-timeline: var(--bg-timeline);
+  --color-inset: var(--bg-inset);
+  --color-frame: var(--bg-frame);
+  --color-hairline: var(--border-hairline);
+  --color-soft: var(--border-soft);
+  --color-strong: var(--border-strong);
+  --color-accent: var(--accent-selection);
+  --color-focus: var(--accent-focus);
+  --color-tprimary: var(--text-primary);
+  --color-tmuted: var(--text-muted);
+  --color-tfaint: var(--text-faint);
+  --color-wave: var(--waveform);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--tc-mono);
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+body {
+  background: #000;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+  font-size: 12px;
+}
+button { font-family: inherit; background: none; border: none; color: inherit; cursor: default; }
+input, select { font-family: inherit; }
+:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 2px;
+}
+::placeholder { color: var(--text-faint); }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+.mono { font-family: var(--tc-mono); font-variant-numeric: tabular-nums; }
+.hairline-r { border-right: 1px solid var(--border-hairline); }
+.hairline-b { border-bottom: 1px solid var(--border-hairline); }
+.hairline-t { border-top: 1px solid var(--border-hairline); }
+
+/* ============================================================
+   SHARED CONTROL LANGUAGE (davinci-mock grammar, token-driven)
+   ============================================================ */
+.vsep {
+  width: 1px; height: 18px; background: var(--border-soft);
+  margin: 0 8px; flex-shrink: 0;
+}
+
+.toolbtn {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--text-muted);
+  padding: 5px 9px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+  white-space: nowrap;
+}
+.toolbtn:hover { background: var(--hover-overlay); color: var(--text-primary); }
+.toolbtn.active { color: var(--text-primary); background: var(--active-overlay); }
+
+.icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  height: var(--ctrl-h);
+  aspect-ratio: 1.08;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+  flex-shrink: 0;
+}
+.icon-btn:hover { background: var(--hover-overlay); color: var(--text-primary); }
+.icon-btn.toggled { color: var(--text-primary); background: var(--active-overlay); }
+.icon-btn.boxed.toggled {
+  background: transparent;
+  border: 1.4px solid var(--text-primary);
+}
+.icon-btn.disabled { opacity: .35; pointer-events: none; }
+.icon-btn svg { pointer-events: none; }
+
+.tc-chip {
+  font-family: var(--tc-mono);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  padding: 2px 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* tooltip (CSS-only, 500ms delay per spec 18 §9) */
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%; top: calc(100% + 7px);
+  transform: translateX(-50%) translateY(-2px);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) ease;
+  z-index: 90;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+  transition-delay: 500ms;
+}
+[data-tip-top]::after { top: auto; bottom: calc(100% + 7px); transform: translateX(-50%) translateY(2px); }
+
+/* range inputs — mock grammar */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  background: var(--border-soft);
+  border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px; height: 11px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #d8d8d8;
+  box-shadow: 0 0 2px rgba(0,0,0,.6);
+  border: none;
+}
+input[type="range"].green-fill::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, #2fae46 0%, #2fae46 var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
+}
+[data-theme="light"] input[type="range"]::-webkit-slider-thumb { background: #4a4a52; }
+[data-theme="light"] input[type="range"].green-fill::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, #2f9e5f 0%, #2f9e5f var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
+}
+
+/* text inputs */
+.field {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 3px 7px;
+  font-size: 11.5px;
+}
+.field:focus { border-color: var(--accent-focus); }
+
+/* dock tabs — icon-only in resolve, icon+label in studio/light */
+[data-theme="resolve"] .dock-tab .dock-label { display: none; }
+.dock-tab .dock-label { font-size: 11px; }
+
+/* generic panel scroll region */
+.scroll-y { overflow-y: auto; overflow-x: hidden; }
+
+/* window-too-small overlay — spec 18 §3.2 */
+.window-too-small { display: none; }
+@media (max-width: 1279px), (max-height: 799px) {
+  .window-too-small { display: flex; }
+}
+
+/* selection-safe text */
+::selection { background: var(--accent-selection); color: var(--accent-contrast); }
