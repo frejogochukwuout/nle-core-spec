@@ -1,1 +1,0 @@
-UI spec has been produced (Round 7): `18-ui-shell.md` — the full UI-shell specification, grounded in the uploaded mockup (`ui-mock/davinci_resolve_ui_mock.html`) with the agreed simplifications (no menu bar, simplified inspector). This placeholder is kept only as a breadcrumb; treat `18-ui-shell.md` as canon.
