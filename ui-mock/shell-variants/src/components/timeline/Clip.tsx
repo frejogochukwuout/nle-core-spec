@@ -46,9 +46,9 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   // live geometry (drag preview = optimistic DOM state, spec 18 §5)
   const geo = drag
     ? drag.mode === 'move'
-      ? { left: drag.cur, width: el.duration * pxPerSec }
+      ? { left: drag.cur * pxPerSec, width: el.duration * pxPerSec }
       : drag.mode === 'l'
-        ? { left: drag.cur, width: (drag.origStart + drag.origDur - drag.cur) * pxPerSec }
+        ? { left: drag.cur * pxPerSec, width: (drag.origStart + drag.origDur - drag.cur) * pxPerSec }
         : { left: el.startTime * pxPerSec, width: (drag.cur - el.startTime) * pxPerSec }
     : { left: el.startTime * pxPerSec, width: el.duration * pxPerSec };
 
@@ -149,20 +149,20 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
             <rect key={i} x={`${i * (100 / bars.length)}%`} y={h / 2 - b.max * (h / 2)} width={`${100 / bars.length - 0.4}%`} height={Math.max(1, (b.max + b.min) * (h / 2) * 0.5)} fill="var(--waveform)" opacity={0.9} />
           ))}
         </svg>
-        {/* fade triangles (spec 18 §9 / spec 05 §14.10) */}
+        {/* fade ramps — white lines + handle dots + soft fill (spec 05 §14.10) */}
         {fadeLeftW > 6 && (
           <svg className="pointer-events-none absolute inset-y-0 left-0" width={fadeLeftW} height="100%" aria-hidden="true">
-            <line x1="1" y1="0" x2={fadeLeftW - 1} y2="100%" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" />
-            <circle cx="2" cy="2" r="2.2" fill="#fff" />
+            <line x1="1" y1="0" x2={fadeLeftW - 1} y2="100%" stroke="var(--fade-line)" strokeWidth="2" />
+            <circle cx="3" cy="3" r="2.6" fill="var(--fade-line)" stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
           </svg>
         )}
         {fadeRightW > 6 && (
           <svg className="pointer-events-none absolute inset-y-0 right-0" width={fadeRightW} height="100%" aria-hidden="true">
-            <line x1={fadeRightW - 2} y1="0" x2="1" y2="100%" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" />
-            <circle cx={fadeRightW - 3} cy="2" r="2.2" fill="#fff" />
+            <line x1={fadeRightW - 2} y1="0" x2="1" y2="100%" stroke="var(--fade-line)" strokeWidth="2" />
+            <circle cx={fadeRightW - 4} cy="3" r="2.6" fill="var(--fade-line)" stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
           </svg>
         )}
-        {clipLabel('#eafff0')}
+        {clipLabel('var(--clip-audio-label)')}
       </div>
     );
   } else if (isText) {
@@ -171,7 +171,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         className="flex h-full items-center justify-center overflow-hidden"
         style={{ background: 'var(--clip-text)', borderRight: '1px solid rgba(0,0,0,0.25)' }}
       >
-        {clipLabel('#fff', 'center')}
+        {clipLabel('var(--clip-text-label)', 'center')}
       </div>
     );
   } else {
@@ -205,7 +205,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       role="button"
       aria-label={`${el.name}, ${tc(el.startTime)}`}
       data-testid={`clip-${el.id}`}
-      className={`absolute top-[2px] bottom-[2px] overflow-visible rounded-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''} ${locked ? 'locked-stripes' : ''}`}
+      className={`clip-box absolute top-[2px] bottom-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''}`}
       style={{
         left: geo.left,
         width: Math.max(6, geo.width),
@@ -227,7 +227,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       onMouseLeave={() => setHover(false)}
     >
       {/* inner clipping box (label + body clip; badges overflow) */}
-      <div className="absolute inset-0 overflow-hidden rounded-[2px]">{body}</div>
+      <div className="clip-box absolute inset-0 overflow-hidden">{body}</div>
+
+      {/* locked overlay — stripes ON TOP of the body (legible, R2) */}
+      {locked && <div className="locked-stripes pointer-events-none absolute inset-0 z-[2]" aria-hidden="true" />}
 
       {/* live trim/move TC bubble (spec 06 §8 overlay pattern) */}
       {drag && (
@@ -236,7 +239,14 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
           data-testid="clip-drag-tc"
         >
           {tc(drag.mode === 'move' ? drag.cur : drag.mode === 'l' ? drag.cur : el.startTime)}
-          {drag.mode !== 'move' && ` · ${tc(drag.cur - (drag.mode === 'l' ? drag.cur : el.startTime))}`}
+          {' · '}
+          {tc(
+            drag.mode === 'move'
+              ? el.duration
+              : drag.mode === 'l'
+                ? drag.origStart + drag.origDur - drag.cur
+                : drag.cur - el.startTime,
+          )}
         </span>
       )}
 

@@ -23,7 +23,7 @@ export function DeliverPage() {
     <div data-testid="shell-deliver" className="flex h-full min-h-0 flex-col bg-panel">
       <div className="flex items-center gap-2 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
         <span className="text-[12px] font-semibold text-tprimary">Deliver</span>
-        <span className="text-[10.5px] text-tfaint">export &amp; handoff</span>
+        <span className="text-[11px] text-tfaint">export &amp; handoff</span>
       </div>
 
       <div className="scroll-y min-h-0 flex-1 px-3 py-3">
@@ -31,13 +31,13 @@ export function DeliverPage() {
         <div className="mb-3 flex items-center justify-between rounded-[var(--radius)] border border-soft bg-inset px-3 py-2">
           <div>
             <span className="text-[11.5px] font-semibold text-tprimary">Beach Doc — Rough Cut</span>
-            <span className="mono ml-2 text-[10px] text-tfaint">00:00:30:00 · 24 fps · 1920×1080</span>
+            <span className="mono ml-2 text-[11px] text-tfaint">00:00:30:00 · 24 fps · 1920×1080</span>
           </div>
-          <span className="rounded-full border border-soft px-2 py-0.5 text-[10px] text-tmuted">Edited</span>
+          <span className="rounded-full border border-soft px-2 py-0.5 text-[11px] text-tmuted">Edited</span>
         </div>
 
         {/* preset picker */}
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.07em] text-tfaint">Presets</div>
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-tfaint">Presets</div>
         <div className="mb-3 grid grid-cols-3 gap-2">
           {PRESETS.map((p) => {
             const Icon = p.icon;
@@ -53,7 +53,7 @@ export function DeliverPage() {
               >
                 <Icon size={15} className={active ? 'text-accent' : 'text-tmuted'} />
                 <span className="text-[11.5px] font-medium text-tprimary">{p.name}</span>
-                <span className="text-[10px] leading-tight text-tfaint">{p.desc}</span>
+                <span className="text-[11px] leading-tight text-tmuted">{p.desc}</span>
               </button>
             );
           })}
@@ -83,15 +83,16 @@ export function DeliverPage() {
           <div className="flex items-center gap-2">
             <span className="w-[92px] shrink-0 text-[11px] text-tmuted">Bundle media</span>
             <input type="checkbox" defaultChecked className="accent-[var(--accent-focus)]" aria-label="Bundle media with FCPXML" />
-            <span className="text-[10.5px] text-tfaint">sidecar files for round-trip (spec 10)</span>
+            <span className="text-[11px] text-tfaint">sidecar files for round-trip (spec 10)</span>
           </div>
         </div>
 
-        {/* export CTA — primary buttons use --accent-focus (spec 18 §9) */}
+        {/* export CTA — accent-focus has no AA text pair in resolve/studio
+            (recorded spec finding); use the accent-selection pair (9.1:1) */}
         <button
           data-testid="shell-deliver-btn-export-fcpxml"
           className="mb-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius)] px-3 py-2.5 text-[12px] font-semibold transition-opacity hover:opacity-90"
-          style={{ background: 'var(--accent-focus)', color: '#fff' }}
+          style={{ background: 'var(--accent-selection)', color: 'var(--accent-contrast)' }}
         >
           <Download size={13} />
           Export {PRESETS.find((p) => p.id === preset)?.name}

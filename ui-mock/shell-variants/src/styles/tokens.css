@@ -73,6 +73,9 @@
   --clip-audio-b: #2c6a44;
   --clip-audio-edge: #5cb87f;
   --clip-text: #5a2a86;
+  --clip-audio-label: #eafff0;
+  --clip-text-label: #ffffff;
+  --fade-line: rgba(255, 255, 255, 0.92);
   --waveform: #4ade80;          /* spec 05 §7.2 */
   --transition-mark: #2a8fb0;   /* mock ruler extent bar */
   --clip-label-text: #dce8ef;
@@ -139,6 +142,9 @@
   --clip-audio-b: #2d7a50;
   --clip-audio-edge: #55b57f;
   --clip-text: #4a5680;         /* slate-indigo, off accent hue */
+  --clip-audio-label: #e2fff0;
+  --clip-text-label: #f2f2fa;
+  --fade-line: rgba(255, 255, 255, 0.92);
   --waveform: #52e08a;
   --clip-label-text: #e2ecf5;
 }
@@ -190,6 +196,9 @@
   --clip-audio-b: #a3d0b6;
   --clip-audio-edge: #58a67c;
   --clip-text: #c9b4ea;
+  --clip-audio-label: #17301f;   /* dark-on-light: labels must punch on pale fills */
+  --clip-text-label: #33245c;
+  --fade-line: rgba(20, 20, 25, 0.8);
   --waveform: #1e9e58;          /* dark green — data must punch on light fill */
   --clip-label-text: #232830;
 

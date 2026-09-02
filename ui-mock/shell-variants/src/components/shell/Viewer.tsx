@@ -85,7 +85,7 @@ export function Viewer({ duration }: { duration: number }) {
           {img && !img.offline ? (
             <img src={img.thumbnail} alt="" aria-label={`Program monitor: ${el?.name ?? 'empty'}`} className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] text-[13px] text-tfaint">
+            <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] text-[13px] text-tmuted">
               {img?.offline ? 'Media offline' : 'No media — import or drop a file'}
             </div>
           )}
@@ -96,7 +96,7 @@ export function Viewer({ duration }: { duration: number }) {
               <span className="mono">{el.name} · {tc(el.sourceStart ?? 0)}–{tc((el.sourceStart ?? 0) + el.duration)}</span>
             )}
           </div>
-          <div className="pointer-events-none absolute right-2 top-2 flex gap-1.5 text-[10px] font-medium text-white/80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+          <div className="pointer-events-none absolute right-2 top-2 flex gap-1.5 text-[11px] font-medium text-white/80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
             <span className="mono">1920×1080</span>
             <span className="mono">24p</span>
           </div>

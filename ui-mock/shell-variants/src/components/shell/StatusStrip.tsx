@@ -1,5 +1,5 @@
-/* StatusStrip — spec 18 §3.1/§6.3: 12px strip, save-status chip (autosave
-   lifecycle), selection info (aria-live), duration, zoom readout. */
+/* StatusStrip — spec 18 §3.1/§6.3 status strip (14px in this mock — the spec's
+   12px value is a documented deviation), save chip, selection info. */
 
 import { useUi } from '../../state/useUiStore';
 import { sceneDuration } from '../../lib/mockData';

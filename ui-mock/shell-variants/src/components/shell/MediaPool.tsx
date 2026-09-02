@@ -77,7 +77,7 @@ function MediaCard({ m, selected, onSelect }: { m: MediaRecord; selected: boolea
       </div>
       <div className="flex flex-col gap-0.5 px-2 py-1.5">
         <span className="truncate text-[11px] text-tprimary">{m.name}</span>
-        <span className="flex items-center gap-1.5 text-[11px] text-tfaint">
+        <span className="flex items-center gap-1.5 text-[11px] text-tmuted">
           <span className={`mono rounded border px-1 font-bold ${badge.cls}`}>{badge.t}</span>
           {m.width ? <span className="mono">{m.width}×{m.height}</span> : <span>audio</span>}
           {m.fps && m.fps !== project.settings.fps && <span className="mono rounded-sm border border-soft px-1 text-[11px] text-tmuted">{m.fps}p</span>}

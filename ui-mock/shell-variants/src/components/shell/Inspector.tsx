@@ -59,7 +59,7 @@ function Group({ title, children, onReset }: { title: string; children: React.Re
           <button
             onClick={onReset}
             data-tip="Reset group to spec 09 defaults"
-            className="text-[11px] text-tfaint hover:text-accent"
+            className="text-[11px] text-tmuted hover:text-accent"
             aria-label={`Reset ${title}`}
           >
             Reset
@@ -165,7 +165,7 @@ export function Inspector() {
       {/* content */}
       <div id={`insp-${activeTab}`} role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="scroll-y min-h-0 flex-1">
         {!el ? (
-          <div className="flex h-full items-center justify-center text-[13px] text-tfaint" data-testid="shell-inspector-state-empty">
+          <div className="flex h-full items-center justify-center text-[13px] text-tmuted" data-testid="shell-inspector-state-empty">
             Nothing to inspect
           </div>
         ) : activeTab === 'video' && !isText ? (
@@ -202,7 +202,7 @@ export function Inspector() {
               <div key={fx.id} className="flex items-center justify-between gap-2 rounded-[var(--radius)] border border-soft px-2 py-1.5">
                 <span className="text-[11.5px] text-tprimary">{fx.name}</span>
                 <span className="flex items-center gap-2">
-                  <span className="text-[10px] text-tfaint">{fx.enabled ? 'on' : 'off'}</span>
+                  <span className="text-[11px] text-tfaint">{fx.enabled ? 'on' : 'off'}</span>
                   <input
                     type="checkbox"
                     checked={fx.enabled}
@@ -230,11 +230,11 @@ export function Inspector() {
             </div>
             <ParamRow label="Duration" value={el.transitionOut?.duration ?? 0.5} min={0.1} max={2} step={0.05} unit="s" decimals={2} />
             <ParamRow label="Alignment" value={Math.round((el.transitionOut?.alignment ?? 0.5) * 100)} min={0} max={100} unit="%" />
-            <p className="pt-1 text-[10px] leading-snug text-tfaint">
+            <p className="pt-1 text-[11px] leading-snug text-tmuted">
               27 registry presentations available (spec 07 §6.3); four shown in mock.
             </p>
             {isTransitionFocus && (
-              <p className="mono rounded border border-soft bg-inset px-2 py-1 text-[10px] text-tmuted">
+              <p className="mono rounded border border-soft bg-inset px-2 py-1 text-[11px] text-tmuted">
                 boundary {tc(el.startTime + el.duration)} · crossfade
               </p>
             )}

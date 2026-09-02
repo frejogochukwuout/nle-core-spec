@@ -40,8 +40,14 @@ body {
   overflow: hidden;
   font-size: 12px;
 }
-button { font-family: inherit; background: none; border: none; color: inherit; cursor: default; }
-input, select { font-family: inherit; }
+
+/* control resets MUST live in @layer base — unlayered author CSS would
+   outrank Tailwind's @layer utilities and silently kill bg/border/color
+   utilities on <button> (R2 design review, cascade finding) */
+@layer base {
+  button { font-family: inherit; background: none; border: none; color: inherit; cursor: default; }
+  input, select { font-family: inherit; }
+}
 :focus-visible {
   outline: 2px solid var(--accent-focus);
   outline-offset: 2px;
@@ -113,6 +119,23 @@ input, select { font-family: inherit; }
 
 /* elevation for studio/light panels */
 .panel-shadow { box-shadow: var(--shadow-panel); }
+
+/* studio/light: floating-panel mainbody — real elevation for the B/C
+   direction study (resolve stays flush, mock-authentic) */
+[data-theme="studio"] .mainbody,
+[data-theme="light"] .mainbody {
+  gap: 2px;
+  padding: 8px;
+  background: var(--bg-app);
+}
+[data-theme="studio"] .mainbody > .shell-region,
+[data-theme="light"] .mainbody > .shell-region {
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* timeline clips follow the theme radius (2px resolve / 8px studio) */
+.clip-box { border-radius: var(--radius); }
 
 /* locked clips — stripes, not opacity (stays legible in every theme) */
 .locked-stripes {

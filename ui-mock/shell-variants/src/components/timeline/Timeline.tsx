@@ -66,7 +66,7 @@ export function Timeline() {
           <TrackHeader key={track.id} track={track} sceneId={scene.id} height={laneHeight(track.kind)} />
         ))}
         {/* add-track affordance (G11) */}
-        <button className="flex h-[26px] shrink-0 items-center justify-center gap-1 text-[10px] text-tfaint hover:bg-[var(--hover-overlay)] hover:text-tmuted" aria-label="Add track">
+        <button className="flex h-[26px] shrink-0 items-center justify-center gap-1 text-[11px] text-tmuted hover:bg-[var(--hover-overlay)] hover:text-tprimary" aria-label="Add track">
           + track
         </button>
       </div>

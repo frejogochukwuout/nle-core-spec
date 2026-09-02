@@ -80,14 +80,14 @@ export function CheatSheet() {
       >
         <div className="flex items-center gap-2 border-b border-hairline bg-raised px-4 py-2.5">
           <span className="text-[14px] font-semibold text-tprimary">Keyboard cheat sheet</span>
-          <span className="text-[11px] text-tfaint">spec 16 · ~180 bindings · showing core set</span>
+          <span className="text-[11px] text-tmuted">spec 16 · ~180 bindings · showing core set</span>
           <div className="grow" />
           <button onClick={() => close(false)} aria-label="Close cheat sheet" className="icon-btn !h-7 !w-7"><X size={14} /></button>
         </div>
         <div className="scroll-y grid max-h-[60vh] grid-cols-2 gap-x-6 gap-y-4 px-5 py-4">
           {GROUPS.map((g) => (
             <div key={g.title}>
-              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-tfaint">{g.title}</div>
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-tmuted">{g.title}</div>
               <div className="flex flex-col gap-1">
                 {g.rows.map(([k, d]) => (
                   <div key={k} className="flex items-baseline justify-between gap-3">

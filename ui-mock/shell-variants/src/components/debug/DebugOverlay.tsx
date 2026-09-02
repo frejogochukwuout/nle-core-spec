@@ -31,7 +31,7 @@ function Seg<T extends string>({ value, options, onChange }: { value: T; options
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-tfaint">{label}</div>
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-tfaint">{label}</div>
       {children}
     </div>
   );
@@ -74,7 +74,7 @@ export function DebugOverlay() {
       <div className="flex items-center gap-2 border-b border-hairline bg-raised px-3 py-2">
         <SlidersHorizontal size={13} className="text-accent" />
         <span className="text-[12px] font-semibold text-tprimary">Variant Explorer</span>
-        <span className="mono rounded border border-soft px-1.5 py-0.5 text-[10px] text-tfaint">Ctrl `</span>
+        <span className="mono rounded border border-soft px-1.5 py-0.5 text-[11px] text-tfaint">Ctrl `</span>
         <div className="grow" />
         <button onClick={() => setOverlayOpen(false)} aria-label="Close variant explorer" className="icon-btn !h-6 !w-6">
           <X size={13} />
@@ -100,7 +100,7 @@ export function DebugOverlay() {
                   </span>
                   <span>
                     <span className="block text-[12px] font-semibold text-tprimary">{p.name}</span>
-                    <span className="block text-[10.5px] leading-tight text-tmuted">{p.tagline}</span>
+                    <span className="block text-[11px] leading-tight text-tmuted">{p.tagline}</span>
                   </span>
                 </button>
               );
@@ -164,10 +164,10 @@ export function DebugOverlay() {
 
         {/* spec note for current selection */}
         <div className="rounded-[var(--radius)] border border-soft bg-inset px-2.5 py-2">
-          <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-tfaint">
+          <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-tfaint">
             <ChevronDown size={10} /> Spec position
           </div>
-          <p className="text-[10.5px] leading-snug text-tmuted">
+          <p className="text-[11px] leading-snug text-tmuted">
             {presetMatch ? presetMatch.specNote : activePreset?.specNote}
             {!presetMatch && ' Current selection deviates from every preset — treat as a custom direction.'}
           </p>
@@ -191,7 +191,7 @@ export function DebugOverlay() {
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 border-t border-hairline pt-2 text-[10px] text-tfaint">
+        <div className="flex items-center gap-1.5 border-t border-hairline pt-2 text-[11px] text-tfaint">
           <Keyboard size={11} />
           <span>Ctrl + ` toggles this panel · Esc closes · choice persists + syncs to the URL</span>
         </div>

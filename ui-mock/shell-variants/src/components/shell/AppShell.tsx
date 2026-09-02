@@ -42,7 +42,7 @@ function EffectsPanel() {
       <div className="scroll-y min-h-0 flex-1 p-1.5">
         {['Blur', 'Stylize', 'Transition'].map((cat) => (
           <div key={cat} className="mb-2">
-            <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-tfaint">{cat}</div>
+            <div className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-tfaint">{cat}</div>
             {EFFECTS.filter((e) => e.cat === cat).map((e) => (
               <div key={e.name} className="cursor-grab rounded-[var(--radius)] border border-transparent px-2 py-1.5 text-[11px] text-tmuted hover:border-soft hover:bg-[var(--hover-overlay)] hover:text-tprimary">
                 {e.name}

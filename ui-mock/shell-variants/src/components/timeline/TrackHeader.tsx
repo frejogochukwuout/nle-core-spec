@@ -20,10 +20,10 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
   const showVisibility = track.kind !== 'audio';
   const badgeCls =
     track.kind === 'main'
-      ? 'border-accent text-accent'
+      ? 'border-[var(--type-video)] text-[var(--type-video)]'
       : track.kind === 'overlay'
-        ? 'border-focus text-focus'
-        : 'border-wave/70 text-wave';
+        ? 'border-[var(--type-overlay)] text-[var(--type-overlay)]'
+        : 'border-[var(--type-audio)] text-[var(--type-audio)]';
 
   return (
     <div
@@ -31,12 +31,13 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
       style={{ height, minHeight: height }}
       data-testid={`shell-track-header-${track.id}`}
     >
-      <span className={`mono flex h-[20px] w-[30px] shrink-0 items-center justify-center rounded-[2px] border text-[10.5px] font-semibold ${badgeCls}`}>
+      <span className={`mono flex h-[20px] w-[30px] shrink-0 items-center justify-center rounded-[2px] border text-[11px] font-semibold ${badgeCls}`}>
         {track.badge}
       </span>
 
       <button
         onClick={() => toggleTrack(sceneId, track.id, 'muted')}
+        data-testid={`shell-track-${track.badge}-btn-mute`}
         className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[2px] border ${track.muted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-inset text-tmuted hover:text-tprimary'}`}
         aria-label={`Mute track ${track.name}`}
         aria-pressed={track.muted}
@@ -46,7 +47,8 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
       </button>
       <button
         onClick={() => toggleTrack(sceneId, track.id, 'solo')}
-        className={`mono flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[2px] border text-[9.5px] font-bold ${track.solo ? 'border-[var(--solo)] bg-[var(--solo)] text-black' : 'border-strong bg-inset text-tmuted hover:text-tprimary'}`}
+        data-testid={`shell-track-${track.badge}-btn-solo`}
+        className={`mono flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[2px] border text-[11px] font-bold ${track.solo ? 'border-[var(--solo)] bg-[var(--solo)] text-black' : 'border-strong bg-inset text-tmuted hover:text-tprimary'}`}
         aria-label={`Solo track ${track.name}`}
         aria-pressed={track.solo}
         data-tip="Solo"
@@ -55,6 +57,7 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
       </button>
       <button
         onClick={() => toggleTrack(sceneId, track.id, 'locked')}
+        data-testid={`shell-track-${track.badge}-btn-lock`}
         className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[2px] border ${track.locked ? 'border-accent bg-accent/20 text-accent' : 'border-strong bg-inset text-tmuted hover:text-tprimary'}`}
         aria-label={`Lock track ${track.name}`}
         aria-pressed={track.locked}
@@ -65,6 +68,7 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
       {showVisibility && (
         <button
           onClick={() => toggleTrack(sceneId, track.id, 'visible')}
+          data-testid={`shell-track-${track.badge}-btn-visibility`}
           className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[2px] border border-strong bg-inset text-tmuted hover:text-tprimary"
           aria-label={`Toggle visibility track ${track.name}`}
           aria-pressed={!track.visible}
@@ -75,7 +79,7 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
       )}
 
       <div className="grow" />
-      <span className="mono hidden shrink-0 pr-0.5 text-[9.5px] text-tfaint 2xl:inline">
+      <span className="mono hidden shrink-0 pr-0.5 text-[11px] text-tmuted 2xl:inline">
         {track.kind === 'audio' ? '48 kHz' : track.kind === 'main' ? '1920×1080' : 'text'}
       </span>
       {track.solo && <Headphones size={10} className="shrink-0 text-[var(--solo)]" aria-label="Solo active" />}

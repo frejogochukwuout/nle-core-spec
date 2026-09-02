@@ -29,7 +29,7 @@ function Slider({ label, value, unit = '' }: { label: string; value: number; uni
     <div className="flex items-center gap-2">
       <span className="w-[72px] shrink-0 text-[11px] text-tmuted">{label}</span>
       <input type="range" min={-100} max={100} defaultValue={value} className="min-w-0 flex-1" aria-label={label} />
-      <span className="mono w-[46px] shrink-0 text-right text-[10.5px] text-tprimary">{value > 0 ? '+' : ''}{value}{unit}</span>
+      <span className="mono w-[46px] shrink-0 text-right text-[11px] text-tprimary">{value > 0 ? '+' : ''}{value}{unit}</span>
     </div>
   );
 }
@@ -39,7 +39,7 @@ export function ColorPage() {
     <div data-testid="shell-color" className="flex h-full min-h-0 flex-col bg-panel">
       <div className="flex items-center gap-2 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
         <span className="text-[12px] font-semibold text-tprimary">Color</span>
-        <span className="text-[11px] text-tfaint">single-column simplified stack (spec 18 §4.8)</span>
+        <span className="text-[11px] text-tmuted">single-column simplified stack (spec 18 §4.8)</span>
       </div>
 
       <div className="scroll-y min-h-0 flex-1">

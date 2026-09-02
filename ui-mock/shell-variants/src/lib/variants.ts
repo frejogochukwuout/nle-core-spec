@@ -44,7 +44,7 @@ export const PRESETS: Preset[] = [
     name: 'Modern Studio',
     tagline: 'elevated dark, visible hairlines, roomier controls, violet accent',
     variant: { theme: 'studio', density: 'comfortable', clipStyle: 'filmstrip', accent: 'violet', headerStyle: 'slim' },
-    specNote: 'Deviations: radius 6px, elevated panel layers, 40px bars, 112px slim headers (OpenCut teacher value from 05 §10 note), accent-token swap. Tone: pro-web (Linear/Figma register) instead of desktop NLE.',
+    specNote: 'Deviations: radius 8px, floating elevated panels, 40px bars, 112px slim headers (OpenCut teacher value from 05 §10 note), accent-token swap. Tone: pro-web (Linear/Figma register) instead of desktop NLE.',
   },
   {
     id: 'C',

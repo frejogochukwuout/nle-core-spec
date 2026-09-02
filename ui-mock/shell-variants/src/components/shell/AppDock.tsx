@@ -45,7 +45,7 @@ export function AppDock() {
               data-tip={p.tip}
               aria-label={p.label}
               aria-current={active ? 'page' : undefined}
-              className={`dock-tab relative flex h-full items-center gap-1.5 px-4 ${active ? 'text-tprimary' : 'text-tfaint hover:text-tmuted'}`}
+              className={`dock-tab relative flex h-full items-center gap-1.5 px-4 ${active ? 'text-tprimary' : 'text-tmuted hover:text-tprimary'}`}
             >
               <Icon size={19} strokeWidth={1.6} />
               <span className="dock-label">{p.label}</span>
