@@ -1917,16 +1917,16 @@ Every file read by the scout with a one-line summary.
 
 | Spec section | Engine file:line (or gaps/audit) | Verified quote | Status | Note |
 |---|---|---|---|---|
-| §3.1 ProjectJSON schema | `src/lib/nle/core/types.ts:1180` | `export interface Project {` | CORRECTIVE | FreeCut-shaped single-timeline container; spec's metadata/settings/scenes wins (engine D1 resolved) |
-| §3.3 Zod validation | `src/lib/nle/headless/api.ts:2265` | `if (!p.id \|\| !p.name \|\| !p.timeline) {` | CORRECTIVE | 3-field presence stub; full ProjectSchema wins |
+| §3.1 ProjectJSON schema | `src/lib/nle/core/types.ts:1451` | `export interface Project {` | CORRECTIVE | FreeCut-shaped single-timeline container; spec's metadata/settings/scenes wins (engine D1 resolved AGAINST the spec — the C8 adapter is the convergence task, spec 19 §7) |
+| §3.3 Zod validation | `src/lib/nle/headless/api.ts:2319` | `export async function normalizeProjectForHeadless(raw: unknown): Promise<Project> {` | CORRECTIVE | Presence-style normalization (now delegated, richer than the 3-field stub); full ProjectSchema wins |
 | §3.3 version literal | `src/lib/nle/headless/api.ts:1737` | `schemaVersion: z.number().int().positive().optional(),` | CORRECTIVE | Optional vs z.literal(N); spec wins |
-| §5.1 migration framework | `gaps/audit/MASTER.md:65` | `No project serialize/hydrate at all; \`schemaVersion\` written, never read` | ENGINE-GAP | E2's persistence module (~350 LOC) is a port target of §5 |
-| §4.1/§4.4 OPFS | `gaps/audit/E2-persistence-serialization.md:107` | `There is no durable project storage` | ENGINE-GAP | Spec's OPFS layout is what engine Wave 4B builds |
-| §4 save path integrity | `src/lib/nle/headless/api.ts:1069` | `project: input.project, // Wave 2 will replace with the rebuilt project.` | CORRECTIVE | Fake editProject round-trip (engine P0.4); spec's serialize-then-parse wins |
+| §5.1 migration framework | `src/lib/nle/persistence/index.ts:65-67/:162-183` (Round-8 re-cite; was `gaps/audit/MASTER.md:65`) | migrate gate + normalize + warnings channel (1,174 LOC, Wave 4B) | ALIGNED-semantics / CORRECTIVE-shape | The migrate/normalize/warnings SEMANTICS match spec §5; the serialized JSON shape is engine-native v2 — the C8 adapter re-targets it to spec 09 ProjectJSON (spec 19 §7 D1) |
+| §4.1/§4.4 OPFS | `gaps/audit/MASTER.md:85` (pre-4B quote) | (Wave 4B landed the module; D5 storage plane still OPEN) | PARTIAL | Storage-agnostic module exists; spec's OPFS layout + host MediaStore is the D5 answer when the engine attaches storage |
+| §4 save path integrity | `src/lib/nle/headless/api.ts:2818` | `async editProject(input: NleEditInput): Promise<NleEditResult> {` | RESOLVED (was CORRECTIVE) | **The fake round-trip is RETIRED (Wave 4B)** — editProject now serializes the post-edit timeline (api.ts:1070-1130 per scout R8-B); the counter-example stays documented in spec 19 §6 |
 | storage seam | `src/lib/nle/headless/api.ts:2578` | `serializeProject?: () => Project;` | ALIGNED | Optional serialize hook reserved (unwired) |
 | wire shape (D1) | `src/lib/nle/headless/api.ts:1745` | `fps: z.number().int().min(1).max(240),` | CORRECTIVE | Two conflicting Project shapes in one module; spec 15's ProjectJSON answers D1 |
-| §6 autosave ↔ undo | `src/lib/nle/timeline/timeline.ts:1746` | `function snapshotsEqual(a: TimelineData, b: TimelineData): boolean {` | CORRECTIVE | Equality ignores keyframes (P0.6); spec's round-trip fidelity bar wins |
-| §5 load normalization | `gaps/audit/MASTER.md:85` | `\`restore()\` weak load path: no in/out sanitize, no orphan prune` | CORRECTIVE | Spec's migrate→normalize→warnings wins |
+| §6 autosave ↔ undo | `src/lib/nle/timeline/timeline.ts:1772` | `function snapshotsEqual(a: TimelineData, b: TimelineData): boolean {` | RESOLVED (was CORRECTIVE) | **P0.6 FIXED (Wave 4A)** — equality now covers keyframes + compositions + backgroundColor (jsonDeepEqual :1798-1803); m20 20.7 regression-tested; counter-example retained in spec 19 §6 |
+| §5 load normalization | `src/lib/nle/persistence/index.ts:352-387` (Round-8 re-cite; was MASTER.md:85) | hydrate: sanitize + orphan-prune + warnings (4B) | ALIGNED-semantics | The weak `restore()` path is retired; normalization now inline — shape still engine-native (C8) |
 | §7.2 media persistence | `gaps/audit/E2-persistence-serialization.md:156` | `No media persistence plane` | ENGINE-GAP | Spec's MediaRecord[] answers it |
 | §7.1 import probe | `src/lib/nle/headless/api.ts:2775` | `// Wave 1 stub: the real impl uses OPFS + mediabunny to decode + probe.` | CORRECTIVE | Engine probe is a stub; spec §7.1's flow is the growth path |
 

@@ -11,7 +11,7 @@
 
 ## 1. Purpose
 
-Define the timeline UI: how tracks and clips are rendered, how the user interacts with them (drag, trim, scrub), and how the UI stays responsive with hundreds of clips. This stream is mostly UI; the underlying NLE op logic is in `06-nle-ops.refined.md`. The DOM-timeline patterns below (component hierarchy, controllers, placement, snapping) are being distilled into the forthcoming timeline-distill repo (spec 19 §3.2) — cite it, not OpenCut-classic's monorepo, when implementing.
+Define the timeline UI: how tracks and clips are rendered, how the user interacts with them (drag, trim, scrub), and how the UI stays fast with hundreds of clips. This stream is mostly UI; the underlying NLE op logic is in `06-nle-ops.refined.md`. The DOM-timeline patterns below (component hierarchy, controllers, placement, snapping) have a live executable port — **opencut-timeline** (landed Round 8; see §16.5 and spec 19 §3.2) — cite it (plus OpenCut-classic for the components its W4 has not landed yet), not the monorepo, when implementing.
 
 ---
 

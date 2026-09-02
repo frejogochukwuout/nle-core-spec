@@ -732,4 +732,4 @@ The full spec set:
 - `15-wire-protocol.md` / `16-keyboard-shortcuts.md` / `17-test-plan.md` — the testability layer
 - `18-ui-shell.md` / `19-code-references.md` — the UI shell + code-reference architecture (Round 7)
 
-Scout refinement is complete (Rounds 1-6 audited and signed off; Round 7 added the code-reference layer). Implementation begins with Phase 0 above; the nle-engine and timeline-distill repos are de-risking references per `19-code-references.md`, not blocking dependencies.
+Scout refinement is complete (Rounds 1-6 audited and signed off; Round 7 added the code-reference layer; Round 8 landed opencut-timeline and the Decision-11 seam). Implementation begins with Phase 0 above; the nle-engine and opencut-timeline repos are de-risking references per `19-code-references.md`, not blocking dependencies.

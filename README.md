@@ -38,10 +38,11 @@ The spec was produced by deep analysis of two open-source browser NLEs:
 - **FreeCut** (`github.com/walterlow/freecut`) — primary system-level teacher (workers, threading, sync, audio-clock, grading toolset)
 - **OpenCut-classic** (`github.com/opencut-app/opencut-classic`) — primary type-design teacher (`MediaTime`, `FrameRate`, `SceneTracks`, `EditorCore`) and DOM-timeline teacher
 
-Two private code references orbit the spec (mapped and governed by `19-code-references.md`, Decision 10 — the spec is canon; where reference code and the spec conflict, the spec wins):
+Reference codebases orbit the spec (mapped and governed by `19-code-references.md`, Decisions 10/11 — the spec is canon; where reference code and the spec conflict, the spec wins):
 
-- **nle-engine** (`github.com/bearachprema/nle-engine`, private) — clean-room FreeCut port; 37,958 LOC, 124 tests, 43-44 GPU effects, 27 transitions, 102 NLE-op methods; actively closing its own gap charter. De-risks the engine side; inherits FreeCut patterns the spec corrects (8-bit sRGB, JSON-RPC+$ref, class-API surface, single-tier tests, procedural media, zero workers).
-- **timeline-distill** (forthcoming) — OpenCut-classic's timeline minus the NLE core; the UI-region counterpart.
+- **nle-engine** (`github.com/bearachprema/nle-engine`, private) — clean-room FreeCut port; ~41k LOC after Waves 4A-4D, 144 tests (reported), 43-44 GPU effects, 27 transitions, 102 NLE-op methods; actively closing its own gap charter. De-risks the engine side; inherits FreeCut patterns the spec corrects (8-bit sRGB, JSON-RPC+$ref, class-API surface, single-tier tests, procedural media, zero workers).
+- **opencut-timeline** (`github.com/bearachprema/opencut-timeline`, private — landed Round 8) — clean-room OpenCut-classic timeline/multi-track engine core: Decision-2 types, placement/ripple/controllers/view math, snapshot undo, spec-15-shaped headless API (11,375 LOC, 136/136 tests; React components pending its W4). De-risks the timeline side.
+- **cloudcut-nle** (`github.com/frejogochukwuout/cloudcut-nle`, public — main branch) — the UX/app-scope reference codebase from the prior iteration (messier, lower quality; used only for UX-surface patterns per spec 18 §13) + the `ux-spec` branch's 28-file UX spec integrated into spec 18 v1.1 under the ours-wins policy.
 - **ui-mock/davinci_resolve_ui_mock.html** — the visual/layout reference for spec 18 (DaVinci Resolve Edit-page clone, deliberately simplified).
 
 ### Process documentation
@@ -69,7 +70,7 @@ Two private code references orbit the spec (mapped and governed by `19-code-refe
 7. **No native desktop** (deferred; rebuild later if needed)
 8. **Cloud render via headless Chrome + ffmpeg** (same engine, bit-identical output)
 9. **Data-driven engine architecture** (JSON-in/JSON-out, three identical consumers: UI/cloud/test)
-10. **Code-reference architecture** (Round 7) — the spec set is canon; nle-engine and timeline-distill are de-risking references whose FreeCut-pattern deltas are documented and corrected, never adopted (see `19-code-references.md`)
+10. **Code-reference architecture** (Rounds 7-8) — the spec set is canon; nle-engine, opencut-timeline, and cloudcut-nle (UX scope) are de-risking references whose legacy-pattern deltas are documented and corrected (C1-C8), never adopted; Decision 11 binds them with one state model, one wire protocol, two algorithm homes, one render seam (see `19-code-references.md`)
 
 ## The WYSIWYG contract
 
@@ -98,4 +99,4 @@ MIT (for this spec document set). The reference repos (FreeCut, OpenCut-classic)
 
 ## Status
 
-**Implementation-ready, Round 7 complete.** Begin with Phase 0 (Playback Spike) per `14-implementation-phases.md` — which now accounts for the nle-engine reference (per-subsystem refactor-vs-rebuild guidance in `19-code-references.md` §8). One **seal round** remains after the engine's current gap-closure waves land (spec 19 §12 has the checklist): re-baseline the engine watch list, wire the timeline-distill repo when it exists, and final-sweep all citations. The engine is actively being worked — hold final judgment on its state until then.
+**Implementation-ready, Round 8 complete.** Begin with Phase 0 (Playback Spike) per `14-implementation-phases.md` — now the two-repo strategy: nle-engine (engine side) + opencut-timeline (timeline side), bound by the Decision-11 seam (P1's mandatory adapter). The full testability layer is in place: three-tier methodology + the facet coverage matrix + NFR recipes (spec 17 §13A, 00-master §6A). One **seal round** remains (spec 19 §12 has the checklist): the engine's convergence adapters (C2/C8), opencut-timeline's C7 rename + W4/W5/W6, the 22-decision reconciliation audit, and a final citation sweep. Both reference repos are actively worked — hold final judgment on their states until then.
