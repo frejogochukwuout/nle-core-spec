@@ -1,9 +1,9 @@
 # 06 — NLE Operations: Cut / Split / Trim / Ripple / Roll / Slip / Slide / Move / Lock / Snap (REFINED)
 
 **Stream:** NLE operation logic (pure functions over timeline state)
-**Status:** Refined (SCOUT-06). Every claim tagged with file:line evidence. Round-8 amendments: §5.2A trim-shape layer mapping + NOOP code, §5.4 ripple modeling notes + OT as executable reference, §5.9 intra-batch overlap guard, §10.4 engine re-baseline @ 8ac91d9 (all citations re-verified, P0.6 fixed), §10.5 opencut-timeline op-coverage (Decision 11.3 division of labor).
+**Status:** Refined (SCOUT-06). Every claim tagged with file:line evidence. Round-8 amendments: §5.2A trim-shape layer mapping + NOOP code, §5.4 ripple modeling notes + OT as executable reference, §5.9 intra-batch overlap guard, §10.4 engine re-baseline @ 8ac91d9 (all citations re-verified, P0.6 fixed), §10.5 opencut-timeline op-coverage. Round-9 amendments: the Decision-11.3 "division of labor" is superseded by **Decision 12.3 — one algorithm home (opencut-timeline's ops layer) with the engine's FreeCut-side families port-scheduled into it** (§10.4/§10.5 notes updated); engine counts re-baselined @ 624a76b (202/202).
 **Primary teacher:** FreeCut `stores/actions/edit/*` (algorithm-level reference) + OpenCut-classic `ripple/` + `retime/` + `commands/` + `timeline/placement/` + `timeline/group-move/` + `timeline/group-resize/` (architecture-level reference)
-**Spec file:** `06-nle-ops.md` (supersedes `06-nle-ops.md`)
+**Spec file:** `06-nle-ops.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 
 ---
 
@@ -2364,9 +2364,9 @@ For multi-select move architecture, **OpenCut-classic's `group-move/` is the can
 | `src/features/timeline/stores/commands/types.ts` | 53 | `TimelineSnapshot`, `TimelineCommand` (`{type, payload}`), `CommandEntry` |
 | `src/features/timeline/stores/timeline-command-store.ts` | 286 | `useTimelineCommandStore` — snapshot-based undo/redo with per-context stacks |
 
-### 10.4. nle-engine op-coverage (reference, NOT canon — Round-8 re-baseline @ `8ac91d9`)
+### 10.4. nle-engine op-coverage (runtime-domain core per Decision 12 — Round-9 re-baseline @ `624a76b`)
 
-> nle-engine (github.com/bearachprema/nle-engine) implements ~20 of this spec's op families as public methods on its `Timeline` class (timeline/timeline.ts, now 6,794 LOC, 102 public methods) with **144 passing tests (reported)** after Waves 4A-4D-A — the strongest ALIGNED subsystem in the reference repo. The deltas are architectural (class-based mutating manager vs this spec's pure-op + command layer; flat N-track array vs `SceneTracks`; 19-op JSON-RPC wire surface vs spec 15's 78-type union) plus three absent families (track-state toggles, snap, splitAndRemove). Where engine code conflicts, **the spec wins**; see `19-code-references.md`. Per Decision 11.3, the engine is the **executable home of the FreeCut-side op families** (roll/slip/slide/rateStretch/retime/insert-edit-3-point/sync-lock) that opencut-timeline (§10.5) lacks.
+> nle-engine (github.com/bearachprema/nle-engine @ 624a76b) implements ~20 of this spec's op families as public methods on its `Timeline` class (timeline/timeline.ts, 6,972 LOC, 102 public methods) with **202 passing tests after Waves 4D-5C** (real A/V export, 25/25 milestones) — the strongest ALIGNED subsystem in the reference repo. The deltas are architectural (class-based mutating manager vs this spec's pure-op + command layer; flat N-track array vs `SceneTracks`; 19-op JSON-RPC wire surface vs spec 15's 78-type union) plus three absent families (track-state toggles, snap, splitAndRemove). Where engine code conflicts, **the spec wins**; see `19-code-references.md`. Per **Decision 12.3**, the engine's FreeCut-side op families (roll/slip/slide/rateStretch/retime/insert-edit-3-point/sync-lock) are **port-scheduled INTO opencut-timeline's ops layer** as pure functions over SceneTracks (acceptance: OT's 297-test suite + the ported engine tests; the engine's implementations remain its internal fallback until each port lands). The engine's timeline as a whole is re-specified as the runtime domain's **render-scheduling projection** (Decision 12.1) — its editing surface is no longer a second normative home.
 
 | Spec 06 op (§) | nle-engine timeline.ts:line | verified signature | status |
 |---|---|---|---|
@@ -2393,13 +2393,13 @@ For multi-select move architecture, **OpenCut-classic's `group-move/` is the can
 | §5.15 Mute/Solo/Lock/Visibility | (absent) | fields only, no public mutators | ENGINE-GAP |
 | §5.16 Snap + razor snap | (absent) | no snap code in src/lib/nle | SPEC-ONLY (opencut-timeline §10.5 owns the reference) |
 | §4.6 pure-Op + command wrap | timeline.ts:2084 (and 20+ sites) | `_commit({...this._data, …})` | CORRECTIVE (class-based mutating manager; spec's layer wins) |
-| §4.7 SceneTracks model | core/types.ts (Clip union @ :995) | flat `TimelineData`; `TrackKind = 'video' \| 'audio'` | CORRECTIVE (flat N-track; spec's main-singleton wins — the Decision-11 seam adapter owns the bridge) |
+| §4.7 SceneTracks model | core/types.ts (Clip union @ :995) | flat `TimelineData`; `TrackKind = 'video' \| 'audio'` | CORRECTIVE (flat N-track; spec's main-singleton wins — the Decision-12 projector owns the one-way bridge; editing never reads back) |
 
 §7 note (Round 7, updated Round 8): the snapshot stored by a drag-coalesced `TracksSnapshotCommand` must cover the full field set incl. keyframes — the engine's `snapshotsEqual` ignored them (keyframe-only edits stopped being undoable; engine P0.6). **Fixed in Wave 4A** (timeline.ts:1772-1803, now compares keyframes + compositions + backgroundColor via JSON-deep; m20 20.7 regression-tested). The counter-example stays in spec 19 §6 as documentation. Residual field-gap: `busAudioEq` exists in FreeCut's 17-field equality but not in the engine model — our spec 06 §7 / spec 15 §14.1 full-field bar covers it by construction.
 
-### 10.5. opencut-timeline op-coverage (reference, NOT canon — landed Round 8 @ `d3b2163`)
+### 10.5. opencut-timeline op-coverage (the algorithm home per Decision 12.3 — re-baselined Round 9 @ `4e39b67`)
 
-> opencut-timeline (github.com/bearachprema/opencut-timeline, `src/lib/timeline/`, 136/136 tests) implements the OpenCut-side op families — the other half of Decision 11.3's division. Where it conflicts with this spec, **the spec wins** (known deltas: prefixed headless command names — C7 rename; 5-kind TrackType taxonomy; group-shape trim — correctly so, per §5.2A).
+> opencut-timeline (github.com/bearachprema/opencut-timeline @ `4e39b67`, `src/lib/timeline/`, **297/297 tests — final-round hardened**) implements the OpenCut-side op families — and per **Decision 12.3 is the single normative algorithm home** this spec's ops converge into. Where it conflicts with this spec, **the spec wins** (known deltas: prefixed headless command names — C7 rename; 5-kind TrackType taxonomy; group-shape trim — correctly so, per §5.2A).
 
 | Spec 06 op (§) | OT file:line | Verified export | Status | Note |
 |---|---|---|---|---|
@@ -2421,7 +2421,7 @@ For multi-select move architecture, **OpenCut-classic's `group-move/` is the can
 | Undo (snapshot + transactions) | `ops/timeline-core.ts:102-207` | `UndoStack` w/ `beginTransaction`, suspended eviction, 100-cap | ALIGNED+ | Transaction discipline absorbed into spec 15 §7.1A (Round 8) |
 | Core class | `ops/timeline-core.ts:209-907` | `TimelineCore` (986 LOC) | ALIGNED | Manager-method names match spec 15 §4.2 1:1 |
 
-**Division of labor (Decision 11.3, summary):** OT owns split/trim-group/move-group/ripple-diff/insert-placement/duplicate + interaction controllers; nle-engine owns roll/slip/slide/rateStretch/retime-command/freezeFrame/range-removal/sync-lock. Both wrap in the spec 15 command layer (OT via C7 rename; engine via C2 adapter).
+**The algorithm home (Decision 12.3, supersedes the R8 division of labor):** opencut-timeline's ops layer owns split/trim-group/move-group/ripple-diff/insert-placement/duplicate + the interaction controllers (as landed); nle-engine's FreeCut-side families (roll/slip/slide/rateStretch/retime/freezeFrame/range-removal/sync-lock) **port into it** per spec 14 §2.1's port plan — the engine's versions remain internal fallback until each port lands. All families wrap in the spec 15 command layer (OT via C7 rename; the engine's editing-wire duty is retired — its C2 scope is the runtime command subset only).
 
 ---
 

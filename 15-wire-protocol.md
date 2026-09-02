@@ -4816,7 +4816,7 @@ nle-engine (github.com/bearachprema/nle-engine, 37,958 LOC) is a clean-room Free
 | §4.2 mapping (adapter surface) | `timeline/timeline.ts:2275` | `splitClip(` | ALIGNED | The 102-method class surface is the manager layer `apply()` dispatches to |
 | §13.8 playback commands | `playback/player.ts:1889` | `ratechange: { playbackRate: number };` | ENGINE-GAP | Zero playback ops on the engine's wire surface despite Player rate support |
 
-### 13.15 Code References — opencut-timeline (reference, NOT canon) — added Round 8
+### 13.15 Code References — opencut-timeline (the editing-domain command surface per Decision 12) — added Round 8, amended Round 9
 
 The timeline-side headless surface (`src/lib/timeline/headless/api.ts`). It is **structurally the spec-15 skeleton** (same `EngineCommand`/`CommandResult` envelope idea, same single-dispatcher design, atomic `applyBatch`) with two systemic deltas: **prefixed command names (C7)** and **coarse error codes**. Full command-by-command table: SCOUT-R8-A §3.2.
 
@@ -4833,7 +4833,7 @@ The timeline-side headless surface (`src/lib/timeline/headless/api.ts`). It is *
 | §4.3.4 ripple | `timeline.rippleDelete` (:69) | CONVERGENT | Documented convenience wrapper — spec keeps `delete{ripple:true}`/RippleCommand as canonical (spec 06 §5.4 note) |
 | command coverage | 17 of 18 have spec-15 counterparts; 60 of 78 spec-15 commands absent (roll/slip/slide/rateStretch/retime/freezeFrame/rangeRemoval/sync-lock/scenes/bookmarks/effects/masks/transitions/keyframes/clipboard/export/…) | ENGINE-GAP | Its own gaps doc charts W5/W6 for these; the C7 rename is the prerequisite |
 
-**The binding convergence statement (Decision 11.2):** spec 15's bare `EngineCommand` is the **only** wire protocol. Both reference repos converge to it — opencut-timeline via the C7 rename + param alignment (this table is the worklist), nle-engine via the C2 dispatcher adapter (§13.14). Neither repo's current surface is spec-conformant; both are executable evidence of what the dispatcher must handle.
+**The binding convergence statement (Decision 11.2, amended by Decision 12.2 in Round 9):** spec 15's bare `EngineCommand` is the **only** wire protocol. Both reference repos converge to it — opencut-timeline via the C7 rename + param alignment (this table is the worklist) and as the **implementation home of the EDITING command subset**; nle-engine via the C2 dispatcher adapter (§13.14), **scoped in Round 9 to the RUNTIME command subset only** (render/export/media/scenes — its JSON-RPC+$ref surface retires; it no longer owes the editing subset, which the op-family port lands in OT). Neither repo's current surface is spec-15-conformant; both are executable evidence of what the dispatcher must handle. The AUDIO command family (track volume/mute/solo, audio-effect parameters) targets the G layer of the three-layer track model (spec 20 §8 — MixerTrackSettings sidecar keyed by trackId, applied via `updateFromTrack`, zero timeline invalidation); per-command audio rows join this table's conformance pass at the seal round, after C7.
 
 ---
 
