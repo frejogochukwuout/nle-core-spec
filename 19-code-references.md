@@ -281,7 +281,8 @@ Round 8 adds a second column: **ot** = opencut-timeline code-references (added t
 5. Full decision reconciliation (13 engine + 10 opencut-timeline + 11 spec): §7 answered engine D1-D5 (D1 escalated in R8); the remaining engine decisions + all 10 opencut-timeline decisions need "no spec conflict" sign-off lines — C7 (its D9) and its D1/D2 (our Decisions 3/2 — aligned by construction) already covered.
 6. Final citation sweep of all per-spec code-ref tables (rule §10.5) + regenerate audit totals — engine line-numbers moved this round (SCOUT-R8-B §6 is the translator); re-verify at seal.
 7. **NEW (R8)** — opencut-timeline C7 rename pass + its W5/W6 command growth: when landed, update §3.2's headless row and spec 15 §13.15.
-8. **NEW (R8)** — cloudcut UX-spec maintenance: the ux-spec branch is now an input-of-record; if it keeps evolving, re-run the applicability matrix deltas (SCOUT-R8-C is the baseline).
+8. **NEW (R8)** — the engine's **C8 persistence adapter** (spec-09-shaped serializer over its clean serialize/hydrate seams — the D1-escalation convergence task, §6/§7 D1) and its C2 command-layer adapter: the two highest-priority engine-side convergence items; verify them when its waves 4D-B+ land.
+9. **NEW (R8)** — cloudcut UX-spec maintenance: the ux-spec branch is now an input-of-record; if it keeps evolving, re-run the applicability matrix deltas (SCOUT-R8-C is the baseline).
 
 ---
 

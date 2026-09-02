@@ -418,9 +418,10 @@ Contrast floors are §9's table; the 4.5:1 body-text and 3:1 non-text minimums a
 - **Panel toggle routing**: snap/link/zoom toggles change UI store state and never emit commands (spec 16 §0.2 split).
 - **Inspector tabs**: per-tab field edits emit the right `update*` command with coalescing (one command per slider release).
 - **Deliver page**: `exportFCPXML` button emits the §4.3.74 command and the artifact lands in `CommandResult.data`.
-- **A11y floor**: roving tabindex, tablist arrow keys, slider `aria-valuetext` spot checks, **F6 cycling, `aria-activedescendant` grid navigation, Shift+F10 menus, state-row presence per panel, save-chip event pairing** (the §13A a11y spot suite; axe-core pass in CI).
+- **A11y floor**: roving tabindex, tablist arrow keys, slider `aria-valuetext` spot checks, **F6 cycling, `aria-activedescendant` grid navigation, Shift+F10 menus, state-row presence per panel, save-chip event pairing (§6.3)** (the spec 17 §13A.2 a11y spot suite; axe-core pass in CI).
 - **Context menus**: every §4.9 menu opens via both right-click and Shift+F10; every item emits its mapped command (or (UI) store mutation).
 - **Cursor grammar**: the §5A cursor table asserts via computed style on synthetic hover (a spot-check row per class, not all 16 in CI).
+- **Sample project (§4.10)**: loads via `loadProject` with the committed fixture; empty-state CTA + cheat-sheet footer both reach it — same fixture as spec 17 §13A.6, never forked.
 Mouse-drag tests are reserved for the translation layer itself (hit-testing, thresholds) — everything else asserts through commands, per the UI-interaction-tax rules (spec 17 §2.5 / SKILL.md).
 
 ```bash
