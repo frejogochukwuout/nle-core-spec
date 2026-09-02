@@ -122,7 +122,7 @@ export class EditorCore {
 }
 ```
 
-**Sub-agent scout task:** Open `apps/web/src/editor/editor-store.ts` and `apps/web/src/core/index.ts` in OpenCut-classic. Verify the manager list, initialization order, and singleton pattern. Note any cross-references between managers (e.g., `TimelineManager` holding a back-reference to `EditorCore`).
+**Verified (SCOUT-01):** §7 Q1/Q2 — 12 managers, zero-arg constructor, `new XxxManager(this)` pattern.
 
 ### 3.3 Manager responsibilities
 
@@ -133,7 +133,7 @@ Each manager exposes typed public methods. No manager directly mutates another m
 // Sketch — corrected per SCOUT-01 (see §14.5 for verbatim source). The seed
 // spec's `split/trim/move/ripple/roll/slip/slide/delete` names do NOT exist in
 // OpenCut-classic — actual method names below. Ripple/roll/slip/slide are
-// implemented as op modules (see 06-nle-ops.md) and dispatched via
+// implemented as op modules (see 06-nle-ops.refined.md) and dispatched via
 // `updateElements` or `BatchCommand`, NOT as TimelineManager methods.
 interface TimelineManager {
   // Queries
@@ -196,7 +196,7 @@ interface TimelineManager {
   commitPreview(): void;
   discardPreview(): void;
 
-  // ... see 06-nle-ops.md for the full op inventory
+  // ... see 06-nle-ops.refined.md for the full op inventory
 }
 ```
 
@@ -215,12 +215,12 @@ interface CommandManager {
   redo(): void;
   canUndo(): boolean;
   canRedo(): boolean;
-  isRippleEnabled: boolean;   // ripple mode flag — modifies every execute() (see 06-nle-ops.md)
+  isRippleEnabled: boolean;   // ripple mode flag — modifies every execute() (see 06-nle-ops.refined.md)
   subscribe(cb: () => void): () => void;
 }
 ```
 
-**Reference:** OpenCut-classic `apps/web/src/core/managers/commands.ts`. Sub-agent scout should verify the exact API.
+**Reference:** OpenCut-classic `apps/web/src/core/managers/commands.ts`. Verified in §7 Q6 (`commands.ts` quoted in full).
 
 #### PlaybackManager
 ```ts
@@ -235,11 +235,13 @@ interface PlaybackManager {
   setLoop(start: MediaTime | null, end: MediaTime | null): void;
   
   // Event subscription (for UI sync)
-  on(event: 'timeUpdate' | 'playbackStateChange', cb: () => void): () => void;
+  subscribe(cb: () => void): () => void;   // state change
+  onUpdate(cb: (time: MediaTime) => void): () => void;   // per-frame time
+  onSeek(cb: (time: MediaTime) => void): () => void;    // seek events (per §14.7)
 }
 ```
 
-**Reference:** OpenCut-classic `apps/web/src/core/managers/playback-manager.ts` (257 LOC). Sub-agent scout to verify the `rAF` + `performance.now()` clock — we override with FreeCut's `AudioContext.currentTime` clock (see `03-playback-engine.md`).
+**Reference:** OpenCut-classic `apps/web/src/core/managers/playback-manager.ts` (257 LOC). Verified (§7 Q2): OpenCut's clock is `performance.now()` + rAF; we override with FreeCut's `AudioContext.currentTime` clock (see `03-playback-engine.refined.md`).
 
 #### ScenesManager
 ```ts
@@ -283,28 +285,48 @@ interface ScenesManager {
 
 #### MediaManager
 ```ts
+// Sketch — corrected per SCOUT-01 (§14.8) + Round-7 amendment (fulfils the
+// "deferred update" promised by spec 15 §5.4/§14.2). OpenCut-classic CRUD
+// (actual names) plus four 📝 NEW greenfield I/O helpers implementing spec 15's
+// pre-extraction pattern (all async I/O happens BEFORE a command is issued;
+// commands stay pure). Probing/persistence delegate to spec 02's workers
+// (§8.6 opfs.worker, §8.7 media-processor.worker).
 interface MediaManager {
-  importFile(file: File): Promise<string>;  // returns mediaId
-  getMediaInfo(mediaId: string): MediaInfo | null;
-  getMediaSource(mediaId: string): MediaSource | null;  // for decode
-  deleteMedia(mediaId: string): Promise<void>;
-  listMedia(): readonly MediaInfo[];
+  // OpenCut-classic CRUD (§14.8 — no per-id accessor; bulk list only)
+  addMediaAsset({ projectId, asset }: { projectId: string; asset: Omit<MediaAsset, "id"> }): Promise<MediaAsset | null>;
+  removeMediaAsset({ projectId, id }: { projectId: string; id: string }): void;
+  removeMediaAssets({ projectId, ids }: { projectId: string; ids: string[] }): void;  // BatchCommand
+  getAssets(): readonly MediaAsset[];
+  deleteMedia(mediaId: string): Promise<void>;  // revoke URLs + evict caches + storage
+
+  // High-level import (orchestrates the helpers below)
+  importFile(file: File): Promise<string>;  // probe → persistBlob → generateThumbnail → addMediaAsset
+
+  // 📝 NEW greenfield I/O helpers (spec 15 §5.4 + §4.3.13 FreezeFrameCommand):
+  probe({ blob }: { blob: Blob }): Promise<MediaInfo>;                    // mediabunny Input + canDecode (spec 03 §5.2)
+  persistBlob({ blob }: { blob: Blob }): Promise<MediaStorageRef>;        // OPFS write via opfs.worker (spec 02 §8.6)
+  generateThumbnail({ blob, time = 0 }: { blob: Blob; time?: MediaTime }): Promise<string>;   // spec 09 §7.4 has the post-import (mediaId, atTime) overload
+  extractFrame({ mediaId, time }: { mediaId: string; time: MediaTime }): Promise<string>;     // mediabunny CanvasSink
 }
 ```
+
+> **Reconciliation notes.** (1) `getMediaInfo`/`getMediaSource`/`listMedia` from the seed sketch are dropped (§14.8) — components select from `getAssets()`. (2) `generateThumbnail` is blob-based here (spec 15 §5.4's import-time sequence); spec 09 §7.4 documents the post-import `(mediaId, atTime)` variant — treat that as the overload. (3) nle-engine has no counterpart (procedural `MediaRegistry` only) — see `19-code-references.md`.
 
 #### ProjectManager
 ```ts
 interface ProjectManager {
-  createNew(params: { name: string, fps: FrameRate, canvasSize: { width: number, height: number } }): Promise<string>;
-  load(id: string): Promise<void>;
-  save(): Promise<void>;
-  saveAs(name: string): Promise<string>;
-  exportFCPXML(): Promise<string>;  // returns XML string
-  close(): Promise<void>;
+  createNewProject(params: { name: string; fps: FrameRate; canvasSize: { width: number; height: number } }): Promise<string>;
+  loadProject({ id }: { id: string }): Promise<void>;
+  saveCurrentProject(): Promise<void>;
+  saveAs(name: string): Promise<string>;  // greenfield (§14.9)
+  closeProject(): Promise<void>;
+  loadFromJSON(project: ProjectJSON): void;   // Layer 2 bridge — spec 15 §3.1 maps here
+  serialize(): ProjectJSON;                    // inverse of loadFromJSON (spec 15 §3.1)
+  updateSettings({ settings, pushHistory = true }: { settings: Partial<ProjectSettings>; pushHistory?: boolean }): void;  // 📝 NEW greenfield (spec 15 §4.3.34 — Round-7 fulfillment of the "deferred update")
 }
 ```
 
-**Note:** We override OpenCut-classic's IndexedDB-backed `ProjectManager` with our own storage layer. See `09-project-model.md`.
+**Note:** We override OpenCut-classic's IndexedDB-backed `ProjectManager` with our own storage layer. See `09-project-model.refined.md`.
 
 #### RendererManager
 ```ts
@@ -314,13 +336,20 @@ interface RendererManager {
   resize(width: number, height: number): void;
   isDegraded(): boolean;  // WebGPU not available, fallback active
   onDeviceLost(cb: () => void): () => void;
+
+  // §14.10 greenfield additions
+  setRenderTree({ renderTree }): void;
+  getRenderTree(): RenderTree | null;
+  saveSnapshot(): Snapshot;
+  copySnapshot(): Promise<Blob>;
+  exportProject({ options, onProgress, onCancel }): Promise<Blob>;
 }
 ```
 
 #### ExportManager
 ```ts
 interface ExportManager {
-  exportFCPXML(): Promise<string>;
+  exportFCPXML(): Promise<string>;  // canonical home per §14.11 — ProjectManager copy removed Round 7
   // Phase 2 (cloud render):
   // requestCloudRender(params: { format: 'prores-4444' | 'prores-422-hq' | 'h265' | ... }): Promise<RenderJobHandle>;
 }
@@ -350,7 +379,7 @@ interface ExportManager {
 19. save.start() (begin autosave loop)
 ```
 
-**Sub-agent scout task:** Open `apps/web/src/core/index.ts` in OpenCut-classic. Verify the constructor body. Note any subtleties (lazy initialization, error handling, async init).
+**Verified (SCOUT-01):** §7 Q1; the actual 12-step order is adopted in §3.4 / §14.17.
 
 ### 3.5 Contract seams (adapted from FreeCut `deps/`)
 
@@ -415,11 +444,11 @@ export interface Clock {
 
 export interface WorkerPool {
   createWorker<T>(spec: WorkerSpec<T>): WorkerHandle<T>;
-  // ... see 02-workers-threading.md
+  // ... see 02-workers-threading.refined.md
 }
 ```
 
-**Sub-agent scout task:** Open FreeCut's `src/runtime/composition-runtime/deps/` directory. Verify the contract pattern. Note which contracts are mandatory vs. optional. Document the exact interface shape for each.
+**Verified (SCOUT-01):** §7 Q3 — 7 contract files + wrapper pairing; no `gizmo-contract.ts`.
 
 ### 3.6 Two entry points
 
@@ -495,7 +524,7 @@ export async function createRenderEngine(opts: {
       opts.onFrame(n, pixels);
     },
     async renderAudio(): Promise<Float32Array> {
-      // Use OfflineAudioContext — see 03-playback-engine.md
+      // Use OfflineAudioContext — see 03-playback-engine.refined.md
       ...
     },
     dispose(): void {
@@ -519,6 +548,8 @@ Enforced by lint (adapt FreeCut's `check-feature-boundaries.mjs` pattern):
 1. **Engine never imports UI.** Files in `src/engine/` cannot import from `src/ui/`. Enforced by ESLint rule `no-restricted-imports`.
 
 2. **UI imports engine via `EditorCore` only.** Files in `src/ui/` import `EditorCore` and call its typed methods. They do not import internal managers directly — they go through `EditorCore.timeline.splitElements(...)` etc.
+
+   The concrete UI shell that performs these calls — toolbar, viewer panel, inspector, timeline area, page dock — is specified in `18-ui-shell.md`; its regions map onto the `src/ui/` subtree in §6.
 
 3. **Engine uses adapters, not browser APIs.** Files in `src/engine/` cannot import `WebCodecs`, `WebGPU`, `OPFS`, `AudioContext`, `Worker` directly. They use the `Decoder`, `Renderer`, `Storage`, `Audio`, `WorkerPool` interfaces. Browser-specific implementations live in `src/platform/`.
 
@@ -613,11 +644,11 @@ engine.timeline.commitPreview();
 engine.timeline.discardPreview();
 ```
 
-The `TracksSnapshotCommand` (see `06-nle-ops.md`) is the canonical coalescing unit — a single Command whose `execute()` swaps tracks to the post-drag snapshot and whose `undo()` swaps back to the pre-drag snapshot. This pattern replaces the seed spec's `coalesceKey` field entirely.
+The `TracksSnapshotCommand` (see `06-nle-ops.refined.md`) is the canonical coalescing unit — a single Command whose `execute()` swaps tracks to the post-drag snapshot and whose `undo()` swaps back to the pre-drag snapshot. This pattern replaces the seed spec's `coalesceKey` field entirely.
 
 ### 4.4 Reference
 
-**Sub-agent scout task:** Open `apps/web/src/core/managers/commands.ts` and `apps/web/src/commands/{base-command,batch-command}.ts` in OpenCut-classic. Verify the command structure, history limit, and `push()` pattern used by `commitPreview()`. Also check FreeCut's `stores/timeline-command-store.ts` and `zundo` (Zustand middleware) usage for any patterns we should adopt.
+**Verified (SCOUT-01):** §7 Q6 — Command/BatchCommand structure, unbounded history, `push()` pattern.
 
 ---
 
@@ -991,7 +1022,7 @@ onSeek(listener: (time: MediaTime) => void): () => void
 ```
 
 ⚠️ **Notable departures from seed spec's PlaybackManager sketch:**
-- ❌ **No `setRate(rate: number)` method** — varispeed is not supported by OpenCut-classic's PlaybackManager. The seed spec's "1.0 = normal, 0.5 = half speed, -1.0 = reverse" API does not exist. (We must build this ourselves — see `03-playback-engine.md`.)
+- ❌ **No `setRate(rate: number)` method** — varispeed is not supported by OpenCut-classic's PlaybackManager. The seed spec's "1.0 = normal, 0.5 = half speed, -1.0 = reverse" API does not exist. (We must build this ourselves — see `03-playback-engine.refined.md`.)
 - ❌ **No `setLoop(start, end)` method** — looping is not implemented at the manager level. The `actualLastFrame`/`actualFirstFrame` loop logic exists only in FreeCut's `Clock.ts:555-559`, not in OpenCut.
 - ❌ **No `getCurrentFrame()` method** — only `getCurrentTime(): MediaTime`. Frame conversion happens via `lastFrameMediaTime({duration, fps})` (used at `timeline-manager.ts:214-219`).
 - ❌ **Clock is `performance.now()` + `requestAnimationFrame`, NOT `AudioContext.currentTime`** — see `playback-manager.ts:196-239`:
@@ -1141,7 +1172,7 @@ async deleteProjects({ ids }: { ids: string[] }): Promise<void>
 closeProject(): void
 // project-manager.ts:318-356
 async renameProject({ id, name }: { id: string; name: string }): Promise<void>
-// project-manager.ts:504-XXX
+// project-manager.ts:504 (range end unverified — teacher repo not cloned in this session)
 ratchetFpsForImportedMedia({ importedAssets }: { importedAssets: MediaAsset[] }): void
 // project-manager.ts:594-599 — throws if no active project
 getActive(): TProject
@@ -1665,7 +1696,7 @@ undo(): void {
 
 #### History management (`commands.ts`)
 
-- **No history limit.** `history: CommandHistoryEntry[]` (`commands.ts:15`) grows unbounded. Compare FreeCut's `timeline-command-store.ts:138-148` which caps at `useSettingsStore.getState().maxUndoHistory` (default value TBD).
+- **No history limit.** `history: CommandHistoryEntry[]` (`commands.ts:15`) grows unbounded. Compare FreeCut's `timeline-command-store.ts:138-148` which caps at `useSettingsStore.getState().maxUndoHistory` (default not yet verified against the teacher repo; our rebuild sets its own cap — see spec 15 §14.1's memory-triggered revisit).
 - **Redo stack cleared on `execute()`** (`commands.ts:35`): `this.redoStack = [];`.
 - **Selection snapshot preservation**: each `CommandHistoryEntry` stores `previousSelection` + optional `selectionOverride` (`commands.ts:7-11`). Undo only restores selection if the command had declared a selection override (lines 60-66):
   ```ts
@@ -1935,6 +1966,25 @@ Every file actually read by the scout, with one-line summary. **Repos cloned to:
 | `src/features/timeline/stores/items-store.ts` | 960 | Items + tracks Zustand store — source calculations, trim clamping, composition cycles |
 | `src/headless/main.ts` | 1292 | Headless entry — `window.freecut = {renderTimeline, renderProject, renderFrame, editProject, ...}` |
 
+> A second, non-canonical reference set — the private clean-room port **nle-engine** — is mapped section-by-section in §13A and consolidated in `19-code-references.md` (reference, NOT canon; this spec wins on conflict).
+
+### 13A. Code References — nle-engine (reference, NOT canon)
+
+> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room FreeCut-port **in-between reference, NOT canon**. It de-risks implementation but inherits FreeCut patterns these specs correct (8-bit rgba8unorm, JSON-RPC + `$ref`, class-API mutation surface, single-tier tests, procedural media, zero Web Workers). Where engine code conflicts with this spec, **the spec wins**. Full reconciliation: `19-code-references.md`.
+
+| Spec section | Engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §3.2 EditorCore singleton, 12 managers | `src/lib/nle/index.ts:7` | `import { initGpu, MediaRegistry, Timeline, Player, AudioMixer } from '@/lib/nle';` | CORRECTIVE | No EditorCore/manager root — concrete classes are the public API; spec's `EditorCore.getInstance(deps)` + Decision 9 dispatcher win |
+| §3.3 TimelineManager | `src/lib/nle/timeline/timeline.ts:1980` | `export class Timeline {` | CORRECTIVE | Class API is the engine's primary mutation surface; spec mandates thin wrappers over `engine.command.apply()` |
+| §4.1/§4.2 Command + undo | `src/lib/nle/timeline/timeline.ts:5225` | `execute<T>(label: string, fn: () => T): T {` | ENGINE-GAP | Undo machinery exists, zero callers (engine P1.5) |
+| §3.3 MediaManager | `src/lib/nle/media/registry.ts:19` | `resolveMediaUrl(mediaId): string` | CORRECTIVE | In-memory procedural registry only; spec's OPFS + helpers win |
+| §3.5 EngineDeps DI | `src/lib/nle/core/types.ts:749` | `export type Clip = VideoClip \| AudioClip \| CompositionItem;` | CORRECTIVE | No EngineDeps injection; only 3 of 8 item types |
+| §3.6 two entry points | `src/lib/nle/headless/api.ts:99` | `Apply a batch of JSON-RPC edit ops + $ref resolution` | CORRECTIVE | 19-op JSON-RPC vs spec 15's 78-type union |
+| §3.3 RendererManager (10-bit) | `src/lib/nle/gpu/compositor.ts:981` | `format: 'rgba8unorm',` | CORRECTIVE | All textures 8-bit; Decision 5 wins |
+| §3.6 render entry WYSIWYG | `src/lib/nle/playback/player.ts:1038` | `if (clip.type !== 'video') continue;` | CORRECTIVE | Render loop drops non-video clips; spec requires all types |
+| §3.3 event subscription | `src/lib/nle/core/event-emitter.ts:8` | `export class EventEmitter<E extends Record<string, any>` | ALIGNED | Typed emitter + unsubscribe-return matches |
+| §6 module structure (ids) | `src/lib/nle/core/id.ts:7` | `export function makeId(prefix = 'id'): string {` | ALIGNED | Deterministic prefixed IDs |
+
 ---
 
 ## 14. Corrections to Seed Spec
@@ -1981,7 +2031,7 @@ The seed spec's §3.7 rule 4 ("No circular deps. Managers can hold references to
 
 **Seed spec claimed (lines 119–138):** `split(params)`, `trim(params)`, `move(params)`, `ripple(params)`, `roll(params)`, `slip(params)`, `slide(params)`, `delete(params)`, `getElement(id)`, `getElementsAtTime(time, trackId?)`, `getTrack(trackId)`, `getTotalDuration()`, `getFrameAtTime(time)`.
 
-**Actual:** Only `getTotalDuration()` matches. Real names: `splitElements({elements, splitTime, retainSide})`, `updateElementTrim({elementId, trimStart, trimEnd, ...})`, `moveElements({moves, createTracks})`, `deleteElements({elements})`. **No ripple/roll/slip/slide methods on TimelineManager** — those NLE ops are implemented as op modules (see `06-nle-ops.md`) and dispatched via `updateElements` or `BatchCommand`. `getElement(id)` → `getElementByRef({trackId, elementId})` (private). `getTrack(trackId)` → `getTrackById({trackId})`. `getFrameAtTime(time)` → does not exist; use `lastFrameMediaTime({duration, fps})` from `@/wasm`.
+**Actual:** Only `getTotalDuration()` matches. Real names: `splitElements({elements, splitTime, retainSide})`, `updateElementTrim({elementId, trimStart, trimEnd, ...})`, `moveElements({moves, createTracks})`, `deleteElements({elements})`. **No ripple/roll/slip/slide methods on TimelineManager** — those NLE ops are implemented as op modules (see `06-nle-ops.refined.md`) and dispatched via `updateElements` or `BatchCommand`. `getElement(id)` → `getElementByRef({trackId, elementId})` (private). `getTrack(trackId)` → `getTrackById({trackId})`. `getFrameAtTime(time)` → does not exist; use `lastFrameMediaTime({duration, fps})` from `@/wasm`.
 
 **Correction:** Adopt actual method names. Move `ripple/roll/slip/slide` into op modules (`src/engine/ops/`), not `TimelineManager`. Document the `previewElements` → `commitPreview` → `discardPreview` pattern that replaces the seed spec's `coalesceKey`.
 
@@ -2008,6 +2058,8 @@ The seed spec's §3.7 rule 4 ("No circular deps. Managers can hold references to
 **Actual:** `addMediaAsset({projectId, asset}): Promise<MediaAsset | null>` — takes already-parsed `MediaAsset`, not a raw `File`. `removeMediaAsset({projectId, id}): void`. `getAssets(): MediaAsset[]` (whole array). `setAssets({assets})`. No per-id accessor. No `importFile` — file probing happens in `media/processing.ts` upstream.
 
 **Correction:** Our `MediaManager` should expose `importFile(file): Promise<mediaId>` (we want the high-level API) but internally delegate probing to a separate `MediaProcessor` service (OpenCut-classic's `media/processing.ts` pattern). Keep `getAssets()` bulk accessor. Drop `getMediaInfo`/`getMediaSource` per-id lookups — components select from `getAssets()`.
+
+**Round-7 addendum:** the four greenfield helpers above are now specified in §3.3, closing spec 15 §14.2/§5.4's "deferred update" promise.
 
 ### 14.9 ProjectManager API (§3.3)
 
@@ -2119,7 +2171,7 @@ The seed spec's §3.7 rule 4 ("No circular deps. Managers can hold references to
 - `editor-core-get-instance-is-singleton` — two consecutive `EditorCore.getInstance(deps)` calls return the same object reference; `getInstance()` ignores a second `deps` argument after first init (first-write-wins)
 - `editor-core-reset-clears-instance` — after `EditorCore.reset()`, the next `getInstance(deps)` returns a fresh instance with empty `command.history`, re-initialized managers, and zero `EngineEvent` subscribers
 - `all-12-managers-initialized-in-correct-order` — with mock spies on each manager constructor, the construction order is exactly: CommandManager → TimelineManager → PlaybackManager → ScenesManager → ProjectManager → MediaManager → RendererManager → SaveManager → AudioManager → SelectionManager → ClipboardManager → DiagnosticsManager (matches §3.4 / §14.17)
-- `command-apply-dispatches-to-correct-manager-method` — for each of the 73 `EngineCommand` variants in spec 15 §4.1, `engine.command.apply(cmd)` invokes exactly the manager method mapped in spec 15 §4.2 (verified via spy), passing `params` through unchanged
+- `command-apply-dispatches-to-correct-manager-method` — for each of the 78 `EngineCommand` variants in spec 15 §4.1, `engine.command.apply(cmd)` invokes exactly the manager method mapped in spec 15 §4.2 (verified via spy), passing `params` through unchanged
 - `batch-command-rolls-back-on-subcommand-failure` — `BatchCommand([a, b, c])` where `b` returns `CommandResult.ok === false` leaves `SceneState` byte-identical to pre-batch state; `a`'s mutations are reverted; `c` is never executed; undo stack is unchanged
 - `tracks-snapshot-command-coalesces-preview-sequence` — `previewElements()` called 10 times then `commitPreview()` pushes exactly one `TracksSnapshotCommand` onto the undo stack (matches §4.3 preview/commit pattern; replaces seed spec's `coalesceKey`)
 - `undo-then-redo-restores-state` — for any single command, `apply(cmd); command.undo(); command.redo()` produces `SceneState` deep-equal to the post-`apply` state (verifies `BatchCommand.redo()` forward-order override at `batch-command.ts:27-38`)
@@ -2147,7 +2199,7 @@ These tests verify the UI translation layer (spec 16 → spec 15 `EngineCommand`
 
 - `keyboard-cmd-z-invokes-undo` — `page.keyboard.press('Meta+z')` issues `{ type: 'undo' }` to `engine.command.apply()`; resulting state matches a direct `engine.command.undo()` call (state diff via spy)
 - `keyboard-cmd-shift-z-invokes-redo` — `page.keyboard.press('Meta+Shift+z')` issues `{ type: 'redo' }` to `engine.command.apply()`; resulting state matches a direct `engine.command.redo()` call (note: spec 16 maps `Cmd+Shift+Z` to redo on macOS, `Ctrl+Y` on Windows — test both)
-- `engine-events-propagate-to-zustand-store` — after `engine.command.apply({ type: 'split', params: { time: <currentTime>, trackIds: null } })`, the `EngineEvent` stream fires `commandApplied`; the Zustand store subscribed via `useEditor()` (spec 01 §10.4) updates; React re-renders the timeline component with the new track-element count
+- `engine-events-propagate-to-zustand-store` — after `engine.command.apply({ type: 'split', params: { time: <currentTime>, trackIds: null } })`, the `EngineEvent` stream fires `commandApplied`; the Zustand store subscribed via `useEditor()` (UI shell wiring — spec `18-ui-shell.md` §6; OpenCut-classic reference: `apps/web/src/editor/use-editor.ts`, §13) updates; React re-renders the timeline component with the new track-element count
 - `state-wysiwyg-keyboard-split-equals-direct-apply` — `page.keyboard.press('Meta+b')` (spec 16 §3, "Split at playhead — focused track") produces `SceneState` deep-equal to `engine.command.apply({ type: 'split', params: { time: <currentTime>, trackIds: null } })`
 
 ### Property-based tests
@@ -2155,7 +2207,7 @@ These tests verify the UI translation layer (spec 16 → spec 15 `EngineCommand`
 [Filename: `tests/unit/01-core-engine/*.property.test.ts`]
 
 - `undo-is-involutive` — `fc.assert(fc.property(arbitraryCommand, arbitraryState, (cmd, state) => { const before = structuredClone(state); apply(cmd, state); applyUndo(cmd, state); expect(state).toEqual(before); }), { numRuns: 1000 })` — for any command and any state, applying then undoing returns to the original state byte-for-byte (matrix row: Undo/redo)
-- `command-exhaustiveness-at-compile-time` — `switch(cmd.type)` over all 73 `EngineCommand` variants has no `default` case; the trailing `const _: never = cmd;` assertion makes adding a new variant without a dispatch arm a compile error (TypeScript exhaustiveness check) — verified by `tsc --noEmit` failing if any variant is unhandled
+- `command-exhaustiveness-at-compile-time` — `switch(cmd.type)` over all 78 `EngineCommand` variants has no `default` case; the trailing `const _: never = cmd;` assertion makes adding a new variant without a dispatch arm a compile error (TypeScript exhaustiveness check) — verified by `tsc --noEmit` failing if any variant is unhandled
 - `manager-initialization-is-acyclic` — `fc.assert(fc.property(arbitraryManagerSubset, (subset) => madge(subset).cycles().length === 0), { numRuns: 100 })` — for any subset of the 12 managers, no constructor references another manager that has not yet been assigned; enforced via `madge` in CI (per §3.7 lint enforcement)
 
 ### Test assets
@@ -2193,4 +2245,4 @@ npm run regen-references -- --filter "01-core-engine"
 
 ---
 
-**End of `01-core-engine.refined.md`.** Next: `02-workers-threading.md`.
+**End of `01-core-engine.refined.md`.** Next: `02-workers-threading.refined.md`.

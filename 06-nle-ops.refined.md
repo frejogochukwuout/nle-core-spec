@@ -71,6 +71,8 @@ For our system we adopt the **pure-function op layer** (cleaner testability) bac
 
 **Note:** OpenCut-classic doesn't implement roll/slip/slide/track-lock/freeze-frame/range-removal. We **must** port these from FreeCut (the user noted FreeCut is more feature-complete for ops).
 
+> The op inventory above is reconciled method-by-method against nle-engine's `Timeline` class (102 public methods; ~20 of the op families already implemented) — see §10.4 and spec 19's op-coverage table.
+
 ---
 
 ## 4. State Model (MAJOR UPDATE per SCOUT-01 finding)
@@ -2342,6 +2344,39 @@ For multi-select move architecture, **OpenCut-classic's `group-move/` is the can
 | `src/features/timeline/stores/commands/types.ts` | 53 | `TimelineSnapshot`, `TimelineCommand` (`{type, payload}`), `CommandEntry` |
 | `src/features/timeline/stores/timeline-command-store.ts` | 286 | `useTimelineCommandStore` — snapshot-based undo/redo with per-context stacks |
 
+### 10.4. nle-engine op-coverage (reference, NOT canon)
+
+> nle-engine (github.com/bearachprema/nle-engine) implements ~20 of this spec's op families as public methods on its `Timeline` class (timeline/timeline.ts, 6,436 LOC, 102 public methods) with 124 passing tests — the strongest ALIGNED subsystem in the reference repo. The deltas are architectural (class-based mutating manager vs this spec's pure-op + command layer; flat N-track array vs `SceneTracks`; 19-op JSON-RPC wire surface vs spec 15's 78-type union) plus three absent families (track-state toggles, snap, splitAndRemove). Where engine code conflicts, **the spec wins**; see `19-code-references.md`.
+
+| Spec 06 op (§) | nle-engine timeline.ts:line | verified signature | status |
+|---|---|---|---|
+| §5.1 Split | :2275 | `splitClip(` | ALIGNED |
+| §5.1 Split-all | :2460 | `splitAllItemsAtFrame(frame: number, options: { linked?: boolean } = {}): number {` | ALIGNED |
+| §5.2 Trim head | :2521 | `trimHead(` | ALIGNED |
+| §5.2 Trim tail | :2598 | `trimTail(` | ALIGNED |
+| §5.2/§5.4 Ripple trim | :2679 | `rippleTrimItem(` | ALIGNED |
+| §5.5 Roll | :2810 | `rollingTrimItems(` | ALIGNED |
+| §5.11 Rate stretch | :2965 / :5500 | `rateStretchItem(` / `rateStretchWithRipple(` | ALIGNED |
+| §5.4 Ripple delete | :3359 / :3385 | `rippleDelete(clipId: string): void {` / `rippleDeleteItems(` | ALIGNED |
+| §5.8 Delete | :3527 | `removeItems(clipIds: string[], options: { linked?: boolean } = {}): void {` | ALIGNED |
+| §5.10 Duplicate | :3573 | `duplicateItems(` | ALIGNED |
+| §5.3 Move | :3681 / :3760 | `moveClip(` / `moveItems(` | ALIGNED |
+| §5.6 Slip | :3858 | `slip(clipId: string, deltaFrames: number, options: { linked?: boolean } = {}): void {` | ALIGNED |
+| §5.7 Slide | :3944 | `slideItem(` | ALIGNED |
+| §5.9 Insert / Overwrite | :4379 / :4510 | `performInsertEdit(` / `performOverwriteEdit(` | ALIGNED |
+| §5.14 Range removal family | :5954 / :6089 / :6118 / :6134 | `removeRangesFromClip(` / `removeSilenceFromItems(` / `removeFillerWordsFromItems(` / `removeTranscriptRangesFromItems(` | ALIGNED |
+| §5.13 Freeze frame | :6185 | `freezeFrameAtPosition(` | ALIGNED |
+| Join (spec 16 composite) | :6329 | `joinItems(clipIds: string[]): string \| null {` | ALIGNED |
+| Close gap | :5344 / :5440 | `closeGapAtPosition(` / `closeAllGapsOnTrack(` | ALIGNED |
+| §6 Sync-lock | timeline/sync-lock.ts:480 + timeline.ts:3296 | `propagateRemovedIntervalsToSyncLockedTracks(` + `applySyncLockRipplePatch(` | ALIGNED |
+| Undo/redo/snapshot | :5247 / :5261 / :5292 | `undo(): boolean {` / `snapshot(label: string = 'snapshot'): TimelineSnapshot {` | ALIGNED-with-caveat (zero callers; keyframe-blind equality — engine P0.6) |
+| §5.15 Mute/Solo/Lock/Visibility | (absent) | fields only, no public mutators | ENGINE-GAP |
+| §5.16 Snap + razor snap | (absent) | no snap code in src/lib/nle | SPEC-ONLY |
+| §4.6 pure-Op + command wrap | timeline.ts:6417 | `private _commit(next: TimelineData): void {` | CORRECTIVE (class-based mutating manager; spec's layer wins) |
+| §4.7 SceneTracks model | core/types.ts:760 | `export type TrackKind = 'video' \| 'audio';` | CORRECTIVE (flat N-track; spec's main-singleton wins) |
+
+§7 note (Round 7): the snapshot stored by a drag-coalesced `TracksSnapshotCommand` must cover the full field set incl. keyframes (the engine's `snapshotsEqual` at timeline.ts:1746 ignores them — keyframe-only edits stop being undoable; engine P0.6).
+
 ---
 
 ## 11. Corrections to Seed Spec
@@ -3173,7 +3208,7 @@ pitch preservation:
   the half-duration mark shows the original source frame at the
   half-source-time mark (tolerance 0%)
 - `retime-then-render-audio-pitch` — render audio for a 2× retimed clip
-  using `440hz-tone-10s.wav` source; take FFT; dominant bin within ±1% of
+  using `10s-440hz-sine.wav` source; take FFT; dominant bin within ±1% of
   440 Hz (verifies SoundTouch `PitchShifter` pitch preservation at the
   render path, not just the unit path)
 - `freeze-frame-then-render` — render a frame inside the freeze region;
@@ -3196,10 +3231,12 @@ Every keyboard shortcut for an NLE op (per `16-keyboard-shortcuts.md`
 
 1. Presses the shortcut via `page.keyboard.press()`
 2. Reads back `SceneState` via
-   `page.evaluate(() => window.editor.state.getSceneState())`
+   `page.evaluate(() => window.__engine.state.getSceneState())`
 3. Compares to the `SceneState` produced by a direct
    `engine.command.apply(EngineCommand)` call (state WYSIWYG, see
    `17-test-plan.md` §6.1)
+
+Shortcuts are bound per spec 16 and dispatched from the UI shell (spec 18: the timeline toolbar tool buttons mirror the tool-mode enum; keyboard focus lives in the shell's timeline area) — the state-read global is the spec 17 harness contract (`window.__engine`).
 
 - `keyboard-split-cmd-b` — `Cmd+B` issues `{ type: 'split', params: {
   time: <currentTime>, trackIds: null } }`; resulting state matches direct
@@ -3295,10 +3332,9 @@ Project fixtures (under `tests/fixtures/projects/`):
   used by split / trim / move / delete / ripple / roll / slip / slide
   tests
 - `multi-track.json` — 5 tracks (1 main + 2 video overlays + 2 audio),
-  10 clips total; used by multi-select, sync-lock, range-removal, and the
-  Tier 2 multi-track blend test
+  10 clips total; used by multi-select, sync-lock, and range-removal tests
 - `all-ops.json` — project with every op type represented (one element
-  per op family); used by the property-based "no-overlap / source-bounds
+  per op family; registered in spec 17 §5.3); used by the property-based "no-overlap / source-bounds
   / locked-tracks" suites as a real-world seed state
 - `10-track-100-clip.json` — stress fixture for property tests with large
   state
@@ -3318,7 +3354,7 @@ Media fixtures (under `tests/fixtures/videos/`, names per
 Audio fixtures (under `tests/fixtures/audio/`, per `17-test-plan.md`
 §5.2):
 
-- `440hz-tone-10s.wav` — 440 Hz sine, 10s, 48 kHz, mono — pitch
+- `10s-440hz-sine.wav` — 440 Hz sine, 10s, 48 kHz, mono — pitch
   preservation test for retime
 
 Reference PNGs (under `tests/fixtures/references/`, regenerated per
@@ -3357,4 +3393,4 @@ npm run regen-references -- --filter "06-nle-ops"
 
 ---
 
-**End of `06-nle-ops.refined.md`.** Next: `07-composition.md`.
+**End of `06-nle-ops.refined.md`.** Next: `07-composition.refined.md`.

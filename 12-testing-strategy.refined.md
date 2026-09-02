@@ -1,8 +1,9 @@
 # 12 — Testing Strategy: Virtual Framebuffer, Pixel Verification, Audio Waveform Checks
 
 **Stream:** Test infrastructure & verification strategy
-**Status:** Seed spec (sub-agent scout will refine with code references)
-**Spec file:** `12-testing-strategy.md`
+**Status:** Refined (SCOUT-12) — open questions resolved (§12), corrections verified (§14), CI/runner configs + asset scripts audited (audits/12-testing-strategy.audit.md — PASS-WITH-CAVEAT, issues applied)
+**Spec file:** `12-testing-strategy.refined.md` (this file)
+**Seed:** `12-testing-strategy.md` (935 LOC)
 
 ---
 
@@ -68,6 +69,8 @@ google-chrome --headless=new \
 
 For local development, use real GPU.
 
+> Software Vulkan comes in two engine-validated flavors: Mesa lavapipe (FreeCut pattern, §14.A — canon choice) and Chrome's SwiftShader flags (nle-engine run-nle-tests.mjs — validated fallback). The probe (Q3) should accept either and report which.
+
 ### 3.3 Test project structure
 
 ```
@@ -131,14 +134,14 @@ tests/
 │   │   └── ...
 │   ├── projects/                # Sample project JSON files
 │   │   ├── simple-cut.json
-│   │   ├── multi-track.json
+│   │   ├── multi-track-blend.json
 │   │   ├── with-transitions.json
-│   │   ├── with-effects.json
+│   │   ├── with-effects.json  # registered in spec 17 §5.3 Round 7
 │   │   └── ...
 │   ├── references/              # Reference render outputs
 │   │   ├── simple-cut-frame-0.png
 │   │   ├── simple-cut-frame-100.png
-│   │   ├── multi-track-frame-50.png
+│   │   ├── multi-track-blend-frame-50.png
 │   │   └── ...
 │   └── luts/
 │       ├── identity.cube
@@ -482,7 +485,7 @@ export function assertFrequencyPresent(samples: Float32Array, expectedFreq: numb
 ```ts
 test('varispeed 0.5x preserves pitch', async () => {
   // Render a 440Hz tone at 0.5x speed
-  const project = loadProject('tests/fixtures/projects/varispeed-0.5x.json');
+  const project = loadProject('tests/fixtures/projects/with-varispeed.json');
   const audio = await renderAudio(project);
   
   // Duration should be 2x original
@@ -506,10 +509,10 @@ The most important test: browser render == cloud render, bit-identical.
 test('WYSIWYG: browser == cloud for all test projects', async () => {
   const testProjects = [
     'simple-cut.json',
-    'multi-track.json',
+    'multi-track-blend.json',
     'with-transitions.json',
-    'with-effects.json',
-    'with-color-grading.json',
+    'with-effects.json',  // registered in spec 17 §5.3 Round 7
+    'with-color-grade.json',
     'with-varispeed.json',
   ];
   
@@ -1306,7 +1309,7 @@ When the renderer changes (e.g., color bug fix, blend mode correction, 8→10-bi
 ```ts
 test('SoundTouch varispeed 0.5x preserves pitch + doubles duration', async () => {
   // 1. Load project with 440Hz sine, varispeed rate=0.5
-  const project = loadProject('tests/fixtures/projects/varispeed-0.5x.json');
+  const project = loadProject('tests/fixtures/projects/with-varispeed.json');
   // 2. Render via OfflineAudioContext (no real-time)
   const audioBuffer = await renderAudio(project);
   // 3. Assert duration doubled
@@ -1354,9 +1357,11 @@ Every URL fetched and every file read during the SCOUT-12 investigation, grouped
 
 ### 13.1 Spec context (read at start)
 
-- `/home/z/my-project/download/nle-spec/00-master-spec.md` — master spec, read to confirm stream-12 scope (466 LOC seed)
-- `/home/z/my-project/download/nle-spec/12-testing-strategy.md` — seed spec (935 LOC, this file's seed)
+- `/home/z/my-project/nle-core-spec/00-master-spec.md` — master spec, read to confirm stream-12 scope (466 LOC seed); path updated from the original /download/nle-spec/ clone location
+- `/home/z/my-project/nle-core-spec/12-testing-strategy.md` — seed spec (935 LOC, this file's seed); path updated from the original /download/nle-spec/ clone location
 - `/home/z/my-project/worklog.md` — worklog of prior SCOUT-* sub-agents (verified FreeCut/OpenCut test infra patterns)
+- `18-ui-shell.md` — UI shell spec; its Tier 3 UI tests consume this spec's canonical runner config (§17.4) and fixture set
+- `19-code-references.md` — code-reference architecture + nle-engine reconciliation; engine test-suite re-tiering deltas (§13.7)
 
 ### 13.2 FreeCut test infrastructure (read for patterns)
 
@@ -1450,6 +1455,25 @@ pix_fmt=yuv420p
 ```
 
 (See §15 for the full command set and outputs.)
+
+### 13.7 Code References — nle-engine (reference, NOT canon)
+
+> nle-engine's test reality is a **single-tier, in-app harness** (124 tests in `src/app/page.tsx`, results DOM-scraped by `scripts/run-nle-tests.mjs`) — the exact pattern this spec + spec 17's three-tier methodology correct. The engine's own 113-item test charter (`gaps/audit/G-test-coverage.md`) is the re-tier worklist. Spec wins; full reconciliation: `19-code-references.md`.
+
+| Spec section | Engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §3.1 Tier 1 (Vitest) | `package.json:9` | `"lint": "eslint .",` | ENGINE-GAP | No Vitest, no test script — primary tier absent |
+| §3.1 three-tier structure | `src/app/page.tsx:197` | `const [milestones, setMilestones] = useState<MilestoneStatus[]>(` | CORRECTIVE | All 124 tests in React state on the app page |
+| §17.3 assertion reporting | `scripts/run-nle-tests.mjs:201` | `const tests = Array.from(m.querySelectorAll('[data-test="result"]')).map((li) => {` | CORRECTIVE | DOM-scrape vs runner report |
+| §17.4/§17.5 runner configs | `package.json:6` | `"dev": "next dev -p 3000 2>&1 \| tee dev.log",` | CORRECTIVE | Next.js :3000 vs spec's Vite :5173 |
+| §14.A software-Vulkan flags | `scripts/run-nle-tests.mjs:35` | `'--enable-unsafe-swiftshader',` | CORRECTIVE (with validation) | Engine-validated fallback; lavapipe stays canon |
+| §3.2 Xvfb | `.agents/DECISIONS.md:218` | `Tests run via Playwright with Chrome under Xvfb + SwiftShader` | ALIGNED | Corroborates Xvfb CI step |
+| Test charter | `gaps/audit/MASTER.md:185` | `124-test inventory, coverage matrix, 113-item test charter` | CORRECTIVE | Engine's charter maps onto spec 17 tiers — converging |
+| §9 error paths | `gaps/audit/G-test-coverage.md:26` | `Total error/boundary ≈ 12/128 (9%).` | CORRECTIVE | ~9% vs spec's methodology |
+| §9.1 smoke budget | `scripts/run-nle-tests.mjs:24` | `const TIMEOUT_MS = 90_000;` | ALIGNED | ~2-min order of magnitude matches |
+| §15 fixtures + manifest | — | COULD-NOT-VERIFY (tests/ has only container scripts) | SPEC-ONLY | Procedural media in-code; ffmpeg fixtures greenfield |
+| §8 property-based | — | COULD-NOT-VERIFY (no fast-check) | SPEC-ONLY | Invariant tests greenfield |
+| Suite count drift | `gaps/audit/G-test-coverage.md:14` | `121 \`addResult(\` call sites, 128 individual test results` | NOTE | 124 runner vs 128 census — motivating the meta-suite guard |
 
 ---
 
@@ -2240,6 +2264,8 @@ Verified against `https://raw.githubusercontent.com/actions/upload-artifact/v7/R
 
 Verified syntax from `https://playwright.dev/docs/test-configuration`:
 
+> This is the single canonical Playwright config for **all** UI tests in the suite, including the UI-shell (spec 18) Tier 3 tests; spec 18 must not define a second config.
+
 ```ts
 // playwright.config.ts
 import { defineConfig, devices } from '@playwright/test';
@@ -2387,7 +2413,7 @@ export default defineConfig({
 
 These exercise the comparison and verification helpers themselves — the
 `pixelmatch` wrapper (§5.1), the `OfflineAudioContext` + FFT helper (§6.3),
-the asset-manifest validator (§13), and the Zod schema for project fixtures
+the asset-manifest validator (`17-test-plan.md` §11.3), and the Zod schema for project fixtures
 (§5.3 / spec 09). They run in Vitest with no browser.
 
 - `pixelmatch-identical-images-yields-zero-diff` — comparing
@@ -2427,7 +2453,7 @@ the asset-manifest validator (§13), and the Zod schema for project fixtures
   to peak). Verifies the window is actually applied (catches the
   accidentally-removed-window regression)
 - `test-asset-manifest-all-assets-exist` — `tests/fixtures/manifest.json`
-  (the canonical manifest from `17-test-plan.md` §5 / spec 12 §13) lists
+  (the canonical manifest from `17-test-plan.md` §11.3) lists
   every fixture; this test asserts `fs.existsSync(path)` for each entry
   before any other test runs (it is registered as a Vitest `beforeAll`
   hook in `tests/setup.ts`)
@@ -2442,11 +2468,11 @@ the asset-manifest validator (§13), and the Zod schema for project fixtures
   between dev machines and CI)
 - `zod-schema-validates-all-project-fixtures` — every
   `tests/fixtures/projects/*.json` parses cleanly through the `ProjectSchema`
-  (spec 09 §2); a fixture that fails Zod validation fails this test rather
+  (spec 09 §3.3); a fixture that fails Zod validation fails this test rather
   than producing a cryptic `engine.loadProject` failure downstream
 - `zod-schema-rejects-malformed-fixture` — a deliberately-corrupted
-  fixture (missing `frameRate`, negative `duration`, unknown `op` enum
-  value) is rejected by `ProjectSchema.safeParse()` with a non-empty
+  fixture (missing `settings.fps`, negative `metadata.duration`, wrong
+  `schemaVersion` literal) is rejected by `ProjectSchema.safeParse()` with a non-empty
   `error.issues` array — verifies the schema is actually constraining
   (regression for the "schema is just a type hint, never enforced" class
   of bug)
@@ -2470,13 +2496,13 @@ headless Chrome under Xvfb (§3.2, §14.A).
   `#FF0000` (tolerance ±2/255 per channel — accounts for Xvfb's RGB565
   fallback path). Verifies the virtual framebuffer is actually wired up,
   not silently using the headless-GPU path
-- `swiftshader-webgpu-adapter-available` — `navigator.gpu.requestAdapter()`
+- `software-vulkan-adapter-available` — `navigator.gpu.requestAdapter()`
   returns a non-null `GPUAdapter`; `adapter.requestDevice()` returns a
   `GPUDevice`; `device.queue.submit([])` does not throw; this is the
   baseline for every WebGPU-dependent test in specs 04, 07, 10, 11 (if
   SwiftShader is missing, those tests are skipped with a clear message,
   not silently passed)
-- `swiftshader-renders-triangle-with-correct-pixel` — a minimal WGSL
+- `software-vulkan-renders-triangle-with-correct-pixel` — a minimal WGSL
   pipeline (vertex shader emits a single red triangle covering the top-left
   quadrant of a 2×2 canvas) renders; `device.capture()` / `copyExternalImageToTexture`
   read-back yields `pixel(0,0) === [255, 0, 0, 255]` and `pixel(1,1) ===

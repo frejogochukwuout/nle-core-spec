@@ -5,13 +5,13 @@
 **Primary teacher:** OpenCut-classic DOM approach + FreeCut's per-element NLE op UI
 **Seed spec:** `05-timeline.md`
 **Refined spec:** `05-timeline.refined.md` (this file)
-**Reference repos audited:** `/tmp/opencut-classic` (archived MIT), `/tmp/freecut` (MIT)
+**Reference repos audited:** `/tmp/opencut-classic` (archived MIT), `/tmp/freecut` (MIT); and a forthcoming **timeline-distill** repo (OpenCut-classic's timeline — components, controllers, placement, snapping — distilled minus the NLE core) will serve as the working code reference for this stream; see spec 19 §3.2.
 
 ---
 
 ## 1. Purpose
 
-Define the timeline UI: how tracks and clips are rendered, how the user interacts with them (drag, trim, scrub), and how the UI stays responsive with hundreds of clips. This stream is mostly UI; the underlying NLE op logic is in `06-nle-ops.md`.
+Define the timeline UI: how tracks and clips are rendered, how the user interacts with them (drag, trim, scrub), and how the UI stays responsive with hundreds of clips. This stream is mostly UI; the underlying NLE op logic is in `06-nle-ops.refined.md`. The DOM-timeline patterns below (component hierarchy, controllers, placement, snapping) are being distilled into the forthcoming timeline-distill repo (spec 19 §3.2) — cite it, not OpenCut-classic's monorepo, when implementing.
 
 ---
 
@@ -21,7 +21,7 @@ Define the timeline UI: how tracks and clips are rendered, how the user interact
 2. **Responsive.** 60fps UI with 500+ clips on the timeline.
 3. **Virtualized.** Only render visible clips + a buffer; recycle DOM nodes.
 4. **Accessible.** Keyboard navigation, screen reader labels.
-5. **Decoupled from engine.** UI subscribes to `SceneManager` for state; calls `EditorCore.timeline.*` for commands.
+5. **Decoupled from engine.** UI subscribes to `ScenesManager` (spec 01 §3.3 — note: plural) for state; issues ops via `engine.command.apply(EngineCommand)` (spec 15 §4, Decision 9).
 
 ---
 
@@ -87,6 +87,8 @@ We adopt OpenCut-classic's approach: **DOM everywhere — including filmstrip th
 </Timeline>
 ```
 
+> The tree above mounts inside the UI shell's timeline area (spec 18): `#timeline-area` = `#track-headers` (fixed 160px column, hosts `TrackHeader`/§10) + `#timeline-scroll` (hosts `TimelineContent`); the tool toggles in `TimelineToolbar` bind to the same tool-mode enum as spec 18's timeline toolbar.
+
 ### 4.1 Component responsibilities
 
 | Component | Responsibility |
@@ -107,7 +109,7 @@ We adopt OpenCut-classic's approach: **DOM everywhere — including filmstrip th
 | `Marquee` | Multi-select rectangle |
 | `DropZones` | Visual feedback during drag-drop |
 
-**Reference:** OpenCut-classic `apps/web/src/timeline/components/index.tsx` (954 LOC, the `Timeline` function). Sub-agent scout to read in full.
+**Reference:** OpenCut-classic `apps/web/src/timeline/components/index.tsx` (954 LOC, the `Timeline` function). ✅ Read in full — see §14.1.
 
 ---
 
@@ -360,16 +362,20 @@ function useTimelineDrag() {
     
     const onUp = () => {
       if (dragState && dragState.currentDelta !== 0) {
-        // Commit the move via EditorCore (real API: moveElements takes a `moves`
-        // array of {trackId, elementId, startTime, duration} and an optional
-        // `createTracks` array — see spec 01 §3.3 / §14.5).
-        engine.timeline.moveElements({
-          moves: dragState.elementIds.map(id => ({
-            trackId: dragState.trackId,
-            elementId: id,
-            startTime: dragState.startTimes[id] + dragState.currentDelta,
-            duration: dragState.durations[id],
-          })),
+        // Commit via the canonical dispatcher (spec 15 §4.2: the `move` command
+        // maps to engine.timeline.moveElements, which takes a `moves` array of
+        // {trackId, elementId, startTime, duration} — see spec 01 §3.3 / §14.5).
+        engine.command.apply({
+          type: 'move',
+          params: {
+            moves: dragState.elementIds.map(id => ({
+              trackId: dragState.trackId,
+              elementId: id,
+              startTime: dragState.startTimes[id] + dragState.currentDelta,
+              duration: dragState.durations[id],
+            })),
+            createTracks: false,
+          },
         });
       }
       setDragState(null);
@@ -425,12 +431,12 @@ function useTrim(elementId: string, edge: 'start' | 'end') {
     };
     
     const onUp = () => {
-      // Commit via EditorCore (real API: updateElementTrim takes absolute
-      // trimStart/trimEnd values, not a delta — see spec 01 §3.3 / §14.5).
-      engine.timeline.updateElementTrim({
-        elementId,
-        trimStart: preview.trimStart,
-        trimEnd: preview.trimEnd,
+      // Commit via the canonical dispatcher (spec 15 §4.2: the `trim` command
+      // takes {elementId, edge, delta}; the resolver computes delta from the
+      // preview's absolute trimStart/trimEnd — see spec 01 §3.3 / §14.5).
+      engine.command.apply({
+        type: 'trim',
+        params: { elementId, edge, delta: preview.trimStart - originalTrimStart },
       });
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
@@ -451,11 +457,11 @@ In razor mode, click to split:
 ```ts
 function handleRazorClick(e: React.MouseEvent, track: Track) {
   const time = pixelToTime(e.clientX - contentOffset, pixelsPerSecond);
-  // Real API: splitElements takes an `elements` array (each with trackId +
-  // elementId) and a `splitTime`, returns the right-side element refs.
-  const elementsAtTime = engine.timeline.getElementsAtTime(time, track.id);
-  engine.timeline.splitElements({ elements: elementsAtTime, splitTime: time });
-}
+  // Read via ScenesManager, commit via the canonical dispatcher (spec 15 §4.2:
+  // the `split` command maps to engine.timeline.splitElements, which takes an
+  // `elements` array + `splitTime` and returns the right-side element refs).
+  const elementsAtTime = engine.scenes.getActiveScene().elementsAtTime(time, track.id);  // read via ScenesManager
+  engine.command.apply({ type: 'split', params: { time, trackIds: [track.id] } });  // spec 15 §4.2 (manager method: engine.timeline.splitElements)
 ```
 
 ### 8.6 Playhead drag
@@ -524,7 +530,7 @@ function handleDrop(e: React.DragEvent, targetTrack: Track, targetTime: MediaTim
   // (resolving mediaId → MediaAsset, computing duration, etc.) happens in a
   // MediaManager helper upstream.
   const element = engine.media.createElementFromMedia({ mediaId, trackId: targetTrack.id, startTime: targetTime });
-  engine.timeline.insertElement({ element, placement: { trackId: targetTrack.id } });
+  engine.command.apply({ type: 'insert', params: { element, placement: { trackId: targetTrack.id } } });  // spec 15 §4.2 (manager method: engine.timeline.insertElement)
 }
 ```
 
@@ -592,7 +598,7 @@ function computeSnapPoints(state: SceneState, viewport: TimeRange): SnapPoint[] 
 }
 ```
 
-**FreeCut reference:** `src/features/timeline/utils/timeline-snap-utils.ts`, `src/features/timeline/utils/razor-snap.ts`, `src/features/timeline/preview/components/snap-guides.tsx`. Sub-agent scout to read all three.
+**FreeCut reference:** `src/features/timeline/utils/timeline-snap-utils.ts`, `src/features/timeline/utils/razor-snap.ts`, `src/features/timeline/preview/components/snap-guides.tsx`. ✅ All three read — see §14.6 and §14.12.
 
 ---
 
@@ -604,10 +610,10 @@ function TrackHeader({ track }: Props) {
     <div className="track-header">
       <span className="track-name">{track.name}</span>
       <div className="track-controls">
-        <button onClick={() => engine.timeline.toggleTrackMute({ trackId: track.id })}>M</button>
-        <button onClick={() => engine.timeline.toggleTrackSolo({ trackId: track.id })}>S</button>
-        <button onClick={() => engine.timeline.toggleTrackLock({ trackId: track.id })}>L</button>
-        <button onClick={() => engine.timeline.toggleTrackVisibility({ trackId: track.id })}>V</button>
+        <button onClick={() => engine.command.apply({ type: 'toggleTrackMute', params: { trackId: track.id } })}>M</button>
+        <button onClick={() => engine.command.apply({ type: 'toggleTrackSolo', params: { trackId: track.id } })}>S</button>
+        <button onClick={() => engine.command.apply({ type: 'toggleTrackLock', params: { trackId: track.id } })}>L</button>
+        <button onClick={() => engine.command.apply({ type: 'toggleTrackVisibility', params: { trackId: track.id } })}>V</button>
       </div>
     </div>
   );
@@ -615,6 +621,8 @@ function TrackHeader({ track }: Props) {
 ```
 
 For audio tracks: M/S/L (no V). For video tracks: M/V/L (no S, or S if we support solo-video). For text/overlay tracks: M/V/L.
+
+Spec 18 fixes the header column at 160px (DaVinci mock `#track-headers`); OpenCut-classic's `TIMELINE_TRACK_LABELS_COLUMN_WIDTH_PX = 112` (§16.1) is the teacher value — 160px is the shell-canonical value.
 
 ---
 
@@ -1014,7 +1022,7 @@ The function `drawTimelineRulerViewportCanvas({ canvas, scrollLeft, viewportWidt
 
 ## 16. Code References
 
-Every file path below is absolute within its reference repo. **OC** = `/tmp/opencut-classic/apps/web/src/timeline/`; **OC-App** = `/tmp/opencut-classic/apps/web/src/app/editor/[project_id]/`; **OC-Actions** = `/tmp/opencut-classic/apps/web/src/actions/`; **FC** = `/tmp/freecut/src/features/timeline/`.
+Every file path below is absolute within its reference repo. **OC** = `/tmp/opencut-classic/apps/web/src/timeline/`; **OC-App** = `/tmp/opencut-classic/apps/web/src/app/editor/[project_id]/`; **OC-Actions** = `/tmp/opencut-classic/apps/web/src/actions/`; **FC** = `/tmp/freecut/src/features/timeline/`. **TD** = forthcoming timeline-distill repo (OpenCut-classic timeline distilled; paths will mirror `timeline/{components,controllers,placement,snapping}`). Note: nle-engine has **no React timeline** (player harness only — see §16.4); it contributes the data model (timeline.ts) but zero UI code for this stream.
 
 ### 16.1 OpenCut-classic — timeline
 
@@ -1122,6 +1130,23 @@ Every file path below is absolute within its reference repo. **OC** = `/tmp/open
 | `FC/hooks/use-timeline-shortcuts.ts` | 43 | Composes 8 sub-hooks `:34-43` |
 | `FC/hooks/shortcuts/*.ts` | (8 files) | (see §19) |
 | `FC/components/timeline-ruler-surface.tsx` | — | DOM wrapper that owns the canvas, scroll, and pointer |
+
+### 16.4. Code References — nle-engine (reference, NOT canon)
+
+> nle-engine (github.com/bearachprema/nle-engine) has **no React timeline** — no components, no controllers, no virtualization; the timeline UI is entirely greenfield (the forthcoming timeline-distill repo is the code reference; see spec 19 §3.2). The engine contributes the data model and ordering contracts below. Where engine code conflicts with this spec, **the spec wins**.
+
+| Spec section | Engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| Whole spec (timeline UI) | (repo census) | only `src/components/ui/*` + test harness page | ENGINE-GAP | No React timeline; spec is greenfield |
+| §12.1 track ordering | `src/lib/nle/playback/scene-assembly.ts:210` | `The \`zIndex = (maxOrder - trackOrder) * 1000\` formula` | ALIGNED | Stable z-index from track order |
+| §7.3 clip DOM state | `src/lib/nle/playback/scene-assembly.ts:158` | `export interface StableDomItemDescriptor {` | ALIGNED | Minimal per-item state for virtualized DOM |
+| §7.3 CSS transforms | `src/lib/nle/playback/transform-resolver.ts:462` | `export function buildCssTransform(` | ALIGNED | React-agnostic CSS transform builder |
+| §12.3 linked selection | `src/lib/nle/timeline/timeline.ts:2224` | `getLinkedClips(clipId: string): Clip[] {` | ALIGNED | Linked A/V query |
+| §11.1 markers | `src/lib/nle/timeline/timeline.ts:5546` | `addMarker(` | ALIGNED | Marker CRUD model |
+| §11.2 in/out points | `src/lib/nle/timeline/timeline.ts:5642` | `setInPoint(frame: number): void {` | ALIGNED | In/out model present |
+| §8.3/§8.4 drag coalescing | — | COULD-NOT-VERIFY (no previewElements/commitPreview) | ENGINE-GAP | spec 06 §4.6 pattern has no counterpart |
+| §6 virtualization / §5 zoom | — | COULD-NOT-VERIFY | SPEC-ONLY | Engine is frame-based; time↔px lives at UI boundary |
+| op entry surface | `src/lib/nle/headless/api.ts:804` | `case 'split': {` | CORRECTIVE | 19-op JSON-RPC vs spec 15 dispatcher; spec wins |
 
 ---
 
@@ -1434,8 +1459,9 @@ This is **DOM-based (CSS background)**, not Canvas-based like FreeCut — but it
 > "Zoom/scroll", "Playhead drag".
 >
 > **Primary testing path: Tier 3 (keyboard-driven).** The timeline has
-> ~50 keyboard shortcuts (§19, spec 16) that map 1:1 to `EngineCommand`
-> types (spec 15 §4). Driving the timeline via `page.keyboard.press()`
+> ~50 keyboard shortcuts (§19, spec 16), most of which map to `EngineCommand`
+> types (spec 15 §4); UI-layer extensions (snap/ripple toggles, viewport
+> zoom, etc.) route to the UI store instead — see spec 16 §0.2. Driving the timeline via `page.keyboard.press()`
 > avoids the click/drag fragility tax of mouse-based UI tests (drag
 > thresholds, pointermove timing, dragenter/dragleave sequencing) and
 > asserts the **state WYSIWYG** invariant (spec 17 §6.1): every keyboard
@@ -1697,4 +1723,4 @@ npm run regen-references -- --filter "05-timeline"
 
 ---
 
-**End of `05-timeline.refined.md`.** Next: `06-nle-ops.md`.
+**End of `05-timeline.refined.md`.** Next: `06-nle-ops.refined.md`; spec 18 (UI shell) consumes this spec's component contracts.

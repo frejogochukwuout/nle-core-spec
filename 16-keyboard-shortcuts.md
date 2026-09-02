@@ -32,11 +32,13 @@
 
 ### 0.2 Alignment with spec 15 (`15-wire-protocol.md`)
 
-The `EngineCommand` type used throughout this spec is the **serializable command descriptor** that the keyboard handler emits and that tests inject via `page.evaluate`. Spec 15 (`15-wire-protocol.md`, shipped under TEST-02) is the **canonical definition** of this type — its §4.1 defines a 60-type discriminated union covering Timeline, Track, Playback, Project, Scene, Media, Tool, Marker, Effect, Mask, Transition, Keyframe, Clipboard, Undo/Redo, and Snapshot categories. Spec 15 §4.2 maps every command type 1:1 to a manager method on `EditorCore`.
+The `EngineCommand` type used throughout this spec is the **serializable command descriptor** that the keyboard handler emits and that tests inject via `page.evaluate`. Spec 15 (`15-wire-protocol.md`, shipped under TEST-02, amended Round 7) is the **canonical definition** of this type — its §4.1 defines a 78-type discriminated union (73 at TEST-02 + 5 Round-7 additions: 3 export commands and 2 project commands) covering Timeline, Track, Playback, Project, Scene, Media, Tool, Marker, Effect, Mask, Transition, Keyframe, Clipboard, Undo/Redo, Snapshot, and Export categories. Spec 15 §4.2 maps every command type 1:1 to a manager method on `EditorCore`.
 
-This spec (16) consumes spec 15's union without modification. The 33 command types in §3 of this spec that overlap with spec 15 (e.g., `split`, `trim`, `play`, `paste`, `undo`, `toggleBookmark`, `addTrack`, `deleteTrack`, `upsertKeyframes`, `removeKeyframes`) use spec 15's canonical names verbatim. Spec 16 additionally defines **18 UI-layer extensions** — commands that fall outside spec 15's wire-protocol scope because they affect UI state (panel focus, workspace switch, timeline viewport zoom, snap toggle, ripple toggle) or are composite helpers (`splitAndRemove`, `findPlayhead`, `join`, `toggleAVLink`) or are out-of-scope for spec 15's wire protocol (export operations — `exportFCPXML`, `exportMaster`, `exportFrame`). These UI-layer extensions are tagged `UI` in §12 and are NOT pushed through `engine.command.apply()`; they are routed to the UI store (Zustand) directly. Spec 15 may absorb them in a future revision.
+This spec (16) consumes spec 15's union without modification. The 33 command types in §3 of this spec that overlap with spec 15 (e.g., `split`, `trim`, `play`, `paste`, `undo`, `toggleBookmark`, `addTrack`, `deleteTrack`, `upsertKeyframes`, `removeKeyframes`) use spec 15's canonical names verbatim. Spec 16 additionally defines **UI-layer extensions** (the rows tagged `(UI)` in §12) — commands that affect UI state (panel focus, workspace switch, timeline viewport zoom, snap toggle, ripple toggle) or are composite helpers (`splitAndRemove`, `findPlayhead`, `join`, `toggleAVLink`). These UI-layer extensions are tagged `UI` in §12 and are NOT pushed through `engine.command.apply()`; they are routed to the UI store (Zustand) directly. The export commands (`exportFCPXML`, `exportMaster`, `exportFrame`) are **NO LONGER spec-16 extensions**: spec 15 §4.3.74-76 (Round-7 amendment) defines them canonically, and they ARE pushed through `engine.command.apply()` — export is spec 15's sanctioned OUTPUT exception (§14.11), non-undoable and non-mutating, with the artifact or job handle returned in `CommandResult.data`. Spec 18 (UI shell) is the primary consumer of the remaining UI extensions.
 
 **Normative priority:** where this spec and spec 15 both define a command name, **spec 15 wins**. The keyboard handler's `EngineCommandResolver` (§8.3) is a thin adapter that (a) computes `<runtime>` params (currentTime, selectedIds, focusedTrackId) from engine + UI state, (b) forwards spec-15 command types through `engine.command.apply(EngineCommand)`, and (c) routes spec-16 UI extensions to the UI store. Spec 15 §4.4 defines `apply()`; this spec does not redefine it.
+
+> **Round-7 note on §8.3's illustrative bodies:** the resolver code below was written against spec 01's class-instance API (`engine.command.execute({ command: new XCommand(...) })`) during the §15.2 migration window; several bodies still show it. Production code uses `engine.command.apply({ type, params })` — the JSON path — exclusively (spec 15 §15.2); the illustrative bodies are to be read as "construct the params, then apply". New bindings must be written in `apply()` form. (Flagged for textual migration at the seal round.)
 
 ---
 
@@ -126,14 +128,16 @@ Organized by category. For each shortcut:
 | `PageDown` | Next edit (jump to next clip start) | `{ type: 'seek', params: { time: <nextEditPoint> } }` | Always | ⚠ differs (Down) |
 | `Cmd+Shift+Left` | Jump to previous marker | `{ type: 'seekToMarker', params: { direction: -1 } }` | Always | Cmd+Up |
 | `Cmd+Shift+Right` | Jump to next marker | `{ type: 'seekToMarker', params: { direction: 1 } }` | Always | Cmd+Down |
-| `I` | Set in point at playhead | `{ type: 'setLoop', params: { in: <currentTime> } }` | Always | I |
-| `O` | Set out point at playhead | `{ type: 'setLoop', params: { out: <currentTime> } }` | Always | O |
-| `Shift+I` | Set in point at preview (gray playhead) | `{ type: 'setLoop', params: { in: <previewTime> } }` | When preview open | Shift+I |
-| `Shift+O` | Set out point at preview | `{ type: 'setLoop', params: { out: <previewTime> } }` | When preview open | Shift+O |
-| `Cmd+Shift+I` | Clear in point | `{ type: 'setLoop', params: { in: null } }` | Always | Option+I |
-| `Cmd+Shift+O` | Clear out point | `{ type: 'setLoop', params: { out: null } }`` | Always | Option+O |
-| `Option+X` | Clear in + out (both) | `{ type: 'setLoop', params: { in: null, out: null } }` | Always | Option+X |
+| `I` | Set in point at playhead | `{ type: 'setLoop', params: { start: <currentTime> } }` | Always | I |
+| `O` | Set out point at playhead | `{ type: 'setLoop', params: { end: <currentTime> } }` | Always | O |
+| `Shift+I` | Set in point at preview (gray playhead) | `{ type: 'setLoop', params: { start: <previewTime> } }` | When preview open | Shift+I |
+| `Shift+O` | Set out point at preview | `{ type: 'setLoop', params: { end: <previewTime> } }` | When preview open | Shift+O |
+| `Cmd+Shift+I` | Clear in point | `{ type: 'setLoop', params: { start: null } }` | Always | Option+I |
+| `Cmd+Shift+O` | Clear out point | `{ type: 'setLoop', params: { end: null } }` | Always | Option+O |
+| `Option+X` | Clear in + out (both) | `{ type: 'setLoop', params: { start: null, end: null } }` | Always | Option+X |
 | `Cmd+Shift+G` | Loop playback toggle | `{ type: 'toggleLoopPlayback' }` | Always | Cmd+L ⚠ conflict |
+
+**In/out points are `setLoop` halves** — spec 15 has no dedicated in/out-point commands; the mark-in/mark-out surface is expressed at the wire level as `setLoop`'s `start`/`end` (spec 15 §4.3.29), which is why `I`/`O` and their clear variants emit the rows above. Spec 03 §3.4's in/out-point behavior is the playback-side consumer of this window.
 
 **JKL multi-tap semantics:** `J` and `L` are stateful — each consecutive press within 500 ms of the previous increments speed by 1× (capped at 4×). Pressing `K` or `Space` resets the counter. The resolver tracks tap-count in a closure; the emitted `EngineCommand` always carries the absolute target rate, not a delta, so tests can assert directly on rate.
 
@@ -145,7 +149,7 @@ Organized by category. For each shortcut:
 | `B` | Razor (blade) tool | `{ type: 'selectTool', params: { tool: 'razor' } }` | Always | B |
 | `H` | Hand tool (pan timeline) | `{ type: 'selectTool', params: { tool: 'hand' } }` | Always | H |
 | `Z` | Zoom tool (click to zoom in, Alt-click to zoom out) | `{ type: 'selectTool', params: { tool: 'zoom' } }` | Always | Z |
-| `T` | Trim tool (rollover edit between adjacent clips) | `{ type: 'selectTool', params: { tool: 'trim' } }` | Always | T |
+| `T` | Trim tool (rollover edit between adjacent clips) | `{ type: 'selectTool', params: { tool: 'roll' } }` | Always | T |
 | `Y` | Slip tool | `{ type: 'selectTool', params: { tool: 'slip' } }` | Always | Y |
 | `U` | Slide tool | `{ type: 'selectTool', params: { tool: 'slide' } }` | Always | U |
 | `R` | Ripple mode toggle (global, affects all delete/insert ops) | `{ type: 'toggleRipple' }` | Always | (none) |
@@ -160,19 +164,19 @@ Organized by category. For each shortcut:
 
 | Key | Action | EngineCommand | Context | FCP equiv |
 |---|---|---|---|---|
-| `Tab` | Select next clip (timeline order) | `{ type: 'selectElements', params: { ids: [<next>], mode: 'replace' } }` | Always | Tab |
-| `Shift+Tab` | Select previous clip | `{ type: 'selectElements', params: { ids: [<prev>], mode: 'replace' } }` | Always | Shift+Tab |
-| `Cmd+A` | Select all clips on focused track | `{ type: 'selectElements', params: { ids: <allOnTrack>, mode: 'replace' } }` | When track focused | Cmd+A |
-| `Cmd+Shift+A` | Select all clips in timeline | `{ type: 'selectElements', params: { ids: <all>, mode: 'replace' } }` | Always | Cmd+Shift+A |
-| `Escape` | Deselect all | `{ type: 'selectElements', params: { ids: [], mode: 'replace' } }` | Always (when no tool override) | Esc |
-| `Up` | Move focus to clip on track above (replace selection) | `{ type: 'selectElements', params: { ids: [<above>], mode: 'replace' } }` | When clip selected | Up |
-| `Down` | Move focus to clip on track below (replace selection) | `{ type: 'selectElements', params: { ids: [<below>], mode: 'replace' } }` | When clip selected | Down |
-| `Shift+Up` | Add clip on track above to selection | `{ type: 'selectElements', params: { ids: [<above>], mode: 'add' } }` | When clip selected | Shift+Up |
-| `Shift+Down` | Add clip on track below to selection | `{ type: 'selectElements', params: { ids: [<below>], mode: 'add' } }` | When clip selected | Shift+Down |
+| `Tab` | Select next clip (timeline order) | `{ type: 'selectElements', params: { elements: [<next>], mode: 'replace' } }` | Always | Tab |
+| `Shift+Tab` | Select previous clip | `{ type: 'selectElements', params: { elements: [<prev>], mode: 'replace' } }` | Always | Shift+Tab |
+| `Cmd+A` | Select all clips on focused track | `{ type: 'selectElements', params: { elements: <allOnTrack>, mode: 'replace' } }` | When track focused | Cmd+A |
+| `Cmd+Shift+A` | Select all clips in timeline | `{ type: 'selectElements', params: { elements: <all>, mode: 'replace' } }` | Always | Cmd+Shift+A |
+| `Escape` | Deselect all | `{ type: 'selectElements', params: { elements: [], mode: 'replace' } }` | Always (when no tool override) | Esc |
+| `Up` | Move focus to clip on track above (replace selection) | `{ type: 'selectElements', params: { elements: [<above>], mode: 'replace' } }` | When clip selected | Up |
+| `Down` | Move focus to clip on track below (replace selection) | `{ type: 'selectElements', params: { elements: [<below>], mode: 'replace' } }` | When clip selected | Down |
+| `Shift+Up` | Add clip on track above to selection | `{ type: 'selectElements', params: { elements: [<above>], mode: 'add' } }` | When clip selected | Shift+Up |
+| `Shift+Down` | Add clip on track below to selection | `{ type: 'selectElements', params: { elements: [<below>], mode: 'add' } }` | When clip selected | Shift+Down |
 | `Cmd+Up` | Move track focus up (no selection change) | `{ type: 'selectTrack', params: { trackId: <trackAbove>, mode: 'focus' } }` | Always | (none) |
 | `Cmd+Down` | Move track focus down | `{ type: 'selectTrack', params: { trackId: <trackBelow>, mode: 'focus' } }` | Always | (none) |
-| `Cmd+Shift+Up` | Move selected clips up one track | `{ type: 'moveElements', params: { moves: <upOneTrack>, createTracks: false } }` | When clip selected | (none) |
-| `Cmd+Shift+Down` | Move selected clips down one track | `{ type: 'moveElements', params: { moves: <downOneTrack>, createTracks: true } }` | When clip selected | (none) |
+| `Cmd+Shift+Up` | Move selected clips up one track | `{ type: 'move', params: { elementIds: <selection>, delta: 0, targetTrackId: <trackAbove> } }` | When clip selected | (none) |
+| `Cmd+Shift+Down` | Move selected clips down one track | `{ type: 'move', params: { elementIds: <selection>, delta: 0, targetTrackId: <trackBelowOrCreate> } }` | When clip selected | (none) |
 | `F` | Find playhead in timeline (select + scroll to clip under playhead) | `{ type: 'findPlayhead' }` | Always | Shift+Z |
 
 **Spatial-neighbor resolution:** `<above>`, `<below>`, `<next>`, `<prev>` are computed by the resolver (not by the shortcut handler) by querying `engine.timeline.getElementsInTrack({ trackId })` and finding the element whose `[startTime, startTime+duration)` interval overlaps `<currentTime>`. If multiple clips overlap the playhead on the target track, the nearest clip *edge* wins. The resolution rules are part of the `EngineCommandResolver` contract (§8.3), not the keyboard handler — so tests can exercise them directly.
@@ -187,23 +191,23 @@ Organized by category. For each shortcut:
 | `S` | Split at playhead (alt, single-key) | `{ type: 'split', params: { time: <currentTime>, trackIds: null } }` | Always (alt binding) | S |
 | `Q` | Split + delete left half (ripple-close left) | `{ type: 'splitAndRemove', params: { time: <currentTime>, side: 'left', ripple: true } }` | When clip under playhead | Q |
 | `W` | Split + delete right half (ripple-close right) | `{ type: 'splitAndRemove', params: { time: <currentTime>, side: 'right', ripple: true } }` | When clip under playhead | W |
-| `[` | Trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', targetTime: <currentTime>, ripple: false } }` | When clip selected | [ |
-| `]` | Trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', targetTime: <currentTime>, ripple: false } }` | When clip selected | ] |
-| `Option+[` | Ripple-trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', targetTime: <currentTime>, ripple: true } }` | When clip selected | Option+[ |
-| `Option+]` | Ripple-trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', targetTime: <currentTime>, ripple: true } }` | When clip selected | Option+] |
-| `,` | Slip left 1 frame (source-window shift) | `{ type: 'slip', params: { elementIds: <selected>, delta: -4000 } }` | When clip selected, slip tool active | , |
-| `.` | Slip right 1 frame | `{ type: 'slip', params: { elementIds: <selected>, delta: 4000 } }` | When clip selected, slip tool active | . |
-| `Shift+,` | Slip left 10 frames | `{ type: 'slip', params: { elementIds: <selected>, delta: -40000 } }` | When clip selected | Shift+, |
-| `Shift+.` | Slip right 10 frames | `{ type: 'slip', params: { elementIds: <selected>, delta: 40000 } }` | When clip selected | Shift+. |
-| `Delete` | Delete selected (no ripple, leaves gap) | `{ type: 'delete', params: { elementIds: <selected>, ripple: false } }` | When clip selected | Delete |
-| `Backspace` | Ripple delete (closes gap) | `{ type: 'delete', params: { elementIds: <selected>, ripple: true } }` | When clip selected | Shift+Delete |
-| `Cmd+Delete` | Ripple delete (alt, matches §19 recommendation) | `{ type: 'delete', params: { elementIds: <selected>, ripple: true } }` | When clip selected | Cmd+Delete |
-| `Cmd+X` | Cut (copy + ripple delete) | `{ type: 'cut', params: { elementIds: <selected> } }` | When clip selected | Cmd+X |
-| `Cmd+C` | Copy (to clipboard) | `{ type: 'copy', params: { elementIds: <selected> } }` | When clip selected | Cmd+C |
-| `Cmd+V` | Paste at playhead (insert mode) | `{ type: 'paste', params: { time: <currentTime>, mode: 'insert' } }` | Always | Cmd+V |
-| `Cmd+Shift+V` | Paste at playhead (overwrite mode) | `{ type: 'paste', params: { time: <currentTime>, mode: 'overwrite' } }` | Always | Cmd+Shift+V |
+| `[` | Trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', delta: <trimDelta>, ripple: false } }` | When clip selected | [ |
+| `]` | Trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', delta: <trimDelta>, ripple: false } }` | When clip selected | ] |
+| `Option+[` | Ripple-trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', delta: <trimDelta>, ripple: true } }` | When clip selected | Option+[ |
+| `Option+]` | Ripple-trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', delta: <trimDelta>, ripple: true } }` | When clip selected | Option+] |
+| `,` | Slip left 1 frame (source-window shift) | `{ type: 'slip', params: { elementId: <primarySelection>, delta: -4000 } }` | When clip selected, slip tool active | , |
+| `.` | Slip right 1 frame | `{ type: 'slip', params: { elementId: <primarySelection>, delta: 4000 } }` | When clip selected, slip tool active | . |
+| `Shift+,` | Slip left 10 frames | `{ type: 'slip', params: { elementId: <primarySelection>, delta: -40000 } }` | When clip selected | Shift+, |
+| `Shift+.` | Slip right 10 frames | `{ type: 'slip', params: { elementId: <primarySelection>, delta: 40000 } }` | When clip selected | Shift+. |
+| `Delete` | Delete selected (no ripple, leaves gap) | `{ type: 'delete', params: { elements: <selection>, ripple: false } }` | When clip selected | Delete |
+| `Backspace` | Ripple delete (closes gap) | `{ type: 'delete', params: { elements: <selection>, ripple: true } }` | When clip selected | Shift+Delete |
+| `Cmd+Delete` | Ripple delete (alt, matches §19 recommendation) | `{ type: 'delete', params: { elements: <selection>, ripple: true } }` | When clip selected | Cmd+Delete |
+| `Cmd+X` | Cut (copy + ripple delete) | `{ type: 'cut', params: { elements: <selected> } }` | When clip selected | Cmd+X |
+| `Cmd+C` | Copy (to clipboard) | `{ type: 'copy', params: { elements: <selected> } }` | When clip selected | Cmd+C |
+| `Cmd+V` | Paste at playhead (insert mode) | `{ type: 'paste', params: { atTime: <currentTime>, ripple: true } }` | Always | Cmd+V |
+| `Cmd+Shift+V` | Paste at playhead (overwrite mode) | `{ type: 'paste', params: { atTime: <currentTime>, ripple: false } }` | Always | Cmd+Shift+V |
 | `Cmd+Option+V` | Paste attributes (effects only, not clip content) | `{ type: 'pasteAttributes', params: { targetIds: <selected> } }` | When clip selected | Cmd+Option+V |
-| `Cmd+D` | Duplicate (in place, offset by clip duration) | `{ type: 'duplicate', params: { elementIds: <selected>, offset: 'auto' } }` | When clip selected | Cmd+D |
+| `Cmd+D` | Duplicate (in place, offset by clip duration) | `{ type: 'duplicate', params: { elements: <selection>, placement: 'alwaysNew', timeOffset: <clipDuration> } }` | When clip selected | Cmd+D |
 | `Cmd+Shift+D` | Duplicate + ripple (insert into timeline, shifting downstream) | `{ type: 'batch', label: 'Duplicate + ripple', commands: [...] }` | When clip selected | (none) |
 | `Shift+F` | Freeze frame at playhead (insert 2-sec still) | `{ type: 'freezeFrame', params: { time: <currentTime>, duration: 2000000 } }` | When clip under playhead | (none) |
 | `Cmd+Shift+J` | Join selected (merge adjacent clips into one) | `{ type: 'join', params: { elementIds: <selected> } }` | When ≥2 adjacent clips selected | (none) |
@@ -235,16 +239,16 @@ Organized by category. For each shortcut:
 
 | Key | Action | EngineCommand | Context |
 |---|---|---|---|
-| `,` (in select mode) | Nudge left 1 frame | `{ type: 'move', params: { moves: <selectedMovesWithDelta(-4000)>, createTracks: false } }` | When clip selected, select tool active |
-| `.` (in select mode) | Nudge right 1 frame | `{ type: 'move', params: { moves: <selectedMovesWithDelta(4000)>, createTracks: false } }` | When clip selected, select tool active |
-| `Shift+,` | Nudge left 10 frames | `{ type: 'move', params: { moves: <selectedMovesWithDelta(-40000)>, createTracks: false } }` | When clip selected |
-| `Shift+.` | Nudge right 10 frames | `{ type: 'move', params: { moves: <selectedMovesWithDelta(40000)>, createTracks: false } }` | When clip selected |
-| `Cmd+Shift+,` | Nudge to previous clip edge (snap to nearest left edge) | `{ type: 'move', params: { moves: <selectedMovesSnapTo('prevEdge')>, createTracks: false } }` | When clip selected |
-| `Cmd+Shift+.` | Nudge to next clip edge | `{ type: 'move', params: { moves: <selectedMovesSnapTo('nextEdge')>, createTracks: false } }` | When clip selected |
-| `Option+,` | Slip left 1 frame (alt — see §6) | `{ type: 'slip', params: { elementIds: <selected>, delta: -4000 } }` | When clip selected |
-| `Option+.` | Slip right 1 frame | `{ type: 'slip', params: { elementIds: <selected>, delta: 4000 } }` | When clip selected |
-| `Option+Shift+,` | Slip left 10 frames | `{ type: 'slip', params: { elementIds: <selected>, delta: -40000 } }` | When clip selected |
-| `Option+Shift+.` | Slip right 10 frames | `{ type: 'slip', params: { elementIds: <selected>, delta: 40000 } }` | When clip selected |
+| `,` (in select mode) | Nudge left 1 frame | `{ type: 'move', params: { elementIds: <selection>, delta: -4000 } }` | When clip selected, select tool active |
+| `.` (in select mode) | Nudge right 1 frame | `{ type: 'move', params: { elementIds: <selection>, delta: 4000 } }` | When clip selected, select tool active |
+| `Shift+,` | Nudge left 10 frames | `{ type: 'move', params: { elementIds: <selection>, delta: -40000 } }` | When clip selected |
+| `Shift+.` | Nudge right 10 frames | `{ type: 'move', params: { elementIds: <selection>, delta: 40000 } }` | When clip selected |
+| `Cmd+Shift+,` | Nudge to previous clip edge (snap to nearest left edge) | `{ type: 'move', params: { elementIds: <selection>, delta: <snapDelta('prevEdge')> } }` | When clip selected |
+| `Cmd+Shift+.` | Nudge to next clip edge | `{ type: 'move', params: { elementIds: <selection>, delta: <snapDelta('nextEdge')> } }` | When clip selected |
+| `Option+,` | Slip left 1 frame (alt — see §6) | `{ type: 'slip', params: { elementId: <primarySelection>, delta: -4000 } }` | When clip selected |
+| `Option+.` | Slip right 1 frame | `{ type: 'slip', params: { elementId: <primarySelection>, delta: 4000 } }` | When clip selected |
+| `Option+Shift+,` | Slip left 10 frames | `{ type: 'slip', params: { elementId: <primarySelection>, delta: -40000 } }` | When clip selected |
+| `Option+Shift+.` | Slip right 10 frames | `{ type: 'slip', params: { elementId: <primarySelection>, delta: 40000 } }` | When clip selected |
 
 **Frame-to-ticks conversion:** 1 frame at 24 fps = `120000 / 24 = 5000` ticks. 10 frames = `50000` ticks. The table above uses `4000` because MediaTime is `120000 ticks/sec` but the canonical frame at 30 fps is `4000 ticks` (i.e., 30 fps assumed for the default). The resolver computes the actual delta from `engine.playback.getFrameRate()` so JKL/nudge on a 24 fps project steps by `5000`, on a 60 fps project by `2000`. **Tests must use `<runtime>` deltas** — the `EngineCommand` carries the absolute ticks, not a frame count. See §9.4.
 
@@ -298,13 +302,13 @@ Organized by category. For each shortcut:
 | `Cmd+N` | New project (open New Project dialog) | (UI only) | Always | Cmd+N |
 | `Cmd+W` | Close project (confirm if unsaved) | `{ type: 'closeProject' }` | Always | Cmd+W |
 | `Cmd+Shift+W` | Close all projects | `{ type: 'batch', label: 'Close all', commands: ... }` | Always | (none) |
-| `Cmd+E` | Export FCPXML (saves .fcpxml file) | `{ type: 'exportFCPXML', params: { format: 'fcpxml-1.11' } }` | Always | Cmd+E |
-| `Cmd+Shift+E` | Export master (cloud render — see spec 11) | `{ type: 'exportMaster', params: { format: 'prores-4444', destination: 'cloud' } }` | Always | Cmd+Shift+E |
-| `Cmd+Option+E` | Export current frame (PNG snapshot) | `{ type: 'exportFrame', params: { format: 'png' } }` | Always | (none) |
+| `Cmd+E` | Export FCPXML (saves .fcpxml file) | `{ type: 'exportFCPXML', params: { format: 'fcpxml-1.10', bundleMedia: false } }` | Always | Cmd+E |
+| `Cmd+Shift+E` | Export master (cloud render — see spec 11; returns `data.renderJob`) | `{ type: 'exportMaster', params: { format: 'prores-4444', destination: 'cloud' } }` | Always | Cmd+Shift+E |
+| `Cmd+Option+E` | Export current frame (PNG snapshot) | `{ type: 'exportFrame', params: { format: 'png', time: <currentTime> } }` | Always | (none) |
 | `Cmd+P` | Print project summary (opens print dialog — UI only) | (UI only) | Always | (none) |
 | `Cmd+Shift+R` | Reveal project file in OS file browser | (UI only) | Always | (none) |
 
-**Export attribution (audit fix Issue #7):** `exportFCPXML` is routed to `engine.project.exportFCPXML(...)` — FCPXML is project-level metadata export (a serialization of the project graph as XML), not a render operation. 📝 NEW greenfield on `ProjectManager` (spec 01 §14.2 doesn't define this method yet — planned addition, see §14.5 update). `exportMaster` is routed to `engine.renderer.exportProject({format, destination})` — it IS a render operation (video/MP4/cloud-render). `exportFrame` is routed to `engine.renderer.saveSnapshot({format})` — a single-frame render. Spec 15 does not define export commands at all (out of wire-protocol scope, see spec 15 §13.7); these are spec-16 extensions.
+**Export attribution (Round-7 update):** `exportFCPXML`, `exportMaster`, and `exportFrame` are spec-15-canonical command types (spec 15 §4.3.74-76, added by the Round-7 amendment — see spec 15 §13.11 and §14.11). They dispatch through `engine.command.apply()` like every other command: `apply({type:'exportFCPXML'})` → `engine.export.exportFCPXML({format, bundleMedia})` (ExportManager, spec 01 §14.11 — FCPXML is project-level metadata serialization, spec 10 §5 is the serializer); `apply({type:'exportMaster'})` → `engine.renderer.exportProject({format, destination, range})` (RendererManager — a render op, enqueues on spec 11's queue, returns a job handle); `apply({type:'exportFrame'})` → `engine.renderer.saveSnapshot({format, time})`. All three are non-undoable output commands — the artifact rides `CommandResult.data`, and state is not mutated (spec 15 §14.11). Spec 10's Tier-3 WYSIWYG test T3.2 (`Cmd+E` == direct `apply`) is un-gated by this change.
 
 ### 3.10 Undo / Redo
 
@@ -316,7 +320,7 @@ Organized by category. For each shortcut:
 | `Cmd+Option+Z` | Step backward in history (open history panel + step) | (UI: opens history panel, then ArrowUp/Down steps) | Always | (none) |
 | `Cmd+Shift+Option+Z` | Step forward in history | (UI: history panel forward) | Always | (none) |
 
-**Coalescing note:** per `06-nle-ops.refined.md` §4.4, drag-ops coalesce at the manager layer via `previewElements()` → `commitPreview()` — a single drag is one undo step, not 50. Keyboard nudge (`,` / `.`) does NOT coalesce by default: each press is a discrete `moveElements` command and a discrete undo step. **Hold `Option` while nudging** to coalesce: the first press begins a coalesced group, subsequent presses within 400 ms merge into the same undo step, releasing for 400 ms commits. This matches the `previewElements`/`commitPreview` pattern but with a keyboard-driven commit timer.
+**Coalescing note:** per `06-nle-ops.refined.md` §4.4, drag-ops coalesce at the manager layer via `previewElements()` → `commitPreview()` — a single drag is one undo step, not 50. Keyboard nudge (`,` / `.`) does NOT coalesce by default: each press is a discrete `move` command and a discrete undo step. **Hold `Option` while nudging** to coalesce: the first press begins a coalesced group, subsequent presses within 400 ms merge into the same undo step, releasing for 400 ms commits. This matches the `previewElements`/`commitPreview` pattern but with a keyboard-driven commit timer.
 
 ### 3.11 Effects / Color
 
@@ -499,7 +503,7 @@ await page.evaluate(async (cmd) => {
   await engine.command.apply(cmd);
 }, {
   type: 'selectElements',
-  params: { ids: ['clip-1', 'clip-3', 'clip-5'], mode: 'replace' },
+  params: { elements: ['clip-1', 'clip-3', 'clip-5'], mode: 'replace' },
 });
 ```
 
@@ -782,18 +786,18 @@ export type EngineCommand =
   | { type: 'pause' }
   | { type: 'seek'; params: { time: number } }                      // MediaTime in ticks
   | { type: 'setRate'; params: { rate: number } }
-  | { type: 'setLoop'; params: { in: number | null; out: number | null } }
+  | { type: 'setLoop'; params: { start: number | null; end: number | null } }   // spec 15 §4.3.29 — start/end (was in/out)
   // Tool / selection
-  | { type: 'selectTool'; params: { tool: 'select' | 'razor' | 'hand' | 'zoom' | 'trim' | 'slip' | 'slide' } }
-  | { type: 'selectElements'; params: { ids: ElementRef[]; mode: 'replace' | 'add' | 'remove' } }
+  | { type: 'selectTool'; params: { tool: 'select' | 'razor' | 'ripple' | 'slip' | 'slide' | 'roll' | 'rate-stretch' | 'hand' | 'zoom' } }   // spec 15 §4.3.45 enum (spec 18 §4.5 mirrors it; `T` maps to roll)
+  | { type: 'selectElements'; params: { elements: ElementRef[]; mode?: 'replace' | 'add' | 'subtract' | 'toggle' } }   // spec 15 §4.3.46 — elements/mode
   | { type: 'selectTrack'; params: { trackId: string; mode: 'focus' } }
   // Timeline ops
   | { type: 'split'; params: { time: number; trackIds: string[] | null } }
-  | { type: 'trim'; params: { elementId: ElementRef; edge: 'start' | 'end'; targetTime: number; ripple: boolean } }
-  | { type: 'slip'; params: { elementIds: ElementRef[]; delta: number } }
-  | { type: 'move'; params: { moves: PlannedElementMove[]; createTracks: boolean } }
-  | { type: 'delete'; params: { elementIds: ElementRef[]; ripple: boolean } }
-  | { type: 'duplicate'; params: { elementIds: ElementRef[]; offset: 'auto' | number } }
+  | { type: 'trim'; params: { elementId: string; edge: 'start' | 'end'; delta: number; ripple: boolean } }   // spec 15 §4.3.2 — delta; resolver converts edge+delta → absolute trimStart/trimEnd (reads current state)
+  | { type: 'slip'; params: { elementId: string; delta: number } }   // spec 15 §4.3.x — single element; multi-select emits N commands or a batch
+  | { type: 'move'; params: { elementIds: string[]; delta: number; targetTrackId: string | null; movePlan?: PlannedElementMove[]; createTracks?: PlannedTrackCreation[]; snap?: boolean } }   // spec 15 §4.3.3 — simple form (elementIds+delta+targetTrackId) or explicit movePlan
+  | { type: 'delete'; params: { elements: ElementRef[]; ripple: boolean } }   // spec 15 §4.3.9 — elements
+  | { type: 'duplicate'; params: { elements: ElementRef[]; placement?: 'auto' | 'end' | 'adjacent'; timeOffset?: number; idSeed?: string } }   // spec 15 §4.3.10
   | { type: 'freezeFrame'; params: { time: number; duration: number } }
   // Track ops
   | { type: 'toggleTrackMute'; params: { trackId: string } }
@@ -807,9 +811,9 @@ export type EngineCommand =
   | { type: 'removeBookmark'; params: { time: number } }
   | { type: 'updateBookmark'; params: { time: number; updates: Partial<Bookmark> } }
   // Clipboard
-  | { type: 'copy'; params: { elementIds: ElementRef[] } }
-  | { type: 'cut'; params: { elementIds: ElementRef[] } }            // spec 15 §4.2: copy + delete(elementIds)
-  | { type: 'paste'; params: { time: number; mode: 'insert' | 'overwrite' } }
+  | { type: 'copy'; params: { elements: ElementRef[] } }   // spec 15 §4.3.68
+  | { type: 'cut'; params: { elements: ElementRef[] } }   // spec 15 §4.3.69 — copy + delete (BatchCommand)
+  | { type: 'paste'; params: { atTime: number; targetTrackId?: string; ripple?: boolean } }   // spec 15 §4.3.70 — atTime; insert/overwrite is resolver-level (sets ripple/placement)
   // Undo / redo
   | { type: 'undo' }
   | { type: 'redo' }
@@ -844,12 +848,11 @@ export type EngineCommand =
   | { type: 'nudgeKeyframe'; params: { keyframeId: string; valueDelta: number } }   // UI — composite (maps to `updateKeyframeCurves`)
   | { type: 'toggleKeyframeNav' }                                    // UI — flips UI store flag
 
-  // ── Out of spec 15's wire-protocol scope (export operations) ──
-  // Spec 15 does not define export commands (see spec 15 §13.7 — out of scope).
-  // Export routing is defined in §12 below.
-  | { type: 'exportFCPXML'; params: { format: string } }
-  | { type: 'exportMaster'; params: { format: string; destination: 'cloud' | 'local' } }
-  | { type: 'exportFrame'; params: { format: 'png' | 'jpg' } }
+  // ── Export ops (spec 15 §4.3.74-76 — canonical since the Round-7 amendment) ──
+  // Output commands: non-undoable, non-mutating; artifact/job handle in CommandResult.data.
+  | { type: 'exportFCPXML'; params: { format?: 'fcpxml-1.10' | 'fcpxml-1.11'; bundleMedia?: boolean } }
+  | { type: 'exportMaster'; params: { format?: string; destination?: 'cloud' | 'local'; range?: { start: number; end: number } | null } }
+  | { type: 'exportFrame'; params: { format?: 'png' | 'jpg'; time?: number } }
 
   // ── Project (spec 15) ──
   | { type: 'saveProject' }
@@ -861,7 +864,7 @@ export type EngineCommand =
 export type ElementRef = { trackId: string; elementId: string };
 
 // NOTE: This union is a *subset reproducing* spec 15 §4.1 for the keyboard
-// handler's local compilation. Spec 15's full union (60 types including
+// handler's local compilation. Spec 15's full union (78 types including
 // `insert`, `ripple`, `roll`, `slide`, `rangeRemoval`, `updateElements`,
 // `toggleElementVisibility`, `toggleElementMuted`, `reorderTrack`,
 // `createProject`, `loadProject`, `updateProjectSettings`, `createScene`,
@@ -935,7 +938,7 @@ export function resolveEngineCommand(
     case 'pause': engine.playback.pause(); return;
     case 'seek': engine.playback.seek(command.params.time); return;
     case 'setRate': engine.playback.setRate(command.params.rate); return;
-    case 'setLoop': engine.playback.setLoop(command.params.in, command.params.out); return;
+    case 'setLoop': engine.playback.setLoop(command.params.start, command.params.end); return;   // spec 15 §4.3.29
 
     // ── Tool / selection ─────────────────────────────────────────────
     // Per spec 15 §4.2: `selectTool` → `engine.selection.setActiveTool({tool})`.
@@ -1024,9 +1027,8 @@ export function resolveEngineCommand(
 
     case 'trim': {
       engine.timeline.updateElementTrim({
-        elementId: command.params.elementId.elementId,
-        trackId: command.params.elementId.trackId,
-        ...computeTrimPatch(command.params, engine),
+        elementId: command.params.elementId,
+        ...computeTrimPatch(command.params, engine),   // edge+delta → absolute trimStart/trimEnd/startTime/duration (spec 15 §4.3.2)
       });
       return;
     }
@@ -1041,15 +1043,16 @@ export function resolveEngineCommand(
 
     case 'move': {
       const cmd = new MoveElementsCommand({
-        moves: command.params.moves,
-        createTracks: command.params.createTracks ? [] : undefined,
+        moves: command.params.movePlan
+          ?? planSimpleMoves(command.params, engine),   // elementIds+delta+targetTrackId → one PlannedElementMove per element (spec 15 §4.3.3)
+        createTracks: command.params.createTracks,      // PlannedTrackCreation[] | undefined
       });
       engine.command.execute({ command: cmd });
       return;
     }
 
     case 'delete': {
-      const elements = command.params.elementIds;
+      const elements = command.params.elements;
       if (command.params.ripple) {
         const cmd = buildRippleDeleteCommand({ elements, engine });
         engine.command.execute({ command: cmd });
@@ -1061,8 +1064,8 @@ export function resolveEngineCommand(
 
     case 'duplicate': {
       const cmd = new DuplicateElementsCommand({
-        elements: command.params.elementIds,
-        offset: command.params.offset,
+        elements: command.params.elements,             // ElementRef[] (spec 15 §4.3.10)
+        placement: command.params.placement, timeOffset: command.params.timeOffset,
       });
       engine.command.execute({ command: cmd });
       return;
@@ -1145,36 +1148,34 @@ export function resolveEngineCommand(
     case 'closeProject':
       engine.project.closeProject(); return;               // spec 01 §14.2: `closeProject()` (was `closeCurrentProject()`)
     case 'exportFCPXML':
-      // FCPXML is project-level metadata export, not a render operation.
-      // 📝 NEW greenfield on ProjectManager (spec 01 §14.2 doesn't define this yet — planned addition).
-      engine.project.exportFCPXML(command.params); return;
     case 'exportMaster':
-      // Master/video export IS a render operation — stays on RendererManager.
-      engine.renderer.exportProject({ format: command.params.format, destination: command.params.destination });
-      return;
     case 'exportFrame':
-      // Single-frame snapshot is a render-side op.
-      engine.renderer.saveSnapshot({ format: command.params.format });
+      // Output commands go through the canonical dispatcher so the keyboard
+      // path and the direct-apply path are the same code (spec 10 T3.2 WYSIWYG).
+      // The resolver does NOT read CommandResult.data — the shell listens for
+      // exportArtifactReady / renderComplete events (spec 15 §9.1) and triggers
+      // the browser download from the artifact (spec 18 §4.8 Deliver page).
+      engine.command.apply(command);
       return;
 
     // ── Clipboard (aligned to spec 15 §4.2 method names) ─────────────
     case 'copy':
-      // spec 15 §4.2: `engine.clipboard.copyClipboardEntry({elementIds})`.
-      engine.clipboard.copyClipboardEntry({ elementIds: command.params.elementIds });
+      // spec 15 §4.3.68 wire `elements` → engine `elementIds` (plain IDs).
+      engine.clipboard.copyClipboardEntry({ elementIds: command.params.elements.map((e) => e.elementId) });
       return;
     case 'cut': {
-      // spec 15 §4.2: `copy` + `delete(elementIds)` (BatchCommand internally).
+      // spec 15 §4.3.69: copy + delete (BatchCommand internally).
       // Implemented via engine.clipboard.buildCutCommand (which returns a BatchCommand).
-      const cmd = engine.clipboard.buildCutCommand({ elementIds: command.params.elementIds });
+      const cmd = engine.clipboard.buildCutCommand({ elementIds: command.params.elements.map((e) => e.elementId) });
       engine.command.execute({ command: cmd });
       return;
     }
     case 'paste': {
       // spec 15 §4.2: `engine.clipboard.buildPasteClipboardCommand({atTime, targetTrackId})` → BatchCommand.
       const cmd = engine.clipboard.buildPasteClipboardCommand({
-        atTime: command.params.time,
-        targetTrackId: uiStore.timeline.focusedTrackId,
-        mode: command.params.mode,
+        atTime: command.params.atTime,                                          // spec 15 §4.3.70
+        targetTrackId: command.params.targetTrackId ?? uiStore.timeline.focusedTrackId,
+        ripple: command.params.ripple,                                          // true = insert, false = overwrite
       });
       engine.command.execute({ command: cmd });
       return;
@@ -1245,8 +1246,9 @@ export function resolveEngineCommand(
 
     // ── Selection ───────────────────────────────────────────────────
     case 'selectElements':
+      // spec 15 §4.3.46 — wire and engine share the {elements, mode} shape.
       engine.selection.setSelectedElements({
-        elementIds: command.params.ids,
+        elements: command.params.elements,
         mode: command.params.mode,
       });
       return;
@@ -1306,15 +1308,17 @@ function resolveToCommandInstance(
     }
     case 'delete':
       return new DeleteElementsCommand({
-        elements: command.params.elementIds, ripple: command.params.ripple,
+        elements: command.params.elements, ripple: command.params.ripple,
       });
     case 'move':
       return new MoveElementsCommand({
-        moves: command.params.moves, createTracks: command.params.createTracks ? [] : undefined,
+        moves: command.params.movePlan ?? planSimpleMoves(command.params, engine),   // spec 15 §4.3.3
+        createTracks: command.params.createTracks,
       });
     case 'duplicate':
       return new DuplicateElementsCommand({
-        elements: command.params.elementIds, offset: command.params.offset,
+        elements: command.params.elements,             // ElementRef[] (spec 15 §4.3.10)
+        placement: command.params.placement, timeOffset: command.params.timeOffset,
       });
     case 'toggleTrackMute':
       return new ToggleTrackMuteCommand({ trackId: command.params.trackId });
@@ -1355,20 +1359,20 @@ function resolveToCommandInstance(
     case 'paste': {
       // spec 15 §4.2: `buildPasteClipboardCommand` returns a BatchCommand.
       return engine.clipboard.buildPasteClipboardCommand({
-        atTime: command.params.time,
-        targetTrackId: uiStore.timeline.focusedTrackId,
-        mode: command.params.mode,
+        atTime: command.params.atTime,                                          // spec 15 §4.3.70
+        targetTrackId: command.params.targetTrackId ?? uiStore.timeline.focusedTrackId,
+        ripple: command.params.ripple,                                          // true = insert, false = overwrite
       });
     }
     case 'cut':
       // spec 15 §4.2: `buildCutCommand` returns a BatchCommand (copy + delete).
-      return engine.clipboard.buildCutCommand({ elementIds: command.params.elementIds });
+      return engine.clipboard.buildCutCommand({ elementIds: command.params.elements.map((e) => e.elementId) });
     case 'pasteAttributes':
       // spec-16-only: attribute-only paste (composite).
       return engine.clipboard.buildPasteAttributesCommand({ targetIds: command.params.targetIds });
     case 'copy':
       // `copy` is non-undoable (just sets clipboard state) — apply immediately, return null.
-      engine.clipboard.copyClipboardEntry({ elementIds: command.params.elementIds });
+      engine.clipboard.copyClipboardEntry({ elementIds: command.params.elements.map((e) => e.elementId) });
       return null;
 
     // Non-undoable ops — apply immediately, return null (no Command to wrap).
@@ -1376,13 +1380,13 @@ function resolveToCommandInstance(
     case 'pause': engine.playback.pause(); return null;
     case 'seek': engine.playback.seek(command.params.time); return null;
     case 'setRate': engine.playback.setRate(command.params.rate); return null;
-    case 'setLoop': engine.playback.setLoop(command.params.in, command.params.out); return null;
+    case 'setLoop': engine.playback.setLoop(command.params.start, command.params.end); return null;   // spec 15 §4.3.29
     case 'selectTool':
       engine.selection.setActiveTool({ tool: command.params.tool });
       uiStore.setActiveTool(command.params.tool);
       return null;
     case 'selectElements':
-      engine.selection.setSelectedElements({ elementIds: command.params.ids, mode: command.params.mode });
+      engine.selection.setSelectedElements({ elements: command.params.elements, mode: command.params.mode });
       return null;
     case 'selectTrack':
       engine.selection.setSelectedTrack({ trackId: command.params.trackId });
@@ -1684,7 +1688,7 @@ test('every shortcut has a test', () => {
 
 ```ts
 test('Cmd+B splits at playhead', async ({ page }) => {
-  await loadTestProject(page, 'simple-cut.json');   // 1 clip, 10 sec
+  await loadTestProject(page, 'single-clip.json');   // 1 clip, 10 s (spec 17 §5.3 — registered Round 7)
   await page.keyboard.press('Cmd+Right');            // Go to end (10s = 1_200_000 ticks)
   await page.waitForTimeout(50);
   await page.keyboard.press('Cmd+B');                // Split
@@ -1761,7 +1765,7 @@ test('Option-held nudge coalesces into one undo step', async ({ page }) => {
 
 ```ts
 test('Cmd+Shift+B splits all tracks', async ({ page }) => {
-  await loadTestProject(page, 'multi-track.json');   // 3 tracks, each 1 clip
+  await loadTestProject(page, 'multi-track.json');   // 5 tracks, 10 clips (spec 17 §5.3)
   await page.keyboard.press('Cmd+Right');             // Go to end
   await page.waitForTimeout(50);
   await page.keyboard.press('Cmd+Shift+B');
@@ -2027,9 +2031,9 @@ Each `EngineCommand` type maps to one or more manager methods on `EditorCore` **
 | `toggleKeyframeNav` (UI) | `uiStore.keyframes.toggleKeyframeNav()` | UIStore | No | UI state |
 | `saveProject` | `project.saveCurrentProject()` | ProjectManager | No | I/O (spec 15 §4.2) |
 | `closeProject` | `project.closeProject()` | ProjectManager | No | I/O — **spec 01 §14.2 method name** (was spec-16 `closeCurrentProject()`) |
-| `exportFCPXML` | `project.exportFCPXML({format})` | ProjectManager | No | I/O — 📝 NEW greenfield (FCPXML = project metadata, not render) |
-| `exportMaster` | `renderer.exportProject({format, destination})` | RendererManager | No | I/O (cloud render — video/master) |
-| `exportFrame` | `renderer.saveSnapshot({format})` | RendererManager | No | I/O (single-frame render) |
+| `exportFCPXML` | via `engine.command.apply({type:'exportFCPXML'})` → `engine.export.exportFCPXML({format, bundleMedia})` | ExportManager | No | Spec 15 §4.3.74 (Round-7) — output command, artifact in `CommandResult.data` |
+| `exportMaster` | via `engine.command.apply({type:'exportMaster'})` → `engine.renderer.exportProject({format, destination, range})` | RendererManager | No | Spec 15 §4.3.75 — job handle `data.renderJob`, spec 11 queue |
+| `exportFrame` | via `engine.command.apply({type:'exportFrame'})` → `engine.renderer.saveSnapshot({format, time})` | RendererManager | No | Spec 15 §4.3.76 — artifact handle `data.frameArtifact` |
 | `batch` | (recursive resolution → `BatchCommand`) | CommandManager | Yes | Composite (spec 15 §7 transaction) |
 
 **Spec 01 + spec 15 cross-check:** method names verified against `01-core-engine.refined.md` §3.1–§3.7 + §14.5–§14.12, and `15-wire-protocol.md` §4.2. Greenfield methods (`toggleTrackSolo`, `toggleTrackLock`, `setActiveTool`, `setRate`, `setLoop`, `exportFCPXML`) confirmed as additions per spec 01 §14 and spec 15 §4.2. The `(UI)` tag marks spec-16 UI-layer extensions routed to `uiStore` (Zustand) instead of `engine.*` — see §0.2 for the rationale (UI state is a separate layer from EditorCore).
@@ -2285,9 +2289,9 @@ For implementers. Each `EngineCommand` type maps to a `Command` subclass (or dir
 | `undo` | `command.undo()` | direct (spec 15 §4.2) |
 | `redo` | `command.redo()` | direct (spec 15 §4.2) |
 | `batch` | `BatchCommand(commands)` | `src/commands/batch-command.ts` (spec 15 §7) |
-| `exportFCPXML` | `engine.project.exportFCPXML({format})` (direct — greenfield on ProjectManager) | `src/project/export-fcpxml.ts` |
-| `exportMaster` | `engine.renderer.exportProject({format, destination})` (direct) | `src/renderer/export-project.ts` |
-| `exportFrame` | `engine.renderer.saveSnapshot({format})` (direct) | `src/renderer/save-snapshot.ts` |
+| `exportFCPXML` | `engine.command.apply({type:'exportFCPXML'})` → `ExportFCPXMLCommand` (spec 15 §4.3.74; impl `engine.export.exportFCPXML`) | `src/commands/export/export-fcpxml.ts` |
+| `exportMaster` | `engine.command.apply({type:'exportMaster'})` → `ExportMasterCommand` (spec 15 §4.3.75) | `src/commands/export/export-master.ts` |
+| `exportFrame` | `engine.command.apply({type:'exportFrame'})` → `ExportFrameCommand` (spec 15 §4.3.76) | `src/commands/export/export-frame.ts` |
 | (all playback / UI-store ops) | direct manager calls / `uiStore.*` setters | (no Command class) |
 
 **Greenfield files** (marked "greenfield" above) are new — they do not exist in OpenCut-classic and must be authored as part of this spec's implementation. See `14-implementation-phases.md` Phase 3 for scheduling. Spec-15-canonical type renames (`deleteTrack`, `upsertKeyframes`, `removeKeyframes`, `retimeKeyframe`, `copyClipboardEntry`, `buildPasteClipboardCommand`, `closeProject`) reflect alignment with `15-wire-protocol.md` §4 — files keep their existing OpenCut-classic file paths (e.g., `remove-track.ts`) but the EngineCommand discriminator uses the spec-15 name.
@@ -2319,6 +2323,21 @@ Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status co
 
 ---
 
+## 17. Code References — nle-engine (reference, NOT canon)
+
+nle-engine has NO keyboard layer — it is engine + headless API only (its own Decision 9: "No React dependency in engine core"). Everything in this spec is SPEC-ONLY relative to the engine; the rows below document what the engine does provide that an implementer will attach a keyboard handler to. Where engine and spec conflict, **the spec wins**. Full reconciliation: `19-code-references.md`.
+
+| Spec 16 section | nle-engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §3 entire inventory | `src/app/page.tsx` (grep) | only match: `compositionKeyframe pass=${pass}` | SPEC-ONLY | No `keydown`/`keyup` handler anywhere in the engine (incl. the test page); FreeCut's `config/hotkeys.ts` (this spec's primary teacher) was not ported |
+| §8 handler architecture | `scripts/run-nle-tests.mjs:122` | `await page.waitForSelector('button:has-text("Run All Milestones")'` | SPEC-ONLY | The only UI input the engine's harness exercises is one button click; `page.keyboard` is never used |
+| §3.1 JKL / setRate | `playback/player.ts:652` | `this._clock.playbackRate = rate;` | ALIGNED (underneath) | The rate machinery a JKL resolver would drive exists in Player; only the key→command layer is missing |
+| §3.2 tool keys → selectTool | `headless/api.ts:767` | `case 'addText': {` | ENGINE-GAP | No tool/selection model on the engine's wire surface (`selectTool`, `selectElements`, `marqueeSelect` have no counterpart) |
+| §3.12 keyframes | `headless/api.ts:893` | `const r = actions.addKeyframe({` | ALIGNED | `addKeyframe {itemId, property, frame, value, easing}` is wire-drivable today |
+| §9 test recipes | `gaps/audit/G-test-coverage.md:248` | `A thrown error inside any test block escapes` | CORRECTIVE | No per-test isolation in the engine harness — §9's assert-on-command patterns are the upgrade |
+
+---
+
 **End of `16-keyboard-shortcuts.md`.**
 
 **Cross-references:**
@@ -2331,4 +2350,6 @@ Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status co
 - Spec 11 (cloud render): `exportMaster` destination
 - Spec 12 (testing strategy): test patterns, property-based testing
 - Spec 14 (implementation phases): phasing (§13)
-- Spec 15 (`15-wire-protocol.md`, TEST-02 shipped): canonical `EngineCommand` discriminated union (60 types, §4.1) + command→manager-method mapping (§4.2) + `apply()` dispatcher (§4.4). Spec 16's §8.3 reproduces the spec-15-overlapping types for local compilation; spec 15 is normative.
+- Spec 15 (`15-wire-protocol.md`, TEST-02 shipped, Round-7 amended): canonical `EngineCommand` discriminated union (78 types, §4.1) + command→manager-method mapping (§4.2) + `apply()` dispatcher (§4.4) + export commands (§4.3.74-76) and `renameProject`/`deleteProject` (§4.3.77-78). Spec 16's §8.3 reproduces the spec-15-overlapping types for local compilation; spec 15 is normative.
+- Spec 18 (UI shell): panel/tool controls that emit this spec's shortcuts and UI-layer commands (§0.2); the cheat-sheet modal (§7.3) lives in the shell's help surface (spec 18 §4.8).
+- Spec 19 (code references): the keyboard layer is SPEC-ONLY vs nle-engine (no keyboard code exists there) — see spec 19 §11's map.

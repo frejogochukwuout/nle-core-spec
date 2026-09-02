@@ -52,12 +52,12 @@ Define how the engine takes a `SceneState` + a frame number and produces a `Fram
 │  - items: FrameItem[]                             │
 │    (= Layer | SceneEffect, discriminated by type) │
 │    Each Layer has: textureId, transform, blendMode │
-│    opacity, effectPassGroups, mask                 │
+│    opacity, effectPassGroups, masks                │
 └────────────────┬─────────────────────────────────┘
                  │
                  ▼
 ┌──────────────────────────────────────────────────┐
-│ Renderer (see 04-renderer-color.md)               │
+│ Renderer (see 04-renderer-color.refined.md)      │
 │  - Uploads source textures                        │
 │  - YUV→linear shader                              │
 │  - Per-layer composite + grade                    │
@@ -100,7 +100,7 @@ interface Layer {
   opacity: number;                // 0.0 to 1.0
   blendMode: BlendMode;
   effectPassGroups: EffectPass[][];   // ← aligned with SceneEffect.effectPassGroups (matches OpenCut-classic `effect_pass_groups`)
-  mask: MaskDescriptor | null;
+  masks: MaskDescriptor[];   // applied in order (§8.3)
 }
 
 interface LayerTransform {
@@ -256,7 +256,7 @@ function buildLayerDescriptor(el: TimelineElement, time: MediaTime): Layer {
     opacity: el.opacity,
     blendMode: el.blendMode ?? 'normal',
     effectPassGroups: buildEffectPasses(el.effects, time),
-    mask: el.masks[0] ? buildMaskDescriptor(el.masks[0], time) : null,
+    masks: el.masks.map(m => buildMaskDescriptor(m, time)),
   };
 }
 
@@ -295,37 +295,63 @@ function buildTransform(el: TimelineElement, time: MediaTime): LayerTransform {
 > ```
 > Note the **sign-as-flip** trick: negative scale is encoded as positive width + `flipX: true`, which is the same trick OpenCut's Rust `LayerUniformBuffer` (compositor.rs:52-61) consumes.
 
+### 5.5 Occlusion cutoff (Round-7 amendment — adopted from FreeCut via nle-engine)
+
+Scene assembly stops walking tracks at the **first fully-opaque item**: scan tracks bottom-up (ascending `order`); once a track's active item at frame N is fully opaque (opacity 1, no alpha-reducing effect or mask), items on lower tracks are excluded from the render plan — they are provably invisible. This is FreeCut's occlusion cutoff (verified in the clean-room port: nle-engine `playback/scene-assembly.ts:1243` — "Occlusion cutoff — scan tracks bottom-up (asc by order), find first" [fully-opaque item]; the walk itself is top-to-bottom DESC at `scene-assembly.ts:1263`).
+
+Why it matters: (a) it bounds the worst-case layer count per frame (early-out instead of always compositing every track); (b) export correctness — occluded layers must not be exported as visible. Amendment to §4's contract: `buildFrameDescriptor(state, frame, options?: { disableOcclusion?: boolean })` — the exporter passes `disableOcclusion: true` when it needs the full stack (lane assignment), the interactive renderer uses the cutoff. Items excluded by the cutoff do not appear in `FrameDescriptor.items`.
+
 ---
 
 ## 6. Transitions
 
 ### 6.1 Transition model
 
+> **Round-7 correction (see §6.1A):** the seed's single-tier type here is struck — `type: 'crossfade' | 'wipe' | 'slide' | 'iris' | 'glitch' | ...` with type-specific `params: TransitionParams` and an `elementAId`/`elementBId` pair. The corrected model is two-tier (structural `crossfade` + presentation registry), cut-centered, and handle-governed; the wire contract that replaces this type is in §6.1A below.
+
+### 6.1A Transition model, corrected (Round-7 amendment — two-tier, cut-centered, handle-governed)
+
+The seed's single-tier `type` union (`'crossfade' | 'wipe' | 'slide' | ...`) conflated timeline structure with visual presentation — reproducing a v1-scaffold bug the reference implementations explicitly fixed (nle-engine `transitions/registry.ts:29-33` documents the split as its first design decision). The corrected model:
+
+**Structural tier — `type: 'crossfade'` (only).** A transition is structurally always a crossfade: two adjacent clips, a shared window of D frames centered on the cut. The planner math is **cut-centered — clips never move or overlap to make room**:
+
+- `leftPortion  = floor(D * alignment)` — frames BEFORE the cut, consumed from the left clip's hidden OUT-handle
+- `rightPortion = D - leftPortion` — frames AFTER the cut, consumed from the right clip's hidden IN-handle
+- `alignment: 0..1` (default 0.5 centered; <0.5 biases the window left, >0.5 right)
+- during the window both clips render; the presentation shader blends by progress `t = (frame − windowStart) / D`, with optional `timing` easing (linear default)
+
+(Verified: nle-engine `transitions/planner.ts:21` — "leftPortion  = floor(D * alignment)   — frames BEFORE the cut".)
+
+**Hidden source handles.** The left clip's source must have `hiddenOut ≥ leftPortion` and the right clip's `hiddenIn ≥ rightPortion`. The planner clamps requested durations:
+
+- `getMaxTransitionDurationForHandles(left, right, alignment)` — binary-search the largest D satisfying both handle constraints (port target: nle-engine `transitions/handle-utils.ts:302`)
+- a requested D above the max either clamps (default) or trims the adjacent clips' timeline edges to grow handles (auto-repair via a spec 15 `updateElements` batch)
+
+**Presentation tier — registry, not union.** Visual variety comes from `presentation: string` (registry key; 27 entries in the reference: fade, dissolve, wipe-left/right/up/down, slide-*, iris-open/close, glitch, … — nle-engine `transitions/registry.ts:2249` `BUILTIN_PRESENTATIONS`). Directional variants share one shader via `{ gpuTransitionId, fixedDirection }`. New presentations never change the planner or the wire protocol.
+
+**Data + wire contract (replaces the seed's §6.1 type):**
+
 ```ts
 interface Transition {
   id: string;
-  type: 'crossfade' | 'wipe' | 'slide' | 'iris' | 'glitch' | ...;
-  duration: MediaTime;
-  params: TransitionParams;
-  
-  // Applied between element A and element B
-  elementAId: string;
-  elementBId: string;
-}
-
-interface TransitionParams {
-  // Type-specific params
-  // e.g., wipe: direction, feather
-  // e.g., slide: direction, distance
+  type: 'crossfade';                 // structural — one value in v1
+  presentation: string;              // registry key ('fade' | 'wipe-left' | ...)
+  duration: MediaTime;               // D
+  alignment: number;                 // 0..1, default 0.5
+  timing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+  leftElementId: string;             // (was elementAId)
+  rightElementId: string;            // (was elementBId)
 }
 ```
 
+`AddTransitionCommand`/`UpdateTransitionCommand` params follow (spec 15 §4.3.61-63; the engine's headless op carries the same `leftClipId`/`rightClipId`/`presentation` fields — nle-engine `headless/api.ts:825`). §6.2's overlap-region description is superseded: there is no overlap region — there is a centered window and consumed handles.
+
 ### 6.2 Transition resolution
 
-At a given time during a transition:
-- Both elements are active (overlap region)
-- Each element's opacity / transform is modified by the transition state
-- The transition itself may render an effect (e.g., wipe mask)
+At a given time during a transition (corrected per §6.1A — there is no overlap region; there is a centered window and consumed handles):
+- Both clips render during the window; clips never move or overlap to make room
+- Each clip's opacity / transform is modified by the transition state (blended by progress `t`)
+- The presentation shader renders the visual effect (registry key, not a type union)
 
 ```ts
 function applyTransitions(
@@ -334,42 +360,37 @@ function applyTransitions(
   time: MediaTime
 ): Layer[] {
   for (const transition of transitions) {
-    const layerA = layers.find(l => l.id === transition.elementAId);
-    const layerB = layers.find(l => l.id === transition.elementBId);
-    if (!layerA || !layerB) continue;
-    
-    const transitionStart = getElement(layerB.id).startTime;
-    const transitionEnd = mediaTimeAdd(transitionStart, transition.duration);
-    
-    if (time < transitionStart || time >= transitionEnd) continue;
-    
-    const t = mediaTimeToSeconds({ time: mediaTimeSub(time, transitionStart) }) 
-            / mediaTimeToSeconds({ time: transition.duration };  // 0.0 to 1.0
-    
-    // Apply transition state to both layers
-    applyTransitionState(transition, layerA, layerB, t);
+    const leftLayer = layers.find(l => l.id === transition.leftElementId);
+    const rightLayer = layers.find(l => l.id === transition.rightElementId);
+    if (!leftLayer || !rightLayer) continue;
+
+    // Cut-centered window (§6.1A): leftPortion frames BEFORE the cut (consumed
+    // from the left clip's hidden OUT-handle), rightPortion = D - leftPortion
+    // AFTER it (consumed from the right clip's hidden IN-handle).
+    const cutPoint = getCutPoint(transition);  // frame of the cut
+    const leftPortion = Math.floor(framesOf(transition.duration) * transition.alignment);
+    const rightPortion = framesOf(transition.duration) - leftPortion;
+    const windowStart = frameToMediaTime(cutPoint - leftPortion);
+
+    if (time < windowStart || time >= mediaTimeAdd(windowStart, transition.duration)) continue;
+
+    const t = mediaTimeToSeconds({ time: mediaTimeSub(time, windowStart) })
+            / mediaTimeToSeconds({ time: transition.duration });  // 0.0 to 1.0
+
+    // Blend by (optionally eased) progress; presentation is a registry key
+    applyPresentation(transition, leftLayer, rightLayer, t);
   }
   return layers;
 }
 
-function applyTransitionState(transition: Transition, layerA: Layer, layerB: Layer, t: number) {
-  switch (transition.type) {
-    case 'crossfade':
-      layerA.opacity *= (1 - t);
-      layerB.opacity *= t;
-      break;
-    case 'wipe':
-      // Add a mask to layerB that wipes from one side to the other
-      const wipeMask = createWipeMask(transition.params.direction, t, transition.params.feather);
-      layerB.mask = wipeMask;
-      break;
-    case 'slide':
-      // Move layerB from off-screen to its position
-      const slideOffset = (1 - t) * transition.params.distance;
-      layerB.transform = applySlideOffset(layerB.transform, slideOffset, transition.params.direction);
-      break;
-    // ...
-  }
+function applyPresentation(transition: Transition, leftLayer: Layer, rightLayer: Layer, t: number) {
+  // Registry dispatch — 27 built-ins (fade, dissolve, wipe-left/right/up/down,
+  // slide-*, iris-open/close, glitch, ...; §6.3). The structural tier is always
+  // a crossfade, so both layers stay live during the window and the shader
+  // blends by eased progress.
+  const eased = applyTiming(transition.timing, t);
+  leftLayer.opacity *= (1 - eased);
+  rightLayer.opacity *= eased;
 }
 ```
 
@@ -622,7 +643,7 @@ async function applyMaskFeather(maskTexture: GPUTexture, feather: number): Promi
   // 1. JFA init pass: seed with mask shape
   // 2. JFA step passes (ceil(log2(maxDim)) passes): propagate distances
   // 3. JFA distance pass: combine inside/outside SDFs, apply smoothstep
-  // ... (see 04-renderer-color.md §8.4)
+  // ... (see 04-renderer-color.refined.md §8.4)
 }
 ```
 
@@ -637,7 +658,9 @@ Audio is composed separately from video:
 - Audio mixing happens in Web Audio (`AudioContext` for interactive, `OfflineAudioContext` for render)
 - Each audio element creates an `AudioBufferSourceNode` (or streaming equivalent) → varispeed → gain → channel splitter → master mix
 
-See `03-playback-engine.md` §9 for the audio graph.
+See `03-playback-engine.refined.md` §9 for the audio graph.
+
+The UI shell for these surfaces is spec 18: the viewer panel hosts mask drawing (§8.2), and the inspector's **Effects**/**Transition** tabs (mock `data-tab="effects"`/`"transition"`) host the parameter editing that feeds `addEffect`/`updateTransition` (spec 15 §4.3.52/§4.3.62).
 
 > **SCOUT-07 finding:** FreeCut's audio composition lives entirely outside `MainComposition`'s visual layer — see `main-composition.tsx:467-679` where audio segments (`previewTransitionAudioSegments`, `previewAudioSegments`, `managedCompoundAudioSegments`, `standaloneCompoundAudioItems`) are rendered *before* the visual `<AbsoluteFill>` block, via `<PitchCorrectedAudio>` (785 LOC) or `<CustomDecoderAudio>` (516 LOC) components. Custom decoding is needed for AC-3/E-AC-3 audio in Matroska containers (`shouldUseCustomDecoder` at main-composition.tsx:369-392).
 
@@ -1019,7 +1042,7 @@ Pattern: a `BaseNode<Params, Resolved>` class (`base-node.ts:4-26`) with `params
 
 ---
 
-## 12. Code References (SCOUT-07)
+## 12.A Code References (SCOUT-07)
 
 ### FreeCut (`/tmp/freecut/src/`)
 
@@ -1101,6 +1124,30 @@ Pattern: a `BaseNode<Params, Resolved>` class (`base-node.ts:4-26`) with `params
 | Render nodes — effect layer | `apps/web/src/services/renderer/nodes/effect-layer-node.ts:1-19` | `EffectLayerNode` — scene-wide effect pass |
 | Render nodes — blur bg | `apps/web/src/services/renderer/nodes/blur-background-node.ts:1-32` | `BlurBackgroundNode` — backdrop source + blur passes |
 | Render nodes — color | `apps/web/src/services/renderer/nodes/color-node.ts:1-7` | `ColorNode({color})` |
+
+### 12.A.1 Code References — nle-engine (reference, NOT canon)
+
+> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room FreeCut-port **in-between reference, NOT canon**. It de-risks implementation but inherits FreeCut patterns this spec corrects (8-bit sRGB pipeline, JSON-RPC+$ref headless protocol, class-based API, procedural media, single-tier tests, zero workers). Where engine and spec conflict, **the spec wins**; deltas are documented, not adopted. Full reconciliation: `19-code-references.md`.
+
+| Spec section | nle-engine file:line | verified quote | status | note |
+|---|---|---|---|---|
+| §5.1 static plan + per-frame split | `src/lib/nle/playback/scene-assembly.ts:16` | `1. CompositionRenderPlan — STATIC per timeline snapshot.` | ALIGNED | Exactly §11.1's FreeCut finding |
+| §5.5 occlusion cutoff | `src/lib/nle/playback/scene-assembly.ts:1243` | `Occlusion cutoff — scan tracks bottom-up (asc by order), find first` | ALIGNED | Engine ahead of pre-amendment spec; adopted §5.5 |
+| §5.2 layer ordering | `src/lib/nle/playback/scene-assembly.ts:1263` | `Build render tasks — top to bottom (desc by order).` | ALIGNED | DESC walk + player reversal |
+| §4 FrameDescriptor purity | `src/lib/nle/playback/player.ts:949` | `private _buildLayers(frame: number, _offscreen: boolean): {` | ENGINE-GAP | Imperative layer build; no serializable descriptor — SPEC-ONLY |
+| §12.2 type-agnostic items | `src/lib/nle/playback/player.ts:1038` | `if (clip.type !== 'video') continue;` | CORRECTIVE | Non-video clips dropped; spec wins |
+| §6.1A structural/presentation split | `src/lib/nle/core/types.ts:260` | `export type TransitionType = 'crossfade';` | ALIGNED | Split matches the Round-7 amendment |
+| §6.1A presentation registry | `src/lib/nle/transitions/registry.ts:2249` | `const BUILTIN_PRESENTATIONS: TransitionPresentationDefinition[] = [` | ALIGNED | 27 presentations ≥ spec §6.3's list |
+| §6.1A cut-centered planner | `src/lib/nle/transitions/planner.ts:21` | `leftPortion  = floor(D * alignment)   — frames BEFORE the cut` | ALIGNED | Amendment B adopts this math |
+| §6.1A handle clamping | `src/lib/nle/transitions/handle-utils.ts:302` | `export function getMaxTransitionDurationForHandles(` | ALIGNED | Amendment B adopts |
+| §6.3 transition pipeline | `src/lib/nle/transitions/pipeline.ts:89` | `export class TransitionPipeline {` | ALIGNED | Single-pass + bind-group caching |
+| §7.3 effect chain | `src/lib/nle/effects/pipeline.ts:5041` | `const tempTex = inputTex;` | ALIGNED | Identical ping-pong swap loop |
+| §7.3 texture ownership | `src/lib/nle/effects/pipeline.ts:5107` | `return this._pongTexture;` | CORRECTIVE | Singleton return (engine P0.1); spec's per-layer outputs win |
+| §8.3 multi-mask chaining | `src/lib/nle/gpu/mask-manager.ts:477` | `this._combinePipeline.combine(inputTexture, maskTexture, outputTexture, {` | ALIGNED | Sequential chaining matches |
+| §8.3 mask texture ownership | `src/lib/nle/gpu/mask-manager.ts:468` | `const maskTexture = this._textureManager.getMaskTexture(mask, canvasW, canvasH);` | CORRECTIVE | Shared persistent textures (engine P0.2); spec wins |
+| §4 BlendMode contract | `src/lib/nle/gpu/compositor.ts:32` | `export const BLEND_MODE_INDEX: Record<BlendMode, number> = {` | CORRECTIVE | 25 FreeCut modes, no `plus-lighter`; map `plus-lighter ≡ linear-dodge` when porting |
+| §10.1 texture pool | `src/lib/nle/gpu/texture-pool.ts:5` | `Textures are keyed by \`{width}x{height}x{format}\` and recycled via` | ALIGNED | Ported but dead code; this spec's cache design is the consumer |
+| §5.4 transform resolution | `src/lib/nle/playback/transform-resolver.ts:59` | `1. resolveTransform             — base fit-to-canvas + explicit override` | ALIGNED | 5-step pipeline ported (corner-pin unwired — engine P1.8) |
 
 ---
 
@@ -1205,6 +1252,37 @@ const ItemEffectWrapperInternal = React.memo<ItemEffectWrapperInternalProps>(({ 
   - Export: `OffscreenCanvas` 2D + `EffectsPipeline`/`TransitionPipeline` GPU passes.
 
 **Correction:** The WYSIWYG contract for OpenCut-classic is fully satisfied (same code, same pixels). For FreeCut, WYSIWYG is *approximate* — the shared scene-assembly logic guarantees the same layer ordering, transforms, masks, and transition windows, but the pixel-level rendering goes through different shaders/code paths. We should aim for OpenCut-classic's "one code path" model: our `CanvasRenderer.render({node, time})` should be the only render entry point, used for both interactive rAF and cloud render. This is the SCOUT-01 finding's recommendation carried into the composition stream.
+
+### 13.11 Correction: multi-track blend expected pixel value (§12.7)
+
+**Seed spec §12.7 expected pixel:** `rgb(127, 127, 0)`.
+
+**Correct expected pixel:** `rgb(187, 187, 0)` (sRGB) = `(0.5, 0.5, 0)`
+(linear-light), per the scene-linear blend math:
+
+```
+overlay_alpha = 0.5  (green overlay at 50% opacity)
+overlay_color_linear = (0, 1, 0)  (sRGB green → linear)
+main_color_linear     = (1, 0, 0)  (sRGB red → linear)
+result_linear = overlay_color_linear × overlay_alpha + main_color_linear × (1 - overlay_alpha)
+             = (0, 1, 0) × 0.5 + (1, 0, 0) × 0.5
+             = (0.5, 0.5, 0)
+result_sRGB = (1.055 × 0.5^(1/2.4) − 0.055, ...) ≈ (0.7438, 0.7438, 0)
+            ≈ rgb(187, 187, 0)
+```
+
+**Why the seed spec was wrong:** the seed spec author conflated "50% blend"
+with "50% sRGB value". In scene-linear pipelines (which spec 04 §3 mandates),
+blends happen in linear-light space, where 0.5 maps to ≈187 in 8-bit sRGB
+output, not 127. The 127 value would be correct *only* if blending happened
+in sRGB space, which the architecture explicitly rejects (spec 04 §3:
+"all blending happens in scene-linear space; converting to sRGB before
+blending produces incorrect gamma-stacking artifacts").
+
+**Action item:** the seed spec §12.7 line "Assert center pixel is
+`rgb(127, 127, 0)`" should be updated to "Assert center pixel is
+`rgb(187, 187, 0)` (50/50 linear-light blend — `(0.5, 0.5, 0)` linear ≈
+sRGB `rgb(187, 187, 0)`)".
 
 ---
 
@@ -1312,7 +1390,7 @@ pub struct CanvasTextureDescriptor {
 | `Layer.transform` | `QuadTransformDescriptor` | ✅ Identical (centerX/Y, width/height, rotationDegrees, flipX/Y) |
 | `Layer.opacity`, `Layer.blendMode` | Same | ✅ Identical |
 | `Layer.effectPassGroups` (`EffectPass[][]`) | `effect_pass_groups: Vec<Vec<EffectPassDescriptor>>` | ✅ Identical (groups-of-passes shape; renamed from `Layer.effects` to match `SceneEffect.effectPassGroups` — REVISE-07-04) |
-| `Layer.mask` (single, nullable) | `Option<LayerMaskDescriptor>` | ✅ Identical; our `masks: MaskDescriptor[]` extends |
+| `Layer.masks` (`MaskDescriptor[]`, applied in order — §8.3) | `Option<LayerMaskDescriptor>` (single) | ✅ Base identical (seed's `mask` was 1:1 with OpenCut); our array extends |
 | `LayerMaskDescriptor` (textureId/feather/inverted) | Same | ✅ Identical |
 | `EffectPass` (shader + uniforms map) | `EffectPassDescriptor` (shader + HashMap<String, EffectUniformValue>) | ✅ Identical; values are `Number | Vector<f32>` |
 
@@ -1652,7 +1730,7 @@ The shape is the same; the substrate differs (React/DOM vs `BaseNode`/canvas). F
 
 ---
 
-## Testing
+## 17. Testing
 
 > See `17-test-plan.md` §4 for the per-module template, §3 for the test
 > matrix, and §5 for canonical test-asset naming. Matrix rows for this
@@ -1849,13 +1927,14 @@ exists to lock down that contract.
 **Transition state resolution (spec §6.2):**
 
 - `transition-state-resolution-crossfade-opacity-multipliers` —
-  transition `{type: 'crossfade', duration: 1s, elementAId: 'red',
-  elementBId: 'green'}`; at `time = transitionStart + 0.0s` (t=0) assert
+  transition `{type: 'crossfade', presentation: 'fade', duration: 1s,
+  leftElementId: 'red', rightElementId: 'green'}`; at
+  `time = windowStart + 0.0s` (t=0) assert
   `layerA.opacity === 1.0 × 1.0 = 1.0` and `layerB.opacity === 1.0 × 0 =
   0.0` (only A visible); at t=0.5 assert `layerA.opacity === 0.5` and
   `layerB.opacity === 0.5` (50/50); at t=1.0 assert `layerA.opacity === 0`
   and `layerB.opacity === 1.0` (only B visible). Matches §6.2
-  `applyTransitionState` case `'crossfade'`
+  `applyPresentation` crossfade blend
 - `transition-state-resolution-crossfade-uses-plus-lighter-blend` —
   for a clean linear-dissolve crossfade in scene-linear space (the
   architecturally-correct behavior per spec 04's scene-linear pipeline),
@@ -1867,21 +1946,24 @@ exists to lock down that contract.
   the WYSIWYG-correct crossfade; `plus-lighter` produces `(0.5, 0.5, 0)`
   which is.)
 - `transition-state-resolution-outside-window-no-op` — at
-  `time < transitionStart` or `time >= transitionStart + transition.duration`,
+  `time < windowStart` or `time >= windowStart + transition.duration`,
   assert `layerA.opacity` and `layerB.opacity` are unchanged from their
   pre-transition values and `layerA.blendMode`/`layerB.blendMode` are
   whatever the element's own `blendMode` field declares (matches §6.2
-  `if (time < transitionStart || time >= transitionEnd) continue`)
-- `transition-state-resolution-wipe-creates-mask-on-layerB` —
-  transition `{type: 'wipe', params: {direction: 'left', feather: 5}}`;
-  at t=0.5 assert `layerB.mask !== null` and `layerB.mask.textureId`
-  starts with `"mask:shape:wipe:left:"` (matches §6.2 case `'wipe'`:
-  "add a mask to layerB that wipes from one side to the other")
-- `transition-state-resolution-slide-offsets-layerB-transform` —
-  transition `{type: 'slide', params: {direction: 'left', distance:
-  1920}}`; at t=0.5 assert `layerB.transform.centerX` is offset by
-  `(1 - 0.5) × 1920 = 960` pixels from its untransitioned value (matches
-  §6.2 case `'slide'`)
+  `if (time < windowStart || time >= mediaTimeAdd(windowStart,
+  transition.duration)) continue`)
+- `transition-state-resolution-wipe-presentation-dispatched-from-registry` —
+  transition `{type: 'crossfade', presentation: 'wipe-left', duration: 1s}`;
+  assert the presentation key resolves in the 27-entry registry (§6.1A)
+  without touching the planner or the wire protocol, and that the wipe
+  edge is rendered by the presentation shader — NOT by a `layerB.mask`
+  (supersedes the seed's single-tier wipe-as-mask behavior, §6.1A)
+- `transition-state-resolution-slide-presentation-dispatched-from-registry` —
+  transition `{type: 'crossfade', presentation: 'slide-left', duration:
+  1s}`; assert the structural clips never move (`layerA.transform` /
+  `layerB.transform` are unmodified — the slide displacement is a
+  presentation-shader effect, §6.1A; the visual offset is verified in the
+  Tier 2 render tests)
 
 **FrameDescriptor Zod schema validation (spec §4):**
 
@@ -1940,21 +2022,23 @@ expected value is auditable.
   within tolerance 1% (the linear-dissolve result: `red_linear × 0.5 +
   green_linear × 0.5 = (0.5, 0.5, 0)` linear, converted back to sRGB ≈
   `(187, 187, 0)`. Achieved via `blendMode: 'plus-lighter'` set on both
-  layers for the transition window — see §6.2 case `'crossfade'`.)
+  layers for the transition window — see §6.2 `applyPresentation`.)
 - `transition-crossfade-at-t1-only-green-visible` — render the frame at
   t=1.0 (transition end); assert center pixel is `rgb(0, 255, 0)` (only
   green visible, opacity 1.0)
-- `transition-wipe-creates-hard-edge-at-t0-5` — wipe transition with
-  `direction: 'left'`, `feather: 0`; render frame at t=0.5; assert left
-  half of frame is clip-A (red) and right half is clip-B (green), with a
-  1-pixel transition at the midpoint (no feather); pixel-diff against
-  `with-transitions-wipe-frame-30.png` reference at tolerance 0.5%
-- `transition-wipe-feather-creates-smooth-edge` — wipe transition with
-  `feather: 20` pixels; render frame at t=0.5; sample 5 pixels across the
+- `transition-wipe-creates-hard-edge-at-t0-5` — wipe presentation
+  (`presentation: 'wipe-left'`) with feather 0; render frame at t=0.5;
+  assert left half of frame is clip-A (red) and right half is clip-B
+  (green), with a 1-pixel transition at the midpoint (no feather);
+  pixel-diff against `with-transitions-wipe-frame-30.png` reference at
+  tolerance 0.5%
+- `transition-wipe-feather-creates-smooth-edge` — wipe presentation
+  (`presentation: 'wipe-left'`) with feather 20 pixels; render frame at
+  t=0.5; sample 5 pixels across the
   wipe edge (at x = mid-10, mid-5, mid, mid+5, mid+10); assert opacity
   ramps smoothly from 1.0 to 0.0 across the feather region (JFA SDF +
-  smoothstep per §8.4 — but here applied to the wipe mask, not a layer
-  mask)
+  smoothstep per §8.4 — applied inside the wipe presentation's shader,
+  not to a layer mask)
 - `transition-outside-window-renders-as-normal-cut` — frame 5 seconds
   before the transition starts; assert pixels match the untransitioned
   clip-A reference (transition is a no-op outside its window — §6.2 early
@@ -2137,8 +2221,9 @@ WYSIWYG invariant).
   (transitions are authored via mouse drag between clip edges on the
   timeline, not via keyboard). Verify the direct-apply path:
   `engine.command.apply({type: 'addTransition', params: {transition:
-  {type: 'crossfade', duration: 1_000_000, elementAId: 'main-1',
-  elementBId: 'main-2', params: {}}}})` adds a transition between the
+  {type: 'crossfade', presentation: 'fade', duration: 1_000_000,
+  leftElementId: 'main-1', rightElementId: 'main-2'}}}})` adds a
+  transition between the
   two adjacent clips; assert the resulting `SceneState.scene.transitions`
   array contains the new transition and `buildFrameDescriptor(state, 30)`
   (mid-transition) emits both layers with the crossfade opacity
@@ -2208,7 +2293,8 @@ includes the exact `fc.assert` call shape.
   `fc.assert(fc.property(arbitrarySceneStateWithTransition, fc.integer(),
   (state, frame) => { const fd = buildFrameDescriptor(state, frame); const
   tr = state.scene.transitions[0]; const a = fd.items.find(i => i.id ===
-  tr.elementAId); const b = fd.items.find(i => i.id === tr.elementBId); if
+  tr.leftElementId); const b = fd.items.find(i => i.id ===
+  tr.rightElementId); if
   (a && b) { expect(a.opacity + b.opacity).toBeLessThanOrEqual(1.0 +
   1e-6); } }), { numRuns: 1000 })` — for any state with one transition,
   if both transition endpoints are active at the queried frame, the sum
@@ -2253,10 +2339,10 @@ fixture names invented — all are listed in spec 17 §5.1 / §5.3 tables).
 
 - `tests/fixtures/projects/multi-track-blend.json` — red main + green overlay @ 50% opacity (registered in spec 17 §5.3; used for Tier 1 layer ordering + Tier 2 multi-track blend + cloud-render WYSIWYG tests)
 - `tests/fixtures/projects/with-transitions.json` — 3 clips with crossfades between them (registered in spec 17 §5.3; used for all Tier 1 transition-state + Tier 2 crossfade/wipe/slide tests)
-- `tests/fixtures/projects/with-effects.json` — clip with blur + color wheels + LUT applied (NEW — proposed for registration in spec 17 §5.3 before merge; used for Tier 1 effectpass-resolution-chain-ordering + Tier 2 effect-ordering tests)
-- `tests/fixtures/projects/with-masks.json` — clip with rectangular mask + 10px feather (NEW — proposed for registration in spec 17 §5.3 before merge; spec 17 §5.3 already has `with-mask.json` for the "1 main clip + 1 overlay with shape mask" pattern — `with-masks.json` (plural) extends this with multiple masks per layer for the §8.3 multi-mask tests)
+- `tests/fixtures/projects/with-effects.json` — clip with blur + color wheels + LUT applied (registered in spec 17 §5.3 in Round 7 — see spec 17 §5.3's with-effects.json row; used for Tier 1 effectpass-resolution-chain-ordering + Tier 2 effect-ordering tests)
+- `tests/fixtures/projects/with-masks.json` — clip with rectangular mask + 10px feather (registered in spec 17 §5.3 in Round 7 — `with-masks.json` extends `with-mask.json` with multiple masks per layer for §8.3 tests)
 - `tests/fixtures/projects/single-clip-red.json` — single main-track element with red fill (used for Tier 3 keyboard add-effect tests; minimal project for fast test runs)
-- `tests/fixtures/projects/green-screen.json` — clip with green-screen background for qualifier mask tests (NEW — proposed for registration)
+- `tests/fixtures/projects/green-screen.json` — clip with green-screen background for qualifier mask tests (registered in spec 17 §5.3 in Round 7)
 
 **Reference PNGs (spec 17 §5.4 — regenerated per §10):**
 
@@ -2305,7 +2391,7 @@ npm run regen-references -- --filter "07-composition"
 
 | Tier | Test count | What it locks down |
 |---|---|---|
-| Tier 1 (pure Vitest) | 32 | `buildFrameDescriptor` purity (3: deep-equal / no-side-effects / cloned-state-determinism), layer ordering (3: main-first / overlay-time-order / background-prepend), active-element resolution (3: half-open interval / gap / hidden-skip), transform resolution (3: static / negative-scale-as-flip / animated-keyframe), effect pass resolution (5: color-wheels-single / gaussian-blur-h+v / disabled-skip / chain-reorder-color-then-spatial / keyframed-param), mask descriptor building (4: shape / image / qualifier / multiple), transition state resolution (5: crossfade opacity multipliers / `plus-lighter` blend for clean linear-dissolve / outside-window-noop / wipe-mask / slide-offset), FrameDescriptor Zod schema validation (6: valid / invalid-displaymode / invalid-blendmode / sceneeffect-discriminator / colorspace-required / maskdescriptor-fields) |
+| Tier 1 (pure Vitest) | 32 | `buildFrameDescriptor` purity (3: deep-equal / no-side-effects / cloned-state-determinism), layer ordering (3: main-first / overlay-time-order / background-prepend), active-element resolution (3: half-open interval / gap / hidden-skip), transform resolution (3: static / negative-scale-as-flip / animated-keyframe), effect pass resolution (5: color-wheels-single / gaussian-blur-h+v / disabled-skip / chain-reorder-color-then-spatial / keyframed-param), mask descriptor building (4: shape / image / qualifier / multiple), transition state resolution (5: crossfade opacity multipliers / `plus-lighter` blend for clean linear-dissolve / outside-window-noop / wipe-presentation / slide-presentation), FrameDescriptor Zod schema validation (6: valid / invalid-displaymode / invalid-blendmode / sceneeffect-discriminator / colorspace-required / maskdescriptor-fields) |
 | Tier 2 (Playwright + WebGPU) | 27 | Transition crossfade at t=0 / 0.5 / 1.0 (center pixel `rgb(255,0,0)` / `rgb(187,187,0)` / `rgb(0,255,0)`); wipe hard-edge + feathered-edge; transition-outside-window; effect ordering (chain reorder + pixel-diff); mask (rectangular / feathered-jfa-sdf / inverted / multiple / image / qualifier); 5-layer composite; multi-track blend (red+green@50% → `rgb(187,187,0)` sRGB-linear); screen/multiply blend modes; opacity 0% / 25% / 100%; cache hit / miss-different-frame / miss-after-trim / miss-after-addEffect / hit-after-undo; cloud-render WYSIWYG (browser == cloud byte-identical for multi-track-blend + transition-frame-15) |
 | Tier 3 (Playwright keyboard) | 7 | `1` apply effect preset, `Shift+1` toggle effect, `Cmd+Shift+E` toggle focused effect, state-WYSIWYG meta-test across 9 presets, `addTransition` via direct EngineCommand (no keyboard shortcut registered), `addMask` via direct EngineCommand (no keyboard shortcut), `addEffect` via mouse on effects panel |
 | Property (fast-check, 1000 runs each) | 6 | Purity (deep-clone → deep-equal descriptor); active-element half-open interval invariant; layer ordering (main before overlay); transition opacity multiplier sum ≤ 1.0; stateHash stability; effect chain reordering idempotence |
@@ -2313,58 +2399,4 @@ npm run regen-references -- --filter "07-composition"
 
 ---
 
-### Correction to seed spec §12.7 (multi-track blend expected pixel value)
-
-**Seed spec §12.7 claimed:** "Two video tracks, track A = red fill, track B
-= green fill at 50% opacity. Composite at frame 0. Assert center pixel is
-`rgb(127, 127, 0)` (50/50 blend in linear-light)."
-
-**This is a math error.** A 50/50 linear-light blend of red `(1, 0, 0)` and
-green `(0, 1, 0)` produces linear `(0.5, 0.5, 0)`, which converted back
-to sRGB via the inverse EOTF (`1.055 × 0.5^(1/2.4) − 0.055 ≈ 0.7438`) is
-`rgb(187, 187, 0)`, NOT `rgb(127, 127, 0)`.
-
-The seed spec's `rgb(127, 127, 0)` is the result of a *naive sRGB-space*
-blend (`0.5 × 255 ≈ 127`), which is incorrect for our scene-linear pipeline
-(spec 04 §3 mandates all blends happen in linear-light space).
-
-**Correction:** The Tier 2 test
-`multi-track-blend-red-main-green-overlay-50-percent-center-187-187-0`
-above asserts the architecturally-correct value `rgb(187, 187, 0)`. The
-seed spec §12.7 should be updated to match — see §13.11 below for the
-addition to the corrections catalog.
-
-### §13.11 (new) — Correction: multi-track blend expected pixel value (§12.7)
-
-**Seed spec §12.7 expected pixel:** `rgb(127, 127, 0)`.
-
-**Correct expected pixel:** `rgb(187, 187, 0)` (sRGB) = `(0.5, 0.5, 0)`
-(linear-light), per the scene-linear blend math:
-
-```
-overlay_alpha = 0.5  (green overlay at 50% opacity)
-overlay_color_linear = (0, 1, 0)  (sRGB green → linear)
-main_color_linear     = (1, 0, 0)  (sRGB red → linear)
-result_linear = overlay_color_linear × overlay_alpha + main_color_linear × (1 - overlay_alpha)
-             = (0, 1, 0) × 0.5 + (1, 0, 0) × 0.5
-             = (0.5, 0.5, 0)
-result_sRGB = (1.055 × 0.5^(1/2.4) − 0.055, ...) ≈ (0.7438, 0.7438, 0)
-            ≈ rgb(187, 187, 0)
-```
-
-**Why the seed spec was wrong:** the seed spec author conflated "50% blend"
-with "50% sRGB value". In scene-linear pipelines (which spec 04 §3 mandates),
-blends happen in linear-light space, where 0.5 maps to ≈187 in 8-bit sRGB
-output, not 127. The 127 value would be correct *only* if blending happened
-in sRGB space, which the architecture explicitly rejects (spec 04 §3:
-"all blending happens in scene-linear space; converting to sRGB before
-blending produces incorrect gamma-stacking artifacts").
-
-**Action item:** the seed spec §12.7 line "Assert center pixel is
-`rgb(127, 127, 0)`" should be updated to "Assert center pixel is
-`rgb(187, 187, 0)` (50/50 linear-light blend — `(0.5, 0.5, 0)` linear ≈
-sRGB `rgb(187, 187, 0)`)".
-
----
-
-**End of `07-composition.refined.md`.** Next: `08-color-grading.md`.
+**End of `07-composition.refined.md`.** Next: `08-color-grading.refined.md`.

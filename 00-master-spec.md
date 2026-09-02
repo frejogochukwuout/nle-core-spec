@@ -1,9 +1,9 @@
 # Master Specification — Browser-Based NLE (Rough-Cut Editor with FCPXML Handoff)
 
-**Status:** v1.0 (seed spec — to be refined by per-stream sub-agent scouts)
-**Date:** 2026-08-22
+**Status:** v3.0 (Rounds 1-6 complete: seed → scout-refined → audited → integrated → testability layer; Round 7 adds the code-reference architecture (spec 19), the UI shell (spec 18), the export-command amendment (spec 15), and the nle-engine reconciliation. One seal round remains after the engine's current gap-closure waves land — see spec 19 §12.)
+**Date:** 2026-09-02 (v1 seed 2026-08-22; v2 testability 2026-08-30; v3 Round 7 2026-09-02)
 **Owner:** Architect (this conversation)
-**Consumers:** Implementation team, scout sub-agents, code reviewers
+**Consumers:** Implementation team, scout sub-agents, code reviewers, the nle-engine and timeline-distill workstreams
 
 ---
 
@@ -13,6 +13,8 @@ This master spec captures **every architectural decision** reached across the de
 
 - **FreeCut** (`github.com/walterlow/freecut`, MIT) — the primary *system-level* teacher (workers, threading, sync, audio-clock, lifecycle, grading toolset)
 - **OpenCut-classic** (`github.com/opencut-app/opencut-classic`, archived MIT) — the primary *type-design* teacher (`MediaTime`, `FrameRate`, `SceneTracks`, `EditorCore`, `mediabunny`+WebCodecs decode path)
+- **nle-engine** (`github.com/bearachprema/nle-engine`, private) — an in-between clean-room FreeCut port used as a de-risking code reference, NOT canon (see Decision 10 and spec 19)
+- **timeline-distill** (forthcoming) — a distillation of OpenCut-classic's timeline minus the NLE core, the UI-region counterpart to nle-engine (see spec 19 §3.2)
 
 This is **not** a copy spec. We are rebuilding from scratch in pure TypeScript, using both repos as reference designs. Each downstream stream spec (files `01` through `12`) refines a single concern; the sub-agent scout plan (`13`) defines how those refinements are produced; the testing strategy (`12`) and implementation phases (`14`) define execution.
 
@@ -21,20 +23,26 @@ This is **not** a copy spec. We are rebuilding from scratch in pure TypeScript, 
 | File | Subject |
 |---|---|
 | `00-master-spec.md` | **This file** — executive summary, decisions, architecture, scope |
-| `01-core-engine.md` | Engine architecture, `EditorCore` pattern, contract seams, two entry points |
-| `02-workers-threading.md` | Worker pool, `ManagedWorker` abstraction, AudioWorklet, threading discipline |
-| `03-playback-engine.md` | Clock, decode, sync plans, scrubbing, varispeed |
-| `04-renderer-color.md` | WebGPU layer, 10-bit pipeline, scene-linear color management |
-| `05-timeline.md` | Timeline UI, DOM rendering, virtualization, data model |
-| `06-nle-ops.md` | Cut / split / trim / ripple / roll / slip / slide / move / lock / snap |
-| `07-composition.md` | Composition runtime, layer model, blend modes, scene graph |
-| `08-color-grading.md` | Wheels, curves, LUT, qualifier, power window, scopes |
-| `09-project-model.md` | Project schema, persistence, migrations, your own storage |
-| `10-fcpxml-export.md` | FCPXML format, element mappings, handoff contract |
-| `11-cloud-render.md` | Headless Chrome, real GPU, ffmpeg at edges, WYSIWYG contract |
-| `12-testing-strategy.md` | Virtual framebuffer, pixel verification, audio waveform checks |
+| `01-core-engine.refined.md` | Engine architecture, `EditorCore` pattern, contract seams, two entry points |
+| `02-workers-threading.refined.md` | Worker pool, `ManagedWorker` abstraction, AudioWorklet, threading discipline |
+| `03-playback-engine.refined.md` | Clock, decode, sync plans, scrubbing, varispeed |
+| `04-renderer-color.refined.md` | WebGPU layer, 10-bit pipeline, scene-linear color management |
+| `05-timeline.refined.md` | Timeline UI, DOM rendering, virtualization, data model |
+| `06-nle-ops.refined.md` | Cut / split / trim / ripple / roll / slip / slide / move / lock / snap |
+| `07-composition.refined.md` | Composition runtime, layer model, blend modes, scene graph |
+| `08-color-grading.refined.md` | Wheels, curves, LUT, qualifier, power window, scopes |
+| `09-project-model.refined.md` | Project schema, persistence, migrations, your own storage |
+| `10-fcpxml-export.refined.md` | FCPXML format, element mappings, handoff contract |
+| `11-cloud-render.refined.md` | Headless Chrome, real GPU, ffmpeg at edges, WYSIWYG contract |
+| `12-testing-strategy.refined.md` | Virtual framebuffer, pixel verification, audio waveform checks |
 | `13-subagent-scout-plan.md` | Stream breakdown, scout prompts, audit pass, deliverables |
 | `14-implementation-phases.md` | Phased rollout: playback → multitrack → ops → grading → export |
+| `15-wire-protocol.md` | JSON wire protocol: 78 `EngineCommand` types, Zod schemas, HTTP API, export commands (§4.3.74-76) |
+| `16-keyboard-shortcuts.md` | ~180 keyboard bindings, every one mapping to an `EngineCommand` |
+| `17-test-plan.md` | Three-tier testing methodology + per-module template |
+| `18-ui-shell.md` | Application shell: DaVinci-derived layout (from `ui-mock/`), panel inventory, gesture→command contracts |
+| `19-code-references.md` | Canon hierarchy, reference-repo map (nle-engine + forthcoming timeline-distill), insight-preservation ledger, corrective mapping, ROI table |
+| `ui-mock/davinci_resolve_ui_mock.html` | Visual reference for spec 18 (DaVinci Resolve layout clone — layout/identity only, not code) |
 
 ---
 
@@ -223,7 +231,7 @@ Both share: project model, NLE ops, GPU shaders, color pipeline, composition run
 
 **Decision:** The engine is a pure JSON-in, JSON-out state machine. Three layers are all JSON-serializable:
 1. **Static project state** (`ProjectJSON`) — the saved project file (clips, tracks, elements, effects, etc.)
-2. **Runtime operations** (`EngineCommand[]`) — a sequence of ops applied to engine state, each a JSON-serializable object like `{ type: 'timeline.split', params: { time, trackIds } }`
+2. **Runtime operations** (`EngineCommand[]`) — a sequence of ops applied to engine state, each a JSON-serializable object like `{ type: 'split', params: { time, trackIds } }`
 3. **Render output** (`FrameDescriptor` + pixels + audio PCM) — what the renderer produces
 
 Three consumers use **identical JSON interfaces** against the same engine:
@@ -266,9 +274,23 @@ Three consumers use **identical JSON interfaces** against the same engine:
 - Extends Decision 8 (cloud render via headless Chrome) — cloud render accepts `ProjectJSON` + `EngineCommand[]` over HTTP rather than driving the engine through Playwright clicks
 
 **New specs that elaborate this decision:**
-- `15-wire-protocol.md` — full JSON schema for `ProjectJSON` + `EngineCommand[]` + `CommandResult`
+- `15-wire-protocol.md` — full JSON schema for `ProjectJSON` + `EngineCommand[]` + `CommandResult` (78 types as of Round 7; the Export category added by the Round-7 amendment — §14.11, the sanctioned OUTPUT exception)
 - `16-keyboard-shortcuts.md` — every keyboard shortcut maps to a deterministic `EngineCommand`
 - `17-test-plan.md` — three-tier test methodology built on this principle
+- `18-ui-shell.md` — the UI shell is a pure `EngineCommand` generator + view renderer (this decision's UI implication, made concrete)
+
+---
+
+### Decision 10: Code-Reference Architecture — the spec set is canon; reference implementations are de-risking references (Round 7)
+
+**Decision:** The spec set (00-18) is the single source of truth. Two private reference repos orbit it: **nle-engine** (clean-room FreeCut port; 37,958 LOC, 124 tests; actively closing its own gap charter) and the forthcoming **timeline-distill** (OpenCut-classic timeline minus NLE core). They de-risk implementation and operationalize the specs with concrete code, but they inherit legacy patterns the spec set explicitly corrects (8-bit sRGB, JSON-RPC+$ref wire protocol, class-API mutation surface, single-tier tests, procedural media, zero workers — see spec 19 §6). **Where reference code and the spec conflict, the spec wins; the delta is documented, not adopted.**
+
+**Reasoning:**
+- The spec workstream and the engine workstream began in parallel (both 2026-08-22); cross-pollination was real but shallow — an early spec snapshot was handed over mid-build, after much of the engine code was written. The engine is therefore NOT spec-conformant and cannot be treated as canon, but it is extremely valuable: it proves the engine architecture is buildable, ports the hardest subsystems (clock, sync plans, 102 NLE-op methods, 43-44 GPU effects, 27 transitions), and surfaces — via its own audit — the exact failure modes the spec's discipline rules prevent.
+- Years of FreeCut iterations plus six rounds of distillation produced implementation insights that must not be lost when specs link to reference code instead of inlining it. Spec 19 §5's insight-preservation ledger (25 crown-jewel rows) is the enforcement mechanism: any future pass that slims a spec must relocate each ledger row, not delete it.
+- Link-plus-distilled-callout is the default reference style (every stream spec gained a "Code References — nle-engine (reference, NOT canon)" table in Round 7); corrections of FreeCut patterns and contract-critical shapes stay inline.
+
+**Implication:** The engine converges toward the spec, never the reverse. Spec 19 §7 answers the engine's own five blocking decisions (D1-D5) from the spec side — the cross-pollination the workstreams never had. The engine's active waves (4A→7) are watched (spec 19 §9) and the final verdict on its state is deferred to the seal round.
 
 ---
 
@@ -442,21 +464,23 @@ Each stream has its own spec file. The breakdown is designed so sub-agents can w
 
 | # | Stream | Spec file | Primary teacher | Key decisions |
 |---|---|---|---|---|
-| 1 | Core engine | `01-core-engine.md` | OpenCut-classic `EditorCore` + FreeCut `deps/` contracts | Decision 1, 2, 6 |
-| 2 | Workers & threading | `02-workers-threading.md` | FreeCut `ManagedWorker*` + worker files | Decision 1 |
-| 3 | Playback engine | `03-playback-engine.md` | FreeCut `Clock.ts` + OpenCut-classic `PlaybackManager` | Decision 1, 2 |
-| 4 | Renderer & color | `04-renderer-color.md` | FreeCut `gpu-*` infrastructure (ported to 10-bit linear) | Decision 4, 5 |
-| 5 | Timeline | `05-timeline.md` | OpenCut-classic DOM approach + FreeCut NLE op UI | Decision 2 |
-| 6 | NLE ops | `06-nle-ops.md` | FreeCut `stores/actions/edit/*` + OpenCut-classic `lib/ripple/` | Decision 1, 2 |
-| 7 | Composition | `07-composition.md` | FreeCut `composition-runtime/` + OpenCut-classic `compositor/` | Decision 1, 2 |
-| 8 | Color grading | `08-color-grading.md` | FreeCut `gpu-effects/effects/color.ts` (ported to linear) | Decision 5 |
-| 9 | Project model | `09-project-model.md` | OpenCut-classic types + your own schema | Decision 2 |
-| 10 | FCPXML export | `10-fcpxml-export.md` | FCPXML 1.10 spec + project model mapping | Decision 6 |
-| 11 | Cloud render | `11-cloud-render.md` | FreeCut `headless/main.ts` + ffmpeg pattern | Decision 6, 8 |
-| 12 | Testing | `12-testing-strategy.md` | Playwright + virtual framebuffer | All decisions |
+| 1 | Core engine | `01-core-engine.refined.md` | OpenCut-classic `EditorCore` + FreeCut `deps/` contracts | Decision 1, 2, 6 |
+| 2 | Workers & threading | `02-workers-threading.refined.md` | FreeCut `ManagedWorker*` + worker files | Decision 1 |
+| 3 | Playback engine | `03-playback-engine.refined.md` | FreeCut `Clock.ts` + OpenCut-classic `PlaybackManager` | Decision 1, 2 |
+| 4 | Renderer & color | `04-renderer-color.refined.md` | FreeCut `gpu-*` infrastructure (ported to 10-bit linear) | Decision 4, 5 |
+| 5 | Timeline | `05-timeline.refined.md` | OpenCut-classic DOM approach + FreeCut NLE op UI | Decision 2 |
+| 6 | NLE ops | `06-nle-ops.refined.md` | FreeCut `stores/actions/edit/*` + OpenCut-classic `lib/ripple/` | Decision 1, 2 |
+| 7 | Composition | `07-composition.refined.md` | FreeCut `composition-runtime/` + OpenCut-classic `compositor/` | Decision 1, 2 |
+| 8 | Color grading | `08-color-grading.refined.md` | FreeCut `gpu-effects/effects/color.ts` (ported to linear) | Decision 5 |
+| 9 | Project model | `09-project-model.refined.md` | OpenCut-classic types + your own schema | Decision 2 |
+| 10 | FCPXML export | `10-fcpxml-export.refined.md` | FCPXML 1.10 spec + project model mapping | Decision 6 |
+| 11 | Cloud render | `11-cloud-render.refined.md` | FreeCut `headless/main.ts` + ffmpeg pattern | Decision 6, 8 |
+| 12 | Testing | `12-testing-strategy.refined.md` | Playwright + virtual framebuffer | All decisions |
 | 13 | Wire protocol | `15-wire-protocol.md` | OpenCut-classic `EditorCore` method shapes + Zod schemas | Decision 9 |
 | 14 | Keyboard shortcuts | `16-keyboard-shortcuts.md` | FreeCut + OpenCut-classic shortcut maps; every shortcut → `EngineCommand` | Decision 9 |
 | 15 | Test plan | `17-test-plan.md` | Three-tier testing methodology (Tier 1 engine / Tier 2 render / Tier 3 UI) | Decision 9 |
+| 16 | UI shell | `18-ui-shell.md` | `ui-mock/davinci_resolve_ui_mock.html` (DaVinci Resolve layout clone, simplified) + spec 05/16 contracts | Decision 9 |
+| 17 | Code references | `19-code-references.md` | nle-engine + forthcoming timeline-distill; canon hierarchy | Decision 10 |
 
 ---
 
@@ -492,6 +516,8 @@ Each phase is independently shippable. P0-P5 are the v1 product. P6 is the v2 ex
 ---
 
 ## 11. Open Questions (For Sub-Agent Scouts to Resolve)
+
+> **Round-7 status note:** Questions 1-11 were resolved by the SCOUT agents during Rounds 2-6 (answers live in each `.refined.md` spec's "Open Questions — Resolved" / §14 sections, verified by the `audits/` reports). Questions 12-14 are implementation-time verifications that remain open by design (they need real hardware/services). New Round-7+ open items are tracked in spec 18 §15, spec 19 §12, and spec 15 §14.
 
 These are the questions sub-agent scouts should investigate against the actual source code:
 
@@ -533,7 +559,7 @@ Sub-agent scouts (see `13-subagent-scout-plan.md`) will resolve these and produc
 - **EOTF** — Electro-Optical Transfer Function (e.g., sRGB EOTF, PQ EOTF for HDR)
 - **OETF** — Opto-Electronic Transfer Function (inverse of EOTF)
 - **`ProjectJSON`** — The static, on-disk representation of a project (clips, tracks, elements, effects, scenes, settings). Loaded via `engine.project.loadFromJSON(project)`. Zod-validated. See `15-wire-protocol.md`.
-- **`EngineCommand`** — A JSON-serializable operation applied to engine state at runtime: `{ type: string; params: Record<string, unknown> }` (e.g., `{ type: 'timeline.split', params: { time, trackIds } }`). Sequenced as `EngineCommand[]`. Applied via `engine.command.apply(command): CommandResult`. The wire protocol that unifies browser UI, cloud render, and test harness (Decision 9). See `15-wire-protocol.md`.
+- **`EngineCommand`** — A JSON-serializable operation applied to engine state at runtime: `{ type: string; params: Record<string, unknown> }` (e.g., `{ type: 'split', params: { time, trackIds } }`). Sequenced as `EngineCommand[]`. Applied via `engine.command.apply(command): CommandResult`. The wire protocol that unifies browser UI, cloud render, and test harness (Decision 9). See `15-wire-protocol.md` (78 types as of Round 7 — the union includes the Export category, spec 15 §4.3.74-76).
 - **`CommandResult`** — The JSON-serializable return value of `engine.command.apply()` — describes what changed (affected track IDs, before/after snapshots for undo, error if rejected). Consumed by the UI to update views, by the cloud caller to verify, and by tests to assert.
 - **`SceneState`** — The JSON-serializable snapshot of the engine's current timeline state (tracks, elements, locks, selections, active scene). Produced by `engine.scenes.getActiveScene().serialize()` or similar. Tests assert against this directly (Tier 1 — see §13).
 - **UI translation layer** — The thin UI module that converts user interactions (mouse clicks, drags, keyboard shortcuts) into `EngineCommand` objects. Holds no engine state. Tested via Playwright (Tier 3 — see §13).

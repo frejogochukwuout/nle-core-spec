@@ -175,6 +175,7 @@ google-chrome \
 4. **Secure context required.** `navigator.gpu` is `undefined` on `about:blank` (NOT a secure context) and `file://` URLs. `http://localhost` and `http://127.0.0.1` ARE secure contexts. FreeCut's `headless/server.mjs:107` binds to `127.0.0.1:port` for exactly this reason.
 
 5. **`powerPreference: 'low-power'`** in `requestAdapter()` — the default preference returns null on some setups. (Verified by tigerabrodi blog, Problem 4.)
+6. **Xvfb fallback for GPU-less CI:** in containers without GPU passthrough, `--headless=new` alone can return `null` from `requestAdapter()`; a dedicated Xvfb display + software Vulkan is the validated fallback (nle-engine Decision 12 — reference, see 19-code-references.md).
 
 ### 4.2 RunPod / container setup
 
@@ -234,6 +235,8 @@ The seed spec's `/render.html` + `/render.ts` sketch is structurally correct. Fr
 
 ### 5.1 `createRenderEngine` (cloud entry point)
 
+> §15.I requires multi-channel for v1; the seed's mono placeholder is retired by this Round-7 edit.
+
 ```ts
 // src/engine/render.ts
 
@@ -256,7 +259,7 @@ export interface RenderEngineOptions {
 export interface RenderEngine {
   getTotalFrames(): number;
   renderFrame(n: number): Promise<void>;
-  renderAudio(): Promise<Float32Array>;
+  renderAudio(): Promise<Float32Array[]>;  // per-channel planes (§15.I — multi-channel is a v1 requirement; mono was a seed placeholder)
   dispose(): void;
 }
 
@@ -311,7 +314,7 @@ export async function createRenderEngine(opts: RenderEngineOptions): Promise<Ren
       await opts.onFrame(n, pixels);
     },
     
-    async renderAudio(): Promise<Float32Array> {
+    async renderAudio(): Promise<Float32Array[]> {
       const offlineCtx = audio.createOfflineContext(
         engine.scenes.getActiveScene().settings.audioChannels,
         Math.ceil(mediaTimeToSeconds({ time: engine.timeline.getTotalDuration() }) * 48000),
@@ -325,7 +328,9 @@ export async function createRenderEngine(opts: RenderEngineOptions): Promise<Ren
       
       // Render
       const buffer = await offlineCtx.startRendering();
-      return buffer.getChannelData(0);  // mono for now; extend to multi-channel
+      const channels: Float32Array[] = [];
+      for (let c = 0; c < buffer.numberOfChannels; c++) channels.push(buffer.getChannelData(c));
+      return channels;  // §15.I: multi-channel (stereo min) for v1; mono placeholder retired
     },
     
     dispose(): void {
@@ -348,6 +353,18 @@ export async function createRenderEngine(opts: RenderEngineOptions): Promise<Ren
 | Audio mix buffer (10 min stereo, 48kHz) | ~110 MB |
 | **Total (4K export)** | **~900 MB** |
 | **Total (8K export)** | **~1.5 GB** |
+
+**VRAM budget (per job, from §15.J):**
+
+| Component | VRAM |
+|---|---|
+| Chrome GPU process baseline | ~200 MB |
+| WebGPU device + queues | ~150 MB |
+| Composite working textures (4K) | ~130 MB |
+| Decoded source texture cache (4K, 10-bit, 4 frames) | ~200 MB |
+| Output texture (4K 10-bit) | ~16 MB |
+| **Total per job (4K)** | **~700 MB** |
+| **Total per job (8K)** | **~1.8 GB** |
 
 Well under the 4 GB ceiling. 8K fits comfortably.
 
@@ -1407,6 +1424,23 @@ FreeCut's harness downloads via Playwright's download API to local disk; it does
 | `02-workers-threading.refined.md` | 2478 | SCOUT-02 verified AudioWorklet `numberOfInputs: 0` (NOT 1) and SoundTouch source-pushed-via-port; vendored soundtouchjs v0.2.3 LGPL v2.1 |
 | `03-playback-engine.refined.md` | 2360 | SCOUT-03 verified mediabunny UrlSource exists and the pixelFormat: 'P010' option does NOT exist |
 
+### 14R. Code References — nle-engine (reference, NOT canon)
+
+> nle-engine has **no cloud render** — `src/lib/nle/headless/api.ts` (2,820 LOC) is the closest reference. The engine's Xvfb+SwiftShader headless setup (its Decision 12) is an ALIGNED reference for this spec's headless-Chrome infrastructure; the cloud pipeline itself is SPEC-ONLY. Full reconciliation: `19-code-references.md`.
+
+| Spec section | Engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §4.1 GPU flags | `scripts/run-nle-tests.mjs:30` | `'--use-webgpu-adapter=swiftshader',` | CORRECTIVE | Engine forces software WebGPU by design; spec's real-GPU flags win for cloud render |
+| Xvfb prerequisite | `.agents/DECISIONS.md:226` | `` `--headless=new` alone returns `null` from `requestAdapter()`. `` | ALIGNED (CI) | Xvfb mandatory even headless; spec §4.1 gains the CI-fallback note |
+| §15.K 9-method surface | `src/lib/nle/headless/api.ts:88` | `export interface NleHeadlessApi {` | ALIGNED | Mirrors FreeCut's `window.freecut` surface |
+| §11.2 StaticClock | `.agents/DECISIONS.md:29` | `The `Clock` class derives time from `AudioContext.currentTime`` | CORRECTIVE | One real-time clock only; spec's StaticClock render entry is required |
+| §14 single-frame delivery | `src/lib/nle/headless/api.ts:95` | `Grab one frame as an image blob (default: full-res PNG).` | ALIGNED | renderFrame → PNG blob matches the frame-grab pattern |
+| HTTP driver | `gaps/audit/MASTER.md:101` | `Node-side HTTP headless driver + workspace writer lock` | ENGINE-GAP | Listed P3 in engine; spec 15 §8 is the contract |
+| §10 crash recovery | — | COULD-NOT-VERIFY | SPEC-ONLY | No queue/supervisor in engine |
+| §18 Docker/RunPod | — | COULD-NOT-VERIFY (no Dockerfile) | SPEC-ONLY | FreeCut's Dockerfile remains the reference |
+| Error-path discipline | `gaps/audit/G-test-coverage.md:26` | `Total error/boundary ≈ 12/128 (9%).` | CORRECTIVE | Spec's explicit failure-state assertions are the bar |
+| CI smoke reference | `scripts/run-nle-tests.mjs:8` | `headless Chrome REQUIRES Xvfb` | ALIGNED | Working Xvfb + software-Vulkan reference for the smoke tier |
+
 ---
 
 ## 15. Corrections to Seed Spec
@@ -1473,7 +1507,7 @@ Without these, `requestAdapter()` returns null on NVIDIA drivers 570+ (RunPod de
 
 **Seed spec §5.1 line 362:** `return buffer.getChannelData(0);  // mono for now; extend to multi-channel`
 
-**Reality:** "Mono for now" is a placeholder. Real projects need stereo minimum, often 5.1 or 7.1. The refined spec keeps the placeholder but explicitly notes it must be extended to multi-channel for v1.
+**Reality:** "Mono for now" is a placeholder. Real projects need stereo minimum, often 5.1 or 7.1. Round-7 edit: the placeholder is retired — `renderAudio()` now returns per-channel planes (`Float32Array[]`, stereo minimum) for v1 (see §5.1).
 
 ### §15.J — Seed spec's memory budget is missing GPU memory accounting
 
@@ -2232,6 +2266,8 @@ CMD ["node", "headless/serve.mjs", "--workspace", "/workspace", "--port", "8787"
 
 ### §18.2 Our RunPod GPU Dockerfile (UNTESTED — needs verification on RunPod)
 
+> When promoting from UNTESTED: fix inline RUN comments + apt-key deprecation (11-cloud-render.audit.md Issue 3).
+
 Based on tigerabrodi's verified blog recipe + FreeCut's Dockerfile. **Mark as "untested, needs verification on RunPod"** per task instructions.
 
 ```dockerfile
@@ -2420,10 +2456,10 @@ only; PRs from forks skip Tier 2 (see spec 17 §9 "which tiers run when").
 - `single-frame-render-pixel-match` — renders frame 0 of `tests/fixtures/projects/simple-cut.json` via `POST /api/engine/render-frame` (per spec 15 §8.4), pixel-diffs the returned PNG against `tests/fixtures/references/simple-cut-frame-0.png`; tolerance `0%` (WYSIWYG contract, §11.3)
 - `multi-frame-render-100-frames-all-correct` — renders frames 0–99 of `simple-cut.json`; every frame's SHA-256 matches its reference hash; no frame skipped, no frame duplicated
 - `ffmpeg-pipe-100-frames-to-prores-plays-via-ffprobe` — pipes 100 frames of `simple-cut.json` to ffmpeg via Path B (§11.4); runs `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,profile,pix_fmt,width,height output.mov`; asserts `codec_name=prores`, `profile=4` (ProRes 4444), `pix_fmt=yuva444p10le`, `width=1920`, `height=1080`
-- `offline-audio-context-renders-pcm-matching-reference` — `engine.audio.renderAudio()` on `tests/fixtures/projects/varispeed.json` returns a `Float32Array` whose SHA-256 matches `tests/fixtures/references/varispeed-audio.pcm.sha256`; sample count = `Math.ceil(projectDuration * sampleRate)`
+- `offline-audio-context-renders-pcm-matching-reference` — `engine.audio.renderAudio()` on `tests/fixtures/projects/varispeed.json` (registered in spec 17 §5.3 in Round 7) returns per-channel `Float32Array[]` planes (§5.1) whose SHA-256 (per channel, concatenated) matches `tests/fixtures/references/varispeed-audio.pcm.sha256`; total sample count = `Math.ceil(projectDuration * sampleRate) * channelCount`
 - `audio-plus-video-mux-plays-correctly` — renders both video (Path B → 100 frames ProRes) and audio (`renderAudio` → PCM), then `ffmpeg -i video.mov -i audio.wav -c copy output.mov`; output MOV plays in `ffplay` (exit 0) and `ffprobe` reports 1 video + 1 audio stream
 - `wysiwyg-browser-vs-cloud-zero-pixel-diff` — the critical test (§11.3): renders frames `[0, 30, 100, 500, 1000]` of `simple-cut.json` via both `createInteractiveEngine()` (browser preview path) and `createRenderEngine()` (cloud path); pixel-diffs each frame; tolerance `0%` (any diff > 0 pixels fails the build). This is the test that enforces the "one engine, two entry points" contract
-- `audio-wysiwyg-realtime-vs-offline-bit-identical-pcm` — renders `varispeed.json` audio via both `AudioContext` (real-time, with SoundTouch varispeed AudioWorklet) and `OfflineAudioContext` (offline render path); the two `Float32Array` outputs are bit-identical (sample-by-sample `===` comparison). Verifies §11.2 claim that the only difference between the two paths is the clock + output target, not the audio graph
+- `audio-wysiwyg-realtime-vs-offline-bit-identical-pcm` — renders `varispeed.json` audio via both `AudioContext` (real-time, with SoundTouch varispeed AudioWorklet) and `OfflineAudioContext` (offline render path); the two `Float32Array[]` outputs are bit-identical (per-channel, sample-by-sample `===` comparison). Verifies §11.2 claim that the only difference between the two paths is the clock + output target, not the audio graph
 - `gpu-readback-pipelining-3-frames-in-flight-throughput` — with N=3 frames in flight (per §7.3), measures wall-clock time to render+readback 100 frames at 4K; effective throughput ≥ 30 fps (i.e. 100 frames in ≤ 3.3 s of GPU time, plus startup overhead). Records the measured throughput in the test report for trend analysis
 - `4k-10min-project-completes-under-10min` — renders `tests/fixtures/projects/4k-5min.json` × 2 (10 min total) at 3840×2160 ProRes 422 HQ; wall-clock < 10 min (i.e. ≥ 1× realtime; target per SCOUT-11 is ~30-50 fps effective throughput, §7.6)
 - `8k-1min-project-completes-under-5min` — renders `tests/fixtures/projects/8k-1min.json` at 7680×4320 ProRes 4444; wall-clock < 5 min (5× realtime headroom; A100 recommended per §18.2 RunPod template)
@@ -2437,6 +2473,8 @@ only; PRs from forks skip Tier 2 (see spec 17 §9 "which tiers run when").
 ### Tier 3: UI tests
 
 [Filename: `tests/integration/11-cloud-render/export-dialog.ui.test.ts`]
+
+The export dialog's visual layout, panel placement, and `data-testid` inventory are owned by `18-ui-shell.md` (Deliver page); the tests below assert behavior only and inherit layout changes from spec 18.
 
 - `keyboard-cmd-shift-e-opens-export-dialog` — `page.keyboard.press('Meta+Shift+e')` opens the export modal; `expect(page.locator('[data-testid="export-dialog"]')).toBeVisible()`; resulting `SceneState` is unchanged (state WYSIWYG, spec 17 §6.1)
 - `keyboard-selects-prores-4444-via-arrow-keys` — with dialog open, `Tab` focuses the format `<select>`, `ArrowDown` × N selects `prores-4444`; `expect(page.locator('[data-testid="export-format-select"]')).toHaveValue('prores-4444')`
@@ -2497,4 +2535,4 @@ npm run regen-references -- --filter "11-cloud-render"
 
 ---
 
-**End of `11-cloud-render.refined.md`.** Next: `12-testing-strategy.md`.
+**End of `11-cloud-render.refined.md`.** Next: `12-testing-strategy.refined.md`.

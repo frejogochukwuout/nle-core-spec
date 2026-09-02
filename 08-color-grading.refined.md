@@ -34,7 +34,7 @@ Define the color grading toolset: the effects, their parameters, their UI, and t
 ## 2. Goals
 
 1. **Resolve-style toolset.** Wheels, curves, levels, qualifier, power window, LUT, vibrance.
-2. **Scene-linear math.** All grading operates on linear-light values (see `04-renderer-color.md`).
+2. **Scene-linear math.** All grading operates on linear-light values (see `04-renderer-color.refined.md`).
 3. **10-bit precision.** LUT data, curve LUTs, and all intermediate textures are 16-bit (or higher).
 4. **Real-time feedback.** Adjustments appear within 1 frame (~33ms).
 5. **Scope accuracy.** Scopes operate on the same 10-bit data as the grade.
@@ -904,6 +904,8 @@ Read in full:
 
 ❗ **No dedicated panels found for**: vibrance, brightness, contrast, exposure, hue shift, saturation, temperature, tint, levels, grayscale, sepia, invert, chroma key. These all use the generic `gpu-effect-panel.tsx` (which auto-renders `<SliderInput>` rows from the effect's `params` definition). For our port, we recommend dedicated panels for `exposure`, `chroma-key`, and `levels` (the most commonly adjusted), and leave the rest as generic.
 
+UI-surface scope note (Round 7): the DaVinci-derived UI shell (spec 18, from `ui-mock/davinci_resolve_ui_mock.html`) is **simplified** — its Color dock page hosts this spec's panels in a simplified single-column layout, with **no Resolve-style node graph or gallery**; grading surfaces via the shell's Color workspace and the inspector's Effects tab. Scope placement (§11.4) follows spec 18 §4.8's page inventory.
+
 ### Q7. FreeCut `gpu-effects/effects-pipeline.ts` (1132 LOC) ✅
 
 Read in full. Key facts:
@@ -1007,6 +1009,26 @@ UI reference only — not code. FreeCut's `gpu-wheels-panel.tsx` is already heav
 | `src/features/color/panels/qualifier-panel.tsx` | Ported UI |
 | `src/features/color/panels/power-window-panel.tsx` | Ported UI |
 | `src/features/color/panels/gradient-map-panel.tsx` | Ported UI |
+
+### 15A. Code References — nle-engine (reference, NOT canon)
+
+> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room FreeCut-port **in-between reference, NOT canon**. It de-risks implementation but inherits FreeCut patterns this spec corrects (8-bit sRGB pipeline, JSON-RPC+$ref headless protocol, class-based API, procedural media, single-tier tests, zero workers). Where engine and spec conflict, **the spec wins**; deltas are documented, not adopted. Full reconciliation: `19-code-references.md`.
+
+| Spec section | nle-engine file:line | verified quote | status | note |
+|---|---|---|---|---|
+| §3 effect inventory | `src/lib/nle/effects/pipeline.ts:4559` | `registerEffects({` | ALIGNED | Full tool inventory; registry counts 43→44 (Wave 3E) |
+| §13.Q7 registry pattern | `src/lib/nle/effects/pipeline.ts:3003` | `export const GPU_EFFECT_REGISTRY = new Map<string, GpuEffectDefinition>();` | ALIGNED | Same Map + buckets + registerEffects walk |
+| §4.1/§16.A wheels model | `src/lib/nle/effects/pipeline.ts:1883` | `fn wheelTint(color: vec3f, hue: f32, amount: f32, mask: f32) -> vec3f {` | ALIGNED | Corrected (hue, amount) + scalar lift/gamma/gain/offset — confirms §16.A |
+| §4.2 scene-linear port | `src/lib/nle/effects/pipeline.ts:1894` | `let luma = luminance601(c);` | CORRECTIVE | 8-bit gamma sRGB + BT.601 luma; spec's 10-bit linear wins (Decision 5) |
+| §7.2/§5.2 precision | `src/lib/nle/effects/pipeline.ts:37` | `Ping-pong chaining (effects-pipeline.ts:477-596). Two \`rgba8unorm\`` | CORRECTIVE | 8-bit chain; rgba16float/uint win |
+| §7.2 .cube parser | `src/lib/nle/effects/lut.ts:49` | `rgba8: size*size*size*4 bytes, red fastest axis` | CORRECTIVE | 8-bit quantization; spec's Uint16Array port wins |
+| §7.4 LUT sRGB bug | `src/lib/nle/effects/lut.ts:337` | `let graded = textureSample(lutTex, texSampler, coords).rgb;` | CORRECTIVE | No linear↔sRGB conversion (FreeCut bug preserved); spec §17.D wins |
+| §7.3 GPU upload | `src/lib/nle/effects/pipeline.ts:4812` | `format: 'rgba8unorm',` | CORRECTIVE | 8-bit data textures; spec overrides |
+| §12.1 runEffectChain | `src/lib/nle/effects/pipeline.ts:5086` | `const finalTex = this.runEffectChain(` | ALIGNED | Single-encoder chain + params-keyed cache |
+| §12.2 real-time cache | `src/lib/nle/playback/player.ts:1076` | `const enabledEffects = (clip.effects ?? []).filter((e) => e.enabled);` | ENGINE-GAP | Whole-frame re-render; no dirty-flag cache |
+| §11/§18 scopes | (directory census) | no scopes module in src/lib/nle | ENGINE-GAP | FreeCut's gpu-scopes/ is the only reference |
+
+Layout note: our §15 port targets (`src/platform/renderer/effects/*`) predate the engine; the engine's actual layout is `src/lib/nle/effects/*` — reconciled in `19-code-references.md` §11.
 
 ---
 
@@ -2070,8 +2092,9 @@ curve baking (control-point → LUT), LUT parsing/loading, qualifier hue
 selection math, power window shape math, vibrance selectivity, scope accuracy
 (histogram bins, waveform IRE mapping, vectorscope Cb/Cr placement, RGB
 Parade layout), and the high-level grading command protocol
-(`addEffect` / `updateEffect` / `removeEffect` / `toggleEffect` /
-`resetEffects` per spec 15 §4.3.52–§4.3.56).
+(`addEffect` / `updateEffect` / `removeEffect` / `toggleEffect` per spec 15
+§4.3.52–§4.3.56; `resetEffects` per spec 16 §3 — a UI-layer BatchCommand
+composite, not in spec 15).
 
 The following tests are **owned by spec 04** and are NOT re-stated here
 (references are to `04-renderer-color.refined.md` §17):
@@ -2104,10 +2127,11 @@ storage, 10-bit scope binning, etc.).
 [Filename: `tests/unit/08-color-grading/*.test.ts` — Vitest, Node only, no GPU.]
 
 - `cube-lut-parser-parses-valid-file` — `parseCubeLUT(validCubeText)` returns
-  `{ size: 33, data: Float32Array(33*33*33*3) }` with `data[0..2]` ===
-  `[0, 0, 0]` (first LUT entry) and `data[last-2..last]` === `[1, 1, 1]`
-  (last entry); verifies `.cube` header parsing (`LUT_3D_SIZE`, `LUT_SIZE`,
-  optional `DOMAIN_MIN`/`DOMAIN_MAX`)
+  `{ size: 33, data: Uint16Array(33*33*33*4) }` (rgba16uint, per §7.2) with
+  `data[0..2]` === `[0, 0, 0]` (first LUT entry), every `data[i*4+3]` ===
+  `65535` (fully-opaque alpha), and `data[last-3..last-1]` ===
+  `[65535, 65535, 65535]` (last entry); verifies `.cube` header parsing
+  (`LUT_3D_SIZE`, `LUT_SIZE`, optional `DOMAIN_MIN`/`DOMAIN_MAX`)
 - `cube-lut-parser-rejects-invalid-files` — `parseCubeLUT()` throws
   `LUTParseError` for: (a) wrong size header (`LUT_3D_SIZE 32` but 33³ data
   rows), (b) malformed header typo (`LUT_3DSIZE 33`), (c) out-of-range
@@ -2300,6 +2324,8 @@ test here. The four shortcuts already covered by spec 04 (`1`–`9` apply
 preset, `Cmd+1`–`Cmd+9` panel switch, `Shift+1` toggle effect 1, color-wheel
 drag latency) are cross-referenced in the boundary table above.]
 
+Panel-focus routing targets the spec 18 inspector tab set (video/audio/effects/transition); the Color shortcut lands on the spec 18 Color dock page, not a Resolve color page.
+
 - `keyboard-shift-1-through-9-toggles-effect-enabled` — for each
   `N ∈ [1, 9]`, with `N` effects on the selected clip,
   `page.keyboard.press('Shift+' + N)` issues `{type:'toggleEffect', params:
@@ -2318,14 +2344,14 @@ drag latency) are cross-referenced in the boundary table above.]
   the resolver maps this to `N × RemoveEffectCommand` wrapped in a
   `BatchCommand('reset-effects')` per spec 16 §8.2; resulting state has
   zero effects on the element; the batch is a single undo step
-- `keyboard-add-effect-state-wysiwg-matches-direct-engine-apply` —
+- `keyboard-add-effect-state-wysiwyg-matches-direct-engine-apply` —
   pressing `1` (apply preset 1) produces a `SceneState` byte-identical to
   calling `engine.command.apply({type:'addEffect', params:{elementId:
   <selected>, effect: <preset1>}})` directly (state WYSIWYG invariant,
   spec 17 §6.1); supplements spec 04's `keyboard-1-through-9-applies-effect-preset`
   which only checks the command fires — this test asserts byte-identical
   state equivalence with the direct API path
-- `keyboard-update-effect-params-state-wysiwg-matches-direct-engine-apply` —
+- `keyboard-update-effect-params-state-wysiwyg-matches-direct-engine-apply` —
   dragging the saturation slider on the Color Wheels panel by `Δy = 30px`
   issues `previewElements({updates:[{elementId, effectId, params:
   {saturation: <computed>}}]})` → `commitPreview()`; the committed state
@@ -2403,8 +2429,8 @@ drag latency) are cross-referenced in the boundary table above.]
 - `tests/fixtures/luts/swap-rb.cube` — 3D LUT that swaps R and B channels;
   owned by spec 04, reused here for LUT parser test coverage
 - `tests/fixtures/luts/typical-s-curve.cube` — common grading LUT with an
-  S-curve contrast shape (33×33×33, 16-bit data per entry); **new in
-  spec 08** for the 16-bit-precision-no-banding test (spec 04's `lut-identity-preserves-input`
+  S-curve contrast shape (33×33×33, 16-bit data per entry); **registered in
+  spec 17 §5.5 in Round 7** for the 16-bit-precision-no-banding test (spec 04's `lut-identity-preserves-input`
   does not exercise the 16-bit precision path because identity is exact
   at any precision)
 - `tests/fixtures/projects/with-color-grade.json` — single clip with a
@@ -2417,11 +2443,11 @@ drag latency) are cross-referenced in the boundary table above.]
 - `tests/fixtures/projects/with-qualifier.json` — single clip with a
   `secondaryQualifier` effect (`hueCenter: 120°, hueWidth: 30°,
   saturationMin: 0.4, lumMin: 0.0, lumMax: 1.0`); for qualifier UI +
-  feathered-edge tests
+  feathered-edge tests (registered in spec 17 §5.3 in Round 7)
 - `tests/fixtures/projects/with-power-window.json` — single clip with a
   `powerWindow` effect (`shape: 'ellipse', centerX: 0.5, centerY: 0.5,
   sizeX: 0.5, sizeY: 0.5, feather: 0.1, exposure: +0.5`); for power
-  window UI + mask-shape tests
+  window UI + mask-shape tests (registered in spec 17 §5.3 in Round 7)
 - `tests/fixtures/videos/10s-red-1080p.mp4` — solid red 8-bit, qualifier
   vectorscope test (owned by spec 04, reused here)
 - `tests/fixtures/videos/10s-green-1080p.mp4` — solid green, qualifier
@@ -2467,4 +2493,4 @@ npm run regen-references -- --filter "08-color-grading"
 
 ---
 
-**End of `08-color-grading.refined.md`.** Next: `09-project-model.md`.
+**End of `08-color-grading.refined.md`.** Next: `09-project-model.refined.md`.

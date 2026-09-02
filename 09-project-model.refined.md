@@ -193,11 +193,13 @@ interface MaskJSON {
 
 interface TransitionJSON {
   id: string;
-  type: 'crossfade' | 'wipe' | 'slide' | 'iris' | 'glitch' | ...;
+  type: 'crossfade';                    // structural only — spec 07 §6.1A (Round-7 amendment)
+  presentation: string;                 // registry key ('fade' | 'wipe-left' | ...)
   duration: MediaTime;
-  params: Record<string, number | string | boolean>;
-  elementAId: string;
-  elementBId: string;
+  alignment: number;                    // 0..1, default 0.5 — cut-centered window
+  timing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+  leftElementId: string;                // (was elementAId)
+  rightElementId: string;               // (was elementBId)
 }
 
 interface MediaRecord {
@@ -252,6 +254,11 @@ interface ProjectUIState {
   // ... (UI prefs, not part of WYSIWYG)
 }
 
+```
+
+> The full `ProjectUIState` field inventory (workspace/panel layout, inspector state, timeline view) is owned by `18-ui-shell.md`; this spec persists it opaquely and MUST NOT gate WYSIWYG correctness on it (§2 Goal 6).
+
+```ts
 interface TimelineViewState {
   pixelsPerSecond: number;
   scrollLeft: number;
@@ -349,7 +356,7 @@ class OPFSStorage implements Storage {
       const file = await fileHandle.getFile();
       const text = await file.text();
       const parsed = JSON.parse(text);
-      return ProjectSchema.parse(parsed);  // Zod validation
+      return parsed as ProjectJSON;  // raw JSON — validation + migration happen at the ProjectManager layer (§5.1: migrateProject → ProjectSchema.parse; a z.literal(N) parse here would reject pre-migration projects)
     } catch (e) {
       if (e.name === 'NotFoundError') return null;
       throw e;
@@ -1904,7 +1911,26 @@ Every file read by the scout with a one-line summary.
 | `src/features/project-bundle/schemas/project-schema.ts` | 919 | (not read in detail) Zod schema for project bundle. |
 | `src/features/project-bundle/types/bundle.ts` | (not read) | `BundleManifest`, `BundleProject`, `ExportProgress`, `ImportResult`, `ImportConflict` types. |
 
-### 10.3 GitHub issues (kimdogyeom)
+### 10.3 Code References — nle-engine (reference, NOT canon)
+
+> nle-engine (github.com/bearachprema/nle-engine) is an in-between clean-room port used to de-risk implementation. It is **NOT canon**; where it conflicts with this spec, **the spec wins**. The engine's own persistence-gap audit (`gaps/audit/E2-persistence-serialization.md`) is the delta record. Full reconciliation: `19-code-references.md` (§7 answers the engine's D1/D5 decisions from this spec).
+
+| Spec section | Engine file:line (or gaps/audit) | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §3.1 ProjectJSON schema | `src/lib/nle/core/types.ts:1180` | `export interface Project {` | CORRECTIVE | FreeCut-shaped single-timeline container; spec's metadata/settings/scenes wins (engine D1 resolved) |
+| §3.3 Zod validation | `src/lib/nle/headless/api.ts:2265` | `if (!p.id \|\| !p.name \|\| !p.timeline) {` | CORRECTIVE | 3-field presence stub; full ProjectSchema wins |
+| §3.3 version literal | `src/lib/nle/headless/api.ts:1737` | `schemaVersion: z.number().int().positive().optional(),` | CORRECTIVE | Optional vs z.literal(N); spec wins |
+| §5.1 migration framework | `gaps/audit/MASTER.md:65` | `No project serialize/hydrate at all; \`schemaVersion\` written, never read` | ENGINE-GAP | E2's persistence module (~350 LOC) is a port target of §5 |
+| §4.1/§4.4 OPFS | `gaps/audit/E2-persistence-serialization.md:107` | `There is no durable project storage` | ENGINE-GAP | Spec's OPFS layout is what engine Wave 4B builds |
+| §4 save path integrity | `src/lib/nle/headless/api.ts:1069` | `project: input.project, // Wave 2 will replace with the rebuilt project.` | CORRECTIVE | Fake editProject round-trip (engine P0.4); spec's serialize-then-parse wins |
+| storage seam | `src/lib/nle/headless/api.ts:2578` | `serializeProject?: () => Project;` | ALIGNED | Optional serialize hook reserved (unwired) |
+| wire shape (D1) | `src/lib/nle/headless/api.ts:1745` | `fps: z.number().int().min(1).max(240),` | CORRECTIVE | Two conflicting Project shapes in one module; spec 15's ProjectJSON answers D1 |
+| §6 autosave ↔ undo | `src/lib/nle/timeline/timeline.ts:1746` | `function snapshotsEqual(a: TimelineData, b: TimelineData): boolean {` | CORRECTIVE | Equality ignores keyframes (P0.6); spec's round-trip fidelity bar wins |
+| §5 load normalization | `gaps/audit/MASTER.md:85` | `\`restore()\` weak load path: no in/out sanitize, no orphan prune` | CORRECTIVE | Spec's migrate→normalize→warnings wins |
+| §7.2 media persistence | `gaps/audit/E2-persistence-serialization.md:156` | `No media persistence plane` | ENGINE-GAP | Spec's MediaRecord[] answers it |
+| §7.1 import probe | `src/lib/nle/headless/api.ts:2775` | `// Wave 1 stub: the real impl uses OPFS + mediabunny to decode + probe.` | CORRECTIVE | Engine probe is a stub; spec §7.1's flow is the growth path |
+
+### 10.4 GitHub issues (kimdogyeom)
 
 | Issue | Title | State | Body length | Source URL |
 |---|---|---|---|---|
@@ -2486,18 +2512,18 @@ The scout's notable findings, in priority order for the implementation team:
 **Schema validation (Zod):**
 
 - `schema-parse-valid-project-succeeds` — `ProjectSchema.parse(validProject)`
-  returns a typed project; `metadata.id` matches UUID v4 regex; `version`
-  equals `CURRENT_PROJECT_VERSION`
+  returns a typed project; `metadata.id` matches UUID v4 regex;
+  `schemaVersion` equals `CURRENT_SCHEMA_VERSION`
 - `schema-parse-missing-required-field-fails` — `{ scenes: [...] }` (no
-  `metadata`, no `version`) throws `ZodError` with `issue.code = 'invalid_type'`
+  `metadata`, no `schemaVersion`) throws `ZodError` with `issue.code = 'invalid_type'`
   pointing at `metadata`
 - `schema-parse-wrong-type-fails` — `metadata: { id: 123, name: "x" }` (id not
   string) throws `ZodError` with `issue.path = ['metadata', 'id']`
 - `schema-parse-invalid-uuid-fails` — `metadata.id = "not-a-uuid"` throws
   `ZodError` with `issue.code = 'invalid_string'` and `issue.message`
   mentioning UUID v4
-- `schema-parse-invalid-version-fails` — `version: 99` (above current) throws
-  `ZodError` (accepted range is `[0, CURRENT_PROJECT_VERSION]`)
+- `schema-parse-invalid-version-fails` — `schemaVersion: 99` (above current)
+  throws `ZodError` (Correction #11 ceiling check; `CURRENT_SCHEMA_VERSION`)
 - `schema-discriminated-union-element-types` — for each of the 6 element
   kinds (`video` / `audio` / `text` / `image` / `shape` / `adjustment`),
   a minimal valid object parses to the correct `Element` variant; cross-kind
@@ -2516,8 +2542,9 @@ The scout's notable findings, in priority order for the implementation team:
 - `project-round-trip-json-deep-equals-original` — for any `ProjectJSON`
   produced by the engine, `JSON.parse(JSON.stringify(project))` deep-equals
   the original (no field loss, no key reordering that breaks equality)
-- `migration-v1-to-v2-applies-correctly` — load `test-projects/v1-minimal.json`,
-  run `migrate(project, v1 → v2)`, assert `version === 2` and the v2-specific
+- `migration-v1-to-v2-applies-correctly` — load
+  `tests/fixtures/projects/09/v1-minimal.json`, run `migrate(project, v1 → v2)`,
+  assert `schemaVersion === 2` and the v2-specific
   field shape is present (e.g., new default `settings.canvas` value applied)
 - `migration-noop-when-already-at-target` — `migrate(project, v2 → v2)`
   returns the project byte-identically (early-return on `from === to`)
@@ -2630,7 +2657,7 @@ browser via Playwright, against a live OPFS instance.
   `media.importBlob(...)` each; assert no `QuotaExceededError` raised;
   `navigator.storage.estimate()` reports ~1 GB usage
 - `save-1000-elements-perf-save-under-2s-load-under-1s` — load
-  `test-projects/v1-large.json` (1000 elements, 50 tracks, 100 media
+  `tests/fixtures/projects/09/v1-large.json` (1000 elements, 50 tracks, 100 media
   records); `saveProject` completes in `< 2000 ms`; `loadProject` (cold,
   OPFS cache empty) completes in `< 1000 ms`. Asserted via `performance.now()`
   brackets around the call. **This is the perf gate for spec 09.**
@@ -2864,7 +2891,7 @@ test('rename during save waits for save (#873)', async () => {
 
   // Concurrently rename. withProjectLock must queue this behind the save.
   const renamePromise = engine.command.apply({
-    type: 'renameProject',  // spec 15 EngineCommand (params: { id, name })
+    type: 'renameProject',  // spec 15 §4.1 Project category (Round-7 addition; maps to engine.project.renameProject({ id, name }))
     params: { id: projectId, name: 'New Name' },
   });
 
@@ -2898,7 +2925,7 @@ test('delete during save waits for save then deletes (#873)', async () => {
 
   // Concurrently delete. withProjectLock queues delete behind save.
   const deletePromise = engine.command.apply({
-    type: 'deleteProject',  // spec 15 EngineCommand (params: { id })
+    type: 'deleteProject',  // spec 15 §4.1 Project category (Round-7 addition; maps to engine.project.deleteProject({ id }))
     params: { id: projectId },
   });
 
@@ -2951,22 +2978,26 @@ test('rename error propagates — no silent success (#873)', async () => {
 - `tests/fixtures/projects/09/v1-minimal.json` — minimal valid v1
   project: 1 scene, 1 track, 1 video element, 1 media record. ~30
   lines. Used by Tier 1 schema tests and Tier 3 `Cmd+O` test.
+  (registered in spec 17 §5.3 in Round 7)
 - `tests/fixtures/projects/09/v1-large.json` — stress fixture: 1000
   elements across 50 tracks, 100 media records, 10 scenes, all 6
   element kinds represented. Used by Tier 2 perf gate
   (`save-1000-elements-perf-save-under-2s-load-under-1s`) and property
   tests' edge-case sampling. ~50 KB minified.
+  (registered in spec 17 §5.3 in Round 7)
 - `tests/fixtures/projects/09/v0-legacy.json` — pre-v1 format (hypothetical
   future-past format used to exercise the migration framework end-to-end).
   Used by `migration-v1-to-v2-applies-correctly`, `migration-idempotency`,
   and kimdogyeom #871 test. Generated by running `migrate(v1, v1 → v0)`
   through a synthetic reverse-migration (test-only helper, never shipped).
+  (registered in spec 17 §5.3 in Round 7)
 - `tests/fixtures/projects/09/dirty-state.json` — project with
   `metadata.updatedAt` older than the timeline mutations, used to test
-  the `Cmd+W` dirty-confirm dialog.
+  the `Cmd+W` dirty-confirm dialog. (registered in spec 17 §5.3 in
+  Round 7)
 - `tests/fixtures/projects/09/ntsc-29.97.json` — project with
   `FrameRate({ num: 30000, den: 1001 })`, used by `framerate-rational`
-  schema test and property test.
+  schema test and property test. (registered in spec 17 §5.3 in Round 7)
 - `tests/fixtures/blobs/synthetic-10mb-{0..99}.bin` — 100 × 10 MB
   deterministic synthetic blobs (PRNG seeded at fixed value) for the
   OPFS quota test. Generated by a `tests/fixtures/blobs/generate.ts`

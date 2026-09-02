@@ -203,7 +203,7 @@ device.queue.writeTexture(
 
 **Why this path:** `copyExternalImageToTexture` for a `VideoFrame` performs an internal YUV→RGB conversion in the browser, which (a) collapses the 10-bit precision down to 8-bit and (b) uses the browser's choice of YUV→RGB matrix, denying us color management. To preserve 10-bit precision AND control the matrix, we extract the raw planes via `VideoFrame.copyTo` (per-plane API) and upload each to its own `r16uint` texture.
 
-⚠️ **Sub-agent scout task:** Validate `VideoFrame.copyTo({ plane: 'Y' | 'U' | 'V' })` works on Chromium 113+ for `I420P10`/`I420P12` formats. The WebCodecs spec defines `VideoFrame.copyTo` as supporting per-plane extraction (`options.plane` argument), but not all browsers expose this for all multi-plane formats. Fallback if needed: write a small WGSL compute shader to extract planes from a single `copyExternalImageToTexture`-uploaded `rgba8unorm` texture — but this loses precision.
+✅ **Verified — see §11.8 Q8 (Option 2):** `VideoFrame.copyTo` supports per-plane extraction (`options.plane`) per WebCodecs spec §5.4; per-plane upload via `device.queue.writeTexture` is the v1 path. The WGSL plane-extraction fallback stays on file for browsers that gate per-plane copies, at the documented precision cost.
 
 ### 5.2 Working linear-light texture
 
@@ -271,7 +271,7 @@ interface MediaColorInfo {
 }
 ```
 
-Store this on the `MediaInfo` (see `09-project-model.md`).
+Store this on the `MediaInfo` (see `09-project-model.refined.md`).
 
 ### 6.2 Color pipeline shaders
 
@@ -467,10 +467,9 @@ class WebGPURenderer implements Renderer {
     this.device = await adapter.requestDevice();
 
     this.context = canvas.getContext('webgpu');
+    // The canvas mounts in the viewer panel of the UI shell (spec 18, #viewer-panel); its CSS size drives descriptor.width/height (spec 18 §3.3).
     // Feature-detect 10-bit canvas support
-    this.format = device.features.has('rgba10a2unorm-render-storage')
-      ? 'rgba10a2unorm'
-      : 'rgba8unorm';
+    // per §11.9: exact feature name varies — try-configure rgba10a2unorm and fall back to rgba8unorm (DegradedRendererBanner path)
     this.context.configure({
       device: this.device,
       format: this.format,
@@ -521,10 +520,12 @@ class WebGPURenderer implements Renderer {
 
   async readPixels(texture: GPUTexture, format: 'rgb24' | 'yuv422p10le'): Promise<Uint8ClampedArray | Uint16Array> {
     // For cloud render — read back pixels for ffmpeg piping
-    // ... (see 11-cloud-render.md for details)
+    // ... (see 11-cloud-render.refined.md for details)
   }
 }
 ```
+
+**Pass-discipline rule (normative, Round 7):** every `applyEffects`/`applyMask`/`composite` step MUST consume pool-acquired textures and never return a texture owned by the pass; outputs are released at `recycleFrame()`. (The reference port's two live P0 bugs are exactly this failure: singleton `return this._pongTexture;` at nle-engine effects/pipeline.ts:5107, and mask combine textures shared across clips at gpu/mask-manager.ts:477.)
 
 ### 7.2 Bind group caching (key optimization)
 
@@ -641,7 +642,7 @@ We need these shaders (mapped from FreeCut's, ported to linear-light):
 | `waveform.wgsl` | Waveform/luminance scope (compute) | FreeCut `gpu-scopes/waveform-scope.ts:14-` |
 | `vectorscope.wgsl` | Vectorscope (compute) | FreeCut `gpu-scopes/vectorscope-scope.ts:14-59` (compute) + `:61-203` (render) |
 
-**Bit depth handling:** FreeCut's scopes assume 8-bit input — see `vectorscope-scope.ts:55-57` `atomicAdd(&accumR[idx], u32(max(r * 255.0, 1.0)))`. We must change `255.0` → `1023.0` (10-bit) and source-tex format → `rgba16float`. See §14.B.
+**Bit depth handling:** FreeCut's scopes assume 8-bit input — see `vectorscope-scope.ts:55-57` `atomicAdd(&accumR[idx], u32(max(r * 255.0, 1.0)))`. We must change `255.0` → `1023.0` (10-bit) and source-tex format → `rgba16float`. See §14.B. Scope canvases mount in the shell's Color workspace / inspector panels (spec 18); the DaVinci-derived shell has a Color dock page — scope placement follows spec 18 §4.8's page inventory.
 
 ---
 
@@ -693,7 +694,9 @@ For a 4K UHD (3840×2160) 10-bit project:
 - 5 sources (Y+U+V each): ~120 MB
 - Working ping-pong: ~132 MB
 - Mask SDF (2 inside/outside textures): ~66 MB
-- Total: ~320 MB
+- Total: ~340 MB
+
+> §16.6 is the canonical itemized per-frame budget (~340 MB at 4K UHD for the 5-layer case); this §10 summary is superseded by it.
 
 Well within the 4 GB ceiling.
 
@@ -706,6 +709,8 @@ For 8K (7680×4320), multiply by 4: ~1.3 GB per frame working set. Still fits in
 ### 11.1 Q1: FreeCut GPU infrastructure overview
 
 **Verified:** All of FreeCut's `src/infrastructure/gpu-*/` uses **`rgba8unorm`** exclusively. No 16-bit, no 10-bit, no HDR. No color management whatsoever. See §13 for the per-file LOC table and §16 for the texture format chain.
+
+nle-engine (clean-room FreeCut port) reproduces this 8-bit baseline — 29 `rgba8unorm` sites across 7 GPU files; the corrective mapping is in §13D and `19-code-references.md`.
 
 **Per-directory summary:**
 
@@ -1013,7 +1018,7 @@ device.lost.then(() => {
 3. Attempt re-init: re-request adapter + device, re-create pipelines, re-configure canvas.
 4. If re-init succeeds: emit `'device-recovered'`; continue rendering.
 5. If re-init fails (e.g., 3 retries): emit `'device-lost-permanent'`; surface to UI as a banner ("GPU unavailable — please reload the page").
-6. For cloud render mode: device loss mid-export = re-init + retry the failed frame (see `11-cloud-render.md`).
+6. For cloud render mode: device loss mid-export = re-init + retry the failed frame (see `11-cloud-render.refined.md`).
 
 ### 11.13 Q13: FreeCut `gpu-scopes/`
 
@@ -1157,6 +1162,25 @@ device.lost.then(() => {
 | `apps/web/src/services/renderer/compositor/wasm-compositor.ts` | 227 | `WasmCompositor` singleton (line 42-183). `ensureInitialized({ width, height })` (line 47-63) calls `initCompositor(w, h)` + `getCompositorCanvas()` from WASM, or `resizeCompositor` on size change. `syncTextures(textures: TextureUploadDescriptor[])` (line 72-88) releases stale textures + syncs current set via `uploadTexture` (WASM). Texture cache: `RenderedCacheEntry` (with `contentHash`) vs `ExternalCacheEntry` (with source identity check). `render(frame)` (line 90-97) calls WASM `renderFrame(frame)`. |
 | `apps/web/src/services/renderer/compositor/frame-descriptor.ts` | 581 | `buildFrameDescriptor({ node, renderer })` (line 30-65) walks the resolved node tree, builds `FrameDescriptor` + texture upload list. `collectNode` (line 67+) dispatches on node type: `RootNode` recurses, `ColorNode` builds a rendered texture + simple layer, `VideoNode` builds an external texture + layer with transform, etc. |
 | `apps/web/src/services/renderer/compositor/types.ts` | 79 | `FrameDescriptor` TS shape (mirror of Rust `frame.rs`). `TextureUploadDescriptor` discriminated union: `ExternalTextureDescriptor` (kind='external', source: CanvasImageSource) | `RenderedTextureDescriptor` (kind='rendered', contentHash: string, draw: TextureCanvasDrawFn). |
+
+### 13D. Code References — nle-engine (reference, NOT canon)
+
+> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room FreeCut-port **in-between reference, NOT canon** — it inherits FreeCut patterns this spec corrects (its GPU pipeline is 8-bit `rgba8unorm` throughout: 29 sites across 7 files). Where engine code conflicts with this spec, **the spec wins** (Decision 5). Full reconciliation: `19-code-references.md`.
+
+| Spec section | Engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §5.1 r16uint Y/U/V planes | `src/lib/nle/playback/player.ts:1263` | `format: 'rgba8unorm',` | CORRECTIVE | 8-bit source textures; spec's 10-bit per-plane r16uint path wins |
+| §5.2 rgba16float working | `src/lib/nle/gpu/compositor.ts:981` | `format: 'rgba8unorm',` | CORRECTIVE | 8-bit ping-pong; linear-light rgba16float wins |
+| §5.3 canvas config | `src/lib/nle/gpu/device.ts:71` | `_canvasFormat = navigator.gpu.getPreferredCanvasFormat();` | CORRECTIVE | Never sets colorSpace; spec's rgba10a2unorm + display-p3 wins |
+| LUT data texture | `src/lib/nle/effects/lut.ts:314` | `Format: rgba8unorm.` | CORRECTIVE | 8-bit LUT; spec ports to 16-bit |
+| §8.2 blend modes | `src/lib/nle/gpu/compositor.ts:32` | `export const BLEND_MODE_INDEX: Record<BlendMode, number> = {` | CORRECTIVE | 25-mode WGSL, 8-bit gamma space; spec's linear-light math wins |
+| §7.3 TexturePool | `src/lib/nle/gpu/texture-pool.ts:190` | `acquire(width: number, height: number, format: GPUTextureFormat = 'rgba8unorm'): GPUTexture {` | CORRECTIVE | Pool ported but dead code; adopt discipline, change default format |
+| §7.1 effect pass outputs | `src/lib/nle/effects/pipeline.ts:5107` | `return this._pongTexture;` | CORRECTIVE | Singleton return (engine P0.1); spec's per-layer outputs win |
+| §8.4 mask invert-once | `src/lib/nle/gpu/mask-manager.ts:478` | `invertNext: mask.shape.shape.maskInvert === true,` | CORRECTIVE | Shader + CPU double-invert (engine P0.2); spec's invert-once wins |
+| §7.1 all item types | `src/lib/nle/playback/player.ts:1038` | `if (clip.type !== 'video') continue;` | CORRECTIVE | Non-video items dropped; spec's dispatch wins |
+| §11.12 device loss | `src/lib/nle/gpu/device.ts:61` | `console.error('[GpuDevice] Device lost!', info.reason, info.message);` | ENGINE-GAP | Logs only; no recovery loop |
+| 8K support | `src/lib/nle/gpu/device.ts:56` | `maxTextureDimension2D: 4096,` | ENGINE-GAP | 4096 cap vs spec's 8K tests |
+| Transitions baseline | `src/lib/nle/transitions/pipeline.ts:115` | `this.format = 'rgba8unorm';` | CORRECTIVE | FreeCut 8-bit baseline reproduced |
 
 ---
 
@@ -2212,7 +2236,7 @@ Playwright + headless Chrome with WebGPU enabled
   fires, assert renderer's `handleDeviceLost()` re-creates the device,
   re-uploads the LUT, and the next `renderFrame()` call succeeds without
   throwing; assert one `lost` event → exactly one recovery cycle
-- `wysiwg-browser-render-equals-cloud-render` — render frame 42 of a
+- `wysiwyg-browser-render-equals-cloud-render` — render frame 42 of a
   multi-layer project via the interactive engine (browser) and via the
   headless render engine (same `buildFrameDescriptor` + same `WebGPURenderer`
   class); pixel-diff must be `0%` (state WYSIWYG invariant, spec 17 §6.1)
@@ -2347,4 +2371,4 @@ npm run regen-references -- --filter "04-renderer-color"
 
 ---
 
-**End of `04-renderer-color.refined.md`.** Next: `05-timeline.md`.
+**End of `04-renderer-color.refined.md`.** Next: `05-timeline.refined.md` (18-ui-shell and 19-code-references follow the 00-17 set).

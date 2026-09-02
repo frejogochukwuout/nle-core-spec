@@ -44,8 +44,8 @@ binding, no side effects until applied.
 The `EngineCommand` / `CommandResult` / `EngineEvent` JSON types used throughout
 this spec are defined canonically in `15-wire-protocol.md` (wire protocol).
 Where this spec shows `engine.command.apply({ type: '...', params: { ... } })`,
-the type and params shape comes from spec 15 §3 (`EngineCommand` schema) and the
-return shape comes from spec 15 §4 (`CommandResult` schema).
+the type and params shape comes from spec 15 §4 (`EngineCommand` union +
+params) and the return shape comes from spec 15 §6 (`CommandResult`).
 
 ---
 
@@ -285,7 +285,11 @@ the rendered pixel output).
 - **Coverage:** keyboard shortcuts (every binding in the keyboard shortcut
   table), mouse interactions (drag, trim handle drag, marquee select),
   drag-and-drop (clip to timeline, media library to timeline), component
-  state (timeline virtualization, toolbar mode switching, inspector panel)
+  state (timeline virtualization, toolbar mode switching, inspector panel),
+  and UI-shell panel contracts from 18-ui-shell.md (transport buttons, tool
+  buttons, track-header toggles, inspector tabs — each asserting the
+  `EngineCommand` the panel dispatches via
+  `window.__engine.command.apply()`, state-WYSIWYG style)
 - **What it deliberately excludes:** pixel output (that's Tier 2 — Tier 3
   asserts on `SceneState`, not on screenshots), op correctness (Tier 1)
 - **Why this tier exists:** the engine is *correct in isolation*, but the
@@ -482,6 +486,7 @@ Legend:
 | Keyboard shortcuts (every binding in the table) | — | — | ✅ | — | — | — |
 | Mouse interactions (drag, trim handle, marquee) | — | — | ✅ | — | — | — |
 | Drag-and-drop (media library → timeline) | — | — | ✅ | — | — | — |
+| UI shell panels (spec 18: transport, tools, inspector, track headers, deliver) | — | — | ✅ | — | — | — |
 | Undo / redo (single, batch, coalesced) | ✅ | — | ✅ | ✅ | — | — |
 | Project save / load (JSON round-trip) | ✅ | — | — | — | — | — |
 | Project schema migration (v1 → v2) | ✅ | — | — | — | — | — |
@@ -907,12 +912,32 @@ conforming to the project model schema (spec 09 §3).
 | `audio-mix.json` | 3 audio tracks (440Hz, 1000Hz, 100Hz) at -6dB each | 3 (audio) | 3 | Audio mix tests |
 | `audio-pan.json` | 1 stereo clip panned hard left, then hard right | 1 (audio) | 1 | Stereo pan tests |
 | `10-track-100-clip.json` | Stress test: 10 tracks, 100 clips total | 10 | 100 | Performance tests, property tests with large state |
+| `multi-track.json` | 5 tracks (1 main + 2 video overlays + 2 audio), 10 clips, no effects | 5 | 10 | Multi-select, sync-lock, range-removal tests (spec 06) |
+| `all-ops.json` | Every op family represented (≥1 element per family: split/trim/move/duplicate/rate-stretch/retime/freeze-frame/range-removal/mute-solo-lock) | 3 | 12 | Property-based no-overlap / source-bounds / locked-tracks suites seeded from a realistic state (spec 06) |
+| `with-effects.json` | 3 clips on main track with 2 stacked GPU effects (blur + color-wheels) | 1 | 3 | Tier 1 effectpass-resolution-chain-ordering + Tier 2 effect-ordering tests (spec 07) |
+| `with-masks.json` | 2 clips, each with 2 masks (rect + ellipse, one inverted) | 1 | 2 | Multi-mask chaining + invert-once semantics (spec 07 §8.3) |
+| `with-qualifier.json` | 1 clip with HSL qualifier targeting a known color region | 1 | 1 | Qualifier keying tests (spec 08) |
+| `with-power-window.json` | 1 clip with ellipse power window + JFA feather | 1 | 1 | Window region grading (spec 08) |
+| `green-screen.json` | 1 green-screen background clip for qualifier-mask keying (spec 07 §12.7) | 1 | 1 | Qualifier mask keyer tests (spec 07 Testing) |
+| `single-clip.json` | 1 clip on main track, 10 s | 1 | 1 | Keyboard recipes (spec 16 §9.2) |
+| `three-clips.json` | 3 clips in timeline order on main track (selection-navigation recipes) | 1 | 3 | Tab/Shift+Tab selection traversal (spec 16 §9) |
+| `varispeed.json` | 2 clips: one at 0.5× and one at 2× | 1 | 2 | Audio-WYSIWYG realtime-vs-offline render (spec 11 Testing) |
 | `4k-5min.json` | 4K UHD 5-minute project, 3 tracks, 15 clips | 3 | 15 | 4K render performance |
 | `8k-1min.json` | 8K UHD 1-minute project, 3 tracks, 5 clips | 3 | 5 | 8K render tests |
 | `ntsc-23976.json` | 23.976 fps NTSC project, 2 hours | 1 | 1 | NTSC drop-frame timing tests |
 | `pal-25.json` | 25 fps PAL project, 1 hour | 1 | 1 | PAL timing tests |
 | `hdr-pq.json` | HDR project with PQ transfer function, 1000 nits | 1 | 1 | HDR pipeline tests |
 | `hdr-hlg.json` | HDR project with HLG transfer function | 1 | 1 | HDR pipeline tests |
+
+> **Per-stream fixture namespacing (Round-7 rule):** streams may register
+> additional fixtures under a namespaced directory
+> `tests/fixtures/projects/<NN>/` (e.g. spec 09's `09/v1-minimal.json`) for
+> stream-local schema/migration fixtures that are never rendered; such
+> fixtures still register a row here. Registered in Round 7 under this rule
+> (spec 09): `09/v1-minimal.json` (v1 schema, minimal), `09/v1-large.json`
+> (v1 schema, 100+ clips), `09/v0-legacy.json` (pre-v1 shape needing
+> migration), `09/dirty-state.json` (overlaps + orphans + out-of-range
+> values for normalize/repair tests), `09/ntsc-29.97.json` (drop-frame rate).
 
 **Generation:** projects are hand-authored JSON, not generated. They
 live in `tests/fixtures/projects/`. The schema is defined in spec 09 §3.
@@ -962,6 +987,7 @@ For LUT application tests:
 | `gamma-2.2.cube` | 1D LUT | Applies gamma 2.2 (legacy gamma, intentionally wrong for linear pipeline — used to verify the LUT is applied *after* linearization, not before) |
 | `s-log3-to-rec709.cube` | 3D LUT, 33×33×33 | Sony S-Log3 to Rec.709 conversion (real-world LUT) |
 | `large-65.cube` | 3D LUT, 65×65×65 | Large LUT for memory/perf tests |
+| `typical-s-curve.cube` | 33×33×33 .cube, monotonically increasing S-curve | 16-bit-precision-no-banding test (spec 08) |
 
 **Generation:** LUTs are hand-authored `.cube` files. The format is
 defined by Adobe's spec (see spec 08 §6 for the parser).
@@ -1055,8 +1081,9 @@ test('state WYSIWYG: Cmd+B (split) == direct API call', async () => {
 ```
 
 **Coverage:** every keyboard shortcut in the shortcut table (spec 16
-§X) gets a state WYSIWYG test. Every mouse interaction (drag, trim
-handle, marquee) gets one too. This is the bulk of Tier 3 tests.
+§3, the 180-binding inventory) gets a state WYSIWYG test. Every mouse
+interaction (drag, trim handle, marquee) gets one too. This is the bulk
+of Tier 3 tests.
 
 **Failure mode:** if state1 ≠ state2, the UI is producing a different
 command than the direct API. The test failure artifact (see §13)
@@ -2188,20 +2215,25 @@ for that module.
 
 ### 14.2 Spec-by-spec mapping
 
+Process specs 13-17 (scout plan, phases, wire protocol, keyboard, test
+plan) carry their own test content inline (e.g. this spec's §18) and are
+exempt from the §4 template.
+
 | Spec | Module | Matrix rows (from §3) | Per-spec `## Testing` location |
 |---|---|---|---|
-| 01 | Core engine | Undo/redo, Project save/load, Worker lifecycle | `01-core-engine.refined.md` §X |
-| 02 | Workers & threading | Worker lifecycle, OPFS persistence | `02-workers-threading.refined.md` §X |
-| 03 | Playback engine | Playback frame accuracy, Scrub latency, Varispeed | `03-playback-engine.refined.md` §X |
-| 04 | Renderer & color | Color space conversion, Transfer functions, YUV/RGB, Multi-track blend, Opacity, Masks | `04-renderer-color.refined.md` §X |
-| 05 | Timeline | Keyboard shortcuts, Mouse interactions, Drag-and-drop | `05-timeline.refined.md` §X |
-| 06 | NLE ops | Split, Trim, Ripple, Roll, Slip, Slide, Delete, Insert, Rate stretch, Retime, Freeze frame, Range removal | `06-nle-ops.refined.md` §X |
-| 07 | Composition | Multi-track blend, Transitions, Masks | `07-composition.refined.md` §X |
-| 08 | Color grading | Color wheels, Curves, LUT, Qualifier, Scopes | `08-color-grading.refined.md` §X |
-| 09 | Project model | Project save/load, Project schema migration, OPFS persistence | `09-project-model.refined.md` §X |
-| 10 | FCPXML export | FCPXML export, FCPXML import (manual) | `10-fcpxml-export.refined.md` §X |
-| 11 | Cloud render | Cloud render WYSIWYG, Memory ceiling (8K), Render time (4K, 8K) | `11-cloud-render.refined.md` §X |
-| 12 | Testing infrastructure | (this spec references 12; 12 references this spec) | `12-testing-strategy.refined.md` §X |
+| 01 | Core engine | Undo/redo, Project save/load, Worker lifecycle | `01-core-engine.refined.md` `## Testing` (≈2108) |
+| 02 | Workers & threading | Worker lifecycle, OPFS persistence | `02-workers-threading.refined.md` `## Testing` (≈2493) |
+| 03 | Playback engine | Playback frame accuracy, Scrub latency, Varispeed | `03-playback-engine.refined.md` `## Testing` (≈2371) |
+| 04 | Renderer & color | Color space conversion, Transfer functions, YUV/RGB, Multi-track blend, Opacity, Masks | `04-renderer-color.refined.md` `## 17. Testing` (≈2084) |
+| 05 | Timeline | Keyboard shortcuts, Mouse interactions, Drag-and-drop | `05-timeline.refined.md` `## Testing` (≈1428) |
+| 06 | NLE ops | Split, Trim, Ripple, Roll, Slip, Slide, Delete, Insert, Rate stretch, Retime, Freeze frame, Range removal | `06-nle-ops.refined.md` `## Testing` (≈2908) |
+| 07 | Composition | Multi-track blend, Transitions, Masks | `07-composition.refined.md` `## Testing` (≈1655) |
+| 08 | Color grading | Color wheels, Curves, LUT, Qualifier, Scopes | `08-color-grading.refined.md` `## 19. Testing` (≈2056) |
+| 09 | Project model | Project save/load, Project schema migration, OPFS persistence | `09-project-model.refined.md` `## Testing` (≈2465) |
+| 10 | FCPXML export | FCPXML export, FCPXML import (manual) | `10-fcpxml-export.refined.md` `## Testing` (≈1863) |
+| 11 | Cloud render | Cloud render WYSIWYG, Memory ceiling (8K), Render time (4K, 8K) | `11-cloud-render.refined.md` `## Testing` (≈2385) |
+| 12 | Testing infrastructure | (this spec references 12; 12 references this spec) | `12-testing-strategy.refined.md` `## Testing` (≈2362) |
+| 18 | UI shell | UI shell panels (row above) | `18-ui-shell.md` §12 (Tier 3 shell suite) |
 
 ### 14.3 Cross-references
 
@@ -2522,7 +2554,7 @@ For each spec 01 through 12:
 - **Lavapipe** — Mesa's software Vulkan implementation, used in CI for
   WebGPU on runners without a real GPU. See spec 12 §3.2.
 - **OPFS** — Origin Private File System, browser storage for large
-  files. See spec 09 §X.
+  files. See spec 09 §4.1 (OPFS).
 - **Test harness** — the HTML page (`tests/integration/test-harness.html`)
   that loads a project and exposes the engine to Playwright. See §15.6.
 
@@ -2565,9 +2597,31 @@ This section documents how this spec itself was tested for correctness.
 - [x] Each open question has a path to resolution (empirical data,
       investigation, or explicit decision)
 
+### 18.5 Code References — nle-engine (reference, NOT canon)
+
+nle-engine (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room
+FreeCut-port **in-between reference, NOT canon**. Its test reality is single-tier (one
+Playwright-driven in-app harness) — the pattern this spec's three-tier methodology corrects;
+its own audit independently recommends the same split. Where engine and spec conflict,
+**the spec wins**. Full reconciliation: `19-code-references.md`.
+
+| Spec 17 section | nle-engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §2.1 Tier 1 (Vitest) | `scripts/run-nle-tests.mjs:90` | `browser = await chromium.launch({` | CORRECTIVE | All 124 tests run in one browser page; no Node tier |
+| §2.1 Tier 1 | `gaps/audit/G-test-coverage.md:255` | `Two-tier runner: extract all CPU-only tests` | CORRECTIVE (converging) | Engine's own audit recommends the same tier split |
+| §2.1 Tier 2/3 harness | `scripts/run-nle-tests.mjs:27` | `const CHROME_FLAGS = [` | ALIGNED | Xvfb + software-Vulkan launch pattern proven in-container |
+| §9 CI strategy | `.agents/DECISIONS.md:218` | `Tests run via Playwright with Chrome under Xvfb + SwiftShader` | ALIGNED | Engine Decision 12 matches spec 12's software-GPU CI |
+| §2.2 error-path coverage | `gaps/audit/G-test-coverage.md:26` | `Total error/boundary ≈ 12/128 (9%).` | CORRECTIVE | 1 throw assertion in 124 tests; 113-item charter queued |
+| §4.2 worked-example realism | `src/app/page.tsx:2418` | `addTextItem: () => { throw new Error('addText not supported in minimal scaffold'); },` | CORRECTIVE | Advertised op that throws — exactly what contract tests catch |
+| §6.2 Pixel WYSIWYG | `gaps/audit/MASTER.md:28` | `Composition rendering \| renders zero pixels \| player.ts:1038` | ENGINE-GAP | Render loop drops non-video clips — evidence for Tier 2's necessity |
+| §7 property-based | `gaps/audit/E2-persistence-serialization.md:192` | `round-trip property test — JSON.parse(JSON.stringify(serialize(t)))` | ALIGNED (planned) | Engine roadmap adopts the same invariant philosophy |
+| §13 triage | `gaps/audit/G-test-coverage.md:248` | `A thrown error inside any test block escapes` | CORRECTIVE | No per-test isolation — §13.1's rails are the fix |
+| §16.1 checklist | `scripts/run-nle-tests.mjs:152` | `await page.click('button:has-text("Run All Milestones")');` | CORRECTIVE | DOM-scrape harness vs `window.__engine` predicate harness |
+
 ---
 
 **End of `17-test-plan.md`.** Next: per-spec `## Testing` sections (01
 through 12) follow the template in §4. Cross-references to spec 12
 (testing infrastructure) and `00-master-spec.md` (architectural decisions)
-throughout.
+throughout. Cross-references to spec 18 (UI shell panel tests, Tier 3) and
+spec 19 (engine-delta evidence for the methodology) are live as of Round 7.

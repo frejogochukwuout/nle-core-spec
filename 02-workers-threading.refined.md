@@ -86,6 +86,8 @@ We will need the following workers (mapped from FreeCut's inventory, pruned/rena
 
 **Total: 10 Web Workers + 1 AudioWorklet.** Pruned from FreeCut's full set (see §13 for FreeCut's complete inventory — it's larger than the seed spec's "21" claim once you count all the AI/analysis workers we will not adopt).
 
+> The private nle-engine port currently runs **zero** Web Workers (verified by grep — no `new Worker(` anywhere in its src), executing all decode/audio/waveform work on the main thread over procedural media. It is a corrective counter-example for this spec, not a reference implementation; see `19-code-references.md`.
+
 ---
 
 ## 4. `ManagedWorker` Abstraction (Adopt from FreeCut)
@@ -306,8 +308,8 @@ type DecodeResponse =
 // `VideoDecoder` produces — mediated by mediabunny's `VideoSampleSink`. For
 // 10-bit H.265 on Chromium this is typically `I420P10` or `I420P12`; for 8-bit
 // sources it's `I420` or `NV12`. mediabunny's `VideoSamplePixelFormat` enum
-// (see `03-playback-engine.md` §11 Q12 and `04-renderer-color.md` §14.C) lists
-// 19 supported formats — `I420P10`, `I420P12`, `I422P10`, `I422P12`,
+// (see `03-playback-engine.refined.md` §5.2 and `04-renderer-color.refined.md` §14.C) lists
+// 23 formats (19 YUV + 4 packed RGB) — `I420P10`, `I420P12`, `I422P10`, `I422P12`,
 // `I444P10`, `I444P12`, `I420`, `I422`, `I444`, `NV12`, `BGRA`, `RGBA`, and
 // others. NOTABLY `P010` (semi-planar 10-bit) is NOT in the enum — the
 // closest equivalent is `I420P10` (planar 10-bit). The renderer (spec 04
@@ -2011,12 +2013,16 @@ const sink = new mediabunny.VideoSampleSink(
 new mediabunny.VideoSampleSink(videoTrack, {
   hardwareAcceleration: 'prefer-hardware',
   optimizeForLatency: true,
-  // TODO: confirm mediabunny exposes pixelFormat option — FreeCut code does NOT set it
-  // pixelFormat: 'P010',  // hypothetical — needs verification against mediabunny API
+  // RESOLVED (2026-09-02, spec 03 §5.2 + §14.D, spec 04 §14.C): mediabunny's
+  // VideoSinkDecoderOptions exposes ONLY hardwareAcceleration and
+  // optimizeForLatency — there is NO pixelFormat option. 10-bit sources decode
+  // to whatever format the browser's VideoDecoder chooses (I420P10-family).
+  // Do NOT request a format here; rely on the browser's native output and
+  // convert in the GPU shader pipeline (spec 04 §6.2 yuv_to_linear).
 })
 ```
 
-> **CAVEAT**: I could not verify a `pixelFormat: 'P010'` option exists in mediabunny's `VideoSampleSink` config — FreeCut's code doesn't set it. The 10-bit pixel format may need to be queried from the `VideoFrame` after decode (`frame.format` property) or set via WebCodecs `VideoDecoderConfig` directly. **Sub-agent scout for stream 03 (playback-engine) should verify this against mediabunny's actual API.**
+> **RESOLVED — no longer open.** Spec 03's scout verified the mediabunny sink surface directly: `VideoSinkDecoderOptions = { hardwareAcceleration?, optimizeForLatency? }` only (media-sink.ts:1622-1633). The `frame.format` query path and the `new VideoFrame(src, { format: 'I420P10' })` re-allocation escape hatch are documented in spec 03 §14.D.
 
 #### Other mediabunny exports used by OpenCut-classic (`mediabunny.ts:1-7`)
 
@@ -2302,6 +2308,24 @@ Total `.worker.ts` + `*-worker.ts` files in `src/`:
 - `src/shared/utils/managed-worker.test.ts`
 - `src/shared/utils/managed-worker-pool.test.ts`
 - `src/shared/utils/managed-worker-session.test.ts`
+
+> nle-engine's zero-worker reality and the corrective deltas are mapped in §13B; consolidated in `19-code-references.md`.
+
+### 13B. Code References — nle-engine (reference, NOT canon)
+
+> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room FreeCut-port **in-between reference, NOT canon**. It de-risks implementation but inherits FreeCut patterns these specs correct (8-bit rgba8unorm, JSON-RPC + `$ref`, class-API mutation surface, single-tier tests, procedural media, zero Web Workers). Where engine code conflicts with this spec, **the spec wins**. Full reconciliation: `19-code-references.md`.
+
+| Spec section | Engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §3 worker inventory | (grep src) | no `new Worker(` matches | ENGINE-GAP | Zero workers; entire §3 inventory unimplemented — spec wins |
+| §4 ManagedWorker | — | COULD-NOT-VERIFY (no abstraction exists) | SPEC-ONLY | Greenfield |
+| §8.1 decode.worker | `src/lib/nle/playback/player.ts:1059` | `const bytes = this._registry.renderVideoFrame(clip.source.sourceId, sourceFrame);` | ENGINE-GAP | Decode is a synchronous procedural call |
+| §7.1 SoundTouch varispeed | `src/lib/nle/audio/soundtouch-processor.worklet.ts:13` | `We implement a simpler granular pitch shifter:` | CORRECTIVE | Simplified shifter vs vendored SoundTouch; spec wins |
+| §7.2 worklet topology | `src/lib/nle/audio/soundtouch-processor.worklet.ts:47` | `NLE_PITCH_SHIFTER_PROCESSOR_NAME = 'nle-pitch-shifter';` | CORRECTIVE | 1-in/1-out + k-rate param vs spec's 0-input + port-push (OfflineAudioContext parity); spec wins |
+| §8.2 audio-decode.worker | `src/lib/nle/media/virtual-audio.ts:4` | `Generates audio samples on-demand. NO disk I/O, NO fetch.` | CORRECTIVE | Procedural VirtualAudio replaces the PCM pipeline |
+| §8.6 opfs.worker | `src/lib/nle/media/registry.ts:24` | Returns a virtual URL scheme `virtual://video/{id}` | ENGINE-GAP | No OPFS plane (engine D5); spec wins |
+| §11 Q12 mediabunny | `src/lib/nle/media/metadata.ts:81` | `a custom decoder path (mediabunny + AudioSampleSink)` | ENGINE-GAP | All 9 mediabunny mentions are comments only — zero imports |
+| §6 COOP/COEP | (grep) | no SharedArrayBuffer usage | SPEC-ONLY | No isolation headers needed by engine |
 
 ---
 
@@ -2600,4 +2624,4 @@ npm run test:property -- --filter "02-workers-threading"
 
 ---
 
-**End of `02-workers-threading.refined.md`.** Next: `03-playback-engine.md`.
+**End of `02-workers-threading.refined.md`.** Next: `03-playback-engine.refined.md`.

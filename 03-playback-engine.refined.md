@@ -126,6 +126,8 @@ Verified behaviors to preserve:
 - Negative rates allowed, `rate === 0` throws — `Clock.ts:229-232`
 - Visibility/focus/pageshow listeners call `_catchUpToCurrentTime` — `Clock.ts:95-105`
 
+> A clean-room port of FreeCut's Clock already exists at `nle-engine/src/lib/nle/core/clock.ts` (reference, NOT canon — a faithful FreeCut port using plain `number` frames, not the `MediaTime` boundary adaptation mandated above; see `19-code-references.md`).
+
 ### 3.5 StaticClock (render entry)
 
 For the cloud render entry point, we use a `StaticClock` that doesn't advance on its own (unchanged from seed spec §3.4):
@@ -262,7 +264,7 @@ Exported functions: `media_time_from_seconds`, `media_time_to_seconds`, `media_t
 
 ### 4.5 Our pure-TS port
 
-We re-implement `MediaTime` in pure TypeScript (no WASM, per master spec §3), preserving the integer-tick semantics. See `04-renderer-color.md` for the related scene-linear pipeline. The implementation is ~150 LOC, mirroring the Rust surface.
+We re-implement `MediaTime` in pure TypeScript (no WASM, per master spec §3), preserving the integer-tick semantics. See `04-renderer-color.refined.md` for the related scene-linear pipeline. The implementation is ~150 LOC, mirroring the Rust surface.
 
 ---
 
@@ -603,6 +605,8 @@ type PlaybackState =
   | { kind: 'reverse-shuttle'; anchorFrame: number; rate: number }
 ```
 
+> nle-engine ports all six plan functions and drift constants verbatim (`playback/video-sync.ts`), but applies them to `HTMLVideoElement` via a DOM registry — the plan logic is the reference; the DOM application surface is the delta §5.1 corrects (decode-rate actuation, not element playbackRate). See `19-code-references.md`.
+
 ---
 
 ## 7. Scrubbing — REFINED
@@ -924,13 +928,21 @@ For `OfflineAudioContext`, the same graph runs but:
 - `startRendering()` returns the final `AudioBuffer`
 - We extract PCM samples and pipe to ffmpeg
 
-See `11-cloud-render.md` for the cloud-side audio pipeline.
+See `11-cloud-render.refined.md` for the cloud-side audio pipeline.
 
 ---
 
-## 10. Frame Rendering Loop
+## 10. Frame Rendering Loop (Round-7 refinement)
 
-(unchanged from seed spec §10)
+Each rendered frame executes, in order:
+
+1. **Plan lookup** — take the current CompositionRenderPlan (static per timeline snapshot; rebuilt on `stateChanged`)
+2. **Per-item layer build** — for the frame's active items, build layers for **every item type** (video, composition, image, adjustment, text when it lands). The reference port's failure mode is instructive: nle-engine `playback/player.ts:1038` drops all non-video clips (`if (clip.type !== 'video') continue;`) — its own audit calls this "the structural bottleneck" behind every per-type gap. Our loop must have per-type branches from day one (spec 07 §4's type-agnostic `FrameItem[]` is the contract).
+3. **Transition co-rendering** — items inside a transition window render both sides into the transition pipeline (spec 07 §6.3)
+4. **Effect chain** — per-layer `EffectPass[]` application with pool-acquired outputs (spec 04 §7.1 discipline; the engine's singleton `_pongTexture` return at `effects/pipeline.ts:5107` is the documented counter-example)
+5. **Upload + composite + present** — upload textures, composite in paint order, convert working space → display transfer, present to canvas (spec 04 §5/§7)
+
+The loop is driven by the clock (rAF in interactive mode, sequential frames in render mode — spec 01 §3.6's two entry points share this loop; the only divergence is the driver).
 
 ---
 
@@ -1484,6 +1496,27 @@ Every file read for this refined spec, with verified line counts.
 
 **mediabunny worker compatibility:** `node_modules/mediabunny/package.json:35-39`, `media-sink.ts:1960-1968`
 
+### 13E. Code References — nle-engine (reference, NOT canon)
+
+> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room FreeCut-port **in-between reference, NOT canon**. It de-risks implementation but inherits FreeCut patterns these specs correct (8-bit rgba8unorm, JSON-RPC + `$ref`, class-API mutation surface, single-tier tests, procedural media, zero Web Workers). Where engine code conflicts with this spec, **the spec wins**. Full reconciliation: `19-code-references.md`.
+
+| Spec section | Engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §3.2 `_now()` audio-clock | `src/lib/nle/core/clock.ts:550` | `? nextTimeSource.currentTime * 1000 : performance.now()` | ALIGNED | Verbatim FreeCut Clock port |
+| §3.2 monotonic guard | `src/lib/nle/core/clock.ts:565` | `this._lastNowMs = Math.max(this._lastNowMs ?? normalizedNow, normalizedNow);` | ALIGNED | Single-offset + Math.max |
+| §3.3 floor/ceil frame math | `src/lib/nle/core/clock.ts:612` | `return Math.floor(this._playbackStartFrame + framesElapsed);` | ALIGNED | Forward floor / reverse ceil |
+| §3.2 timeupdate throttle | `src/lib/nle/core/clock.ts:661` | `if (now - this._lastTimeUpdateEmit >= this.TIME_UPDATE_INTERVAL_MS) {` | ALIGNED | 100ms throttle |
+| §3.4 MediaTime adaptation | `src/lib/nle/core/clock.ts:92` | `export class Clock extends EventEmitter<ClockEvents> {` | CORRECTIVE | Plain number frames; spec mandates MediaTime at boundaries |
+| §3.5 StaticClock | — | COULD-NOT-VERIFY (no StaticClock class) | SPEC-ONLY | No render-entry clock |
+| §4 MediaTime/FrameRate | `src/lib/nle/core/types.ts:20` | `absolute timeline FRAMES (integer)` | CORRECTIVE | Integer frames, no i64 ticks / rational FrameRate |
+| §6.1 six sync plans | `src/lib/nle/playback/video-sync.ts:925` | `export function planVideoFrameCallbackCorrection(input: {` | ALIGNED | All six plans ported as pure functions |
+| §6.3 drift constants | `src/lib/nle/playback/video-sync.ts:180` | `export const LARGE_DRIFT_SECONDS = 0.2;` | ALIGNED | 0.2s / 0.15 cap / ±5%/±15% bands |
+| §6.4 reverse coalescing | `src/lib/nle/playback/video-sync.ts:224` | `export const COALESCED_SEEK_EPSILON_SECONDS = 0.001;` | ALIGNED | 1ms epsilon |
+| §5.1 mediabunny not `<video>` | `src/lib/nle/playback/video-sync.ts:1040` | `export function registerDomVideoElement(itemId: string, element: HTMLVideoElement): void {` | CORRECTIVE | Plans drive DOM elements; spec swaps actuator to decode-rate |
+| §7.2 three-tier scrub | `src/lib/nle/playback/player.ts:234` | `When the user scrubs the timeline (beginScrub → frame seek → endScrub),` | ENGINE-GAP | Single-tier LRU only |
+| §10 render loop | `src/lib/nle/playback/player.ts:1038` | `if (clip.type !== 'video') continue;` | CORRECTIVE | Non-video clips dropped |
+| §8.2 SoundTouch worklet | `src/lib/nle/audio/soundtouch-processor.worklet.ts:13` | `We implement a simpler granular pitch shifter:` | CORRECTIVE | No full WSOLA port; spec's vendored-SoundTouch adoption wins |
+
 ---
 
 ## 14. Corrections to Seed Spec
@@ -1566,7 +1599,7 @@ To **force** a specific format on the output, you must either:
 2. Implement a custom `VideoSampleResource` subclass that exposes the format you want.
 3. Configure the underlying `VideoDecoder` directly (bypass mediabunny) — but you lose mediabunny's demuxer.
 
-**Recommendation for our port:** Rely on the browser to produce the native format from 10-bit sources, then sample/convert in the GPU shader pipeline (`04-renderer-color.md`). The seed spec's `pixelFormat: 'P010'` sketch is removed.
+**Recommendation for our port:** Rely on the browser to produce the native format from 10-bit sources, then sample/convert in the GPU shader pipeline (`04-renderer-color.refined.md`). The seed spec's `pixelFormat: 'P010'` sketch is removed.
 
 ### 14.E `scrub-throttle.ts` path is wrong
 
@@ -2364,7 +2397,7 @@ export function createClock(config: ClockConfig): Clock {
 - FreeCut `Clock.ts` (641 LOC) quoted in full as appendix §15
 - Key findings: (1) audio-clock trick ✅ verified, (2) seekGenerations pattern ✅ verified, (3) MediaTime 120,000 ticks/sec ✅ verified, (4) `VideoSampleSink` exists ✅ but (5) `pixelFormat: 'P010'` ❌ does NOT exist (mediabunny exposes `I420P10`/`I422P10`/`I444P10` instead), (6) 6 sync plans exist (not 5), (7) `scrub-throttle.ts` at the seed spec's path ❌ does NOT exist
 
-**Next:** `04-renderer-color.md` (renderer + color pipeline).
+**Next:** `04-renderer-color.refined.md` (renderer + color pipeline).
 
 ---
 

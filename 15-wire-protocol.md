@@ -4,7 +4,7 @@
 **Status:** NEW (TEST-02). Defines the runtime-operations layer that makes the engine fully data-driven.
 **Primary teacher:** OpenCut-classic `commands/` (class-based `Command`/`BatchCommand`/`TracksSnapshotCommand` architecture) + FreeCut `headless/contract.test.mjs` (Zod schema in test pattern) + the architect's decision that the engine must be drivable without a UI (master spec §3 "Architecture", §2 Decision 6 "One engine, two entry points").
 **Predecessor specs:** `01-core-engine.refined.md` (manager API), `06-nle-ops.refined.md` (op inventory), `09-project-model.refined.md` (ProjectJSON — Layer 1).
-**Successor specs:** `12-testing-strategy.refined.md` (tier 1 tests use this protocol), `16-keyboard-shortcuts.md` (TBD — every shortcut maps to an `EngineCommand`), `17-test-plan.md` (TBD — tier 1 tests use this protocol).
+**Successor specs:** `12-testing-strategy.refined.md` (tier 1 infrastructure; methodology superseded by 17), `16-keyboard-shortcuts.md` (TEST-03, shipped — every shortcut maps to an `EngineCommand`, see §13.5), `17-test-plan.md` (TEST-04, shipped — Tier 1 tests use this protocol, see §13.6), `18-ui-shell.md` (UI shell panels dispatch `EngineCommand`s via this protocol, see §13.12), `19-code-references.md` (reference-repo map and nle-engine reconciliation, see §13.13).
 
 ---
 
@@ -12,9 +12,9 @@
 
 This spec defines **Layer 2 of the three-layer JSON protocol**: the `EngineCommand` discriminated union that captures every runtime operation the engine can perform. Layer 1 (static project state, `ProjectJSON`) is defined in spec 09. Layer 3 (render output, `FrameDescriptor` + pixels + audio PCM) is defined in specs 04 and 07. This spec fills the gap between them.
 
-**Why this matters:** without an explicit, JSON-serializable runtime-operations layer, the engine has three separate "ways to drive it" — React UI handlers calling manager methods directly (interactive path), Playwright scripts calling `window.editor.*` (test path), and HTTP API consumers calling a remote engine (cloud path). Each path drifts; each path adds UI tax to the engine. The `EngineCommand` union collapses all three into one: the same `(ProjectJSON, EngineCommand[])` tuple produces the same final `SceneState` regardless of caller. This is what makes the engine testable without UI tax, makes cloud render use the same code path as browser preview, and makes regression tests fit in 30 lines instead of 300.
+**Why this matters:** without an explicit, JSON-serializable runtime-operations layer, the engine has three separate "ways to drive it" — React UI handlers calling manager methods directly (interactive path), Playwright scripts calling `window.__engine.*` (test path — spec 17 §15.6's harness contract), and HTTP API consumers calling a remote engine (cloud path). Each path drifts; each path adds UI tax to the engine. The `EngineCommand` union collapses all three into one: the same `(ProjectJSON, EngineCommand[])` tuple produces the same final `SceneState` regardless of caller. This is what makes the engine testable without UI tax, makes cloud render use the same code path as browser preview, and makes regression tests fit in 30 lines instead of 300.
 
-**Adoption decision (informs spec 00 §2 Decision 9 if added by TEST-01):** The engine's public mutation surface is the `engine.command.apply(command: EngineCommand): CommandResult` method on `CommandManager`. Manager methods like `engine.timeline.splitElements(...)` become thin wrappers that construct the `EngineCommand` and call `apply()`. The TS types and Zod schemas in this spec are the source of truth — manager method signatures in spec 01 §3.3 are inferred from (and constrained by) the schema here.
+**Adoption decision (spec 00 §2 Decision 9, adopted by TEST-01):** The engine's public mutation surface is the `engine.command.apply(command: EngineCommand): CommandResult` method on `CommandManager`. Manager methods like `engine.timeline.splitElements(...)` become thin wrappers that construct the `EngineCommand` and call `apply()`. The TS types and Zod schemas in this spec are the source of truth — manager method signatures in spec 01 §3.3 are inferred from (and constrained by) the schema here.
 
 ---
 
@@ -66,7 +66,7 @@ The contract: given the same `(ProjectJSON, EngineCommand[])` tuple, the engine 
 Without an explicit runtime-operations layer, every consumer of the engine writes its own driver:
 
 - **React UI handlers** call manager methods directly (`engine.timeline.splitElements({elements, splitTime})`).
-- **Playwright scripts** call the same manager methods via `page.evaluate(() => window.editor.timeline.splitElements(...))`.
+- **Playwright scripts** call the same manager methods via `page.evaluate(() => window.__engine.timeline.splitElements(...))` (spec 17 §15.6's harness global).
 - **HTTP API consumers** (cloud render) call manager methods via a thin RPC shim that mirrors the manager API surface.
 - **Tests** call manager methods directly.
 
@@ -246,10 +246,17 @@ export type EngineCommand =
   | UndoCommand
   | RedoCommand
   // ── Snapshot (for testing) ────────────────────────────────────
-  | SnapshotCommand;
+  | SnapshotCommand
+  // ── Export ops (§4.3.74-76, §14.11 — Round-7 amendment) ───────
+  | ExportFCPXMLCommand
+  | ExportMasterCommand
+  | ExportFrameCommand
+  // ── Project ops (§4.3.77-78 — Round-7 amendment) ──────────────
+  | RenameProjectCommand
+  | DeleteProjectCommand;
 ```
 
-**Total: 73 command types** organized into 15 categories.
+**Total: 78 command types** organized into 16 categories (Export category + two Project ops added by the Round-7 amendment — see §14.11 for the export design decision and §13.11 for the cross-spec un-gating).
 
 Each command type is defined below in §4.3 with:
 - Its `type` discriminator (string literal)
@@ -297,6 +304,8 @@ Every command type maps 1:1 to a manager method on `EditorCore`. This mapping is
 | | `loadProject` | `engine.project.loadProject({id})` | ❌ |
 | | `saveProject` | `engine.project.saveCurrentProject()` | ❌ |
 | | `closeProject` | `engine.project.closeProject()` | ❌ |
+| | `renameProject` | `engine.project.renameProject({id, name})` (greenfield 📝 NEW — Round-7 addition; manager surface per spec 09 §13) | ❌ (persisted separately) |
+| | `deleteProject` | `engine.project.deleteProject({id})` (greenfield 📝 NEW — Round-7 addition; manager surface per spec 09 §13) | ❌ (persisted separately) |
 | | `updateProjectSettings` | `engine.project.updateSettings({settings, pushHistory})` (greenfield 📝 NEW — not on OpenCut-classic `ProjectManager`; see spec 01 §3.3 for the deferred manager-method addition) | ✅ |
 | **Scene** | `createScene` | `engine.scenes.createScene({name, isMain})` | ✅ |
 | | `deleteScene` | `engine.scenes.deleteScene({sceneId})` | ✅ |
@@ -337,8 +346,11 @@ Every command type maps 1:1 to a manager method on `EditorCore`. This mapping is
 | **Undo/redo** | `undo` | `engine.command.undo()` | ❌ (meta) |
 | | `redo` | `engine.command.redo()` | ❌ (meta) |
 | **Snapshot** | `snapshot` | (no-op — returns current `SceneState` for test assertions) | ❌ |
+| **Export** | `exportFCPXML` | `engine.export.exportFCPXML({format, bundleMedia})` (greenfield — ExportManager, spec 01 §14.11; serializer per spec 10 §5) | ❌ (output, not state) |
+| | `exportMaster` | `engine.renderer.exportProject({format, destination, range})` (greenfield — enqueues on the spec 11 §9.2 render queue) | ❌ (output, not state) |
+| | `exportFrame` | `engine.renderer.saveSnapshot({format, time})` (greenfield — single-frame render + GPU readback) | ❌ (output, not state) |
 
-**Total: 73 commands.** Of these, **55 are undoable** (state-changing mutations that go through `CommandManager.execute()`), **18 are not undoable** (side-effectful I/O like save/load/import, pure queries like `snapshot`, playback control, undo/redo themselves, and selection/tool state which is UI-prefs and not part of WYSIWYG state).
+**Total: 78 commands.** Of these, **55 are undoable** (state-changing mutations that go through `CommandManager.execute()`), **23 are not undoable** (side-effectful I/O like save/load/import/renameProject/deleteProject, pure queries like `snapshot`, playback control, undo/redo themselves, selection/tool state which is UI-prefs and not part of WYSIWYG state, and the three export commands, which produce output artifacts without mutating `SceneState` — see §14.11).
 
 ### 4.3 Command type definitions
 
@@ -1693,11 +1705,20 @@ export interface AddTransitionCommand {
 }
 
 export interface TransitionSpec {
-  type: 'crossfade' | 'wipe' | 'slide' | 'iris' | 'glitch';
+  /** Structural type — always 'crossfade' in v1 (spec 07 §6.1A: structure vs presentation). */
+  type: 'crossfade';
+  /** Presentation registry key — visual variety ('fade' | 'wipe-left' | 'dissolve' | ...; 27 in the reference registry). */
+  presentation: string;
+  /** Transition window D. */
   duration: MediaTime;
-  params: Record<string, number | string | boolean>;
-  elementAId: string;
-  elementBId: string;
+  /** Window centering on the cut: leftPortion = floor(D * alignment). Default 0.5. */
+  alignment: number;
+  /** Easing of the blend progress. Default 'linear'. */
+  timing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+  /** Left clip (consumes hidden OUT-handle for leftPortion). */
+  leftElementId: string;
+  /** Right clip (consumes hidden IN-handle for rightPortion). */
+  rightElementId: string;
 }
 ```
 
@@ -1906,6 +1927,157 @@ export interface SnapshotCommand {
 
 **Returns:** `CommandResult.ok.stateChange.newState` contains the full `SceneState` snapshot. `addedElements`/`modifiedElements`/`removedElements` are all empty (no state change).
 
+#### 4.3.74 `ExportFCPXMLCommand` (Round-7 amendment)
+
+```ts
+export interface ExportFCPXMLCommand {
+  type: 'exportFCPXML';
+  params: {
+    /**
+     * FCPXML dialect. Default 'fcpxml-1.10' — spec 10's DTD target
+     * (FCPXMLv1_10.dtd, version CDATA #FIXED "1.10"). 'fcpxml-1.11' exists solely
+     * for Display P3 colorSpace fidelity (spec 10 §13 Correction #4; Apple added
+     * P3 support from 1.11+; on 1.10 Display P3 falls back to "1-1-1 (Rec. 709)").
+     * Reconciles the two historical shapes: spec 10's gated test used
+     * { bundleMedia: false }; spec 16 §3.9 used { format: 'fcpxml-1.11' } — both
+     * params now exist on one canonical type with 1.10 as default.
+     */
+    format?: 'fcpxml-1.10' | 'fcpxml-1.11';
+    /**
+     * If true, co-locate referenced media next to the FCPXML (spec 10's
+     * media/<asset-id>.<ext> + relative <media-rep src> layout). Default false —
+     * media stays referenced by its canonical MediaStorageRef. When true, the
+     * result artifact is a zip-style bundle referenced by artifactId, not an
+     * inline XML string.
+     */
+    bundleMedia?: boolean;
+  };
+}
+```
+
+**Maps to:** `engine.export.exportFCPXML({format, bundleMedia})` (ExportManager — spec 01 §14.11; the serializer itself is spec 10 §5's `ProjectJSON → FCPXML` pipeline; the manager method wraps it so the dispatcher stays 1:1).
+
+**Undoable:** ❌ (output command — does not mutate `SceneState`; see §14.11).
+
+**Returns:** `CommandResult.ok.stateChange` is a no-op change (`newState` = current state, all ID arrays empty — same convention as `SnapshotCommand`). The artifact rides the `data` field:
+
+```ts
+{ ok: true, stateChange: { /* no-op */ }, data: {
+  kind: 'fcpxml',
+  format: 'fcpxml-1.10',
+  /** The full FCPXML document as a string (bundleMedia: false). */
+  xml?: string,
+  /** When bundleMedia: true — reference to the assembled bundle artifact. */
+  artifactId?: string,
+  fileName: 'project.fcpxml',
+  bundledMediaCount?: number,
+} }
+```
+
+**Constraints (reject if):** no active project → `NO_ACTIVE_PROJECT`; unknown `format` → `EXPORT_UNSUPPORTED_FORMAT` (unreachable via Zod — defense-in-depth).
+
+**Determinism note:** the XML is a pure function of `(SceneState, params)` — no timestamps or random IDs in the body (spec 10 §13 requires stable UUIDs from the project model), which is what makes spec 10's state-WYSIWYG test T3.2 (byte-for-byte `Cmd+E` == `apply()`) meaningful.
+
+#### 4.3.75 `ExportMasterCommand` (Round-7 amendment)
+
+```ts
+export interface ExportMasterCommand {
+  type: 'exportMaster';
+  params: {
+    /** Output format. Default 'prores-4444' (spec 11 cloud master). */
+    format?: 'prores-4444' | 'prores-422' | 'h264' | 'vp9';
+    /** Where the render runs / the artifact lands. Default 'cloud' (spec 11). */
+    destination?: 'cloud' | 'local';
+    /** Timeline range to render, in MediaTime ticks. Default: full timeline. */
+    range?: { start: MediaTime; end: MediaTime } | null;
+  };
+}
+```
+
+**Maps to:** `engine.renderer.exportProject({format, destination, range})` (RendererManager — enqueues on the spec 11 §9.2 render queue; browser-local master export uses the same WebCodecs pipeline as cloud render, per Decision 6 "one engine, two entry points").
+
+**Undoable:** ❌ (output command; does not mutate `SceneState`).
+
+**Returns:** job-style — `apply()` returns immediately with a job reference; progress and completion arrive on the `EngineEvent` stream (§9) and the HTTP job endpoint (§8.10):
+
+```ts
+{ ok: true, stateChange: { /* no-op */ }, data: {
+  kind: 'renderJob',
+  jobId: string,          // opaque; spec 11 §9.1 render job identity
+  status: 'queued',
+} }
+```
+
+**Constraints (reject if):** no active project → `NO_ACTIVE_PROJECT`; queue at capacity → `JOB_QUEUE_FULL` (spec 11 §9.2 `maxConcurrent`).
+
+#### 4.3.76 `ExportFrameCommand` (Round-7 amendment)
+
+```ts
+export interface ExportFrameCommand {
+  type: 'exportFrame';
+  params: {
+    /** Image format. Default 'png'. */
+    format?: 'png' | 'jpg';
+    /**
+     * Frame to export, in MediaTime ticks. Default: the current playhead
+     * (resolver-computed at dispatch — engine.playback.getCurrentTime()).
+     */
+    time?: MediaTime;
+  };
+}
+```
+
+**Maps to:** `engine.renderer.saveSnapshot({format, time})` (single-frame render + GPU readback + encode; the render itself is Layer 3, spec 04 §7).
+
+**Undoable:** ❌ (output command; does not mutate `SceneState`).
+
+**Returns:** artifact-reference style (PNG bytes materialize asynchronously because GPU readback is async — the command completes synchronously with a handle):
+
+```ts
+{ ok: true, stateChange: { /* no-op */ }, data: {
+  kind: 'frameArtifact',
+  artifactId: string,     // fetch via GET /api/engine/artifact/:id (§8.10)
+  mimeType: 'image/png',
+} }
+```
+
+**Constraints (reject if):** `time` outside `[0, totalDuration]` → `TIME_OUT_OF_RANGE`; no active project → `NO_ACTIVE_PROJECT`.
+
+#### 4.3.77 `RenameProjectCommand` (Round-7 amendment)
+
+```ts
+export interface RenameProjectCommand {
+  type: 'renameProject';
+  params: {
+    id: string;   // projectId
+    name: string; // new name (non-empty, trimmed)
+  };
+}
+```
+
+**Maps to:** `engine.project.renameProject({id, name})` (manager surface per spec 09 §13; persists via the storage layer).
+
+**Undoable:** ❌ (project-level metadata persisted separately from `SceneState` undo history — same class as `saveProject`).
+
+**Constraints (reject if):** project not found → `PROJECT_NOT_FOUND`; empty name → `VALIDATION_FAILED`.
+
+#### 4.3.78 `DeleteProjectCommand` (Round-7 amendment)
+
+```ts
+export interface DeleteProjectCommand {
+  type: 'deleteProject';
+  params: {
+    id: string;   // projectId
+  };
+}
+```
+
+**Maps to:** `engine.project.deleteProject({id})` (manager surface per spec 09 §13; removes the project record + its OPFS media — the active project cannot be deleted: `NO_ACTIVE_PROJECT` misuse guard returns `PROJECT_ACTIVE`).
+
+**Undoable:** ❌ (destructive project-level I/O — same class as `closeProject`).
+
+**Round-7 note:** these two commands close a previously unacknowledged instance of the TEST-INTEGRATION-REVIEW Issue #1 class — spec 09's Testing contract (§ Testing, `rename-project-...` / `delete-project-...` tests) referenced them as spec 15 EngineCommands before they existed. They are now canonical; spec 09's test comments point here.
+
 ### 4.4 The `apply()` dispatcher
 
 ```ts
@@ -1962,9 +2134,19 @@ export class CommandManager {
         return this.dispatchSplit(command);
       case 'trim':
         return this.dispatchTrim(command);
-      // ... 73 cases, one per command type
+      // ... 78 cases, one per command type
       case 'snapshot':
         return this.dispatchSnapshot(command);
+      case 'exportFCPXML':
+        return this.dispatchExportFCPXML(command);   // §4.3.74 — output exception, §14.11
+      case 'exportMaster':
+        return this.dispatchExportMaster(command);   // §4.3.75
+      case 'exportFrame':
+        return this.dispatchExportFrame(command);    // §4.3.76
+      case 'renameProject':
+        return this.dispatchRenameProject(command);  // §4.3.77
+      case 'deleteProject':
+        return this.dispatchDeleteProject(command);  // §4.3.78
       default:
         // Exhaustiveness check — if a new command type is added without a
         // dispatcher case, this fails at compile time.
@@ -2418,10 +2600,11 @@ Frame 2700 at 30fps = 90 seconds. The task description used `108000000000` (108 
   "params": {
     "transition": {
       "type": "crossfade",
+      "presentation": "fade",
       "duration": 100000000,
-      "params": {},
-      "elementAId": "clip-1",
-      "elementBId": "clip-2"
+      "alignment": 0.5,
+      "leftElementId": "clip-1",
+      "rightElementId": "clip-2"
     }
   }
 }
@@ -2533,8 +2716,18 @@ Every command returns a `CommandResult`. This is what `engine.command.apply(comm
 // src/engine/types/command.ts
 
 export type CommandResult =
-  | { ok: true; stateChange: StateChange; undoInfo?: UndoInfo }
+  | { ok: true; stateChange: StateChange; undoInfo?: UndoInfo; data?: CommandResultData }
   | { ok: false; error: CommandError };
+
+/**
+ * Output artifact or job reference produced by an export command (§14.11).
+ * Populated ONLY by `exportFCPXML` / `exportMaster` / `exportFrame` — the
+ * sanctioned OUTPUT exception. All other commands leave it undefined.
+ */
+export type CommandResultData =
+  | { kind: 'fcpxml'; format: 'fcpxml-1.10' | 'fcpxml-1.11'; xml?: string; artifactId?: string; fileName: string; bundledMediaCount?: number }
+  | { kind: 'renderJob'; jobId: string; status: 'queued' | 'running' | 'complete' | 'failed' }
+  | { kind: 'frameArtifact'; artifactId: string; mimeType: string };
 ```
 
 ### 6.1 `StateChange`
@@ -2625,6 +2818,11 @@ export interface CommandError {
    * - 'PROJECT_DIRTY' — closeProject called without saving
    * - 'MEDIA_IN_USE' — deleteMedia called with cascadeElements=false but refs exist
    * - 'TRACK_NOT_EMPTY' — deleteTrack called with cascadeElements=false but elements exist
+   * - 'EXPORT_UNSUPPORTED_FORMAT' — export command's format value is not in the supported set (§4.3.74-76)
+   * - 'JOB_QUEUE_FULL' — exportMaster rejected: render queue at maxConcurrent (spec 11 §9.2)
+   * - 'TIME_OUT_OF_RANGE' — exportFrame time outside [0, totalDuration]
+   * - 'PROJECT_NOT_FOUND' — renameProject/deleteProject target does not exist (§4.3.77-78)
+   * - 'PROJECT_ACTIVE' — deleteProject called on the active project (§4.3.78)
    * - 'INTERNAL_ERROR' — unexpected exception (see `message` for details)
    */
   code: string;
@@ -2834,6 +3032,14 @@ GET /api/engine/state
 POST /api/engine/subscribe
   Body: { events: string[] }
   Response: SSE stream of EngineEvent
+
+GET /api/engine/artifact/:artifactId
+  Response: binary (bytes of a produced artifact — exportFrame PNG,
+  exportFCPXML bundleMedia zip; Content-Type per artifact record — §8.10)
+
+GET /api/engine/job/:jobId
+  Response: { jobId, status: 'queued'|'running'|'complete'|'failed',
+              progress?: number, artifactId?: string, error?: CommandError }
 ```
 
 ### 8.2 `POST /api/engine/load`
@@ -3013,6 +3219,15 @@ Cloud render endpoints are rate-limited to prevent abuse:
 
 Rate limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`) are included in every response.
 
+### 8.10 Export results over the wire (Round-7 amendment)
+
+Export commands travel the same `POST /api/engine/command` channel as everything else; only the response shape differs (§14.11):
+
+- **`exportFCPXML` (bundleMedia: false)** — the XML string rides inline: `{ ok: true, stateChange: {…}, data: { kind: 'fcpxml', xml: "<fcpxml …>" } }`. Typical size is tens-to-hundreds of KB, well within a JSON response; this inline shape is what spec 10's Tier-3 WYSIWYG test diffs byte-for-byte.
+- **`exportFCPXML` (bundleMedia: true)** — the response carries `data.artifactId`; the client fetches the zip bundle via `GET /api/engine/artifact/:artifactId`. Bundling is I/O (OPFS media copy), so it is assembled server-side into an artifact store before `exportArtifactReady` fires.
+- **`exportMaster`** — job-style: the HTTP response is the job envelope `{ ok: true, data: { kind: 'renderJob', jobId, status: 'queued' } }` (HTTP 200 — the command succeeded; job failures arrive as events/endpoint state, per the §8.3 "ok:false is still 200" convention). Clients poll `GET /api/engine/job/:jobId` or subscribe via §8.7 SSE for `renderProgress`/`renderComplete`/`exportArtifactReady`. This maps 1:1 onto spec 11 §9.2's `RenderQueue.enqueue()` → jobId contract and §9.3's progress reporting.
+- **`exportFrame`** — `data.artifactId` immediately; PNG bytes follow via the artifact endpoint (GPU readback is async). For tests that want synchronous bytes, Tier 2 should use `POST /api/engine/render-frame` (§8.4) instead — `exportFrame` is the user-facing "save current frame" command, `render-frame` is the test-facing raw-pixels endpoint.
+
 ---
 
 ## 9. Event Stream (for UI Sync)
@@ -3046,6 +3261,9 @@ export type EngineEvent =
   | { type: 'renderProgress'; frame: number; totalFrames: number; progress: number }
   | { type: 'renderComplete'; frameCount: number; durationMs: number }
   | { type: 'renderError'; error: EngineError; frame?: number }
+  // ── Export (output artifacts — §14.11) ────────────────────────
+  | { type: 'exportJobStarted'; jobId: string; format: string; totalFrames?: number }
+  | { type: 'exportArtifactReady'; jobId?: string; artifactId: string; mimeType: string; byteSize: number }
   // ── Errors ─────────────────────────────────────────────────────
   | { type: 'error'; error: EngineError };
 ```
@@ -3899,11 +4117,13 @@ export const AddTransitionCommandSchema = z.object({
   type: z.literal('addTransition'),
   params: z.object({
     transition: z.object({
-      type: z.enum(['crossfade', 'wipe', 'slide', 'iris', 'glitch']),
+      type: z.literal('crossfade'),            // structural — spec 07 §6.1A
+      presentation: z.string().min(1),          // registry key
       duration: MediaTimeSchema.positive(),
-      params: z.record(z.union([z.number(), z.string(), z.boolean()])),
-      elementAId: z.string().uuid(),
-      elementBId: z.string().uuid(),
+      alignment: z.number().min(0).max(1).default(0.5),
+      timing: z.enum(['linear', 'ease-in', 'ease-out', 'ease-in-out']).optional(),
+      leftElementId: z.string().uuid(),
+      rightElementId: z.string().uuid(),
     }),
   }),
 });
@@ -4007,6 +4227,53 @@ export const SnapshotCommandSchema = z.object({
   type: z.literal('snapshot'),
 });
 
+// ── Export ops (§14.11 — sanctioned OUTPUT exception; artifacts ride CommandResult.data) ──
+
+export const ExportFCPXMLCommandSchema = z.object({
+  type: z.literal('exportFCPXML'),
+  params: z.object({
+    format: z.enum(['fcpxml-1.10', 'fcpxml-1.11']).default('fcpxml-1.10'),
+    bundleMedia: z.boolean().default(false),
+  }),
+});
+
+export const ExportMasterCommandSchema = z.object({
+  type: z.literal('exportMaster'),
+  params: z.object({
+    format: z.enum(['prores-4444', 'prores-422', 'h264', 'vp9']).default('prores-4444'),
+    destination: z.enum(['cloud', 'local']).default('cloud'),
+    range: z.object({
+      start: MediaTimeSchema,
+      end: MediaTimeSchema,
+    }).nullable().optional(),
+  }),
+});
+
+export const ExportFrameCommandSchema = z.object({
+  type: z.literal('exportFrame'),
+  params: z.object({
+    format: z.enum(['png', 'jpg']).default('png'),
+    time: MediaTimeSchema.optional(),
+  }),
+});
+
+// ── Project ops (§4.3.77-78 — Round-7 additions) ──
+
+export const RenameProjectCommandSchema = z.object({
+  type: z.literal('renameProject'),
+  params: z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+  }),
+});
+
+export const DeleteProjectCommandSchema = z.object({
+  type: z.literal('deleteProject'),
+  params: z.object({
+    id: z.string().min(1),
+  }),
+});
+
 // ── The discriminated union ─────────────────────────────────────────
 
 export const EngineCommandSchema = z.discriminatedUnion('type', [
@@ -4098,6 +4365,11 @@ export const EngineCommandSchema = z.discriminatedUnion('type', [
   RedoCommandSchema,
   // Snapshot
   SnapshotCommandSchema,
+  ExportFCPXMLCommandSchema,
+  ExportMasterCommandSchema,
+  ExportFrameCommandSchema,
+  RenameProjectCommandSchema,
+  DeleteProjectCommandSchema,
 ]);
 
 // ── Batch ────────────────────────────────────────────────────────────
@@ -4455,9 +4727,11 @@ test('every command type has a dispatcher case', () => {
 - Property-based tests (spec 12 §8) generate arbitrary `EngineCommand` sequences via `fast-check` and assert invariants.
 - The contract test pattern (FreeCut's `headless/contract.test.mjs:1-210`, spec 12 §8 verified example) is adopted in §12.6.
 
-### 13.5 Spec 16 (keyboard shortcuts — TBD)
+### 13.5 Spec 16 (keyboard shortcuts — shipped, TEST-03)
 
-Every keyboard shortcut maps to an `EngineCommand`. The shortcut registry (a future spec) is a `{ shortcut: string, command: EngineCommand }` table. Example:
+Every keyboard shortcut maps to an `EngineCommand` — spec 16 §3 (180 bindings across 13 categories) is that table. Spec 16's §0.2 declares this spec's union canonical ("where this spec and spec 15 both define a command name, spec 15 wins"), and its §8.3 resolver fills `<runtime>` params (currentTime, selectedIds, focusedTrackId) before calling `engine.command.apply()`. Spec 16 also defines UI-layer extensions (viewport zoom, panel focus, snap toggle — routed to the UI store, not `apply()`); see spec 16 §0.2 and spec 18 (UI shell) for the dispatch split. Export bindings (`Cmd+E` etc.) dispatch the §4.3.74-76 commands.
+
+The shortcut registry (realized as spec 16 §3 + its Appendix A flat registry) is a `{ shortcut: string, command: EngineCommand }` table. Example:
 
 ```ts
 const shortcutRegistry = {
@@ -4471,15 +4745,15 @@ const shortcutRegistry = {
 };
 ```
 
-When the user presses a shortcut, the UI constructs the `EngineCommand` (filling in `<selection>` and `<playhead>` from current state) and calls `engine.command.apply()`.
+When the user presses a shortcut, the UI constructs the `EngineCommand` (filling in `<selection>` and `<playhead>` from current state) and calls `engine.command.apply()` — spec 16 §8.3's resolver is that construction layer, now realized.
 
-### 13.6 Spec 17 (test plan — TBD)
+### 13.6 Spec 17 (test plan — shipped, TEST-04)
 
-Tier 1 tests (pure-function, no browser) use this protocol. Tier 3 tests (Playwright, full browser) use the HTTP API (§8) when testing cloud render, or call `window.editor.command.apply()` directly when testing the browser engine.
+Tier 1 tests (pure-function, no browser — spec 17 §2.1) use this protocol via `engine.command.apply()` (templates in §12). Tier 2 render tests use `/api/engine/render-frame`/`render-audio` (§8.4-8.5). Tier 3 UI tests (spec 17 §2.1, including state-WYSIWYG §6.1) drive keyboard/mouse through the UI and assert against `window.__engine.command.apply()` on the test harness (spec 17 §15.6). Property-based tests generate `EngineCommand[]` sequences against this spec's Zod schemas (spec 17 §7).
 
 ### 13.7 Spec 11 (cloud render)
 
-The HTTP API (§8) is the cloud render server's external interface. Cloud render clients (CLI tools, web dashboards) construct `EngineCommand`s and POST them to `/api/engine/command`. The server applies them, renders frames on demand, and streams events via SSE.
+The HTTP API (§8) is the cloud render server's external interface. Cloud render clients (CLI tools, web dashboards) construct `EngineCommand`s and POST them to `/api/engine/command`. The server applies them, renders frames on demand, and streams events via SSE. The `exportMaster` command (§4.3.75) is the protocol-facing front door to spec 11's render queue: `apply({type:'exportMaster', params:{destination:'cloud'}})` enqueues a spec 11 §9.1 render job and returns `{ data: { kind: 'renderJob', jobId } }`; progress flows back over the §9 event stream / §8.10 job endpoint. `exportFCPXML` with cloud storage refs is similarly serializable — the XML references media by `MediaStorageRef`, so a cloud client can POST the command without downloading media.
 
 ### 13.8 Spec 03 (playback engine)
 
@@ -4491,7 +4765,43 @@ Layer 3 of the protocol. `engine.renderer.renderFrame(n)` (spec 04 §7) reads th
 
 ### 13.10 Spec 08 (color grading)
 
-The `EffectSpec` type in `AddEffectCommand.params.effect` (§4.3.52) references spec 08's effect inventory. The `type` discriminator (`'color-wheels' | 'curves' | 'lut' | 'qualifier' | 'power-window' | ...`) matches spec 08's effect type registry. The `params` object carries the effect-specific parameters (e.g., color wheels has `liftHue`, `gammaAmount`, etc. — spec 08 §3).
+The `EffectSpec` type in `AddEffectCommand.params.effect` (§4.3.52) references spec 08's effect inventory. The `type` discriminator (`'color-wheels' | 'curves' | 'lut' | 'qualifier' | 'power-window' | ...`) matches spec 08's effect type registry. The `params` object carries the effect-specific parameters (e.g., color wheels has `liftHue`, `gammaAmount`, etc. — spec 08 §3). Note (Round 7): the nle-engine reference registry uses `gpu-*`-prefixed ids (`'gpu-color-wheels'`, `'gpu-lut'`); the mapping row lives in `19-code-references.md` — this spec's bare ids remain canonical.
+
+### 13.11 Spec 10 (FCPXML export) — export commands (Round-7 amendment)
+
+The three export commands (§4.3.74-76) close the Round-7 MAJOR gap (TEST-INTEGRATION-REVIEW Issue #1): spec 10's Tier-3 state-WYSIWYG test T3.2 — `keyboard-cmd-e-matches-direct-engine-command`, comparing the `Cmd+E` output byte-for-byte against `engine.command.apply({ type: 'exportFCPXML', params: { bundleMedia: false } })` — is now un-gated (spec 10's gating note removed in Round 7). `ExportFCPXMLCommand` is the command-shaped wrapper around spec 10 §5's `ProjectJSON → FCPXML` serializer: `format` defaults to `'fcpxml-1.10'` (spec 10's DTD target — `version CDATA #FIXED "1.10"`); `'fcpxml-1.11'` exists solely for Display P3 colorSpace fidelity (spec 10 §13 Correction #4). `bundleMedia: true` activates spec 10's media-bundling layout. Spec 16 §3.9's export bindings (`Cmd+E`, `Cmd+Shift+E`, `Cmd+Option+E`) now dispatch these canonical types instead of spec-16 extensions.
+
+### 13.12 Spec 18 (UI shell)
+
+The UI shell (`18-ui-shell.md`, derived from `ui-mock/davinci_resolve_ui_mock.html`) is a pure consumer of Layer 2: every panel control constructs an `EngineCommand` and calls `engine.command.apply()`. Mockup→command contracts: viewer transport (`btn-play`/`btn-loop`) → `play`/`pause`/`setLoop`; track-header mute/lock/visibility buttons → `toggleTrackMute`/`toggleTrackLock`/`toggleTrackVisibility`; timeline-toolbar magnet (snap) and link-lock route to the UI store per spec 16 §0.2; inspector tabs drive `selectElements` + read `EngineEvent`s; the Deliver page dispatches the §4.3.74-76 export commands. No shell control calls a manager method directly (spec 18 §5's interaction-contract table is normative).
+
+### 13.13 Spec 19 (code references & nle-engine reconciliation)
+
+Spec 19 is the canon-hierarchy + reference-repo map. §13.14's table is this spec's contribution to it. When the private nle-engine's headless API (19-op JSON-RPC + `$ref`, `headless/api.ts:747`) and this spec conflict, this spec (canon) wins — the engine's op surface is the adapter target, not the protocol.
+
+### 13.14 Code References — nle-engine (reference, NOT canon)
+
+nle-engine (github.com/bearachprema/nle-engine, 37,958 LOC) is a clean-room FreeCut-port engine kept as an in-between de-risking reference. It is NOT conformant to this spec; it inherits FreeCut patterns this spec corrects. When engine and spec conflict, the spec wins. The valuable content is the delta, mapped below (citations verified Round 7):
+
+| Spec 15 section | nle-engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §4.1 union (78 types) | `headless/api.ts:747` | `// ─── applyOp: the 19-case JSON-RPC dispatch ─────────────────` | CORRECTIVE | 19-op `EditOp` union vs typed, categorized union |
+| §4.3.1 SplitCommand | `headless/api.ts:804` | `case 'split': {` | CORRECTIVE | Engine `split {id, frame}` vs spec `{time, trackIds, retainSide}` |
+| §4.3.2 TrimCommand | `headless/api.ts:811` | `case 'trimStart': {` | CORRECTIVE | Two engine ops vs one `trim {edge, delta}` command |
+| §4.3.8/9 Insert/Delete | `headless/api.ts:772` | `case 'addItem': {` | CORRECTIVE | Raw Clip object vs validated ElementSpec + PlacementStrategy |
+| §4.3.61-63 transitions | `headless/api.ts:825` | `case 'addTransition': {` | CORRECTIVE | `leftClipId/rightClipId/presentation` — param names differ (FreeCut wire shape) |
+| §4.3.22/23 tracks | `headless/api.ts:868` | `case 'addTrack': {` | ALIGNED | `addTrack(kind, order)` exists; delete/reorder commands absent |
+| §4.3.52/54 effects | `headless/api.ts:938` | `case 'addEffect': {` | ALIGNED | `addEffect(itemId, effect)` maps to AddEffectCommand |
+| §4.3.64/65 keyframes | `headless/api.ts:885` | `case 'addKeyframe': {` | CORRECTIVE | Per-property ops vs `upsertKeyframes {elementId, keyframes[]}` |
+| §7 CommandBatch | `headless/api.ts:985` | `function applyOpTracked(` | CORRECTIVE | Batch aborts on first failure without rollback; spec §7.1 requires atomic all-or-nothing |
+| §4.4 apply() dispatcher | `headless/api.ts:759` | `export function applyOp(op: EditOp, actions: TimelineActionsAdapter): unknown {` | CORRECTIVE | Adapter dispatch + op-local detail vs uniform CommandResult |
+| §2 goal 1 (JSON-serializable) | `headless/api.ts:542` | `export function resolveOperationRefs(` | CORRECTIVE | `{$ref: 'callerId#/pointer'}` chaining vs by-value IDs (replayability) |
+| §11 Zod schemas | `headless/api.ts:1691` | `export const editOpSchema = z.union(opSchemas);` | ALIGNED | Zod-at-the-boundary philosophy matches §11 |
+| §12.2 replay | `headless/api.ts:1067` | `project: input.project, // Wave 2 will replace with the rebuilt project.` | CORRECTIVE | Fake editProject round-trip (engine P0.4); the spec's determinism contract is what the engine must grow |
+| §4.3.71 UndoCommand | `timeline/timeline.ts:5247` | `undo(): boolean {` | ALIGNED | Capability exists; spec requires `{type:'undo'}` via the dispatcher |
+| §4.3.73 SnapshotCommand | `timeline/timeline.ts:5292` | `snapshot(label: string = 'snapshot'): TimelineSnapshot {` | ALIGNED | Same pattern, protocol-shaped |
+| §4.2 mapping (adapter surface) | `timeline/timeline.ts:2275` | `splitClip(` | ALIGNED | The 102-method class surface is the manager layer `apply()` dispatches to |
+| §13.8 playback commands | `playback/player.ts:1889` | `ratechange: { playbackRate: number };` | ENGINE-GAP | Zero playback ops on the engine's wire surface despite Player rate support |
 
 ---
 
@@ -4518,7 +4828,7 @@ The pattern: side-effectful I/O happens BEFORE the command is issued. The caller
 
 **Why:** This keeps `engine.command.apply()` synchronous, which simplifies the API (callers don't have to `await` it) and makes property-based testing tractable (commands are pure data, no I/O mocking required).
 
-**Cost:** The caller has to know the pre-extraction pattern. This is documented in §5.4 and exposed as helper methods on `MediaManager` (`engine.media.probe()`, `engine.media.persistBlob()`, `engine.media.generateThumbnail()` — all 📝 NEW greenfield helpers, not present on OpenCut-classic `MediaManager`; spec 01 §3.3 will add them as a deferred update) plus `engine.media.extractFrame()` (also 📝 NEW greenfield — see §4.3.13 `FreezeFrameCommand`) so callers don't have to implement it themselves.
+**Cost:** The caller has to know the pre-extraction pattern. This is documented in §5.4 and exposed as helper methods on `MediaManager` (`engine.media.probe()`, `engine.media.persistBlob()`, `engine.media.generateThumbnail()` — all 📝 NEW greenfield helpers, not present on OpenCut-classic `MediaManager`; spec 01 §3.3 will add them as a deferred update) plus `engine.media.extractFrame()` (also 📝 NEW greenfield — see §4.3.13 `FreezeFrameCommand`) so callers don't have to implement it themselves. The mirror case — OUTPUT I/O (export) — is resolved by §14.11: export commands return artifacts in `CommandResult.data` without mutating state; they are the only sanctioned exception.
 
 **Alternatives considered:**
 - Make `apply()` async. Rejected — breaks property-based testing and adds `await` noise to every caller.
@@ -4616,13 +4926,37 @@ Some users might want to extend the engine with custom commands (e.g., a third-p
 **Problem:** The HTTP API (§8) exposes `GET /api/engine/state` for the full state, but there's no way to query a specific subset (e.g., "give me element clip-3's current state"). Clients have to fetch the full state and filter.
 
 **Options:**
-- **A:** Add a `QueryCommand` variant with `params: { query: string, args: unknown[] }`. The engine evaluates the query and returns the result in `CommandResult.stateChange.newState` (or a new `CommandResult.data` field).
+- **A:** Add a `QueryCommand` variant with `params: { query: string, args: unknown[] }`. The engine evaluates the query and returns the result in `CommandResult.stateChange.newState` (or the `CommandResult.data` field, which now exists — §14.11 export commands use it; query commands remain open).
 - **B:** Add specific query endpoints to the HTTP API (`GET /api/engine/element/:id`, `GET /api/engine/track/:id`, etc.).
 - **C:** Keep the current design — full state on `GET /api/engine/state`, filter client-side.
 
 **Current decision:** Option C for v1. The full `SceneState` is small enough (a few hundred KB for typical projects) that fetching it is cheaper than designing and implementing a query language.
 
 **Revisit when:** Projects grow large enough that fetching the full state on every sync becomes a bottleneck. At that point, option B is the most likely path — it's RESTful and doesn't require a query language.
+
+### 14.11 How do export (output) commands fit the "commands are pure state mutations" rule? (Round-7 amendment)
+
+**Status:** Resolved. Export commands are the **sanctioned OUTPUT exception**.
+
+**The problem:** §2 Goals 1-2 and §14.2 establish that commands are pure, JSON-serializable state mutations; §14.2's pre-extraction pattern covers INPUT I/O (probe/persist happen before `importMedia`). Export is the mirror case — OUTPUT I/O — and until this amendment it had no protocol home: spec 10's gated test T3.2 referenced `apply({type:'exportFCPXML'})` that didn't exist, and spec 16 §0.2/§3.9 routed export ops to manager methods as "spec-16 extensions".
+
+**Options considered:**
+- **Option 1 (adopted): export commands join the union as the sanctioned OUTPUT exception.** `apply()` returns `CommandResult` with an optional `data` field carrying the artifact (inline string for FCPXML) or an artifact/job reference (frame, master). The command is NOT undoable, does NOT mutate `SceneState` (`stateChange` is a no-op with `newState` = current state, matching `SnapshotCommand`'s read-only convention), and is excluded from undo history.
+- **Option 2 (rejected): export stays a manager-method** (`engine.export.exportFCPXML()`), §13 documents it as out-of-protocol, and spec 10's T3.2 is rewritten to compare the keyboard path against the function path.
+- (Rejected sub-option: an `applyAsync()` split — same API-splitting cost §14.2 already rejected for input I/O.)
+
+**Why Option 1:**
+1. **State-WYSIWYG stays coherent.** Spec 10's T3.2 invariant is "keyboard path == direct path produce identical output." With Option 1 both paths are `engine.command.apply({type:'exportFCPXML'})`, so the test is a pure dispatcher comparison. With Option 2 the two paths are different APIs, and the invariant silently degrades into "the resolver calls the right function" — weaker, and untestable through the command bus.
+2. **Specs 10 and 16 already reference the command shape.** The TEST-INTEGRATION-REVIEW recommended resolving via amendment rather than rewriting two shipped specs' test tiers.
+3. **One entry point for automation.** Cloud/CLI/MCP consumers drive the full lifecycle — edit AND deliver — through the same `POST /api/engine/command` channel (spec 11 clients POST `exportMaster` and get a `jobId`); no second protocol to document, version, and drift.
+4. **Pre-extraction symmetry.** Input I/O happens before the command (§14.2); output I/O happens after the state read — the command is a pure function of `(SceneState, params)` whose *result* carries bytes or a handle. Nothing in the undo/determinism machinery is touched: exports never enter `UndoInfo`, never emit `stateChanged`, and replay of `(ProjectJSON, EngineCommand[])` with exports stripped is byte-identical.
+
+**Honest costs of Option 1 (accepted):**
+- `CommandResult` gains a `data?: CommandResultData` field — the ok-variant is no longer purely state-descriptive. Mitigated: the field is optional, discriminated by `kind`, and only the three export commands populate it (this also retires half of §14.10 Option A's "query command" open question — the `data` channel now exists).
+- `exportMaster`/`exportFrame` complete asynchronously (job/artifact events), so "apply returns the finished artifact" is true only for `exportFCPXML`. This is the same asynchronous reality spec 11 already owns (render queue, progress events); the protocol just names it.
+- The union grows output-semantics commands, which §14.9's "closed union" rationale must tolerate — it does, because these three are first-party, not plugin extensions.
+
+**Rule going forward (normative):** a command may produce an output artifact via `data` ONLY if (a) it does not mutate `SceneState`, (b) it is `undoable: false`, (c) it maps 1:1 to a manager method that returns the artifact or a job handle, and (d) its artifact is JSON-transportable (string) or referenced by `artifactId`. Any future output command must amend this section.
 
 ---
 
@@ -4644,7 +4978,10 @@ src/engine/
 ├── commands/                   # Command class implementations (OpenCut-classic pattern)
 │   ├── SplitCommand.ts
 │   ├── TrimCommand.ts
-│   └── ...                     # One per EngineCommand variant
+│   ├── ExportFCPXMLCommand.ts   # §4.3.74 — output exception (§14.11)
+│   ├── ExportMasterCommand.ts   # §4.3.75
+│   ├── ExportFrameCommand.ts    # §4.3.76
+│   └── ...                     # One per EngineCommand variant (78 total)
 └── http/                       # HTTP API server (for cloud render)
     ├── server.ts               # Express/Hono server
     ├── routes/
@@ -4653,7 +4990,9 @@ src/engine/
     │   ├── render-frame.ts
     │   ├── render-audio.ts
     │   ├── state.ts
-    │   └── subscribe.ts
+    │   ├── subscribe.ts
+    │   ├── artifact.ts             # GET /api/engine/artifact/:id (§8.10 — Round-7)
+    │   └── job.ts                  # GET /api/engine/job/:id (§8.10 — Round-7)
     └── middleware/
         ├── auth.ts
         ├── rate-limit.ts
@@ -4747,8 +5086,8 @@ This keeps the docs in sync with the schema — no manual doc maintenance.
 
 This spec defines Layer 2 of the three-layer JSON protocol: the `EngineCommand` discriminated union. It contains:
 
-- **73 command types** organized into 15 categories (timeline, track, playback, project, scene, media, tool, marker, effect, mask, transition, keyframe, clipboard, undo/redo, snapshot).
-- **55 undoable** commands (state-changing mutations) and **18 non-undoable** (side-effectful I/O, queries, playback control, meta).
+- **78 command types** organized into 16 categories (timeline, track, playback, project, scene, media, tool, marker, effect, mask, transition, keyframe, clipboard, undo/redo, snapshot, export).
+- **55 undoable** commands (state-changing mutations) and **23 non-undoable** (side-effectful I/O incl. renameProject/deleteProject, queries, playback control, meta, output/export).
 - **1:1 mapping** between command types and `EditorCore` manager methods (§4.2) — enforced by the exhaustive `dispatch()` switch (§4.4).
 - **Zod schemas** as source of truth (§11) — TS types inferred via `z.infer<>`.
 - **`CommandResult`** type (§6) describing state change + undo info + error info.
@@ -4764,6 +5103,8 @@ The protocol is the unifying abstraction that makes the engine testable without 
 1. **Spec 00 (master):** Add Decision 9 ("JSON wire protocol as unifying engine abstraction") pointing to this spec. (TEST-01 may already be doing this — if not, this spec is the basis for it.)
 2. **Spec 01 (core engine):** Update §3.3 manager method signatures to align with the Zod schemas in §11 (deferred — not blocking).
 3. **Spec 12 (testing strategy):** Add tier 1 test examples using `engine.command.apply()` (this spec's §12 provides the templates).
-4. **Spec 16 (keyboard shortcuts — TBD):** Every shortcut maps to an `EngineCommand` — see §13.5.
-5. **Spec 17 (test plan — TBD):** Tier 1 tests use this protocol — see §13.6.
-6. **Implementation:** Add `apply()` to `CommandManager` (§4.4), write the dispatcher, port the 73 command class implementations (most already exist in OpenCut-classic — see spec 06 §10 for the source file inventory).
+4. **Spec 16 (keyboard shortcuts — shipped):** Every shortcut maps to an `EngineCommand` — see §13.5. Alignment edits (command-name renames already applied in spec 16) are tracked in spec 16 §0.2/§11.
+5. **Spec 17 (test plan — shipped):** Tier 1 tests use this protocol — see §13.6; per-module `## Testing` sections follow spec 17 §4's template.
+6. **Implementation:** Add `apply()` to `CommandManager` (§4.4), write the dispatcher, port the 78 command class implementations (most already exist in OpenCut-classic — see spec 06 §10 for the source file inventory; the 5 Round-7 additions are greenfield: 3 export wrappers + 2 project ops).
+7. **Spec 18 (UI shell):** every panel's interaction contract dispatches `EngineCommand`s through `apply()` (see §13.12).
+8. **Spec 19 (code references):** reconciliation deltas recorded in §13.14 feed the reference-repo map.

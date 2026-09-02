@@ -1,7 +1,7 @@
 # 14 — Implementation Phases: From Playback Spike to Full NLE
 
 **Stream:** Phased implementation plan
-**Status:** Plan for executing the spec
+**Status:** Plan for executing the spec (Round-7 update: engine-aware build strategy, §2.1)
 **Spec file:** `14-implementation-phases.md`
 
 ---
@@ -14,15 +14,25 @@ Define the implementation order. Each phase produces a shippable milestone. Phas
 
 ## 2. Phase Overview
 
-| Phase | Goal | Exit Criteria | Estimated Effort |
-|---|---|---|---|
-| **P0: Playback spike** | Single clip, play/pause/seek, frame-accurate | User loads a video file, plays it smoothly | 1-2 weeks |
-| **P1: Multi-track** | Multiple clips on a timeline, basic composition | User arranges 5 clips on 3 tracks, previews the composite | 2-3 weeks |
-| **P2: NLE ops** | Cut/split/trim/ripple/move/snap | User performs a real rough cut | 3-4 weeks |
-| **P3: Composition & transitions** | Crossfades, blends, basic effects | User adds transitions between clips | 2-3 weeks |
-| **P4: Color grading** | Wheels, curves, LUT, qualifier, scopes (10-bit) | User grades a clip with 10-bit precision | 3-4 weeks |
-| **P5: FCPXML export** | Round-trip to FCP/DaVinci | User exports and re-opens in FCP | 1-2 weeks |
-| **P6: Cloud render** (optional) | Headless Chrome + ffmpeg pipeline | User requests a ProRes master render | 2-3 weeks |
+### 2.1 Engine-aware build strategy (Round 7)
+
+The phases below were written greenfield; the nle-engine reference changes the *cost* of several of them without changing their order or exit criteria. Per `19-code-references.md` §8's per-subsystem ROI table:
+
+- **Graft from the engine** (adapt, don't adopt): NLE op algorithms (~20 families, spec 06's §10.4 maps them method-by-method), the transition planner/handles/27 presentations (spec 07 §6.1A now matches the engine's model by construction), the Clock + six sync plans (spec 03 §13E), the audio mixer/EQ/pitch worklet. All grafted code passes through the spec 15 command layer — the engine's class-API and JSON-RPC+$ref surface are the adapter target, never the architecture.
+- **Rebuild fresh**: media pipeline (mediabunny+WebCodecs), persistence (OPFS per spec 09), FCPXML export (spec 10 — pure JSON→XML, no engine dependency), workers (spec 02), UI shell + timeline UI (specs 18/05), and the three-tier test harness (spec 17).
+- **Correct, don't copy**: the 8-bit sRGB pipeline (re-texture per Decision 5), singleton texture returns (spec 04 §7.1's pool discipline), render-loop item-type skip (spec 07 §12.2).
+
+The engine's own wave plan (its `gaps/audit/MASTER.md`, waves 4A→7) is converging on the same contracts from its side; the seal round re-baselines (spec 19 §9). The timeline-distill repo, when it lands, becomes the timeline-UI code reference for P1.
+
+| Phase | Goal | Exit Criteria | Estimated Effort | Engine contribution |
+|---|---|---|---|---|
+| **P0: Playback spike** | Single clip, play/pause/seek, frame-accurate | User loads a video file, plays it smoothly | 1-2 weeks | Reference only (clock + sync plans graft; media path rebuilt fresh — engine is procedural-only) |
+| **P1: Multi-track + UI shell** | Multiple clips on a timeline, basic composition, shell scaffold | User arranges 5 clips on 3 tracks, previews the composite | 2-3 weeks | Scene assembly + compositor structure graft (8-bit→10-bit corrective); shell is greenfield (spec 18) |
+| **P2: NLE ops** | Cut/split/trim/ripple/move/snap | User performs a real rough cut | 3-4 weeks | **Biggest accelerator** — ~20 op families already implemented + tested in the engine; wrap in the command layer |
+| **P3: Composition & transitions** | Crossfades, blends, basic effects | User adds transitions between clips | 2-3 weeks | 27 presentations + planner + handle math graft; effects pipeline math ports, pipeline discipline rebuilds |
+| **P4: Color grading** | Wheels, curves, LUT, qualifier, scopes (10-bit) | User grades a clip with 10-bit precision | 3-4 weeks | Effect algorithms port; 8-bit→10-bit + linear-light is the corrective core |
+| **P5: FCPXML export** | Round-trip to FCP/DaVinci | User exports and re-opens in FCP | 1-2 weeks | Zero engine surface — build fresh from spec 10; can start early (no GPU/media dependency) |
+| **P6: Cloud render** (optional) | Headless Chrome + ffmpeg pipeline | User requests a ProRes master render | 2-3 weeks | Xvfb infra reference (engine Decision 12); pipeline itself fresh |
 
 **Total estimate: 14-21 weeks (3.5-5 months)** for a single developer. With 2-3 developers, can compress to ~2-3 months.
 
@@ -76,9 +86,10 @@ A single video file plays in a canvas with frame-accurate seek. No timeline, no 
    - `MediaManager` (import file)
    - `RendererManager` (single layer)
 
-5. **UI (minimal):**
-   - One page with: file picker, canvas, play/pause button, seek bar
-   - No timeline UI yet
+5. **UI (minimal — spec 18 shell scaffold):**
+   - Single-page Edit shell: toolbar2 + viewer panel (canvas + transport) + timeline area (one track, ruler, playhead) — the P0 subset of spec 18's panel inventory, `data-testid`s included from day one
+   - No inspector/media pool yet (P1)
+   - Every control dispatches via `engine.command.apply()` (spec 18 §5 contracts — established here, never retrofitted)
 
 6. **Tests:**
    - MediaTime / FrameRate unit tests
@@ -161,13 +172,14 @@ Multiple clips arranged on a multi-track timeline. Basic composition (overlay tr
    - `SceneTracks = { overlay: OverlayTrack[]; main: VideoTrack; audio: AudioTrack[] }`
    - `Track`, `TimelineElement` types
 
-2. **Timeline UI (minimal):**
-   - Track headers (with mute/solo/lock buttons)
+2. **Timeline UI (minimal — spec 05 + shell regions from spec 18):**
+   - Track headers (with mute/solo/lock buttons — spec 18 §4.7's 160px column)
    - Track bodies (DOM-based, with virtualization)
    - Clip rendering (color rectangles with name labels — no filmstrip yet)
    - Playhead (draggable)
    - Ruler (DOM-based, time markers)
    - Zoom (pixels per second slider)
+   - MediaPool + Inspector panels mount (spec 18 §4.2/§4.4 — 4 inspector tabs, model-backed params only)
 
 3. **Composition runtime:**
    - `buildFrameDescriptor(state, frame)` — basic version
@@ -704,7 +716,9 @@ Use the worklog (`/home/z/my-project/worklog.md`) and a project board to track:
 The full spec set:
 - `00-master-spec.md` — executive summary, decisions, architecture
 - `01-core-engine.md` through `12-testing-strategy.md` — per-stream specs
-- `13-subagent-scout-plan.md` — how to refine these specs with code references
+- `13-subagent-scout-plan.md` — how to refine these specs with code references (Rounds 1-6 process record)
 - `14-implementation-phases.md` (this file) — how to execute
+- `15-wire-protocol.md` / `16-keyboard-shortcuts.md` / `17-test-plan.md` — the testability layer
+- `18-ui-shell.md` / `19-code-references.md` — the UI shell + code-reference architecture (Round 7)
 
-Next step: dispatch sub-agent scouts per `13-subagent-scout-plan.md` to refine each stream with concrete code references.
+Scout refinement is complete (Rounds 1-6 audited and signed off; Round 7 added the code-reference layer). Implementation begins with Phase 0 above; the nle-engine and timeline-distill repos are de-risking references per `19-code-references.md`, not blocking dependencies.

@@ -1,5 +1,7 @@
 # Testability Integration Review
 
+> **Round-7 resolution note (2026-09-02):** All six issues found by this review are now RESOLVED — Issue #1 (MAJOR, `exportFCPXML` command gap) via the spec 15 Round-7 amendment (§4.3.74-76 Export category + §14.11 output-exception design; spec 10's T3.2 un-gated); Issue #2 (audio fixture name) and Issue #3 (unregistered fixtures) via the Round-7 registration pass (spec 17 §5.3/§5.5 now carries all 15 new rows incl. a namespacing convention); Issues #4-#6 (cosmetic) fixed in place (spec 15 §13.5/§13.6 refresh, spec 04 `wysiwyg` test name, spec 03 audio coverage acknowledged). A NEW instance of the Issue-#1 class was found and fixed in the same round (spec 09's `renameProject`/`deleteProject` — now spec 15 §4.3.77-78). This document is preserved as the Round-6 historical record; see `INTEGRATION-REVIEW-R7.md` for the current state.
+
 **Reviewer:** general-purpose (TEST-INTEGRATION)
 **Date:** 2026-08-22
 **Scope:** Final integration review for the testability refinement (data-driven engine architecture + wire protocol + keyboard shortcuts + overall test plan + 12 per-spec testing facets)

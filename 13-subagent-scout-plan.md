@@ -1,5 +1,6 @@
 # 13 — Sub-Agent Scout Plan: Stream Breakdown, Prompts, Audit, Deliverables
 
+> **Round-7 note:** the `/home/z/my-project/download/nle-spec/` paths below are the original working locations from the Round-1-6 sessions (historical record — the repo now lives at `/home/z/my-project/nle-core-spec/` and on GitHub). This document is the process record for Rounds 1-6; Round 7's process is documented in `README.md` and `audits/ROUND-7-AUDITS.md`.
 **Status:** Plan for dispatching sub-agents to refine the spec with code references
 **Spec file:** `13-subagent-scout-plan.md`
 

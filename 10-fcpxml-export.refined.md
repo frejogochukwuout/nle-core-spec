@@ -731,7 +731,7 @@ The ultimate test is opening the FCPXML in each flagship NLE and verifying:
 - Audio levels preserved
 - Markers preserved
 
-This must be done manually as part of the test matrix (see `12-testing-strategy.md`).
+This must be done manually as part of the test matrix (see `12-testing-strategy.refined.md`).
 
 ---
 
@@ -1397,9 +1397,9 @@ The DTD uses `CDATA` for almost every attribute. The following constraints must 
 
 | File | LOC | Purpose |
 |---|---|---|
-| `/home/z/my-project/download/nle-spec/00-master-spec.md` | 466 | Master spec — stream map, decisions, WYSIWYG contract |
-| `/home/z/my-project/download/nle-spec/10-fcpxml-export.md` | 727 | Seed spec for this stream (refined by this file) |
-| `/home/z/my-project/download/nle-spec/09-project-model.refined.md` | 2379 | Dependency — `ProjectJSON`, `MediaColorInfo`, `ElementJSON`, `TransitionJSON` schema. SCOUT-09 flagged the need for sequence-level `colorSpace` (§8.13, §11 Correction #3) — addressed in this file's §10 Q8 / §13 Correction #7. |
+| `/home/z/my-project/nle-core-spec/00-master-spec.md` | 466 | Master spec — stream map, decisions, WYSIWYG contract (path updated from the original /download/nle-spec/ clone location) |
+| `/home/z/my-project/nle-core-spec/10-fcpxml-export.md` | 727 | Seed spec for this stream (refined by this file; path updated) |
+| `/home/z/my-project/nle-core-spec/09-project-model.refined.md` | 2379 | Dependency — `ProjectJSON`, `MediaColorInfo`, `ElementJSON`, `TransitionJSON` schema. SCOUT-09 flagged the need for sequence-level `colorSpace` (§8.13, §11 Correction #3) — addressed in this file's §10 Q8 / §13 Correction #7. (path updated) |
 
 ### 12.2 Apple documentation (markdown mirrors fetched successfully)
 
@@ -1455,6 +1455,27 @@ All URLs below were fetched during this scout task with HTTP 200 (markdown versi
 | URL | HTTP | Purpose |
 |---|---|---|
 | https://api.github.com/search/repositories?q=fcpxml&sort=stars | 200 | Found 197 FCPXML-related repos; top result `elliotttate/SpliceKit` (129★, Objective-C), `reuelk/pipeline` (Swift, 61★), `andrewarrow/cutlass` (Go, 56★). |
+
+---
+
+### 12.8 Code References — nle-engine (reference, NOT canon) — Round 7
+
+**Engine FCPXML surface: verified zero.** `grep -ri fcpxml /home/z/my-project/nle-engine/src` returns 0 matches — no exporter module, no `engine.export.*`, no XML emission anywhere. This entire spec is SPEC-ONLY relative to the engine. The mapping below records what the engine's project model already provides the future exporter, plus the gaps.
+
+> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room FreeCut-port **in-between reference, NOT canon**. Where engine and spec conflict, **the spec wins**. Full reconciliation: `19-code-references.md`.
+
+| Spec section | nle-engine file:line | Verified quote | Status | Note |
+|---|---|---|---|---|
+| §4 mapping (entire exporter) | (absence — 0 fcpxml matches in src/) | COULD-NOT-VERIFY (nothing to quote) | ENGINE-GAP | Engine export roadmap (MASTER P1.10) is MP4/WebM only — FCPXML is absent from its registers |
+| §4.4 asset-clip start/duration | `core/types.ts:439` | `sourceStart: number;` | ALIGNED (field presence) | `SourceRef` groups sourceStart/sourceEnd/sourceDuration/sourceFps — maps to `<asset-clip>`; D1 wire-shape delta applies |
+| §3.3/§11.6 retiming | `core/types.ts:593` | `speed?: number;` | ALIGNED (partial) | Constant speed + isReversed support the two-timept `<timeMap>`; no variable-speed ramp — ENGINE-GAP |
+| §4.4 audio properties | `core/types.ts:605` | `volume?: number;` | ALIGNED (field presence) | dB volume + seconds-based fades map to `<adjust-volume>`/fade params |
+| §4.7 markers | `core/types.ts:1067` | `markers?: ProjectMarker[];` | ALIGNED (with mapping nuance) | Timeline-level markers must be assigned to covering clips (Correction #10) |
+| §4.2 format resources | `core/types.ts:1049` | `fps: number;` | ALIGNED (field presence) | `TimelineData {fps, width, height}` supplies `<format>`; no colorSpace anywhere |
+| §4.2/§13 Corr #4 colorSpace | `media/metadata.ts:46` | `export interface MediaMetadata {` | ENGINE-GAP | No colorSpace field in MediaMetadata — highest-value pre-export engine addition |
+| §3.1 lane mapping | `core/types.ts:760` | `export type TrackKind = 'video' \| 'audio';` | ALIGNED (mapping needed) | Exporter must synthesize lanes from track.order (V3/V2/A1 per M2) |
+| §4.5 transitions | `core/types.ts:371` | `presentation: TransitionPresentation;` | ALIGNED (field presence) | Richer than spec 10's crossfade-only §4.5; only crossfade maps in v1 |
+| §8.1 non-exported item types | `core/types.ts:734` | `export interface CompositionItem extends BaseClip {` | ENGINE-GAP | Comps exist as types but render zero pixels (player.ts:1038) — consistent with §8.1 |
 
 ---
 
@@ -1860,7 +1881,7 @@ Per the npm search (§12.6):
 
 ---
 
-## Testing
+## 16. Testing
 
 > See `17-test-plan.md` §4 for the per-module template, §3 for the test
 > matrix, and §5 for canonical test-asset naming. Matrix row for this
@@ -1868,7 +1889,7 @@ Per the npm search (§12.6):
 > "FCPXML with media bundle", "colorSpace triplet format", "Keyboard
 > shortcut `Cmd+E` (export FCPXML)". EngineCommand types referenced in
 > Tier 3 (`exportFCPXML`) are defined in `15-wire-protocol.md` §4.3
-> (proposed addition — see note in Tier 3 below). The brief test plan in
+> (added in Round 7 — see note in Tier 3 below). The brief test plan in
 > §15 above remains as the *intent* list; this section is the
 > *executable* contract — reviewers compare it line-by-line against the
 > actual test files. The manual FCP/DaVinci/Premiere round-trip tests
@@ -1998,7 +2019,9 @@ doesn't produce pixels, it produces a file. Tests verify the file is
 written to disk correctly and that bundled media is co-located.
 
 - `export-fcpxml-via-ui-triggers-download-event` — clicking the
-  "Export FCPXML" menu item (or pressing `Cmd+E`, see Tier 3) triggers
+  "Export FCPXML" affordance in the spec 18 shell's Deliver page (the
+  mock's menu bar is removed — spec 18 §8.1) or pressing `Cmd+E` (see
+  Tier 3) triggers
   a browser download; Playwright intercepts the
   `page.on('download')` event; the downloaded file has extension
   `.fcpxml` and a non-empty body that passes Tier 1's Zod schema
@@ -2020,15 +2043,15 @@ written to disk correctly and that bundled media is co-located.
 
 [Filename: `tests/integration/10-fcpxml-export/*.ui.test.ts`]
 
-> **Note on `exportFCPXML` EngineCommand:** the Tier 3 tests below
+> **Note on `exportFCPXML` EngineCommand (Round-7 update):** the Tier 3 tests below
 > reference `engine.command.apply({ type: 'exportFCPXML', params: { ... } })`.
-> At the time of this spec's refinement, spec 15 §4.1 lists 73
-> `EngineCommand` types and `exportFCPXML` is **not** among them — it's
-> a *proposed* addition tracked as a follow-up to FACET-10. Until that
-> command is added, the UI tests assert against the function-based
-> export path (`engine.export.exportFCPXML(project, opts)`) and the
-> state-WYSIWYG test (T3.2 below) is gated behind the command addition.
-> See worklog entry FACET-10 for the cross-spec follow-up.
+> The export commands were added to spec 15's `EngineCommand` union in
+> Round 7 (spec 15 §4.1 union + §4.2 mapping + §4.3.74 type definition —
+> the Export category). The command is a dispatch wrapper: its
+> implementation remains the function-based export path
+> (`engine.export.exportFCPXML(project, opts)` — ExportManager, spec 01
+> §14.11). T3.2 below is **un-gated and runs as written**. The FACET-10
+> follow-up is closed.
 
 - `keyboard-cmd-e-triggers-fcpxml-export` — `Cmd+E` (macOS) /
   `Ctrl+E` (Windows/Linux) issues the export via `page.keyboard.press()`
@@ -2042,7 +2065,11 @@ written to disk correctly and that bundled media is co-located.
   the FCPXML produced by calling
   `engine.command.apply({ type: 'exportFCPXML', params: { bundleMedia: false } })`
   directly; this is the WYSIWYG invariant for export — keyboard path
-  and direct-API path produce identical output
+  and direct-API path produce identical output. The `exportFCPXML`
+  command dispatches to the function-based implementation
+  `engine.export.exportFCPXML(project, opts)` (spec 15 §4.2 mapping;
+  spec 01 §14.11 ExportManager) — both paths must produce identical
+  bytes.
 
 ### Manual tests (CRITICAL — cannot be automated)
 
@@ -2057,7 +2084,7 @@ justification).
 macOS, before each release, owner: QA)
 
 Pass criteria — open `tests/fixtures/projects/10/hdr-pq.json` exported
-via `engine.export.exportFCPXML(project, { bundleMedia: true })` in
+via `engine.export.exportFCPXML(project, { bundleMedia: true })` (the implementation path the `exportFCPXML` EngineCommand dispatches to — spec 15 §4.2) in
 FCP and verify:
 
 - Project loads without errors (no red banner, no import dialog
@@ -2233,4 +2260,4 @@ npm run test:fixtures:regen -- --filter "10-fcpxml-export"
 
 ---
 
-**End of `10-fcpxml-export.refined.md`.** Next: `11-cloud-render.md`.
+**End of `10-fcpxml-export.refined.md`.** Next: `11-cloud-render.refined.md`.
