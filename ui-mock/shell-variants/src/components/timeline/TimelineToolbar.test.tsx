@@ -108,3 +108,102 @@ describe('TimelineToolbar', () => {
     expect(meter.getAttribute('title')).toContain('Master: -8.5 dB'); // 0.78 × 66 − 60
   });
 });
+
+/* R14 no-op sweep wiring — view options, the marker-color dropdown (shared
+   §4.9 palette), the zoom cluster (fit / selection / magnifier-focus), the
+   DIM chip honesty contract, slider aria-valuetext, and the ⌘M tooltip. */
+describe('TimelineToolbar R14 wiring', () => {
+  it('view options explains itself with the honest-mock toast', () => {
+    boot({});
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+    const t = store().toasts.at(-1)!;
+    expect(t.kind).toBe('info');
+    expect(t.title).toBe('View options');
+    expect(t.detail).toContain('debug overlay');
+  });
+
+  it('the marker-color button opens the shared §4.9 palette; a pick adds a colored marker at the playhead', () => {
+    boot({});
+    const btn = screen.getByTestId('shell-timeline-toolbar-btn-marker-color');
+    expect(btn).toHaveAttribute('aria-haspopup', 'menu');
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(btn);
+    expect(screen.getByTestId('shell-menu-tb-marker-color')).toBeInTheDocument();
+    expect(btn).toHaveAttribute('aria-expanded', 'true');
+    // the SAME 8-dot row the ruler menu renders (markerColorItems builder)
+    for (const c of ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray']) {
+      expect(screen.getByTestId(`shell-menu-tb-marker-color-${c}`)).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByTestId('shell-menu-tb-marker-color-purple'));
+    const added = scene1().markers.at(-1)!;
+    expect(added.color).toBe('purple');
+    expect(added.time).toBe(16); // at the playhead
+    expect(screen.queryByTestId('shell-menu-tb-marker-color')).not.toBeInTheDocument(); // closed
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('zoom-to-fit solves px/s from the measured viewport (900 fallback) + scene duration', () => {
+    boot({});
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-zoom-fit'));
+    // sc-1 duration = 30 s → zoomFit(900, 30) = (900-24)/(30+2)
+    expect(store().pxPerSec).toBeCloseTo((900 - 24) / 32, 5);
+  });
+
+  it('zoom-to-selection fits the selection span at ~80% of the viewport', () => {
+    boot({}); // boot selection = ['el-2'] → span 8.5 s (8.5 → 17)
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-zoom-selection'));
+    expect(store().pxPerSec).toBeCloseTo((900 * 0.8) / 8.5, 5);
+  });
+
+  it('zoom-to-selection with no selection explains itself with an info toast, zoom untouched', () => {
+    boot({ selection: [] });
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-zoom-selection'));
+    expect(store().pxPerSec).toBe(46);
+    const t = store().toasts.at(-1)!;
+    expect(t.kind).toBe('info');
+    expect(t.title).toBe('Zoom to selection');
+    expect(t.detail).toBe('No selection — select clips to zoom to their span');
+  });
+
+  it('the magnifier button focuses the zoom slider (distinct honest effect)', () => {
+    boot({});
+    const slider = screen.getByRole('slider', { name: 'Timeline zoom' });
+    fireEvent.click(screen.getByRole('button', { name: 'Focus zoom slider' }));
+    expect(slider).toHaveFocus();
+  });
+
+  it('the zoom + master sliders expose aria-valuetext (spec 18 §11.3 slider contract)', () => {
+    boot({});
+    expect(screen.getByRole('slider', { name: 'Timeline zoom' })).toHaveAttribute('aria-valuetext', '46 px/s');
+    expect(screen.getByRole('slider', { name: 'Master volume' })).toHaveAttribute('aria-valuetext', '78%');
+  });
+
+  it('the DIM chip is aria-disabled with the M2 explanation tip (honesty contract)', () => {
+    boot({});
+    const dim = screen.getByText('DIM');
+    expect(dim).toHaveAttribute('aria-disabled', 'true');
+    expect(dim).toHaveAttribute('data-tip', 'Master dim is M2 (spec 20 §12) — display-only in the mock');
+  });
+
+  it('the ⌘M tooltip tells the focused-track truth (spec 16 §3.5)', () => {
+    boot({});
+    expect(screen.getByRole('button', { name: 'Mute master' })).toHaveAttribute(
+      'data-tip',
+      'Mute focused track (⌘M — master when nothing focused)',
+    );
+  });
+});
+
+describe('R14: tool radiogroup arrow-key navigation (spec 18 §11.1)', () => {
+  it('ArrowRight moves the checked tool and roves focus; ArrowLeft wraps back', () => {
+    renderPlain(<TimelineToolbar />);
+    const first = screen.getByTestId('shell-timeline-toolbar-tool-select');
+    first.focus();
+    fireEvent.keyDown(first.parentElement!, { key: 'ArrowRight' });
+    expect(useUi.getState().tool).toBe('blade'); // select → blade
+    expect(document.activeElement).toBe(screen.getByTestId('shell-timeline-toolbar-tool-blade'));
+    fireEvent.keyDown(document.activeElement!.parentElement!, { key: 'ArrowLeft' });
+    expect(useUi.getState().tool).toBe('select');
+    expect(document.activeElement).toBe(first);
+  });
+});

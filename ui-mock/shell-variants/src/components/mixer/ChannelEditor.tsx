@@ -154,6 +154,14 @@ export function ChannelEditor() {
                     onChange={(e) => setMixerTrack(track.id, { auxA: +e.target.value })} aria-label={`${track.name} aux 1 send`} />
                   <span className="mono text-[10px] text-tmuted">{Math.round(strip.auxA * 100)}%</span>
                 </Row>
+                {/* A2 twin (R14): the editor showed only the A1 send while the
+                    model + strip both carry auxB — parity with the strip rows */}
+                <Row label="A2 send">
+                  <input type="range" min={0} max={1} step={0.05} value={strip.auxB} className="h-[10px] min-w-0 flex-1 green-fill"
+                    style={{ ['--fill' as any]: `${strip.auxB * 100}%` }}
+                    onChange={(e) => setMixerTrack(track.id, { auxB: +e.target.value })} aria-label={`${track.name} aux 2 send`} />
+                  <span className="mono text-[10px] text-tmuted">{Math.round(strip.auxB * 100)}%</span>
+                </Row>
               </div>
             </div>
 

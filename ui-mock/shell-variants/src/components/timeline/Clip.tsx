@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { useVariantClipStyle } from '../../state/variantHooks';
-import { mediaById, findElement, type ElementJSON, type TrackJSON } from '../../lib/mockData';
+import { mediaById, findElement, EFFECT_DEFS, TRANSITION_PRESENTATIONS, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
@@ -24,6 +24,23 @@ interface ClipProps {
 }
 
 type DragState = { mode: 'move' | 'l' | 'r'; startX: number; origStart: number; origDur: number; cur: number; alt: boolean } | null;
+
+/* effects-rail drag payload type (HTML5 DnD): the AppShell effects rail
+   drags rows as application/x-nle-effect JSON {name, cat} (cat: 'Blur' |
+   'Stylize' | 'Transition') — the twin of MediaPool's POOL_DRAG_TYPE. */
+export const EFFECT_DRAG_TYPE = 'application/x-nle-effect';
+
+/* nominal effect-param defaults — INSPECTOR TWIN: mockData's EFFECT_DEFS
+   carries no default column (spec 07's registry does; Inspector.tsx:64-77
+   keeps the same map module-private — shell/ is another agent's surface, so
+   the drop path inlines the identical values/rule: param default =
+   PARAM_DEFAULTS[key] ?? param.min). */
+const PARAM_DEFAULTS: Record<string, number> = { radius: 12, length: 24, angle: 0, amount: 50, feather: 50, intensity: 50, offset: 5 };
+const defaultsFor = (def: (typeof EFFECT_DEFS)[number]): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const p of def.params) out[p.key] = PARAM_DEFAULTS[p.key] ?? p.min;
+  return out;
+};
 
 export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps) {
   const clipStyle = useVariantClipStyle();
@@ -42,6 +59,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
 
   const [drag, setDrag] = useState<DragState>(null);
   const [hover, setHover] = useState(false);
+  const [fxHover, setFxHover] = useState(false); // effects-rail drag over THIS clip (R14)
   const ref = useRef<HTMLDivElement>(null);
   const dragCancelled = useRef(false); // Esc during a drag → drop dispatches nothing
   const suppressClick = useRef(false); // swallow the trailing click after a gesture (alt-drop / Esc-cancel)
@@ -132,14 +150,13 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     }
     if (drag.mode === 'move') {
       if (drag.alt && Math.abs(drag.cur - drag.origStart) > 1e-6) {
-        // Alt+drag = duplicate: spawn a copy at the drop position, original
-        // stays put. duplicateElements() selects the new ids, so read the new
-        // id straight back from the store, then move it to the drop time. The
-        // trailing click is suppressed so the new copy stays selected.
+        // Alt+drag = duplicate: spawn a copy AT the drop position, original
+        // stays put — ONE history entry (R14: was duplicate + move, two undo
+        // steps with a flashing intermediate). duplicateElements() selects
+        // the new ids. The trailing click is suppressed so the copy stays
+        // selected.
         suppressClick.current = true;
-        duplicateElements([el.id]);
-        const newId = useUi.getState().selection[0];
-        if (newId) moveElement(newId, drag.cur);
+        duplicateElements([el.id], drag.cur);
       } else if (!drag.alt && Math.abs(drag.cur - drag.origStart) > 1e-6) {
         moveElement(el.id, drag.cur);
       }
@@ -245,6 +262,46 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         useUi.getState().enterAudioFocus('escalation', track.id);
       } },
     ];
+  };
+
+  /* ---------- effects-rail drop target (R14 wiring): mirrors the Timeline
+     lane pool-drop grammar — type guard, preventDefault, locked-track
+     not-allowed cursor, ring feedback while an effect drag hovers. The
+     clip's own move/trim gestures are POINTER events, so HTML5 DnD and the
+     pointer grammar never collide; the lane's pool handlers ignore this
+     drag type entirely. */
+  const onEffectDrop = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+    e.preventDefault();
+    setFxHover(false);
+    if (locked) return; // locked-track guard: not-allowed, nothing commits
+    let payload: { name: string; cat: string } | null = null;
+    try { payload = JSON.parse(e.dataTransfer.getData(EFFECT_DRAG_TYPE) || 'null'); } catch { payload = null; }
+    if (!payload || typeof payload.name !== 'string' || typeof payload.cat !== 'string') {
+      pushToast({ kind: 'error', title: 'Effect drop failed', detail: 'unreadable drag payload from the effects rail (mock dataTransfer)' });
+      return;
+    }
+    const { name, cat } = payload;
+    if (cat === 'Transition') {
+      const pres = TRANSITION_PRESENTATIONS.find((p) => p === name);
+      if (!pres) {
+        pushToast({ kind: 'info', title: 'Unknown transition', detail: `'${name}' is not in the mock's transition vocabulary (spec 09 §3.4 presentations)` });
+        return;
+      }
+      /* Honest type mapping: the mock's TransitionJSON has ONE type —
+         'crossfade' (spec 09 §3.4 mock slice). Every presentation (Dip to
+         Black, Wipe Left, …) rides on it; the timeline's transition marker
+         displays the presentation. No dip/wipe types exist to map to, so
+         none are invented. */
+      useUi.getState().setTransition(el.id, { presentation: pres });
+      return;
+    }
+    const def = EFFECT_DEFS.find((d) => d.name === name);
+    if (!def) {
+      pushToast({ kind: 'info', title: 'Unknown effect', detail: `'${name}' is not in EFFECT_DEFS (the mock's effect registry)` });
+      return;
+    }
+    useUi.getState().addEffectToElement(el.id, { name: def.name, enabled: true, params: defaultsFor(def) });
   };
 
   const fadeLeftW = (el.audioFadeIn ?? 0) * pxPerSec;
@@ -366,7 +423,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         aria-label={`${el.name}, ${tc(el.startTime)}`}
         data-testid={`clip-${el.id}`}
         tabIndex={-1} /* programmatic focus only — roving host for Shift+F10 (§4.9) */
-        className={`clip-box absolute top-[2px] bottom-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''}`}
+        className={`clip-box absolute top-[2px] bottom-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''} ${fxHover ? 'ring-1 ring-accent' : ''}`}
         onDoubleClick={(e) => {
           // M3 escalation preview (design doc §3.1): dbl-click audio clip → Audio focus + strip focus
           if (track.kind === 'audio') {
@@ -381,10 +438,22 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
           menu.open(e.clientX, e.clientY, buildMenuItems(), 'clip');
         }}
         onKeyDown={(e) => {
-          if (!isMenuKey(e)) return;
-          e.preventDefault();
-          e.stopPropagation();
-          menu.openForElement(ref.current, buildMenuItems(), 'clip');
+          if (isMenuKey(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            menu.openForElement(ref.current, buildMenuItems(), 'clip');
+            return;
+          }
+          /* ARIA button pattern (WAI-ARIA authoring §Button) + spec 18 §11
+             keyboard floor: role="button" activates on Enter/Space — plain =
+             select, ⇧ = extend, mirroring onClick (Space prevented: page
+             scroll). Blade splits stay pointer-driven — ⌘B owns the keyboard
+             route. Locked tracks keep the same inert contract as clicks. */
+          if (e.key === 'Enter' || e.key === ' ') {
+            if (locked) return;
+            e.preventDefault();
+            selectElement(el.id, e.shiftKey || e.metaKey);
+          }
         }}
       style={{
         left: geo.left,
@@ -405,6 +474,18 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+        e.preventDefault(); // the ONLY drop the clip itself accepts
+        e.dataTransfer.dropEffect = locked ? 'none' : 'copy';
+        if (!locked) setFxHover(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setFxHover(false);
+      }}
+      onDrop={onEffectDrop}
     >
       {/* inner clipping box (label + body clip; badges overflow) */}
       <div className="clip-box absolute inset-0 overflow-hidden">{body}</div>

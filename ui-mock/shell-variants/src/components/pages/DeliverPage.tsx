@@ -2,9 +2,14 @@
    master, render settings, progress list (job rows + retry per §6.4).
    Honest mock: the export CTA / Reveal / Retry never run an encode — each
    pushes an info toast that says the render queue is mock, and the CTA
-   appends a static queued job row (it never progresses). */
+   appends a static queued job row (it never progresses). R14: render
+   settings (range/resolution/bundle) are LOCAL state the queue READS — the
+   queued row's name + bundle chip mirror the choices; §4.2 state rows: an
+   empty active scene swaps the queue for the empty-state row + honestly
+   disables the CTA, and the job list carries one failed fixture whose Retry
+   uses the same honest toast. */
 
-import { FileVideo, FileCode2, Camera, Download, RefreshCw, CheckCircle2, LoaderCircle, Clock } from 'lucide-react';
+import { FileVideo, FileCode2, Camera, Download, RefreshCw, CheckCircle2, LoaderCircle, Clock, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { useUi } from '../../state/useUiStore';
 
@@ -14,9 +19,12 @@ const PRESETS = [
   { id: 'frame', icon: Camera, name: 'Current frame · PNG', desc: 'Playhead frame export', badge: '' },
 ];
 
-type Job = { id: string; name: string; progress: number; state: 'done' | 'running' | 'queued'; time: string };
+type Job = { id: string; name: string; progress: number; state: 'done' | 'running' | 'queued' | 'failed'; time: string; bundle?: boolean };
 
 const JOBS: Job[] = [
+  /* §4.2 error-state fixture (R14): one permanently-failed row — the Retry
+     affordance already exists for non-done rows and fires the honest toast */
+  { id: 'j-0', name: 'Beach Doc — v2 master.mp4', progress: 62, state: 'failed', time: '12m ago' },
   { id: 'j-1', name: 'Beach Doc — v3 master.mp4', progress: 100, state: 'done', time: '2m ago' },
   { id: 'j-2', name: 'Beach Doc — v3.fcpxml', progress: 100, state: 'done', time: '2m ago' },
   { id: 'j-3', name: 'Interview selects master.mp4', progress: 38, state: 'running', time: '' },
@@ -31,17 +39,36 @@ export function DeliverPage() {
   const [preset, setPreset] = useState('fcpxml');
   const [jobs, setJobs] = useState<Job[]>(JOBS);
   const pushToast = useUi((s) => s.pushToast);
+  const scenes = useUi((s) => s.scenes);
+  const activeSceneId = useUi((s) => s.activeSceneId);
 
-  /** honest-mock export: toast the preset + append a static queued row */
+  /* render settings = LOCAL state the queued row READS (R14): range /
+     resolution feed the job name, bundle-media toggles a chip on the row */
+  const [range, setRange] = useState<'inout' | 'full'>('inout');
+  const [resolution, setResolution] = useState<'1080' | '2160'>('1080');
+  const [bundleMedia, setBundleMedia] = useState(true);
+  const rangeLabel = range === 'inout' ? 'In–Out' : 'Full';
+  const resLabel = resolution === '2160' ? '2160p' : '1080p';
+
+  /* §4.2 empty state: an element-less active scene has nothing to render —
+     honest-disabled route: the CTA is aria-disabled with the reason in the
+     tip and the queue swaps for the empty-state row (no fake export) */
+  const scene = scenes.find((s) => s.id === activeSceneId) ?? scenes[0];
+  const emptyTimeline = scene.tracks.every((t) => t.elements.length === 0);
+
+  /** honest-mock export: toast the preset + append a static queued row whose
+      name reflects the current range/resolution choices */
   const queueExport = () => {
+    if (emptyTimeline) return; // aria-disabled guard — nothing to export
     const p = PRESETS.find((x) => x.id === preset)!;
     pushToast({ kind: 'info', title: `Export queued: ${p.name}`, detail: MOCK_RENDER_DETAIL });
     setJobs((prev) => [...prev, {
       id: `j-${prev.length + 1}`,
-      name: `Beach Doc — Rough Cut.${EXPORT_EXT[preset]}`,
+      name: `Beach Doc — Rough Cut — ${resLabel} · ${rangeLabel}.${EXPORT_EXT[preset]}`,
       progress: 0,
       state: 'queued',
       time: '',
+      bundle: bundleMedia,
     }]);
   };
 
@@ -90,16 +117,16 @@ export function DeliverPage() {
         <div className="mb-3 flex flex-col gap-1.5 rounded-[var(--radius)] border border-soft px-3 py-2.5">
           <div className="flex items-center gap-2">
             <span className="w-[92px] shrink-0 text-[11px] text-tmuted">Range</span>
-            <select className="field flex-1 cursor-pointer" aria-label="Export range" defaultValue="inout">
+            <select className="field flex-1 cursor-pointer" aria-label="Export range" value={range} onChange={(e) => setRange(e.target.value as 'inout' | 'full')}>
               <option value="inout">In → Out (00:00:02:00 – 00:00:28:00)</option>
               <option value="full">Full timeline (00:00:30:00)</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-[92px] shrink-0 text-[11px] text-tmuted">Resolution</span>
-            <select className="field flex-1 cursor-pointer" aria-label="Export resolution">
-              <option>1920 × 1080 (project)</option>
-              <option>3840 × 2160</option>
+            <select className="field flex-1 cursor-pointer" aria-label="Export resolution" value={resolution} onChange={(e) => setResolution(e.target.value as '1080' | '2160')}>
+              <option value="1080">1920 × 1080 (project)</option>
+              <option value="2160">3840 × 2160</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
@@ -108,7 +135,7 @@ export function DeliverPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="w-[92px] shrink-0 text-[11px] text-tmuted">Bundle media</span>
-            <input type="checkbox" defaultChecked className="accent-[var(--accent-focus)]" aria-label="Bundle media with FCPXML" />
+            <input type="checkbox" checked={bundleMedia} onChange={(e) => setBundleMedia(e.target.checked)} className="accent-[var(--accent-focus)]" aria-label="Bundle media with FCPXML" />
             <span className="text-[11px] text-tmuted">sidecar files for round-trip (spec 10)</span>
           </div>
         </div>
@@ -116,24 +143,36 @@ export function DeliverPage() {
         {/* export CTA — accent-focus has no AA text pair in resolve/studio
             (recorded spec finding); use the accent-selection pair — per accent:
             gold 9.1:1 / ember 6.0:1 / violet 5.05:1 (R13: violet darkened from
-            #7b5cff after a live AA measurement caught 3.99:1) */}
+            #7b5cff after a live AA measurement caught 3.99:1). §4.2 empty
+            state: honest-disabled (aria-disabled + reason in the tip) */}
         <button
           data-testid="shell-deliver-btn-export-fcpxml"
+          aria-disabled={emptyTimeline || undefined}
+          data-tip={emptyTimeline ? 'nothing to export — the timeline is empty' : undefined}
           className="mb-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius)] px-3 py-2.5 text-[12px] font-semibold transition-opacity hover:opacity-90"
           style={{ background: 'var(--accent-selection)', color: 'var(--accent-contrast)' }}
-          onClick={queueExport}
+          onClick={emptyTimeline ? undefined : queueExport}
         >
           <Download size={13} />
           Export {PRESETS.find((p) => p.id === preset)?.name}
         </button>
 
-        {/* job list */}
+        {/* job list — §4.2: the empty scene swaps the queue for the
+            empty-state row (nothing was ever renderable) */}
         <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Jobs</div>
+        {emptyTimeline ? (
+          <div data-testid="shell-deliver-state-empty" className="rounded-[var(--radius)] border border-dashed border-soft px-3 py-4 text-center text-[11px] text-tmuted">
+            Timeline is empty — nothing to export
+          </div>
+        ) : (
         <div className="flex flex-col gap-1.5">
           {jobs.map((j) => (
             <div key={j.id} className="flex items-center gap-2.5 rounded-[var(--radius)] border border-soft px-2.5 py-2" data-testid="shell-deliver-job">
               {j.state === 'done' ? (
                 <CheckCircle2 size={14} className="shrink-0 text-[var(--mk-green)]" />
+              ) : j.state === 'failed' ? (
+                /* §4.2 error state (R14): red/amber failure affordance */
+                <TriangleAlert size={14} className="shrink-0 text-[var(--danger)]" />
               ) : j.state === 'queued' ? (
                 /* static queued row — the honest-mock export artifact; it
                    never progresses (no encode runs) */
@@ -144,7 +183,17 @@ export function DeliverPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="truncate text-[11.5px] text-tprimary">{j.name}</span>
-                  <span className="mono shrink-0 text-[11px] text-tmuted">{j.state === 'done' ? j.time : `${j.progress}%`}</span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {/* R14: bundle-media chip mirrors the checkbox on queued rows */}
+                    {j.bundle && (
+                      <span className="mono rounded border border-soft px-1 text-[10px] text-tmuted" data-testid="shell-deliver-job-bundle">bundle media</span>
+                    )}
+                    {j.state === 'failed' ? (
+                      <span className="mono text-[11px] font-semibold text-[var(--danger)]">Failed</span>
+                    ) : (
+                      <span className="mono text-[11px] text-tmuted">{j.state === 'done' ? j.time : `${j.progress}%`}</span>
+                    )}
+                  </div>
                 </div>
                 {j.state === 'running' && (
                   <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-[var(--border-soft)]">
@@ -174,6 +223,7 @@ export function DeliverPage() {
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   );

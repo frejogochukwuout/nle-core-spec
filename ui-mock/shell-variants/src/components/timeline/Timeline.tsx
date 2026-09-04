@@ -41,6 +41,12 @@ export function Timeline() {
     { id: 'paste', label: 'Paste', shortcut: '⌘V', disabled: true, tip: 'mock: clipboard paste needs spec 15 §4.3.70' },
     { id: 'add-marker', label: 'Add marker', onSelect: () => addMarker(useUi.getState().playhead) },
     { id: 'add-track', label: 'Add track (audio)', onSelect: () => addTrack('audio') },
+    { id: 'import-media', label: 'Import media', shortcut: '⌘I', onSelect: () => {
+      /* §4.9 timeline-empty menu wants the ⌘I import flow; the toast text
+         mirrors useShortcuts' ⌘I binding EXACTLY so surface parity is
+         testable (same title + detail, both routes say the same thing) */
+      pushToast({ kind: 'info', title: 'Import media', detail: 'File picker is mock — drop files on the Media Pool' });
+    } },
     { id: 'load-sample', label: 'Load sample project', sep: true, onSelect: () => {
       loadSampleProject();
       pushToast({ kind: 'success', title: 'Sample project loaded', detail: '30 s demo · 3 video + 1 text + 1 audio + crossfade (18 §4.10)' });
@@ -120,21 +126,47 @@ export function Timeline() {
   const colW = variant.headerStyle === 'readout' ? 160 : 112;
 
   const audioLaneBoost = useUi((s) => s.audioLaneBoost);
+  const trackHeightPref = useUi((s) => s.trackHeightPref);
   const laneHeight = (kind: TrackJSON['kind']) => {
     const base = trackHeights(kind, variant.clipStyle);
+    /* spec 18 §4.9 Height pref (track-header menu): compact = 60% /
+       tall = 140% of the kind-based auto height (normal = auto, the
+       default), min 24px, rounded to px. B3 registration: the state-home
+       question (per-track vs global) is a seal item — the mock answers
+       GLOBAL (one pref for all lanes); deviation noted in the store. */
+    const sized = trackHeightPref === 'compact'
+      ? Math.max(24, Math.round(base * 0.6))
+      : trackHeightPref === 'tall'
+        ? Math.max(24, Math.round(base * 1.4))
+        : base;
     // audio focus: audio lanes ×1.6, video/overlay compress (design doc §3.2)
-    if (audioLaneBoost) return kind === 'audio' ? Math.round(base * 1.6) : kind === 'main' ? Math.min(base, 40) : Math.min(base, 28);
-    return base;
+    // — applied on the PREF'D height so the two axes compose
+    if (audioLaneBoost) return kind === 'audio' ? Math.round(sized * 1.6) : kind === 'main' ? Math.min(sized, 40) : Math.min(sized, 28);
+    return sized;
   };
 
   // snap targets: all clip edges + playhead + sequence ends (spec 05 §9)
   const snapTargets = scene.tracks.flatMap((t) => t.elements.flatMap((e) => [e.startTime, e.startTime + e.duration]));
   snapTargets.push(playhead, 0, duration);
 
+  /* two-way scroll sync (W0-21): lanes ⇄ headers — a wheel over EITHER
+     column keeps the pair aligned (the real shell has ONE scroll region;
+     two synced panes is the mock's stand-in). Loop guard: writes happen
+     only when the two scrollTops differ, so the rebound scroll the write
+     provokes is a no-op; the syncing ref covers the synchronous re-entry
+     window. */
+  const syncing = useRef(false);
+  const syncVertical = (from: HTMLElement, to: HTMLElement | null) => {
+    if (syncing.current || !to || Math.abs(to.scrollTop - from.scrollTop) < 1) return;
+    syncing.current = true;
+    to.scrollTop = from.scrollTop;
+    syncing.current = false;
+  };
   const onScrollSync = () => {
-    if (headersRef.current && scrollRef.current) {
-      headersRef.current.scrollTop = scrollRef.current.scrollTop;
-    }
+    if (scrollRef.current) syncVertical(scrollRef.current, headersRef.current);
+  };
+  const onHeaderScrollSync = () => {
+    if (headersRef.current) syncVertical(headersRef.current, scrollRef.current);
   };
 
   /* wheel grammar (spec 18 §5A) — NATIVE listener: React's delegated wheel
@@ -180,6 +212,7 @@ export function Timeline() {
         data-testid="shell-track-headers"
         className="relative z-20 flex shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-hairline bg-raised"
         style={{ width: colW, minWidth: colW }}
+        onScroll={onHeaderScrollSync}
       >
         {variant.headerStyle === 'readout' ? (
           <div className="flex shrink-0 items-center border-b border-hairline bg-shell px-3" style={{ height: zoneH }}>

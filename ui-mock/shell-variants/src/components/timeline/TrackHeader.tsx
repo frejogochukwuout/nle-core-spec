@@ -39,6 +39,10 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
   const strip = useUi((s) => s.mixer.tracks[track.id]);
   const setMixerTrack = useUi((s) => s.setMixerTrack);
   const addTrack = useUi((s) => s.addTrack);
+  const trackHeightPref = useUi((s) => s.trackHeightPref);
+  const setTrackHeightPref = useUi((s) => s.setTrackHeightPref);
+  const focused = useUi((s) => s.focusedTrackId === track.id);
+  const setFocusedTrack = useUi((s) => s.setFocusedTrack);
   const menu = useContextMenu(); // §4.9 track-header menu
 
   /* §4.9 track-header menu — direct toggles reuse the module-level
@@ -48,7 +52,19 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
      clip-menu multi-delete carry the confirm consumers instead). */
   const kindLabel = track.kind === 'main' ? 'video' : track.kind === 'overlay' ? 'text' : 'audio';
   const buildMenuItems = (): MenuItem[] => [
-    { id: 'add-track', label: `Add ${kindLabel} track`, onSelect: () => addTrack(track.kind) },
+    /* §4.9 add-track above/below: explicit insertion at THIS header's index —
+       user direction wins over the spec 05 §12.1 kind-ordering law (which
+       governs the default no-position route only; see the store's addTrack). */
+    { id: 'add-above', label: `Add ${kindLabel} track above`, onSelect: () => addTrack(track.kind, 'above', track.id) },
+    { id: 'add-below', label: `Add ${kindLabel} track below`, onSelect: () => addTrack(track.kind, 'below', track.id) },
+    /* §4.9 Height rows (spec 18 §4.9 "Height: Compact/Normal/Tall — (UI)
+       pref"): single-choice group — ContextMenu renders checked items as
+       menuitemcheckbox (no radio role in its vocabulary; mock-level
+       acceptable). null = auto → no row checked. The pref is GLOBAL (all
+       lanes), the mock's answer to the B3 state-home seal item. */
+    { id: 'height-compact', label: 'Height: Compact', checked: trackHeightPref === 'compact', sep: true, onSelect: () => setTrackHeightPref('compact') },
+    { id: 'height-normal', label: 'Height: Normal', checked: trackHeightPref === 'normal', onSelect: () => setTrackHeightPref('normal') },
+    { id: 'height-tall', label: 'Height: Tall', checked: trackHeightPref === 'tall', onSelect: () => setTrackHeightPref('tall') },
     { id: 'rename', label: 'Rename track', disabled: true, tip: 'mock: inline rename needs the track-name update command', sep: true },
     { id: 'mute', label: 'Mute', checked: track.muted, sep: true, onSelect: () => toggleTrack(sceneId, track.id, 'muted') },
     { id: 'solo', label: 'Solo', checked: track.solo, onSelect: () => toggleTrack(sceneId, track.id, 'solo') },
@@ -106,11 +122,17 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
 
   return (
     <div
-      className="flex shrink-0 flex-col justify-center gap-[3px] border-b border-hairline bg-raised px-2"
+      className={`flex shrink-0 flex-col justify-center gap-[3px] border-b border-hairline bg-raised px-2 ${focused ? 'shadow-[inset_2px_0_0_0_var(--accent-selection)]' : ''}`}
       style={{ height, minHeight: height, overflow: 'hidden' }}
       data-testid={`shell-track-header-${track.id}`}
       title={`${track.name} · ${meta}`}
+      aria-current={focused ? 'true' : undefined} /* the focused track — ↑/↓ move this focus */
       tabIndex={-1} /* focusable host for the §4.9 Shift+F10 keyboard route */
+      onPointerDown={() => {
+        /* pointer focus feeds the ↑/↓ / ⌘A / ⌘M focused-track family —
+           setFocusedTrack was store-surface-only before (R14 no-op sweep) */
+        if (useUi.getState().focusedTrackId !== track.id) setFocusedTrack(track.id);
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -153,6 +175,7 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
                 className="icon-btn !h-[14px] !w-[14px] shrink-0"
                 data-tip="Automation lane — M2 (spec 20 §12.1)"
                 aria-label="Automation lane placeholder"
+                aria-disabled="true" /* honesty contract: no local mutation possible (M2 audio path) — the tip explains */
                 data-testid={`track-automation-${track.badge}`}
               >
                 <SlidersHorizontal size={9} strokeWidth={1.6} />

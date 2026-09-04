@@ -4,18 +4,31 @@
    share-link copy feedback, and the reset-to-canon action. Rendered through
    renderShell (needs VariantProvider + the store). */
 
-import { describe, expect, it, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DebugOverlay } from './DebugOverlay';
+import { StatusStrip } from '../shell/StatusStrip';
 import { DEFAULT_VARIANT, serializeVariant } from '../../lib/variants';
 import { renderShell, store } from '../../test/helpers';
+import { useUi } from '../../state/useUiStore';
 
 const shellRoot = (container: HTMLElement) => container.querySelector('[data-variant]') as HTMLElement;
+
+/** jsdom ships no navigator.clipboard — install the writeText stub the
+ *  share-link path awaits (ErrorBoundary.test pattern). */
+const stubClipboard = (impl: () => Promise<void>) => {
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn(impl) }, configurable: true });
+};
 
 beforeEach(() => {
   window.localStorage.clear();
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
+});
+
+afterEach(() => {
+  // drop any clipboard stub installed by a test (configurable by definition)
+  delete (navigator as { clipboard?: unknown }).clipboard;
 });
 
 describe('DebugOverlay open/close states', () => {
@@ -110,9 +123,65 @@ describe('toast-test driver (spec 18 §6.4)', () => {
 describe('share link', () => {
   it('Copy share link flips to the copied confirmation', async () => {
     const user = userEvent.setup();
+    // AFTER setup: user-event installs its own navigator.clipboard stub —
+    // a stub defined earlier would be silently overwritten (probed)
+    stubClipboard(() => Promise.resolve());
     renderShell(<DebugOverlay />);
     await user.click(screen.getByRole('button', { name: 'Open variant explorer' }));
     await user.click(screen.getByRole('button', { name: 'Copy share link' }));
     await waitFor(() => expect(screen.getByText('Link copied')).toBeInTheDocument());
+  });
+
+  it('a rejected write surfaces "Copy failed" inline and the button stays retryable (W1-17 fix)', async () => {
+    // clipboard permission denied — the OLD code swallowed this and showed
+    // a false "Link copied"; the fix must show the failure honestly
+    const user = userEvent.setup();
+    stubClipboard(() => Promise.reject(new Error('denied'))); // AFTER setup (it replaces navigator.clipboard)
+    renderShell(<DebugOverlay />);
+    await user.click(screen.getByRole('button', { name: 'Open variant explorer' }));
+    await user.click(screen.getByRole('button', { name: 'Copy share link' }));
+    await waitFor(() => expect(screen.getByText('Copy failed')).toBeInTheDocument());
+    expect(screen.queryByText('Link copied')).toBeNull(); // no false success
+    // retry stays enabled and can succeed once the clipboard recovers
+    stubClipboard(() => Promise.resolve());
+    await user.click(screen.getByRole('button', { name: 'Copy failed' }));
+    await waitFor(() => expect(screen.getByText('Link copied')).toBeInTheDocument());
+  });
+
+  it('a missing clipboard API surfaces the failure too (not a false success)', async () => {
+    const user = userEvent.setup();
+    delete (navigator as { clipboard?: unknown }).clipboard; // jsdom default — setup re-adds its stub, so drop AFTER setup
+    renderShell(<DebugOverlay />);
+    await user.click(screen.getByRole('button', { name: 'Open variant explorer' }));
+    await user.click(screen.getByRole('button', { name: 'Copy share link' }));
+    await waitFor(() => expect(screen.getByText('Copy failed')).toBeInTheDocument());
+  });
+});
+
+describe('Simulate save failure drill (R14 — wires the orphaned store action)', () => {
+  it('the toggle arms simulateSaveFail; a doc mutation then drives StatusStrip to the §6.4 failure row', async () => {
+    const user = userEvent.setup();
+    renderShell(
+      <>
+        <DebugOverlay />
+        <StatusStrip />
+      </>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open variant explorer' }));
+    const toggle = screen.getByLabelText('Simulate save failure');
+    expect(store().simulateSaveFail).toBe(false);
+    await user.click(toggle);
+    expect(store().simulateSaveFail).toBe(true);
+    expect(toggle).toBeChecked();
+    // the armed drill: the next save attempt (doc mutation → 600 ms mock
+    // write) lands in the failure state — the StatusStrip.test pattern
+    act(() => { useUi.getState().addMarker(21); });
+    await waitFor(() =>
+      expect(screen.getByTestId('shell-status-save')).toHaveTextContent('Save failed'),
+      { timeout: 2000 },
+    );
+    // un-arming the toggle restores the flag
+    await user.click(toggle);
+    expect(store().simulateSaveFail).toBe(false);
   });
 });

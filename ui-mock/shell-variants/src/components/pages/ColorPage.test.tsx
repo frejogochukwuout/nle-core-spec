@@ -1,14 +1,16 @@
-/* ColorPage — spec 18 §4.8 color-focus right rail. Static grading mock:
-   these tests pin the STRUCTURE (region root, the 4 wheels, primaries
-   sliders, curves + scopes, LUT/qualifier) plus the §15.3 single-column
-   deferral note. Wheels are decorative dials exposed as role="img" with
-   accessible names (R13 fix — role=slider promised interaction the mock
-   never had); sliders are labeled inputs (§11 a11y floor). No store
-   interaction — renderPlain. */
+/* ColorPage — spec 18 §4.8 color-focus right rail. Grading stack is
+   display state (R14 no-op fix): the 4 sliders + LUT select are controlled
+   LOCAL state whose readouts follow, wheels are decorative role="img"
+   statics (R13 fix), and first interaction per mount fires one honest
+   toast (no fake engine writes — spec 08 §4 render round). Store is touched
+   only for toasts — renderPlain. */
 
 import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ColorPage } from './ColorPage';
+import { useUi } from '../../state/useUiStore';
+
+const S = () => useUi.getState();
 
 describe('ColorPage (spec 18 §4.8 color-focus rail)', () => {
   it('renders the color region root (right-rail swap at inspectorW)', () => {
@@ -67,5 +69,54 @@ describe('ColorPage (spec 18 §4.8 color-focus rail)', () => {
   it('documents the deferred node-graph (spec 18 §15.3 seal question)', () => {
     render(<ColorPage />);
     expect(screen.getByText(/Node-graph layout deferred/i)).toBeInTheDocument();
+  });
+});
+
+describe('ColorPage display state (R14 no-op fix — real local behavior + honest toast)', () => {
+  it('moving a primary updates its readout; only ONE toast fires per mount', () => {
+    render(<ColorPage />);
+    fireEvent.change(screen.getByRole('slider', { name: 'Contrast' }), { target: { value: '40' } });
+    expect(screen.getByText('+40')).toBeInTheDocument();
+    expect(screen.queryByText('+12')).toBeNull(); // stale readout replaced
+    // first touch fires the honest display-state toast…
+    expect(S().toasts).toHaveLength(1);
+    expect(S().toasts[0]).toMatchObject({
+      kind: 'info',
+      title: 'Color params',
+      detail: 'grading stack is static in the mock — values are display state (spec 08 §4 render round)',
+    });
+    // …and further interactions do NOT repeat it (one per mount)
+    fireEvent.change(screen.getByRole('slider', { name: 'Pivot' }), { target: { value: '-20' } });
+    fireEvent.change(screen.getByRole('slider', { name: 'Saturation' }), { target: { value: '60' } });
+    fireEvent.change(screen.getByRole('slider', { name: 'Qualifier hue' }), { target: { value: '70' } });
+    expect(screen.getByText('-20')).toBeInTheDocument();
+    expect(screen.getByText('+60')).toBeInTheDocument();
+    expect(S().toasts).toHaveLength(1);
+  });
+
+  it('the LUT select updates the under-wheels readout and fires its own one-time toast', () => {
+    render(<ColorPage />);
+    expect(screen.getByTestId('shell-color-lut-readout')).toHaveTextContent('LUT: None');
+    fireEvent.change(screen.getByLabelText('LUT select'), { target: { value: 'Kodak 2383' } });
+    expect(screen.getByTestId('shell-color-lut-readout')).toHaveTextContent('LUT: Kodak 2383');
+    expect(S().toasts.at(-1)).toMatchObject({
+      kind: 'info',
+      title: 'Color params',
+      detail: 'LUT preview lands with the render round (spec 08)',
+    });
+    // one per mount: a second change stays silent
+    fireEvent.change(screen.getByLabelText('LUT select'), { target: { value: 'Rec709 → sRGB' } });
+    expect(screen.getByTestId('shell-color-lut-readout')).toHaveTextContent('LUT: Rec709 → sRGB');
+    expect(S().toasts).toHaveLength(1);
+  });
+
+  it('the power-window button answers with the v2 deferral toast', () => {
+    render(<ColorPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Power window' }));
+    expect(S().toasts.at(-1)).toMatchObject({
+      kind: 'info',
+      title: 'Power window',
+      detail: 'windowing is a v2 grading surface (spec 08)',
+    });
   });
 });

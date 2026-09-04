@@ -117,15 +117,34 @@ export function ChannelStrip({ track, sceneId, compact, focused, flashing, onStr
               <InsertSlot slot={2} value={strip.inserts[1]} onPick={(v) => setMixerTrack(track.id, { inserts: [strip.inserts[0], v] })} />
             </div>
 
-            {/* aux sends + output bus */}
+            {/* aux sends: A1/A2 twins — auxB was model-present but
+                display-missing (R14; spec 20 §4.2 MixerTrackSettings.auxB) */}
             <div className="flex w-full items-center gap-1 text-[10px] text-tmuted">
               <span className="mono shrink-0">A1</span>
               <input type="range" min={0} max={1} step={0.05} value={strip.auxA} className="h-[10px] min-w-0 flex-1 green-fill"
                 style={{ ['--fill' as any]: `${strip.auxA * 100}%` }}
                 onChange={(e) => setMixerTrack(track.id, { auxA: +e.target.value })}
                 aria-label={`${track.name} aux 1 send`} />
-              <span className="mono shrink-0 text-[10px]">{strip.auxPreFader ? 'pre' : 'post'}</span>
             </div>
+            <div className="flex w-full items-center gap-1 text-[10px] text-tmuted">
+              <span className="mono shrink-0">A2</span>
+              <input type="range" min={0} max={1} step={0.05} value={strip.auxB} className="h-[10px] min-w-0 flex-1 green-fill"
+                style={{ ['--fill' as any]: `${strip.auxB * 100}%` }}
+                onChange={(e) => setMixerTrack(track.id, { auxB: +e.target.value })}
+                aria-label={`${track.name} aux 2 send`} />
+            </div>
+            {/* tap point: ONE shared pre/post field per track (spec 20 §4.2
+                auxPreFader) — real toggle via setMixerTrack, was a static
+                display-only label (R14) */}
+            <button
+              onClick={() => setMixerTrack(track.id, { auxPreFader: !strip.auxPreFader })}
+              aria-pressed={strip.auxPreFader}
+              aria-label="Aux send pre-fader"
+              data-tip={`Aux tap point — ${strip.auxPreFader ? 'pre' : 'post'} fader`}
+              className={`mono flex h-[14px] w-full shrink-0 items-center justify-center rounded-[2px] border text-[9px] font-bold ${strip.auxPreFader ? 'border-accent bg-accent/20 text-accent' : 'border-strong bg-inset text-tmuted'}`}
+            >
+              {strip.auxPreFader ? 'pre' : 'post'}
+            </button>
             <select aria-label={`${track.name} output bus`} className="field w-full cursor-pointer px-1 py-0 text-[10px]"
               value={strip.outputBus} onChange={(e) => setMixerTrack(track.id, { outputBus: +e.target.value as 0 | 1 | 2 })}>
               <option value={0}>→ Master</option>
@@ -174,7 +193,17 @@ export function AuxStrip({ bus, compact }: { bus: 'a1' | 'a2'; compact: boolean 
         {!compact && <StripMeter trackId={`aux-${bus}`} db={settings.returnGain} fillHeight label={`Aux ${bus}`} />}
         <Fader db={settings.returnGain} onChange={(db) => setAuxBus(bus, { returnGain: db })} fillHeight ariaLabel={`Aux ${bus} return`} />
       </div>
-      {settings.on && <span className="mono text-[10px] text-[var(--solo)]">ON</span>}
+      {/* bus output enable — spec 20 §4.2 AuxBusSettings.on: real toggle via
+          setAuxBus, was a static ON badge (R14) */}
+      <button
+        onClick={() => setAuxBus(bus, { on: !settings.on })}
+        aria-pressed={settings.on}
+        aria-label={`Aux ${bus} bus on`}
+        data-tip="Aux bus output enable"
+        className={`mono rounded-[2px] border px-1.5 py-px text-[10px] font-bold ${settings.on ? 'border-[var(--solo)] text-[var(--solo)]' : 'border-strong text-tmuted'}`}
+      >
+        {settings.on ? 'ON' : 'OFF'}
+      </button>
     </div>
   );
 }

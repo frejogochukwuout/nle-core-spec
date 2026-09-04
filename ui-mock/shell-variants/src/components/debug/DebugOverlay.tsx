@@ -1,6 +1,9 @@
 /* DebugOverlay — ctrl+` (or the pill button) opens this floating panel.
    Presets A/B/C pick a curated direction; each dimension can then be toggled
-   independently. Share-link copies a URL that restores the current variant. */
+   independently. Share-link copies a URL that restores the current variant
+   (write awaited — failures surface inline, W1-17 fix). Also hosts the §6.4
+   drivers: toast-kind test buttons + the Simulate-save-failure drill toggle
+   that arms StatusStrip's error path. */
 
 import { useState } from 'react';
 import { useVariant } from './VariantProvider';
@@ -43,8 +46,14 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function DebugOverlay() {
   const { variant, setVariant, overlayOpen, setOverlayOpen } = useVariant();
-  const [copied, setCopied] = useState(false);
+  /* copy feedback mirrors ErrorBoundary's pattern (W1-17 fix): the write is
+     awaited — success flips to "Link copied", a rejection (or a missing
+     clipboard API) flips to an inline "Copy failed" and the button stays
+     enabled for retry. No swallowed failures → no false success. */
+  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
   const pushToast = useUi((s) => s.pushToast);
+  const simulateSaveFail = useUi((s) => s.simulateSaveFail);
+  const setSimulateSaveFail = useUi((s) => s.setSimulateSaveFail);
   if (!overlayOpen) {
     return (
       <button
@@ -63,11 +72,15 @@ export function DebugOverlay() {
   const presetMatch = PRESETS.find((p) => serializeVariant(p.variant) === serializeVariant(variant));
   const activePreset = PRESETS.find((p) => p.id === (presetMatch?.id ?? 'A'));
 
-  const share = () => {
+  const share = async () => {
     const url = `${location.origin}${location.pathname}#v=${encodeURIComponent(serializeVariant(variant))}`;
-    navigator.clipboard?.writeText(url).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyState('ok');
+      setTimeout(() => setCopyState('idle'), 1500);
+    } catch {
+      setCopyState('fail'); // stays failed — retry stays one click away
+    }
   };
 
   return (
@@ -189,6 +202,26 @@ export function DebugOverlay() {
           </div>
         </Row>
 
+        {/* save-failure drill (R14 wiring of the orphaned store action):
+            arms setSimulateSaveFail so the NEXT save attempt fails once —
+            drives StatusStrip's §6.4 error path (retry clears it) */}
+        <Row label="Save drill">
+          <label
+            className="flex cursor-pointer items-center gap-1.5 rounded-[var(--radius)] border border-soft px-2 py-1.5 text-[11px] text-tmuted hover:bg-[var(--hover-overlay)] hover:text-tprimary"
+            data-tip="next save attempt fails once (§6.4 error path drill)"
+          >
+            <input
+              type="checkbox"
+              checked={simulateSaveFail}
+              onChange={(e) => setSimulateSaveFail(e.target.checked)}
+              className="accent-[var(--accent-focus)]"
+              aria-label="Simulate save failure"
+              data-testid="debug-toggle-save-fail"
+            />
+            <span>Simulate save failure</span>
+          </label>
+        </Row>
+
         {/* spec note for current selection */}
         <div className="rounded-[var(--radius)] border border-soft bg-inset px-2.5 py-2">
           <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-tfaint">
@@ -206,8 +239,8 @@ export function DebugOverlay() {
             onClick={share}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] border border-soft px-2 py-1.5 text-[11px] text-tmuted hover:bg-[var(--hover-overlay)] hover:text-tprimary"
           >
-            {copied ? <Check size={12} className="text-accent" /> : <Copy size={12} />}
-            {copied ? 'Link copied' : 'Copy share link'}
+            {copyState === 'ok' ? <Check size={12} className="text-accent" /> : <Copy size={12} />}
+            {copyState === 'ok' ? 'Link copied' : copyState === 'fail' ? 'Copy failed' : 'Copy share link'}
           </button>
           <button
             onClick={() => setVariant(DEFAULT_VARIANT)}

@@ -64,10 +64,23 @@ export function AppDock() {
         <button className="icon-btn" onClick={() => setCheatOpen(true)} data-tip="Keyboard cheat sheet (?)" aria-label="Keyboard cheat sheet">
           <Keyboard size={16} strokeWidth={1.7} />
         </button>
-        <button className="icon-btn" data-tip="Project home" aria-label="Project home">
+        {/* both route to surfaces the mock doesn't have — aria-disabled +
+            the reason (§9 disabled language), NOT a toast: the tips already
+            carry the explanation (R14 no-op sweep) */}
+        <button
+          className="icon-btn"
+          aria-disabled="true"
+          data-tip="mock: project home is the media pool round (spec 18 §4.7)"
+          aria-label="Project home"
+        >
           <House size={16} strokeWidth={1.7} />
         </button>
-        <button className="icon-btn" data-tip="Settings (deferred §8.12)" aria-label="Settings">
+        <button
+          className="icon-btn"
+          aria-disabled="true"
+          data-tip="Settings (deferred §8.12)"
+          aria-label="Settings"
+        >
           <Settings2 size={16} strokeWidth={1.7} />
         </button>
       </div>

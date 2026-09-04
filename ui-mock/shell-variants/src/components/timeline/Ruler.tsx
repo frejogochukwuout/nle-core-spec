@@ -17,29 +17,18 @@ const MARKER_COLORS: Record<Marker['color'], string> = {
 
 const MARKER_COLOR_ORDER: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
 
-export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSON; duration: number; pxPerSec: number; playhead: number }) {
-  const headerStyle = useHeaderStyle();
-  const zoneH = headerStyle === 'readout' ? 44 : 22;
-  const setPlayhead = useUi((s) => s.setPlayhead);
-  const loop = useUi((s) => s.loop);
-  const loopEnabled = useUi((s) => s.loopEnabled);
-  const addMarker = useUi((s) => s.addMarker);
-  const clearInOut = useUi((s) => s.clearInOut);
-  const setLoopEnabled = useUi((s) => s.setLoopEnabled);
-  const menu = useContextMenu(); // §4.9 ruler menu
-  const ref = useRef<HTMLDivElement>(null);
-  /* gesture-origin gate: only the ruler's OWN press may seek — a drag that
-     started on the track headers / toolbar must not scrub the playhead when
-     it crosses the ruler (R13 review: `buttons === 1` alone made any
-     left-drag an accidental seek with no undo trail). */
-  const seeking = useRef(false);
-  const [hoverT, setHoverT] = useState<number | null>(null);
-
-  /* §4.9 ruler menu — marker at playhead, in/out clearing, loop toggle, and
-     the 8-color marker palette row (spec 16 §3.7 FCP cycle order). The dot
-     row is a role="group" of menuitem dots: Enter/click adds a colored
-     marker at the playhead, Left/Right cycles the dots. */
-  const markerDotRow = (
+/* §4.9 marker-color palette — ONE shared builder (R14 no-op sweep: the
+   TimelineToolbar marker-color button rendered this same dot row as a dead
+   color-dot + chevron). Returns the 8-dot row (spec 16 §3.7 FCP cycle order)
+   as a custom menu item: the ContextMenu wraps it in a role="group" row;
+   dots are role="menuitem" buttons — Enter/click fires onPick(color),
+   Left/Right cycles the dots. The HOST owns menu.close() + the addMarker
+   commit (this builder is presentation-only, so it stays host-agnostic). */
+export function markerColorItems(
+  onPick: (color: Marker['color']) => void,
+  dotTestidPrefix = 'shell-menu-ruler-color',
+): MenuItem[] {
+  const dotRow = (
     <div
       className="flex w-full items-center justify-between"
       onKeyDown={(e) => {
@@ -61,13 +50,83 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
           className="menu-dot"
           style={{ background: MARKER_COLORS[c] }}
           aria-label={`Add ${c} marker at playhead`}
-          data-testid={`shell-menu-ruler-color-${c}`}
-          onClick={() => { menu.close(); addMarker(playhead, c); }}
+          data-testid={`${dotTestidPrefix}-${c}`}
+          onClick={() => onPick(c)}
         />
       ))}
     </div>
   );
+  return [{ id: 'marker-color', label: 'Marker color', sep: true, custom: dotRow }];
+}
 
+export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSON; duration: number; pxPerSec: number; playhead: number }) {
+  const headerStyle = useHeaderStyle();
+  const zoneH = headerStyle === 'readout' ? 44 : 22;
+  const setPlayhead = useUi((s) => s.setPlayhead);
+  const loop = useUi((s) => s.loop);
+  const loopEnabled = useUi((s) => s.loopEnabled);
+  const addMarker = useUi((s) => s.addMarker);
+  const clearInOut = useUi((s) => s.clearInOut);
+  const setLoopEnabled = useUi((s) => s.setLoopEnabled);
+  const menu = useContextMenu(); // §4.9 ruler menu
+  const ref = useRef<HTMLDivElement>(null);
+  /* gesture-origin gate: only the ruler's OWN press may seek — a drag that
+     started on the track headers / toolbar must not scrub the playhead when
+     it crosses the ruler (R13 review: `buttons === 1` alone made any
+     left-drag an accidental seek with no undo trail). */
+  const seeking = useRef(false);
+  const [hoverT, setHoverT] = useState<number | null>(null);
+
+  /* ---------- in/out brackets: draggable loop edges (R14 no-op sweep —
+     the bracket art LOOKED draggable but was pointer-events-none). Drag =
+     pointer-captured edge move (x → time, frame-snapped); keyboard = the
+     ruler's own slider grammar (spec 18 §11.3) — ←/→ ±1 frame (⇧ ×10),
+     Home/End jump. applyBracket keeps the ordering law (R14, same as
+     markIn/markOut): start <= end ALWAYS — moving an edge past the other
+     drags the far edge along instead of inverting the window (an inverted
+     loop pegs the playback tick; the R13 hang). */
+  const bracketDrag = useRef<'in' | 'out' | null>(null);
+  const applyBracket = (side: 'in' | 'out', t: number) => {
+    const v = Math.max(0, snapToFrame(t));
+    useUi.setState((s) =>
+      side === 'in'
+        ? { loop: { ...s.loop, start: v, end: Math.max(s.loop.end, v) } }
+        : { loop: { ...s.loop, end: v, start: Math.min(s.loop.start, v) } },
+    );
+  };
+  const bracketHandlers = (side: 'in' | 'out') => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      e.stopPropagation(); // the ruler's own press must NOT seek the playhead
+      (e.currentTarget as HTMLElement).focus();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      bracketDrag.current = side;
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (bracketDrag.current !== side || e.buttons !== 1) return;
+      const box = ref.current?.getBoundingClientRect();
+      if (!box) return;
+      applyBracket(side, (e.clientX - box.left) / pxPerSec);
+    },
+    onPointerUp: () => { bracketDrag.current = null; },
+    onPointerCancel: () => { bracketDrag.current = null; },
+    onLostPointerCapture: () => { bracketDrag.current = null; },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        e.stopPropagation(); // the ruler root nudges the playhead on arrows
+        const frames = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1);
+        applyBracket(side, (side === 'in' ? loop.start : loop.end) + frames / 24);
+      } else if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        e.stopPropagation();
+        applyBracket(side, e.key === 'Home' ? 0 : duration);
+      }
+    },
+  });
+
+  /* §4.9 ruler menu — marker at playhead, in/out clearing, loop toggle, and
+     the shared 8-color marker palette row (markerColorItems above). */
   const buildMenuItems = (): MenuItem[] => [
     { id: 'add-marker', label: 'Add marker at playhead', onSelect: () => addMarker(playhead) },
     { id: 'goto-marker', label: 'Go to Marker ›', disabled: true, tip: 'mock: marker navigation list not built' },
@@ -76,7 +135,7 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
     { id: 'mark-out', label: 'Mark Out', shortcut: 'O', onSelect: () => useUi.getState().markOut() },
     { id: 'clear-inout', label: 'Clear in/out', onSelect: () => clearInOut() },
     { id: 'loop', label: 'Loop playback', checked: loopEnabled, onSelect: () => setLoopEnabled(!loopEnabled) },
-    { id: 'marker-color', label: 'Marker color', sep: true, custom: markerDotRow },
+    ...markerColorItems((c) => { menu.close(); addMarker(playhead, c); }),
   ];
 
   const contentW = (duration + 4) * pxPerSec;
@@ -120,7 +179,9 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
       aria-valuetext={tc(playhead)}
       className="sticky top-0 z-30 shrink-0 cursor-pointer border-b border-hairline bg-shell"
       style={{ height: zoneH, width: contentW }}
-      tabIndex={-1} /* focusable host for the §4.9 Shift+F10 keyboard route */
+      tabIndex={0} /* in tab order: the §11.3 slider is keyboard-operable, and
+        Shift+F10 (§4.9 marker palette) must be reachable without a pointer
+        (R14: was -1, focusable only via pointerdown) */
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation(); // keep the timeline-empty menu out of it
@@ -191,14 +252,42 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
         className="absolute bottom-0 top-0"
         style={{ left: bandLeft, width: bandW, background: 'var(--accent-selection)', opacity: loopEnabled ? 0.24 : 0.13 }}
       />
-      {/* in bracket */}
-      <svg className="pointer-events-none absolute" style={{ left: bandLeft - 2, top: headerStyle === 'readout' ? 16 : 3 }} width="9" height={zoneH - (headerStyle === 'readout' ? 18 : 5)} aria-hidden="true">
-        <path d={`M7 0 L1 ${zoneH / 4} M7 0 L1 0 M7 0 L1 ${zoneH / 2.6}`} stroke="var(--accent-selection)" strokeWidth="1.6" fill="none" />
-      </svg>
-      {/* out bracket */}
-      <svg className="pointer-events-none absolute" style={{ left: bandLeft + bandW - 7, top: headerStyle === 'readout' ? 16 : 3 }} width="9" height={zoneH - (headerStyle === 'readout' ? 18 : 5)} aria-hidden="true">
-        <path d={`M2 0 L8 ${zoneH / 4} M2 0 L8 0 M2 0 L8 ${zoneH / 2.6}`} stroke="var(--accent-selection)" strokeWidth="1.6" fill="none" />
-      </svg>
+      {/* in bracket — interactive loop edge (R14: draggable + keyboard) */}
+      <div
+        {...bracketHandlers('in')}
+        role="slider"
+        aria-label="Loop in point"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(duration * 24)}
+        aria-valuenow={Math.round(loop.start * 24)}
+        aria-valuetext={tc(loop.start)}
+        tabIndex={0}
+        data-testid="shell-ruler-bracket-in"
+        className="pointer-events-auto absolute z-[7] flex cursor-ew-resize items-center"
+        style={{ left: bandLeft - 2, top: headerStyle === 'readout' ? 16 : 3, width: 13, height: zoneH - (headerStyle === 'readout' ? 18 : 5) }}
+      >
+        <svg className="pointer-events-none" width="9" height={zoneH - (headerStyle === 'readout' ? 18 : 5)} aria-hidden="true">
+          <path d={`M7 0 L1 ${zoneH / 4} M7 0 L1 0 M7 0 L1 ${zoneH / 2.6}`} stroke="var(--accent-selection)" strokeWidth="1.6" fill="none" />
+        </svg>
+      </div>
+      {/* out bracket — interactive loop edge (R14: draggable + keyboard) */}
+      <div
+        {...bracketHandlers('out')}
+        role="slider"
+        aria-label="Loop out point"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(duration * 24)}
+        aria-valuenow={Math.round(loop.end * 24)}
+        aria-valuetext={tc(loop.end)}
+        tabIndex={0}
+        data-testid="shell-ruler-bracket-out"
+        className="pointer-events-auto absolute z-[7] flex cursor-ew-resize items-center"
+        style={{ left: bandLeft + bandW - 7, top: headerStyle === 'readout' ? 16 : 3, width: 13, height: zoneH - (headerStyle === 'readout' ? 18 : 5) }}
+      >
+        <svg className="pointer-events-none" width="9" height={zoneH - (headerStyle === 'readout' ? 18 : 5)} aria-hidden="true">
+          <path d={`M2 0 L8 ${zoneH / 4} M2 0 L8 0 M2 0 L8 ${zoneH / 2.6}`} stroke="var(--accent-selection)" strokeWidth="1.6" fill="none" />
+        </svg>
+      </div>
 
       {/* markers — larger pins, always-visible labels at readout zoom */}
       {scene.markers.map((m) => (

@@ -4,7 +4,9 @@
    (jsdom has no geometry). */
 
 import { describe, expect, it } from 'vitest';
-import { fireEvent } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
+import { act } from 'react';
+import userEvent from '@testing-library/user-event';
 import { Toolbar2 } from './Toolbar2';
 import { renderPlain } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
@@ -60,8 +62,73 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
     expect(getByTitle('Beach Doc — Rough Cut')).toBeInTheDocument(); // truncate fallback
   });
 
-  it('the fullscreen affordance is a labeled icon button (mock: no wiring)', () => {
+  it('the fullscreen affordance is honest: click pushes the §8.5 deferral toast', () => {
     const { getByRole } = renderPlain(<Toolbar2 />);
-    expect(getByRole('button', { name: 'Toggle fullscreen viewer' })).toBeInTheDocument();
+    // v2 surface isn't built — the control answers instead of staying silent
+    fireEvent.click(getByRole('button', { name: 'Toggle fullscreen viewer' }));
+    const t = S().toasts.at(-1)!;
+    expect(t.kind).toBe('info');
+    expect(t.title).toBe('Fullscreen viewer');
+    expect(t.detail).toBe('v2 surface (spec 18 §8.5) — not built in the mock');
+  });
+});
+
+describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', () => {
+  const btn = (name: string) => screen.getByRole('button', { name });
+
+  it('Tab from outside lands on the FIRST button only — the rest are tabIndex −1', async () => {
+    const user = userEvent.setup();
+    renderPlain(
+      <div>
+        <button>before</button>
+        <Toolbar2 />
+      </div>,
+    );
+    await user.tab(); // "before"
+    await user.tab(); // enters the toolbar — single tab stop
+    expect(document.activeElement).toBe(btn('Media Pool'));
+    // one tab stop: the other three are removed from the tab order
+    expect(btn('Effects')).toHaveAttribute('tabindex', '-1');
+    expect(btn('Inspector')).toHaveAttribute('tabindex', '-1');
+    expect(btn('Toggle fullscreen viewer')).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('ArrowRight/ArrowLeft move focus between buttons in DOM order (wrapping)', () => {
+    renderPlain(<Toolbar2 />);
+    const focus = (name: string) => act(() => { btn(name).focus(); });
+    focus('Media Pool');
+    fireEvent.keyDown(btn('Media Pool'), { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(btn('Effects'));
+    fireEvent.keyDown(btn('Effects'), { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(btn('Inspector'));
+    // ← walks back
+    fireEvent.keyDown(btn('Inspector'), { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(btn('Effects'));
+    // wrap: ← from the first lands on the LAST, → from the last on the first
+    focus('Media Pool');
+    fireEvent.keyDown(btn('Media Pool'), { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(btn('Toggle fullscreen viewer'));
+    fireEvent.keyDown(btn('Toggle fullscreen viewer'), { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(btn('Media Pool'));
+    // the tab stop follows the rover, not the boot index
+    expect(btn('Media Pool')).toHaveAttribute('tabindex', '0');
+  });
+
+  it('Home/End jump to the first/last button; Tab is left natural (exits)', async () => {
+    const user = userEvent.setup();
+    renderPlain(
+      <div>
+        <Toolbar2 />
+        <button>after</button>
+      </div>,
+    );
+    act(() => { btn('Media Pool').focus(); });
+    fireEvent.keyDown(btn('Media Pool'), { key: 'End' });
+    expect(document.activeElement).toBe(btn('Toggle fullscreen viewer'));
+    fireEvent.keyDown(btn('Toggle fullscreen viewer'), { key: 'Home' });
+    expect(document.activeElement).toBe(btn('Media Pool'));
+    // Tab is NOT intercepted — it leaves the toolbar for the next stop
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'after' }));
   });
 });

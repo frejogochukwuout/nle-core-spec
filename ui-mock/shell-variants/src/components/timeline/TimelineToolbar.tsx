@@ -2,9 +2,13 @@
    snap/link/lock toggles, marker cluster, zoom cluster, master audio.
    Mock's sync-bin/auto-sync/dyntrim dropped (§8.10 / §8.9). */
 
+import { useRef } from 'react';
 import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, AudioLines } from 'lucide-react';
 import { useUi, type ToolId } from '../../state/useUiStore';
+import { sceneDuration } from '../../lib/mockData';
 import { StripMeter } from '../mixer/MixerPrimitives';
+import { ContextMenu, useContextMenu } from '../shell/ContextMenu';
+import { markerColorItems } from './Ruler';
 
 const BladeIcon = () => (
   <svg width="13" height="15" viewBox="0 0 20 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -58,16 +62,61 @@ export function TimelineToolbar() {
   const setMasterVolume = useUi((s) => s.setMasterVolume);
   const mixerState = useUi((s) => s.mixerState);
   const cycleMixerState = useUi((s) => s.cycleMixerState);
+  const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
+  const zoomFit = useUi((s) => s.zoomFit);
+  const pushToast = useUi((s) => s.pushToast);
+  const menu = useContextMenu(); // §4.9 marker-color dropdown (R14 no-op sweep)
+  const sliderRef = useRef<HTMLInputElement>(null); // magnifier focuses the zoom slider
+
+  /* lane-viewport measurement for the zoom cluster — same source as the ⌘\
+     binding (useShortcuts): #timeline-scroll's clientWidth, 900 fallback when
+     the element is absent OR jsdom reports 0 (no layout). */
+  const measureLanes = () => {
+    const w = document.getElementById('timeline-scroll')?.clientWidth ?? 900;
+    return w > 0 ? w : 900;
+  };
+
+  /* zoom-to-selection (R14 no-op sweep): span = min start → max end of the
+     selection across the ACTIVE scene; empty selection or span ≤ 0 → honest
+     info toast; else setZoom so the span fills ~80% of the lane viewport
+     (setZoom clamps 8..240 px/s — the spec 16 §3.8 zoom window). */
+  const zoomToSelection = () => {
+    const s = useUi.getState();
+    const sc = s.scenes.find((x) => x.id === s.activeSceneId)!;
+    let tMin = Infinity, tMax = -Infinity, hits = 0;
+    for (const t of sc.tracks) for (const el of t.elements) {
+      if (!s.selection.includes(el.id)) continue;
+      hits++;
+      tMin = Math.min(tMin, el.startTime);
+      tMax = Math.max(tMax, el.startTime + el.duration);
+    }
+    const span = tMax - tMin;
+    if (hits === 0 || !(span > 0)) {
+      pushToast({ kind: 'info', title: 'Zoom to selection', detail: 'No selection — select clips to zoom to their span' });
+      return;
+    }
+    setZoom((measureLanes() * 0.8) / span);
+  };
 
   return (
-    <div
+    <>
+      <div
       data-testid="shell-timeline-toolbar"
       role="toolbar"
       aria-label="Timeline toolbar"
       className="flex shrink-0 items-center gap-1 border-b border-hairline bg-shell px-2.5"
       style={{ height: 'var(--bar-h)', minHeight: 'var(--bar-h)' }}
     >
-      <button className="icon-btn" data-tip="Timeline view options" aria-label="Timeline view options">
+      {/* view options — honest mock: the popover isn't specced; density and
+          clip-style live in the debug overlay, so the button explains instead
+          of silently doing nothing (R14 no-op sweep) */}
+      <button
+        className="icon-btn"
+        data-testid="shell-timeline-toolbar-btn-view-options"
+        data-tip="Timeline view options"
+        aria-label="Timeline view options"
+        onClick={() => pushToast({ kind: 'info', title: 'View options', detail: 'popover not specced — density/clip-style live in the debug overlay (ctrl+`)' })}
+      >
         <svg width="16" height="13" viewBox="0 0 24 18" fill="none" stroke="currentColor" strokeWidth="1.6">
           <rect x="1" y="1" width="22" height="4" /><rect x="1" y="7" width="22" height="4" /><rect x="1" y="13" width="22" height="4" />
         </svg>
@@ -75,8 +124,24 @@ export function TimelineToolbar() {
 
       <div className="grow" />
 
-      {/* tool cluster (radio) */}
-      <div className="flex items-center gap-0.5" role="radiogroup" aria-label="Edit tool">
+      {/* tool cluster (radio) — §11.1: arrow-key navigation + roving focus */}
+      <div
+        className="flex items-center gap-0.5"
+        role="radiogroup"
+        aria-label="Edit tool"
+        onKeyDown={(e) => {
+          // spec 18 §11.1: "the tool radio group uses arrow-key navigation".
+          // R14: the radios were click/Tab-only — arrow roving was missing.
+          if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+          e.preventDefault();
+          const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1;
+          const idx = TOOLS.findIndex((t) => t.id === tool);
+          const next = (idx + dir + TOOLS.length) % TOOLS.length;
+          setTool(TOOLS[next].id);
+          // rove focus with the checked state (radios: focus follows selection)
+          document.querySelector<HTMLElement>(`[data-testid="shell-timeline-toolbar-tool-${TOOLS[next].id}"]`)?.focus();
+        }}
+      >
         {TOOLS.map((t) => (
           <button
             key={t.id}
@@ -132,27 +197,73 @@ export function TimelineToolbar() {
       <button className="flex items-center gap-1.5 rounded-[var(--radius)] px-1.5 py-1 hover:bg-[var(--hover-overlay)]" data-tip="Add marker (M)" aria-label="Add marker" onClick={() => addMarker(playhead)}>
         <Flag size={13} strokeWidth={1.8} className="text-[var(--mk-blue)]" />
       </button>
-      <button className="flex items-center gap-1 rounded-[var(--radius)] px-1.5 py-1 hover:bg-[var(--hover-overlay)]" data-tip="Marker color" aria-label="Marker color options">
+      {/* marker-color dropdown (R14 no-op sweep: the color-dot + chevron was
+          dead). Opens the SHARED §4.9 8-color palette row (markerColorItems,
+          the same builder the ruler menu renders) at the button; picking a
+          color adds a colored marker at the playhead. Roving/Esc are the
+          ContextMenu machinery's own. */}
+      <button
+        className="flex items-center gap-1 rounded-[var(--radius)] px-1.5 py-1 hover:bg-[var(--hover-overlay)]"
+        data-testid="shell-timeline-toolbar-btn-marker-color"
+        data-tip="Marker color"
+        aria-label="Marker color options"
+        aria-haspopup="menu"
+        aria-expanded={menu.state !== null}
+        onClick={(e) => {
+          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          menu.open(
+            r.left, r.bottom + 2,
+            markerColorItems(
+              (c) => { menu.close(); addMarker(useUi.getState().playhead, c); },
+              'shell-menu-tb-marker-color',
+            ),
+            'tb-marker-color',
+          );
+        }}
+      >
         <span className="h-[13px] w-[13px] rounded-full" style={{ background: 'var(--mk-blue)' }} />
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="3"><polyline points="6 9 12 15 18 9" /></svg>
       </button>
 
       <div className="vsep" />
 
-      {/* zoom cluster */}
-      <button className="icon-btn" data-tip="Zoom to fit (⌘\)" aria-label="Zoom to fit">
+      {/* zoom cluster (R14 no-op sweep — all three icon buttons were dead).
+          Fit: same math as the real ⌘\ binding (spec 16 §3.8). Selection:
+          span-fit at 80% of the lane viewport. Magnifier: focuses the zoom
+          slider — chosen over zoomStep(1.5) (the + button already does that)
+          so the click has a DISTINCT honest effect: exposing the slider's
+          own keyboard grammar (spec 18 §11.3). */}
+      <button
+        className="icon-btn"
+        data-testid="shell-timeline-toolbar-btn-zoom-fit"
+        data-tip="Zoom to fit (⌘\)"
+        aria-label="Zoom to fit"
+        onClick={() => zoomFit(measureLanes(), sceneDuration(scene))}
+      >
         <ScanSearch size={15} strokeWidth={1.5} />
       </button>
-      <button className="icon-btn" data-tip="Zoom to selection" aria-label="Zoom to selection">
+      <button
+        className="icon-btn"
+        data-testid="shell-timeline-toolbar-btn-zoom-selection"
+        data-tip="Zoom to selection"
+        aria-label="Zoom to selection"
+        onClick={zoomToSelection}
+      >
         <Frame size={14} strokeWidth={1.6} />
       </button>
-      <button className="icon-btn" data-tip="Timeline zoom" aria-label="Timeline zoom">
+      <button
+        className="icon-btn"
+        data-tip="Focus zoom slider"
+        aria-label="Focus zoom slider"
+        onClick={() => sliderRef.current?.focus()}
+      >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" />
         </svg>
       </button>
       <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomStep(1 / 1.5)} data-tip="Zoom out (−)" aria-label="Zoom out">−</button>
       <input
+        ref={sliderRef}
         type="range"
         min={0}
         max={100}
@@ -160,6 +271,7 @@ export function TimelineToolbar() {
         value={ppsToSlider(pxPerSec)}
         onChange={(e) => setZoom(sliderToPps(Number(e.target.value)))}
         aria-label="Timeline zoom"
+        aria-valuetext={`${Math.round(pxPerSec)} px/s`} /* §11.3 slider contract */
         className="w-[90px]"
       />
       <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomStep(1.5)} data-tip="Zoom in (+)" aria-label="Zoom in">+</button>
@@ -187,7 +299,7 @@ export function TimelineToolbar() {
           mock falls back to master only when nothing is focused (registered). */}
       <button
         className={`icon-btn ${masterMuted ? 'toggled' : ''}`}
-        data-tip="Mute master (⌘M when no track focused)"
+        data-tip="Mute focused track (⌘M — master when nothing focused)"
         aria-label="Mute master"
         aria-pressed={masterMuted}
         onClick={toggleMasterMute}
@@ -204,8 +316,21 @@ export function TimelineToolbar() {
         className="green-fill w-[70px]"
         style={{ ['--fill' as string]: `${Math.round(masterVolume * 100)}%` }}
         aria-label="Master volume"
+        aria-valuetext={`${Math.round(masterVolume * 100)}%`} /* §11.3 slider contract */
       />
-      <span className="shrink-0 rounded-[var(--radius-sm)] border border-strong px-1.5 py-px text-[11px] text-tmuted">DIM</span>
-    </div>
+      {/* DIM chip — display-only (R14 no-op sweep): master dim is M2 (spec 20
+          §12); no local toggle is possible without the audio path, so the chip
+          carries the disabled contract (aria-disabled + tip) instead of
+          pretending to be a live control */}
+      <span
+        aria-disabled="true"
+        data-tip="Master dim is M2 (spec 20 §12) — display-only in the mock"
+        className="shrink-0 rounded-[var(--radius-sm)] border border-strong px-1.5 py-px text-[11px] text-tmuted"
+      >
+        DIM
+      </span>
+      </div>
+      {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
+    </>
   );
 }

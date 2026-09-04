@@ -1,17 +1,24 @@
 /* SoundLibrary — the Audio-focus media-pool view (design doc §3.2): audio
    media + audio-bearing video, grouped by role (Dialogue/BGM/SFX/Music),
-   role chips, Import-sound CTA, same search/sort as the pool. Reuses the
-   pool's Thumb/waveform grammar. Roles are client-side tags keyed by
-   mediaId (spec 09 has no role field — seal decision pending). */
+   role chips, Import-sound CTA, same search/sort grammar as the pool
+   (search filter + name/type/duration sort × asc/desc — R14: the sort
+   control was missing while the header claimed parity). Reuses the pool's
+   Thumb/waveform grammar. */
 
 import { useMemo, useState } from 'react';
-import { Search, Upload, Waves, Music2, X } from 'lucide-react';
+import { Search, Upload, Waves, Music2, X, ArrowUpNarrowWide, ArrowDownWideNarrow } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { project, type MediaRecord } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
 import { ROLES, ROLE_LABEL, type Role } from '../../state/mockMixer';
 
+/* mediaId-keyed role tags — TWO-REGISTRY DEVIATION (R14, registered as a
+   spec-revision candidate): DESIGN-audio-mode §7 specifies ONE roles map
+   keyed by Record<trackId|mediaId>, but the store's mixer.roles is
+   trackId-keyed today and useUiStore/mockMixer are outside this task's
+   edit scope. The registry stays module-local until the store unifies;
+   spec 09 has no role field either way (seal decision pending). */
 const MEDIA_ROLES: Record<string, Role> = {
   'm-06': 'bgm',      // ocean_ambience.wav
   'm-07': 'dialogue', // interview_marina.wav
@@ -38,6 +45,11 @@ function AudioThumb({ m, h = 30 }: { m: MediaRecord; h?: number }) {
 
 export function SoundLibrary() {
   const [q, setQ] = useState('');
+  /* LOCAL sort state (R14): mirrors the pool's sort grammar (name/type/
+     duration × asc/desc) without aliasing the pool's store-persisted sort —
+     the two views sort independently */
+  const [sortBy, setSortBy] = useState<'name' | 'type' | 'duration'>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const setPlayhead = useUi((s) => s.setPlayhead);
   const scenes = useUi((s) => s.scenes);
   const activeSceneId = useUi((s) => s.activeSceneId);
@@ -45,9 +57,22 @@ export function SoundLibrary() {
   const setMediaSelection = useUi((s) => s.setMediaSelection);
   const pushToast = useUi((s) => s.pushToast);
 
+  /* pool's comparator grammar (MediaPool.cmpBy, minus the unused date mode) */
+  const cmp = (a: MediaRecord, b: MediaRecord) => {
+    const r = sortBy === 'duration'
+      ? (a.duration ?? -1) - (b.duration ?? -1) // stills sink in asc
+      : sortBy === 'type'
+        ? a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
+        : a.name.localeCompare(b.name);
+    return sortDir === 'asc' ? r : -r;
+  };
+
   const items = useMemo(
-    () => project.media.filter(audioBearing).filter((m) => m.name.toLowerCase().includes(q.toLowerCase())),
-    [q],
+    () => project.media
+      .filter(audioBearing)
+      .filter((m) => m.name.toLowerCase().includes(q.toLowerCase()))
+      .sort(cmp), // sorted BEFORE grouping → each role group inherits the order
+    [q, sortBy, sortDir],
   );
 
   const grouped = useMemo(() => {
@@ -99,6 +124,26 @@ export function SoundLibrary() {
             <X size={11} strokeWidth={1.6} />
           </button>
         )}
+        {/* sort grammar twin of the pool header (R14): mode select + dir flip */}
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          aria-label="Sort sounds"
+          className="field w-[58px] shrink-0 cursor-pointer"
+          title="Sort sounds"
+        >
+          <option value="name">Name</option>
+          <option value="duration">Dur.</option>
+          <option value="type">Type</option>
+        </select>
+        <button
+          onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
+          aria-label={`Sort ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
+          data-tip={`Sort ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
+          className="icon-btn !h-[18px] !w-[18px] shrink-0"
+        >
+          {sortDir === 'asc' ? <ArrowUpNarrowWide size={13} strokeWidth={1.6} /> : <ArrowDownWideNarrow size={13} strokeWidth={1.6} />}
+        </button>
       </div>
 
       {/* grouped list */}

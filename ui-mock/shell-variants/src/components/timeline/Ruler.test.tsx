@@ -104,3 +104,64 @@ describe('Ruler', () => {
     expect(screen.queryByTestId('shell-menu-ruler')).not.toBeInTheDocument(); // closed after select
   });
 });
+
+/* R14: the in/out brackets are real draggable loop edges — slider semantics,
+   pointer-captured drag (x → frame-snapped time), arrow nudging, and the
+   ordering law (start <= end ALWAYS; crossing drags the far edge along). */
+describe('Ruler in/out brackets (R14 draggable edges)', () => {
+  const inB = () => screen.getByTestId('shell-ruler-bracket-in');
+  const outB = () => screen.getByTestId('shell-ruler-bracket-out');
+
+  it('both brackets expose slider semantics bound to the loop window (§11.3)', () => {
+    boot({}); // fixture loop: start 2 s, end 28 s
+    const i = inB(), o = outB();
+    expect(i).toHaveAttribute('role', 'slider');
+    expect(i).toHaveAttribute('aria-label', 'Loop in point');
+    expect(i).toHaveAttribute('aria-valuemin', '0');
+    expect(i).toHaveAttribute('aria-valuemax', '720'); // 30 s × 24
+    expect(i).toHaveAttribute('aria-valuenow', '48');  // 2 s × 24
+    expect(i).toHaveAttribute('aria-valuetext', '00:00:02:00');
+    expect(o).toHaveAttribute('aria-label', 'Loop out point');
+    expect(o).toHaveAttribute('aria-valuenow', '672'); // 28 s × 24
+    expect(i.className).toContain('cursor-ew-resize'); // looks draggable, IS draggable
+  });
+
+  it('dragging the in bracket moves loop.start WITHOUT scrubbing the playhead', () => {
+    boot({});
+    fireEvent.pointerDown(inB(), { pointerId: 2, button: 0 });
+    fireEvent.pointerMove(inB(), { pointerId: 2, buttons: 1, clientX: 300 }); // 300/46 s
+    expect(store().loop.start).toBeCloseTo(157 / 24, 5); // frame-snapped (R13 grid law)
+    expect(store().loop.end).toBe(28);
+    expect(store().playhead).toBe(16); // the ruler's own press must not seek
+    fireEvent.pointerUp(inB(), { pointerId: 2 });
+  });
+
+  it('dragging the in bracket past the out point drags out along (ordering law, R14)', () => {
+    boot({});
+    fireEvent.pointerDown(inB(), { pointerId: 2, button: 0 });
+    fireEvent.pointerMove(inB(), { pointerId: 2, buttons: 1, clientX: 1380 }); // 30 s > 28 s
+    expect(store().loop.start).toBe(30);
+    expect(store().loop.end).toBe(30); // never inverted — the tick cannot hang
+    fireEvent.pointerUp(inB(), { pointerId: 2 });
+  });
+
+  it('arrow keys nudge the in bracket ±1 frame (⇧ ×10) and never nudge the playhead', () => {
+    boot({});
+    fireEvent.keyDown(inB(), { key: 'ArrowLeft' });
+    expect(store().loop.start).toBeCloseTo(2 - 1 / 24, 5);
+    expect(store().playhead).toBe(16); // stopPropagation beats the ruler root's nudge
+    fireEvent.keyDown(inB(), { key: 'ArrowRight', shiftKey: true });
+    expect(store().loop.start).toBeCloseTo(2 - 1 / 24 + 10 / 24, 5);
+  });
+
+  it('the out bracket moves loop.end; dragging it below start pulls start along (ordering law)', () => {
+    boot({});
+    fireEvent.keyDown(outB(), { key: 'ArrowLeft' });
+    expect(store().loop.end).toBeCloseTo(28 - 1 / 24, 5);
+    fireEvent.pointerDown(outB(), { pointerId: 3, button: 0 });
+    fireEvent.pointerMove(outB(), { pointerId: 3, buttons: 1, clientX: 46 }); // 1 s < start
+    expect(store().loop.end).toBe(1);
+    expect(store().loop.start).toBe(1); // pulled along — same markOut formula
+    fireEvent.pointerUp(outB(), { pointerId: 3 });
+  });
+});

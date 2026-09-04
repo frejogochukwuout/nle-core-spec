@@ -114,3 +114,49 @@ describe('TrackHeader', () => {
     expect(screen.queryByTestId('shell-menu-track')).not.toBeInTheDocument(); // menu closed after select
   });
 });
+
+/* R14 wiring: the automation-lane button honesty contract, the §4.9 Height
+   rows (global pref), and the Add-track above/below explicit insert routes. */
+describe('TrackHeader R14 wiring (§4.9 height + add above/below)', () => {
+  it('the automation-lane button is aria-disabled with the M2 tip (honesty contract)', () => {
+    useUi.setState({ page: 'audio' }); // set BEFORE mount (existing minifader pattern)
+    const audio = renderPlain(<Header trackId="tr-audio-1" height={60} />);
+    const btn = screen.getByTestId('track-automation-A1');
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).toHaveAttribute('data-tip', 'Automation lane — M2 (spec 20 §12.1)');
+    audio.unmount();
+    useUi.setState({ page: 'edit' });
+  });
+
+  it('Height rows check the active pref and drive setTrackHeightPref (view state, no history)', () => {
+    renderPlain(<Header trackId="tr-main" height={80} />);
+    fireEvent.contextMenu(screen.getByTestId('shell-track-header-tr-main'), { clientX: 5, clientY: 5 });
+    const compact = screen.getByTestId('shell-menu-track-height-compact');
+    expect(compact).toHaveAttribute('role', 'menuitemcheckbox');
+    expect(compact).toHaveAttribute('aria-checked', 'false'); // null = auto → no row checked
+    fireEvent.click(compact);
+    expect(store().trackHeightPref).toBe('compact');
+    expect(store().past).toHaveLength(0); // view pref, not a doc mutation
+    // re-open: compact is now the checked row (single-choice group)
+    fireEvent.contextMenu(screen.getByTestId('shell-track-header-tr-main'), { clientX: 5, clientY: 5 });
+    expect(screen.getByTestId('shell-menu-track-height-compact')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('shell-menu-track-height-tall')).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('Add track above inserts at the header index — NOT the default kind route (spec 18 §4.9)', () => {
+    renderPlain(<Header trackId="tr-audio-1" height={60} />);
+    fireEvent.contextMenu(screen.getByTestId('shell-track-header-tr-audio-1'), { clientX: 5, clientY: 5 });
+    fireEvent.click(screen.getByTestId('shell-menu-track-add-above'));
+    // default route would APPEND audio at the bottom; above puts A3 above A1
+    expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.map((t) => t.badge))
+      .toEqual(['T1', 'V1', 'A3', 'A1', 'A2']);
+  });
+
+  it('Add track below inserts one past the header index (spec 18 §4.9)', () => {
+    renderPlain(<Header trackId="tr-audio-1" height={60} />);
+    fireEvent.contextMenu(screen.getByTestId('shell-track-header-tr-audio-1'), { clientX: 5, clientY: 5 });
+    fireEvent.click(screen.getByTestId('shell-menu-track-add-below'));
+    expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.map((t) => t.badge))
+      .toEqual(['T1', 'V1', 'A1', 'A3', 'A2']); // A3 below A1, above A2
+  });
+});

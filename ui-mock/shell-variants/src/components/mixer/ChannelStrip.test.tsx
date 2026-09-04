@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
-import { ChannelStrip } from './ChannelStrip';
+import { ChannelStrip, AuxStrip } from './ChannelStrip';
 import { renderPlain, store } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 
@@ -46,7 +46,7 @@ describe('ChannelStrip', () => {
     expect(s).toHaveAttribute('role', 'group');
     expect(s).toHaveAttribute('aria-label', 'A2 channel strip');
     expect(within(s).getByText('BGM')).toBeInTheDocument(); // mockMixer role tag
-    expect(within(s).getAllByText('A2').length).toBe(2); // badge + name header
+    expect(within(s).getAllByText('A2').length).toBe(3); // badge + name header + A2 send-row label (R14 twin)
   });
 
   it('the A1 strip is tagged Dialogue and gets NO duck-under row (spec 20 §12.2)', () => {
@@ -95,6 +95,39 @@ describe('ChannelStrip', () => {
     expect(g('tr-audio-1').auxA).toBeCloseTo(0.2, 5);
     fireEvent.change(screen.getByLabelText('A1 output bus'), { target: { value: '1' } });
     expect(g('tr-audio-1').outputBus).toBe(1);
+  });
+
+  it('the A2 send twin writes auxB through setMixerTrack (R14: was display-missing)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    // mockMixer boots auxB at 0 — the twin control reaches the model field
+    fireEvent.change(screen.getByLabelText('A2 aux 2 send'), { target: { value: '0.35' } });
+    expect(g('tr-audio-2').auxB).toBeCloseTo(0.35, 5);
+    expect((screen.getByLabelText('A2 aux 2 send') as HTMLInputElement).value).toBe('0.35');
+  });
+
+  it('the pre/post tap point is a real toggle writing auxPreFader (spec 20 §4.2, R14)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    const tap = screen.getByRole('button', { name: 'Aux send pre-fader' });
+    expect(tap).toHaveAttribute('aria-pressed', 'false');
+    expect(tap).toHaveTextContent('post'); // mockMixer boots post-fader
+    fireEvent.click(tap);
+    expect(g('tr-audio-2').auxPreFader).toBe(true);
+    expect(tap).toHaveAttribute('aria-pressed', 'true');
+    expect(tap).toHaveTextContent('pre');
+  });
+
+  it('the AuxStrip bus ON badge is a real toggle writing AuxBusSettings.on (R14)', () => {
+    renderPlain(<AuxStrip bus="a2" compact={false} />);
+    // fixture: a2 boots OFF (Spare), a1 boots ON (Reverb)
+    const a2 = screen.getByRole('button', { name: 'Aux a2 bus on' });
+    expect(a2).toHaveAttribute('aria-pressed', 'false');
+    expect(a2).toHaveTextContent('OFF');
+    fireEvent.click(a2);
+    expect(store().mixer.buses.a2.on).toBe(true);
+    expect(a2).toHaveAttribute('aria-pressed', 'true');
+    expect(a2).toHaveTextContent('ON');
+    fireEvent.click(a2);
+    expect(store().mixer.buses.a2.on).toBe(false);
   });
 
   it('the BGM strip renders the duck-under row and its controls (spec 20 §12.2)', () => {

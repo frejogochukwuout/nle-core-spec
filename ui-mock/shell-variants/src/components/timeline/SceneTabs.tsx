@@ -51,6 +51,9 @@ export function SceneTabs() {
             key={sc.id}
             role="tab"
             aria-selected={active}
+            /* §11.6 tablist↔tabpanel pairing: every scene tab controls the one
+               timeline region (scenes render into the same panel) */
+            aria-controls="shell-timeline"
             tabIndex={active ? 0 : -1}
             data-testid={`shell-scene-tab-${sc.id}`}
             onClick={() => setActiveScene(sc.id)}

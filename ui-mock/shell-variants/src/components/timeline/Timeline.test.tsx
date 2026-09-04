@@ -215,3 +215,50 @@ describe('pool-drag overTrack/allowed computation (spec 18 §4.2)', () => {
     // the engine round (spec 15 §5.4), so no element is added to the doc
   });
 });
+
+/* R14 wiring: the §4.9 Height pref lane math, the Import-media row (⌘I
+   surface parity), and the two-way headers ⇄ lanes scroll sync (W0-21). */
+describe('Timeline R14 wiring', () => {
+  it('the §4.9 Height pref resizes every lane: compact 60% / tall 140%, min 24px', () => {
+    boot({});
+    expect(laneOf('el-1').style.height).toBe('80px'); // spec 05 §12.2 auto
+    act(() => { store().setTrackHeightPref('compact'); });
+    expect(laneOf('el-1').style.height).toBe('48px'); // 80 × 0.6
+    expect(laneOf('el-5').style.height).toBe('36px'); // 60 × 0.6
+    act(() => { store().setTrackHeightPref('tall'); });
+    expect(laneOf('el-1').style.height).toBe('112px'); // 80 × 1.4
+    expect(laneOf('el-6').style.height).toBe('84px');  // 60 × 1.4
+    act(() => { store().setTrackHeightPref(null); });
+    expect(laneOf('el-1').style.height).toBe('80px'); // auto again
+  });
+
+  it('the header-menu Height rows drive the same pref end-to-end (spec 18 §4.9)', () => {
+    boot({});
+    fireEvent.contextMenu(screen.getByTestId('shell-track-header-tr-main'), { clientX: 5, clientY: 5 });
+    fireEvent.click(screen.getByTestId('shell-menu-track-height-tall'));
+    expect(store().trackHeightPref).toBe('tall');
+    expect(laneOf('el-1').style.height).toBe('112px');
+  });
+
+  it('the empty-lane Import media row mirrors the ⌘I toast exactly (surface parity)', () => {
+    boot({});
+    fireEvent.contextMenu(laneOf('el-1'), { clientX: 30, clientY: 30 });
+    fireEvent.click(screen.getByTestId('shell-menu-timeline-empty-import-media'));
+    const t = store().toasts.at(-1)!;
+    expect(t.kind).toBe('info');
+    expect(t.title).toBe('Import media');
+    expect(t.detail).toBe('File picker is mock — drop files on the Media Pool'); // useShortcuts' exact text
+  });
+
+  it('scrolling the track headers drives the lanes scrollTop — and vice versa (two-way sync, W0-21)', () => {
+    boot({});
+    const headers = screen.getByTestId('shell-track-headers');
+    const lanes = scrollEl();
+    act(() => { headers.scrollTop = 40; });
+    fireEvent.scroll(headers);
+    expect(lanes.scrollTop).toBe(40); // headers → lanes (the NEW direction)
+    act(() => { lanes.scrollTop = 80; });
+    fireEvent.scroll(lanes);
+    expect(headers.scrollTop).toBe(80); // lanes → headers (the original direction, intact)
+  });
+});

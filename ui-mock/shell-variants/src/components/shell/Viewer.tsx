@@ -11,13 +11,24 @@ import { useUi } from '../../state/useUiStore';
 import { mediaById, type ElementJSON, type SceneJSON } from '../../lib/mockData';
 import { snapToFrame, tc } from '../../lib/timecode';
 
+/* multi-track law (R14): scan ALL tracks of the kind, topmost wins — the
+   single-find version hid clips on a second Video/Text track (addTrack makes
+   them) from the viewer. Same contract as elementAtTime in lib/mockData. */
 function mainElementAt(scene: SceneJSON, time: number): ElementJSON | null {
-  const t = scene.tracks.find((tr) => tr.kind === 'main');
-  return t?.elements.find((e) => time >= e.startTime && time < e.startTime + e.duration) ?? null;
+  const kindTracks = scene.tracks.filter((tr) => tr.kind === 'main');
+  for (let i = kindTracks.length - 1; i >= 0; i--) {
+    const hit = kindTracks[i].elements.find((e) => time >= e.startTime && time < e.startTime + e.duration);
+    if (hit) return hit;
+  }
+  return null;
 }
 function overlayElementAt(scene: SceneJSON, time: number): ElementJSON | null {
-  const t = scene.tracks.find((tr) => tr.kind === 'overlay');
-  return t?.elements.find((e) => time >= e.startTime && time < e.startTime + e.duration) ?? null;
+  const kindTracks = scene.tracks.filter((tr) => tr.kind === 'overlay');
+  for (let i = kindTracks.length - 1; i >= 0; i--) {
+    const hit = kindTracks[i].elements.find((e) => time >= e.startTime && time < e.startTime + e.duration);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 function MarkIcon({ dir }: { dir: 'l' | 'r' }) {
@@ -65,6 +76,39 @@ export function Viewer({ duration }: { duration: number }) {
   const overlayEl = overlayElementAt(scene, playhead);
   const img = el ? mediaById(el.mediaId) : undefined;
   const boundaries = scene.tracks.find((t) => t.kind === 'main')?.elements ?? [];
+
+  /* §4.2 viewer state rows (R14):
+     - LOADING: when the resolved program element's mediaId CHANGES (a cut),
+       a first-frame skeleton row shows for ~600 ms (mock decode) before the
+       program image renders. The initial resolve at mount skips the theater
+       — a boot has no "previous frame" to decode away from. Real shell:
+       EngineEvents first-frame per spec 09 §6.1.
+     - ERROR: the program <img> onError flips to the decode-failure row
+       (spec 18 §4.2 viewer error row) with a Retry that clears the state and
+       re-attempts by re-keying the img; one error toast per failure. */
+  const [frameLoading, setFrameLoading] = useState(false);
+  const [decodeFailed, setDecodeFailed] = useState(false);
+  const [imgKey, setImgKey] = useState(0);
+  const prevMediaRef = useRef<string | null | undefined>(undefined);
+  const mediaId = el?.mediaId ?? null;
+  useEffect(() => {
+    const prev = prevMediaRef.current;
+    prevMediaRef.current = mediaId;
+    if (prev === undefined || prev === mediaId) return; // boot or unchanged
+    setDecodeFailed(false); // a new frame means the old failure is stale
+    setFrameLoading(true);
+    const t = setTimeout(() => setFrameLoading(false), 600);
+    return () => clearTimeout(t); // a further cut restarts the window
+  }, [mediaId]);
+  const pushToast = useUi((s) => s.pushToast);
+  const onImgError = () => {
+    setDecodeFailed(true);
+    pushToast({ kind: 'error', title: 'Media failed to decode', detail: 'program frame failed to decode — check the media pool (spec 18 §4.2)' });
+  };
+  const retryDecode = () => {
+    setDecodeFailed(false);
+    setImgKey((k) => k + 1); // re-key → the img remounts and re-attempts
+  };
 
   /* duration 0 (empty scene) would render NaN% — every pct() caller paints
      0% instead (R13 fix: NaN-safe empty scene) */
@@ -152,7 +196,22 @@ export function Viewer({ duration }: { duration: number }) {
               monitor decorative and drop the name from the a11y tree —
               R13 review caught alt="" + aria-label conflicting) */}
           {img && !img.offline ? (
-            <img src={img.thumbnail} alt={`Program monitor: ${el?.name ?? 'empty'}`} className="h-full w-full object-cover" />
+            frameLoading ? (
+              /* §4.2 loading row: first-frame decode skeleton (pulse) */
+              <div data-testid="shell-viewer-state-loading" role="status" className="flex h-full w-full animate-pulse items-center justify-center bg-[#0a0a0c] text-[13px] text-[#9a9aa5]">
+                Loading first frame…
+              </div>
+            ) : decodeFailed ? (
+              /* §4.2 viewer error row: decode failure + retry re-attempt */
+              <div data-testid="shell-viewer-state-error" role="alert" className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[#0a0a0c] text-[13px] text-[#9a9aa5]">
+                <span>Media failed to decode — check the pool</span>
+                <button type="button" onClick={retryDecode} className="underline decoration-dotted hover:text-white" aria-label="Retry decoding the program frame">
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <img key={imgKey} src={img.thumbnail} alt={`Program monitor: ${el?.name ?? 'empty'}`} className="h-full w-full object-cover" onError={onImgError} />
+            )
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] text-[13px] text-[#9a9aa5]">
               {/* theme-invariant on-canvas text: the monitor surround is always

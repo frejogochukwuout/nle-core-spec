@@ -655,6 +655,7 @@ export function Inspector() {
   const tab = useUi((s) => s.inspectorTab);
   const setTab = useUi((s) => s.setInspectorTab);
   const setElementField = useUi((s) => s.setElementField);
+  const pushToast = useUi((s) => s.pushToast);
 
   /* mock-only model extensions (see header): transform position/scale/
      rotation + flips, gain-dB/pan, preserve-pitch. Keyed by element id —
@@ -760,11 +761,24 @@ export function Inspector() {
     <div data-testid="shell-inspector" className="flex h-full w-full min-h-0 min-w-0 flex-col bg-shell">
       {/* inspector toolbar — actions only (chrome trimmed per review) */}
       <div className="flex items-center gap-1.5 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
-        <button className="icon-btn icon-btn-sm" data-tip="Inspector history" aria-label="Inspector history">
+        <button
+          className="icon-btn icon-btn-sm"
+          data-tip="Inspector history"
+          aria-label="Inspector history"
+          /* honest mock: the per-field history panel isn't built; the global
+             ⌘Z/⇧⌘Z undo IS live — the toast routes users to it (R14 no-op fix) */
+          onClick={() => pushToast({ kind: 'info', title: 'History', detail: 'panel not built in the mock — ⌘Z / ⇧⌘Z work (cheat sheet, spec 16 §3.10)' })}
+        >
           <History size={12} strokeWidth={1.7} />
         </button>
         <div className="grow" />
-        <button className="icon-btn icon-btn-sm" data-tip="More" aria-label="More inspector actions">
+        <button
+          className="icon-btn icon-btn-sm"
+          data-tip="More"
+          aria-label="More inspector actions"
+          /* honest mock: nothing is hidden behind this button — say so */
+          onClick={() => pushToast({ kind: 'info', title: 'More inspector actions', detail: 'the inspector surface is complete for the mock (spec 18 §4.4)' })}
+        >
           <MoreHorizontal size={13} strokeWidth={1.7} />
         </button>
       </div>

@@ -107,6 +107,13 @@ describe('ChannelEditor', () => {
     expect(g('tr-audio-2').auxA).toBeCloseTo(0.4, 5);
   });
 
+  it('the A2 send twin writes auxB through setMixerTrack (R14 parity with the strip)', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    fireEvent.change(screen.getByLabelText('A2 aux 2 send'), { target: { value: '0.25' } });
+    expect(g('tr-audio-2').auxB).toBeCloseTo(0.25, 5);
+    expect(screen.getByText('25%')).toBeInTheDocument(); // the %-readout follows
+  });
+
   it('the duck-under row edits the sidechain amount (spec 20 §12.2)', () => {
     boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
     expect(screen.getByTestId('channel-ducking-A2')).toBeInTheDocument();

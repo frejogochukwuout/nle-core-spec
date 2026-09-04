@@ -298,4 +298,22 @@ describe('Inspector (spec 18 §4.4)', () => {
     expect(el('el-2').transitionOut!.presentation).toBe('Wipe Left');
     expect(el('el-3').transitionOut!.presentation).toBe('Wipe Left');
   });
+
+  /* ---- toolbar actions (R14 no-op wiring: honest toasts) ---- */
+
+  it('Inspector history + More buttons answer with honest toasts, not silence', () => {
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Inspector history' }));
+    expect(S().toasts.at(-1)).toMatchObject({
+      kind: 'info',
+      title: 'History',
+      detail: 'panel not built in the mock — ⌘Z / ⇧⌘Z work (cheat sheet, spec 16 §3.10)',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'More inspector actions' }));
+    expect(S().toasts.at(-1)).toMatchObject({
+      kind: 'info',
+      title: 'More inspector actions',
+      detail: 'the inspector surface is complete for the mock (spec 18 §4.4)',
+    });
+  });
 });

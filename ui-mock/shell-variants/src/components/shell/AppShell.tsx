@@ -40,7 +40,15 @@ const EFFECTS = [
   { name: 'Wipe Left', cat: 'Transition' },
 ];
 
+/* drag-to-clip payload contract (spec 15 §5.4 drag-to-lane spirit): the
+   timeline Clip drop target consumes this exact MIME type + JSON shape and
+   applies the effect through addEffectToElement. FIXED CONTRACT — do not
+   change the type string or the payload keys. */
+const EFFECT_DRAG_TYPE = 'application/x-nle-effect';
+const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
 function EffectsPanel() {
+  const pushToast = useUi((s) => s.pushToast);
   return (
     <div data-testid="shell-effects" className="flex h-full min-h-0 w-[220px] shrink-0 flex-col bg-shell">
       <div className="flex items-center gap-2 border-b border-hairline px-2.5 py-1.5">
@@ -52,9 +60,31 @@ function EffectsPanel() {
           <div key={cat} className="mb-2">
             <div className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-tfaint">{cat}</div>
             {EFFECTS.filter((e) => e.cat === cat).map((e) => (
-              <div key={e.name} className="cursor-grab rounded-[var(--radius)] border border-transparent px-2 py-1.5 text-[11px] text-tmuted hover:border-soft hover:bg-[var(--hover-overlay)] hover:text-tprimary">
+              /* dual route (R14 no-op fix): DnD rows are the REAL apply path
+                 (drag → Clip drop target → addEffectToElement), while click is
+                 the honest fallback for users who can't complete a drag — a
+                 toast explains where the apply + param UI actually live. A
+                 button element keeps the fallback keyboard-operable. */
+              <button
+                key={e.name}
+                type="button"
+                draggable
+                onDragStart={(ev) => {
+                  ev.dataTransfer.setData(EFFECT_DRAG_TYPE, JSON.stringify({ name: e.name, cat: e.cat }));
+                  ev.dataTransfer.effectAllowed = 'copy';
+                  ev.dataTransfer.dropEffect = 'copy';
+                }}
+                onClick={() => pushToast({
+                  kind: 'info',
+                  title: `Add ${e.name}`,
+                  detail: 'drag the row onto a timeline clip to apply (mock drag-to-clip, spec 15 §5.4); the Inspector Effects tab carries the param UI',
+                })}
+                data-testid={`shell-effects-row-${slug(e.name)}`}
+                aria-label={`Effect ${e.name}`}
+                className="w-full cursor-grab rounded-[var(--radius)] border border-transparent px-2 py-1.5 text-left text-[11px] text-tmuted hover:border-soft hover:bg-[var(--hover-overlay)] hover:text-tprimary active:cursor-grabbing"
+              >
                 {e.name}
-              </div>
+              </button>
             ))}
           </div>
         ))}
@@ -68,15 +98,17 @@ const SPLIT_HIT = 12; // §3.2: 12px interactive hit; visual line is the 6px --s
 
 function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
   const start = useRef(0);
-  const keyStep = (dir: 1 | -1) => onDrag(dir * 8); // §11 a11y floor: separator is keyboard-operable (arrows = 8px steps)
+  /* §11 a11y floor: separator is keyboard-operable — ←/→ = 8px steps,
+     ⇧ ×4 = 32px (the R13 reviewer's ladder; R14 adds the shift multiplier) */
+  const keyStep = (dir: 1 | -1, shift: boolean) => onDrag(dir * 8 * (shift ? 4 : 1));
   return (
     <div
       className="group relative z-10 flex shrink-0 cursor-col-resize items-center justify-center bg-app"
       style={{ width: SPLIT_HIT }}
       onDoubleClick={() => onDrag(0)}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft') { e.preventDefault(); keyStep(-1); }
-        else if (e.key === 'ArrowRight') { e.preventDefault(); keyStep(1); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); keyStep(-1, e.shiftKey); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); keyStep(1, e.shiftKey); }
       }}
       onPointerDown={(e) => {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -100,15 +132,16 @@ function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
 
 function HSplitter({ onDrag }: { onDrag: (dy: number) => void }) {
   const start = useRef(0);
-  const keyStep = (dir: 1 | -1) => onDrag(dir * 8); // arrows = 8px steps
+  /* ↑/↓ = 8px steps, ⇧ ×4 = 32px (same ladder as VSplitter) */
+  const keyStep = (dir: 1 | -1, shift: boolean) => onDrag(dir * 8 * (shift ? 4 : 1));
   return (
     <div
       className="group relative z-10 flex shrink-0 cursor-row-resize items-center justify-center bg-app"
       style={{ height: SPLIT_HIT }}
       onDoubleClick={() => onDrag(0)}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowUp') { e.preventDefault(); keyStep(-1); }
-        else if (e.key === 'ArrowDown') { e.preventDefault(); keyStep(1); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); keyStep(-1, e.shiftKey); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); keyStep(1, e.shiftKey); }
       }}
       onPointerDown={(e) => {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);

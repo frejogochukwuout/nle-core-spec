@@ -8,9 +8,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { act, fireEvent, screen } from '@testing-library/react';
-import { Clip } from './Clip';
+import { Clip, EFFECT_DRAG_TYPE } from './Clip';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
+import { POOL_DRAG_TYPE } from '../shell/MediaPool';
 
 /* snap targets mirroring the real Timeline set (clip edges + playhead) */
 const SNAP = [0, 8.5, 17, 24, 30, 16];
@@ -233,5 +234,92 @@ describe('Clip', () => {
     fireEvent.click(screen.getByTestId('shell-menu-clip-delete'));
     fireEvent.click(screen.getByTestId('shell-confirm-confirm'));
     expect(countEls()).toBe(2); // el-6 + el-7 remain
+  });
+});
+
+/* R14 wiring: ARIA button activation (Enter/Space) + the effects-rail drop
+   target (application/x-nle-effect payloads — the AppShell effects rail's
+   drag rows land as real store mutations, mirroring the lane pool-drop
+   grammar). dataTransfer stubs follow the Timeline.test drop pattern. */
+const fxPayload = (name: string, cat: string) => ({
+  types: [EFFECT_DRAG_TYPE],
+  getData: (t: string) => (t === EFFECT_DRAG_TYPE ? JSON.stringify({ name, cat }) : ''),
+  dropEffect: '',
+});
+
+describe('Clip keyboard activation (ARIA button pattern, spec 18 §11)', () => {
+  it('Enter and Space select; Shift+Enter extends additively (A/V pair joins)', () => {
+    boot({ selection: [] });
+    fireEvent.keyDown(screen.getByTestId('clip-el-1'), { key: 'Enter' });
+    expect(store().selection).toEqual(['el-1']);
+    fireEvent.keyDown(screen.getByTestId('clip-el-2'), { key: 'Enter', shiftKey: true });
+    expect(store().selection).toEqual(['el-1', 'el-2', 'el-7']); // 05 §12.3 pair as a group
+  });
+
+  it('Space is prevented (no page scroll) and locked clips stay inert on Enter', () => {
+    boot({ selection: [] });
+    // fireEvent returns false when the handler called preventDefault
+    expect(fireEvent.keyDown(screen.getByTestId('clip-el-1'), { key: ' ' })).toBe(false);
+    expect(store().selection).toEqual(['el-1']);
+    fireEvent.keyDown(screen.getByTestId('clip-el-7'), { key: 'Enter' }); // tr-audio-2 ships locked
+    expect(store().selection).toEqual(['el-1']); // unchanged — same inert contract as clicks
+  });
+});
+
+describe('Clip effects-rail drop target (R14 wiring)', () => {
+  // the MIME contract is FIXED (AppShell EffectsPanel sets the same string) —
+  // pin the literal so a silent rename on either side fails here first
+  it('exports the fixed effects-rail drag MIME type', () => {
+    expect(EFFECT_DRAG_TYPE).toBe('application/x-nle-effect');
+  });
+
+  it('an effect drag rings the clip; a Blur drop adds the effect with nominal defaults', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-3'); // no fixture effects on el-3
+    fireEvent.dragOver(clip, { dataTransfer: fxPayload('Gaussian Blur', 'Blur') });
+    expect(clip.className).toContain('ring-accent'); // subtle ring while hovering
+    fireEvent.drop(clip, { dataTransfer: fxPayload('Gaussian Blur', 'Blur') });
+    const fx = el('el-3').effects!;
+    expect(fx).toHaveLength(1);
+    expect(fx[0]!.name).toBe('Gaussian Blur');
+    expect(fx[0]!.enabled).toBe(true);
+    expect(fx[0]!.params).toEqual({ radius: 12 }); // Inspector's PARAM_DEFAULTS twin
+    expect(clip.className).not.toContain('ring-accent'); // ring cleared on drop
+    expect(store().past).toHaveLength(1); // one undoable addEffectToElement
+  });
+
+  it('a Transition drop sets transitionOut to the picked presentation on the crossfade type', () => {
+    boot({});
+    fireEvent.drop(screen.getByTestId('clip-el-3'), { dataTransfer: fxPayload('Dip to Black', 'Transition') });
+    const tr = el('el-3').transitionOut!;
+    expect(tr.type).toBe('crossfade'); // the mock's ONLY transition type — honest mapping
+    expect(tr.presentation).toBe('Dip to Black');
+  });
+
+  it('unknown effect / transition names get honest toasts; nothing commits', () => {
+    boot({});
+    fireEvent.drop(screen.getByTestId('clip-el-3'), { dataTransfer: fxPayload('Nuke It', 'Stylize') });
+    expect(store().toasts.at(-1)!.title).toBe('Unknown effect');
+    expect(el('el-3').effects ?? []).toHaveLength(0);
+    expect(store().past).toHaveLength(0);
+    fireEvent.drop(screen.getByTestId('clip-el-3'), { dataTransfer: fxPayload('Melt', 'Transition') });
+    expect(store().toasts.at(-1)!.title).toBe('Unknown transition');
+    expect(el('el-3').transitionOut).toBeUndefined();
+  });
+
+  it('locked tracks refuse the drop (not-allowed, no commit); pool drags never ring', () => {
+    boot({});
+    const locked = screen.getByTestId('clip-el-7'); // tr-audio-2 ships locked
+    const dt = fxPayload('Gaussian Blur', 'Blur');
+    fireEvent.dragOver(locked, { dataTransfer: dt });
+    expect(locked.className).not.toContain('ring-accent');
+    expect(dt.dropEffect).toBe('none'); // not-allowed cursor grammar
+    fireEvent.drop(locked, { dataTransfer: fxPayload('Gaussian Blur', 'Blur') });
+    expect(el('el-7').effects ?? []).toHaveLength(0);
+    expect(store().past).toHaveLength(0);
+    // a media-pool drag is not an effect drag: no ring, no effect commit
+    const el1 = screen.getByTestId('clip-el-1');
+    fireEvent.dragOver(el1, { dataTransfer: { types: [POOL_DRAG_TYPE], dropEffect: '' } });
+    expect(el1.className).not.toContain('ring-accent');
   });
 });

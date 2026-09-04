@@ -63,6 +63,26 @@ describe('SoundLibrary', () => {
     expect(screen.getAllByTestId('shell-soundlibrary-item')).toHaveLength(6);
   });
 
+  it('the sort control re-orders items within the role groups (R14: header parity made true)', () => {
+    renderPlain(<SoundLibrary />);
+    // default name-asc: SFX group = drone_launch (18.6s) then sunset (12.8s)
+    expect(itemNames()[3]).toMatch(/drone_launch/);
+    expect(itemNames()[4]).toMatch(/sunset_timelapse/);
+    // duration asc flips the SFX pair (12.8s < 18.6s)
+    fireEvent.change(screen.getByLabelText('Sort sounds'), { target: { value: 'duration' } });
+    expect(itemNames()[3]).toMatch(/sunset_timelapse/);
+    expect(itemNames()[4]).toMatch(/drone_launch/);
+    // desc flips it back
+    fireEvent.click(screen.getByRole('button', { name: 'Sort ascending' }));
+    expect(itemNames()[3]).toMatch(/drone_launch/);
+    expect(itemNames()[4]).toMatch(/sunset_timelapse/);
+    // type asc: within Dialogue, the .wav (audio) precedes the .mp4 (video)
+    fireEvent.change(screen.getByLabelText('Sort sounds'), { target: { value: 'type' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sort descending' }));
+    expect(itemNames()[0]).toMatch(/interview_marina\.wav/);
+    expect(itemNames()[1]).toMatch(/interview_marina\.mp4/);
+  });
+
   it('the Import CTA explains the mock import path as a toast (spec 18 §8.8 honest mock)', () => {
     renderPlain(<SoundLibrary />);
     fireEvent.click(screen.getByRole('button', { name: 'Import sound' }));

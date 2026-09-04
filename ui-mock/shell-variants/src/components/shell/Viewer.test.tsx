@@ -4,7 +4,7 @@
    tool is armed (§4.3/§9), zoom select, transport cluster wiring, mark
    in/out, loop toggle and the marker color palette. No geometry assertions. */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { Viewer } from './Viewer';
 import { useUi } from '../../state/useUiStore';
@@ -177,5 +177,76 @@ describe('Viewer (spec 18 §4.3)', () => {
     // paint 0% instead of NaN% when the scene duration is 0
     expect(screen.getByTestId('shell-viewer-scrub-playhead').style.left).toBe('0%');
     expect(scrub.querySelector('[style*="NaN"]')).toBeNull();
+  });
+
+  it('§4.2 loading row: a mediaId change shows the first-frame skeleton for ~600 ms, then the image (fake timers)', () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = render(<Viewer duration={DUR} />);
+      // boot resolve (16 s → el-2/m-02) renders immediately — no boot theater
+      expect(container.querySelector('img')).toHaveAttribute('alt', 'Program monitor: Marina interview');
+      expect(screen.queryByTestId('shell-viewer-state-loading')).toBeNull();
+      // cut: 0 s → el-1/m-01 — the mediaId CHANGE starts the decode window
+      act(() => { S().setPlayhead(0); });
+      const skel = screen.getByTestId('shell-viewer-state-loading');
+      expect(skel).toHaveTextContent('Loading first frame…');
+      expect(skel.className).toContain('animate-pulse'); // subtle pulse
+      expect(container.querySelector('img')).toBeNull(); // image renders after
+      act(() => { vi.advanceTimersByTime(599); });
+      expect(screen.getByTestId('shell-viewer-state-loading')).toBeInTheDocument(); // not yet
+      act(() => { vi.advanceTimersByTime(1); });
+      expect(screen.queryByTestId('shell-viewer-state-loading')).toBeNull(); // done
+      expect(container.querySelector('img')).toHaveAttribute('alt', 'Program monitor: A012_C034_beach_wide');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('§4.2 error row: img onError swaps to the decode-failure row + one error toast; Retry re-keys and re-attempts', () => {
+    const { container } = render(<Viewer duration={DUR} />);
+    const img1 = container.querySelector('img')!;
+    fireEvent.error(img1);
+    const errRow = screen.getByTestId('shell-viewer-state-error');
+    expect(errRow).toHaveTextContent('Media failed to decode — check the pool');
+    expect(errRow).toHaveAttribute('role', 'alert');
+    expect(S().toasts).toHaveLength(1); // exactly one toast per failure
+    expect(S().toasts[0]).toMatchObject({
+      kind: 'error',
+      title: 'Media failed to decode',
+      detail: 'program frame failed to decode — check the media pool (spec 18 §4.2)',
+    });
+    expect(container.querySelector('img')).toBeNull(); // img swapped out for the row
+    // Retry clears the state and re-keys the img (a NEW node re-attempts)
+    fireEvent.click(screen.getByRole('button', { name: 'Retry decoding the program frame' }));
+    expect(screen.queryByTestId('shell-viewer-state-error')).toBeNull();
+    const img2 = container.querySelector('img')!;
+    expect(img2).not.toBe(img1); // re-keyed remount
+    // the retry can fail again — the row returns and a fresh toast fires
+    fireEvent.error(img2);
+    expect(screen.getByTestId('shell-viewer-state-error')).toBeInTheDocument();
+    expect(S().toasts).toHaveLength(2);
+  });
+
+  it('§4.2 offline/empty fallback rows are untouched by the new state rows', () => {
+    const { container } = render(<Viewer duration={DUR} />);
+    // past the last clip: empty-frame row (no loading/error theater)
+    act(() => { S().setPlayhead(30); });
+    expect(screen.getByText('No media — import or drop a file')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-viewer-state-loading')).toBeNull();
+    expect(screen.queryByTestId('shell-viewer-state-error')).toBeNull();
+    // offline media: the §4.2 offline row (m-04 fixture via a patched element)
+    act(() => {
+      const scenes = S().scenes.map((sc) => sc.id === 'sc-1' ? {
+        ...sc,
+        tracks: sc.tracks.map((t) => t.id === 'tr-main' ? {
+          ...t,
+          elements: t.elements.map((e) => e.id === 'el-1' ? { ...e, mediaId: 'm-04' } : e),
+        } : t),
+      } : sc);
+      useUi.setState({ scenes });
+    });
+    act(() => { S().setPlayhead(0); });
+    expect(screen.getByText('Media offline')).toBeInTheDocument();
+    expect(container.querySelector('img')).toBeNull();
   });
 });

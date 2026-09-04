@@ -7,7 +7,7 @@
    Boot states are set directly through the store patch — ResizeObserver-
    dependent compact behavior is never simulated via resize. */
 
-import { describe, expect, it, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
@@ -221,6 +221,35 @@ describe('inspector tab bar + toolbar panel toggles', () => {
     expect(within(effects).getByText('Cross Dissolve')).toBeInTheDocument();
   });
 
+  it('effect rows are drag sources: dragStart writes the fixed x-nle-effect payload (R14 wiring)', async () => {
+    const user = userEvent.setup();
+    renderAppShell();
+    await user.click(screen.getByTestId('shell-toolbar-btn-effects'));
+    const row = screen.getByTestId('shell-effects-row-gaussian-blur');
+    expect(row).toHaveAttribute('draggable', 'true');
+    // jsdom has no DataTransfer — a recording stub pins the contract payload
+    const dt = { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
+    fireEvent.dragStart(row, { dataTransfer: dt });
+    expect(dt.setData).toHaveBeenCalledWith(
+      'application/x-nle-effect',
+      JSON.stringify({ name: 'Gaussian Blur', cat: 'Blur' }),
+    );
+    expect(dt.effectAllowed).toBe('copy');
+    expect(dt.dropEffect).toBe('copy');
+  });
+
+  it('clicking an effect row answers with the drag-to-clip toast (pointer fallback, R14)', async () => {
+    const user = userEvent.setup();
+    renderAppShell();
+    await user.click(screen.getByTestId('shell-toolbar-btn-effects'));
+    await user.click(screen.getByTestId('shell-effects-row-vignette'));
+    expect(store().toasts.at(-1)).toMatchObject({
+      kind: 'info',
+      title: 'Add Vignette',
+      detail: 'drag the row onto a timeline clip to apply (mock drag-to-clip, spec 15 §5.4); the Inspector Effects tab carries the param UI',
+    });
+  });
+
   it('toolbar Inspector toggle removes the right rail + its seam (viewer keeps the row)', async () => {
     const user = userEvent.setup();
     renderAppShell();
@@ -233,18 +262,19 @@ describe('inspector tab bar + toolbar panel toggles', () => {
   });
 });
 
+/** Both V-seams share the "Resize panel" label (registered deviation), so
+ *  locate each by the panel its NEXT sibling wraps: the media seam precedes
+ *  the viewer region, the inspector seam precedes the right rail. */
+const seamBefore = (testid: string): HTMLElement => {
+  const panel = screen.getByTestId(testid);
+  const sep = screen.getAllByRole('separator', { name: 'Resize panel' }).find(
+    (el) => (el.nextElementSibling as HTMLElement | null)?.contains(panel),
+  );
+  if (!sep) throw new Error(`no "Resize panel" seam precedes ${testid}`);
+  return sep;
+};
+
 describe('splitter seams (R12 regression — spec 18 §3.2)', () => {
-  /** Both V-seams share the "Resize panel" label (registered deviation), so
-   *  locate each by the panel its NEXT sibling wraps: the media seam precedes
-   *  the viewer region, the inspector seam precedes the right rail. */
-  const seamBefore = (testid: string): HTMLElement => {
-    const panel = screen.getByTestId(testid);
-    const sep = screen.getAllByRole('separator', { name: 'Resize panel' }).find(
-      (el) => (el.nextElementSibling as HTMLElement | null)?.contains(panel),
-    );
-    if (!sep) throw new Error(`no "Resize panel" seam precedes ${testid}`);
-    return sep;
-  };
 
   it('inspector seam: dragging LEFT widens the right-docked rail (pins the R12 +dx runaway fix)', () => {
     renderAppShell();
@@ -294,7 +324,9 @@ describe('playback loop (mock engine — spec 18 §3.2 playback)', () => {
   it('playing: true advances the playhead through the rAF loop', async () => {
     renderAppShell({ playing: true });
     // rAF stub = 16 ms setTimeout (setup.ts) → real-timer waitFor suffices
-    await waitFor(() => expect(store().playhead).toBeGreaterThan(16));
+    // sibling parity: 3 s real-timer budget — the default 1 s flaked under a
+    // full parallel-suite load (rAF stub = setTimeout, CPU-contended workers)
+    await waitFor(() => expect(store().playhead).toBeGreaterThan(16), { timeout: 3000 });
     expect(store().playing).toBe(true); // mid-timeline — no auto-stop
     act(() => store().setPlaying(false)); // stop the loop before teardown
   });
@@ -397,5 +429,28 @@ describe('app dock cheat-sheet button (spec 16 §7.3 entry point)', () => {
     expect(store().cheatOpen).toBe(true);
     expect(screen.getByTestId('shell-cheatsheet')).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Keyboard cheat sheet' })).toBeInTheDocument();
+  });
+});
+
+describe('splitter keyboard resize (R14 — the keyStep implementation finally pinned)', () => {
+  it('inspector seam: ArrowLeft widens the rail by 8px/step, ArrowRight narrows it; dbl-click reset stays', () => {
+    renderAppShell();
+    const sep = seamBefore('shell-inspector');
+    expect(store().inspectorW).toBe(340);
+    // keyboard grammar: ←/→ = ±8px per press (Shift ×4 = 32px) — spec 18 §3.2
+    fireEvent.keyDown(sep, { key: 'ArrowLeft' });
+    expect(store().inspectorW).toBe(348);
+    fireEvent.keyDown(sep, { key: 'ArrowLeft', shiftKey: true });
+    expect(store().inspectorW).toBe(380);
+    fireEvent.keyDown(sep, { key: 'ArrowRight' });
+    expect(store().inspectorW).toBe(372);
+  });
+
+  it('media-pool seam: ArrowRight widens the pool by 8px/step', () => {
+    renderAppShell();
+    const sep = seamBefore('shell-viewer');
+    expect(store().mediaW).toBe(280);
+    fireEvent.keyDown(sep, { key: 'ArrowRight' });
+    expect(store().mediaW).toBe(288);
   });
 });

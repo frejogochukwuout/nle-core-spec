@@ -1,8 +1,13 @@
 /* ColorPage — spec 18 §4.8: Color enters a color-focus mode that swaps the
    inspector for a simplified single-column grading stack (spec 08's panels,
-   heavily reduced). Timeline stays live below. Static mock. */
+   heavily reduced). Timeline stays live below. Interactive display state:
+   sliders/LUT are LOCAL state (real readout behavior, §11 floor) + one
+   honest toast per mount on first touch — no fake engine writes (spec 08
+   §4 render round). Wheels stay honest role="img" statics. */
 
+import { useState } from 'react';
 import { Contrast, Spline, Pipette, Circle } from 'lucide-react';
+import { useUi } from '../../state/useUiStore';
 
 function Wheel({ label, tint }: { label: string; tint: string }) {
   return (
@@ -26,17 +31,34 @@ function Wheel({ label, tint }: { label: string; tint: string }) {
   );
 }
 
-function Slider({ label, value, unit = '' }: { label: string; value: number; unit?: string }) {
+function Slider({ label, value, unit = '', onChange }: { label: string; value: number; unit?: string; onChange: (v: number) => void }) {
   return (
     <div className="flex items-center gap-2">
       <span className="w-[72px] shrink-0 text-[11px] text-tmuted">{label}</span>
-      <input type="range" min={-100} max={100} defaultValue={value} className="min-w-0 flex-1" aria-label={label} />
+      <input type="range" min={-100} max={100} value={value} className="min-w-0 flex-1" aria-label={label} onChange={(e) => onChange(+e.target.value)} />
       <span className="mono w-[46px] shrink-0 text-right text-[11px] text-tprimary">{value > 0 ? '+' : ''}{value}{unit}</span>
     </div>
   );
 }
 
 export function ColorPage() {
+  const pushToast = useUi((s) => s.pushToast);
+
+  /* grading params = display state (R14 no-op fix): controlled LOCAL values
+     so the readout follows the control — honest local behavior without
+     pretending the engine re-grades. First interaction per mount fires ONE
+     toast saying exactly that (spec 08 §4 render round). */
+  const [params, setParams] = useState({ contrast: 12, pivot: 35, saturation: -8 });
+  const [qualifierHue, setQualifierHue] = useState(40);
+  const [lut, setLut] = useState('None');
+  const [toldParams, setToldParams] = useState(false);
+  const [toldLut, setToldLut] = useState(false);
+  const tellParamsOnce = () => {
+    if (toldParams) return;
+    setToldParams(true);
+    pushToast({ kind: 'info', title: 'Color params', detail: 'grading stack is static in the mock — values are display state (spec 08 §4 render round)' });
+  };
+
   return (
     <div data-testid="shell-color" className="flex h-full w-full min-h-0 flex-col bg-panel">
       <div className="flex items-center gap-2 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
@@ -51,6 +73,11 @@ export function ColorPage() {
           <Wheel label="Gamma" tint="rgba(120,200,150,0.30)" />
           <Wheel label="Gain" tint="rgba(230,180,75,0.32)" />
           <Wheel label="Offset" tint="rgba(200,120,220,0.30)" />
+          {/* LUT readout under the wheels (R14): the select below is display
+              state — this row shows which LUT the mock "applies" */}
+          <span className="col-span-2 text-center text-[11px] text-tmuted" data-testid="shell-color-lut-readout">
+            LUT: {lut}
+          </span>
         </div>
 
         {/* primaries */}
@@ -58,9 +85,9 @@ export function ColorPage() {
           <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">
             <Contrast size={11} /> Primaries
           </div>
-          <Slider label="Contrast" value={12} />
-          <Slider label="Pivot" value={35} />
-          <Slider label="Saturation" value={-8} />
+          <Slider label="Contrast" value={params.contrast} onChange={(v) => { setParams((p) => ({ ...p, contrast: v })); tellParamsOnce(); }} />
+          <Slider label="Pivot" value={params.pivot} onChange={(v) => { setParams((p) => ({ ...p, pivot: v })); tellParamsOnce(); }} />
+          <Slider label="Saturation" value={params.saturation} onChange={(v) => { setParams((p) => ({ ...p, saturation: v })); tellParamsOnce(); }} />
         </div>
 
         {/* curves mini */}
@@ -94,7 +121,20 @@ export function ColorPage() {
         <div className="flex flex-col gap-2 px-3 py-3">
           <div className="flex items-center gap-2">
             <span className="w-[72px] shrink-0 text-[11px] text-tmuted">LUT</span>
-            <select className="field flex-1 cursor-pointer" aria-label="LUT select">
+            {/* display state (R14): the choice updates the readout under the
+                wheels; the preview itself lands with the render round (spec 08) */}
+            <select
+              className="field flex-1 cursor-pointer"
+              aria-label="LUT select"
+              value={lut}
+              onChange={(e) => {
+                setLut(e.target.value);
+                if (!toldLut) {
+                  setToldLut(true);
+                  pushToast({ kind: 'info', title: 'Color params', detail: 'LUT preview lands with the render round (spec 08)' });
+                }
+              }}
+            >
               <option>None</option>
               <option>Kodak 2383</option>
               <option>Rec709 → sRGB</option>
@@ -102,8 +142,14 @@ export function ColorPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="flex w-[72px] shrink-0 items-center gap-1 text-[11px] text-tmuted"><Pipette size={11} /> HSL</span>
-            <input type="range" min={0} max={100} defaultValue={40} className="flex-1" aria-label="Qualifier hue" />
-            <button className="icon-btn !h-[20px]" data-tip="Power window" aria-label="Power window">
+            <input type="range" min={0} max={100} value={qualifierHue} className="flex-1" aria-label="Qualifier hue" onChange={(e) => { setQualifierHue(+e.target.value); tellParamsOnce(); }} />
+            <button
+              className="icon-btn !h-[20px]"
+              data-tip="Power window"
+              aria-label="Power window"
+              /* honest mock: v2 grading surface — answer, don't stay silent */
+              onClick={() => pushToast({ kind: 'info', title: 'Power window', detail: 'windowing is a v2 grading surface (spec 08)' })}
+            >
               <Circle size={13} strokeWidth={1.6} />
             </button>
           </div>

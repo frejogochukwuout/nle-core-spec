@@ -1,8 +1,9 @@
 /* StatusStrip — spec 18 §3.1/§6.3: 12px strip, autosave state machine
    (Saving… / Saved Ns ago / Save failed — retry), selection + zoom readouts.
    Mock autosave: doc mutations flip "Saving…" briefly, then stamp the save
-   time; a simulated failure can be triggered via the debug overlay for
-   state-row testing. */
+   time; the debug overlay's "Simulate save failure" toggle (Save drill row)
+   arms the store flag so the next attempt lands in the failure state for
+   state-row testing — retry clears it. */
 
 import { useEffect, useRef, useState } from 'react';
 import { useUi } from '../../state/useUiStore';
