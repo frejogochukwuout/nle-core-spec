@@ -8,7 +8,7 @@
 
 ## 1. The decision in one paragraph
 
-**No Fairlight-style hard page split. Audio is a *focus mode* in the existing page-dock grammar, plus a mixer surface that lives with the timeline.** The app keeps ONE timeline, ONE clock, ONE command stream (Decisions 12/13, spec 03 §3). A 4th dock page **"Audio" (⌘4)** enters audio-focus: audio lanes grow, a **mixer strip row** opens under the timeline, the media pool becomes a **Sound Library**, and the inspector becomes a **channel editor** that shows the S/G seam (clip params + track strip params). Mode/collapse/heights are view-state (UI store); audio *parameters* ride a **mock G-layer sidecar** (`mockMixer`, mirroring spec 20 §4.2's MixerTrackSettings shape) — never UI prefs, never TrackJSON fields. A collapsed **meter-bridge state** keeps levels visible in Edit mode at all times.
+**No Fairlight-style hard page split. Audio is a *focus mode* in the existing page-dock grammar, plus a mixer surface that lives with the timeline.** The app keeps ONE timeline, ONE clock, ONE command stream (Decisions 12/13, spec 03 §3). A 4th dock page **"Audio" (⌘4)** enters audio-focus: audio lanes grow, a **mixer strip row** opens under the timeline, the media pool becomes a **Sound Library**, and the inspector becomes a **channel editor** that shows the S/G seam (clip params + track strip params). Mode/collapse/heights are view-state (UI store); audio *parameters* ride a **mock G-layer sidecar** (`mockMixer`, mirroring spec 20 §4.2's MixerTrackSettings shape) — never UI prefs, never TrackJSON fields. A **meter-bridge state** (~32px) is available in Edit for per-track level detail beyond the always-on micro-meters.
 
 ## 2. Why this shape (evidence, review-corrected)
 
@@ -39,13 +39,13 @@ Scope honesty: this surface covers the *core* of spec 20's recorded M2 scope (mi
 | Region | Edit mode | Audio focus |
 |---|---|---|
 | Page dock | Edit active | Audio active |
-| Media pool | all media | **Sound Library view**: audio media + audio-bearing video (detachable), grouped by role (Dialogue/BGM/SFX/Music), role chips, "Import sound…" CTA, same search/sort |
+| Media pool | all media | **Sound Library view**: audio media + audio-bearing video, grouped by role (Dialogue/BGM/SFX/Music), role chips, "Import sound…" CTA, same search/sort |
 | Viewer | program monitor | **unchanged** (audio work needs picture context; one clock) |
 | Inspector | 4-tab inspector | **Channel editor** with two sections: **Clip** (selected element: gain/pan/fades — the SAME fields and commands as the inspector Audio tab, 17 §6.1 parity) above **Track** (focused track's G strip: fader/pan/inserts/sends/outputBus + ducking row for BGM/Music roles). The panel literally displays the S/G seam. |
 | Timeline lanes | heights per user pref | **audio lanes ×1.6, video lanes compress to blocks style** (structure identical; heights are view prefs) |
-| Track headers (all modes) | M/S/L(/V) | audio headers gain a **micro-meter** (4px, view-only G projection) + waveform toggle in every mode; a **mini gain fader** + an **automation-lane placeholder toggle** appear in Audio focus only |
+| Track headers (all modes) | M/S/L(/V) + **audio micro-meters** (4px, view-only G projection) + waveform toggle | Audio focus adds: **mini gain fader** + **automation-lane placeholder toggle** |
 | Timeline toolbar | master mute + volume + **master micro-meter** (2 bars, always-on levels — zero new regions) | same + **Mixer state button** (cycles collapsed/bridge/full) |
-| Under timeline | mixer row available: **meter-bridge default-on** (~32px) | mixer row **full** (default; auto-compact below ~880px viewport height) |
+| Under timeline | mixer row available (default **collapsed** — toolbar master micro-meter + header micro-meters already keep levels visible; see §11.6) | mixer row **full** (default; auto-compact below ~850px viewport height) |
 | Status/dock/transport/keys | — | **unchanged** — Space, JKL, I/O, Home/End identical (one clock) |
 
 ### 3.3 Exit
@@ -58,17 +58,19 @@ Dock button, ⌘1 (Edit), or **Esc always exits Audio→Edit** (one rule, no pat
 
 ## 4. The mixer strip row — three states (the 1280×800 arithmetic)
 
-Vertical budget at the spec floor 1280×800 (chrome: dock 42 + status 12 + toolbar2 34 + HSplitter 6 + timeline-toolbar 34 + tabs 26 = **154px**; main body min 320px per 18 §3.2 → timeline block ≈ 326px − 60 toolbar/tabs = **~266px for lanes+mixer**). A single 176px mixer would leave ~90px of lanes — unusable. Therefore the row is a **three-state machine**:
+Vertical budget at the spec floor 1280×800: chrome = dock 42 + status 12 + toolbar2 34 + HSplitter 6 + timeline-toolbar 34 + tabs 26 = **154px** (already includes toolbar+tabs); main body min 320px per 18 §3.2 → timeline block ≈ 326px, minus ~26px ruler → **~300px for lanes+mixer**. A full 176px mixer leaves ~150px of lanes — tight (~1.5 boosted audio lanes) but workable; the bridge leaves ~294px. Therefore the row is a **three-state machine** (auto-compact below ~850px viewport height):
 
 | State | Height | Contents | Default |
 |---|---|---|---|
 | **Collapsed** | 0 | — | never default |
 | **Meter bridge** | ~32px | per-audio-track: badge + name + stereo meter + M/S/L chips; master: meter + mute + volume (synced) | **Edit focus default** |
-| **Full** | ~176px (auto-**compact ~120px** when viewport height < ~880px OR opened from Edit) | complete strips (below) | **Audio focus default** |
+| **Full** | ~176px (auto-**compact ~120px** when viewport height < ~850px) | complete strips (below) | **Audio focus default** |
 
 Full strip anatomy (top→bottom): badge+name+role chip · stereo meter · **fader** (dB-tapered, −∞…+6, dbl-click = 0 dB unity) · **pan** knob (dbl-click = center) · **M/S/L** (same toggles/commands as track headers — one source of truth) · insert slot chips (2, mock picker) · aux send knobs + pre/post · output bus select (Master/A1/A2). Plus **Aux A1/A2 return strips** and the **MASTER strip** (master fader = the same store value as timeline-toolbar master volume + master mute — the 18 §4.5 "master bus gain" parameter, mock-level).
 
-Drag grammar on faders/kobs: **Shift+drag = fine mode, double-click = reset**. A11y: strips `role="group"`; faders are keyboard-operable sliders; meters `aria-hidden` with a textual dB exposed **on focus/query only** (never aria-live — no 60fps announcement spam); the mixer row joins the F6 region cycle — a 7th region, which amends 18 §11.5's enumerated six (registered in §10).
+**Mixer state button semantics** (one definition): in Edit it cycles **collapsed → bridge → full-compact**; in Audio focus it toggles **bridge ↔ full**. The bridge's M/S/L chips emit the **same toggle commands as the track headers** (one source of truth, 17 §6.1 parity).
+
+Drag grammar on faders/knobs: **Shift+drag = fine mode, double-click = reset**. A11y: strips `role="group"`; faders are keyboard-operable sliders; meters `aria-hidden` with a textual dB exposed **on focus/query only** (never aria-live — no 60fps announcement spam); the mixer row joins the F6 region cycle — a 7th region, which amends 18 §11.5's enumerated six (registered in §10).
 
 ## 5. Sidechain ducking — the spec 20 §12.2 answer, concretized
 
@@ -78,7 +80,7 @@ On BGM/Music-role strips and in the channel editor's Track section, a **"Duck un
 
 - ⌘4 → Audio focus; ⌘1-3 unchanged from the current mock (Edit/Color/Deliver — noting the pre-existing ⌘3/Deliver drift registered in §10).
 - **No new chords.** ⌘⇧M is spec 16 §3.5's "mute all tracks" (conflict resolution #17 — closed, not reopenable). The mixer state cycles via its toolbar button and F6+keyboard once focused; if a chord is wanted, it gets registered at seal (candidates: none currently unbound and sane).
-- Faders/pan are sliders: arrow keys ±1 dB / ±5%, Home/End = −∞/unity, page keys = coarse steps.
+- Faders/pan are sliders: arrow keys ±1 dB / ±5%, Home = −∞, End = **+6 dB max** (unity 0 dB is mid-scale, covered by dbl-click reset), page keys = coarse steps.
 
 ## 7. Roles: Dialogue / BGM / SFX / Music
 
@@ -106,8 +108,9 @@ Spec 09 has no role field (only the FCPXML `<sequence role>` attr echoes it; BGM
 ## 11. What the user should react to
 
 1. Focus mode (4th dock page, ⌘4) vs. hard page split — right weight?
-2. Mixer under the timeline with three states (bridge default in Edit, full in Audio) — vs. only-in-Audio-page.
+2. Mixer under the timeline with three states (collapsed default in Edit, full in Audio) — vs. only-in-Audio-page.
 3. Always-on levels: master micro-meter in the timeline toolbar + track micro-meters in headers (every mode).
 4. Channel editor as the S/G seam (Clip section + Track section) — and ducking row (source/amount/attack/release) as the sidechain UX.
 5. Escalation gesture (dbl-click audio clip → Audio focus + strip focus) as the M3 preview.
 6. Sound Library = audio-filtered pool with role grouping (includes audio-bearing video).
+7. **Levels redundancy**: master micro-meter + header micro-meters + optional bridge — triple coverage right, or should Edit default to bridge instead of collapsed?
