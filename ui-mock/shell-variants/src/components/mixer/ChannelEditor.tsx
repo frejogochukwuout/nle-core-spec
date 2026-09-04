@@ -82,10 +82,12 @@ export function ChannelEditor() {
             <Row label="Gain dB">
               <NumField value={((el.volume ?? 1) * 20 - 20)} min={-48} max={12} step={0.5} ariaLabel="Clip gain"
                 onCommit={(dbv) => setElementField(el.id, { volume: Math.max(0.001, (dbv + 20) / 20) })} />
-              <input type="range" min={-48} max={12} step={0.5} value={((el.volume ?? 1) * 20 - 20)}
-                className="h-[10px] min-w-0 flex-1" style={{ ['--fill' as any]: `${(((el.volume ?? 1) * 20 - 20) + 48) / 60 * 100}%` }}
-                onChange={(e) => setElementField(el.id, { volume: Math.max(0.001, (+e.target.value + 20) / 20) })}
-                aria-label="Clip gain slider" />
+              <input type="range" min={-48} max={12} step={0.5} defaultValue={((el.volume ?? 1) * 20 - 20)}
+                key={`${el.id}-${el.volume}`}
+                className="h-[10px] min-w-0 flex-1"
+                onPointerUp={(e) => setElementField(el.id, { volume: Math.max(0.001, (+ (e.target as HTMLInputElement).value + 20) / 20) })}
+                onKeyUp={(e) => setElementField(el.id, { volume: Math.max(0.001, (+ (e.target as HTMLInputElement).value + 20) / 20) })}
+                aria-label="Clip gain slider (commit on release)" />
             </Row>
             <Row label="Fade in">
               <NumField value={el.audioFadeIn ?? 0} min={0} max={10} step={0.1} unit="s" ariaLabel="Audio fade in"
@@ -111,7 +113,7 @@ export function ChannelEditor() {
         <div className="mb-1 flex items-center gap-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-tfaint">Track</span>
           <span className="text-[10px] text-tfaint">· signal layer</span>
-          {role && <span className="ml-auto rounded-[2px] border border-hairline bg-inset px-1 text-[9px] font-semibold uppercase text-tmuted">{ROLE_LABEL[role]}</span>}
+          {role && <span className="ml-auto rounded-[2px] border border-hairline bg-inset px-1 text-[10px] font-semibold uppercase text-tmuted">{ROLE_LABEL[role]}</span>}
         </div>
         {track && strip ? (
           <div className="flex flex-col">

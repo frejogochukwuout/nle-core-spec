@@ -14,15 +14,9 @@ import type { TrackJSON } from '../../lib/mockData';
 const EMPTY_TRACKS: TrackJSON[] = [];
 import { Fader, PanKnob, StripMeter } from './MixerPrimitives';
 
-function toggleTrack(sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked') {
-  const { scenes } = useUi.getState();
-  const next = scenes.map((s) =>
-    s.id === sceneId
-      ? { ...s, tracks: s.tracks.map((t) => (t.id === trackId ? { ...t, [field]: !t[field] } : t)) }
-      : s,
-  );
-  useUi.setState({ scenes: next });
-}
+// single source of truth: the undoable store command (headers, strips, bridge)
+const toggleTrack = (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked') =>
+  useUi.getState().toggleTrackCmd(sceneId, trackId, field);
 
 function InsertSlot({ value, onPick, slot }: { value: string | null; onPick: (v: string | null) => void; slot: number }) {
   return (
@@ -41,8 +35,8 @@ function InsertSlot({ value, onPick, slot }: { value: string | null; onPick: (v:
   );
 }
 
-export function ChannelStrip({ track, sceneId, compact, focused, onStripClick }: {
-  track: TrackJSON; sceneId: string; compact: boolean; focused: boolean; onStripClick: () => void;
+export function ChannelStrip({ track, sceneId, compact, focused, flashing, onStripClick }: {
+  track: TrackJSON; sceneId: string; compact: boolean; focused: boolean; flashing?: boolean; onStripClick: () => void;
 }) {
   // stable-ref selectors only (zustand v5: unstable selector results loop useSyncExternalStore)
   const mixer = useUi((s) => s.mixer);
@@ -59,7 +53,8 @@ export function ChannelStrip({ track, sceneId, compact, focused, onStripClick }:
 
   return (
     <div
-      className={`flex shrink-0 flex-col items-center gap-1 border-r border-hairline px-1.5 pb-1.5 pt-1 ${focused ? 'bg-[color-mix(in_srgb,var(--accent-selection)_12%,var(--bg-shell)))] ring-1 ring-[var(--accent-selection)]' : 'bg-shell hover:bg-[var(--hover-overlay)]'}`}
+      data-flash={flashing ? 'on' : undefined}
+      className={`mixer-strip flex shrink-0 flex-col items-center gap-1 border-r border-hairline px-1.5 pb-1.5 pt-1 ${focused ? 'bg-[color-mix(in_srgb,var(--accent-selection)_12%,var(--bg-shell)))] ring-1 ring-[var(--accent-selection)]' : 'bg-shell hover:bg-[var(--hover-overlay)]'}`}
       style={{ width: compact ? 108 : 128 }}
       data-testid={`mixer-strip-${track.badge}`}
       onClick={onStripClick}
@@ -74,7 +69,7 @@ export function ChannelStrip({ track, sceneId, compact, focused, onStripClick }:
         <span className="min-w-0 flex-1 truncate text-[10px] text-tprimary">{track.name}</span>
       </div>
       {role && (
-        <span className="w-full rounded-[2px] border border-hairline bg-inset py-px text-center text-[9px] font-semibold uppercase tracking-wide text-tmuted">
+        <span className="w-full rounded-[2px] border border-hairline bg-inset py-px text-center text-[10px] font-semibold uppercase tracking-wide text-tmuted">
           {ROLE_LABEL[role]}
         </span>
       )}
@@ -92,11 +87,11 @@ export function ChannelStrip({ track, sceneId, compact, focused, onStripClick }:
       {/* M/S/L — same commands as the track header (one source of truth) */}
       <div className="flex items-center gap-1">
         <button onClick={() => toggleTrack(sceneId, track.id, 'muted')} aria-pressed={track.muted} aria-label={`Mute ${track.name}`}
-          className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[9px] font-bold ${track.muted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-inset text-tmuted'}`}>M</button>
+          className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${track.muted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-inset text-tmuted'}`}>M</button>
         <button onClick={() => toggleTrack(sceneId, track.id, 'solo')} aria-pressed={track.solo} aria-label={`Solo ${track.name}`}
-          className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[9px] font-bold ${track.solo ? 'border-[var(--solo)] bg-[var(--solo)] text-black' : 'border-strong bg-inset text-tmuted'}`}>S</button>
+          className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${track.solo ? 'border-[var(--solo)] bg-[var(--solo)] text-black' : 'border-strong bg-inset text-tmuted'}`}>S</button>
         <button onClick={() => toggleTrack(sceneId, track.id, 'locked')} aria-pressed={track.locked} aria-label={`Lock ${track.name}`}
-          className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[9px] font-bold ${track.locked ? 'border-accent bg-accent/20 text-accent' : 'border-strong bg-inset text-tmuted'}`}>L</button>
+          className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${track.locked ? 'border-accent bg-accent/20 text-accent' : 'border-strong bg-inset text-tmuted'}`}>L</button>
       </div>
 
       {!compact && (
@@ -114,7 +109,7 @@ export function ChannelStrip({ track, sceneId, compact, focused, onStripClick }:
               style={{ ['--fill' as any]: `${strip.auxA * 100}%` }}
               onChange={(e) => setMixerTrack(track.id, { auxA: +e.target.value })}
               aria-label={`${track.name} aux 1 send`} />
-            <span className="mono shrink-0 text-[9px]">{strip.auxPreFader ? 'pre' : 'post'}</span>
+            <span className="mono shrink-0 text-[10px]">{strip.auxPreFader ? 'pre' : 'post'}</span>
           </div>
           <select aria-label={`${track.name} output bus`} className="field w-full cursor-pointer px-1 py-0 text-[10px]"
             value={strip.outputBus} onChange={(e) => setMixerTrack(track.id, { outputBus: +e.target.value as 0 | 1 | 2 })}>
@@ -128,19 +123,19 @@ export function ChannelStrip({ track, sceneId, compact, focused, onStripClick }:
       {/* duck-under row (bgm/music roles) — spec 20 §12.2 answer, mock */}
       {!compact && duck && (
         <div className="flex w-full flex-col gap-0.5 rounded-[2px] border border-hairline bg-inset px-1 py-1" data-testid={`mixer-ducking-${track.badge}`}>
-          <span className="text-[9px] font-semibold uppercase tracking-wide text-tmuted">Duck under</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-tmuted">Duck under</span>
           <select aria-label={`${track.name} ducking source`} className="field w-full cursor-pointer px-1 py-0 text-[10px]"
             value={duck.source ?? ''} onChange={(e) => setDucking(track.id, { source: e.target.value || null })}>
             <option value="">—</option>
             {audioTracks.filter((t) => t.id !== track.id).map((t) => <option key={t.id} value={t.id}>{t.badge} {t.name}</option>)}
           </select>
-          <div className="flex items-center gap-1 text-[9px] text-tmuted">
+          <div className="flex items-center gap-1 text-[10px] text-tmuted">
             <span className="mono shrink-0">amt</span>
             <input type="range" min={0} max={1} step={0.05} value={duck.amount} className="h-[10px] min-w-0 flex-1"
               onChange={(e) => setDucking(track.id, { amount: +e.target.value })} aria-label={`${track.name} ducking amount`} />
             <span className="mono shrink-0">{Math.round(duck.amount * 100)}</span>
           </div>
-          <div className="flex items-center justify-between text-[9px] text-tmuted">
+          <div className="flex items-center justify-between text-[10px] text-tmuted">
             <span className="mono">atk {duck.attack}ms</span>
             <span className="mono">rel {duck.release}ms</span>
           </div>
@@ -161,7 +156,7 @@ export function AuxStrip({ bus, compact }: { bus: 'a1' | 'a2'; compact: boolean 
       <span className="w-full truncate text-center text-[10px] text-tprimary">{settings.name}</span>
       {!compact && <StripMeter trackId={`aux-${bus}`} db={settings.returnGain} height={64} label={`Aux ${bus}`} />}
       <Fader db={settings.returnGain} onChange={(db) => setAuxBus(bus, { returnGain: db })} height={compact ? 48 : 64} ariaLabel={`Aux ${bus} return`} />
-      {settings.on && <span className="mono text-[9px] text-[var(--solo)]">ON</span>}
+      {settings.on && <span className="mono text-[10px] text-[var(--solo)]">ON</span>}
     </div>
   );
 }
@@ -181,8 +176,8 @@ export function MasterStrip({ compact }: { compact: boolean }) {
       {!compact && <StripMeter trackId="master" db={db} label="Master" />}
       <Fader db={db} onChange={(ndb) => setMasterVolume(Math.max(0, Math.min(1, (ndb + 60) / 66)))} height={compact ? 64 : 84} ariaLabel="Master fader" />
       <button onClick={toggleMasterMute} aria-pressed={masterMuted} aria-label="Master mute"
-        className={`mono flex h-[16px] w-[24px] items-center justify-center rounded-[2px] border text-[9px] font-bold ${masterMuted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-inset text-tmuted'}`}>M</button>
-      {!compact && <span className="mono text-[9px] text-tfaint">LUFS — v2</span>}
+        className={`mono flex h-[16px] w-[24px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${masterMuted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-inset text-tmuted'}`}>M</button>
+      {!compact && <span className="mono text-[10px] text-tfaint">LUFS — v2</span>}
     </div>
   );
 }

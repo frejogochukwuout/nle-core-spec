@@ -18,6 +18,7 @@ export function StatusStrip() {
   const pxPerSec = useUi((s) => s.pxPerSec);
   const simulateSaveFail = useUi((s) => s.simulateSaveFail);
   const retrySave = useUi((s) => s.retrySave);
+  const saveAttempt = useUi((s) => s.saveAttempt);
   const scene = scenes.find((s) => s.id === activeSceneId) ?? scenes[0];
 
   const [saveState, setSaveState] = useState<SaveState>('saved');
@@ -40,10 +41,16 @@ export function StatusStrip() {
     return () => clearTimeout(t);
   }, [scenes]);
 
-  // retry clears the failure flag and re-runs the save
+  // explicit retry (click) or any new saveAttempt re-runs the save cycle
   useEffect(() => {
-    if (saveState === 'failed') return;
-  }, [saveState]);
+    if (saveAttempt === 0) return;
+    setSaveState('saving');
+    const t = setTimeout(() => {
+      if (useUi.getState().simulateSaveFail) setSaveState('failed');
+      else { setSaveState('saved'); setSavedAt(Date.now()); }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [saveAttempt]);
 
   // "Saved Ns ago" ticker
   useEffect(() => {

@@ -118,7 +118,8 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     }
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e?: React.PointerEvent) => {
+    void e;
     if (!drag) {
       dragCancelled.current = false; // stale flag after an Esc-cancelled drag
       return;
@@ -418,8 +419,8 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
               setDrag({ mode: 'l', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: false });
             }}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
+            onPointerMove={(e) => { e.stopPropagation(); onPointerMove(e); }}
+            onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e); }}
           />
           <div
             className="absolute inset-y-0 right-0 w-3 rounded-r-[2px]"
@@ -430,8 +431,8 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
               setDrag({ mode: 'r', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime + el.duration, alt: false });
             }}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
+            onPointerMove={(e) => { e.stopPropagation(); onPointerMove(e); }}
+            onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e); }}
           />
         </>
       )}

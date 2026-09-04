@@ -10,15 +10,9 @@ import type { TrackJSON } from '../../lib/mockData';
 import { dbToSlider, sliderToDb } from '../../state/mockMixer';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 
-function toggleTrack(sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') {
-  const { scenes } = useUi.getState();
-  const next = scenes.map((s) =>
-    s.id === sceneId
-      ? { ...s, tracks: s.tracks.map((t) => (t.id === trackId ? { ...t, [field]: !t[field] } : t)) }
-      : s,
-  );
-  useUi.setState({ scenes: next });
-}
+// single source of truth: the undoable store command (headers, strips, bridge)
+const toggleTrack = (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') =>
+  useUi.getState().toggleTrackCmd(sceneId, trackId, field);
 
 function CtrlBtn({ track, sceneId, field, label, tip, on, onCls, children, testid }: {
   track: TrackJSON; sceneId: string; field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform';

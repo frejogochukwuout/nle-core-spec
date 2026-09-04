@@ -570,3 +570,10 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
   0%, 100% { opacity: 0.45; }
   50% { opacity: 1; }
 }
+
+/* escalation strip flash — 3 pulses in 1.2s (design doc §3.1) */
+@keyframes strip-flash {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  25%, 75% { box-shadow: 0 0 0 2px var(--accent-selection); }
+}
+.mixer-strip[data-flash='on'] { animation: strip-flash 1.2s ease-in-out; }

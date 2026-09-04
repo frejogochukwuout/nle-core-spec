@@ -1,7 +1,7 @@
 /* useShortcuts — spec 16 keyboard layer for the shell mock. ONE window
    keydown listener; SHORTCUT_MAP (lib/shortcutMap.ts) is the documented
    twin (cheat sheet). §8.5 text-input guard; JKL multi-tap shuttle with an
-   800 ms accel window; ⌘ = metaKey || ctrlKey (spec 16 conventions), ⌥ =
+   500 ms accel window; ⌘ = metaKey || ctrlKey (spec 16 conventions), ⌥ =
    altKey exactly. F6 region cycling stays in AppShell (spec 18 §11.5). */
 
 import { useEffect, useRef } from 'react';
@@ -9,7 +9,7 @@ import { useUi } from '../state/useUiStore';
 import type { Marker } from '../lib/mockData';
 
 const MARKER_PALETTE: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
-const JKL_WINDOW_MS = 800; // multi-tap accel window (task spec: 800 ms)
+const JKL_WINDOW_MS = 500; // multi-tap accel window (task spec: 500 ms)
 
 interface JklState {
   dir: 1 | -1; // shuttle direction of the last J/L press
@@ -134,8 +134,10 @@ export function useShortcuts(duration: number) {
           if (e.shiftKey) {
             s.setSelection([]);
           } else {
-            const main = s.scenes.find((x) => x.id === s.activeSceneId)?.tracks.find((tr) => tr.kind === 'main');
-            if (main) s.selectTrackElements(main.id, false);
+            // spec 16 §3.3: select all elements in the timeline
+            const sc = s.scenes.find((x) => x.id === s.activeSceneId);
+            const ids = (sc?.tracks ?? []).flatMap((t) => t.elements.map((e2) => e2.id));
+            s.setSelection(ids);
           }
           return;
         }
@@ -153,8 +155,13 @@ export function useShortcuts(duration: number) {
           return;
         }
         if (lower === 'm') {
+          // spec 16 §3.5: ⌘M = focused track mute; master fallback when nothing focused
           e.preventDefault();
-          s.toggleMasterMute();
+          const st = useUi.getState();
+          const sc = st.scenes.find((x) => x.id === st.activeSceneId);
+          const ft = sc?.tracks.find((t) => t.id === st.focusedTrackId && t.kind === 'audio');
+          if (ft) st.toggleTrackCmd(sc!.id, ft.id, 'muted');
+          else st.toggleMasterMute();
           return;
         }
         if (lower === 'g' && e.shiftKey) {
@@ -225,10 +232,13 @@ export function useShortcuts(duration: number) {
         case 'i': s.markIn(); return;
         case 'o': s.markOut(); return;
         case 'm': {
-          if (e.shiftKey) {
+          // spec 16 §3.7: ⇧M = delete marker at playhead; ⌥⇧M = add with cycled color
+          if (e.shiftKey && e.altKey) {
             const color = MARKER_PALETTE[markerColorIdx.current % MARKER_PALETTE.length];
             markerColorIdx.current = (markerColorIdx.current + 1) % MARKER_PALETTE.length;
             s.addMarker(s.playhead, color);
+          } else if (e.shiftKey) {
+            s.removeMarkersAt(s.playhead);
           } else {
             s.addMarker(s.playhead);
           }

@@ -12,15 +12,9 @@ import { dbLabel } from '../../state/mockMixer';
 import { ChannelStrip, AuxStrip, MasterStrip } from './ChannelStrip';
 import { StripMeter } from './MixerPrimitives';
 
-function toggleTrack(sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked') {
-  const { scenes } = useUi.getState();
-  const next = scenes.map((s) =>
-    s.id === sceneId
-      ? { ...s, tracks: s.tracks.map((t) => (t.id === trackId ? { ...t, [field]: !t[field] } : t)) }
-      : s,
-  );
-  useUi.setState({ scenes: next });
-}
+// single source of truth: the undoable store command (headers, strips, bridge)
+const toggleTrack = (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked') =>
+  useUi.getState().toggleTrackCmd(sceneId, trackId, field);
 
 /* ---------- meter bridge (32px) ---------- */
 function Bridge() {
@@ -41,7 +35,7 @@ function Bridge() {
             <StripMeter trackId={t.id} db={strip?.fader ?? -6} height={14} width={5} duckAmount={mixer.ducking[t.id]?.amount ?? 0} label={t.name} />
             {(['muted', 'solo', 'locked'] as const).map((f) => (
               <button key={f} onClick={() => toggleTrack(scene.id, t.id, f)} aria-pressed={t[f]} aria-label={`${f} ${t.name}`}
-                className={`mono flex h-[14px] w-[14px] items-center justify-center rounded-[2px] border text-[9px] font-bold ${t[f] ? (f === 'muted' ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : f === 'solo' ? 'border-[var(--solo)] bg-[var(--solo)] text-black' : 'border-accent bg-accent/20 text-accent') : 'border-strong bg-inset text-tmuted'}`}>
+                className={`mono flex h-[14px] w-[14px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${t[f] ? (f === 'muted' ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : f === 'solo' ? 'border-[var(--solo)] bg-[var(--solo)] text-black' : 'border-accent bg-accent/20 text-accent') : 'border-strong bg-inset text-tmuted'}`}>
                 {f === 'muted' ? 'M' : f === 'solo' ? 'S' : 'L'}
               </button>
             ))}
@@ -51,9 +45,11 @@ function Bridge() {
       {/* master mini-cluster — same store values as the toolbar master (§4.5) */}
       <div className="ml-auto flex shrink-0 items-center gap-1.5 border-l border-hairline px-2">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-tprimary">Master</span>
-        <StripMeter trackId="master-bridge" db={useUi.getState().masterMuted ? -60 : useUi.getState().masterVolume * 66 - 60} height={14} width={5} label="Master" />
+        <BridgeMasterMeter />
+        <BridgeMasterMute />
+        <BridgeMasterVol />
         <button
-          className="mono flex h-[14px] w-[14px] items-center justify-center rounded-[2px] border text-[9px] font-bold"
+          className="mono flex h-[14px] w-[14px] items-center justify-center rounded-[2px] border text-[10px] font-bold"
           style={{ borderColor: 'var(--border-strong)', background: 'var(--bg-inset)', color: 'var(--text-muted)' }}
           onClick={() => useUi.getState().setMixerState('full')}
           aria-label="Expand mixer to full"
@@ -71,6 +67,31 @@ function Bridge() {
       </div>
     </div>
   );
+}
+
+/* bridge master mute + volume — synced with toolbar master (§4.5) */
+function BridgeMasterMute() {
+  const muted = useUi((s) => s.masterMuted);
+  const toggle = useUi((s) => s.toggleMasterMute);
+  return (
+    <button onClick={toggle} aria-pressed={muted} aria-label="Master mute"
+      className={`mono flex h-[14px] w-[14px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${muted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-inset text-tmuted'}`}>M</button>
+  );
+}
+function BridgeMasterVol() {
+  const vol = useUi((s) => s.masterVolume);
+  const setVol = useUi((s) => s.setMasterVolume);
+  return (
+    <input type="range" min={0} max={100} value={Math.round(vol * 100)} onChange={(e) => setVol(+e.target.value / 100)}
+      className="green-fill h-[10px] w-[54px]" style={{ ['--fill' as any]: `${Math.round(vol * 100)}%` }} aria-label="Master volume" />
+  );
+}
+
+/* reactive bridge master meter (not getState-in-render) */
+function BridgeMasterMeter() {
+  const muted = useUi((s) => s.masterMuted);
+  const vol = useUi((s) => s.masterVolume);
+  return <StripMeter trackId="master-bridge" db={muted ? -60 : vol * 66 - 60} height={14} width={5} label="Master" />;
 }
 
 /* ---------- full strip row ---------- */
@@ -95,11 +116,14 @@ function FullRow({ compact }: { compact: boolean }) {
     <div className="flex h-full min-h-0 items-stretch overflow-x-auto border-t border-hairline bg-shell" data-testid="mixer-row-full">
       <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-r border-hairline px-2 py-1">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-tfaint">Mixer</span>
-        <span className="mono text-[9px] text-tfaint">G-layer</span>
+        <span className="mono text-[10px] text-tfaint">G-layer</span>
         <button onClick={() => cycleMixerState()} className="rounded-[2px] px-1 text-[10px] text-tmuted hover:bg-[var(--hover-overlay)] hover:text-tprimary" aria-label="Collapse mixer row">collapse</button>
       </div>
       {audio.map((t) => (
-        <ChannelStrip key={t.id} track={t} sceneId={scene.id} compact={compact} focused={stripFocus === t.id || (flashOn && stripFocus === t.id)} onStripClick={() => setStripFocus(t.id)} />
+        <ChannelStrip key={t.id} track={t} sceneId={scene.id} compact={compact}
+          focused={stripFocus === t.id}
+          flashing={flashOn && stripFocus === t.id}
+          onStripClick={() => setStripFocus(t.id)} />
       ))}
       <AuxStrip bus="a1" compact={compact} />
       <AuxStrip bus="a2" compact={compact} />

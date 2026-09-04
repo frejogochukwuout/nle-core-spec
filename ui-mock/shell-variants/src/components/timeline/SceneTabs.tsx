@@ -75,6 +75,8 @@ export function SceneTabs() {
         className="flex w-[28px] shrink-0 items-center justify-center text-tfaint hover:bg-[var(--hover-overlay)] hover:text-tprimary"
         aria-label="Create scene"
         data-tip="New scene"
+        data-testid="shell-timeline-tab-add"
+        onClick={() => useUi.getState().createScene()}
       >
         <Plus size={13} />
       </button>

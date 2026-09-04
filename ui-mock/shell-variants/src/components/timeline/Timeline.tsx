@@ -23,7 +23,6 @@ export function Timeline() {
   const playhead = useUi((s) => s.playhead);
   const setPlayhead = useUi((s) => s.setPlayhead);
   const snap = useUi((s) => s.snap);
-  const setZoom = useUi((s) => s.setZoom);
   const setSelection = useUi((s) => s.setSelection);
   const addTrack = useUi((s) => s.addTrack);
   const addMarker = useUi((s) => s.addMarker);
@@ -138,30 +137,36 @@ export function Timeline() {
     }
   };
 
-  /* wheel grammar (spec 18 §5A) — zoom anchored at the pointer's time-position */
-  const onWheel = (e: React.WheelEvent) => {
+  /* wheel grammar (spec 18 §5A) — NATIVE listener: React's delegated wheel
+     handlers are passive, so preventDefault would be a silent no-op (browser
+     zoom would hijack ⌘+wheel). Anchored at the pointer's time-position. */
+  const ppsRef = useRef(pxPerSec);
+  ppsRef.current = pxPerSec;
+  useEffect(() => {
     const sc = scrollRef.current;
     if (!sc) return;
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const box = sc.getBoundingClientRect();
-      const anchorX = e.clientX - box.left + sc.scrollLeft;
-      const anchorT = anchorX / pxPerSec;
-      const factor = Math.exp(-e.deltaY * 0.0018); // smooth exponential zoom
-      setZoom(pxPerSec * factor);
-      requestAnimationFrame(() => {
-        const sc2 = scrollRef.current;
-        if (!sc2) return;
-        const newPps = useUi.getState().pxPerSec;
-        sc2.scrollLeft = Math.max(0, anchorT * newPps - (e.clientX - sc2.getBoundingClientRect().left));
-      });
-    } else if (e.shiftKey) {
-      // fast horizontal pan (×10)
-      e.preventDefault();
-      sc.scrollBy({ left: e.deltaY * 10, behavior: 'instant' as ScrollBehavior });
-    }
-    // plain wheel: native vertical scroll (and horizontal trackpad pan)
-  };
+    const onWheelNative = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const box = sc.getBoundingClientRect();
+        const anchorX = e.clientX - box.left + sc.scrollLeft;
+        const anchorT = anchorX / ppsRef.current;
+        const factor = Math.exp(-e.deltaY * 0.0018);
+        useUi.getState().setZoom(ppsRef.current * factor);
+        requestAnimationFrame(() => {
+          const newPps = useUi.getState().pxPerSec;
+          sc.scrollLeft = Math.max(0, anchorT * newPps - (e.clientX - sc.getBoundingClientRect().left));
+        });
+      } else if (e.shiftKey) {
+        // fast horizontal pan (×10)
+        e.preventDefault();
+        sc.scrollBy({ left: e.deltaY * 10, behavior: 'instant' as ScrollBehavior });
+      }
+      // plain wheel: native vertical scroll (and horizontal trackpad pan)
+    };
+    sc.addEventListener('wheel', onWheelNative, { passive: false });
+    return () => sc.removeEventListener('wheel', onWheelNative);
+  }, []);
 
   const laneBg = (kind: TrackJSON['kind']) =>
     kind === 'main' ? 'var(--lane-video)' : kind === 'audio' ? 'var(--lane-audio)' : 'var(--lane-overlay)';
@@ -227,7 +232,6 @@ export function Timeline() {
           }
         }}
         onScroll={onScrollSync}
-        onWheel={onWheel}
         onPointerMove={moveMarquee}
         onPointerUp={finishMarquee}
         onPointerCancel={() => setMarquee(null)}

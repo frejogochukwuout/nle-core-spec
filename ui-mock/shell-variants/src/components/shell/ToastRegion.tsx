@@ -1,7 +1,7 @@
 /* ToastRegion — spec 18 §6.4 notification UX: fixed bottom-right, above the
    12px status strip + 42px app dock (§3.1). role="status" for info/success
    (polite live semantics), role="alert" for errors; the region never steals
-   focus. Auto-dismiss: info 4 s, success 6 s, error/persist stay until the
+   focus. Auto-dismiss: info/success 4 s, persist (warning-class) 6 s, error stays
    × button dismisses them. Max-3 stack is enforced by the store (pushToast).
    `data-testid="shell-toast-<n>"`, n = 0..len-1 counting BOTTOM-UP (the
    newest toast sits at the bottom of the stack and owns index 0).
@@ -26,8 +26,8 @@ const ICON_COLOR: Record<ToastKind, string> = {
   persist: 'var(--mute-warn)', // warning-class: persists, but not an error
 };
 
-/* info 4 s / success 6 s (task §6.4 contract); error + persist: no timer */
-const AUTO_MS: Partial<Record<ToastKind, number>> = { info: 4000, success: 6000 };
+/* spec 18 §6.4: info/success 4 s; warning-class (persist kind) 6 s; error: no timer */
+const AUTO_MS: Partial<Record<ToastKind, number>> = { info: 4000, success: 4000, persist: 6000 };
 
 function ToastCard({ toast, testid, onDismiss }: { toast: Toast; testid: string; onDismiss: (id: number) => void }) {
   const ms = AUTO_MS[toast.kind];

@@ -66,6 +66,7 @@ interface UiState {
   mediaDrag: { mediaId: string; overTrackId: string | null; allowed: boolean } | null;
   focusedTrackId: string | null; // ↑/↓ track focus (spec 16 §3.6)
   toasts: Toast[];
+  saveAttempt: number;
   simulateSaveFail: boolean;
   past: { scenes: SceneJSON[]; activeSceneId: string }[];
   future: { scenes: SceneJSON[]; activeSceneId: string }[];
@@ -123,6 +124,8 @@ interface UiState {
   dismissToast: (id: number) => void;
   setSimulateSaveFail: (v: boolean) => void;
   retrySave: () => void;
+  removeMarkersAt: (time: number) => void;
+  toggleTrackCmd: (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') => void;
   enterAudioFocus: (trigger: 'dock' | 'shortcut' | 'escalation', trackId?: string) => void;
   exitAudioFocus: () => void;
   setMixerState: (m: MixerRowState) => void;
@@ -200,6 +203,7 @@ export const useUi = create<UiState>((set, get) => ({
   mediaDrag: null,
   focusedTrackId: null,
   toasts: [],
+  saveAttempt: 0,
   simulateSaveFail: false,
   past: [],
   future: [],
@@ -209,7 +213,11 @@ export const useUi = create<UiState>((set, get) => ({
   stripFocus: null,
   stripFlash: 0,
 
-  setPage: (p) => set({ page: p }),
+  setPage: (p) => set((s) => ({
+    page: p,
+    // leaving audio focus by ANY route resets the lane boost (design §3.3)
+    ...(s.page === 'audio' && p !== 'audio' ? { audioLaneBoost: false } : {}),
+  })),
   setActiveScene: (id) => set((s) => ({ activeSceneId: id, selection: [] })),
   createScene: () => withHistory(set, get, (scenes) => {
     const n = scenes.length + 1;
@@ -335,7 +343,22 @@ export const useUi = create<UiState>((set, get) => ({
   }),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setSimulateSaveFail: (v) => set({ simulateSaveFail: v }),
-  retrySave: () => set({ simulateSaveFail: false }),
+  retrySave: () => set((s) => ({ simulateSaveFail: false, saveAttempt: s.saveAttempt + 1 })),
+
+  removeMarkersAt: (time) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId)!;
+    const before = sc.markers.length;
+    sc.markers = sc.markers.filter((m) => Math.abs(m.time - snapToFrame(time)) > 1 / 24);
+    if (sc.markers.length === before) return; // nothing removed — no history entry
+    return scenes;
+  }),
+  toggleTrackCmd: (sceneId, trackId, field) => withHistory(set, get, (scenes) => {
+    for (const t of scenes.find((x) => x.id === sceneId)?.tracks ?? []) {
+      if (t.id === trackId) { (t as any)[field] = !(t as any)[field]; break; }
+    }
+    return scenes;
+  }),
 
   // ---- audio focus (design doc §3) ----
   enterAudioFocus: (trigger, trackId) => set((s) => {
@@ -414,6 +437,10 @@ export const useUi = create<UiState>((set, get) => ({
     return scenes;
   }),
   splitElement: (id, time) => withHistory(set, get, (scenes) => {
+    // pre-validate against the CURRENT doc so no-op splits don't pollute history
+    const pre = findEl(get().scenes, id);
+    const preCut = snapToFrame(time);
+    if (!pre || preCut - pre.el.startTime <= 0.1 || preCut - pre.el.startTime >= pre.el.duration - 0.1) return;
     for (const sc of scenes) for (const t of sc.tracks) {
       const idx = t.elements.findIndex((e) => e.id === id);
       if (idx === -1) continue;
@@ -460,6 +487,7 @@ export const useUi = create<UiState>((set, get) => ({
     return scenes;
   }),
   deleteElements: (ids, ripple) => withHistory(set, get, (scenes) => {
+    set((st) => ({ selection: st.selection.filter((id) => !ids.includes(id)) }));
     for (const sc of scenes) for (const t of sc.tracks) {
       const removed = t.elements.filter((e) => ids.includes(e.id));
       t.elements = t.elements.filter((e) => !ids.includes(e.id));
@@ -549,9 +577,9 @@ export const useUi = create<UiState>((set, get) => ({
       waveform: kind === 'audio' ? true : undefined,
       elements: [],
     };
-    // audio tracks render below main (spec 05 §12.1)
+    // audio below main; overlay above main (spec 05 §12.1)
     const mainIdx = sc.tracks.findIndex((t) => t.kind === 'main');
-    const insertAt = kind === 'audio' ? sc.tracks.length : mainIdx + 1;
+    const insertAt = kind === 'audio' ? sc.tracks.length : kind === 'overlay' ? Math.max(0, mainIdx) : mainIdx + 1;
     sc.tracks.splice(insertAt, 0, track);
     return scenes;
   }),
