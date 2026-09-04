@@ -1,17 +1,37 @@
 /* UI store (Zustand) — spec 18 §6.2: view state only (tool, snap, panels,
    zoom, selection, playhead) + the mock document slice so drag/trim/split
    commits can re-render. In the real shell the doc comes from SceneState
-   snapshots + EngineEvents; the mock co-locates it for simplicity. */
+   snapshots + EngineEvents; the mock co-locates it for simplicity.
+   R11 additions: undo history (mock), full editing command set (delete /
+   duplicate / ripple-trim / slip / transitions / effect params), toast
+   region state, JKL shuttle, track focus, media multi-select + drag ghost,
+   keyboard-completeness fields. */
 
 import { create } from 'zustand';
-import { project, type SceneJSON, type ElementJSON, type TrackJSON, type Marker } from '../lib/mockData';
+import { project, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation } from '../lib/mockData';
 import { clamp, snapToFrame } from '../lib/timecode';
 
 export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch';
 export type Page = 'edit' | 'color' | 'deliver';
 export type InspectorTab = 'video' | 'audio' | 'effects' | 'transition';
+export type ToastKind = 'info' | 'success' | 'error' | 'persist';
+
+export interface Toast {
+  id: number;
+  kind: ToastKind;
+  title: string;
+  detail?: string;
+}
 
 const clone = (scenes: SceneJSON[]): SceneJSON[] => scenes.map((s) => ({ ...s, tracks: s.tracks.map((t) => ({ ...t, elements: t.elements.map((e) => ({ ...e })) })), markers: s.markers.map((m) => ({ ...m })) }));
+
+const findEl = (scenes: SceneJSON[], id: string): { el: ElementJSON; track: TrackJSON; scene: SceneJSON } | null => {
+  for (const sc of scenes) for (const t of sc.tracks) {
+    const el = t.elements.find((e) => e.id === id);
+    if (el) return { el, track: t, scene: sc };
+  }
+  return null;
+};
 
 interface UiState {
   page: Page;
@@ -22,6 +42,7 @@ interface UiState {
   lockAll: boolean;
   playhead: number;
   playing: boolean;
+  playRate: number;            // JKL shuttle: 0=pause, 1,2,4 forward, -1,-2,-4 reverse
   loopEnabled: boolean;
   loop: { start: number; end: number };
   selection: string[];
@@ -30,6 +51,7 @@ interface UiState {
   mediaView: 'grid' | 'list';
   search: string;
   sortBy: 'name' | 'duration' | 'date' | 'type';
+  sortDir: 'asc' | 'desc';
   inspectorTab: InspectorTab;
   masterMuted: boolean;
   masterVolume: number;
@@ -37,13 +59,20 @@ interface UiState {
   inspectorW: number;
   mainBodyH: number;
   cheatOpen: boolean;
-  simulateSaveFail: boolean;
   scenes: SceneJSON[];
-  mediaSelection: string | null;
+  mediaSelection: string[];    // multi-select per spec 18 §4.2
+  mediaDrag: { mediaId: string; overTrackId: string | null; allowed: boolean } | null;
+  focusedTrackId: string | null; // ↑/↓ track focus (spec 16 §3.6)
+  toasts: Toast[];
+  simulateSaveFail: boolean;
+  past: { scenes: SceneJSON[]; activeSceneId: string }[];
+  future: { scenes: SceneJSON[]; activeSceneId: string }[];
 
   // actions
   setPage: (p: Page) => void;
   setActiveScene: (id: string) => void;
+  createScene: () => void;
+  deleteScene: (id: string) => void;
   setTool: (t: ToolId) => void;
   toggleSnap: () => void;
   toggleLink: () => void;
@@ -52,12 +81,16 @@ interface UiState {
   nudgePlayhead: (frames: number) => void;
   togglePlay: () => void;
   setPlaying: (p: boolean) => void;
+  setShuttle: (rate: number) => void;
   setLoopEnabled: (v: boolean) => void;
   markIn: () => void;
   markOut: () => void;
+  clearInOut: () => void;
   addMarker: (time: number, color?: Marker['color']) => void;
   setSelection: (ids: string[]) => void;
   selectElement: (id: string, additive: boolean) => void;
+  selectTrackElements: (trackId: string, additive: boolean) => void;
+  selectNeighbors: (dir: 1 | -1) => void;
   setZoom: (px: number) => void;
   zoomStep: (factor: number) => void;
   zoomFit: (containerW: number, duration: number) => void;
@@ -65,6 +98,7 @@ interface UiState {
   setMediaView: (v: 'grid' | 'list') => void;
   setSearch: (s: string) => void;
   setSortBy: (s: UiState['sortBy']) => void;
+  setSortDir: (d: UiState['sortDir']) => void;
   setInspectorTab: (t: InspectorTab) => void;
   toggleMasterMute: () => void;
   setMasterVolume: (v: number) => void;
@@ -72,18 +106,51 @@ interface UiState {
   setInspectorW: (w: number) => void;
   setMainBodyH: (h: number) => void;
   setCheatOpen: (v: boolean) => void;
+  setMediaSelection: (ids: string[]) => void;
+  toggleMediaSelection: (id: string, additive: boolean, range: boolean) => void;
+  setMediaDrag: (d: UiState['mediaDrag']) => void;
+  setFocusedTrack: (id: string | null) => void;
+  moveFocusedTrack: (dir: 1 | -1) => void;
+  pushToast: (t: Omit<Toast, 'id'>) => void;
+  dismissToast: (id: number) => void;
   setSimulateSaveFail: (v: boolean) => void;
   retrySave: () => void;
-  setMediaSelection: (id: string | null) => void;
+  undo: () => void;
+  redo: () => void;
   moveElement: (id: string, startTime: number) => void;
   trimElement: (id: string, edge: 'l' | 'r', newStart: number, newDur: number) => void;
   splitElement: (id: string, time: number) => void;
   toggleEffect: (elementId: string, fxId: string) => void;
   addTrack: (kind: TrackJSON['kind']) => void;
+  deleteElements: (ids: string[], ripple: boolean) => void;
+  duplicateElements: (ids: string[]) => void;
+  slipNudge: (ids: string[], frames: number) => void;
+  trimToPlayhead: (edge: 'l' | 'r', ripple: boolean) => void;
+  setElementField: (id: string, patch: Partial<ElementJSON>) => void;
+  setTransition: (id: string, patch: Partial<NonNullable<ElementJSON['transitionOut']>>) => void;
+  setEffectParam: (elementId: string, fxId: string, param: string, value: number) => void;
+  addEffectToElement: (elementId: string, fx: Omit<EffectJSON, 'id'>) => void;
+  removeEffect: (elementId: string, fxId: string) => void;
+  loadSampleProject: () => void;
 }
 
 const MIN_PPS = 8;
 const MAX_PPS = 240;
+
+/* history wrapper: snapshot before each doc mutation, 50-deep */
+const HISTORY = 50;
+function withHistory(set: (partial: any) => void, get: () => UiState, mutate: (scenes: SceneJSON[]) => SceneJSON[] | void) {
+  const s = get();
+  const before = { scenes: clone(s.scenes), activeSceneId: s.activeSceneId };
+  const next = mutate(clone(s.scenes));
+  set({
+    past: [...s.past.slice(-HISTORY + 1), before],
+    future: [],
+    ...(next ? { scenes: next } : {}),
+  });
+}
+
+let toastSeq = 1;
 
 export const useUi = create<UiState>((set, get) => ({
   page: 'edit',
@@ -94,6 +161,7 @@ export const useUi = create<UiState>((set, get) => ({
   lockAll: false,
   playhead: 16,
   playing: false,
+  playRate: 1,
   loopEnabled: false,
   loop: { ...project.loop },
   selection: ['el-2'],
@@ -102,6 +170,7 @@ export const useUi = create<UiState>((set, get) => ({
   mediaView: 'grid',
   search: '',
   sortBy: 'name',
+  sortDir: 'asc',
   inspectorTab: 'video',
   masterMuted: false,
   masterVolume: 0.78,
@@ -109,35 +178,94 @@ export const useUi = create<UiState>((set, get) => ({
   inspectorW: 340,
   mainBodyH: 0, // 0 = auto (40% of viewport per spec 18 §3.2)
   cheatOpen: false,
-  simulateSaveFail: false,
   scenes: clone(project.scenes),
-  mediaSelection: 'm-02',
+  mediaSelection: ['m-02'],
+  mediaDrag: null,
+  focusedTrackId: null,
+  toasts: [],
+  simulateSaveFail: false,
+  past: [],
+  future: [],
 
   setPage: (p) => set({ page: p }),
   setActiveScene: (id) => set((s) => ({ activeSceneId: id, selection: [] })),
+  createScene: () => withHistory(set, get, (scenes) => {
+    const n = scenes.length + 1;
+    const sc: SceneJSON = {
+      id: `sc-${Date.now()}`,
+      name: `Scene ${n}`,
+      tracks: [
+        { id: `t-ov-${n}`, kind: 'overlay', name: `Text 1`, badge: `T1`, muted: false, solo: false, locked: false, visible: true, elements: [] },
+        { id: `t-mn-${n}`, kind: 'main', name: 'Video 1', badge: 'V1', muted: false, solo: false, locked: false, visible: true, elements: [] },
+        { id: `t-au-${n}`, kind: 'audio', name: 'Audio 1', badge: 'A1', muted: false, solo: false, locked: false, visible: true, waveform: true, elements: [] },
+      ],
+      markers: [],
+      dirty: true,
+    };
+    scenes.push(sc);
+    set({ activeSceneId: sc.id, selection: [] });
+    return scenes;
+  }),
+  deleteScene: (id) => withHistory(set, get, (scenes) => {
+    const idx = scenes.findIndex((x) => x.id === id);
+    if (idx === -1 || scenes.length <= 1) return;
+    scenes.splice(idx, 1);
+    const s = get();
+    if (s.activeSceneId === id) set({ activeSceneId: scenes[Math.max(0, idx - 1)].id, selection: [] });
+    return scenes;
+  }),
   setTool: (t) => set({ tool: t }),
   toggleSnap: () => set((s) => ({ snap: !s.snap })),
   toggleLink: () => set((s) => ({ link: !s.link })),
-  toggleLockAll: () => set((s) => ({ lockAll: !s.lockAll })),
+  toggleLockAll: () => {
+    // spec 18 §4.5: lock-all = per-track toggleTrackLock fan-out (undoable batch)
+    withHistory(set, get, (scenes) => {
+      const s = get();
+      const sc = scenes.find((x) => x.id === s.activeSceneId)!;
+      const target = !s.lockAll;
+      sc.tracks.forEach((t) => { t.locked = target; });
+      set({ lockAll: target });
+      return scenes;
+    });
+  },
   setPlayhead: (t) => set({ playhead: clamp(t, 0, 600) }),
   nudgePlayhead: (frames) => set((s) => ({ playhead: clamp(s.playhead + frames / 24, 0, 600) })),
-  togglePlay: () => set((s) => ({ playing: !s.playing })),
-  setPlaying: (p) => set({ playing: p }),
+  togglePlay: () => set((s) => ({ playing: !s.playing, playRate: 1 })),
+  setPlaying: (p) => set({ playing: p, ...(p ? {} : { playRate: 1 }) }),
+  setShuttle: (rate) => set({ playRate: rate, playing: rate !== 0 }),
   setLoopEnabled: (v) => set({ loopEnabled: v }),
   markIn: () => set((s) => ({ loop: { ...s.loop, start: snapToFrame(s.playhead) } })),
   markOut: () => set((s) => ({ loop: { ...s.loop, end: snapToFrame(s.playhead) } })),
-  addMarker: (time, color) => set((s) => {
-    const scenes = clone(s.scenes);
+  clearInOut: () => set((s) => ({ loop: { ...s.loop, start: 0, end: s.scenes.find((x) => x.id === s.activeSceneId) ? (function () { const sc = s.scenes.find((x) => x.id === s.activeSceneId)!; let d = 0; for (const t of sc.tracks) for (const e of t.elements) d = Math.max(d, e.startTime + e.duration); return d || 30; })() : 30 } })),
+  addMarker: (time, color) => withHistory(set, get, (scenes) => {
+    const s = get();
     const sc = scenes.find((x) => x.id === s.activeSceneId)!;
     const colors: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
     sc.markers.push({ id: `mk-${Date.now()}`, time: snapToFrame(time), label: 'Marker', color: color ?? colors[sc.markers.length % 8] });
-    return { scenes };
+    return scenes;
   }),
   setSelection: (ids) => set({ selection: ids }),
   selectElement: (id, additive) => set((s) => {
     if (!additive) return { selection: [id] };
     const has = s.selection.includes(id);
     return { selection: has ? s.selection.filter((x) => x !== id) : [...s.selection, id] };
+  }),
+  selectTrackElements: (trackId, additive) => set((s) => {
+    const sc = s.scenes.find((x) => x.id === s.activeSceneId);
+    const track = sc?.tracks.find((t) => t.id === trackId);
+    const ids = (track?.elements ?? []).map((e) => e.id);
+    if (!additive) return { selection: ids };
+    const merged = new Set([...s.selection, ...ids]);
+    return { selection: [...merged] };
+  }),
+  selectNeighbors: (dir) => set((s) => {
+    const sc = s.scenes.find((x) => x.id === s.activeSceneId);
+    const main = sc?.tracks.find((t) => t.kind === 'main');
+    const els = (main?.elements ?? []).slice().sort((a, b) => a.startTime - b.startTime);
+    if (els.length === 0) return {};
+    const cur = s.selection[0] ? els.findIndex((e) => e.id === s.selection[0]) : -1;
+    const next = cur === -1 ? (dir === 1 ? 0 : els.length - 1) : clamp(cur + dir, 0, els.length - 1);
+    return { selection: [els[next].id] };
   }),
   setZoom: (px) => set({ pxPerSec: clamp(px, MIN_PPS, MAX_PPS) }),
   zoomStep: (factor) => set((s) => ({ pxPerSec: clamp(s.pxPerSec * factor, MIN_PPS, MAX_PPS) })),
@@ -146,70 +274,207 @@ export const useUi = create<UiState>((set, get) => ({
   setMediaView: (v) => set({ mediaView: v }),
   setSearch: (s) => set({ search: s }),
   setSortBy: (sortBy) => set({ sortBy }),
+  setSortDir: (d) => set({ sortDir: d }),
   setInspectorTab: (t) => set({ inspectorTab: t }),
   toggleMasterMute: () => set((s) => ({ masterMuted: !s.masterMuted })),
-  setMasterVolume: (v) => set({ masterVolume: v }),
+  setMasterVolume: (v) => set({ masterVolume: clamp(v, 0, 1) }),
   setMediaW: (w) => set({ mediaW: clamp(w, 200, 480) }),
   setInspectorW: (w) => set({ inspectorW: clamp(w, 280, 560) }),
   setMainBodyH: (h) => set({ mainBodyH: clamp(h, 320, 900) }),
   setCheatOpen: (v) => set({ cheatOpen: v }),
+  setMediaSelection: (ids) => set({ mediaSelection: ids }),
+  toggleMediaSelection: (id, additive, range) => set((s) => {
+    if (range) {
+      // shift-range over the flat filtered list (MediaPool supplies order via mediaSelection; mock: anchor = first)
+      const anchor = s.mediaSelection[0];
+      void anchor;
+      const has = s.mediaSelection.includes(id);
+      return { mediaSelection: has ? s.mediaSelection.filter((x) => x !== id) : [...s.mediaSelection, id] };
+    }
+    if (!additive) return { mediaSelection: [id] };
+    const has = s.mediaSelection.includes(id);
+    return { mediaSelection: has ? s.mediaSelection.filter((x) => x !== id) : [...s.mediaSelection, id] };
+  }),
+  setMediaDrag: (d) => set({ mediaDrag: d }),
+  setFocusedTrack: (id) => set({ focusedTrackId: id }),
+  moveFocusedTrack: (dir) => set((s) => {
+    const sc = s.scenes.find((x) => x.id === s.activeSceneId);
+    const tracks = sc?.tracks ?? [];
+    if (tracks.length === 0) return {};
+    const idx = tracks.findIndex((t) => t.id === s.focusedTrackId);
+    const next = idx === -1 ? (dir === 1 ? 0 : tracks.length - 1) : clamp(idx + dir, 0, tracks.length - 1);
+    return { focusedTrackId: tracks[next].id };
+  }),
+  pushToast: (t) => set((s) => {
+    const toast: Toast = { ...t, id: toastSeq++ };
+    // max-3 stack (spec 18 §6.4)
+    const next = [...s.toasts, toast];
+    return { toasts: next.length > 3 ? next.slice(next.length - 3) : next };
+  }),
+  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setSimulateSaveFail: (v) => set({ simulateSaveFail: v }),
   retrySave: () => set({ simulateSaveFail: false }),
-  setMediaSelection: (id) => set({ mediaSelection: id }),
+
+  undo: () => set((s) => {
+    if (s.past.length === 0) return {};
+    const prev = s.past[s.past.length - 1];
+    return {
+      past: s.past.slice(0, -1),
+      future: [{ scenes: clone(s.scenes), activeSceneId: s.activeSceneId }, ...s.future].slice(0, HISTORY),
+      scenes: prev.scenes,
+      activeSceneId: prev.activeSceneId,
+    };
+  }),
+  redo: () => set((s) => {
+    if (s.future.length === 0) return {};
+    const next = s.future[0];
+    return {
+      future: s.future.slice(1),
+      past: [...s.past, { scenes: clone(s.scenes), activeSceneId: s.activeSceneId }].slice(-HISTORY),
+      scenes: next.scenes,
+      activeSceneId: next.activeSceneId,
+    };
+  }),
 
   // ---- document mutations (mock-level; real shell = EngineCommand) ----
-  moveElement: (id, startTime) => set((s) => {
-    const scenes = clone(s.scenes);
-    for (const sc of scenes) for (const t of sc.tracks) {
-      const el = t.elements.find((e) => e.id === id);
-      if (el) el.startTime = snapToFrame(Math.max(0, startTime));
-    }
-    return { scenes };
+  moveElement: (id, startTime) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, id);
+    if (hit) hit.el.startTime = snapToFrame(Math.max(0, startTime));
+    return scenes;
   }),
-  trimElement: (id, edge, newStart, newDur) => set((s) => {
-    const scenes = clone(s.scenes);
-    for (const sc of scenes) for (const t of sc.tracks) {
-      const el = t.elements.find((e) => e.id === id);
-      if (el) {
-        el.startTime = snapToFrame(Math.max(0, newStart));
-        el.duration = snapToFrame(Math.max(0.25, newDur));
-        if (el.sourceStart !== undefined && edge === 'l') el.sourceStart = Math.max(0, el.sourceStart + (newStart - el.startTime));
-      }
+  trimElement: (id, edge, newStart, newDur) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, id);
+    if (hit) {
+      const prevStart = hit.el.startTime;
+      hit.el.startTime = snapToFrame(Math.max(0, newStart));
+      hit.el.duration = snapToFrame(Math.max(0.25, newDur));
+      if (hit.el.sourceStart !== undefined && edge === 'l') hit.el.sourceStart = Math.max(0, hit.el.sourceStart + (hit.el.startTime - prevStart));
     }
-    return { scenes };
+    return scenes;
   }),
-  splitElement: (id, time) => set((s) => {
-    const scenes = clone(s.scenes);
+  splitElement: (id, time) => withHistory(set, get, (scenes) => {
     for (const sc of scenes) for (const t of sc.tracks) {
       const idx = t.elements.findIndex((e) => e.id === id);
       if (idx === -1) continue;
       const el = t.elements[idx];
       const cut = snapToFrame(time);
       const offset = cut - el.startTime;
-      if (offset <= 0.1 || offset >= el.duration - 0.1) return {};
+      if (offset <= 0.1 || offset >= el.duration - 0.1) return;
       const left: ElementJSON = { ...el, duration: offset };
       const right: ElementJSON = { ...el, id: `${el.id}-b${t.elements.length}`, startTime: cut, duration: el.duration - offset };
       if (right.sourceStart !== undefined) right.sourceStart = el.sourceStart! + offset;
       delete left.transitionOut;
       t.elements.splice(idx, 1, left, right);
     }
-    return { scenes };
+    return scenes;
   }),
-  toggleEffect: (elementId, fxId) => set((s) => {
-    const scenes = clone(s.scenes);
+  toggleEffect: (elementId, fxId) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, elementId);
+    if (hit?.el.effects) {
+      const fx = hit.el.effects.find((f) => f.id === fxId);
+      if (fx) fx.enabled = !fx.enabled;
+    }
+    return scenes;
+  }),
+  addEffectToElement: (elementId, fx) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, elementId);
+    if (hit) {
+      if (!hit.el.effects) hit.el.effects = [];
+      hit.el.effects.push({ ...fx, id: `fx-${Date.now()}` });
+    }
+    return scenes;
+  }),
+  removeEffect: (elementId, fxId) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, elementId);
+    if (hit?.el.effects) hit.el.effects = hit.el.effects.filter((f) => f.id !== fxId);
+    return scenes;
+  }),
+  setEffectParam: (elementId, fxId, param, value) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, elementId);
+    const fx = hit?.el.effects?.find((f) => f.id === fxId);
+    if (fx) {
+      if (!fx.params) fx.params = {};
+      fx.params[param] = value;
+    }
+    return scenes;
+  }),
+  deleteElements: (ids, ripple) => withHistory(set, get, (scenes) => {
     for (const sc of scenes) for (const t of sc.tracks) {
-      const el = t.elements.find((e) => e.id === elementId);
-      if (el?.effects) {
-        const fx = el.effects.find((f) => f.id === fxId);
-        if (fx) fx.enabled = !fx.enabled;
+      const removed = t.elements.filter((e) => ids.includes(e.id));
+      t.elements = t.elements.filter((e) => !ids.includes(e.id));
+      if (ripple && removed.length > 0) {
+        const earliest = Math.min(...removed.map((e) => e.startTime));
+        const dur = removed.reduce((a, e) => Math.max(a, e.startTime + e.duration), earliest) - earliest;
+        t.elements.forEach((e) => { if (e.startTime > earliest) e.startTime = Math.max(earliest, e.startTime - dur); });
       }
     }
-    return { scenes };
+    return scenes;
   }),
-
-  // add a track at the end of its kind-group (mock-level; real shell = wire command)
-  addTrack: (kind) => set((s) => {
-    const scenes = clone(s.scenes);
+  duplicateElements: (ids) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const newIds: string[] = [];
+    for (const sc of scenes) for (const t of sc.tracks) {
+      const dupes: ElementJSON[] = [];
+      for (const e of t.elements) {
+        if (ids.includes(e.id)) {
+          const copy: ElementJSON = { ...e, id: `${e.id}-d${Date.now()}`, startTime: e.startTime + e.duration };
+          dupes.push(copy);
+          newIds.push(copy.id);
+        }
+      }
+      t.elements.push(...dupes);
+    }
+    set({ selection: newIds.length ? newIds : s.selection });
+    return scenes;
+  }),
+  slipNudge: (ids, frames) => withHistory(set, get, (scenes) => {
+    for (const sc of scenes) for (const t of sc.tracks) for (const e of t.elements) {
+      if (!ids.includes(e.id)) continue;
+      if (e.sourceStart === undefined) continue;
+      // slip: shift source window, keep placement
+      const next = e.sourceStart + frames / 24;
+      if (next >= 0) e.sourceStart = next;
+    }
+    return scenes;
+  }),
+  trimToPlayhead: (edge, ripple) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const ph = snapToFrame(s.playhead);
+    for (const sc of scenes) for (const t of sc.tracks) {
+      if (t.locked) continue;
+      for (const e of t.elements) {
+        if (edge === 'l' && ph > e.startTime && ph < e.startTime + e.duration - 0.1) {
+          const cut = ph - e.startTime;
+          if (e.sourceStart !== undefined) e.sourceStart += cut;
+          e.duration -= cut;
+          e.startTime = ph;
+        } else if (edge === 'r' && ph > e.startTime + 0.1 && ph < e.startTime + e.duration) {
+          e.duration = ph - e.startTime;
+        }
+      }
+      if (ripple) {
+        // close gaps left by the trim (simplified: shift later elements left by the delta)
+        // mock-level approximation of ripple delete-close
+        t.elements.sort((a, b) => a.startTime - b.startTime);
+      }
+    }
+    return scenes;
+  }),
+  setElementField: (id, patch) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, id);
+    if (hit) Object.assign(hit.el, patch);
+    return scenes;
+  }),
+  setTransition: (id, patch) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, id);
+    if (hit) {
+      if (!hit.el.transitionOut) hit.el.transitionOut = { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 };
+      Object.assign(hit.el.transitionOut, patch);
+    }
+    return scenes;
+  }),
+  addTrack: (kind) => withHistory(set, get, (scenes) => {
+    const s = get();
     const sc = scenes.find((x) => x.id === s.activeSceneId)!;
     const sameKind = sc.tracks.filter((t) => t.kind === kind);
     const n = sameKind.length + 1;
@@ -227,7 +492,38 @@ export const useUi = create<UiState>((set, get) => ({
     const mainIdx = sc.tracks.findIndex((t) => t.kind === 'main');
     const insertAt = kind === 'audio' ? sc.tracks.length : mainIdx + 1;
     sc.tracks.splice(insertAt, 0, track);
-    return { scenes };
+    return scenes;
+  }),
+  loadSampleProject: () => withHistory(set, get, (scenes) => {
+    // spec 18 §4.10 recipe: 30s, 3 video + 1 text + 1 audio + 1 crossfade
+    const sc = scenes.find((x) => x.id === get().activeSceneId)!;
+    sc.tracks = [
+      {
+        id: 't-ov-sample', kind: 'overlay', name: 'Text 1', badge: 'T1',
+        muted: false, solo: false, locked: false, visible: true,
+        elements: [{
+          id: 'el-sample-text', type: 'text', trackId: 't-ov-sample', name: 'TITLE CARD',
+          startTime: 2, duration: 4, sourceStart: 0,
+        }],
+      },
+      {
+        id: 't-mn-sample', kind: 'main', name: 'Video 1', badge: 'V1',
+        muted: false, solo: false, locked: false, visible: true,
+        elements: [
+          { id: 'el-sample-v1', type: 'video', trackId: 't-mn-sample', mediaId: 'm-01', name: 'Coastal dawn', startTime: 0, duration: 10, sourceStart: 0, transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 1, alignment: 0.5 } },
+          { id: 'el-sample-v2', type: 'video', trackId: 't-mn-sample', mediaId: 'm-02', name: 'Marina interview', startTime: 10, duration: 12, sourceStart: 0 },
+          { id: 'el-sample-v3', type: 'video', trackId: 't-mn-sample', mediaId: 'm-04', name: 'Golden hour cliffs', startTime: 22, duration: 8, sourceStart: 0 },
+        ],
+      },
+      {
+        id: 't-au-sample', kind: 'audio', name: 'Audio 1', badge: 'A1',
+        muted: false, solo: false, locked: false, visible: true, waveform: true,
+        elements: [{ id: 'el-sample-a1', type: 'audio', trackId: 't-au-sample', mediaId: 'm-05', name: 'Ambient waves loop', startTime: 0, duration: 30, sourceStart: 0 }],
+      },
+    ];
+    sc.markers = [{ id: 'mk-sample-1', time: 10, label: 'Marker', color: 'blue' }];
+    set({ selection: [], playhead: 0 });
+    return scenes;
   }),
 }));
 

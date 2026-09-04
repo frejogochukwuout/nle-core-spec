@@ -21,11 +21,29 @@ export interface MediaRecord {
   offline?: boolean;  // spec 18 §4.2 missing-asset state
 }
 
+export const TRANSITION_PRESENTATIONS = [
+  'Cross Dissolve', 'Dip to Black', 'Dip to White', 'Fade In', 'Fade Out',
+  'Wipe Left', 'Wipe Right', 'Wipe Up', 'Wipe Down',
+  'Push Left', 'Push Right', 'Push Up', 'Push Down',
+  'Slide Left', 'Slide Right', 'Slide Up', 'Slide Down',
+  'Zoom In', 'Zoom Out', 'Spin Blur', 'Center Wipe',
+  'Blinds', 'Checkerboard', 'Circle Wipe', 'Diamond Wipe',
+  'Iris Open', 'Iris Close',
+] as const;
+export type TransitionPresentation = (typeof TRANSITION_PRESENTATIONS)[number];
+
 export interface TransitionJSON {
   type: 'crossfade';
-  presentation: 'fade' | 'dip-to-black' | 'wipe-left' | 'push-left';
+  presentation: TransitionPresentation;
   duration: number; // seconds
   alignment: number; // 0..1, cut-centered at 0.5
+}
+
+export interface EffectJSON {
+  id: string;
+  name: string;
+  enabled: boolean;
+  params?: Record<string, number>;
 }
 
 export interface ElementJSON {
@@ -43,7 +61,7 @@ export interface ElementJSON {
   opacity?: number;
   audioFadeIn?: number;
   audioFadeOut?: number;
-  effects?: { id: string; name: string; enabled: boolean }[];
+  effects?: EffectJSON[];
   transitionOut?: TransitionJSON;
   linkedTo?: string; // A/V link (spec 05 §12.3)
 }
@@ -75,6 +93,14 @@ export interface SceneJSON {
   tracks: TrackJSON[];
   markers: Marker[];
 }
+
+export const EFFECT_DEFS: { name: string; params: { key: string; label: string; min: number; max: number; step: number; unit?: string }[] }[] = [
+  { name: 'Gaussian Blur', params: [{ key: 'radius', label: 'Radius', min: 0, max: 100, step: 1, unit: 'px' }] },
+  { name: 'Motion Blur', params: [{ key: 'length', label: 'Length', min: 0, max: 100, step: 1, unit: 'px' }, { key: 'angle', label: 'Angle', min: 0, max: 360, step: 1, unit: '°' }] },
+  { name: 'Vignette', params: [{ key: 'amount', label: 'Amount', min: 0, max: 100, step: 1, unit: '%' }, { key: 'feather', label: 'Feather', min: 0, max: 100, step: 1, unit: '%' }] },
+  { name: 'Glow', params: [{ key: 'intensity', label: 'Intensity', min: 0, max: 100, step: 1, unit: '%' }, { key: 'radius', label: 'Radius', min: 0, max: 100, step: 1, unit: 'px' }] },
+  { name: 'Chromatic Aberration', params: [{ key: 'offset', label: 'Offset', min: 0, max: 50, step: 0.5, unit: 'px' }] },
+];
 
 export interface Project {
   metadata: { name: string; status: string };
@@ -123,7 +149,7 @@ const scene1: SceneJSON = {
         {
           id: 'el-2', type: 'video', trackId: 'tr-main', name: 'Marina interview', startTime: 8.5, duration: 8.5,
           sourceStart: 3.0, sourceDuration: 8.5, mediaId: 'm-02', speed: 1, opacity: 1,
-          transitionOut: { type: 'crossfade', presentation: 'fade', duration: 0.75, alignment: 0.5 },
+          transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.75, alignment: 0.5 },
           linkedTo: 'el-7',
         },
         {

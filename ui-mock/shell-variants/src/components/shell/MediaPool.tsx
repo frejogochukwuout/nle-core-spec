@@ -50,7 +50,7 @@ function Thumb({ m, small = false }: { m: MediaRecord; small?: boolean }) {
   );
 }
 
-function MediaCard({ m, selected, onSelect }: { m: MediaRecord; selected: boolean; onSelect: () => void }) {
+function MediaCard({ m, selected, onSelect, onReveal }: { m: MediaRecord; selected: boolean; onSelect: () => void; onReveal: () => void }) {
   const badge = typeBadge(m);
   return (
     <button
@@ -58,7 +58,7 @@ function MediaCard({ m, selected, onSelect }: { m: MediaRecord; selected: boolea
       aria-selected={selected}
       aria-label={`${m.name}, ${m.duration !== null ? tc(m.duration) : 'still'}`}
       onClick={onSelect}
-      onDoubleClick={onSelect}
+      onDoubleClick={onReveal}
       className={`group flex flex-col overflow-hidden rounded-[var(--radius)] border bg-inset text-left transition-colors ${
         selected ? 'border-accent shadow-[inset_0_0_0_1px_var(--accent-selection)]' : 'border-soft hover:border-strong'
       }`}
@@ -87,7 +87,7 @@ function MediaCard({ m, selected, onSelect }: { m: MediaRecord; selected: boolea
   );
 }
 
-function MediaRow({ m, selected, onSelect }: { m: MediaRecord; selected: boolean; onSelect: () => void }) {
+function MediaRow({ m, selected, onSelect, onReveal }: { m: MediaRecord; selected: boolean; onSelect: () => void; onReveal: () => void }) {
   const badge = typeBadge(m);
   return (
     <button
@@ -95,6 +95,7 @@ function MediaRow({ m, selected, onSelect }: { m: MediaRecord; selected: boolean
       aria-selected={selected}
       aria-label={m.name}
       onClick={onSelect}
+      onDoubleClick={onReveal}
       className={`flex items-center gap-2.5 rounded-[var(--radius)] border px-2 py-1.5 text-left transition-colors ${
         selected ? 'border-accent bg-[color-mix(in_srgb,var(--accent-selection)_10%,transparent)]' : 'border-transparent hover:border-soft hover:bg-[var(--hover-overlay)]'
       }`}
@@ -154,7 +155,10 @@ export function MediaPool() {
   };
 
   const select = (m: MediaRecord) => {
-    setMediaSelection(m.id);
+    setMediaSelection([m.id]);
+  };
+  const reveal = (m: MediaRecord) => {
+    setMediaSelection([m.id]);
     revealFirstUse(m);
   };
 
@@ -235,11 +239,11 @@ export function MediaPool() {
           </div>
         ) : mediaView === 'grid' ? (
           <div className="grid grid-cols-2 gap-2">
-            {items.map((m) => <MediaCard key={m.id} m={m} selected={mediaSelection === m.id} onSelect={() => select(m)} />)}
+            {items.map((m) => <MediaCard key={m.id} m={m} selected={mediaSelection.includes(m.id)} onSelect={() => select(m)} onReveal={() => reveal(m)} />)}
           </div>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {items.map((m) => <MediaRow key={m.id} m={m} selected={mediaSelection === m.id} onSelect={() => select(m)} />)}
+            {items.map((m) => <MediaRow key={m.id} m={m} selected={mediaSelection.includes(m.id)} onSelect={() => select(m)} onReveal={() => reveal(m)} />)}
           </div>
         )}
       </div>
