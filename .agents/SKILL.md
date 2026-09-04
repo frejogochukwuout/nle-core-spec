@@ -702,6 +702,18 @@ Output: integration review report with per-check verdict + issues list.
 
 ---
 
+## R13 meta-learnings (test + review-gate round)
+
+34. **Writing the test suite IS a review pass.** Five real bugs surfaced while writing tests (shallow-clone undo, no-op history pollution, a documented-but-dead shortcut) — before any reviewer looked at the code. Write the suite FIRST; treat every "why does this test fail" as a finding, not a test bug.
+
+35. **Verify the DEPLOYED artifact, not the fix claim.** A fix sub-agent reported "dist rebuilt, code-verified" — the verification wave proved the bundle was still pre-fix (mtime + literal markers). For any build step: grep the OUTPUT for a code marker (comments get stripped), then restart, then re-check. Claims are not artifacts.
+
+36. **Review waves converge on different strata.** Wave 1 (code/UX/test/docs) found store-contract honesty issues; the maintainer's live pass found interaction bugs (targeting, hotkey collisions) that static review missed; the verification wave found the deployment gap. Rotate reviewer MODES (static / live-interactive / verification) rather than running the same mode twice.
+
+37. **Open the PR EARLY in the fix loop.** CodeRabbit + Codex comments arrived while sub-agent waves ran; the fix batches could fold all sources into one dedup corpus per commit. A PR opened at the end would have serialized three review sources instead of parallelizing them.
+
+38. **Tests that pin behavior need behavior-level assertions.** The PageUp bug survived a test that only asserted `playhead < 17` — a weak bound that a completely broken implementation satisfies. Assert exact landings (`toBeCloseTo(8.49, 4)`) wherever the math is deterministic.
+
 ## Summary
 
 The core insight from this session: **multi-round scout → audit → revise → integration review produces dramatically higher-quality specs than single-pass writing.** The audit step is non-negotiable — scouts make mistakes (especially fabrication), and only a fresh skeptical reader catches them. The integration step catches cross-stream inconsistencies that no individual scout could see.

@@ -6,7 +6,9 @@
 
 ---
 
-## UI/UX direction track (R10 `390fd48` → R11 `e0eaed2` → R12 `5550902`+)
+## UI/UX direction track (R10 `390fd48` → R11 `e0eaed2` → R12 `5550902`+ → R13 `b8d504f`+)
+
+**R13 (2026-09-04) landed (test + PR + review-gate round):** the mock got its **test program** — Vitest 5 + RTL + jsdom, **33 files / 511 tests**, co-located `*.test.tsx`, per-test store-reset contract (`src/test/setup.ts`), provider-stack helpers; PR **#1** opened (base `ui-baseline` @ `ce16d33`, head `main`, 143 files ≤ 300) which pulled in **CodeRabbit + Codex + three maintainer review waves**; five fix rounds closed every P1/P2 (only P3s remain, deliberately): store bug-hunt (deep-clone undo, no-op history pollution, dead ⌥⇧M, setMixerTrack partial strips, lockAll/selection-in-undo, locked-track law, ripple trim + target constraint, id collisions, range-param stub), keyboard/a11y parity (Tab scoping, slider grammar on scrub rows, splitters/menu tabs/cards keyboard-operable, danger-dialog cancel-first, violet AA), §4.9 menu enumerations completed, §6.4 keyboard multi-delete confirm, annotakit hotkeys remapped off the shell's keys + vendor functional fixes with dist rebuilt. **Direction-2 output: `.agents/SPEC-REVISION-CANDIDATES.md` + GitHub issue #2 (17 entries: 6 spec-vs-spec conflicts, 4 missing canon answers, 9 mock registrations C1-C9, seal staleness flags).**
 
 **R12 (2026-09-04) landed (user-feedback round):** mixer relocated to a RIGHT-SIDE DOCK beside the multi-track lanes (design doc v2.2 — 3 states preserved: 44px bridge rail / full strip row with fill-height faders); inspector seam direction fixed (was inverted+runaway) + Inspector/MediaPool fill their columns (w-full); playhead triangle re-centered on the bar centerline (was 2px off); **Storybook 10.6 + annotakit 0.4.0** (vendored, pin-comments with component/file:line digests, sqlite store, GitHub issue mirror ACTIVE) served at the platform preview URL via `storybook dev --port 3000` under a supervisor; **71 stories** (every shell region, chrome strip, timeline leaf, mixer surface, page, overlay, primitive); viewer overlays + safe-area guides became store-level UI prefs (real 90/80% guides); review gates: code review NO MAJORS + spec review 1 major (type floor) — all closed.
 
@@ -15,10 +17,10 @@
 `ui-mock/shell-variants/` — interactive TSX mockup of the spec-18 shell (React 19 + Vite per 00 §4) with a ctrl+` Variant Explorer: direction presets **A Resolve Classic** (spec-canonical), **B Modern Studio** (elevated dark, violet), **C Editorial Light** (tests the 18 §8.14 rejection). Three sub-agent review rounds (pro-editor / product-designer / a11y+spec) → R3 verdict: **NO MAJORS REMAIN — valid for user review**. Mock-level interactions live (drag/trim/split with snap, playhead, search, variants persist + share links).
 
 **Next steps (in order):**
-1. **USER REACTION (the gate)** — tour the three presets AND the new Audio focus mode (dock "Audio" / ⌘4); answer the 7 questions in DESIGN-audio-mode.md §11 (focus-mode weight, mixer states, levels redundancy, channel editor, escalation, sound library). The direction decision (A/B/C/hybrid + audio-focus shape) gates everything below.
-2. Feed the decisions into the shell-variants token layer + mixer shape; tune as directed.
-3. P1 wiring (spec 14) inherits the chosen token set + component structure + `shell-*` testids; the audio-focus surfaces become the spec-18 mixer-panel section the seal round must write.
-4. Fold the spec findings into the SEAL round (items 10-13 + the R11 items below).
+1. **USER REACTION remains the gate** — now with TWO surfaces: the PR (#1, CodeRabbit review + the candidates issue #2) and the live pins (public URL → annotakit → GH issue mirror). Tour the presets + Audio focus; answer DESIGN-audio-mode.md §11 q1-q9.
+2. **PR #1 close-out** — remaining open items are P3-only (the maintainer's corpus lists them; batch as a polish round or fold into wiring); re-run CodeRabbit on the final commit; merge or keep open per the user's call.
+3. **Seal round inherits THREE new inputs:** seal items 10-25 + `SPEC-REVISION-CANDIDATES.md` (17 entries — A1-A6 conflicts need pick-one amendments, B1-B4 missing canon answers, C1-C9 registrations) + the R13 test suite as the regression harness for any wiring.
+4. P1 wiring (spec 14) inherits the token set + component structure + `shell-*` testids + the 511-test suite; the audio-focus surfaces become the spec-18 mixer-panel section the seal round must write.
 
 **Seal additions from the mockup reviews (spec-side findings, not mock bugs):**
 10. **18 §9 playhead provenance error** — table says `--accent-selection #e8b34b (mock playhead gold)` but the davinci mock's playhead is RED (#fa1024, `.playhead-line`); spec must decide the canonical playhead treatment (mock follows the actual mock: red time indicators, gold = state/selection).
@@ -27,7 +29,7 @@
 13. **18 §3.1 12px status strip vs §11.12 11px type floor** — internally in tension; mock used 12px.
 14. **R11: workspace keymap mismatch** — spec 16 §3.8/App A binds ⌘3 = Effects workspace, no Deliver binding; spec 18 dock ships Edit/Color/Deliver. The mock binds ⌘4 (per 16) + ⌘1-3 (per 18 tooltips). Seal must reconcile.
 15. **R11/R12: F6 region count** — 18 §11.5 enumerates six regions; the mixer DOCK is a seventh (mock registers it conditionally — visible states only, no invisible collapsed stop; amendment or fold-into-timeline decision).
-16. **R11: meter deferral (18 §8.13) vs always-on master micro-meter + header micro-meters** — seal decides whether these count as "meters panel."
+16. **R11: meter deferral (18 §8.13) vs always-on master micro-meter + header micro-meters** — seal decides whether these count as "meters panel." **(R13 flag: STALE — header micro-meters do not exist in the code; re-scope to the master micro-meter or re-implement.)**
 17. **R11: automation-curve UX home (20 §12.1)** — the mock ships a visible placeholder (Automation — M2 watermark); the seal round inherits the question.
 18. **R11: the C15 re-litigation needs formalizing** — DESIGN-audio-mode.md §9 argues it (D13 postdates the ruling); the seal round should either ratify the mixer surface as the spec-18 mixer-panel section or reject with the ledger. **R12: the mixer is now a right-side DOCK (v2.2) — the ratification question now carries the dock placement.**
 19. **R12: strip-family 10px type floor exception** — the console vocabulary (strips/rail/guides) runs 10px against §11.12's categorical 11px (R11 accepted 10px-in-strips informally; now needs formal ratification or a 11px pass).
