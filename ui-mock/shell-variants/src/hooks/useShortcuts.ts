@@ -219,6 +219,18 @@ export function useShortcuts(duration: number) {
           s.clearInOut();
           return;
         }
+        if (e.code === 'KeyM' && e.shiftKey) {
+          // ⌥⇧M — add marker with cycled color (spec 16 §3.7). Lives HERE, not
+          // in the plain-key switch below: the switch is unreachable under
+          // alt, and e.key is remapped on Mac layouts so e.code is the only
+          // stable signal. (R13: previously unreachable — the cheat sheet
+          // documented the binding but it never fired; caught by tests.)
+          e.preventDefault();
+          const color = MARKER_PALETTE[markerColorIdx.current % MARKER_PALETTE.length];
+          markerColorIdx.current = (markerColorIdx.current + 1) % MARKER_PALETTE.length;
+          s.addMarker(s.playhead, color);
+          return;
+        }
         return;
       }
 
@@ -234,12 +246,9 @@ export function useShortcuts(duration: number) {
         case 'i': s.markIn(); return;
         case 'o': s.markOut(); return;
         case 'm': {
-          // spec 16 §3.7: ⇧M = delete marker at playhead; ⌥⇧M = add with cycled color
-          if (e.shiftKey && e.altKey) {
-            const color = MARKER_PALETTE[markerColorIdx.current % MARKER_PALETTE.length];
-            markerColorIdx.current = (markerColorIdx.current + 1) % MARKER_PALETTE.length;
-            s.addMarker(s.playhead, color);
-          } else if (e.shiftKey) {
+          // spec 16 §3.7: ⇧M = delete marker at playhead; plain M = add marker.
+          // (⌥⇧M add-with-color is handled up in the alt block — unreachable here.)
+          if (e.shiftKey) {
             s.removeMarkersAt(s.playhead);
           } else {
             s.addMarker(s.playhead);

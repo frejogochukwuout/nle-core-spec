@@ -25,7 +25,17 @@ export interface Toast {
   detail?: string;
 }
 
-const clone = (scenes: SceneJSON[]): SceneJSON[] => scenes.map((s) => ({ ...s, tracks: s.tracks.map((t) => ({ ...t, elements: t.elements.map((e) => ({ ...e })) })), markers: s.markers.map((m) => ({ ...m })) }));
+/* deep structural clone of the doc slice: nested element arrays (effects,
+   transitionOut, effect params) are cloned too, so undo/redo round-trips
+   nested mutations (effect toggles, param edits, transition patches). The
+   R11 shallow version shared those refs across history snapshots — undo
+   silently kept the mutation. Caught by the R13 store test-suite. */
+const cloneEl = (e: ElementJSON): ElementJSON => ({
+  ...e,
+  ...(e.effects ? { effects: e.effects.map((f) => ({ ...f, ...(f.params ? { params: { ...f.params } } : {}) })) } : {}),
+  ...(e.transitionOut ? { transitionOut: { ...e.transitionOut } } : {}),
+});
+const clone = (scenes: SceneJSON[]): SceneJSON[] => scenes.map((s) => ({ ...s, tracks: s.tracks.map((t) => ({ ...t, elements: t.elements.map(cloneEl) })), markers: s.markers.map((m) => ({ ...m })) }));
 
 const findEl = (scenes: SceneJSON[], id: string): { el: ElementJSON; track: TrackJSON; scene: SceneJSON } | null => {
   for (const sc of scenes) for (const t of sc.tracks) {
@@ -163,12 +173,17 @@ interface UiState {
 const MIN_PPS = 8;
 const MAX_PPS = 240;
 
-/* history wrapper: snapshot before each doc mutation, 50-deep */
+/* history wrapper: snapshot before each doc mutation, 50-deep.
+   Returning undefined from `mutate` = no-op: NOTHING is set (no history
+   entry) — this is the contract the no-pollution comments in splitElement /
+   removeMarkersAt / deleteScene describe. (R13: previously a no-op still
+   pushed a history entry; the store test-suite pins the fixed behavior.) */
 const HISTORY = 50;
 function withHistory(set: (partial: any) => void, get: () => UiState, mutate: (scenes: SceneJSON[]) => SceneJSON[] | void) {
   const s = get();
   const before = { scenes: clone(s.scenes), activeSceneId: s.activeSceneId };
   const next = mutate(clone(s.scenes));
+  if (next === undefined) return; // no-op — no history entry
   set({
     past: [...s.past.slice(-HISTORY + 1), before],
     future: [],
@@ -366,9 +381,9 @@ export const useUi = create<UiState>((set, get) => ({
     return scenes;
   }),
   toggleTrackCmd: (sceneId, trackId, field) => withHistory(set, get, (scenes) => {
-    for (const t of scenes.find((x) => x.id === sceneId)?.tracks ?? []) {
-      if (t.id === trackId) { (t as any)[field] = !(t as any)[field]; break; }
-    }
+    const t = scenes.find((x) => x.id === sceneId)?.tracks.find((x) => x.id === trackId);
+    if (!t) return; // unknown scene/track — true no-op, no history entry
+    (t as any)[field] = !(t as any)[field];
     return scenes;
   }),
 
