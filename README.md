@@ -115,10 +115,13 @@ implementation-ready — begin with Phase 0 (Playback Spike) per
 The full testability layer is in place: three-tier methodology + the facet
 coverage matrix + NFR recipes (spec 17 §13A, 00-master §6A).
 
-Alongside the specs, `ui-mock/shell-variants/` grew through R1–R13: the
+Alongside the specs, `ui-mock/shell-variants/` grew through R1–R14: the
 interactive spec-18 shell mockup with direction variants, the Storybook 10
-review surface (71 stories), and a vitest test suite (33 files / 510
-tests). **PR #1 — the ui-mock work — is open for review.**
+review surface (71 stories), and a vitest test suite (34 files / 596
+tests). **PR #1 — the ui-mock work — is open for review** (R14: the full
+90-comment review corpus re-audited, zero-no-op wiring sweep landed, and the
+both-directions UX-spec scan filed via `.agents/SPEC-REVISION-CANDIDATES.md`
+§E + issue #2).
 
 One **seal round** remains (checklist: spec 19 §12 + ARCH-R9 §7): the
 M1.5 wire-up verification, the op-family port kickoff, opencut-timeline's

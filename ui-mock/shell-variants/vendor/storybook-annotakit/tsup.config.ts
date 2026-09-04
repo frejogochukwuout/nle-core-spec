@@ -33,12 +33,15 @@ export default [
     },
   }),
   // Node bundle: dev-server middleware + sqlite store + digest + gh publisher.
+  // clean: false (CR10): both entries share dist/ and tsup runs them in
+  // parallel — a `clean: true` on either can wipe the other's output. The
+  // package build script rm -rf's dist BEFORE tsup instead.
   defineConfig({
     entry: { server: 'src/server/routes.ts' },
     format: ['cjs'],
     platform: 'node',
     target: 'node20',
-    clean: true,
+    clean: false,
     outExtension: () => ({ js: '.cjs' }),
     dts: false,
     splitting: false,
