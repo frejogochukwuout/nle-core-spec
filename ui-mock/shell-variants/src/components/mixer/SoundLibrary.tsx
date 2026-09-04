@@ -131,7 +131,7 @@ export function SoundLibrary() {
                     <AudioThumb m={m} h={18} />
                   </div>
                   <span className="min-w-0 flex-1 truncate text-[11px] text-tprimary">{m.name}</span>
-                  {m.type === 'video' && <span className="mono shrink-0 rounded border border-soft px-1 text-[9px] font-bold text-tmuted">V+A</span>}
+                  {m.type === 'video' && <span className="mono shrink-0 rounded border border-soft px-1 text-[10px] font-bold text-tmuted">V+A</span>}
                   <span className="mono shrink-0 text-[10px] text-tmuted">{m.duration !== null ? tc(m.duration) : '—'}</span>
                 </button>
               ))}

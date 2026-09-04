@@ -131,13 +131,15 @@ export function useShortcuts(duration: number) {
         }
         if (lower === 'a') {
           e.preventDefault();
+          // spec 16 §3.3: ⌘A = focused track, ⇧⌘A = all in timeline
+          const sc = s.scenes.find((x) => x.id === s.activeSceneId);
           if (e.shiftKey) {
-            s.setSelection([]);
-          } else {
-            // spec 16 §3.3: select all elements in the timeline
-            const sc = s.scenes.find((x) => x.id === s.activeSceneId);
             const ids = (sc?.tracks ?? []).flatMap((t) => t.elements.map((e2) => e2.id));
             s.setSelection(ids);
+          } else {
+            const ft = sc?.tracks.find((t) => t.id === s.focusedTrackId);
+            if (ft) s.selectTrackElements(ft.id, false);
+            else if (sc) s.selectTrackElements(sc.tracks[0].id, false);
           }
           return;
         }

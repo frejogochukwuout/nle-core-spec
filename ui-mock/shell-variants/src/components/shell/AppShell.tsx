@@ -64,8 +64,7 @@ function EffectsPanel() {
 }
 
 /* ---------- splitters (§3.2: 6px visual line, 12px hit target, dbl-click resets) ---------- */
-const SPLIT_HIT = 12;
-const SPLIT_VISUAL = 6;
+const SPLIT_HIT = 12; // §3.2: 12px interactive hit; visual line is the 6px --split-visual token
 
 function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
   const start = useRef(0);

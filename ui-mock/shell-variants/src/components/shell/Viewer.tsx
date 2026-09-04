@@ -138,10 +138,6 @@ export function Viewer({ duration }: { duration: number }) {
             </div>
           )}
 
-          {/* safe-area guides (UI pref, mock) */}
-          {false && (
-            <div className="pointer-events-none absolute inset-[5%] border border-white/30" aria-hidden="true" />
-          )}
         </div>
       </div>
 

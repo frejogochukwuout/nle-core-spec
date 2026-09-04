@@ -199,9 +199,6 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
   background: linear-gradient(to right, var(--type-audio) 0%, var(--type-audio) var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
 }
 [data-theme="light"] input[type="range"]::-webkit-slider-thumb { background: #4a4a52; }
-[data-theme="light"] input[type="range"].green-fill::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, var(--type-audio) 0%, var(--type-audio) var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
-}
 
 /* text inputs */
 .field {

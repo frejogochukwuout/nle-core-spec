@@ -122,3 +122,12 @@ screenshots/            captured presets + pages (committed)
 
 Reference: `../davinci_resolve_ui_mock.html` remains the static visual
 reference; this app is the interactive successor.
+
+
+## R11 — completeness + audio focus (2026-09-04)
+
+- **Layout overhaul to spec-18 geometry**: splitter-owned seams (12px hit / 6px visual), 12px scrub-row + status strip, TrackHeader two-row redesign (fits the 160px column, names per spec 05 §10), sticky ruler + full-viewport playhead, spec-exact transport clusters.
+- **Missing spec surfaces landed**: context menus (§4.9, five menus, right-click + Shift+F10), toasts (§6.4), confirm dialogs, error boundary + beforeunload, state rows (empty/loading), sample-project load, media-pool drag-to-lane + multi-select, marquee, Alt-drag-duplicate, Esc-cancels-drag, 40-key map with JKL shuttle + undo/redo.
+- **Audio focus mode** (docs/DESIGN-audio-mode.md v2.1, peer-reviewed): 4th dock page (⌘4), three-state mixer (collapsed / 32px meter-bridge / full strips), channel editor = S/G seam, Sound Library with roles, sidechain ducking row (spec 20 §12.2 mock answer), escalation gesture.
+- **Storybook 9** review surface: 29 stories (`npm run storybook`).
+- Review gates: R11 code review (FIX-MAJORS → all majors fixed) + gate re-check **NO MAJORS REMAIN**.

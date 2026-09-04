@@ -19,13 +19,13 @@ export const SHORTCUT_GROUPS: string[] = [
 export const SHORTCUT_MAP: ShortcutRow[] = [
   /* ---- Transport (spec 16 §3.1) ---- */
   { action: 'transport-play', keys: 'Space', group: 'Transport', desc: 'Play / pause toggle' },
+  { action: 'audio-mute', keys: '⌘M', group: 'Transport', desc: 'Mute focused audio track (master fallback)' },
   { action: 'transport-shuttle', keys: 'J / L', group: 'Transport', desc: 'Shuttle reverse / forward — tap to accelerate 1× → 2× → 4×' },
   { action: 'transport-shuttle-stop', keys: 'K', group: 'Transport', desc: 'Pause shuttle (JKL stop)' },
   { action: 'transport-step', keys: '← / → (⇧ ×10)', group: 'Transport', desc: 'Step playhead ±1 frame (±10 with ⇧)' },
   { action: 'transport-mark-inout', keys: 'I / O', group: 'Transport', desc: 'Mark in / mark out at playhead' },
   { action: 'transport-clear-inout', keys: '⌥X', group: 'Transport', desc: 'Clear in + out points' },
-  { action: 'transport-master-mute', keys: '⌘M', group: 'Transport', desc: 'Toggle master mute' },
-  { action: 'transport-loop', keys: '⌘⇧G', group: 'Transport', desc: 'Toggle loop playback' },
+    { action: 'transport-loop', keys: '⌘⇧G', group: 'Transport', desc: 'Toggle loop playback' },
 
   /* ---- Tools (spec 16 §3.2) ---- */
   { action: 'tool-select', keys: 'V', group: 'Tools', desc: 'Select tool' },
@@ -38,8 +38,7 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
 
   /* ---- Clips + edit history (spec 16 §3.3/§3.4/§3.10) ---- */
   { action: 'clips-select-neighbor', keys: 'Tab / ⇧Tab', group: 'Clips', desc: 'Select next / previous clip (main track)' },
-  { action: 'clips-select-all', keys: '⌘A', group: 'Clips', desc: 'Select all clips on main track' },
-  { action: 'clips-deselect-all', keys: '⇧⌘A', group: 'Clips', desc: 'Clear selection' },
+  { action: 'clips-select-all', keys: '⌘A / ⇧⌘A', group: 'Clips', desc: 'Select focused track / all in timeline (Esc clears)' },
   { action: 'clips-delete', keys: 'Delete', group: 'Clips', desc: 'Delete selection (leaves gap)' },
   { action: 'clips-ripple-delete', keys: '⇧Delete', group: 'Clips', desc: 'Ripple delete (closes gap)' },
   { action: 'clips-split', keys: '⌘B', group: 'Clips', desc: 'Split clip under playhead, at playhead' },
@@ -52,7 +51,8 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
 
   /* ---- Markers (spec 16 §3.7) ---- */
   { action: 'markers-add', keys: 'M', group: 'Markers', desc: 'Add marker at playhead' },
-  { action: 'markers-add-color', keys: '⇧M', group: 'Markers', desc: 'Add marker, cycling palette color' },
+  { action: 'markers-delete', keys: '⇧M', group: 'Markers', desc: 'Delete marker at playhead' },
+  { action: 'markers-add-color', keys: '⌥⇧M', group: 'Markers', desc: 'Add marker with cycled color' },
 
   /* ---- Selection (spec 16 §3.3 / §5.4) ---- */
   { action: 'selection-track-focus', keys: '↑ / ↓', group: 'Selection', desc: 'Move track focus up / down' },
