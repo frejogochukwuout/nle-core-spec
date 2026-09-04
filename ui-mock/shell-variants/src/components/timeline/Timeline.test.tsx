@@ -10,12 +10,23 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import { Timeline } from './Timeline';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
+import { useShortcuts } from '../../hooks/useShortcuts';
+import { sceneDuration } from '../../lib/mockData';
 import { POOL_DRAG_TYPE } from '../shell/MediaPool';
 
 const boot = (patch: UiPatch = {}) => renderShell(<Timeline />, { patch });
 const laneOf = (clipId: string) => screen.getByTestId(`clip-${clipId}`).parentElement as HTMLElement;
 const scrollEl = () => document.getElementById('timeline-scroll') as HTMLElement;
 const scene1 = () => store().scenes.find((s) => s.id === 'sc-1')!;
+const countEls = () => store().scenes.find((s) => s.id === 'sc-1')!.tracks.reduce((m, t) => m + t.elements.length, 0);
+
+/* escape-ladder harness: mounts the shell's window keydown layer next to
+ * the Timeline so the composed ladder (gesture-cancel → shell selection
+ * clear) is testable at the surface level. */
+function ShortcutsHarness() {
+  useShortcuts(sceneDuration(scene1()));
+  return null;
+}
 
 describe('Timeline', () => {
   it('renders one lane per track, all 7 clips, and the header column (spec 05 §12 lanes / 18 §4.7)', () => {
@@ -60,6 +71,51 @@ describe('Timeline', () => {
     fireEvent.pointerUp(scrollEl(), { pointerId: 1 });
     expect(screen.queryByTestId('timeline-marquee')).not.toBeInTheDocument();
     expect(store().selection).toEqual(['el-1']); // el-2 starts at 8.5 — outside the rect
+  });
+
+  /* ---- R15 T2/T7 marquee activation + ratchet ---- */
+
+  it('marquee 5px activation: ≤5px never renders the band and releases as a click-deselect; >5px activates (strict >)', () => {
+    boot({}); // selection ['el-2']
+    const lane = laneOf('el-1');
+    fireEvent.pointerDown(lane, { pointerId: 1, button: 0, clientX: 100, clientY: 120 });
+    fireEvent.pointerMove(scrollEl(), { pointerId: 1, buttons: 1, clientX: 105, clientY: 120 }); // Δx = 5 → still pending
+    expect(screen.queryByTestId('timeline-marquee')).not.toBeInTheDocument();
+    fireEvent.pointerUp(scrollEl(), { pointerId: 1 });
+    expect(store().selection).toEqual([]); // under-threshold release = click → deselect (kept behavior)
+    fireEvent.pointerDown(lane, { pointerId: 2, button: 0, clientX: 100, clientY: 120 });
+    fireEvent.pointerMove(scrollEl(), { pointerId: 2, buttons: 1, clientX: 106, clientY: 120 }); // Δx = 6 → active
+    expect(screen.getByTestId('timeline-marquee')).toBeInTheDocument();
+    fireEvent.pointerUp(scrollEl(), { pointerId: 2 });
+    // the 6px rect (x 100..106 ≈ 2.17..2.30 s) still intersects el-1 → replace
+    expect(store().selection).toEqual(['el-1']);
+  });
+
+  it('additive marquee = live-merge RATCHET: shift-drag merges live and only ever GROWS (R15 T7)', () => {
+    boot({ selection: ['el-2'] });
+    const lane = laneOf('el-1');
+    fireEvent.pointerDown(lane, { pointerId: 1, button: 0, clientX: 0, clientY: 120, shiftKey: true });
+    // 780 px → 16.96 s: rect covers el-1 (0..8.26) + el-2 (8.5..17) on the main band
+    fireEvent.pointerMove(scrollEl(), { pointerId: 1, buttons: 1, clientX: 780, clientY: 160, shiftKey: true });
+    expect(screen.getByTestId('timeline-marquee')).toBeInTheDocument();
+    // LIVE merge during the drag: initial selection ∪ intersected
+    expect(store().selection).toEqual(['el-2', 'el-1']);
+    // shrink the rect to x 0..7.9 s — el-2 leaves the rect but NEVER un-selects
+    fireEvent.pointerMove(scrollEl(), { pointerId: 1, buttons: 1, clientX: 363, clientY: 160, shiftKey: true });
+    expect(store().selection).toEqual(['el-2', 'el-1']); // ratchet: grow-only
+    fireEvent.pointerUp(scrollEl(), { pointerId: 1 });
+    expect(store().selection).toEqual(['el-2', 'el-1']); // release adds nothing (already live)
+  });
+
+  it('a buttons-mask-0 move cancels the marquee without deselecting (R15 T2 belt-and-braces)', () => {
+    boot({}); // selection ['el-2']
+    fireEvent.pointerDown(laneOf('el-1'), { pointerId: 1, button: 0, clientX: 0, clientY: 120 });
+    fireEvent.pointerMove(scrollEl(), { pointerId: 1, buttons: 1, clientX: 380, clientY: 160 });
+    expect(screen.getByTestId('timeline-marquee')).toBeInTheDocument();
+    fireEvent.pointerMove(scrollEl(), { pointerId: 1, buttons: 0, clientX: 400, clientY: 160 }); // left button released
+    expect(screen.queryByTestId('timeline-marquee')).not.toBeInTheDocument();
+    fireEvent.pointerUp(scrollEl(), { pointerId: 1 });
+    expect(store().selection).toEqual(['el-2']); // cancelled gesture ≠ click — no deselect
   });
 
   it('Escape mid-marquee cancels the gesture without changing the selection (spec 16 §3.3 escape)', () => {
@@ -149,6 +205,62 @@ describe('Timeline', () => {
     expect(within(menu).getByTestId('shell-menu-timeline-empty-paste')).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(screen.getByTestId('shell-menu-timeline-empty-add-marker'));
     expect(scene1().markers).toHaveLength(5); // 4 fixtures + the playhead marker
+  });
+
+  /* ---- R15 T2 context-menu ROUTING (single scroll-surface handler;
+     clips no longer stopPropagation their right-clicks — canonical §5) ---- */
+
+  it('routing: right-click on an UNSELECTED clip selects it first and opens the CLIP menu (not the empty-lane one)', () => {
+    boot({ selection: [] });
+    fireEvent.contextMenu(screen.getByTestId('clip-el-1'), { clientX: 30, clientY: 30 });
+    expect(screen.getByTestId('shell-menu-clip')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-menu-timeline-empty')).not.toBeInTheDocument();
+    expect(store().selection).toEqual(['el-1']); // canonical: select-if-unselected, no toggle
+  });
+
+  it('routing: right-click on a SELECTED clip keeps the whole selection (multi-select stays the command target)', () => {
+    boot({}); // selection ['el-2']
+    fireEvent.contextMenu(screen.getByTestId('clip-el-2'), { clientX: 10, clientY: 10 });
+    expect(screen.getByTestId('shell-menu-clip')).toBeInTheDocument();
+    expect(store().selection).toEqual(['el-2']); // no re-toggle, no collapse to single
+  });
+
+  it('the §4.9 clip menu via the routed right-click: Mix-this-track escalates into audio focus (design doc §3.1)', () => {
+    boot({});
+    fireEvent.contextMenu(screen.getByTestId('clip-el-2'), { clientX: 10, clientY: 10 });
+    expect(screen.getByTestId('shell-menu-clip')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('shell-menu-clip-mix-track'));
+    expect(store().page).toBe('audio');
+    expect(store().stripFocus).toBe('tr-main'); // the video track the clip sits on
+  });
+
+  it('multi-delete of ≥ 5 clips confirms first; cancel keeps, confirm deletes (spec 18 §6.4, routed clip menu)', () => {
+    boot({ selection: ['el-1', 'el-2', 'el-3', 'el-4', 'el-5'] });
+    fireEvent.contextMenu(screen.getByTestId('clip-el-2'), { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByTestId('shell-menu-clip-delete'));
+    expect(screen.getByTestId('shell-confirm')).toBeInTheDocument();
+    expect(screen.getByText('Delete 5 clips?')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('shell-confirm-cancel'));
+    expect(countEls()).toBe(7); // nothing deleted
+    fireEvent.contextMenu(screen.getByTestId('clip-el-2'), { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByTestId('shell-menu-clip-delete'));
+    fireEvent.click(screen.getByTestId('shell-confirm-confirm'));
+    expect(countEls()).toBe(2); // el-6 + el-7 remain
+  });
+
+  it('R15 T2 escape ladder (composed): no gesture → Escape falls through to the shell listener and clears the selection', () => {
+    renderShell(
+      <>
+        <Timeline />
+        <ShortcutsHarness />
+      </>,
+    );
+    expect(store().selection).toEqual(['el-2']); // boot selection
+    scrollEl().focus(); // the timeline surface holds focus (§4.9 Shift+F10 host)
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    expect(store().selection).toEqual([]); // the shell ladder's selection rung
   });
 
   it('⌘+wheel zooms via the rAF-coalesced accumulator (capped ±30, exp(−Δ/300)) — R15 T1 canonical wheel grammar', async () => {

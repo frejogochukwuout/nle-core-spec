@@ -29,6 +29,11 @@ export const DEFAULT_PPS = 46;
 
 /** Playhead line width (canonical: 2px, center-aligned). */
 export const PLAYHEAD_LINE_PX = 2;
+/** Gesture drag threshold (canonical TIMELINE_DRAG_THRESHOLD_PX, R15 T2):
+ *  STRICT > on EITHER axis, measured from the gesture origin in screen px.
+ *  Move/trim/marquee gestures stay `pending` until it is exceeded; a release
+ *  back within it (both axes) is a drag-back CANCEL, not a commit. */
+export const DRAG_THRESHOLD_PX = 5;
 /** Content padding ratios (canonical zoom-utils). */
 export const PADDING_MAX_RATIO = 0.75;
 export const PADDING_MIN_RATIO = 0.15;

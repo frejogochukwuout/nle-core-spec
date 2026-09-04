@@ -46,7 +46,6 @@ const el = (id: string) => {
   throw new Error(`element ${id} not found`);
 };
 const mainIds = () => store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-main')!.elements.map((e) => e.id);
-const countEls = () => store().scenes.find((s) => s.id === 'sc-1')!.tracks.reduce((m, t) => m + t.elements.length, 0);
 
 describe('Clip', () => {
   it('selected clips get the accent outline; the clip is a labelled button (spec 05 §7.3)', () => {
@@ -183,6 +182,109 @@ describe('Clip', () => {
     expect(store().selection).toEqual(['el-2']); // boot selection survives
   });
 
+  /* ---- R15 T2 gesture discipline (canonical §5: 5px threshold,
+     drag-back-cancel, buttons-mask, lastGestureWasDrag) ---- */
+
+  it('a sub-threshold press-drag-release is a plain click: no preview, no move, no history (R15 T2 5px threshold)', () => {
+    boot({ selection: [] });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: 100 });
+    // Δ4px — under the strict >5px activation threshold
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 395, clientY: 100 });
+    expect(screen.queryByTestId('clip-drag-tc')).not.toBeInTheDocument(); // no optimistic preview
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 395, clientY: 100 });
+    expect(el('el-2').startTime).toBe(8.5);
+    expect(store().past).toHaveLength(0);
+    // under-threshold release = plain click — select semantics preserved
+    fireEvent.click(clip);
+    expect(store().selection).toEqual(['el-2', 'el-7']); // A/V pair joins (spec 05 §12.3)
+  });
+
+  it('crossing the threshold activates the drag: exactly 5px does NOT, 6px does — on either axis (strict >)', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: 100 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 396, clientY: 100 }); // Δx = 5 → still pending
+    expect(screen.queryByTestId('clip-drag-tc')).not.toBeInTheDocument();
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 397, clientY: 100 }); // Δx = 6 → active
+    expect(screen.getByTestId('clip-drag-tc')).toBeInTheDocument();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    // Y axis counts on its own: a 6px vertical move activates too
+    fireEvent.pointerDown(clip, { pointerId: 2, button: 0, clientX: 391, clientY: 100 });
+    fireEvent.pointerMove(clip, { pointerId: 2, buttons: 1, clientX: 391, clientY: 106 }); // Δy = 6
+    expect(screen.getByTestId('clip-drag-tc')).toBeInTheDocument();
+    fireEvent.pointerUp(clip, { pointerId: 2, clientX: 391, clientY: 106 }); // Δ > 5 → not drag-back
+    expect(el('el-2').startTime).toBe(8.5); // dt = 0 — no move committed
+    expect(store().past).toHaveLength(0);
+  });
+
+  it('drag-back-cancel: a release back within 5px of the gesture origin is a CANCEL — no write, no history, click may select', () => {
+    boot({ selection: [] });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: 100 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 489, clientY: 100 }); // activate + preview
+    expect(screen.getByTestId('clip-drag-tc')).toBeInTheDocument();
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 393, clientY: 102 }); // back within 5px (both axes)
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 393, clientY: 102 });
+    expect(el('el-2').startTime).toBe(8.5); // never moved
+    expect(store().past).toHaveLength(0); // canonical: no history entry
+    // lastGestureWasDrag = false on the drag-back path — the follow-up click selects
+    fireEvent.click(clip);
+    expect(store().selection).toEqual(['el-2', 'el-7']);
+  });
+
+  it('buttons-mask: a mid-drag move with the left button released cancels the gesture (no commit)', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 489 });
+    expect(screen.getByTestId('clip-drag-tc')).toBeInTheDocument();
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 0, clientX: 500 }); // button dropped off-window
+    expect(screen.queryByTestId('clip-drag-tc')).not.toBeInTheDocument(); // preview discarded
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 500 });
+    expect(el('el-2').startTime).toBe(8.5);
+    expect(store().past).toHaveLength(0);
+  });
+
+  it('pointercancel discards the gesture without committing (R15 T2)', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 489 });
+    fireEvent.pointerCancel(clip, { pointerId: 1 });
+    expect(el('el-2').startTime).toBe(8.5);
+    expect(store().past).toHaveLength(0);
+    expect(screen.queryByTestId('clip-drag-tc')).not.toBeInTheDocument();
+  });
+
+  it('lastGestureWasDrag: the follow-up click after a committed drag is swallowed; the next click selects', () => {
+    boot({ selection: [] });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 489 });
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 489 });
+    expect(el('el-2').startTime).toBeCloseTo(10.625, 4);
+    fireEvent.click(clip); // the browser-synthesized follow-up click — NOT a re-select
+    expect(store().selection).toEqual([]);
+    fireEvent.click(clip); // flag consumed — a genuine click selects again
+    expect(store().selection).toEqual(['el-2', 'el-7']);
+  });
+
+  it('after an Esc-cancelled drag the trailing click may select (canonical cancel() clears the flag)', () => {
+    boot({ selection: [] });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 489 });
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    fireEvent.pointerUp(clip, { pointerId: 1 });
+    fireEvent.click(clip);
+    expect(store().selection).toEqual(['el-2', 'el-7']);
+  });
+
   it('the left trim handle commits trimElement(l) with the new start/duration (spec 05 §14.2)', () => {
     boot({});
     const clip = screen.getByTestId('clip-el-2');
@@ -213,27 +315,19 @@ describe('Clip', () => {
     expect(store().stripFocus).toBe('tr-audio-1');
   });
 
-  it('the §4.9 clip menu: Mix-this-track escalates into audio focus (design doc §3.1)', () => {
+  /* R15 T2: the POINTER right-click route moved to the Timeline scroll
+     surface (single contextmenu router, canonical no-stopPropagation law) —
+     see Timeline.test.tsx for the routed clip-menu tests. The clip keeps the
+     §4.9 KEYBOARD route: */
+  it('the §4.9 keyboard route (Shift+F10) opens the clip menu and its commands dispatch (R15 T2 restructure)', () => {
     boot({});
-    fireEvent.contextMenu(screen.getByTestId('clip-el-2'), { clientX: 10, clientY: 10 });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.keyDown(clip, { key: 'F10', shiftKey: true });
     expect(screen.getByTestId('shell-menu-clip')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('shell-menu-clip-mix-track'));
-    expect(store().page).toBe('audio');
-    expect(store().stripFocus).toBe('tr-main'); // the video track the clip sits on
-  });
-
-  it('multi-delete of ≥ 5 clips confirms first; cancel keeps, confirm deletes (spec 18 §6.4)', () => {
-    boot({ selection: ['el-1', 'el-2', 'el-3', 'el-4', 'el-5'] });
-    fireEvent.contextMenu(screen.getByTestId('clip-el-2'), { clientX: 10, clientY: 10 });
-    fireEvent.click(screen.getByTestId('shell-menu-clip-delete'));
-    expect(screen.getByTestId('shell-confirm')).toBeInTheDocument();
-    expect(screen.getByText('Delete 5 clips?')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('shell-confirm-cancel'));
-    expect(countEls()).toBe(7); // nothing deleted
-    fireEvent.contextMenu(screen.getByTestId('clip-el-2'), { clientX: 10, clientY: 10 });
-    fireEvent.click(screen.getByTestId('shell-menu-clip-delete'));
-    fireEvent.click(screen.getByTestId('shell-confirm-confirm'));
-    expect(countEls()).toBe(2); // el-6 + el-7 remain
+    expect(screen.getByTestId('shell-menu-clip-split')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-menu-clip-ripple-delete')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('shell-menu-clip-duplicate'));
+    expect(mainIds()).toHaveLength(5); // duplicate committed via the keyboard-opened menu
   });
 });
 

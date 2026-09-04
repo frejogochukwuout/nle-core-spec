@@ -3,7 +3,13 @@
    triangles (§9), linked badge. Two render modes:
    filmstrip (spec 05 canonical) | blocks (davinci mock compact).
    Selected = accent outline + tint; locked = stripes (legible, not faded);
-   drag = optimistic preview + live TC bubble; commit on release (18 §5). */
+   drag = optimistic preview + live TC bubble; commit on release (18 §5).
+   R15 T2 gesture discipline (canonical §5): pointerdown arms a PENDING
+   gesture; the preview/commit machinery engages only past the strict 5px
+   threshold (either axis); release back within 5px = drag-back cancel;
+   buttons-mask-0 moves and pointercancel cancel; lastGestureWasDrag
+   swallows the follow-up click after a completed drag. Right-click does
+   NOT stopPropagation — the Timeline scroll surface routes the menu. */
 
 import { useEffect, useRef, useState } from 'react';
 import { Link2 } from 'lucide-react';
@@ -11,9 +17,10 @@ import { useUi } from '../../state/useUiStore';
 import { useVariantClipStyle } from '../../state/variantHooks';
 import { mediaById, findElement, EFFECT_DEFS, TRANSITION_PRESENTATIONS, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc } from '../../lib/timecode';
+import { DRAG_THRESHOLD_PX } from '../../lib/pixel';
 import { getWaveform } from '../../lib/waveform';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
-import { useConfirm } from '../shell/ConfirmDialog';
+import { useConfirm, type ConfirmFn } from '../shell/ConfirmDialog';
 
 interface ClipProps {
   el: ElementJSON;
@@ -23,7 +30,25 @@ interface ClipProps {
   snapTargets: number[];
 }
 
-type DragState = { mode: 'move' | 'l' | 'r'; startX: number; origStart: number; origDur: number; cur: number; alt: boolean } | null;
+/* R15 T2 canonical gesture discipline: every move/trim gesture starts
+   `pending` — pointerdown does NOT enter drag mode. The optimistic-preview
+   machinery (geometry, TC bubble, alt ghost) engages only when the pointer
+   moves STRICTLY more than DRAG_THRESHOLD_PX (5px, either axis) from the
+   gesture origin. A release under threshold is a plain click (onClick
+   carries select semantics); a release back within 5px after activation is
+   a drag-back CANCEL (no store write, no history); a pointermove with
+   (buttons & 1) === 0 mid-gesture cancels it (left button released
+   off-window — capture still delivers the move). */
+type DragState = {
+  phase: 'pending' | 'active';
+  mode: 'move' | 'l' | 'r';
+  startX: number; // gesture origin (screen px) — threshold + drag-back math
+  startY: number;
+  origStart: number;
+  origDur: number;
+  cur: number;
+  alt: boolean;
+} | null;
 
 /* effects-rail drag payload type (HTML5 DnD): the AppShell effects rail
    drags rows as application/x-nle-effect JSON {name, cat} (cat: 'Blur' |
@@ -42,6 +67,94 @@ const defaultsFor = (def: (typeof EFFECT_DEFS)[number]): Record<string, number> 
   return out;
 };
 
+/* ---------- §4.9 clip menu builder (shared surface).
+   R15 T2 context-menu routing: the clip no longer owns an onContextMenu
+   handler (that pattern stopPropagation'd, breaking the canonical
+   right-click law). ONE handler on the Timeline scroll surface routes
+   bubbling contextmenu events: clip under cursor → THIS menu (after
+   select-if-unselected), else the empty-lane menu. The clip keeps the
+   keyboard route (Shift+F10 / ContextMenu key) and calls the same builder.
+   Multi-select: right-clicking a selected element makes the WHOLE
+   selection the command target; an unselected clip targets itself (the
+   router selects it first, so targets end up selection-wide either way).
+   All store reads are LIVE (useUi.getState()) — the builder runs at open
+   time, after the router's selection write. */
+export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: ConfirmFn): MenuItem[] {
+  const targets = useUi.getState().selection.includes(el.id)
+    ? useUi.getState().selection
+    : [el.id];
+  const deleteSelected = (ripple: boolean) => {
+    const run = () => {
+      useUi.getState().deleteElements(targets, ripple);
+      useUi.getState().pushToast({
+        kind: 'info',
+        title: `Deleted ${targets.length} clip${targets.length === 1 ? '' : 's'}${ripple ? ' — ripple' : ''}`,
+        detail: ripple ? 'Later clips shifted left' : 'Delete leaves a gap — ⇧⌫ ripples (spec 16 C8)',
+      });
+    };
+    // §6.4: multi-delete ≥ 5 elements confirms first
+    if (targets.length >= 5) {
+      confirm({
+        title: `Delete ${targets.length} clips?`,
+        body: `${targets.length} selected elements will be removed from the timeline. Undo can restore them.`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: run,
+      });
+    } else run();
+  };
+  const focusInspector = () => {
+    const s = useUi.getState();
+    if (s.page !== 'edit') s.setPage('edit');
+    if (!s.panels.inspector) s.togglePanel('inspector');
+    s.setInspectorTab('video');
+    // focus call: the panel root is not focusable — focus its F6 region wrapper
+    requestAnimationFrame(() => {
+      const root = document.querySelector('[data-testid="shell-inspector"]');
+      (root?.closest('.shell-region') as HTMLElement | null)?.focus();
+    });
+  };
+  return [
+    /* §4.9 clip-menu enumeration — Cut/Copy/Paste are honest disabled rows
+       (the mock has no clipboard model); the real commands live below. */
+    { id: 'cut', label: 'Cut', shortcut: '⌘X', disabled: true, tip: 'mock: no clipboard — Delete + ⌘D instead' },
+    { id: 'copy', label: 'Copy', shortcut: '⌘C', disabled: true, tip: 'mock: no clipboard — ⌘D duplicates in place' },
+    { id: 'paste', label: 'Paste', shortcut: '⌘V', disabled: true, tip: 'mock: no clipboard (timeline toolbar carries the same disabled row)' },
+    { id: 'open-in-viewer', label: 'Open in viewer', sep: true, onSelect: () => useUi.getState().pushToast({ kind: 'info', title: 'Open in viewer', detail: `mock: v1.1 source preview is the §4.3 plain-<video> fallback (not built here; dual viewer = §8.5 v2) — dbl-click a pool card reveals instead (§4.2) — ${el.name}` }) },
+    { id: 'split', label: 'Split at playhead', shortcut: '⌘B', onSelect: () => {
+      const t = useUi.getState().playhead;
+      // fan-out; real shell sends ONE batched split command (spec 15 §7)
+      targets.forEach((id) => useUi.getState().splitElement(id, t));
+    } },
+    { id: 'duplicate', label: 'Duplicate', shortcut: '⌘D', onSelect: () => useUi.getState().duplicateElements(targets) },
+    { id: 'remove-effects', label: 'Remove Effects', disabled: targets.length === 0 || !targets.some((id) => (findElement(useUi.getState().scenes, id)?.element.effects?.length ?? 0) > 0), tip: 'clears the effect stack of every selected clip', sep: true, onSelect: () => {
+      targets.forEach((id) => useUi.getState().setElementField(id, { effects: [] }));
+    } },
+    { id: 'add-transition', label: 'Add Transition…', onSelect: () => {
+      // default crossfade (spec 09 TransitionJSON) per selected clip
+      targets.forEach((id) => useUi.getState().setTransition(id, {}));
+    } },
+    { id: 'rename', label: 'Rename', disabled: true, tip: 'mock: name edits live in the Inspector (Properties →)' },
+    { id: 'reveal', label: 'Reveal in Media Pool', disabled: !el.mediaId, tip: el.mediaId ? `selects ${el.mediaId} in the pool` : 'text clips have no media asset', onSelect: () => {
+      if (!el.mediaId) return;
+      const s = useUi.getState();
+      s.setMediaSelection([el.mediaId!]);
+      if (!s.panels.mediaPool) s.togglePanel('mediaPool');
+      requestAnimationFrame(() => {
+        const pool = document.querySelector('[data-testid="shell-mediapool"]');
+        (pool?.closest('.shell-region') as HTMLElement | null)?.focus();
+      });
+    } },
+    { id: 'delete', label: 'Delete', shortcut: '⌫', danger: true, sep: true, onSelect: () => deleteSelected(false) },
+    { id: 'ripple-delete', label: 'Ripple delete', shortcut: '⇧⌫', danger: true, onSelect: () => deleteSelected(true) },
+    { id: 'detach-audio', label: 'Detach audio', disabled: true, tip: 'mock: not in spec 15 union', sep: true },
+    { id: 'properties', label: 'Properties', onSelect: focusInspector },
+    { id: 'mix-track', label: 'Mix this track…', sep: true, onSelect: () => {
+      useUi.getState().enterAudioFocus('escalation', track.id);
+    } },
+  ];
+}
+
 export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps) {
   const clipStyle = useVariantClipStyle();
   const tool = useUi((s) => s.tool);
@@ -51,7 +164,6 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   const moveElement = useUi((s) => s.moveElement);
   const trimElement = useUi((s) => s.trimElement);
   const duplicateElements = useUi((s) => s.duplicateElements);
-  const deleteElements = useUi((s) => s.deleteElements);
   const pushToast = useUi((s) => s.pushToast);
   const snap = useUi((s) => s.snap);
   const menu = useContextMenu();   // §4.9 clip menu (right-click + Shift+F10)
@@ -61,11 +173,20 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   const [hover, setHover] = useState(false);
   const [fxHover, setFxHover] = useState(false); // effects-rail drag over THIS clip (R14)
   const ref = useRef<HTMLDivElement>(null);
-  const dragCancelled = useRef(false); // Esc during a drag → drop dispatches nothing
-  const suppressClick = useRef(false); // swallow the trailing click after a gesture (alt-drop / Esc-cancel)
+  const dragCancelled = useRef(false); // Esc during a gesture → drop dispatches nothing
+  /* canonical §5: set when a gesture crossed the 5px threshold and ENDED as a
+     drag; survives pointerup so the browser's synthesized follow-up click
+     never re-toggles/re-selects. Drag-back-cancel and Esc-cancel clear it
+     (canonical cancel() / mouseup-within-threshold paths). Reset on the NEXT
+     pointerdown and consumed by the first click. (Replaces the old
+     suppressClick ref, which only covered alt-drop + Esc.) */
+  const lastGestureWasDrag = useRef(false);
   const dragOn = drag !== null;
+  const dragActive = drag?.phase === 'active';
 
-  /* Escape cancels an active drag (preview snaps back, nothing commits).
+  /* Escape cancels an active gesture — pending OR past-threshold (the R15 T2
+     escape ladder's first rung, before the shell Esc cascade). Canonical
+     cancel() clears lastGestureWasDrag, so the trailing click may select.
      Capture-phase + stopPropagation so the shell Esc cascade (tool →
      deselect) doesn't also fire while a gesture is in flight. */
   useEffect(() => {
@@ -74,7 +195,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       if (e.key !== 'Escape') return;
       e.stopPropagation();
       dragCancelled.current = true;
-      suppressClick.current = true; // the trailing click must not select either
+      lastGestureWasDrag.current = false; // canonical cancel() semantics
       setDrag(null);
     };
     window.addEventListener('keydown', onKey, true);
@@ -115,39 +236,72 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     if (e.button !== 0) return;
     (e.currentTarget as HTMLElement).focus(); // roving focus — Shift+F10 host (§4.9)
     dragCancelled.current = false;
-    suppressClick.current = false; // fresh gesture — clear any stale suppression
+    lastGestureWasDrag.current = false; // fresh gesture — canonical reset-on-pointerdown
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setDrag({ mode: 'move', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: e.altKey });
+    // PENDING gesture: no drag mode yet — the 5px threshold gates activation
+    setDrag({ phase: 'pending', mode: 'move', startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: e.altKey });
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag) return;
-    const dt = (e.clientX - drag.startX) / pxPerSec;
-    if (drag.mode === 'move') {
-      const { t } = applySnap(drag.origStart + dt, false);
-      setDrag({ ...drag, cur: t, alt: e.altKey }); // Alt held? = duplicate gesture
-    } else if (drag.mode === 'l') {
-      const { t } = applySnap(drag.origStart + dt, false);
-      const maxStart = drag.origStart + drag.origDur - 0.25;
-      setDrag({ ...drag, cur: Math.min(t, maxStart) });
+    /* buttons-bitmask (canonical §5, belt-and-braces under pointer capture):
+       a move with the left button released — the pointer left the window and
+       came back, or the button was dropped off-window — cancels the gesture:
+       preview discarded, nothing commits. */
+    if ((e.buttons & 1) === 0) {
+      dragCancelled.current = true; // the pointerup that follows must be a no-op
+      lastGestureWasDrag.current = dragActive; // a real drag happened: swallow the stray click
+      setDrag(null);
+      return;
+    }
+    let d = drag;
+    if (d.phase === 'pending') {
+      // strict > 5px on EITHER axis from the gesture origin → activate
+      if (Math.abs(e.clientX - d.startX) <= DRAG_THRESHOLD_PX && Math.abs(e.clientY - d.startY) <= DRAG_THRESHOLD_PX) return;
+      d = { ...d, phase: 'active' };
+    }
+    const dt = (e.clientX - d.startX) / pxPerSec;
+    if (d.mode === 'move') {
+      const { t } = applySnap(d.origStart + dt, false);
+      setDrag({ ...d, cur: t, alt: e.altKey }); // Alt held? = duplicate gesture
+    } else if (d.mode === 'l') {
+      const { t } = applySnap(d.origStart + dt, false);
+      const maxStart = d.origStart + d.origDur - 0.25;
+      setDrag({ ...d, cur: Math.min(t, maxStart) });
     } else {
-      const { t } = applySnap(drag.origStart + drag.origDur + dt, true);
-      setDrag({ ...drag, cur: Math.max(drag.origStart + 0.25, t) });
+      const { t } = applySnap(d.origStart + d.origDur + dt, true);
+      setDrag({ ...d, cur: Math.max(d.origStart + 0.25, t) });
     }
   };
 
   const onPointerUp = (e?: React.PointerEvent) => {
-    void e;
     if (!drag) {
       dragCancelled.current = false; // stale flag after an Esc-cancelled drag
       return;
     }
     if (dragCancelled.current) {
-      // Esc was pressed mid-gesture: restore the element, dispatch nothing
+      // Esc / buttons-mask / pointercancel killed the gesture mid-flight:
+      // restore the element, dispatch nothing
       dragCancelled.current = false;
       setDrag(null);
       return;
     }
+    if (drag.phase === 'pending') {
+      // Under threshold on release = plain click — onClick carries the
+      // semantics (select / blade-split). lastGestureWasDrag stays false.
+      setDrag(null);
+      return;
+    }
+    /* Drag-back-cancel (canonical §5): the drag ends with the pointer within
+       5px of the gesture origin (BOTH axes) → CANCEL — no store write, no
+       history entry, and lastGestureWasDrag stays false (the release is
+       treated as a click). */
+    if (e && Math.abs(e.clientX - drag.startX) <= DRAG_THRESHOLD_PX && Math.abs(e.clientY - drag.startY) <= DRAG_THRESHOLD_PX) {
+      setDrag(null);
+      return;
+    }
+    // A real drag is completing — the follow-up click must not re-select
+    lastGestureWasDrag.current = true;
     if (drag.mode === 'move') {
       if (drag.alt && Math.abs(drag.cur - drag.origStart) > 1e-6) {
         // Alt+drag = duplicate: spawn a copy AT the drop position, original
@@ -155,7 +309,6 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         // steps with a flashing intermediate). duplicateElements() selects
         // the new ids. The trailing click is suppressed so the copy stays
         // selected.
-        suppressClick.current = true;
         duplicateElements([el.id], drag.cur);
       } else if (!drag.alt && Math.abs(drag.cur - drag.origStart) > 1e-6) {
         moveElement(el.id, drag.cur);
@@ -166,11 +319,20 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     setDrag(null);
   };
 
+  /* pointercancel (touch interruption / alt-tab): same as Esc — discard the
+     preview, commit nothing. Bubbles here from the trim handles too (their
+     capture retargets the cancel event at the handle, which bubbles up). */
+  const onPointerCancelGesture = () => {
+    dragCancelled.current = true;
+    lastGestureWasDrag.current = dragActive;
+    setDrag(null);
+  };
+
   const onClick = (e: React.MouseEvent) => {
-    if (suppressClick.current) {
-      // gesture just ended (alt-duplicate drop or Esc-cancel) — the synthesized
-      // click would otherwise re-select the original and clobber the result
-      suppressClick.current = false;
+    if (lastGestureWasDrag.current) {
+      // canonical §5: a completed drag persists past pointerup — the
+      // browser-synthesized follow-up click must NOT re-toggle/re-select
+      lastGestureWasDrag.current = false; // consumed
       return;
     }
     if (locked) return;
@@ -187,82 +349,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
 
   const cursor = locked ? 'not-allowed' : tool === 'blade' ? 'crosshair' : drag?.mode === 'move' ? 'grabbing' : 'move';
 
-  /* ---------- §4.9 clip menu (right-click + Shift+F10 / ContextMenu key).
-     Multi-select: right-clicking a selected element makes the WHOLE
-     selection the command target; an unselected clip targets itself. */
-  const buildMenuItems = (): MenuItem[] => {
-    const targets = selection.includes(el.id) ? selection : [el.id];
-    const deleteSelected = (ripple: boolean) => {
-      const run = () => {
-        deleteElements(targets, ripple);
-        pushToast({
-          kind: 'info',
-          title: `Deleted ${targets.length} clip${targets.length === 1 ? '' : 's'}${ripple ? ' — ripple' : ''}`,
-          detail: ripple ? 'Later clips shifted left' : 'Delete leaves a gap — ⇧⌫ ripples (spec 16 C8)',
-        });
-      };
-      // §6.4: multi-delete ≥ 5 elements confirms first
-      if (targets.length >= 5) {
-        confirm({
-          title: `Delete ${targets.length} clips?`,
-          body: `${targets.length} selected elements will be removed from the timeline. Undo can restore them.`,
-          confirmLabel: 'Delete',
-          danger: true,
-          onConfirm: run,
-        });
-      } else run();
-    };
-    const focusInspector = () => {
-      const s = useUi.getState();
-      if (s.page !== 'edit') s.setPage('edit');
-      if (!s.panels.inspector) s.togglePanel('inspector');
-      s.setInspectorTab('video');
-      // focus call: the panel root is not focusable — focus its F6 region wrapper
-      requestAnimationFrame(() => {
-        const root = document.querySelector('[data-testid="shell-inspector"]');
-        (root?.closest('.shell-region') as HTMLElement | null)?.focus();
-      });
-    };
-    return [
-      /* §4.9 clip-menu enumeration — Cut/Copy/Paste are honest disabled rows
-         (the mock has no clipboard model); the real commands live below. */
-      { id: 'cut', label: 'Cut', shortcut: '⌘X', disabled: true, tip: 'mock: no clipboard — Delete + ⌘D instead' },
-      { id: 'copy', label: 'Copy', shortcut: '⌘C', disabled: true, tip: 'mock: no clipboard — ⌘D duplicates in place' },
-      { id: 'paste', label: 'Paste', shortcut: '⌘V', disabled: true, tip: 'mock: no clipboard (timeline toolbar carries the same disabled row)' },
-      { id: 'open-in-viewer', label: 'Open in viewer', sep: true, onSelect: () => pushToast({ kind: 'info', title: 'Open in viewer', detail: `mock: v1.1 source preview is the §4.3 plain-<video> fallback (not built here; dual viewer = §8.5 v2) — dbl-click a pool card reveals instead (§4.2) — ${el.name}` }) },
-      { id: 'split', label: 'Split at playhead', shortcut: '⌘B', onSelect: () => {
-        const t = useUi.getState().playhead;
-        // fan-out; real shell sends ONE batched split command (spec 15 §7)
-        targets.forEach((id) => splitElement(id, t));
-      } },
-      { id: 'duplicate', label: 'Duplicate', shortcut: '⌘D', onSelect: () => duplicateElements(targets) },
-      { id: 'remove-effects', label: 'Remove Effects', disabled: targets.length === 0 || !targets.some((id) => (findElement(useUi.getState().scenes, id)?.element.effects?.length ?? 0) > 0), tip: 'clears the effect stack of every selected clip', sep: true, onSelect: () => {
-        targets.forEach((id) => useUi.getState().setElementField(id, { effects: [] }));
-      } },
-      { id: 'add-transition', label: 'Add Transition…', onSelect: () => {
-        // default crossfade (spec 09 TransitionJSON) per selected clip
-        targets.forEach((id) => useUi.getState().setTransition(id, {}));
-      } },
-      { id: 'rename', label: 'Rename', disabled: true, tip: 'mock: name edits live in the Inspector (Properties →)' },
-      { id: 'reveal', label: 'Reveal in Media Pool', disabled: !el.mediaId, tip: el.mediaId ? `selects ${el.mediaId} in the pool` : 'text clips have no media asset', onSelect: () => {
-        if (!el.mediaId) return;
-        const s = useUi.getState();
-        s.setMediaSelection([el.mediaId!]);
-        if (!s.panels.mediaPool) s.togglePanel('mediaPool');
-        requestAnimationFrame(() => {
-          const pool = document.querySelector('[data-testid="shell-mediapool"]');
-          (pool?.closest('.shell-region') as HTMLElement | null)?.focus();
-        });
-      } },
-      { id: 'delete', label: 'Delete', shortcut: '⌫', danger: true, sep: true, onSelect: () => deleteSelected(false) },
-      { id: 'ripple-delete', label: 'Ripple delete', shortcut: '⇧⌫', danger: true, onSelect: () => deleteSelected(true) },
-      { id: 'detach-audio', label: 'Detach audio', disabled: true, tip: 'mock: not in spec 15 union', sep: true },
-      { id: 'properties', label: 'Properties', onSelect: focusInspector },
-      { id: 'mix-track', label: 'Mix this track…', sep: true, onSelect: () => {
-        useUi.getState().enterAudioFocus('escalation', track.id);
-      } },
-    ];
-  };
+  /* §4.9 clip menu items for the keyboard route (Shift+F10 / ContextMenu
+     key — the clip keeps this route; the POINTER right-click route is
+     routed by the Timeline scroll surface, which calls the same builder). */
+  const buildMenuItems = (): MenuItem[] => buildClipMenuItems(el, track, confirm);
 
   /* ---------- effects-rail drop target (R14 wiring): mirrors the Timeline
      lane pool-drop grammar — type guard, preventDefault, locked-track
@@ -393,8 +483,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
 
   /* Alt+drag duplicate gesture: faded ghost copy pinned at the ORIGINAL
      position (visual only — the dragged preview is the copy-in-flight; on
-     drop the store duplicates and the original never moves). */
-  const showGhost = drag !== null && drag.mode === 'move' && drag.alt;
+     drop the store duplicates and the original never moves). Gated on the
+     ACTIVE phase — the ghost respects the 5px threshold like the drag
+     itself (R15 T2). */
+  const showGhost = dragActive && drag.mode === 'move' && drag.alt;
   const ghost = showGhost ? (
     <div
       data-testid={`clip-ghost-${el.id}`}
@@ -422,21 +514,18 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         role="button"
         aria-label={`${el.name}, ${tc(el.startTime)}`}
         data-testid={`clip-${el.id}`}
+        data-clip-id={el.id} /* R15 T2 context-menu routing hook — the Timeline scroll surface's single onContextMenu resolves the clip under the cursor via closest('[data-clip-id]') */
         tabIndex={-1} /* programmatic focus only — roving host for Shift+F10 (§4.9) */
-        className={`clip-box absolute top-[2px] bottom-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''} ${fxHover ? 'ring-1 ring-accent' : ''}`}
+        className={`clip-box absolute top-[2px] bottom-[2px] ${dragActive ? 'z-10' : ''} ${selected ? 'z-[5]' : ''} ${fxHover ? 'ring-1 ring-accent' : ''}`}
         onDoubleClick={(e) => {
           // M3 escalation preview (design doc §3.1): dbl-click audio clip → Audio focus + strip focus
           if (track.kind === 'audio') {
             useUi.getState().enterAudioFocus('escalation', track.id);
           }
         }}
-        onContextMenu={(e) => {
-          if (locked) return;
-          e.preventDefault();
-          e.stopPropagation(); // keep the timeline-empty menu out of it
-          (e.currentTarget as HTMLElement).focus(); // opener for focus-return
-          menu.open(e.clientX, e.clientY, buildMenuItems(), 'clip');
-        }}
+        /* R15 T2 canonical right-click law: NO onContextMenu here — the event
+           bubbles (un-stopped) to the Timeline scroll surface, whose single
+           router selects-if-unselected and opens the clip menu. */
         onKeyDown={(e) => {
           if (isMenuKey(e)) {
             e.preventDefault();
@@ -464,13 +553,14 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         outlineOffset: 0,
         boxShadow: selected
           ? 'inset 0 0 0 999px color-mix(in srgb, var(--accent-selection) 12%, transparent)'
-          : drag
+          : dragActive
             ? '0 4px 12px rgba(0,0,0,0.45)'
             : 'none',
       }}
       onPointerDown={onPointerDownBody}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancelGesture}
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -493,8 +583,9 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       {/* locked overlay — stripes ON TOP of the body (legible, R2) */}
       {locked && <div className="locked-stripes pointer-events-none absolute inset-0 z-[2]" aria-hidden="true" />}
 
-      {/* live trim/move TC bubble (spec 06 §8 overlay pattern) */}
-      {drag && (
+      {/* live trim/move TC bubble (spec 06 §8 overlay pattern) — active
+          gestures only (the 5px threshold gates the optimistic preview) */}
+      {dragActive && (
         <span
           className="mono pointer-events-none absolute -top-[22px] left-0 whitespace-nowrap rounded-[var(--radius-sm)] border border-strong bg-inset px-1.5 py-px text-[11px] text-tprimary shadow-lg"
           data-testid="clip-drag-tc"
@@ -511,7 +602,9 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         </span>
       )}
 
-      {/* trim handles — 12px hit strips, ew-resize (spec 05 §14.2) */}
+      {/* trim handles — 12px hit strips, ew-resize (spec 05 §14.2). Gestures
+          start PENDING (R15 T2): the 5px threshold gates the trim preview —
+          a press-release without crossing it is a plain click (no trim). */}
       {!locked && (
         <>
           <div
@@ -520,8 +613,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
             onPointerDown={(e) => {
               e.stopPropagation();
               if (tool !== 'select') return;
+              dragCancelled.current = false;
+              lastGestureWasDrag.current = false; // fresh gesture
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-              setDrag({ mode: 'l', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: false });
+              setDrag({ phase: 'pending', mode: 'l', startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: false });
             }}
             onPointerMove={(e) => { e.stopPropagation(); onPointerMove(e); }}
             onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e); }}
@@ -532,8 +627,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
             onPointerDown={(e) => {
               e.stopPropagation();
               if (tool !== 'select') return;
+              dragCancelled.current = false;
+              lastGestureWasDrag.current = false; // fresh gesture
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-              setDrag({ mode: 'r', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime + el.duration, alt: false });
+              setDrag({ phase: 'pending', mode: 'r', startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime + el.duration, alt: false });
             }}
             onPointerMove={(e) => { e.stopPropagation(); onPointerMove(e); }}
             onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e); }}

@@ -6,20 +6,25 @@
    R15 T1 wheel grammar (spec-18 §5A revision R15-2 + canonical): Cmd/Ctrl+
    wheel = rAF-coalesced zoom (capped ±30, exp(−Δ/300)) through the zoom
    controller (two-regime playhead anchor, spec-05 §5.2); plain wheel:
-   horizontal when shift or |δX|>|δY| (±40px clamped manual), else vertical. */
+   horizontal when shift or |δX|>|δY| (±40px clamped manual), else vertical.
+   R15 T2: ONE context-menu router on the scroll surface (clip under cursor
+   → select-if-unselected + §4.9 clip menu; else timeline-empty menu) and
+   the marquee gesture discipline (5px strict activation, additive
+   shift/ctrl/meta = live-merge ratchet, buttons-mask cancel). */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useUi, trackHeights } from '../../state/useUiStore';
 import { useVariant } from '../debug/VariantProvider';
-import { sceneDuration, mediaById, type TrackJSON } from '../../lib/mockData';
+import { sceneDuration, mediaById, findElement, type TrackJSON } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
-import { dynamicContentWidth, snapPxToDeviceGrid, zoomMinPps, PLAYHEAD_LINE_PX, HORIZONTAL_WHEEL_STEP_PX } from '../../lib/pixel';
+import { dynamicContentWidth, snapPxToDeviceGrid, zoomMinPps, PLAYHEAD_LINE_PX, HORIZONTAL_WHEEL_STEP_PX, DRAG_THRESHOLD_PX } from '../../lib/pixel';
 import { zoomController, createWheelZoomAccumulator } from '../../lib/zoomController';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
-import { Clip } from './Clip';
+import { Clip, buildClipMenuItems } from './Clip';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { POOL_DRAG_TYPE, isDroppable } from '../shell/MediaPool';
+import { useConfirm } from '../shell/ConfirmDialog';
 
 export function Timeline() {
   const { variant } = useVariant();
@@ -34,7 +39,8 @@ export function Timeline() {
   const loadSampleProject = useUi((s) => s.loadSampleProject);
   const pushToast = useUi((s) => s.pushToast);
   const mediaDrag = useUi((s) => s.mediaDrag); // pool drag-to-lane state (18 §4.2)
-  const menu = useContextMenu(); // §4.9 timeline-empty menu
+  const menu = useContextMenu(); // §4.9 timeline-empty + clip menus (R15 T2 router)
+  const confirm = useConfirm(); // §6.4 multi-delete confirmation (clip menu route)
 
   const headersRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -45,9 +51,10 @@ export function Timeline() {
   const [scrollLeft, setScrollLeft] = useState(0);
   const [viewportW, setViewportW] = useState(0);
 
-  /* §4.9 timeline-empty menu — right-click / Shift+F10 on the empty lane
-     surface. Clips and the ruler stopPropagation for their own menus, so
-     anything that reaches the scroll surface is empty lane. */
+  /* §4.9 timeline-empty menu items — the DEFAULT branch of the R15 T2
+     context-menu router below (right-click / Shift+F10 on the empty lane
+     surface; the ruler and track headers keep their own stopPropagation
+     handlers, and clips are routed to the clip menu). */
   const buildMenuItems = (): MenuItem[] => [
     { id: 'paste', label: 'Paste', shortcut: '⌘V', disabled: true, tip: 'mock: clipboard paste needs spec 15 §4.3.70' },
     { id: 'add-marker', label: 'Add marker', onSelect: () => addMarker(useUi.getState().playhead) },
@@ -64,12 +71,26 @@ export function Timeline() {
     } },
   ];
 
-  /* marquee rubber-band selection — rect in CONTENT coordinates (scroll
-     offsets applied). Started by pointerdown on an empty lane background;
-     a <4px release is a click → clears selection (replaces the old plain
-     empty-lane deselect); Escape mid-drag cancels without changing it. */
-  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
-  const marqueeOn = marquee !== null;
+  /* marquee rubber-band selection — R15 T2/T7 canonical: the gesture starts
+     PENDING on pointerdown and activates only when the pointer moves STRICTLY
+     more than 5px (either axis, screen space) — the rubber band renders and
+     selection changes only from then on. A release under threshold is a
+     plain click → clears selection (replaces the old plain empty-lane
+     deselect). Additive marquee (shift/ctrl/meta held at START): live-merge
+     RATCHET — each move merges the rect's intersections into the LIVE
+     selection, so it only ever GROWS (shrinking the rect never un-selects);
+     release writes nothing more. Non-additive: replace at release (current
+     behavior). Buttons-mask: a move with the left button released cancels
+     the gesture (additive live merges are not rolled back — canonical
+     cancel() leaves them). */
+  const [marquee, setMarquee] = useState<{
+    x0: number; y0: number;   // content-space origin (rect + hit-testing)
+    sx: number; sy: number;   // screen-space origin (threshold math)
+    x1: number; y1: number;
+    additive: boolean;        // modifiers held at marquee START
+    active: boolean;          // threshold crossed
+  } | null>(null);
+  const marqueeOn = marquee !== null; // pending OR active — gates the Esc canceller
 
   const toContent = (e: { clientX: number; clientY: number }): { x: number; y: number } | null => {
     const sc = scrollRef.current;
@@ -82,24 +103,17 @@ export function Timeline() {
     const p = toContent(e);
     if (!p) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setMarquee({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+    setMarquee({
+      x0: p.x, y0: p.y,
+      sx: e.clientX, sy: e.clientY,
+      x1: p.x, y1: p.y,
+      additive: e.shiftKey || e.ctrlKey || e.metaKey,
+      active: false,
+    });
   };
 
-  const moveMarquee = (e: React.PointerEvent) => {
-    if (!marquee) return;
-    const p = toContent(e);
-    if (!p) return;
-    setMarquee({ ...marquee, x1: p.x, y1: p.y });
-  };
-
-  const finishMarquee = () => {
-    const m = marquee;
-    setMarquee(null);
-    if (!m) return;
-    if (Math.hypot(m.x1 - m.x0, m.y1 - m.y0) < 4) {
-      setSelection([]); // click-no-drag on empty lane → deselect (kept behavior)
-      return;
-    }
+  /* interval + lane-band hit test (unchanged math) — returns intersected ids */
+  const marqueeHit = (m: { x0: number; y0: number; x1: number; y1: number }): string[] => {
     const tMin = Math.min(m.x0, m.x1) / pxPerSec;
     const tMax = Math.max(m.x0, m.x1) / pxPerSec;
     const yTop = Math.min(m.y0, m.y1);
@@ -115,10 +129,59 @@ export function Timeline() {
       }
       top += h;
     }
-    setSelection(ids);
+    return ids;
   };
 
-  /* Escape cancels an active marquee (capture — beats the shell Esc handler) */
+  const moveMarquee = (e: React.PointerEvent) => {
+    if (!marquee) return;
+    // buttons-bitmask: left button released (off-window) → cancel the gesture
+    if ((e.buttons & 1) === 0) {
+      setMarquee(null);
+      return;
+    }
+    const p = toContent(e);
+    if (!p) return;
+    const next = { ...marquee, x1: p.x, y1: p.y };
+    if (!next.active) {
+      // strict > 5px on either axis (screen space) before activation
+      if (Math.abs(e.clientX - marquee.sx) <= DRAG_THRESHOLD_PX && Math.abs(e.clientY - marquee.sy) <= DRAG_THRESHOLD_PX) return;
+      next.active = true;
+    }
+    setMarquee(next);
+    if (next.active && next.additive) {
+      // LIVE-MERGE RATCHET (canonical mergeElementsIntoSelection): union into
+      // the LIVE selection on every move — grow-only by construction
+      const ids = marqueeHit(next);
+      const live = useUi.getState().selection;
+      const merged = [...new Set([...live, ...ids])];
+      if (merged.length !== live.length) useUi.getState().setSelection(merged);
+    }
+  };
+
+  /* R15 T2 item 9 — follow-up click swallow analysis: the canonical
+     justFinishedSelecting rAF guard swallows the click a browser synthesizes
+     after an ACTIVE marquee's mouseup. Here it CANNOT fire a deselect: the
+     deselect lives inside THIS pointerup handler's under-threshold branch
+     (never reached once active), and the lanes/scroll surface register no
+     onClick at all — a stray click has no listener to hit. (jsdom fires no
+     synthesized clicks either.) Documented instead of dead code, per the
+     task contract. */
+  const finishMarquee = () => {
+    const m = marquee;
+    setMarquee(null);
+    if (!m) return;
+    if (!m.active) {
+      setSelection([]); // click-no-drag on empty lane → deselect (kept behavior)
+      return;
+    }
+    if (m.additive) return; // ratchet already wrote the live merges — nothing more
+    setSelection(marqueeHit(m));
+  };
+
+  /* Escape cancels an active marquee — pending OR active (capture — beats
+     the shell Esc handler; R15 T2 escape-ladder rung 1). Additive live
+     merges are NOT rolled back (canonical cancel() leaves the grown
+     selection); non-additive never wrote, so it cancels clean. */
   useEffect(() => {
     if (!marqueeOn) return;
     const onKey = (e: KeyboardEvent) => {
@@ -328,11 +391,40 @@ export function Timeline() {
         ref={scrollRef}
         className="relative min-h-0 flex-1 overflow-auto bg-timeline"
         tabIndex={-1} /* focusable surface for the §4.9 Shift+F10 keyboard route */
+        /* R15 T2 context-menu ROUTER — ONE handler on the scroll surface.
+           Clips no longer stopPropagation their right-clicks (canonical §5:
+           the contextmenu must bubble). Route: clip under cursor (resolved
+           via closest('[data-clip-id]') — the outer clip box carries the id)
+           → select-if-unselected FIRST (plain select; linked A/V pair joins
+           per the store's selectElement), then the §4.9 clip menu; anything
+           else (empty lane, playhead head, transition marker) → the
+           timeline-empty menu. The ruler/track headers keep their own
+           stopPropagation handlers and never reach this router. */
         onContextMenu={(e) => {
           e.preventDefault();
+          const clipNode = (e.target as HTMLElement).closest('[data-clip-id]') as HTMLElement | null;
+          if (clipNode) {
+            const id = clipNode.getAttribute('data-clip-id')!;
+            const hit = findElement(useUi.getState().scenes, id);
+            if (hit) {
+              if (!useUi.getState().selection.includes(id)) {
+                useUi.getState().selectElement(id, false); // select-if-unselected, NO toggle
+              }
+              clipNode.focus(); // opener for focus-return (§4.9)
+              menu.open(e.clientX, e.clientY, buildClipMenuItems(hit.element, hit.track, confirm), 'clip');
+              return;
+            }
+          }
           menu.open(e.clientX, e.clientY, buildMenuItems(), 'timeline-empty');
         }}
         onKeyDown={(e) => {
+          /* R15 T2 escape ladder, verified: an ACTIVE gesture (clip drag /
+             marquee) is cancelled FIRST by the capture-phase window listeners
+             in Clip/Timeline (stopPropagation blocks this handler and the
+             shell). With no gesture, Escape intentionally falls through — the
+             shell's useShortcuts window listener clears the selection (after
+             its audio/tool rungs). The surface adds no competing handler so
+             the shell ladder is never bypassed or doubled. */
           if (!isMenuKey(e)) return;
           e.preventDefault();
           e.stopPropagation();
@@ -461,8 +553,10 @@ export function Timeline() {
           })}
 
           {/* ---- marquee rubber-band rect (dashed accent border + 10% alpha
-               fill via .timeline-marquee; geometry in content coords) ---- */}
-          {marquee && (
+               fill via .timeline-marquee; geometry in content coords).
+               Renders only once the gesture is ACTIVE — the 5px threshold
+               gates the band like the selection writes (R15 T2/T7). ---- */}
+          {marquee?.active && (
             <div
               data-testid="timeline-marquee"
               className="timeline-marquee absolute z-[35]"
