@@ -184,7 +184,18 @@ async function ghJsonPaged<T>(
     out.push(...data);
     const link: string = res.headers.get('link') ?? '';
     const next: RegExpMatchArray | null = link.match(/<([^>]+)>;\s*rel="next"/);
-    url = next ? (next[1] as string) : null;
+    // origin guard (R13 CodeRabbit): the Link header is server-controlled —
+    // a cross-origin "next" URL must never receive the bearer token. Compare
+    // against the configured API origin (GHE-aware), stop paging on mismatch.
+    if (!next) {
+      url = null;
+    } else {
+      try {
+        url = new URL(next[1]).origin === new URL(ghApiBase()).origin ? (next[1] as string) : null;
+      } catch {
+        url = null; // unparseable next-link — treat as end of pagination
+      }
+    }
   }
   return out;
 }

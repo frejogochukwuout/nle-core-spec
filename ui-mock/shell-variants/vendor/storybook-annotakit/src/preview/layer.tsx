@@ -26,6 +26,7 @@ import {
   FOCUS_THREAD,
   LAYER_STATE,
   THREADS_CHANGED,
+  THREAD_FOCUSED,
   TOGGLE_LAYER,
   type ThreadsChangedPayload,
 } from '../shared/events';
@@ -327,6 +328,9 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
         el.scrollIntoView({ block: 'center', behavior: 'smooth' });
         el.setAttribute('data-annota-flash', '1');
         window.setTimeout(() => el.removeAttribute('data-annota-flash'), 3400);
+        // ack ONLY on a resolved pin — an anchors map still owned by the
+        // previous story stays silent so the manager re-emits (retry race fix)
+        sbChannel().emit(THREAD_FOCUSED, threadId);
       }
     },
     [anchors],

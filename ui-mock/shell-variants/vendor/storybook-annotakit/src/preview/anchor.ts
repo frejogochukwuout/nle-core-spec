@@ -298,7 +298,10 @@ function findByTextQuote(ann: AnchorLike, root: HTMLElement): HTMLElement | null
     el = el.parentElement;
     hops++;
   }
-  if (!el || el === root || withinOverlay(el)) return null;
+  // post-loop re-verify (R13 review): a 3-hop budget exhaustion leaves `el`
+  // on an ancestor that never matched — anchoring there would flash a wrong
+  // bbox and lie about component.source. Miss = null, not approx.
+  if (!el || el === root || withinOverlay(el) || el.tagName.toLowerCase() !== wantTag) return null;
   return el;
 }
 
@@ -329,7 +332,8 @@ function findByFingerprint(ann: AnchorLike, root: HTMLElement): HTMLElement | nu
           el = el.parentElement;
           hops++;
         }
-        if (el && el !== root && !withinOverlay(el)) return el;
+        // post-loop re-verify — same law as the text-quote branch above
+        if (el && el !== root && !withinOverlay(el) && el.tagName.toLowerCase() === fp.tag) return el;
       }
     }
   }

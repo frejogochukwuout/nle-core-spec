@@ -165,7 +165,17 @@ export function createGhSync(opts: GhSyncOptions): GhSync {
     );
   }
 
-  const mirrorBody = (c: Comment): string => `**${c.author}:** ${c.body}`;
+  // per-comment sentinel: embedded in every mirrored body so a push that
+  // crashed AFTER the GitHub call but BEFORE the ghId stamp can be healed on
+  // the next pull (the engine imports its own comment otherwise — duplicate
+  // echo). Parsed on pull by `parseSentinel`.
+  const SENTINEL_RE = /<!--\s*annotakit:c_(\S+?)\s*-->/;
+  const mirrorBody = (c: Comment): string =>
+    `**${c.author}:** ${c.body}\n<!-- annotakit:c_${c.id} -->`;
+  const parseSentinel = (body: string): string | null => {
+    const m = body.match(SENTINEL_RE);
+    return m ? (m[1] as string) : null;
+  };
 
   /**
    * Reconcile ONE thread against its GitHub mirror. Idempotent: no mapping →
@@ -408,10 +418,20 @@ export function createGhSync(opts: GhSyncOptions): GhSync {
           const knownNow = new Set(cur.comments.map((c) => c.ghId).filter((x): x is string => Boolean(x)));
           for (const c of fresh) {
             if (knownNow.has(String(c.id))) continue;
+            // SELF-HEAL: a GitHub comment carrying our per-comment sentinel is
+            // the engine's own mirror of a local reply whose ghId stamp was
+            // lost (crash between addIssueComment and mutateThread). Heal by
+            // stamping the local comment instead of importing a duplicate.
+            const localId = parseSentinel(c.body);
+            const target = localId ? cur.comments.find((x) => x.id === localId && !x.ghId) : undefined;
+            if (target) {
+              target.ghId = String(c.id);
+              continue;
+            }
             cur.comments.push({
               id: newId().replace(/^th_/, 'c_'),
               author: c.user?.login ?? 'github',
-              body: c.body,
+              body: c.body.replace(SENTINEL_RE, '').trimEnd(),
               createdAt: c.created_at,
               ghId: String(c.id),
               source: 'github',

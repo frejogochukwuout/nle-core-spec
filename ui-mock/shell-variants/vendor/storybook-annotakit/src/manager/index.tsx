@@ -17,7 +17,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { addons, types, useStorybookApi, useStorybookState } from 'storybook/manager-api';
 import { useTheme } from 'storybook/theming';
 import { CheckIcon, CommentIcon, EyeIcon, EyeCloseIcon, LinkIcon, SyncIcon } from '@storybook/icons';
-import { API_BASE, FOCUS_THREAD, THREADS_CHANGED, TOGGLE_LAYER, type ThreadsChangedPayload } from '../shared/events';
+import { API_BASE, FOCUS_THREAD, THREADS_CHANGED, THREAD_FOCUSED, TOGGLE_LAYER, type ThreadsChangedPayload } from '../shared/events';
 import type { GhSyncStatus, GhSyncSummary, Thread } from '../shared/types';
 
 const ADDON_ID = 'annotakit';
@@ -191,8 +191,22 @@ function ReviewPanel(): React.ReactElement {
   const focusThread = (t: Thread): void => {
     if (t.storyId !== storyId) {
       storybookApi.selectStory(t.storyId);
-      // the preview needs a beat to switch stories before it can focus a pin
-      window.setTimeout(() => addons.getChannel().emit(FOCUS_THREAD, t.id), 400);
+      // Cross-story focus is a RACE: the preview's anchors map still belongs
+      // to the previous story until the new story's fetch + resolve passes
+      // (350/1200 ms) land. Retry-until-ack: the preview emits THREAD_FOCUSED
+      // only when the pin actually resolved + flashed — until then, re-emit
+      // (R14 fix; was a fixed 400 ms one-shot that silently dead-clicked).
+      const ch = addons.getChannel();
+      let attempts = 0;
+      const ack = () => { attempts = 99; ch.removeListener(THREAD_FOCUSED, ack); };
+      ch.on(THREAD_FOCUSED, ack);
+      const emitOnce = () => {
+        if (attempts >= 5) { ch.removeListener(THREAD_FOCUSED, ack); return; }
+        attempts += 1;
+        ch.emit(FOCUS_THREAD, t.id);
+        window.setTimeout(emitOnce, 400); // re-armed until ack / 5 attempts
+      };
+      window.setTimeout(emitOnce, 400);
     } else {
       addons.getChannel().emit(FOCUS_THREAD, t.id);
     }
