@@ -92,13 +92,16 @@ at commit `ebc1604`; cross-checked with `.agents/PLAN.md` seal items 14–25.
   map (the mock's direction) vs doc state, and give 05 §12.2's 24 px collapsed
   row an owner.
 
-### B4. 18 §4.2 vs §4.3 double-click + source preview trigger
-- **Gap:** §4.2 makes pool double-click = reveal; §4.3 v1.1 ships a plain-`<video>`
-  fallback source-preview but never says what TRIGGERS it (the dual viewer is v2).
-  The mock's clip-menu toast now cites this conflict honestly.
-- **Proposed amendment (18 §4.3):** the v1 fallback source-preview is triggered
-  from the clip menu's *Open in viewer* / the source card's play button;
-  double-click on a pool card remains §4.2's reveal — one gesture, one meaning.
+### B4. 18 §4.2 vs §4.3 — the SAME GESTURE (double-click) claimed twice
+- **Conflict (not a missing answer):** §4.3:147 specifies the trigger —
+  "double-clicking a media-pool asset (or the inspector's source card) can
+  play the raw asset" — while §4.2 assigns double-click = reveal. Two clauses
+  claim the same gesture. The mock's clip-menu toast cites the conflict
+  honestly.
+- **Proposed amendment (18 §4.3):** the v1 fallback source-preview is
+  triggered from the clip menu's *Open in viewer* / the source card's play
+  button; double-click on a pool card remains §4.2's reveal — one gesture,
+  one meaning.
 
 ---
 
@@ -112,6 +115,7 @@ at commit `ebc1604`; cross-checked with `.agents/PLAN.md` seal items 14–25.
 | C4 | `,`/`.` always slip (spec: select-mode nudge / tool-disambiguated) | 16 §3.6/§6 | `useShortcuts.ts` |
 | C5 | ⌘B splits the main-track clip under playhead (spec: focused track only; ⌘⇧B all-tracks absent) | 16 §3.4 | `useShortcuts.ts` ⌘B |
 | C6 | e.key-primary dispatch (spec 16 §8.4 prefers event.code lookup) | 16 §8.4 | `useShortcuts.ts` |
+| C7 | Viewer zoom ladder = Fit/1.5×/2×/4× magnification labels (R13 honesty fix); spec 18 §3.3 enumerates Fit/50%/100%/200% whose "percent" semantics are unanchored (the old mock's "100%" was 2× fit) — spec should adopt magnification or pixel-anchored semantics at seal | 18 §3.3 | `Viewer.tsx` zoom select |
 
 ## D. Seal-item staleness flags (from R13-W1b)
 

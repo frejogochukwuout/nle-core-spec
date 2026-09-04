@@ -371,6 +371,23 @@ describe('F6 region cycling (spec 18 §11.5)', () => {
   });
 });
 
+describe('keyboard multi-delete confirm (spec 18 §6.4 — R13 parity with the clip-menu path)', () => {
+  it('Delete with a >=5 selection opens the confirm dialog; confirm deletes, cancel keeps', async () => {
+    renderAppShell({ selection: ['el-1', 'el-2', 'el-3', 'el-4', 'el-5', 'el-6'] });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Delete 6 clips?');
+    // danger dialog → cancel-focused (R13 fix), nothing deleted yet
+    expect(store().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-main')!.elements).toHaveLength(4);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    const main = store().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-main')!;
+    expect(main.elements).toHaveLength(0); // el-1..el-4 deleted (unlocked)
+    expect(store().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-overlay-1')!.elements).toHaveLength(0);
+    expect(store().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-audio-1')!.elements).toHaveLength(0);
+    expect(store().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-audio-2')!.elements).toHaveLength(1); // locked — el-7 survives
+  });
+});
+
 describe('app dock cheat-sheet button (spec 16 §7.3 entry point)', () => {
   it('the dock Keyboard button opens the cheat-sheet modal (store flag + DOM)', async () => {
     const user = userEvent.setup();

@@ -24,7 +24,7 @@ export interface ConfirmOptions {
   onConfirm: () => void;
 }
 
-type ConfirmFn = (opts: ConfirmOptions) => void;
+export type ConfirmFn = (opts: ConfirmOptions) => void;
 
 const ConfirmContext = createContext<ConfirmFn | null>(null);
 

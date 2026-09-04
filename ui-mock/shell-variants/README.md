@@ -28,7 +28,7 @@ Vite app remains the interactive mock for local dev.
 ## Tests
 
 ```bash
-npm test            # vitest run — 33 files / 461 tests (jsdom)
+npm test            # vitest run — 33 files / 510 tests (jsdom)
 npm run test:watch  # vitest in watch mode
 npm run test:ui     # vitest --ui dashboard
 npm run typecheck   # tsc --noEmit

@@ -132,7 +132,7 @@ describe('Clip', () => {
     expect(clip.style.cursor).toBe('crosshair');
     expect(screen.getByTestId('clip-el-2').style.cursor).toBe('crosshair');
     fireEvent.click(clip, { clientX: 100 }); // rect.left = 0 in jsdom → cut at 100/46 s
-    expect(mainIds()).toContain('el-1-b4');
+    expect(mainIds().some((id) => id.startsWith('el-1-b'))).toBe(true);
     expect(mainIds()).toHaveLength(5);
   });
 

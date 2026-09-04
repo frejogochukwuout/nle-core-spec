@@ -512,12 +512,14 @@ describe('trimElement', () => {
 });
 
 describe('splitElement', () => {
-  it('splits at the cut: two clips, ids stable + -b suffix, source window split', () => {
+  it('splits at the cut: two clips, stable left id + unique right id, source window split', () => {
     act(() => { S().splitElement('el-2', 12.75); });
     const els = mainEls();
-    expect(els).toEqual(['el-1', 'el-2', 'el-2-b4', 'el-3', 'el-4']);
+    expect(els).toHaveLength(5);
+    const rightId = els.find((id) => id !== 'el-2' && id.startsWith('el-2-b'))!;
+    expect(els).toEqual(['el-1', 'el-2', rightId, 'el-3', 'el-4']);
     const left = el('el-2');
-    const right = el('el-2-b4');
+    const right = el(rightId);
     expect(left.duration).toBe(4.25);
     expect(right.startTime).toBe(12.75);
     expect(right.duration).toBe(4.25);

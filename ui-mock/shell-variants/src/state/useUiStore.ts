@@ -529,7 +529,7 @@ export const useUi = create<UiState>((set, get) => ({
       const offset = cut - el.startTime;
       if (offset <= 0.1 || offset >= el.duration - 0.1) return;
       const left: ElementJSON = { ...el, duration: offset };
-      const right: ElementJSON = { ...el, id: `${el.id}-b${t.elements.length}`, startTime: cut, duration: el.duration - offset };
+      const right: ElementJSON = { ...el, id: nextId(`${el.id}-b`), startTime: cut, duration: el.duration - offset };
       if (right.sourceStart !== undefined) right.sourceStart = el.sourceStart! + offset;
       delete left.transitionOut;
       t.elements.splice(idx, 1, left, right);

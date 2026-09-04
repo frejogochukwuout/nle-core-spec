@@ -5,14 +5,14 @@
    mocked manually for deterministic JKL timing. */
 
 import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { useShortcuts } from './useShortcuts';
 import { useUi } from '../state/useUiStore';
 
 const S = () => useUi.getState();
 
-function Harness({ duration = 30 }: { duration?: number }) {
-  useShortcuts(duration);
+function Harness({ duration = 30, confirm }: { duration?: number; confirm?: (opts: { title: string; onConfirm: () => void }) => void }) {
+  useShortcuts(duration, confirm);
   return null;
 }
 
@@ -255,7 +255,7 @@ describe('clip + selection keys', () => {
     // playhead 16 sits inside el-2 (8.5..17)
     press({ key: 'b', metaKey: true });
     const ids = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-main')!.elements.map((e) => e.id);
-    expect(ids).toContain('el-2-b4');
+    expect(ids.some((id) => id.startsWith('el-2-b'))).toBe(true);
   });
 
   it('⌘D duplicates the selection and selects the copies', () => {
@@ -287,6 +287,25 @@ describe('clip + selection keys', () => {
     expect(el('el-4').duration).toBeCloseTo(3.5, 5);           // 20 - 16.5
   });
 
+
+  it('§6.4: keyboard multi-delete (≥5) routes through the confirm dialog — not a bypass', () => {
+    const calls: { title: string; onConfirm: () => void }[] = [];
+    const fakeConfirm = (opts: { title: string; onConfirm: () => void }) => calls.push(opts);
+    cleanup();
+    render(<Harness confirm={fakeConfirm} />); // re-render the harness WITH a confirm fn
+    useUi.setState({ selection: ['el-1', 'el-2', 'el-3', 'el-4', 'el-5', 'el-6'] });
+    press({ key: 'Delete' });
+    expect(calls).toHaveLength(1);                 // dialog requested
+    expect(calls[0].title).toBe('Delete 6 clips?');
+    expect(el('el-1')).toBeDefined();            // nothing deleted yet
+    act(() => calls[0].onConfirm());
+    expect(() => el('el-1')).toThrow();             // confirmed → deleted (unlocked ones)
+    // 4-clipped selections still delete directly
+    calls.length = 0;
+    useUi.setState({ selection: ['el-1', 'el-2', 'el-3', 'el-4'] });
+    press({ key: 'Delete' });
+    expect(calls).toHaveLength(0);                 // no dialog below the threshold
+  });
   it('undo / redo with empty history pushes an info toast instead', () => {
     press({ key: 'z', metaKey: true });
     expect(S().toasts.map((t) => t.title)).toContain('Nothing to undo');

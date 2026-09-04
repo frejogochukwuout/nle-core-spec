@@ -57,7 +57,7 @@ Reference codebases are **domain cores** orbiting the spec's contracts (mapped a
 - `INTEGRATION-REAUDIT.md` — verification that all integration fixes were applied
 - `TEST-INTEGRATION-REVIEW.md` — testability refinement integration review
 - `TESTABILITY-SIGNOFF.md` — final sign-off for the testability refinement
-- `audits/` — 16 audit reports documenting every claim verification against source code
+- `audits/` — 21 documents: 16 audit reports documenting every claim verification against source code, plus 5 round-process artifacts (ARCH-R9 three-domain strategy, ROUND-7-AUDITS, SCOUT-R8-A/B/C)
 - `audits/ROUND-7-AUDITS.md` + `INTEGRATION-REVIEW-R7.md` — Round 7 (2026-09-02): five parallel auditors, per-spec engine code-reference tables (all citations machine-verified), the spec 15 export-command amendment, and the integration re-review
 
 ### Agent meta doc
@@ -108,4 +108,20 @@ MIT (for this spec document set). The reference repos (FreeCut, OpenCut-classic)
 
 ## Status
 
-**Implementation-ready, Round 8 complete.** Begin with Phase 0 (Playback Spike) per `14-implementation-phases.md` — now the two-repo strategy: nle-engine (engine side) + opencut-timeline (timeline side), bound by the Decision-11 seam (P1's mandatory adapter). The full testability layer is in place: three-tier methodology + the facet coverage matrix + NFR recipes (spec 17 §13A, 00-master §6A). One **seal round** remains (spec 19 §12 has the checklist): the engine's convergence adapters (C2/C8), opencut-timeline's C7 rename + W4/W5/W6, the 22-decision reconciliation audit, and a final citation sweep. Both reference repos are actively worked — hold final judgment on their states until then.
+**Spec rounds through R9 landed; seal round pending.** The spec set is
+implementation-ready — begin with Phase 0 (Playback Spike) per
+`14-implementation-phases.md`, now the three-domain strategy of Decisions
+12-14 (nle-engine runtime + opencut-timeline editing + web-daw-core audio).
+The full testability layer is in place: three-tier methodology + the facet
+coverage matrix + NFR recipes (spec 17 §13A, 00-master §6A).
+
+Alongside the specs, `ui-mock/shell-variants/` grew through R1–R13: the
+interactive spec-18 shell mockup with direction variants, the Storybook 10
+review surface (71 stories), and a vitest test suite (33 files / 510
+tests). **PR #1 — the ui-mock work — is open for review.**
+
+One **seal round** remains (checklist: spec 19 §12 + ARCH-R9 §7): the
+M1.5 wire-up verification, the op-family port kickoff, opencut-timeline's
+C7 rename, the full decision-reconciliation audit, and a final citation
+sweep. The reference repos are actively worked — hold final judgment on
+their states until then.

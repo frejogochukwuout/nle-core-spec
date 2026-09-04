@@ -7,6 +7,7 @@
 import { useEffect, useRef } from 'react';
 import { useUi } from '../state/useUiStore';
 import type { Marker } from '../lib/mockData';
+import type { ConfirmFn } from '../components/shell/ConfirmDialog';
 
 const MARKER_PALETTE: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
 const JKL_WINDOW_MS = 500; // multi-tap accel window (task spec: 500 ms)
@@ -18,8 +19,11 @@ interface JklState {
 }
 
 /** Installs the global shortcut handler. `duration` = active scene duration
- *  (Home/End). Everything else is read fresh from the store per event. */
-export function useShortcuts(duration: number) {
+ *  (Home/End). Everything else is read fresh from the store per event.
+ *  `confirm` (optional) routes multi-delete through the §6.4 dialog — the
+ *  AppShell supplies its ConfirmProvider's fn; bare harnesses (tests) omit
+ *  it and Delete falls back to the direct path. */
+export function useShortcuts(duration: number, confirm?: ConfirmFn) {
   const jklRef = useRef<JklState | null>(null);
   const markerColorIdx = useRef(0); // ⇧M palette cursor (red → orange → …)
 
@@ -121,6 +125,24 @@ export function useShortcuts(duration: number) {
         case 'Backspace':
           if (s.selection.length === 0) return;
           e.preventDefault();
+          // §6.4: multi-delete ≥ 5 elements confirms first — same dialog as
+          // the clip-menu path (R13: the keyboard route previously bypassed
+          // the confirm the menu honored)
+          if (s.selection.length >= 5 && confirm) {
+            const n = s.selection.length;
+            const ripple = e.shiftKey;
+            confirm({
+              title: `Delete ${n} clips?`,
+              body: `${n} selected elements will be removed from the timeline. Undo can restore them.`,
+              confirmLabel: 'Delete',
+              danger: true,
+              onConfirm: () => {
+                const st = useUi.getState();
+                st.deleteElements(st.selection, ripple);
+              },
+            });
+            return;
+          }
           s.deleteElements(s.selection, e.shiftKey); // ⇧Delete = ripple
           return;
         case 'Escape':
@@ -280,5 +302,5 @@ export function useShortcuts(duration: number) {
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [duration]);
+  }, [duration, confirm]);
 }

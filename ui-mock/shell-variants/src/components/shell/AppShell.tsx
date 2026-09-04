@@ -26,7 +26,7 @@ import { SoundLibrary } from '../mixer/SoundLibrary';
 import { sceneDuration } from '../../lib/mockData';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import { ToastRegion } from './ToastRegion';
-import { ConfirmProvider } from './ConfirmDialog';
+import { ConfirmProvider, useConfirm } from './ConfirmDialog';
 
 /* ---------- effects library (compact mock of the Effects toggle §4.1) ---------- */
 const EFFECTS = [
@@ -143,7 +143,20 @@ function useBeforeUnloadGuard() {
   }, [dirty]);
 }
 
+/* Provider wrapper: §6.4's ConfirmProvider sits OUTSIDE the hook consumers so
+   the keyboard layer (useShortcuts → multi-delete confirm) shares the same
+   dialog provider as the clip-menu path — one confirm surface, one focus
+   trap, one dialog at a time. */
 export function AppShell() {
+  return (
+    <ConfirmProvider>
+      <AppShellInner />
+    </ConfirmProvider>
+  );
+}
+
+function AppShellInner() {
+  const confirm = useConfirm();
   const panels = useUi((s) => s.panels);
   const page = useUi((s) => s.page);
   const mediaW = useUi((s) => s.mediaW);
@@ -188,7 +201,7 @@ export function AppShell() {
   /* keyboard — spec 16 implemented set via the single useShortcuts hook
      (SHORTCUT_MAP in lib/shortcutMap.ts is the documented twin; the cheat
      sheet renders it). F6 region cycling stays local, below. */
-  useShortcuts(duration);
+  useShortcuts(duration, confirm);
 
   /* spec 18 §6.4: "unsaved changes" browser prompt while edits are pending */
   useBeforeUnloadGuard();
@@ -223,8 +236,7 @@ export function AppShell() {
     : <Inspector />;
 
   return (
-    <ConfirmProvider>
-      <div className="flex h-full w-full flex-col overflow-hidden bg-app" role="application" aria-label="NLE shell study">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-app" role="application" aria-label="NLE shell study">
       <a href="#timeline-scroll" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[99] focus:rounded focus:bg-inset focus:px-2 focus:py-1 focus:text-[11px] focus:text-tprimary">
         Skip to timeline
       </a>
@@ -292,7 +304,6 @@ export function AppShell() {
       {/* spec 18 §6.4 — notification region (fixed bottom-right, above the
           status strip; never steals focus) */}
       <ToastRegion />
-      </div>
-    </ConfirmProvider>
+    </div>
   );
 }
