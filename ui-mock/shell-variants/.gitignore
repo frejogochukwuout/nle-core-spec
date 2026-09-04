@@ -5,3 +5,6 @@ dist/
 
 # Storybook
 storybook-static/
+# annotakit runtime state + secrets
+.env
+.storybook/annotakit/

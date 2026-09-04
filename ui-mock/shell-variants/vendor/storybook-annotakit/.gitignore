@@ -1,0 +1,13 @@
+node_modules/
+dist/
+examples/nimbus/node_modules/
+examples/nimbus/dist-storybook/
+examples/nimbus/sb.log
+examples/nimbus/sb-debug.log
+# annotakit store: threads.db IS tracked (durable feedback — survives disk loss);
+# only the sqlite sidecars are volatile
+*.db-wal
+*.db-shm
+*.tsbuildinfo
+.DS_Store
+*.tgz
