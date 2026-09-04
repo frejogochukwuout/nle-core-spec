@@ -1,63 +1,49 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-05, end of the R14 audit + zero-no-op + both-directions spec-scan round (pushed through `6da2610`)
+**Written:** 2026-09-05, end of the R15 ASSEMBLY round (pushed through `81bafc2`; gitlab backup = same)
 **Scope of this file:** IMMEDIATE next session ONLY. Long horizon lives in `.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`.
 
 ---
 
 ## What this session produced
 
-R14 was the re-audit round (user ask: inventorize + audit ALL 90 PR comments, ensure zero no-ops at the UI layer, deep both-directions UX-spec scan):
+R15 was the assembly + implementation-path round (user ask: honest evolve-vs-greenfield assessment, the assembly architecture, the execution plan, and a deep pass to push the spec toward final):
 
-- **Full 90-comment corpus re-audited** (74 inline + 11 issue + 5 reviews, ~75 unique findings; every status re-verified against CODE, not the R13 reply's claims). The audit caught **5 claimed-but-not-landed fixes** (gh.ts pagination origin guard, ghsync mirror sentinel, anchor walk-up re-verify, cross-story focus race, vendor prestorybook prebuild) — all landed in W1 with dist rebuilt + bundle markers verified. Two more partials closed (tsup clean race — node entry was still `clean:true`; reveal seek snapped to the frame grid). One documented skip: token-in-argv (security/credential class excluded by the review charter). Full table posted on PR #1 (comment `5546483104`).
-- **Zero-no-op sweep:** every interactive element across 29 files audited; the dead cluster is wired (zoom cluster + ⌘\ + ±/⌘0, marker-color menu, marker nav keys, ⌘⇧I/O, ⌘S/⌘E, ⌘⇧M, [ ], effects drag-to-clip, Color/Deliver form controls, §4.2 state rows, mixer aux toggles, SoundLibrary sort, brackets drag, Clip Enter/Space, height menu rows, add-track above/below, two-way scroll sync, Toolbar2 roving + radiogroup arrows, splitter ⇧×4, DebugOverlay copy-fail + save-fail drill). Store laws: loop ordering, link gating, split linkedTo, MIN_DUR, duplicate-at single undo, multi-track viewer, loadSample mixer rebuild, ⌘M any-kind.
-- **Both-directions spec scan:** `.agents/SPEC-REVISION-CANDIDATES.md` §E — 15 net-new findings (N1 ElementJSON home P1, N4 Link A/V contract vacuum P1, N15 trim targeting P2, +12 more), strengthenings to every R13 entry, 20 new registrations (C10-C29). Mirrored on issue #2 (comment `5546483226`).
-- **Suite: 511 → 596 tests** (34 files), `tsc --noEmit` clean, PR #1 auto-updated (37 commits, 146 files ≤ 300).
-- **Runtime stack REBUILT from scratch this session** (fresh sandbox wiped it — see "Fresh-sandbox restoration" below): static build synced to `public/mockup/`, runtime copy at `/home/z/my-project/shell-variants/` (install + .env + git remote + vendor dist verified), `sb-supervisor.mjs` + `/api/spawntest` route rewritten. Boot test passed (storybook serves :3000, 200, allowedHosts OK) — the instance is bash-reaped as expected; **the supervisor is ARMED: when the platform's next-server comes up (user opens the preview URL), POST `/api/spawntest` `{cmd:"node",args:["/home/z/my-project/scripts/sb-supervisor.mjs"],log:"/home/z/my-project/scripts/sb-serve.log"}` and Storybook takes :3000.**
+- **Decisions 15/16/17 landed in 00-master v6.0** (evolve-in-place; the `nle-app` assembly architecture — fifth repo + pinned-submodule lockset + ENGINE-home projector + two-staircase commands-down/events-up + app-level multi-scene; four-walls-one-roof verification). Each ruling went through: ARCH-R15 v1 → two parallel fresh-context peer reviews (adversarial architecture + practical execution) → v2 folding ALL 7+8 findings → BOTH re-reviews SIGNED OFF → v2.1. Full record: `audits/ARCH-R15-assembly-and-path.md` + `audits/REVIEW-R15-ARCH.md` + `audits/REVIEW-R15-EXEC.md`.
+- **spec 14 REWRITTEN as the assembly plan** (week −1 pre-flight + A0-A7b phases with exit gates + per-domain gap registers citing module pins + P→A traceability; the honest calendar: A7 ≈22-27wk solo / 13-16 two-dev, DEMO (A3) ≈11-13/7-8; P0-P6 bodies retired to git history).
+- **spec 15 gained the routing-disposition table (§4.1A, 78/78 members — every union member's home or typed NOT_IMPLEMENTED), §4.1B NOT_IMPLEMENTED code (registered in §6.3), §9.5 event-name mapping register, §10.1 versioning-at-bus; §13.15 refreshed to the 24-command reality** (+ N5 loop invariant, the C7 rename list complete).
+- **The full candidate amendment set processed:** A1-A6 + B1-B4 + N1-N15 landed across 09/05/16/18/20 (with cross-spec fixes: 15's marker-note → per-scene, 181 bindings, R→ripple); **19/17 re-baselined to R15 SHAs** (engine 274+265+318 @f526e67, OT 423/423 @0412e41, WDC 721/721 pure @374711c, mock 596/596 @d42693e) + 17's new roof-suite section; README R15.
+- **INTEGRATION-REVIEW-R15:** 0 BLOCKING/6 MAJOR/7 MINOR → ALL fixed (`6315cd6`); verdict CLEARED. **`scripts/battery_r15.py` — 47/47 green** (replaces battery_r9; the R9 checks retired with the canon they checked).
+- **Four scouts, gates re-run in-sandbox:** SCOUT-R15-A/B/C/D in `audits/` (the current verified facts on all four repos — also the best onboarding pack for anyone joining).
 
+## Next session's task: USER REACTION + ASSEMBLY KICKOFF DECISION
 
-- **Test program (from zero):** Vitest 5 + RTL + jsdom — **33 files / 511 tests, all green, `tsc --noEmit` clean**, co-located `*.test.tsx`, per-test store reset (`useUi.setState(useUi.getInitialState(), true)` in `src/test/setup.ts` — the stories' withStoreReset contract), `renderShell` provider-stack helper. Tests found **5 real bugs before any review** (deep-clone undo, no-op history pollution, dead ⌥⇧M, plus the store contract gaps reviewers later confirmed).
-- **PR #1 OPEN:** base `ui-baseline` (branch at `ce16d33`, pre-mockup) ← head `main`, 143 files (≤ 300 as instructed), +29k/−31. **CodeRabbit + Codex + the maintainer's three review waves** all landed on it; every P1/P2 addressed through `8b52edb`/`b8d504f`; response comments posted; only P3s remain (listed in the maintainer's final verdict comment on the PR).
-- **Direction-2 output:** `.agents/SPEC-REVISION-CANDIDATES.md` + **GitHub issue #2** — 17 entries (A1-A6 spec-vs-spec conflicts, B1-B4 missing canon answers, C1-C9 mock registrations, seal-staleness flags). This is the seal round's spec-side input.
-- **Big fixes of the round (all regression-pinned):** trimToPlayhead target constraint (was: one keypress destroyed unselected material across ALL scenes), setMixerTrack partial-strip shell crash, locked-track law at the store level, Tab scoped to the timeline region, slider keyboard grammar (Viewer + Ruler scrub), §6.4 keyboard multi-delete confirm (AppShell = ConfirmProvider wrapper + AppShellInner), annotakit hotkeys remapped off shell keys (c/g/h/f/q), annotakit manager + drawer cards keyboard-accessible, violet accent AA (#8f74ff), F6 deepest-region match, ripple trim, linked A/V selection groups.
-
-## Fresh-sandbox restoration (the R14 recipe — this session ran it)
-
-The sandbox filesystem reset (clone gone, platform scaffold reset, runtime
-copy gone; git-is-the-disk recovered the code). Restoration order:
-1. `git clone` to `/home/z/nle-core-spec`, set identity, `npm install` in `ui-mock/shell-variants`, run `npx vitest run` (596 green) as the baseline gate.
-2. `npm run build` → `rsync -a --delete dist/ /home/z/my-project/public/mockup/` (the static fallback surface).
-3. Runtime copy: `rsync -a --exclude node_modules --exclude dist --exclude .env --exclude 'src/**/*.test.*' <repo>/ /home/z/my-project/shell-variants/` → write `.env` (ANNOTAKIT_GH_TOKEN + ANNOTAKIT_GH_REPO) → `git init` + remote with PAT → `mkdir .storybook/annotakit` → `npm install` → copy `vendor/storybook-annotakit/dist/` (built in the repo) and grep the dist for fix markers.
-4. Supervisor armed: `node /home/z/my-project/scripts/sb-supervisor.mjs` must be spawned VIA the platform next-server (`POST /api/spawntest`) — bash-spawned processes are reaped between tool calls (verified again this session: even setsid dies). The platform next-server appears when the user opens the preview URL; then POST the spawn and verify `:3000` + `/annotakit/api/health`.
-
-## Next session's task: USER REACTION + PR CLOSE-OUT
-
-1. **Watch the pins** (the user reviews at the public URL): poll `GET :3000/annotakit/api/threads` or the GH issues labeled `annotakit`; resolve with `PATCH /threads/:id` (full-doc PUT-back semantics).
-2. **Poll PR #1** for new CodeRabbit/maintainer comments (the diff auto-updates with every `main` push — R14 added 6 commits; the audit reply is the last comment). Remaining corpus is P3-only; the candidates file C10-C29 now registers what used to be open P3s.
-3. **Tour the answers:** the R14 wiring sweep + the spec-scan outputs (issue #2 N-series) + the still-open questions (A/B/C direction + DESIGN §11 q1-q9).
-4. **Seal round prep:** the candidates file (A+B+N+C+D) is the agenda; seal items 10-25 + issue #2.
+1. **The user's gate decision:** green-light `nle-app` creation (then **week −1 pre-flight** is the first work item — the 12-item list in REVIEW-R15-EXEC §7, with the TS one-compiler spike + Vite HMR spike as GATES; the dev-loop config to adopt verbatim is REVIEW-R15-EXEC §2.2) — or further seal-polish rounds. The parallel session's `.agents/design/` docs (R15 W0, `ac784f7`: timeline-parity + audio-overhaul design v2 FINALs) are the MOCK-side iteration track and remain live.
+2. **Watch PR #1 + issue #2** (the mock's review surfaces; only 2 P3 inline comments remain; the C-ledger keeps registering).
+3. **Known forward obligations recorded in-canon:** the per-row pin-SHA battery clauses land at A2; the union's Bookmark block retires at the next union-version bump; 10 §1665's FCPXML marker wording gets its A6-consistent pass; engine cosmetic folds (layout.tsx metadata, ~280→265) ride the next engine commit; OT submodule pin bump (3420b5f→0412e41, low-risk, carries W9 fixes — recommended by SCOUT-B §9).
 
 ## Repo state at handoff
 
-| Repo | Commit | Notes |
+| Repo | Commit | State |
 |---|---|---|
-| nle-core-spec (canon) | `b8d504f` | 21 specs unchanged; `ui-mock/shell-variants/` (app + storybook + 511 tests + vendored annotakit + docs); `.agents/SPEC-REVISION-CANDIDATES.md` NEW; PR #1 open |
+| nle-core-spec (canon) | `81bafc2` | 21 specs (00 v6.0 with 17 decisions; 14 = assembly plan; 15 w/ routing table); battery_r15 47/47; ui-mock @`d42693e` (596/596) untouched this round |
+| nle-engine | `f526e67` | sealed (274+265+318, ledger closed) — NOT touched this round |
+| opencut-timeline | `0412e41` | sealed (423/423, W9 terminal) — NOT touched |
+| web-daw-core | `374711c` | sealed (721/721, pure) — NOT touched |
 
-## Mechanics to reuse (READ THESE, they save hours)
+**Parallel sessions are ACTIVE on this repo** (the user works in parallel: `ac784f7`, `0403225` landed mid-round, both rebased cleanly). ALWAYS `git fetch` before push; `git pull --rebase` on rejection; NEVER force push.
 
-- **Sandbox persistence law:** processes spawned from agent bash sessions are REAPED between tool calls, but **children of the platform's next-server survive** (platform cgroup). The spawner is the API route `/home/z/my-project/src/app/api/spawntest/route.ts` (POST {cmd,args,cwd,log}). The supervisor + storybook on :3000 were born that way and are orphaned-to-init stable.
-- **Boot path:** `/home/z/my-project/package.json` `dev` script = `node scripts/sb-supervisor.mjs` (respawn loop). If :3000 is dead AND next is gone: one-shot bash — start `next dev -p 3001`, POST the spawn, it takes over :3000.
-- **Sync flow (repo → runtime):** edit in `/home/z/nle-core-spec/ui-mock/shell-variants` (canonical), then `rsync -a --exclude node_modules --exclude storybook-static --exclude '.storybook/annotakit' --exclude .env --exclude .git --exclude 'src/**/*.test.*' --exclude vendor <repo>/ <runtime>/` — HMR picks src changes up live. NEVER delete the runtime `.git` (annotakit GH mirror needs the remote), `.env` (GH token), or `.storybook/annotakit/` (threads.db).
-- **Vendor (annotakit) changes need a dist rebuild — and the rebuild must be VERIFIED:** edit the repo's `vendor/storybook-annotakit/src/`, then IN THE RUNTIME COPY: `rsync -a --delete <repo>/vendor/storybook-annotakit/src/ vendor/storybook-annotakit/src/ && cd vendor/storybook-annotakit && npm run build`, then grep the DIST for a code marker (comments are stripped — grep `role: "button"` / `tabIndex: 0` / a string literal from the fix, NOT the comment text), then `pkill -f "storybook dev --port 3000"` (supervisor respawns in ~25s; log `/home/z/my-project/scripts/sb-serve.log`). **R13 lesson: a sub-agent claimed the rebuild; the verification wave proved dist was still pre-fix — always verify the artifact, not the claim.**
-- **"Invalid host" 403 through the public URL** = storybook 10 core-server host validation (the platform edge REWRITES the Host header). Fix already in `.storybook/main.ts`: `core.allowedHosts: true`. Vite 8 has NO `allowedDevHosts` option — don't re-add one.
-- **Annotakit API gotchas:** DELETE not allowed; PATCH expects the FULL thread document. Health: `GET :3000/annotakit/api/health`. **Change notification rides Storybook's `experimental_serverChannel`** (Storybook's own WS) — the addon has NO WebSocket of its own; REST lives on the dev server. Hotkeys are REMAPPED (c/g/h/f/q) in `.storybook/preview.tsx` — keep new shell plain keys out of that set.
-- **agent-browser + iframes:** stories render in an IFRAME — query `document.querySelector('iframe').contentDocument.querySelector(...)`. Screenshots need several seconds after navigation.
-- **VLM discipline:** always add "Do NOT generate code/HTML" to vision prompts. Prefer DOM assertions over VLM.
+## Mechanics to reuse
+
+- The battery: `python3 scripts/battery_r15.py` after every fix round (47 checks; recalibrate stale checks; the live-hit discipline exempts annotated supersessions — check BOTH directions' context).
+- Peer-review pattern that worked: write the decision doc → 2 parallel fresh reviewers (different lenses) → fold ALL findings → resume both for re-check → sign-off gate → land. ~2 rounds, ~30-40 min, caught 1 CRITICAL + 10 MAJORs this round.
+- Sub-agent fleet discipline: disjoint file ownership per agent (AM1: 16+18 / AM2: 09+05+20 / AM3: 19+17) — zero clobbering; the integration review AFTER is non-negotiable (it found 6 propagation Majors the agents' own QA missed).
+- GitLab backup remote is configured: `git push gitlab main` (namespace `ansgareutychisO`; WAF retries probabilistically).
+- The PAT for module-repo access: lives in the runtime .env / remote URLs only (NEVER in committed files — GitHub's secret scanner blocks pushes; recover from the session chat if lost).
 
 ## Standing cautions
 
+- The spec set is CONTRACT + GAP + ACCEPTANCE (D14) — now with the assembly plan (D15-17). The mock does NOT amend specs — deviations live in SPEC-REVISION-CANDIDATES.md (C-series = the live ledger).
 - Never edit web-daw-core's `copy`-class files (file-class law).
-- The spec set is CONTRACT + GAP + ACCEPTANCE (Decision 14): the mock does NOT amend specs — deviations live in PLAN seal items + SPEC-REVISION-CANDIDATES.md.
 - Push at every micro milestone; `git fetch` before push; never force push.
-- The PAT lives in `/home/z/my-project/shell-variants/.env` + the runtime `.git` remote URL — NEVER commit either.
-- PR #1 is head=`main`: every push updates the PR diff and re-triggers CodeRabbit; keep `ui-baseline` frozen at `ce16d33`.
+- The PAT lives in runtime .env files / remote URLs — NEVER commit it.

@@ -1,10 +1,25 @@
 # PLAN — Long-Horizon Task Tracker (nle-core-spec)
 
 **Created:** 2026-09-02 (Round 8 wrap-up — user directive: push/backup every micro milestone; PLAN tracks the long horizon, HANDOFF tracks the next session only)
-**Current round:** 14 (audit + zero-no-op + both-ways spec scan) COMPLETE through R14 HEAD — seal round remains
+**Current round:** 15 COMPLETE (`81bafc2`) — the ASSEMBLY round: D15/D16/D17 landed, the full amendment set processed, re-baselines done. **The horizon is now the A0-A7b assembly plan (spec 14 / ARCH-R15 §3.4).** R16+ = either (a) the user green-lights `nle-app` creation (week −1 pre-flight first — REVIEW-R15-EXEC §7's 12 items) or (b) further seal-polish rounds.
 **Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec
 
 ---
+
+## Round 15 (2026-09-05) — the assembly + path round (COMPLETE)
+
+**The three rulings (peer-reviewed 2×, both signed off; full record `audits/ARCH-R15-assembly-and-path.md` v2.1):**
+- **Decision 15 — EVOLVE-IN-PLACE:** the four repos ARE the product (user's ~70% estimate verified: the union covers ~65-70% of non-assembly/non-cloud scope; the adversarial steelman FOR greenfield recorded and beaten in REVIEW-R15-ARCH §4; reversal condition probed — no structural defect found). D10's "references" framing superseded.
+- **Decision 16 — the `nle-app` assembly architecture:** fifth repo + three pinned submodules (lockset rule) + mock chrome PORTED; **projector is ENGINE-home** (`src/lib/nle/projector/`, additive; Timeline = parity oracle → permanent test substrate); commands DOWN one union (routing-disposition table = spec 15 §4.1A, 78/78 members; NOT_IMPLEMENTED typed) + telemetry UP one event staircase (spec 15 §9.5 register; playhead ownership = engine Clock truth, imperative mirror); multi-scene app-level (OT stays sealed single-scene); D12.2 amended (engine JSON-RPC = internal transport).
+- **Decision 17 — four walls one roof:** module gates stay undiluted; the app adds S1-S5 (seam contracts / state WYSIWYG / wired shell with the /dev/view-fixture + ~200 ported chrome + §12 capture suite / render-audio parity incl. the net-new null rig / battery); port-then-swap law; CI fast-lane/nightly + HEAD-follow bump PRs.
+
+**Execution plan (spec 14 REWRITTEN):** week −1 pre-flight (TS + HMR spike gates) + A0 scaffold (HMR round-trip exit gate) → A1 projector (engine, 4-5wk) → A2 bus+C7+op-port wave 1 (5-6wk) → A2.5 wave 2 (∥A3) → A3 shell + DEMO (5-6wk; demo ≈11-13wk solo / 7-8 two-dev) → A4-v1/v2 audio → A5 project+scenes → A6 FCPXML → A7a/b polish. **A7-complete ≈22-27wk solo / 13-16 two-dev (honest, fresh-senior calibrated).** Per-domain gap registers live in spec 14 §4 (every row cites a module pin).
+
+**The amendment set (all landed, battery-checked):** A1-A6 + B1-B4 + N1-N15 processed into 09/05/16/18/20/15 (AM1/AM2 agents); 19/17 re-baselined to R15 SHAs with the roof-suite section (AM3); README R15; integration review R15 (0 BLOCKING/6 MAJOR/7 MINOR → all fixed in `6315cd6`, verdict CLEARED); **battery_r15.py 47/47 green**. The C-series + D remain the live deviation ledger (candidates file). Cross-spec contradiction fixes: 15's marker-note → per-scene, 181 bindings, R→ripple example.
+
+**Scouts (the evidence base, all gates re-run in-sandbox):** SCOUT-R15-A (engine: 274/274+265/265+318; headless = JSON-RPC 19 ops; OT vendored TYPE-ONLY; P0 85%/P-A 80%/P3 85%/P4 70%/P5 0) — SCOUT-R15-B (OT: 423/423; W8 UI landed; C7 NOT STARTED deliberately; 24/78 wire coverage; pin=post-W8-d, bump recommended) — SCOUT-R15-C (WDC: 721/721 pure; one-audio-engine verified; mixer G-surface UNWIRED = M2; 12 host obligations) — SCOUT-R15-D (mock: 596/596; ≈55% UI-layer risk de-risked; net-new 09 deltas incl. float-seconds vs MediaTime; PR #1 down to 2 P3s).
+
+**Parallel-session note:** the user's parallel session landed `ac784f7` (R15 W0: OT seam-contract research, web-daw-ui pattern reference, mockup 18-defect audit, two design docs v2 FINAL — timeline-parity + audio-overhaul) and `0403225` mid-round; both rebased cleanly (no file overlap). The design docs in `.agents/design/` are the MOCK-side next iterations — they complement (not conflict with) this round's canon work.
 
 ## UI/UX direction track (R10 `390fd48` → R11 `e0eaed2` → R12 `5550902`+ → R13 `b8d504f`+)
 
