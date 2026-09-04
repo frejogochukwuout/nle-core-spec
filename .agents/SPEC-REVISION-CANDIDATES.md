@@ -314,3 +314,42 @@ Viewer loading/error state rows (§4.2), ColorPage/Deliver settings wiring,
 auxPreFader/auxB/aux-on toggles, SoundLibrary sort, DebugOverlay copy-failure
 state + save-fail drill, SceneTabs aria-controls (§11.6), splitter ⇧×4
 ladder, Ruler Tab reachability, ToastRegion timing doc sync.
+
+---
+
+## F. R15 audio-overhaul registrations (R15-A3/A4 round)
+
+Provenance: R15 audio waves A0–A4 in the ui-mock (design doc
+`.agents/design/R15-audio-overhaul.md` v2 FINAL; worklog R15-A1 + R15-A3).
+The §A/§B/§E.2 processing above predates the audio overhaul; these rows are
+the net-new ledger entries that overhaul surfaced, registered the same way
+(mock does NOT amend specs — contract + gap + evidence per Decision 14).
+
+### F.1 Closed in the mock — seal evidence (the "re-implement" branch taken)
+
+- **Header micro-meters — v2.2 §3.2 promise CLOSED (seal item 16 / §D
+  above).** DESIGN-audio-mode §3.2/§11.3/§11.7 (and the R15 audio design's
+  A4) presuppose per-audio-track header micro-meters; §D item 16 flagged
+  them as non-existent ("re-scope the seal question to the master
+  micro-meter, or re-implement header meters"). The mock now takes the
+  re-implement branch: a 4px view-only vertical level meter per AUDIO track
+  header (`TrackHeader.tsx`), fed by the shared metering engine
+  (`lib/meterEngine.ts` → `useMeter(trackId)` — the SAME key the channel
+  strips, bridge rail, aux returns and master read, so header and strip can
+  never disagree), mono-collapsed to the louder channel, clip latches red,
+  effectiveMute dims, aria-hidden + pointer-events-none, no LED segments,
+  and hidden on compact lanes (height < 48 — the single-row layout has no
+  vertical room; documented in the component). Evidence:
+  `src/components/timeline/TrackHeader.test.tsx` ("audio micro-meters
+  (v2.2 §3.2)"). **Amendment for the seal:** spec 18 §4.7 (or
+  DESIGN-audio §3.2, whichever home wins) blesses the grammar — view-only
+  level display on audio headers, shared-engine key, decorative (aria-hidden)
+  role, compact-lane suppression — and seal item 16 closes as implemented.
+
+### F.2 New registrations (C30–C32)
+
+| # | Simplification | Spec clause | Where / status |
+|---|---|---|---|
+| C30 | Strip chrome now carries h-1 role-color base bars at every strip bottom (--mk-role-* mapped to Dialogue/BGM/SFX/Music; master = accent gradient; aux = type-audio) — spec 18 §9's "type color strips" clause describes 2px TRACK-HEADER strips, which remain absent (C15 stays half-open: header-side strips + clip label strips still unimplemented) | 18 §9 | `ChannelStrip.tsx` (R15-A4) |
+| C31 | Fader dB scale column: labels +6/0/−6/−12/−24/−48/−∞ at TRUE (db+60)/66 taper positions, 8px aria-hidden right-aligned, channel strips only (not the bridge) — no spec pins ANY mixer scale grammar; invention registered so the seal can bless or replace it | 20 §4.2 (absent) | `MixerPrimitives.tsx` Fader `scale` (R15-A3) |
+| C32 | Aux "no source" honest-disabled chip, derived live from (any auxN send > 0 ∨ outputBus route to the bus) — no spec defines a no-source/return-inactive visual state; engine side already honest (bus OFF → silent return, R15-A2) | 20 §4.2 (absent) | `ChannelStrip.tsx` AuxStrip (R15-A4) |

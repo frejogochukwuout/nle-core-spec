@@ -8,11 +8,48 @@ import { Lock, Eye, EyeOff, Volume2, VolumeX, Headphones, Activity, SlidersHoriz
 import { useUi } from '../../state/useUiStore';
 import type { TrackJSON } from '../../lib/mockData';
 import { dbToSlider, sliderToDb } from '../../state/mockMixer';
+import { useMeter } from '../../lib/meterEngine';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 
 // single source of truth: the undoable store command (headers, strips, bridge)
 const toggleTrack = (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') =>
   useUi.getState().toggleTrackCmd(sceneId, trackId, field);
+
+/* R15-A4 — audio track-header micro-meter (v2.2 §3.2 promise, never
+   implemented until now): a 4px view-only vertical level display fed by the
+   SHARED metering engine — the same useMeter(trackId) key the channel
+   strips / bridge rail read, so the header and the strip can never disagree.
+   Zero interaction: aria-hidden, pointer-events-none. No LED segments (a 4px
+   column can't carry them) and mono-collapsed to the louder channel; clip
+   latches red like the strip meters; effectiveMute dims it.
+   Compact-safe: rendered ONLY on tall lanes (height ≥ 48) — the compact
+   single-row layout has no vertical room for a readable level display
+   (documented judgment; the mixer dock + toolbar master micro remain the
+   glance sources there). */
+function HeaderMicroMeter({ trackId, badge }: { trackId: string; badge: string }) {
+  const snap = useMeter(trackId);
+  const level = Math.max(snap.l.level, snap.r.level);
+  const clipped = snap.l.clipped || snap.r.clipped;
+  const pct = Math.round(level * 10000) / 100;
+  return (
+    <div
+      data-testid={`track-micrometer-${badge}`}
+      aria-hidden="true"
+      className={`pointer-events-none absolute inset-y-[3px] right-0 w-[4px] select-none overflow-hidden rounded-[1px] bg-[var(--meter-well)] ${snap.muted ? 'opacity-20' : ''}`}
+    >
+      <div
+        data-testid={`track-micrometer-${badge}-fill`}
+        className="absolute inset-x-0 bottom-0 h-full"
+        style={{
+          background: clipped
+            ? 'var(--meter-red)'
+            : 'linear-gradient(to top, var(--meter-green) 0%, var(--meter-amber) 70%, var(--meter-red) 90%)',
+          clipPath: `inset(${100 - pct}% 0 0 0)`,
+        }}
+      />
+    </div>
+  );
+}
 
 function CtrlBtn({ track, sceneId, field, label, tip, on, onCls, children, testid }: {
   track: TrackJSON; sceneId: string; field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform';
@@ -122,7 +159,7 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
 
   return (
     <div
-      className={`flex shrink-0 flex-col justify-center gap-[3px] border-b border-hairline bg-raised px-2 ${focused ? 'shadow-[inset_2px_0_0_0_var(--accent-selection)]' : ''}`}
+      className={`relative flex shrink-0 flex-col justify-center gap-[3px] border-b border-hairline bg-raised px-2 ${focused ? 'shadow-[inset_2px_0_0_0_var(--accent-selection)]' : ''}`}
       style={{ height, minHeight: height, overflow: 'hidden' }}
       data-testid={`shell-track-header-${track.id}`}
       title={`${track.name} · ${meta}`}
@@ -191,6 +228,9 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
           {track.solo && <Headphones size={10} className="shrink-0 text-[var(--solo)]" aria-label="Solo active" />}
         </div>
       )}
+      {/* A4: view-only audio micro-meter on the tall header's right edge —
+          see HeaderMicroMeter for the compact-safety note */}
+      {track.kind === 'audio' && tall && <HeaderMicroMeter trackId={track.id} badge={track.badge} />}
       {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
     </div>
   );

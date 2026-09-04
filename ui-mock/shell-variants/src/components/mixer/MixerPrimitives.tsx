@@ -6,6 +6,8 @@
    R15-A2: StripMeter is a view over the shared stereo metering engine
    (lib/meterEngine): dB-linear display [−60,0], token palette anchored to the
    well, LED segments, 1px peak line, mute/clip states.
+   R15-A3: fader polish — unity notch + end caps + dB scale column at TRUE
+   taper positions + master accent cap, all token-driven; grammar untouched.
    Fader drag grammar (SCOUT-R8-C): Shift+drag = fine, double-click = reset,
    full keyboard grammar (design doc §6). */
 
@@ -15,11 +17,33 @@ import { useMeter } from '../../lib/meterEngine';
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
-/* ---------- vertical fader (dB-tapered) ---------- */
-export function Fader({ db, onChange, height = 96, fillHeight = false, ariaLabel }: {
+/* ---------- vertical fader (dB-tapered) ----------
+   R15-A3: the track gains end caps + a 2px 0 dB unity notch (fg/30); the
+   thumb keeps the A0 --fader-thumb-1/2 gradient pair and gains the stable
+   data-testid hook; `scale` renders the dB label column at TRUE taper
+   positions (the taper is linear-in-dB, so (db+60)/66 positions are exact —
+   better than a decorative scale); `accent` swaps the thumb to the master
+   --fader-cap-accent-1/2 pair (flat cap, no glow — resolve's language).
+   Taper + drag + keyboard grammar are UNCHANGED (pinned by tests). */
+const FADER_SCALE: { db: number; label: string }[] = [
+  { db: 6, label: '+6' },
+  { db: 0, label: '0' },
+  { db: -6, label: '−6' },
+  { db: -12, label: '−12' },
+  { db: -24, label: '−24' },
+  { db: -48, label: '−48' },
+  { db: -60, label: '−∞' },
+];
+
+export function Fader({ db, onChange, height = 96, fillHeight = false, scale = false, accent = false, ariaLabel }: {
   db: number; onChange: (db: number) => void; height?: number;
   /** side-dock mode: the track fills the strip's centerpiece height */
-  fillHeight?: boolean; ariaLabel: string;
+  fillHeight?: boolean;
+  /** dB label column at true taper positions — channel strips (not bridge) */
+  scale?: boolean;
+  /** master cap: --fader-cap-accent-1/2 gradient (flat, no glow) */
+  accent?: boolean;
+  ariaLabel: string;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ startY: number; startDb: number } | null>(null);
@@ -32,54 +56,93 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, ariaLabel
     onChange(Math.min(6, Math.max(-60, drag.current.startDb + dDb)));
   }, [onChange]);
 
+  const capGradient = accent
+    ? 'linear-gradient(180deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))'
+    : 'linear-gradient(180deg, var(--fader-thumb-1), var(--fader-thumb-2))';
+
   return (
     <div className={`flex flex-col items-center gap-1 ${fillHeight ? 'self-stretch' : ''}`}>
       <span className="mono text-[10px] text-tmuted">{dbLabel(db)}</span>
+      {/* track + optional scale column share one row so the labels align with
+          the track's exact height (items-stretch) — the scale sits BETWEEN the
+          meter and the fader in strip composition (labels hug the track) */}
       <div
-        ref={trackRef}
-        role="slider"
-        tabIndex={0}
-        aria-label={ariaLabel}
-        aria-valuemin={-60}
-        aria-valuemax={6}
-        aria-valuenow={Math.round(db)}
-        aria-valuetext={dbLabel(db)}
-        className={`relative w-[14px] cursor-ns-resize rounded-[3px] bg-inset ${fillHeight ? 'min-h-[80px] flex-1' : ''}`}
+        className={`flex items-stretch justify-center ${fillHeight ? 'min-h-[80px] flex-1' : ''}`}
         style={fillHeight ? undefined : { height }}
-        onPointerDown={(e) => {
-          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-          const box = trackRef.current!.getBoundingClientRect();
-          const v = 1 - (e.clientY - box.top) / box.height;
-          const nextDb = sliderToDb(v);
-          onChange(nextDb);
-          drag.current = { startY: e.clientY, startDb: nextDb };
-        }}
-        onPointerMove={(e) => {
-          if (e.buttons !== 1 || !drag.current) return;
-          setFromEvent(e.clientY, e.shiftKey);
-        }}
-        onDoubleClick={() => onChange(0)}
-        onKeyDown={(e) => {
-          const step = e.shiftKey ? 0.2 : 1;
-          if (e.key === 'ArrowUp') { e.preventDefault(); onChange(Math.min(6, db + step)); }
-          else if (e.key === 'ArrowDown') { e.preventDefault(); onChange(Math.max(-60, db - step)); }
-          else if (e.key === 'PageUp') { e.preventDefault(); onChange(Math.min(6, db + 6)); }
-          else if (e.key === 'PageDown') { e.preventDefault(); onChange(Math.max(-60, db - 6)); }
-          else if (e.key === 'Home') { e.preventDefault(); onChange(-60); }
-          else if (e.key === 'End') { e.preventDefault(); onChange(6); }
-        }}
       >
-        {/* dB scale ticks */}
-        {[6, 0, -12, -24, -48, -60].map((t) => (
-          <span key={t} className="absolute left-0 h-px w-[3px] bg-tfaint" style={{ bottom: `${dbToSlider(t) * 100}%` }} aria-hidden="true" />
-        ))}
-        {/* thumb — A0 fader-thumb token pair (flat cap; unity notch + scale
-            column are the A3 wave, deliberately not here) */}
-        <span
-          className="absolute left-1/2 h-[10px] w-[12px] -translate-x-1/2 rounded-[2px] border border-strong bg-[linear-gradient(180deg,var(--fader-thumb-1),var(--fader-thumb-2))] shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
-          style={{ bottom: `calc(${dbToSlider(db) * 100}% - 5px)` }}
-          aria-hidden="true"
-        />
+        {scale && (
+          <div
+            data-testid="fader-scale"
+            aria-hidden="true"
+            className="relative mr-1 w-[15px] shrink-0 select-none text-right text-[8px] leading-none text-tprimary/40"
+          >
+            {FADER_SCALE.map(({ db: t, label }) => (
+              <span
+                key={t}
+                className="absolute right-0"
+                style={{ bottom: `${dbToSlider(t) * 100}%`, transform: 'translateY(50%)' }}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
+        <div
+          ref={trackRef}
+          role="slider"
+          tabIndex={0}
+          aria-label={ariaLabel}
+          aria-valuemin={-60}
+          aria-valuemax={6}
+          aria-valuenow={Math.round(db)}
+          aria-valuetext={dbLabel(db)}
+          className="relative w-[14px] shrink-0 cursor-ns-resize rounded-[3px] bg-inset"
+          onPointerDown={(e) => {
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            const box = trackRef.current!.getBoundingClientRect();
+            const v = 1 - (e.clientY - box.top) / box.height;
+            const nextDb = sliderToDb(v);
+            onChange(nextDb);
+            drag.current = { startY: e.clientY, startDb: nextDb };
+          }}
+          onPointerMove={(e) => {
+            if (e.buttons !== 1 || !drag.current) return;
+            setFromEvent(e.clientY, e.shiftKey);
+          }}
+          onDoubleClick={() => onChange(0)}
+          onKeyDown={(e) => {
+            const step = e.shiftKey ? 0.2 : 1;
+            if (e.key === 'ArrowUp') { e.preventDefault(); onChange(Math.min(6, db + step)); }
+            else if (e.key === 'ArrowDown') { e.preventDefault(); onChange(Math.max(-60, db - step)); }
+            else if (e.key === 'PageUp') { e.preventDefault(); onChange(Math.min(6, db + 6)); }
+            else if (e.key === 'PageDown') { e.preventDefault(); onChange(Math.max(-60, db - 6)); }
+            else if (e.key === 'Home') { e.preventDefault(); onChange(-60); }
+            else if (e.key === 'End') { e.preventDefault(); onChange(6); }
+          }}
+        >
+          {/* end caps — the slot's visible travel stops */}
+          <span data-testid="fader-endcap-top" className="absolute inset-x-0 top-0 h-[2px] rounded-t-[1px] bg-strong" aria-hidden="true" />
+          <span data-testid="fader-endcap-bottom" className="absolute inset-x-0 bottom-0 h-[2px] rounded-b-[1px] bg-strong" aria-hidden="true" />
+          {/* dB scale ticks */}
+          {[6, 0, -12, -24, -48, -60].map((t) => (
+            <span key={t} className="absolute left-0 h-px w-[3px] bg-tfaint" style={{ bottom: `${dbToSlider(t) * 100}%` }} aria-hidden="true" />
+          ))}
+          {/* 0 dB unity notch — 2px full-width, subtle fg/30 (A3) */}
+          <span
+            data-testid="fader-unity-notch"
+            className="absolute inset-x-0 h-[2px] bg-tprimary/30"
+            style={{ bottom: `calc(${dbToSlider(0) * 100}% - 1px)` }}
+            aria-hidden="true"
+          />
+          {/* thumb — A0 token pair (or the master accent pair), flat cap; the
+              data-testid is the stable hook the tests pin (R15-A3) */}
+          <span
+            data-testid="fader-thumb"
+            className="absolute left-1/2 h-[10px] w-[12px] -translate-x-1/2 rounded-[2px] border border-strong shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+            style={{ bottom: `calc(${dbToSlider(db) * 100}% - 5px)`, background: capGradient }}
+            aria-hidden="true"
+          />
+        </div>
       </div>
     </div>
   );

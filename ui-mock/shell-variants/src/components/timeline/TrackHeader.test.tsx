@@ -4,10 +4,11 @@
    the §4.9 header menu. */
 
 import { describe, expect, it } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { TrackHeader } from './TrackHeader';
 import { renderPlain, store } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
+import { __setLevel } from '../../lib/meterEngine';
 
 /** Header harness that re-reads the track from the store so post-toggle
  *  re-renders see the fresh track object (mirrors Timeline's prop flow). */
@@ -158,5 +159,51 @@ describe('TrackHeader R14 wiring (§4.9 height + add above/below)', () => {
     fireEvent.click(screen.getByTestId('shell-menu-track-add-below'));
     expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.map((t) => t.badge))
       .toEqual(['T1', 'V1', 'A1', 'A3', 'A2']); // A3 below A1, above A2
+  });
+});
+
+/* R15-A4 — audio track-header micro-meters (the v2.2 §3.2 promise, closed):
+   4px view-only vertical level display fed by the SHARED metering engine —
+   same useMeter(trackId) key as the strips/bridge, so header and strip can
+   never disagree. aria-hidden, no segments, hidden on compact lanes. */
+describe('TrackHeader R15-A4 — audio micro-meters (v2.2 §3.2)', () => {
+  it('tall audio headers carry the 4px view-only micro-meter: aria-hidden, well token, no LED segments', () => {
+    renderPlain(<Header trackId="tr-audio-1" height={60} />);
+    const m = screen.getByTestId('track-micrometer-A1');
+    expect(m).toHaveAttribute('aria-hidden', 'true');
+    expect(m.className).toContain('w-[4px]');
+    expect(m.className).toContain('pointer-events-none'); // view-only — never a hit target
+    expect(m.className).toContain('bg-[var(--meter-well)]'); // the shared well token
+    expect(m.querySelector('.meter-segments')).toBeNull(); // no 3px LEDs at 4px wide
+    expect(m.querySelector('[data-testid="track-micrometer-A1-fill"]')).not.toBeNull();
+  });
+
+  it('non-audio headers and compact lanes get none (compact-safe judgment, documented)', () => {
+    renderPlain(<Header trackId="tr-main" height={80} />);
+    expect(screen.queryByTestId('track-micrometer-V1')).toBeNull(); // video lane — no meter
+    renderPlain(<Header trackId="tr-audio-1" height={34} />);
+    expect(screen.queryByTestId('track-micrometer-A1')).toBeNull(); // compact single row — no room
+  });
+
+  it('renders the shared engine level: dB-linear fill, clip latches red, effectiveMute dims', () => {
+    renderPlain(<Header trackId="tr-audio-1" height={60} />);
+    const fill = screen.getByTestId('track-micrometer-A1-fill') as HTMLElement;
+    expect(fill.style.clipPath).toBe('inset(100% 0 0 0)'); // silent at rest
+    act(() => { __setLevel('tr-audio-1', -12); });
+    expect(fill.style.clipPath).toBe('inset(20% 0 0 0)'); // (−12+60)/60 — dB-linear, mono-collapsed
+    expect(fill.style.background).toContain('var(--meter-green)'); // token palette
+    act(() => { __setLevel('tr-audio-1', 0); });
+    expect(fill.style.background).toContain('var(--meter-red)'); // clip → solid red
+    act(() => { useUi.getState().toggleTrackCmd('sc-1', 'tr-audio-1', 'muted'); });
+    expect(screen.getByTestId('track-micrometer-A1').className).toContain('opacity-20'); // effectiveMute
+  });
+
+  it('header + strip read the ONE engine key — __setLevel moves both surfaces', () => {
+    // the header meter alone (strip tested in ChannelStrip/MixerDock files);
+    // same key contract: tr-audio-1's snapshot is shared, not header-local
+    renderPlain(<Header trackId="tr-audio-1" height={60} />);
+    act(() => { __setLevel('tr-audio-1', -30); });
+    const fill = screen.getByTestId('track-micrometer-A1-fill') as HTMLElement;
+    expect(fill.style.clipPath).toBe('inset(50% 0 0 0)'); // (−30+60)/60
   });
 });

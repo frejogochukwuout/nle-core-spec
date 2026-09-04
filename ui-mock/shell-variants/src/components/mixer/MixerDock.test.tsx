@@ -110,4 +110,45 @@ describe('MixerDock', () => {
     expect(store().mixer.tracks[added.id]).toBeDefined();
     expect(store().mixerState).toBe('full');
   });
+
+  it('strip row: subtle alternating bg parity across the channel strips (A4)', () => {
+    boot({ mixerState: 'full' });
+    // A1 is row 0 (shell), A2 is row 1 (raised) — console-strip banding
+    expect(screen.getByTestId('mixer-strip-A1').className).toContain('bg-shell');
+    expect(screen.getByTestId('mixer-strip-A2').className).toContain('bg-raised');
+    // the focused ring still wins over the parity background
+    fireEvent.click(screen.getByTestId('mixer-strip-A1'));
+    expect(screen.getByTestId('mixer-strip-A1').className).toContain('ring-1');
+  });
+
+  it('master strip: accent-tinted fader cap + accent-gradient base bar + readout row (A4)', () => {
+    boot({ mixerState: 'full' });
+    const master = screen.getByTestId('mixer-strip-master');
+    const thumb = master.querySelector('[data-testid="fader-thumb"]') as HTMLElement;
+    expect(thumb.style.background).toContain('var(--fader-cap-accent-1)'); // accent pair, flat
+    expect(thumb.style.background).toContain('var(--fader-cap-accent-2)');
+    expect(thumb.style.background).not.toContain('var(--fader-thumb-1)'); // NOT the neutral pair
+    const bar = screen.getByTestId('mixer-basebar-master');
+    expect(bar.style.background).toContain('var(--fader-cap-accent-1)');
+    expect(bar.style.background).toContain('var(--fader-cap-accent-2)');
+    expect(bar.className).toContain('h-1');
+    const row = screen.getByTestId('mixer-readout-master');
+    expect(row.className).toContain('mono');
+    expect(within(row).getByText('-8.5 dB')).toBeInTheDocument(); // 0.78 volume → −8.5 dB
+  });
+
+  it('master readout −∞ guard: volume 0 (or mute) reads −∞, not −60.0 (A3)', () => {
+    boot({ mixerState: 'full', masterVolume: 0 });
+    const row = screen.getByTestId('mixer-readout-master');
+    // at the volume floor BOTH the fader dB and the peak read −∞ (the guard),
+    // and the fake "-60.0 dB" never renders
+    expect(within(row).getAllByText('−∞')).toHaveLength(2);
+    expect(within(row).queryByText('-60.0 dB')).toBeNull();
+  });
+
+  it('master readout follows the live engine peak (one key with bridge/toolbar views)', () => {
+    boot({ mixerState: 'full' });
+    act(() => { __setLevel('master', -6); });
+    expect(within(screen.getByTestId('mixer-readout-master')).getByText('-6.0')).toBeInTheDocument();
+  });
 });

@@ -144,7 +144,7 @@ function FullDock() {
         </span>
         <AudioLines size={11} strokeWidth={1.6} className="text-tfaint" aria-hidden="true" />
       </div>
-      {audio.map((t) => (
+      {audio.map((t, i) => (
         <ChannelStrip
           key={t.id}
           track={t}
@@ -152,6 +152,7 @@ function FullDock() {
           compact={compact}
           focused={stripFocus === t.id}
           flashing={flashOn && stripFocus === t.id}
+          index={i} /* A4: subtle alternating bg parity across the strip row */
           onStripClick={() => setStripFocus(t.id)}
         />
       ))}

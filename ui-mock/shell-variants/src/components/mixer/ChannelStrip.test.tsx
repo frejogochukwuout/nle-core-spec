@@ -4,15 +4,15 @@
    focus/flash affordances. */
 
 import { describe, expect, it } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { ChannelStrip, AuxStrip } from './ChannelStrip';
 import { renderPlain, store } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
-import { meterGetSnapshot } from '../../lib/meterEngine';
+import { meterGetSnapshot, __setLevel } from '../../lib/meterEngine';
 
 /** Strip harness reading the track from the store (fresh on doc mutations). */
-function Strip({ trackId, compact = false, focused = false, flashing = false }: {
-  trackId: string; compact?: boolean; focused?: boolean; flashing?: boolean;
+function Strip({ trackId, compact = false, focused = false, flashing = false, index = 0 }: {
+  trackId: string; compact?: boolean; focused?: boolean; flashing?: boolean; index?: number;
 }) {
   const scene = useUi((s) => s.scenes.find((x) => x.id === 'sc-1')!);
   const track = scene.tracks.find((t) => t.id === trackId);
@@ -25,6 +25,7 @@ function Strip({ trackId, compact = false, focused = false, flashing = false }: 
         compact={compact}
         focused={focused}
         flashing={flashing}
+        index={index}
         onStripClick={() => useUi.getState().setStripFocus(track.id)}
       />
     </div>
@@ -178,5 +179,99 @@ describe('ChannelStrip', () => {
     renderPlain(<Strip trackId="tr-audio-2" />);
     fireEvent.click(strip('A2'));
     expect(store().stripFocus).toBe('tr-audio-2');
+  });
+});
+
+/* R15-A3/A4 — strip chrome: role base bar, scale column, readout row,
+   20×18 letter buttons, row parity, aux no-source honesty. */
+describe('ChannelStrip R15-A3/A4 chrome', () => {
+  it('renders the h-1 role base bar in the strip role\'s --mk-role-* color (flush to the bottom edge)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />); // fixture role: BGM
+    const bar = screen.getByTestId('mixer-basebar-A2');
+    expect(bar.className).toContain('h-1');
+    expect(bar.className).toContain('absolute');
+    expect(bar.style.background).toBe('var(--mk-role-bgm)');
+    expect(bar.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('every role maps to its own base-bar token (A2 bgm / A1 dialogue)', () => {
+    renderPlain(<Strip trackId="tr-audio-1" />);
+    expect(screen.getByTestId('mixer-basebar-A1').style.background).toBe('var(--mk-role-dialogue)');
+  });
+
+  it('carries the fader\'s dB scale column at true taper positions (A3, channel strips only)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    const scale = strip('A2').querySelector('[data-testid="fader-scale"]') as HTMLElement;
+    expect(scale).not.toBeNull();
+    expect(scale.getAttribute('aria-hidden')).toBe('true');
+    expect(scale.textContent).toContain('−48');
+    expect(scale.textContent).toContain('+6');
+    expect(scale.textContent).toContain('−∞');
+  });
+
+  it('readout row: fader dB (mono) + live peak in meter-green, −∞ when silent (A3)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    const row = screen.getByTestId('mixer-readout-A2');
+    expect(row.className).toContain('mono'); // tabular-nums rides .mono
+    expect(within(row).getByText('-12.0 dB')).toBeInTheDocument(); // G-slice fader (A2 boots −12)
+    const peak = within(row).getByText('−∞');
+    expect(peak.className).toContain('var(--meter-green)'); // token color, not a hex
+    act(() => { __setLevel('tr-audio-2', -6); });
+    expect(within(row).getByText('-6.0')).toBeInTheDocument(); // engine peak, signed 1dp
+    expect(within(row).queryByText('−∞')).toBeNull();
+  });
+
+  it('M/S/L are normalized 20×18 letter buttons (A4) with the semantic on-state tokens kept', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    for (const name of ['Mute A2', 'Solo A2', 'Lock A2']) {
+      const b = screen.getByRole('button', { name });
+      expect(b.className).toContain('w-[20px]');
+      expect(b.className).toContain('h-[18px]');
+    }
+    // routing unchanged — the same undoable command family
+    fireEvent.click(screen.getByRole('button', { name: 'Mute A2' }));
+    expect(track('tr-audio-2').muted).toBe(true);
+  });
+
+  it('section hairlines (--border-strong) rhythm the strip (A4)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    // 1px --border-strong dividers: under the header/role block, under the
+    // readout row, above the lower stack — bg-strong = var(--border-strong)
+    const hairlines = strip('A2').querySelectorAll('.bg-strong');
+    expect(hairlines.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('odd strips get the raised parity background, even stay shell (A4 row banding)', () => {
+    const { rerender } = renderPlain(<Strip trackId="tr-audio-2" index={1} />);
+    expect(strip('A2').className).toContain('bg-raised');
+    rerender(<Strip trackId="tr-audio-2" index={0} />);
+    expect(strip('A2').className).toContain('bg-shell');
+    expect(strip('A2').className).not.toContain('bg-raised');
+  });
+
+  it('aux strips: the type-audio base bar + readout row on the engine bus key (A4 grammar)', () => {
+    renderPlain(<AuxStrip bus="a1" compact={false} />);
+    expect(screen.getByTestId('mixer-basebar-aux-a1').style.background).toBe('var(--type-audio)');
+    const row = screen.getByTestId('mixer-readout-aux-a1');
+    expect(within(row).getByText('-6.0 dB')).toBeInTheDocument(); // a1 Reverb returnGain
+    expect(within(row).getByText('−∞')).toBeInTheDocument();
+  });
+
+  it('aux "no source" state: honest-disabled chip when nothing feeds the bus (A4)', () => {
+    // fixture: NOTHING feeds either bus (all sends 0, no outputBus routes) —
+    // both returns carry the honest-disabled chip
+    renderPlain(<AuxStrip bus="a1" compact={false} />);
+    renderPlain(<AuxStrip bus="a2" compact={false} />);
+    const chip = screen.getByTestId('mixer-nosource-a1');
+    expect(chip).toHaveAttribute('aria-disabled', 'true');
+    expect(chip).toHaveTextContent('no source');
+    expect(chip.className).toContain('border-dashed');
+    expect(screen.getByTestId('mixer-nosource-a2')).toBeInTheDocument();
+    // the state is live, not fixture-frozen: one send > 0 drops a1's chip
+    act(() => { useUi.getState().setMixerTrack('tr-audio-2', { auxA: 0.3 }); });
+    expect(screen.queryByTestId('mixer-nosource-a1')).toBeNull();
+    expect(screen.getByTestId('mixer-nosource-a2')).toBeInTheDocument(); // a2 still unfed
+    // the engine side of the honesty is already pinned: bus OFF → silent
+    expect(meterGetSnapshot('auxB').muted).toBe(true);
   });
 });

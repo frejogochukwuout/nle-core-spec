@@ -4,6 +4,9 @@
    pointer-release-only detent, arc/indicator geometry, bubble), and
    StripMeter over the shared engine (R15-A2: dB-linear mapping, token
    palette, LED segments, peak line, mute/clip, engine lifecycle + reset).
+   R15-A3: fader CHROME assertions — thumb test hook + token gradients,
+   end caps + unity notch, the dB scale column at TRUE taper positions
+   (taper/keyboard/drag grammar tests above are UNCHANGED by design).
    Drag math is exercised by mocking getBoundingClientRect where needed
    (jsdom reports 0×0); the knob drag grammar is clientY-relative so it needs
    no rect at all. */
@@ -74,15 +77,60 @@ describe('Fader', () => {
     expect(onChange).toHaveBeenCalledWith(-22.875); // −10.5 − 12.375
   });
 
-  it('the thumb position follows the controlled db value (dbToSlider taper)', () => {
+  it('the thumb position follows the controlled db value (dbToSlider taper) — pinned by the stable data-testid hook', () => {
     const { rerender } = render(<Fader db={0} onChange={() => {}} ariaLabel="Test fader" height={96} />);
     const f = screen.getByRole('slider', { name: 'Test fader' });
-    const thumb = f.querySelector('span.rounded-\\[2px\\]') as HTMLElement | null;
+    const thumb = f.querySelector('[data-testid="fader-thumb"]') as HTMLElement | null;
     expect(thumb).not.toBeNull();
     // jsdom serializes percentages at 4 decimals: 60/66 → 90.9091%
     expect(thumb!.style.bottom).toContain('90.9091%');
     rerender(<Fader db={-60} onChange={() => {}} ariaLabel="Test fader" height={96} />);
-    expect((f.querySelector('span.rounded-\\[2px\\]') as HTMLElement)!.style.bottom).toContain('0%');
+    expect((f.querySelector('[data-testid="fader-thumb"]') as HTMLElement)!.style.bottom).toContain('0%');
+  });
+});
+
+describe('Fader A3 polish (R15-A3 — chrome only, grammar untouched)', () => {
+  it('thumb: A0 --fader-thumb-1/2 gradient; the accent prop swaps to the master --fader-cap-accent-1/2 pair (flat)', () => {
+    const { container, rerender } = render(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" />);
+    const thumb = () => container.querySelector('[data-testid="fader-thumb"]') as HTMLElement;
+    expect(thumb().style.background).toContain('var(--fader-thumb-1)');
+    expect(thumb().style.background).toContain('var(--fader-thumb-2)');
+    rerender(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" accent />);
+    expect(thumb().style.background).toContain('var(--fader-cap-accent-1)');
+    expect(thumb().style.background).toContain('var(--fader-cap-accent-2)');
+  });
+
+  it('track chrome: end caps at both travel stops + the 0 dB unity notch at the taper-true position', () => {
+    const { container } = render(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" />);
+    expect(container.querySelector('[data-testid="fader-endcap-top"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="fader-endcap-bottom"]')).not.toBeNull();
+    const notch = container.querySelector('[data-testid="fader-unity-notch"]') as HTMLElement;
+    expect(notch.className).toContain('h-[2px]'); // 2px notch, subtle fg/30
+    expect(notch.className).toContain('bg-tprimary/30');
+    // unity 0 dB sits at (0+60)/66 of the travel — the taper-true position
+    expect(notch.style.bottom).toContain('90.9091%');
+  });
+
+  it('dB scale column: opt-in, aria-hidden, 8px right-aligned labels at TRUE taper positions', () => {
+    const { container, rerender } = render(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" />);
+    expect(container.querySelector('[data-testid="fader-scale"]')).toBeNull(); // plain faders stay lean
+    rerender(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" scale />);
+    const scale = container.querySelector('[data-testid="fader-scale"]') as HTMLElement;
+    expect(scale.getAttribute('aria-hidden')).toBe('true');
+    expect(scale.className).toContain('text-[8px]');
+    expect(scale.className).toContain('text-right');
+    const byText: Record<string, HTMLElement> = {};
+    for (const el of Array.from(scale.querySelectorAll('span'))) byText[el.textContent!] = el as HTMLElement;
+    // taper is linear-in-dB: (db+60)/66 — every label lands on its exact dB
+    // position (jsdom keeps full float precision on bare percentages)
+    expect(byText['+6'].style.bottom).toBe('100%');
+    expect(byText['0'].style.bottom).toContain('90.909');
+    expect(byText['−6'].style.bottom).toContain('81.818');
+    expect(byText['−12'].style.bottom).toContain('72.727');
+    expect(byText['−24'].style.bottom).toContain('54.545');
+    expect(byText['−48'].style.bottom).toContain('18.181');
+    expect(byText['−∞'].style.bottom).toBe('0%');
+    expect(byText['0'].style.transform).toBe('translateY(50%)'); // each label centers on its position
   });
 });
 
