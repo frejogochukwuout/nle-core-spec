@@ -20,6 +20,32 @@ npm run build      # static bundle → dist/ (base: /mockup/)
 A built copy is synced into the platform preview app's `public/mockup` and
 served at the preview root.
 
+## Storybook (design-review surface)
+
+The same components, second surface: **`npm run storybook`** (port 6006) boots
+Storybook 9 (react-vite builder) over this app — the standalone Vite app stays
+untouched and remains the interactive mock. `npm run build-storybook` emits a
+static review site to `storybook-static/` (gitignored). Stories live in
+`src/stories/*.stories.tsx`; `.storybook/` holds the config.
+
+| Story file | What it covers |
+|---|---|
+| `AppShell.stories.tsx` | Full shell on each page: Edit / Audio Focus / Color / Deliver |
+| `Variants.stories.tsx` | Presets A / B / C as complete shells — the fixed, screenshot-friendly A/B/C comparison (per-dimension exploration stays in the app's ctrl+\` overlay) |
+| `Mixer.stories.tsx` | Mixer row (full + bridge), solo ChannelStrip, Channel editor, Sound library |
+| `Timeline.stories.tsx` | Timeline default + blocks clip-style, clip anatomy states (selected / offline / fades / locked / badges), ruler + markers |
+| `Shell.stories.tsx` (title "Shell/Components") | Media pool grid/list, Viewer, Inspector ×4 tabs, status-strip autosave states, toast region, open context menu, cheat sheet |
+
+Review-workflow mapping: open the sidebar tree side-by-side, screenshot at the
+default 1920×1080 viewport (1440×900 and the 1280×800 floor are in the viewport
+toolbar), and attach story links (`?path=/story/…`) to review notes. Every story
+renders in a fresh state — a global decorator snapshots the Zustand store at
+module load and re-hydrates it per story (plus wipes the app's
+localStorage/hash persistence), so interactions never leak between stories.
+Install note: Storybook 9's react-vite builder peers on Vite ^5–^7 while this
+app pins Vite 8 — `.npmrc` sets `legacy-peer-deps=true` (verified: boots clean,
+all stories render, `tsc --noEmit` passes).
+
 ## Direction variants — Ctrl + `
 
 Press **Ctrl + `** (or the pill button, bottom-right) to open the **Variant
