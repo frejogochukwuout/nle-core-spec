@@ -1,7 +1,7 @@
 # 09 — Project Model: Schema, Persistence, Migrations (Refined)
 
 **Stream:** Project data model & persistence
-**Status:** Refined by sub-agent scout (SCOUT-09) — open questions answered with source code references
+**Status:** Refined by sub-agent scout (SCOUT-09) — open questions answered with source code references. **Round-15 amendments (§3.1 + new §3.1A + §7.2):** N1 inline `ElementJSON` container, A2 unified per-scene `Marker` (Bookmark absorbed), A3 `TrackJSON.volume` removed, A4 mute/solo S-authored/G-projected, A5 no V on audio tracks, B1 `linkedTo`+`syncLock`, B2 `pan`/`preservePitch`/volume unit, N3 `MediaRecord.importedAt`, multi-scene app-level ruling — per `.agents/SPEC-REVISION-CANDIDATES.md` (A/B/N series) and `audits/ARCH-R15-assembly-and-path.md` §2.4
 **Primary teacher:** OpenCut-classic types + our own storage layer (override OpenCut's IndexedDB)
 **Spec file:** `09-project-model.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 
@@ -52,7 +52,8 @@ interface ProjectJSON {
   currentSceneId: string;
 
   media: MediaRecord[];          // media library (per-project)
-  markers: Marker[];
+  // (Round 15 amendment, A2) project-level `markers: Marker[]` is RETIRED —
+  // markers live PER SCENE (SceneJSON.markers). See the §3.1A note.
 
   // UI prefs (optional — not part of WYSIWYG contract)
   uiState?: ProjectUIState;
@@ -89,7 +90,8 @@ interface SceneJSON {
   isMain: boolean;
 
   tracks: SceneTracksJSON;
-  bookmarks: Bookmark[];
+  markers: Marker[];             // (Round 15 amendment, A2) per-scene markers —
+                                 // absorbs Bookmark; see the §3.1A note
 }
 
 interface SceneTracksJSON {
@@ -101,17 +103,26 @@ interface SceneTracksJSON {
 interface TrackJSON {
   id: string;
   name: string;
-  muted: boolean;
-  solo: boolean;
+  muted: boolean;                // (Round 15 amendment, A4) mute/solo are AUTHORED
+  solo: boolean;                 // here (S layer) and PROJECTED into the G slice at
+                                 // materialization — the G layer (20 §4.2) carries
+                                 // no second authored copy
   locked: boolean;
-  visible: boolean;
-  volume: number;
-  elements: string[];            // element IDs in time order
+  visible: boolean;              // (Round 15 amendment, A5) non-audio kinds only
+  syncLock?: boolean;            // (Round 15 amendment, B1) 06 §6's sync-lock flag —
+                                 // default true (FreeCut `syncLock !== false`)
+  // (Round 15 amendment, A3) `volume` is REMOVED: per-track gain is owned by the
+  // G layer (20 §4.2 MixerTrackSettings.fader). Round-trips persist the fader
+  // with the per-scene audio-settings sidecar, never via TrackJSON. See §3.1A.
+  elements: ElementJSON[];       // (Round 15 amendment, N1) INLINE element records
+                                 // in time order — the string[]-IDs reading is retired
 }
 
 interface VideoTrackJSON extends TrackJSON {}
 interface OverlayTrackJSON extends TrackJSON {}
-interface AudioTrackJSON extends TrackJSON {
+// (Round 15 amendment, A5) audio tracks carry NO V (visibility) — M/S/L on all
+// kinds, V on non-audio only (cross-ref 18 §4.7's correction):
+interface AudioTrackJSON extends Omit<TrackJSON, 'visible'> {
   audioEq?: AudioEq;
 }
 
@@ -119,6 +130,10 @@ interface ElementJSON {
   id: string;
   type: 'video' | 'audio' | 'text' | 'image' | 'shape' | 'adjustment';
   trackId: string;
+  linkedTo?: string;             // (Round 15 amendment, B1) A/V link — id of the linked
+                                 // companion element (05 §12.3 linked selection; 16
+                                 // §3.4 toggleAVLink). `linkGroupId` alternative
+                                 // REJECTED — one companion is the v1 shape (mock)
 
   // Timeline position
   startTime: MediaTime;
@@ -133,7 +148,12 @@ interface ElementJSON {
   speed: number;                 // 1.0 = normal, 2.0 = 2x, -1.0 = reverse
 
   // Audio
-  volume: number;
+  volume: number;                // (Round 15 amendment, B2) unit is LINEAR 0..1 as
+                                 // persisted; the shell displays dB (conversion at
+                                 // the UI boundary — 18 §4.4 reword cross-ref)
+  pan?: number;                  // (Round 15 amendment, B2) −100..100 (full L..full R)
+  preservePitch?: boolean;       // (Round 15 amendment, B2) retime keeps pitch (18
+                                 // §4.4's preserve-pitch toggle)
   muted: boolean;
   audioFadeIn?: MediaTime;
   audioFadeOut?: MediaTime;
@@ -205,7 +225,10 @@ interface MediaRecord {
   id: string;
   name: string;
   type: 'video' | 'audio' | 'image';
-  size: number;
+  size: number;                  // (Round 15 amendment, N3) numeric BYTES — the shell
+                                 // formats for display
+  importedAt: string;            // (Round 15 amendment, N3) ISO 8601 — 18 §4.2's
+                                 // import-date sort mode
   duration: MediaTime;            // for video/audio
   width?: number;                 // for video/image
   height?: number;
@@ -230,17 +253,11 @@ interface MediaStorageRef {
   // For remote: includes URL or signed URL
 }
 
-interface Marker {
-  id: string;
-  time: MediaTime;
+interface Marker {               // (Round 15 amendment, A2) the ONE marker type, PER
+  id: string;                    // SCENE (SceneJSON.markers) — absorbs Bookmark; the
+  time: MediaTime;               // separate Bookmark shape is DELETED (was here)
   label?: string;
-  color?: string;
-}
-
-interface Bookmark {
-  id: string;
-  time: MediaTime;
-  label: string;
+  color?: string;                // 16 §3.7's 8-color palette cycles this field
 }
 
 interface ColorRGBA {
@@ -278,6 +295,30 @@ interface KeyframeJSON {
   easingParams?: { cx1: number; cy1: number; cx2: number; cy2: number };  // for bezier
 }
 ```
+
+### 3.1A Round-15 amendments — data-model rulings
+
+*(Amendments per `.agents/SPEC-REVISION-CANDIDATES.md` A2/A3/A4/A5/B1/B2/N1/N3 + E.1 strengthenings, and `audits/ARCH-R15-assembly-and-path.md` §2.4. The schema above carries the field-level changes; this section is the ruling text each one cites.)*
+
+**N1 — the ElementJSON container (P1).** `TrackJSON.elements` is an INLINE array of `ElementJSON` records, in time order. The earlier `string[]`-of-IDs reading is retired: under it no field anywhere held the records themselves, while spec 05's own examples (`§6.1`'s `track.elements.filter(el => el.startTime…)` and `§7.3`'s `TimelineElement({element…})`) and the opencut-timeline `SceneTracks` producer both read inline objects. This ruling reconciles 05 §6.1/§7.3 with the schema: their `track.elements` / `element` shapes ARE `ElementJSON`, not IDs. Mock evidence: `mockData.ts` inlines `elements: ElementJSON[]`.
+
+**A2 — one marker family, per scene.** ONE type — `Marker {id, time, label?, color?}` — stored PER SCENE (`SceneJSON.markers`), absorbing `Bookmark` (the separate project-level `Marker` array and the `Bookmark` shape are both retired; mock and opencut-timeline store markers per scene). The wire form is spec 15 §13.3's `addMarker`/`deleteMarker`/`updateMarker` command family; 16 §3.7's `toggleBookmark`/`removeBookmark`/`updateBookmark` trio and 15 §13.15's bookmark rows RENAME into this family (toggle ≈ add/delete, move ≈ update position). No project-level marker surface remains (ARCH-R15 §2.4 sub-gate (c)). 05 §11.1 carries the UI-side cross-reference.
+
+**A3 — track gain has one home.** `TrackJSON.volume` is removed; per-track gain is owned by the G layer (spec 20 §4.2 `MixerTrackSettings.fader`). For round-trips, the persisted projection of the fader is the per-scene audio-settings sidecar serialized with the scene — never a TrackJSON field. Mock evidence: `mockMixer.ts` keeps gain only in the G slice; TrackJSON has no volume.
+
+**A4 — mute/solo are S-authored, G-projected.** Mute/solo are authored on the S layer (the TrackJSON flags above) and PROJECTED into the G slice at materialization; the G slice carries no second authored copy (per 20 §4.2 and the mock's one-command-family pattern — `toggleTrackMute`/`toggleTrackSolo` mutate S; the mix graph reads the projection).
+
+**A5 — visibility is non-audio-only.** M/S/L on ALL track kinds; V on non-audio kinds only — audio tracks carry no visibility flag (18 §4.7's unqualified M/S/L/V is wrong in both directions; the mock ships S on all kinds and V only on non-audio headers).
+
+**B1 — link + sync-lock fields.** `ElementJSON.linkedTo?: string` backs 05 §12.3 linked selection and 16 §3.4 `toggleAVLink` (the `linkGroupId` alternative was REJECTED — one linked companion is the v1 shape, matching the mock). `TrackJSON.syncLock?: boolean` backs 06 §6's sync-lock (default true, FreeCut's `syncLock !== false`).
+
+**B2 — audio element fields.** `ElementJSON.pan?: number` (−100..100) and `preservePitch?: boolean` join `volume`; volume's persisted unit is LINEAR 0..1 — the shell displays dB via conversion at the UI boundary (18 §4.4's "Gain dB" row is the display form, not the persisted form).
+
+**N3 — MediaRecord.** `importedAt` (ISO 8601) is added (18 §4.2's import-date sort); `size` stays numeric bytes — display formatting ("1.8 GB") is the shell's job, never a persisted string.
+
+**Multi-scene is app-level (ARCH-R15 §2.4).** The app owns `scenes[]` + the scene wire ops; per-scene editing state is exactly ONE opencut-timeline `TimelineCore` (state-isolated by construction). Per-core undo NEVER crosses a scene switch (registered UX law, mock-consistent); inactive cores' history is budget-capped/evicted beyond a memory budget; scene persistence rides per-scene `toJSON`/`fromJSON`. `ProjectJSON.scenes[]` above is the persisted form of that ruling.
+
+**Loop/in-out state is NOT a ProjectJSON field (N12/N5 note).** In/out points are `setLoop` halves (15 §4.3.29; 16 §3.1; 18 §4.3/§4.9) — no `InOutPoints` shape persists here (05 §11.2's dedicated model is superseded). The `setLoop` invariant `end > start` (else INVALID_PARAMS, or the halves swap — N5) is the law wherever loop windows are authored.
 
 ### 3.2 MediaTime and FrameRate serialization
 
@@ -711,7 +752,10 @@ interface MediaRecord {
   id: string;                    // UUID v4
   name: string;                  // original filename
   type: 'video' | 'audio' | 'image';
-  size: number;                  // bytes
+  size: number;                  // bytes — stays NUMERIC (Round 15 amendment, N3); the
+                                 // shell formats for display ("1.8 GB" is 18 §4.2's job)
+  importedAt: string;            // (Round 15 amendment, N3) ISO 8601 — 18 §4.2's
+                                 // "import date" sort mode
   duration: MediaTime;
   width?: number;
   height?: number;

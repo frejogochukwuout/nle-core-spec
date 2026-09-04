@@ -6,6 +6,14 @@ internally inconsistent, stale, or missing a canon answer. The mock does NOT
 amend specs (Decision 14: contract+gap+acceptance); these are the proposed
 amendments for the seal round, each with the mock's evidence.
 
+**ROUND 15 STATUS: §A (A1-A6) + §B (B1-B4) + §E.2 (N1-N15) + the §13.15-side
+C7/N5 rows are PROCESSED — landed as in-place spec amendments (09/05/16/18/20/15,
+each carrying "(Round 15 amendment)" markers; see the R15-AM1/AM2/AM3 worklog
+entries and git log `aa54c81..` for the edit ledger). §C (C1-C29) and §D remain
+the LIVE deviation ledger: the mock is the UX review surface through the app's
+A7 phase, so new deviations keep registering here — now measured against the
+APP rather than the mock alone. The E.4 fixed-list is closed.**
+
 **Provenance:** R13-W1b spec-compliance review (opus) against specs 05/09/16/18/20
 at commit `ebc1604`; cross-checked with `.agents/PLAN.md` seal items 14–25.
 **R14 deep re-audit** (both directions, 2 verification + 2 spec-scan agents + a
