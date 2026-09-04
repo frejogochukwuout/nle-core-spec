@@ -10,11 +10,13 @@
 import { create } from 'zustand';
 import { project, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation } from '../lib/mockData';
 import { clamp, snapToFrame } from '../lib/timecode';
+import { createMixerScene, type MockMixerScene, type MixerTrackSettings, type DuckingSettings, type AuxBusSettings } from './mockMixer';
 
 export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch';
-export type Page = 'edit' | 'color' | 'deliver';
+export type Page = 'edit' | 'color' | 'audio' | 'deliver';
 export type InspectorTab = 'video' | 'audio' | 'effects' | 'transition';
 export type ToastKind = 'info' | 'success' | 'error' | 'persist';
+export type MixerRowState = 'collapsed' | 'bridge' | 'full';
 
 export interface Toast {
   id: number;
@@ -67,6 +69,12 @@ interface UiState {
   simulateSaveFail: boolean;
   past: { scenes: SceneJSON[]; activeSceneId: string }[];
   future: { scenes: SceneJSON[]; activeSceneId: string }[];
+  // ---- audio focus mode (design doc docs/DESIGN-audio-mode.md v2.1) ----
+  mixer: MockMixerScene;      // mock G-slice (spec 20 §4.2 shape)
+  mixerState: MixerRowState;
+  audioLaneBoost: boolean;
+  stripFocus: string | null;
+  stripFlash: number;
 
   // actions
   setPage: (p: Page) => void;
@@ -115,6 +123,15 @@ interface UiState {
   dismissToast: (id: number) => void;
   setSimulateSaveFail: (v: boolean) => void;
   retrySave: () => void;
+  enterAudioFocus: (trigger: 'dock' | 'shortcut' | 'escalation', trackId?: string) => void;
+  exitAudioFocus: () => void;
+  setMixerState: (m: MixerRowState) => void;
+  cycleMixerState: () => void;
+  setAudioLaneBoost: (v: boolean) => void;
+  setStripFocus: (id: string | null) => void;
+  setMixerTrack: (trackId: string, patch: Partial<MixerTrackSettings>) => void;
+  setAuxBus: (bus: 'a1' | 'a2', patch: Partial<AuxBusSettings>) => void;
+  setDucking: (trackId: string, patch: Partial<DuckingSettings>) => void;
   undo: () => void;
   redo: () => void;
   moveElement: (id: string, startTime: number) => void;
@@ -186,6 +203,11 @@ export const useUi = create<UiState>((set, get) => ({
   simulateSaveFail: false,
   past: [],
   future: [],
+  mixer: createMixerScene(project.scenes.flatMap((sc) => sc.tracks.filter((t) => t.kind === 'audio').map((t) => t.id))),
+  mixerState: 'collapsed',
+  audioLaneBoost: false,
+  stripFocus: null,
+  stripFlash: 0,
 
   setPage: (p) => set({ page: p }),
   setActiveScene: (id) => set((s) => ({ activeSceneId: id, selection: [] })),
@@ -314,6 +336,45 @@ export const useUi = create<UiState>((set, get) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setSimulateSaveFail: (v) => set({ simulateSaveFail: v }),
   retrySave: () => set({ simulateSaveFail: false }),
+
+  // ---- audio focus (design doc §3) ----
+  enterAudioFocus: (trigger, trackId) => set((s) => {
+    // ensure the G-slice covers every audio trackId (tracks may have been added)
+    const audioIds = s.scenes.flatMap((sc) => sc.tracks.filter((t) => t.kind === 'audio').map((t) => t.id));
+    const mixer = { ...s.mixer };
+    for (const id of audioIds) if (!mixer.tracks[id]) {
+      mixer.tracks = { ...mixer.tracks, [id]: { fader: -6, pan: 0, inserts: [null, null], auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0 } };
+    }
+    return {
+      page: 'audio',
+      mixer,
+      mixerState: 'full',
+      audioLaneBoost: true,
+      ...(trackId || trigger === 'escalation' ? { stripFocus: trackId ?? s.stripFocus } : {}),
+      stripFlash: trackId ? Date.now() : s.stripFlash,
+    };
+  }),
+  exitAudioFocus: () => set({ page: 'edit', audioLaneBoost: false }),
+  setMixerState: (m) => set({ mixerState: m }),
+  cycleMixerState: () => set((s) => {
+    // design doc §4: Edit — collapsed → bridge → full-compact; Audio — bridge ↔ full
+    if (s.page === 'audio') return { mixerState: s.mixerState === 'full' ? 'bridge' : 'full' };
+    return { mixerState: s.mixerState === 'collapsed' ? 'bridge' : s.mixerState === 'bridge' ? 'full' : 'collapsed' };
+  }),
+  setAudioLaneBoost: (v) => set({ audioLaneBoost: v }),
+  setStripFocus: (id) => set({ stripFocus: id }),
+  setMixerTrack: (trackId, patch) => set((s) => ({
+    mixer: { ...s.mixer, tracks: { ...s.mixer.tracks, [trackId]: { ...s.mixer.tracks[trackId], ...patch } } },
+  })),
+  setAuxBus: (bus, patch) => set((s) => ({
+    mixer: { ...s.mixer, buses: { ...s.mixer.buses, [bus]: { ...s.mixer.buses[bus], ...patch } } },
+  })),
+  setDucking: (trackId, patch) => set((s) => ({
+    mixer: {
+      ...s.mixer,
+      ducking: { ...s.mixer.ducking, [trackId]: { ...(s.mixer.ducking[trackId] ?? { source: null, amount: 0.5, attack: 20, release: 400 }), ...patch } },
+    },
+  })),
 
   undo: () => set((s) => {
     if (s.past.length === 0) return {};

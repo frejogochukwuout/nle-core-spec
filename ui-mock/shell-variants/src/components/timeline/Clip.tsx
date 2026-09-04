@@ -217,7 +217,9 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       { id: 'ripple-delete', label: 'Ripple delete', shortcut: '⇧⌫', danger: true, onSelect: () => deleteSelected(true) },
       { id: 'detach-audio', label: 'Detach audio', disabled: true, tip: 'mock: not in spec 15 union', sep: true },
       { id: 'properties', label: 'Properties', onSelect: focusInspector },
-      { id: 'mix-track', label: 'Mix this track…', sep: true, onSelect: () => pushToast({ kind: 'info', title: 'Mix this track…', detail: 'Audio focus lands with the mixer round' }) },
+      { id: 'mix-track', label: 'Mix this track…', sep: true, onSelect: () => {
+        useUi.getState().enterAudioFocus('escalation', track.id);
+      } },
     ];
   };
 
@@ -341,6 +343,12 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         data-testid={`clip-${el.id}`}
         tabIndex={-1} /* programmatic focus only — roving host for Shift+F10 (§4.9) */
         className={`clip-box absolute top-[2px] bottom-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''}`}
+        onDoubleClick={(e) => {
+          // M3 escalation preview (design doc §3.1): dbl-click audio clip → Audio focus + strip focus
+          if (track.kind === 'audio') {
+            useUi.getState().enterAudioFocus('escalation', track.id);
+          }
+        }}
         onContextMenu={(e) => {
           if (locked) return;
           e.preventDefault();

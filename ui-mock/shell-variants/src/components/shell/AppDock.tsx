@@ -1,14 +1,16 @@
-/* AppDock — spec 18 §4.8: brand left, THREE-page dock center (Edit / Color /
-   Deliver — mock's 7 pages collapsed), cheat-sheet + settings right.
-   Icon-only in resolve theme, icon+label in studio/light; aria-label keeps
-   the accessible name regardless of visible label. */
+/* AppDock — spec 18 §4.8: brand left, page dock center, cheat-sheet +
+   settings right. FOUR pages in this study: Edit / Color / Audio (the
+   audio-focus mode per docs/DESIGN-audio-mode.md — occupies spec 16 §3.8's
+   orphaned ⌘4 binding) / Deliver. Icon-only in resolve theme, icon+label in
+   studio/light; aria-label keeps the accessible name regardless of label. */
 
-import { ScissorsLineDashed, Palette, Send, Keyboard, Settings2, House } from 'lucide-react';
+import { ScissorsLineDashed, Palette, AudioLines, Send, Keyboard, Settings2, House } from 'lucide-react';
 import { useUi, type Page } from '../../state/useUiStore';
 
 const PAGES: { id: Page; label: string; icon: typeof ScissorsLineDashed; tip: string }[] = [
   { id: 'edit', label: 'Edit', icon: ScissorsLineDashed, tip: 'Edit — rough cut (⌘1)' },
   { id: 'color', label: 'Color', icon: Palette, tip: 'Color — grading (⌘2)' },
+  { id: 'audio', label: 'Audio', icon: AudioLines, tip: 'Audio focus — BGM / SFX mixing (⌘4)' },
   { id: 'deliver', label: 'Deliver', icon: Send, tip: 'Deliver — export & handoff (⌘3)' },
 ];
 
@@ -40,7 +42,7 @@ export function AppDock() {
           return (
             <button
               key={p.id}
-              onClick={() => setPage(p.id)}
+              onClick={() => (p.id === 'audio' ? useUi.getState().enterAudioFocus('dock') : setPage(p.id))}
               data-testid={`shell-dock-page-${p.id}`}
               data-tip={p.tip}
               aria-label={p.label}

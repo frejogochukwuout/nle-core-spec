@@ -64,6 +64,9 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
 
   /* ---- Panels / pages (spec 16 §3.9 + spec 18) ---- */
   { action: 'panels-page', keys: '⌘1 / ⌘2 / ⌘3', group: 'Panels', desc: 'Switch page: Edit / Color / Deliver' },
+  { action: 'panels-audio-focus', keys: '⌘4', group: 'Panels', desc: 'Toggle Audio focus (BGM / SFX mixer)' },
+  { action: 'panels-mixer', keys: 'toolbar button', group: 'Panels', desc: 'Mixer row: collapsed / meter bridge / full' },
+  { action: 'escape-audio', keys: 'Esc', group: 'Panels', desc: 'Exit Audio focus back to Edit' },
   { action: 'panels-import', keys: '⌘I', group: 'Panels', desc: 'Import media (mock toast — drop on Media Pool)' },
   { action: 'panels-cheatsheet', keys: '?', group: 'Panels', desc: 'Toggle this cheat sheet' },
   { action: 'panels-region-focus', keys: 'F6 (⇧ reverse)', group: 'Panels', desc: 'Cycle focus across shell regions' },

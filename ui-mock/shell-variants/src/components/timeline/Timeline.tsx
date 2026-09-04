@@ -120,7 +120,13 @@ export function Timeline() {
   const zoneH = variant.headerStyle === 'readout' ? 44 : 22;
   const colW = variant.headerStyle === 'readout' ? 160 : 112;
 
-  const laneHeight = (kind: TrackJSON['kind']) => trackHeights(kind, variant.clipStyle);
+  const audioLaneBoost = useUi((s) => s.audioLaneBoost);
+  const laneHeight = (kind: TrackJSON['kind']) => {
+    const base = trackHeights(kind, variant.clipStyle);
+    // audio focus: audio lanes ×1.6, video/overlay compress (design doc §3.2)
+    if (audioLaneBoost) return kind === 'audio' ? Math.round(base * 1.6) : kind === 'main' ? Math.min(base, 40) : Math.min(base, 28);
+    return base;
+  };
 
   // snap targets: all clip edges + playhead + sequence ends (spec 05 §9)
   const snapTargets = scene.tracks.flatMap((t) => t.elements.flatMap((e) => [e.startTime, e.startTime + e.duration]));

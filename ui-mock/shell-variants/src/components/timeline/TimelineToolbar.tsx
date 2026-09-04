@@ -2,8 +2,9 @@
    snap/link/lock toggles, marker cluster, zoom cluster, master audio.
    Mock's sync-bin/auto-sync/dyntrim dropped (§8.10 / §8.9). */
 
-import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX } from 'lucide-react';
+import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, AudioLines } from 'lucide-react';
 import { useUi, type ToolId } from '../../state/useUiStore';
+import { StripMeter } from '../mixer/MixerPrimitives';
 
 const BladeIcon = () => (
   <svg width="13" height="15" viewBox="0 0 20 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -55,6 +56,8 @@ export function TimelineToolbar() {
   const masterVolume = useUi((s) => s.masterVolume);
   const toggleMasterMute = useUi((s) => s.toggleMasterMute);
   const setMasterVolume = useUi((s) => s.setMasterVolume);
+  const mixerState = useUi((s) => s.mixerState);
+  const cycleMixerState = useUi((s) => s.cycleMixerState);
 
   return (
     <div
@@ -164,16 +167,32 @@ export function TimelineToolbar() {
 
       <div className="vsep" />
 
-      {/* master audio */}
+      {/* mixer row state — design doc §4: Edit cycles collapsed→bridge→full-compact;
+          Audio toggles bridge↔full. No chord (⌘⇧M is spec 16 §3.5 mute-all). */}
+      <button
+        className={`icon-btn ${mixerState !== 'collapsed' ? 'toggled' : ''}`}
+        data-tip="Mixer (collapsed / meter bridge / full)"
+        aria-label="Toggle mixer row"
+        aria-pressed={mixerState !== 'collapsed'}
+        onClick={cycleMixerState}
+        data-testid="btn-mixer-state"
+      >
+        <AudioLines size={14} strokeWidth={1.6} />
+      </button>
+
+      <div className="vsep" />
+
+      {/* master audio + always-on micro-meter (design doc §3.2 — zero new regions) */}
       <button
         className={`icon-btn ${masterMuted ? 'toggled' : ''}`}
-        data-tip="Mute master"
+        data-tip="Mute master (⌘M)"
         aria-label="Mute master"
         aria-pressed={masterMuted}
         onClick={toggleMasterMute}
       >
         {masterMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
       </button>
+      <StripMeter trackId="toolbar-master" db={masterMuted ? -60 : masterVolume * 66 - 60} height={14} width={4} label="Master" />
       <input
         type="range"
         min={0}

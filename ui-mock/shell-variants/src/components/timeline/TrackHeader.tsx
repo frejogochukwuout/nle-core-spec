@@ -4,9 +4,10 @@
    single compact control row — everything fits the fixed 160px column with
    no horizontal overflow. */
 
-import { Lock, Eye, EyeOff, Volume2, VolumeX, Headphones, Activity } from 'lucide-react';
+import { Lock, Eye, EyeOff, Volume2, VolumeX, Headphones, Activity, SlidersHorizontal } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import type { TrackJSON } from '../../lib/mockData';
+import { dbToSlider, sliderToDb } from '../../state/mockMixer';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 
 function toggleTrack(sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') {
@@ -40,6 +41,9 @@ function CtrlBtn({ track, sceneId, field, label, tip, on, onCls, children, testi
 export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; height: number; sceneId: string }) {
   const showVisibility = track.kind !== 'audio';
   const tall = height >= 48; // two-row layout; single compact row below 48px
+  const audioFocus = useUi((s) => s.page === 'audio');
+  const strip = useUi((s) => s.mixer.tracks[track.id]);
+  const setMixerTrack = useUi((s) => s.setMixerTrack);
   const addTrack = useUi((s) => s.addTrack);
   const menu = useContextMenu(); // §4.9 track-header menu
 
@@ -140,6 +144,27 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
             {controls}
             <div className="grow" />
           </div>
+          {audioFocus && track.kind === 'audio' && (
+            <div className="flex w-full items-center gap-1.5" data-testid={`track-minifader-${track.badge}`}>
+              <Volume2 size={9} className="shrink-0 text-tfaint" aria-hidden="true" />
+              <input
+                type="range" min={0} max={100} step={1}
+                value={Math.round(dbToSlider(strip?.fader ?? -6) * 100)}
+                onChange={(e) => setMixerTrack(track.id, { fader: sliderToDb(+e.target.value / 100) })}
+                className="h-[8px] min-w-0 flex-1 green-fill"
+                style={{ ['--fill' as any]: `${Math.round(dbToSlider(strip?.fader ?? -6) * 100)}%` }}
+                aria-label={`${track.name} gain (G layer)`}
+              />
+              <button
+                className="icon-btn !h-[14px] !w-[14px] shrink-0"
+                data-tip="Automation lane — M2 (spec 20 §12.1)"
+                aria-label="Automation lane placeholder"
+                data-testid={`track-automation-${track.badge}`}
+              >
+                <SlidersHorizontal size={9} strokeWidth={1.6} />
+              </button>
+            </div>
+          )}
         </>
       ) : (
         /* compact single row: badge + controls; name via title attr */

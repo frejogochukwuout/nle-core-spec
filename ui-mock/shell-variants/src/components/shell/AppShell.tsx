@@ -20,6 +20,9 @@ import { SceneTabs } from '../timeline/SceneTabs';
 import { Timeline } from '../timeline/Timeline';
 import { ColorPage } from '../pages/ColorPage';
 import { DeliverPage } from '../pages/DeliverPage';
+import { MixerRow } from '../mixer/MixerRow';
+import { ChannelEditor } from '../mixer/ChannelEditor';
+import { SoundLibrary } from '../mixer/SoundLibrary';
 import { sceneDuration } from '../../lib/mockData';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import { ToastRegion } from './ToastRegion';
@@ -212,6 +215,7 @@ export function AppShell() {
   const rightPanel: ReactNode =
     page === 'color' ? <ColorPage />
     : page === 'deliver' ? <DeliverPage />
+    : page === 'audio' ? <ChannelEditor />
     : <Inspector />;
 
   return (
@@ -232,7 +236,7 @@ export function AppShell() {
       >
         {panels.mediaPool && (
           <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
-            <MediaPool />
+            {page === 'audio' ? <SoundLibrary /> : <MediaPool />}
           </div>
         )}
         {panels.mediaPool && (
@@ -256,11 +260,14 @@ export function AppShell() {
 
       <HSplitter onDrag={(dy) => setMainBodyH(dy === 0 ? 0 : (useUi.getState().mainBodyH || window.innerHeight * 0.4) + dy)} />
 
-      {/* ---- timeline block ---- */}
+      {/* ---- timeline block + mixer row (design doc §4 — 7th F6 region) ---- */}
       <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />
         <Timeline />
+        <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region">
+          <MixerRow />
+        </div>
       </div>
 
       <StatusStrip />

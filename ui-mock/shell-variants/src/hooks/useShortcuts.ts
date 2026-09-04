@@ -110,7 +110,8 @@ export function useShortcuts(duration: number) {
           s.deleteElements(s.selection, e.shiftKey); // ⇧Delete = ripple
           return;
         case 'Escape':
-          if (s.tool !== 'select') s.setTool('select');
+          if (s.page === 'audio') s.exitAudioFocus();
+          else if (s.tool !== 'select') s.setTool('select');
           else if (s.selection.length > 0) s.setSelection([]);
           return;
       }
@@ -174,6 +175,12 @@ export function useShortcuts(duration: number) {
         if (key === '3') {
           e.preventDefault();
           s.setPage('deliver');
+          return;
+        }
+        if (key === '4') {
+          // spec 16 §3.8's orphaned "Audio workspace" binding gets its surface
+          e.preventDefault();
+          s.page === 'audio' ? s.exitAudioFocus() : s.enterAudioFocus('shortcut');
           return;
         }
         if (lower === 'i') {
