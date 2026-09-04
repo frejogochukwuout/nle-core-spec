@@ -132,7 +132,7 @@ nle-app (NEW — the assembly repo, the only greenfield surface)
 **The law, re-scoped to the right layer:** *editing state* never flows engine→OT (D12). *Telemetry* flows one-way UP through a separate seam — exactly as engine D8's own data-contract clause already rules (waveform peaks, metering, transport/playhead state route upward as DATA, DECISIONS.md:335-338).
 
 **`nle-app/src/events/`** normalizes the three event models into one stream shaped like spec-15 §9's `EngineEvent`:
-- **Player emitter** (`framechange/timeupdate/statechange/ratechange/seeked/ended/error`, player.ts:587-608) → `playbackTimeUpdate`/playback-state events. **Playhead ownership ruling:** during playback the engine Clock is truth; time mirrors into the view via the **imperative playhead API** (NOT `core.seek` — that fires `subscribe` → full React re-render per frame); commit time into the OT core on pause/scrub.
+- **Player emitter** (`framechange/timeupdate/statechange/ratechange/seeked/ended/error`, player.ts:587-608) → `playbackTimeUpdate`/playback-state events. **Viewer frames are a PULL, not a push** — the viewer subscribes to time events and calls `renderFrame`/`renderFrameOffscreen` (player.ts:2995) on its own cadence. **Playhead ownership ruling:** during playback the engine Clock is truth; time mirrors into the view via the **imperative playhead API** (NOT `core.seek` — that fires `subscribe` → full React re-render per frame); commit time into the OT core on pause/scrub.
 - **Export progress** (`onProgress: NleRenderProgress`, orchestrator.ts:111) → `renderProgress`/`exportJob*`; feeds the mock-proven Deliver queue states.
 - **Meters** (`masterAnalyser`/`masterMeter`, realtime-engine.ts:44-58) → a polled meter contract feeding the mixer strips (the one polling loop in the app).
 - **OT `core.subscribe()`** (preview-layered readouts) → scene-state snapshot events for the app store's selectors.
@@ -147,9 +147,9 @@ App holds `scenes[]` + the 4 scene wire ops; ONE `TimelineCore` per scene (state
 
 **Pins travel as a LOCKSET:** the app's OT/WDC pins must be ≥ the engine pin's SHAs and move only WITH the engine pin (the app compiles vendored engine code against app-level OT/WDC — the compile couples pins regardless of re-export choices). S5 asserts mechanically: parse the engine's `git submodule status` at the app's engine SHA and compare. The app never advances OT/WDC beyond the engine's validated combination without an explicit compat run. **HEAD-follow opens a bump PR** (write-scoped credential, distinct from the read PAT) — never pushes main. Daily integration-owner bump ritual (the one-day rule). The engine's nested vendored pins stay **un-materialized in the app** (non-recursive update); S1's type-identity check catches divergence.
 
-### 2.7 The integration punch list (scout-verified gaps, now costed)
+### 2.6 The integration punch list (scout-verified gaps, now costed)
 
-- OT `onViewStateChange` → plumbed as a new `TimelineViewProps` prop (additive OT PR, A3, ~0.5d).
+- OT `onViewStateChange` → plumbed as a new `TimelineViewProps` prop (additive OT PR, A3, ~0.5d). **Plus the imperative playhead surface** (A3, ~0.5d): `TimelinePlayhead.tsx:50` renders from `core.getCurrentTime()` — without a new imperative set-mirror API, the OT playhead FREEZES during engine playback (the §2.3bis ruling needs this seam).
 - Test-attr unification: harness-side dual selector (`[data-test=] ∪ [data-testid=]` locator helper) — zero churn in two sealed repos (week-(-1) decision).
 - OT real-mouse runner: app wrapper imports the 13 phase modules directly (re-implements the ~80-LOC aggregation; keeps artifacts OUT of the submodule tree); sets BOTH `TIMELINE_VIEW_URL` and `TIMELINE_TEST_VIEW_URL` (m17 vs the other 12 — verified inconsistency) or fixes m17 in OT (one line).
 - `shell-viewer-state-empty` testid (mock patch, registers in the C-ledger).
@@ -162,7 +162,7 @@ App holds `scenes[]` + the 4 scene wire ops; ONE `TimelineCore` per scene (state
 
 ### 3.1 The principle
 
-Module repos keep their full gates UNDILUTED (engine 3-job CI; OT 423 incl. 120 real-mouse; WDC 721+tsc; mock 596+tsc, local — the mock has no CI and is not required to add one: it is ported at A3 and retires as a repo after A7). The app NEVER re-tests module internals; it tests ONLY the seams and the wired whole.
+Module repos keep their full gates UNDILUTED (engine 3-job CI; OT 423 incl. 120 real-mouse; WDC 721+tsc; mock 596+tsc, local — the mock has no CI and is not required to add one: it is ported at A3 and retires as a repo after A7). The app does not re-test module internals — with the one sanctioned exception of S3(a), which re-runs OT's real-mouse phases specifically to verify the VIEW COMPONENT in the app's host context (bundler/CSS/React), not the engine semantics; the app tests ONLY the seams and the wired whole.
 
 ### 3.2 The app's five suites (the roof) — relabeled per PR2
 
@@ -197,7 +197,7 @@ Every behavior pinned in a module test that assembly REWIRES must appear in the 
 | **A7a app polish** | Keymap long tail (C22), i18n posture, a11y residuals | spec 18 §11 audit; battery green | 1-1.5 |
 | **A7b engine P2 surfacing** | Scopes (~1), secondary qualifier + power window (~1-1.5) — ENGINE-repo items under engine gates, app pin bumps, slips independently | milestones green | 2-2.5 |
 
-**Totals (honest, per PR2 §5): A7-complete ≈ 22-27 wk solo / ≈ 13-16 wk two-dev. The A3 DEMO lands ≈ 11-13 wk solo / ≈ 7-8 wk two-dev.** Two-dev decay after A3 is real (A4→A6 chain is one front; second dev takes A7b/engine backlogs). A3's exit gate is serially gated on A1+A2 (only the chrome port parallelizes); the projector is single-context work (one head holding both data models). The 8-13 wk R9 estimate is superseded (it under-counted assembly + multi-scene + FCPXML + review latency).
+**Totals (honest, per PR2 §5): A7-complete ≈ 22-27 wk solo / ≈ 13-16 wk two-dev — with A2.5 riding PARALLEL to A3 (full-serial high end ≈ 29-30). The A3 DEMO lands ≈ 11-13 wk solo / ≈ 7-8 wk two-dev** (derivation: week−1 + A0 + A1 + A2 serial-critical-chain ≈ 10.5-13 wk; chrome-port work inside A3 overlaps A1/A2; the demo exit itself is serially gated on A1+A2). Two-dev decay after A3 is real (A4→A6 chain is one front; second dev takes A7b/engine backlogs). A3's exit gate is serially gated on A1+A2 (only the chrome port parallelizes); the projector is single-context work (one head holding both data models). The 8-13 wk R9 estimate is superseded (it under-counted assembly + multi-scene + FCPXML + review latency).
 
 **Milestone discipline:** every phase = module PRs merged + pin-lockset bump + app suites green + battery green + push. A3 is the program's demo-ability gate.
 
