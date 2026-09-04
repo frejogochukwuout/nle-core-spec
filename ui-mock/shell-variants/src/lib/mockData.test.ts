@@ -183,3 +183,25 @@ describe('sceneDuration', () => {
     expect(sceneDuration(scene2)).toBe(19.5);
   });
 });
+
+/* ---------- R14: multi-track viewer resolution ---------- */
+
+describe('R14: elementAtTime scans ALL tracks of a kind (topmost wins)', () => {
+  it('a clip on a second main track is visible to the viewer', () => {
+    const twoMain = {
+      ...scene1,
+      tracks: [
+        ...scene1.tracks,
+        {
+          id: 'tr-main-2', kind: 'main' as const, name: 'V2', badge: 'V2',
+          muted: false, solo: false, locked: false, visible: true,
+          elements: [{ id: 'el-v2', type: 'video' as const, trackId: 'tr-main-2', mediaId: 'm-04', name: 'V2 insert', startTime: 5, duration: 3, sourceStart: 0 }],
+        },
+      ],
+    };
+    const hit = elementAtTime(twoMain, 6);
+    expect(hit?.id).toBe('el-v2'); // topmost main track wins over el-1
+    const below = elementAtTime(twoMain, 2);
+    expect(below?.id).toBe('el-1'); // gap in V2 falls through to V1
+  });
+});

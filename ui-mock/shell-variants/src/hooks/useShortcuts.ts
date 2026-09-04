@@ -6,11 +6,13 @@
 
 import { useEffect, useRef } from 'react';
 import { useUi } from '../state/useUiStore';
+import { snapToFrame } from '../lib/timecode';
 import type { Marker } from '../lib/mockData';
 import type { ConfirmFn } from '../components/shell/ConfirmDialog';
 
 const MARKER_PALETTE: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
 const JKL_WINDOW_MS = 500; // multi-tap accel window (task spec: 500 ms)
+const DEFAULT_PPS = 46;    // store's boot pxPerSec — ⌘0 "reset zoom" target
 
 interface JklState {
   dir: 1 | -1; // shuttle direction of the last J/L press
@@ -43,9 +45,15 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
       const lower = key.length === 1 ? key.toLowerCase() : key;
       const now = performance.now();
 
-      /* ---- JKL shuttle: tap-accel 1× → 2× → 4×, reset on K / Space ---- */
+      /* ---- JKL shuttle: tap-accel 1× → 2× → 4×, reset on K / Space.
+          spec 16 §3.1: ⇧J/⇧L jump straight to 2× (no accel ladder). ---- */
       if (!cmd && !alt && (lower === 'j' || lower === 'l')) {
         const dir: 1 | -1 = lower === 'l' ? 1 : -1;
+        if (e.shiftKey) {
+          jklRef.current = null; // ⇧ variant is a fixed rate, not a ladder step
+          s.setShuttle(dir * 2);
+          return;
+        }
         const prev = jklRef.current;
         const taps = prev && prev.dir === dir && now - prev.t < JKL_WINDOW_MS ? Math.min(prev.taps + 1, 3) : 1;
         jklRef.current = { dir, t: now, taps };
@@ -193,11 +201,16 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           return;
         }
         if (lower === 'm') {
-          // spec 16 §3.5: ⌘M = focused track mute; master fallback when nothing focused
+          // spec 16 §3.5: ⌘M = focused track mute (ANY kind — TrackJSON.muted
+          // exists on video/text too, and the M button renders on every
+          // header); master fallback ONLY when nothing is focused. ⌘⇧M =
+          // mute-all batch. (R14: the old audio-kind filter made ⌘M on a
+          // focused VIDEO track silently mute the master.)
           e.preventDefault();
+          if (e.shiftKey) { s.toggleMuteAll(); return; }
           const st = useUi.getState();
           const sc = st.scenes.find((x) => x.id === st.activeSceneId);
-          const ft = sc?.tracks.find((t) => t.id === st.focusedTrackId && t.kind === 'audio');
+          const ft = sc?.tracks.find((t) => t.id === st.focusedTrackId);
           if (ft) st.toggleTrackCmd(sc!.id, ft.id, 'muted');
           else st.toggleMasterMute();
           return;
@@ -226,6 +239,67 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           // spec 16 §3.8's orphaned "Audio workspace" binding gets its surface
           e.preventDefault();
           s.page === 'audio' ? s.exitAudioFocus() : s.enterAudioFocus('shortcut');
+          return;
+        }
+        if (lower === 's') {
+          // spec 16 §3.9 ⌘S — runs the save cycle (StatusStrip chip tracks it).
+          // saveNow keeps simulateSaveFail armed so the debug overlay's failure
+          // drill still works from the keyboard (retrySave would clear it).
+          e.preventDefault();
+          if (s.past.length > 0 || s.saveAttempt > 0) s.saveNow();
+          else s.pushToast({ kind: 'info', title: 'Nothing to save', detail: 'no doc mutations since boot (mock)' });
+          return;
+        }
+        if (lower === 'e') {
+          // spec 16 §3.9 ⌘E — FCPXML export: real command lands with spec 10;
+          // the mock lands on the Deliver page and explains the boundary.
+          e.preventDefault();
+          s.setPage('deliver');
+          s.pushToast({ kind: 'info', title: 'Export', detail: 'FCPXML export lands with spec 10 — the Deliver page carries the mock queue (§5)' });
+          return;
+        }
+        if (key === '0') {
+          // spec 16 §3.8 ⌘0 — reset zoom to the boot default
+          e.preventDefault();
+          s.setZoom(DEFAULT_PPS);
+          return;
+        }
+        if (key === '\\') {
+          // spec 16 §3.8 ⌘\ — zoom-to-fit (the TimelineToolbar tooltip has
+          // advertised this chord since R12; the binding is real now)
+          e.preventDefault();
+          const w = document.getElementById('timeline-scroll')?.clientWidth ?? 900;
+          s.zoomFit(w, duration);
+          return;
+        }
+        if ((key === 'ArrowLeft' || key === 'ArrowRight')) {
+          e.preventDefault();
+          if (e.shiftKey) {
+            // spec 16 §3.1 ⌘⇧←/→ — marker navigation (nearest before/after)
+            const sc = s.scenes.find((x) => x.id === s.activeSceneId);
+            const markers = (sc?.markers ?? []).slice().sort((a, b) => a.time - b.time);
+            if (markers.length === 0) return;
+            const t = snapToFrame(s.playhead);
+            const next = key === 'ArrowRight'
+              ? markers.find((m) => m.time > t + 0.01)
+              : [...markers].reverse().find((m) => m.time < t - 0.01);
+            if (next) s.setPlayhead(next.time);
+            return;
+          }
+          // spec 16 §3.1 ⌘←/→ — playhead to timeline start / end
+          s.setPlayhead(key === 'ArrowRight' ? duration : 0);
+          return;
+        }
+        if (lower === 'i' && e.shiftKey) {
+          // spec 16 §3.1 ⌘⇧I — clear the IN half (loop reverts to 0)
+          e.preventDefault();
+          s.clearLoopIn();
+          return;
+        }
+        if (lower === 'o' && e.shiftKey) {
+          // spec 16 §3.1 ⌘⇧O — clear the OUT half (loop reverts to scene tail)
+          e.preventDefault();
+          s.clearLoopOut();
           return;
         }
         if (lower === 'i') {
@@ -291,8 +365,15 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           }
           return;
         }
-        case ',': if (s.selection.length > 0) s.slipNudge(s.selection, -1); return;
-        case '.': if (s.selection.length > 0) s.slipNudge(s.selection, 1); return;
+        case ',': if (s.selection.length > 0) s.slipNudge(s.selection, e.shiftKey ? -10 : -1); return;
+        case '.': if (s.selection.length > 0) s.slipNudge(s.selection, e.shiftKey ? 10 : 1); return;
+        /* spec 16 §3.4 ⇧,/⇧. = 10-frame slip ladder (R14 — was 1-frame only);
+           spec 16 §3.8 zoom keys use the same 1.5× steps as the toolbar buttons */
+        case '[': s.trimToPlayhead('l', false); return; // spec 16 §3.4: non-ripple trim start
+        case ']': s.trimToPlayhead('r', false); return; // spec 16 §3.4: non-ripple trim end
+        case '=':
+        case '+': s.zoomStep(1.5); return;
+        case '-': s.zoomStep(1 / 1.5); return;
       }
 
       if (key === '?') {

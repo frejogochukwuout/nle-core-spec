@@ -250,14 +250,19 @@ export function mediaById(id: string | undefined): MediaRecord | undefined {
   return media.find((m) => m.id === id);
 }
 
-/** element under the playhead on the main/overlay tracks (viewer source) */
+/** element under the playhead on the main/overlay tracks (viewer source).
+ *  Multi-track law (R14 review): iterate ALL tracks of each kind — the
+ *  single-`find` version made clips on a second Video/Text/Audio track
+ *  (addTrack creates them) invisible to the viewer. Topmost track wins:
+ *  later tracks render above earlier ones, so the scan runs in reverse. */
 export function elementAtTime(scene: SceneJSON, time: number): ElementJSON | null {
   const order: TrackKind[] = ['overlay', 'main'];
   for (const kind of order) {
-    const t = scene.tracks.find((tr) => tr.kind === kind);
-    if (!t) continue;
-    const hit = t.elements.find((e) => time >= e.startTime && time < e.startTime + e.duration);
-    if (hit) return hit;
+    const kindTracks = scene.tracks.filter((tr) => tr.kind === kind);
+    for (let i = kindTracks.length - 1; i >= 0; i--) {
+      const hit = kindTracks[i].elements.find((e) => time >= e.startTime && time < e.startTime + e.duration);
+      if (hit) return hit;
+    }
   }
   return null;
 }

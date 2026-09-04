@@ -90,6 +90,11 @@ interface UiState {
   audioLaneBoost: boolean;
   stripFocus: string | null;
   stripFlash: number;
+  /* spec 18 §4.9 track-header Height rows (Compact/Normal/Tall): GLOBAL lane-
+     height pref (null = auto: kind-based trackHeights()). B3 registration: the
+     state-home question (per-track vs global) is a seal item — the mock answers
+     GLOBAL, a noted deviation; view state, not doc. */
+  trackHeightPref: 'compact' | 'normal' | 'tall' | null;
 
   // actions
   setPage: (p: Page) => void;
@@ -100,6 +105,7 @@ interface UiState {
   toggleSnap: () => void;
   toggleLink: () => void;
   toggleLockAll: () => void;
+  toggleMuteAll: () => void;
   setPlayhead: (t: number) => void;
   nudgePlayhead: (frames: number) => void;
   togglePlay: () => void;
@@ -110,6 +116,8 @@ interface UiState {
   toggleViewerSafeGuides: () => void;
   markIn: () => void;
   markOut: () => void;
+  clearLoopIn: () => void;
+  clearLoopOut: () => void;
   clearInOut: () => void;
   addMarker: (time: number, color?: Marker['color']) => void;
   setSelection: (ids: string[]) => void;
@@ -140,6 +148,7 @@ interface UiState {
   dismissToast: (id: number) => void;
   setSimulateSaveFail: (v: boolean) => void;
   retrySave: () => void;
+  saveNow: () => void;
   removeMarkersAt: (time: number) => void;
   toggleTrackCmd: (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') => void;
   enterAudioFocus: (trigger: 'dock' | 'shortcut' | 'escalation', trackId?: string) => void;
@@ -147,6 +156,7 @@ interface UiState {
   setMixerState: (m: MixerDockState) => void;
   cycleMixerState: () => void;
   setAudioLaneBoost: (v: boolean) => void;
+  setTrackHeightPref: (p: UiState['trackHeightPref']) => void;
   setStripFocus: (id: string | null) => void;
   setMixerTrack: (trackId: string, patch: Partial<MixerTrackSettings>) => void;
   setAuxBus: (bus: 'a1' | 'a2', patch: Partial<AuxBusSettings>) => void;
@@ -157,9 +167,9 @@ interface UiState {
   trimElement: (id: string, edge: 'l' | 'r', newStart: number, newDur: number) => void;
   splitElement: (id: string, time: number) => void;
   toggleEffect: (elementId: string, fxId: string) => void;
-  addTrack: (kind: TrackJSON['kind']) => void;
+  addTrack: (kind: TrackJSON['kind'], position?: 'above' | 'below', refTrackId?: string) => void;
   deleteElements: (ids: string[], ripple: boolean) => void;
-  duplicateElements: (ids: string[]) => void;
+  duplicateElements: (ids: string[], at?: number) => void;
   slipNudge: (ids: string[], frames: number) => void;
   trimToPlayhead: (edge: 'l' | 'r', ripple: boolean) => void;
   setElementField: (id: string, patch: Partial<ElementJSON>) => void;
@@ -172,6 +182,11 @@ interface UiState {
 
 const MIN_PPS = 8;
 const MAX_PPS = 240;
+/* one minimum-duration law for every trim-family mutation (R14 review):
+   trim handles enforced 0.25s while ⌥[/⌥[ and the blade could leave 0.1s
+   slivers — both behaviors were individually test-pinned, freezing the
+   inconsistency. One constant, one rule: no clip can shrink below MIN_DUR. */
+const MIN_DUR = 0.25;
 
 /* history wrapper: snapshot before each doc mutation, 50-deep.
    Returning undefined from `mutate` = no-op: NOTHING is set (no history
@@ -252,6 +267,7 @@ export const useUi = create<UiState>((set, get) => ({
   audioLaneBoost: false,
   stripFocus: null,
   stripFlash: 0,
+  trackHeightPref: null,
 
   setPage: (p) => set((s) => ({
     page: p,
@@ -309,6 +325,18 @@ export const useUi = create<UiState>((set, get) => ({
       return scenes;
     });
   },
+  toggleMuteAll: () => {
+    // spec 16 §3.5 ⌘⇧M "mute all tracks" — set-all batch (undoable), the
+    // audio twin of toggleLockAll. Target = NOT all-muted so a mixed state
+    // converges to muted on one press (no per-track flip-flop).
+    withHistory(set, get, (scenes) => {
+      const s = get();
+      const sc = scenes.find((x) => x.id === s.activeSceneId)!;
+      const target = !sc.tracks.every((t) => t.muted);
+      sc.tracks.forEach((t) => { t.muted = target; });
+      return scenes;
+    });
+  },
   setPlayhead: (t) => set({ playhead: clamp(t, 0, 600) }),
   nudgePlayhead: (frames) => set((s) => ({ playhead: clamp(s.playhead + frames / 24, 0, 600) })),
   togglePlay: () => set((s) => ({ playing: !s.playing, playRate: 1 })),
@@ -317,9 +345,24 @@ export const useUi = create<UiState>((set, get) => ({
   setLoopEnabled: (v) => set({ loopEnabled: v }),
   toggleViewerOverlays: () => set((s) => ({ viewerOverlays: !s.viewerOverlays })),
   toggleViewerSafeGuides: () => set((s) => ({ viewerSafeGuides: !s.viewerSafeGuides })),
-  markIn: () => set((s) => ({ loop: { ...s.loop, start: snapToFrame(s.playhead) } })),
-  markOut: () => set((s) => ({ loop: { ...s.loop, end: snapToFrame(s.playhead) } })),
+  markIn: () => set((s) => {
+    // ordering law (R14): start <= end ALWAYS — an inverted window pegs the
+    // playback tick (t >= end resets to start) and the playhead never advances
+    // (R13 review found the hang). Setting in past out drags out along.
+    const start = snapToFrame(s.playhead);
+    return { loop: { ...s.loop, start, end: Math.max(s.loop.end, start) } };
+  }),
+  markOut: () => set((s) => {
+    const end = snapToFrame(s.playhead);
+    return { loop: { ...s.loop, end, start: Math.min(s.loop.start, end) } };
+  }),
   clearInOut: () => set((s) => ({ loop: { ...s.loop, start: 0, end: s.scenes.find((x) => x.id === s.activeSceneId) ? (function () { const sc = s.scenes.find((x) => x.id === s.activeSceneId)!; let d = 0; for (const t of sc.tracks) for (const e of t.elements) d = Math.max(d, e.startTime + e.duration); return d || 30; })() : 30 } })),
+  clearLoopIn: () => set((s) => ({ loop: { ...s.loop, start: 0 } })),
+  clearLoopOut: () => set((s) => ({
+    // spec 16 §3.1 ⌘⇧O "clear out" — the out half reverts to the scene tail
+    // (open-ended), same computation clearInOut uses for its end.
+    loop: { ...s.loop, end: (function () { const sc = s.scenes.find((x) => x.id === s.activeSceneId); if (!sc) return 30; let d = 0; for (const t of sc.tracks) for (const e of t.elements) d = Math.max(d, e.startTime + e.duration); return d || 30; })() },
+  })),
   addMarker: (time, color) => withHistory(set, get, (scenes) => {
     const s = get();
     const sc = scenes.find((x) => x.id === s.activeSceneId)!;
@@ -333,6 +376,11 @@ export const useUi = create<UiState>((set, get) => ({
     // pair (el-2 ↔ el-7 in the fixture) enters/leaves the selection as a
     // group. Moves stay independent (sync-lock is 06 §6, a seal item).
     const pairOf = (target: string): string[] => {
+      // link toggle GATES pair propagation (R14 — the flag was previously
+      // inert: pairs propagated with the toggle off). ON = 05 §12.3
+      // "selecting one selects both"; OFF = plain single selection.
+      // (Sync-lock move-following stays 06 §6, a seal item — never claimed.)
+      if (!s.link) return [target];
       const hit = findEl(s.scenes, target);
       const other = hit?.el.linkedTo;
       return other && other !== target ? [target, other] : [target];
@@ -406,6 +454,7 @@ export const useUi = create<UiState>((set, get) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setSimulateSaveFail: (v) => set({ simulateSaveFail: v }),
   retrySave: () => set((s) => ({ simulateSaveFail: false, saveAttempt: s.saveAttempt + 1 })),
+  saveNow: () => set((s) => ({ saveAttempt: s.saveAttempt + 1 })), // ⌘S: runs the save cycle WITHOUT clearing a armed simulateSaveFail drill
 
   removeMarkersAt: (time) => withHistory(set, get, (scenes) => {
     const s = get();
@@ -449,6 +498,7 @@ export const useUi = create<UiState>((set, get) => ({
     return { mixerState: s.mixerState === 'collapsed' ? 'bridge' : s.mixerState === 'bridge' ? 'full' : 'collapsed' };
   }),
   setAudioLaneBoost: (v) => set({ audioLaneBoost: v }),
+  setTrackHeightPref: (p) => set({ trackHeightPref: p }), /* §4.9 Height pref — view state, no history */
   setStripFocus: (id) => set({ stripFocus: id }),
   setMixerTrack: (trackId, patch) => set((s) => ({
     // ?? DEFAULT_MIXER_TRACK: a track missing from the sidecar (added after
@@ -508,7 +558,7 @@ export const useUi = create<UiState>((set, get) => ({
     const hit = findEl(scenes, id);
     if (!hit || hit.track.locked) return;
     const start = snapToFrame(Math.max(0, newStart));
-    const dur = snapToFrame(Math.max(0.25, newDur));
+    const dur = snapToFrame(Math.max(MIN_DUR, newDur));
     if (start === hit.el.startTime && dur === hit.el.duration) return; // press-release without movement — no history
     const prevStart = hit.el.startTime;
     hit.el.startTime = start;
@@ -520,18 +570,23 @@ export const useUi = create<UiState>((set, get) => ({
     // pre-validate against the CURRENT doc so no-op splits don't pollute history
     const pre = findEl(get().scenes, id);
     const preCut = snapToFrame(time);
-    if (!pre || pre.track.locked || preCut - pre.el.startTime <= 0.1 || preCut - pre.el.startTime >= pre.el.duration - 0.1) return;
+    if (!pre || pre.track.locked || preCut - pre.el.startTime <= MIN_DUR || preCut - pre.el.startTime >= pre.el.duration - MIN_DUR) return;
     for (const sc of scenes) for (const t of sc.tracks) {
       const idx = t.elements.findIndex((e) => e.id === id);
       if (idx === -1) continue;
       const el = t.elements[idx];
       const cut = snapToFrame(time);
       const offset = cut - el.startTime;
-      if (offset <= 0.1 || offset >= el.duration - 0.1) return;
+      if (offset <= MIN_DUR || offset >= el.duration - MIN_DUR) return;
       const left: ElementJSON = { ...el, duration: offset };
       const right: ElementJSON = { ...el, id: nextId(`${el.id}-b`), startTime: cut, duration: el.duration - offset };
       if (right.sourceStart !== undefined) right.sourceStart = el.sourceStart! + offset;
       delete left.transitionOut;
+      // link law (R14): the audio partner must never be linked to BOTH halves
+      // (the R13 review caught split copying linkedTo onto each side). The
+      // left half — which owns the original startTime — keeps the pair; the
+      // new right half severs it, so the badge + pair-selection stay truthful.
+      delete right.linkedTo;
       t.elements.splice(idx, 1, left, right);
     }
     return scenes;
@@ -587,14 +642,18 @@ export const useUi = create<UiState>((set, get) => ({
     set((st) => ({ selection: st.selection.filter((id) => !removedIds.includes(id)) }));
     return scenes;
   }),
-  duplicateElements: (ids) => withHistory(set, get, (scenes) => {
+  duplicateElements: (ids, at) => withHistory(set, get, (scenes) => {
     const newIds: string[] = [];
     for (const sc of scenes) for (const t of sc.tracks) {
       if (t.locked) continue; // locked tracks are inert
       const dupes: ElementJSON[] = [];
       for (const e of t.elements) {
         if (ids.includes(e.id)) {
-          const copy: ElementJSON = { ...e, id: nextId(`${e.id}-d`), startTime: e.startTime + e.duration };
+          // `at` (Alt+drag drop point) lands the copy AT the drop position in
+          // the SAME history entry — one gesture = one undo (R14: was
+          // duplicate + moveElement = two entries with a flashing
+          // intermediate overlapping the next clip).
+          const copy: ElementJSON = { ...e, id: nextId(`${e.id}-d`), startTime: at !== undefined ? snapToFrame(Math.max(0, at)) : e.startTime + e.duration };
           dupes.push(copy);
           newIds.push(copy.id);
         }
@@ -642,7 +701,7 @@ export const useUi = create<UiState>((set, get) => ({
       let rippleLen = 0;
       for (const e of t.elements) {
         if (!targetSet.has(e.id)) continue;
-        if (edge === 'l' && ph > e.startTime && ph < e.startTime + e.duration - 0.1) {
+        if (edge === 'l' && ph > e.startTime && ph < e.startTime + e.duration - MIN_DUR) {
           const cut = ph - e.startTime;
           if (e.sourceStart !== undefined) e.sourceStart += cut;
           e.duration -= cut;
@@ -657,7 +716,7 @@ export const useUi = create<UiState>((set, get) => ({
             e.startTime = ph;
           }
           changed = true;
-        } else if (edge === 'r' && ph > e.startTime + 0.1 && ph < e.startTime + e.duration) {
+        } else if (edge === 'r' && ph > e.startTime + MIN_DUR && ph < e.startTime + e.duration) {
           const removed = e.startTime + e.duration - ph;
           e.duration = ph - e.startTime;
           if (ripple) {
@@ -691,7 +750,7 @@ export const useUi = create<UiState>((set, get) => ({
     Object.assign(hit.el.transitionOut, patch);
     return scenes;
   }),
-  addTrack: (kind) => withHistory(set, get, (scenes) => {
+  addTrack: (kind, position, refTrackId) => withHistory(set, get, (scenes) => {
     const s = get();
     const sc = scenes.find((x) => x.id === s.activeSceneId)!;
     const sameKind = sc.tracks.filter((t) => t.kind === kind);
@@ -706,9 +765,21 @@ export const useUi = create<UiState>((set, get) => ({
       waveform: kind === 'audio' ? true : undefined,
       elements: [],
     };
-    // audio below main; overlay above main (spec 05 §12.1)
+    /* Two routes (spec 18 §4.9 track-header "Add track above/below"):
+       DEFAULT (no position) keeps the spec 05 §12.1 kind-ordering law —
+       audio below main, overlay above main. The EXPLICIT route (position +
+       refTrackId from the header menu) inserts at the header's own index —
+       user direction wins over §12.1, which governs only the default
+       insertion (kind ordering is NOT re-normalized after an explicit
+       insert). */
     const mainIdx = sc.tracks.findIndex((t) => t.kind === 'main');
-    const insertAt = kind === 'audio' ? sc.tracks.length : kind === 'overlay' ? Math.max(0, mainIdx) : mainIdx + 1;
+    let insertAt: number;
+    const refIdx = refTrackId ? sc.tracks.findIndex((t) => t.id === refTrackId) : -1;
+    if (position && refIdx !== -1) {
+      insertAt = position === 'above' ? refIdx : refIdx + 1;
+    } else {
+      insertAt = kind === 'audio' ? sc.tracks.length : kind === 'overlay' ? Math.max(0, mainIdx) : mainIdx + 1;
+    }
     sc.tracks.splice(insertAt, 0, track);
     return scenes;
   }),
@@ -740,7 +811,10 @@ export const useUi = create<UiState>((set, get) => ({
       },
     ];
     sc.markers = [{ id: 'mk-sample-1', time: 10, label: 'Marker', color: 'blue' }];
-    set({ selection: [], playhead: 0 });
+    // G-slice coherence (R14 review): rebuild the mixer sidecar from the NEW
+    // audio track ids — the old keys leaked stale faders/roles/ducking and the
+    // sample's strip fell back to defaults until enterAudioFocus patched it.
+    set({ selection: [], playhead: 0, mixer: createMixerScene(sc.tracks.filter((t) => t.kind === 'audio').map((t) => t.id)) });
     return scenes;
   }),
 }));

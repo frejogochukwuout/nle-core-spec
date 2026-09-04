@@ -945,3 +945,142 @@ describe('trackHeights (spec 05 §12.2)', () => {
     expect(trackHeights('overlay', 'blocks')).toBe(28);
   });
 });
+
+/* ---------- R14 fix batch ---------- */
+
+describe('R14: loop ordering law (markIn/markOut can never invert)', () => {
+  it('markIn past the out point drags out along — start <= end invariant holds', () => {
+    act(() => { S().setPlayhead(29); S().markIn(); });
+    expect(S().loop.start).toBe(29);
+    expect(S().loop.end).toBeGreaterThanOrEqual(29); // was 28 — dragged up, not left behind
+  });
+  it('markOut before the in point drags in along', () => {
+    act(() => { S().setPlayhead(1); S().markOut(); });
+    expect(S().loop.end).toBe(1);
+    expect(S().loop.start).toBeLessThanOrEqual(1); // was 2 — dragged down
+  });
+});
+
+describe('R14: split link law (linkedTo never duplicated to both halves)', () => {
+  it('left half keeps the link, right half severs it', () => {
+    act(() => { S().splitElement('el-2', 12.75); });
+    const els = mainEls();
+    const rightId = els.find((id) => id.startsWith('el-2-b'))!;
+    expect(el('el-2').linkedTo).toBe('el-7'); // original keeps the pair (05 §12.3)
+    expect(el(rightId).linkedTo).toBeUndefined(); // new half claims no pair
+  });
+});
+
+describe('R14: duplicateElements(ids, at) — one composite history entry', () => {
+  it('lands the copy AT the drop point and costs ONE undo', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().duplicateElements(['el-2'], 5); });
+    const dupe = mainEls().find((id) => id.startsWith('el-2-d'))!;
+    expect(el(dupe).startTime).toBe(5); // at the drop point, not appended after
+    expect(S().past.length).toBe(pastBefore + 1); // ONE entry (was: duplicate + move = two)
+    act(() => { S().undo(); });
+    expect(mainEls()).toHaveLength(4); // fully unwound by a single ⌘Z
+    expect(mainEls().find((id) => id.startsWith('el-2-d'))).toBeUndefined();
+  });
+});
+
+describe('R14: toggleMuteAll (⌘⇧M set-all batch)', () => {
+  it('mutes every track in the active scene in one undoable batch', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().toggleMuteAll(); });
+    const sc = S().scenes.find((x) => x.id === S().activeSceneId)!;
+    expect(sc.tracks.every((t) => t.muted)).toBe(true);
+    expect(S().past.length).toBe(pastBefore + 1);
+    act(() => { S().undo(); });
+    const scAfter = S().scenes.find((x) => x.id === S().activeSceneId)!;
+    expect(scAfter.tracks.every((t) => t.muted)).toBe(false);
+  });
+});
+
+describe('R14: clearLoopIn / clearLoopOut (⌘⇧I / ⌘⇧O halves)', () => {
+  it('clearLoopIn reverts start to 0; clearLoopOut reverts end to the scene tail', () => {
+    act(() => { S().clearLoopIn(); });
+    expect(S().loop.start).toBe(0);
+    expect(S().loop.end).toBe(28); // untouched half
+    act(() => { S().clearLoopOut(); });
+    expect(S().loop.end).toBe(30); // sample project tail
+  });
+});
+
+describe('R14: loadSampleProject rebuilds the mixer sidecar', () => {
+  it('mixer keys track the new audio ids — no stale pre-sample strips', () => {
+    act(() => { S().loadSampleProject(); });
+    expect(Object.keys(S().mixer.tracks)).toContain('t-au-sample');
+    const oldAudioIds = ['tr-audio-1', 'tr-audio-2'];
+    for (const id of oldAudioIds) expect(Object.keys(S().mixer.tracks)).not.toContain(id);
+  });
+});
+
+describe('R14: link toggle gates pair propagation (was inert)', () => {
+  it('link OFF — selecting one half of the A/V pair selects it alone', () => {
+    act(() => { S().toggleLink(); }); // default ON
+    act(() => { S().selectElement('el-2', false); });
+    expect(S().selection).toEqual(['el-2']); // no el-7 propagation
+    act(() => { S().toggleLink(); }); // back ON
+    act(() => { S().selectElement('el-2', false); });
+    expect(S().selection).toEqual(['el-2', 'el-7']); // 05 §12.3 pair again
+  });
+});
+
+describe('R14: MIN_DUR is one law across the trim family', () => {
+  it('trimToPlayhead refuses to leave a sub-0.25s remainder (no history entry)', () => {
+    const pastBefore = S().past.length;
+    // l-edge at 0.1s before the end would leave a 0.1s clip — refused
+    act(() => { S().setPlayhead(16.9); S().trimToPlayhead('l', false); }); // el-2: [8.5, 17)
+    expect(el('el-2').duration).toBe(8.5); // untouched
+    expect(S().past.length).toBe(pastBefore);
+    // r-edge at 0.2s past the start would leave a 0.2s clip — refused
+    act(() => { S().setPlayhead(8.7); S().trimToPlayhead('r', false); });
+    expect(el('el-2').duration).toBe(8.5);
+    expect(S().past.length).toBe(pastBefore);
+  });
+  it('splitElement refuses sub-0.25s halves', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().splitElement('el-2', 8.7); }); // 0.2s left half
+    expect(mainEls()).toHaveLength(4);
+    expect(S().past.length).toBe(pastBefore);
+  });
+});
+
+describe('R14: trackHeightPref (spec 18 §4.9 Height rows)', () => {
+  it('boots null (auto) and setTrackHeightPref writes view state WITHOUT history', () => {
+    expect(S().trackHeightPref).toBeNull(); // null = kind-based trackHeights()
+    act(() => { S().setTrackHeightPref('compact'); });
+    expect(S().trackHeightPref).toBe('compact');
+    expect(S().past).toHaveLength(0); // view pref, not a doc mutation
+    act(() => { S().setTrackHeightPref('tall'); });
+    expect(S().trackHeightPref).toBe('tall');
+    act(() => { S().setTrackHeightPref(null); });
+    expect(S().trackHeightPref).toBeNull(); // back to auto
+  });
+});
+
+describe('R14: addTrack position routes (spec 18 §4.9 above/below)', () => {
+  it('explicit above/below inserts at the ref track index, overriding the §12.1 default law', () => {
+    // sc-1 boot order: [T1, V1, A1, A2]
+    act(() => { S().addTrack('audio', 'above', 'tr-audio-1'); });
+    expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.map((t) => t.badge))
+      .toEqual(['T1', 'V1', 'A3', 'A1', 'A2']); // A3 above A1 — NOT appended at the end
+    act(() => { S().addTrack('audio', 'below', 'tr-audio-1'); });
+    expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.map((t) => t.badge))
+      .toEqual(['T1', 'V1', 'A3', 'A1', 'A4', 'A2']); // A4 below A1, above A2
+    expect(S().past).toHaveLength(2); // each insert is its own undoable batch
+  });
+
+  it('a position without a resolvable ref track falls back to the default kind route', () => {
+    act(() => { S().addTrack('audio', 'above', 'no-such-track'); });
+    const tracks = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks;
+    expect(tracks.at(-1)!.badge).toBe('A3'); // appended at the bottom (§12.1 law)
+  });
+
+  it('no position keeps the spec 05 §12.1 kind-ordering law (existing callers)', () => {
+    act(() => { S().addTrack('overlay'); });
+    expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.map((t) => t.kind))
+      .toEqual(['overlay', 'overlay', 'main', 'audio', 'audio']);
+  });
+});

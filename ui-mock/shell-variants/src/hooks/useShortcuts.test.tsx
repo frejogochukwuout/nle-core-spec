@@ -440,3 +440,91 @@ describe('text-input guard (spec 16 §8.5)', () => {
     expect(S().playing).toBe(false);
   });
 });
+
+/* ---------- R14 spec-16 additions (zoom family, marker nav, save/export, mute-all, non-ripple trim) ---------- */
+
+describe('R14: zoom key family (spec 16 §3.8)', () => {
+  it('⌘\\ zooms to fit (toolbar tooltip finally truthful)', () => {
+    press({ key: '\\', ctrlKey: true });
+    expect(S().pxPerSec).toBeCloseTo((900 - 24) / 32, 4); // jsdom: no #timeline-scroll → 900px fallback
+  });
+  it('+ / − step zoom by the toolbar 1.5× factors', () => {
+    const before = S().pxPerSec;
+    press({ key: '+' });
+    expect(S().pxPerSec).toBeCloseTo(before * 1.5, 4);
+    press({ key: '-' });
+    expect(S().pxPerSec).toBeCloseTo(before, 4);
+  });
+  it('⌘0 resets zoom to the boot default', () => {
+    press({ key: '+' });
+    press({ key: '0', ctrlKey: true });
+    expect(S().pxPerSec).toBe(46);
+  });
+});
+
+describe('R14: marker navigation (spec 16 §3.1 ⌘⇧←/→)', () => {
+  it('jumps to the next / previous marker time (fixture: 0, 8.5, 15.5, 24)', () => {
+    press({ key: 'ArrowRight', ctrlKey: true, shiftKey: true });
+    expect(S().playhead).toBe(24); // from 16 → next marker
+    press({ key: 'ArrowLeft', ctrlKey: true, shiftKey: true });
+    expect(S().playhead).toBe(15.5); // nearest previous
+  });
+});
+
+describe('R14: clear-half keys (spec 16 §3.1 ⌘⇧I/O)', () => {
+  it('⌘⇧I clears the in half; ⌘⇧O clears the out half', () => {
+    press({ key: 'I', ctrlKey: true, shiftKey: true });
+    expect(S().loop.start).toBe(0);
+    press({ key: 'O', ctrlKey: true, shiftKey: true });
+    expect(S().loop.end).toBe(30); // scene tail
+  });
+});
+
+describe('R14: ⌘S / ⌘E (spec 16 §3.9)', () => {
+  it('⌘S with no history toasts "Nothing to save"; after a mutation it runs the save cycle', () => {
+    useUi.setState({ past: [] });
+    press({ key: 's', ctrlKey: true });
+    expect(S().toasts.at(-1)?.title).toBe('Nothing to save');
+    act(() => { S().moveElement('el-2', 9); });
+    press({ key: 's', ctrlKey: true });
+    expect(S().saveAttempt).toBe(1);
+  });
+  it('⌘E lands on the Deliver page with the export-boundary toast', () => {
+    press({ key: 'e', ctrlKey: true });
+    expect(S().page).toBe('deliver');
+    expect(S().toasts.at(-1)?.title).toBe('Export');
+  });
+});
+
+describe('R14: ⌘⇧M mute-all + ⌘M on a non-audio focused track', () => {
+  it('⌘⇧M mutes every track in one batch', () => {
+    press({ key: 'm', ctrlKey: true, shiftKey: true });
+    const sc = S().scenes.find((x) => x.id === S().activeSceneId)!;
+    expect(sc.tracks.every((t) => t.muted)).toBe(true);
+  });
+  it('⌘M with a focused VIDEO track toggles THAT track — never the master', () => {
+    act(() => { S().setFocusedTrack('tr-main'); });
+    press({ key: 'm', ctrlKey: true });
+    const sc = S().scenes.find((x) => x.id === S().activeSceneId)!;
+    expect(sc.tracks.find((t) => t.id === 'tr-main')!.muted).toBe(true);
+    expect(S().masterMuted).toBe(false);
+  });
+});
+
+describe('R14: [ / ] non-ripple trim + ⇧,/⇧. 10-frame slip + ⇧J/⇧L fixed 2×', () => {
+  it('[ trims the selected clip start to the playhead WITHOUT rippling neighbors', () => {
+    act(() => { S().setPlayhead(12); }); // el-2: [8.5, 17)
+    press({ key: '[' });
+    expect(el('el-2').startTime).toBe(12);
+    expect(el('el-3').startTime).toBe(17); // neighbor NOT shifted (non-ripple)
+  });
+  it('⇧, slips 10 frames', () => {
+    press({ key: ',', shiftKey: true });
+    expect(el('el-2').sourceStart).toBeCloseTo(3.0 - 10 / 24, 5);
+  });
+  it('⇧L shuttles at a fixed 2× (no accel ladder)', () => {
+    press({ key: 'l', shiftKey: true });
+    expect(S().playRate).toBe(2);
+    expect(S().playing).toBe(true);
+  });
+});
