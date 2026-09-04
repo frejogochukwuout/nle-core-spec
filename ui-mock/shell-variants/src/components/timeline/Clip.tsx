@@ -12,6 +12,8 @@ import { useVariantClipStyle } from '../../state/variantHooks';
 import { mediaById, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
+import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
+import { useConfirm } from '../shell/ConfirmDialog';
 
 interface ClipProps {
   el: ElementJSON;
@@ -32,7 +34,11 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   const moveElement = useUi((s) => s.moveElement);
   const trimElement = useUi((s) => s.trimElement);
   const duplicateElements = useUi((s) => s.duplicateElements);
+  const deleteElements = useUi((s) => s.deleteElements);
+  const pushToast = useUi((s) => s.pushToast);
   const snap = useUi((s) => s.snap);
+  const menu = useContextMenu();   // §4.9 clip menu (right-click + Shift+F10)
+  const confirm = useConfirm();    // §6.4 multi-delete ≥ 5 confirmation
 
   const [drag, setDrag] = useState<DragState>(null);
   const [hover, setHover] = useState(false);
@@ -89,6 +95,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     if (locked) return;
     if (tool === 'blade') return; // handled by click
     if (e.button !== 0) return;
+    (e.currentTarget as HTMLElement).focus(); // roving focus — Shift+F10 host (§4.9)
     dragCancelled.current = false;
     suppressClick.current = false; // fresh gesture — clear any stale suppression
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -161,6 +168,58 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   };
 
   const cursor = locked ? 'not-allowed' : tool === 'blade' ? 'crosshair' : drag?.mode === 'move' ? 'grabbing' : 'move';
+
+  /* ---------- §4.9 clip menu (right-click + Shift+F10 / ContextMenu key).
+     Multi-select: right-clicking a selected element makes the WHOLE
+     selection the command target; an unselected clip targets itself. */
+  const buildMenuItems = (): MenuItem[] => {
+    const targets = selection.includes(el.id) ? selection : [el.id];
+    const deleteSelected = (ripple: boolean) => {
+      const run = () => {
+        deleteElements(targets, ripple);
+        pushToast({
+          kind: 'info',
+          title: `Deleted ${targets.length} clip${targets.length === 1 ? '' : 's'}${ripple ? ' — ripple' : ''}`,
+          detail: ripple ? 'Later clips shifted left' : 'Delete leaves a gap — ⇧⌫ ripples (spec 16 C8)',
+        });
+      };
+      // §6.4: multi-delete ≥ 5 elements confirms first
+      if (targets.length >= 5) {
+        confirm({
+          title: `Delete ${targets.length} clips?`,
+          body: `${targets.length} selected elements will be removed from the timeline. Undo can restore them.`,
+          confirmLabel: 'Delete',
+          danger: true,
+          onConfirm: run,
+        });
+      } else run();
+    };
+    const focusInspector = () => {
+      const s = useUi.getState();
+      if (s.page !== 'edit') s.setPage('edit');
+      if (!s.panels.inspector) s.togglePanel('inspector');
+      s.setInspectorTab('video');
+      // focus call: the panel root is not focusable — focus its F6 region wrapper
+      requestAnimationFrame(() => {
+        const root = document.querySelector('[data-testid="shell-inspector"]');
+        (root?.closest('.shell-region') as HTMLElement | null)?.focus();
+      });
+    };
+    return [
+      { id: 'open-in-viewer', label: 'Open in viewer', onSelect: () => pushToast({ kind: 'info', title: 'Open in viewer', detail: `mock: source preview deferred to v2 (18 §8.5) — ${el.name}` }) },
+      { id: 'split', label: 'Split at playhead', shortcut: '⌘B', sep: true, onSelect: () => {
+        const t = useUi.getState().playhead;
+        // fan-out; real shell sends ONE batched split command (spec 15 §7)
+        targets.forEach((id) => splitElement(id, t));
+      } },
+      { id: 'duplicate', label: 'Duplicate', shortcut: '⌘D', onSelect: () => duplicateElements(targets) },
+      { id: 'delete', label: 'Delete', shortcut: '⌫', danger: true, sep: true, onSelect: () => deleteSelected(false) },
+      { id: 'ripple-delete', label: 'Ripple delete', shortcut: '⇧⌫', danger: true, onSelect: () => deleteSelected(true) },
+      { id: 'detach-audio', label: 'Detach audio', disabled: true, tip: 'mock: not in spec 15 union', sep: true },
+      { id: 'properties', label: 'Properties', onSelect: focusInspector },
+      { id: 'mix-track', label: 'Mix this track…', sep: true, onSelect: () => pushToast({ kind: 'info', title: 'Mix this track…', detail: 'Audio focus lands with the mixer round' }) },
+    ];
+  };
 
   const fadeLeftW = (el.audioFadeIn ?? 0) * pxPerSec;
   const fadeRightW = (el.audioFadeOut ?? 0) * pxPerSec;
@@ -280,7 +339,21 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         role="button"
         aria-label={`${el.name}, ${tc(el.startTime)}`}
         data-testid={`clip-${el.id}`}
+        tabIndex={-1} /* programmatic focus only — roving host for Shift+F10 (§4.9) */
         className={`clip-box absolute top-[2px] bottom-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''}`}
+        onContextMenu={(e) => {
+          if (locked) return;
+          e.preventDefault();
+          e.stopPropagation(); // keep the timeline-empty menu out of it
+          (e.currentTarget as HTMLElement).focus(); // opener for focus-return
+          menu.open(e.clientX, e.clientY, buildMenuItems(), 'clip');
+        }}
+        onKeyDown={(e) => {
+          if (!isMenuKey(e)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          menu.openForElement(ref.current, buildMenuItems(), 'clip');
+        }}
       style={{
         left: geo.left,
         width: Math.max(6, geo.width),
@@ -371,6 +444,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         <span className="mono absolute left-1 top-1 rounded-sm bg-black/55 px-1 text-[11px] font-bold text-white">F</span>
       )}
     </div>
+    {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
     </>
   );
 }

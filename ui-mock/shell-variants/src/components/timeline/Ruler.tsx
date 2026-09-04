@@ -8,11 +8,14 @@ import { useUi } from '../../state/useUiStore';
 import { useHeaderStyle } from '../../state/variantHooks';
 import { tc, tcRuler } from '../../lib/timecode';
 import type { Marker, SceneJSON } from '../../lib/mockData';
+import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 
 const MARKER_COLORS: Record<Marker['color'], string> = {
   red: 'var(--mk-red)', orange: 'var(--mk-orange)', yellow: 'var(--mk-yellow)', green: 'var(--mk-green)',
   blue: 'var(--mk-blue)', purple: 'var(--mk-purple)', pink: 'var(--mk-pink)', gray: 'var(--mk-gray)',
 };
+
+const MARKER_COLOR_ORDER: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
 
 export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSON; duration: number; pxPerSec: number; playhead: number }) {
   const headerStyle = useHeaderStyle();
@@ -20,8 +23,52 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
   const setPlayhead = useUi((s) => s.setPlayhead);
   const loop = useUi((s) => s.loop);
   const loopEnabled = useUi((s) => s.loopEnabled);
+  const addMarker = useUi((s) => s.addMarker);
+  const clearInOut = useUi((s) => s.clearInOut);
+  const setLoopEnabled = useUi((s) => s.setLoopEnabled);
+  const menu = useContextMenu(); // §4.9 ruler menu
   const ref = useRef<HTMLDivElement>(null);
   const [hoverT, setHoverT] = useState<number | null>(null);
+
+  /* §4.9 ruler menu — marker at playhead, in/out clearing, loop toggle, and
+     the 8-color marker palette row (spec 16 §3.7 FCP cycle order). The dot
+     row is a role="group" of menuitem dots: Enter/click adds a colored
+     marker at the playhead, Left/Right cycles the dots. */
+  const markerDotRow = (
+    <div
+      className="flex w-full items-center justify-between"
+      onKeyDown={(e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const dots = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('.menu-dot'));
+        if (dots.length === 0) return;
+        const idx = dots.findIndex((d) => d === document.activeElement);
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        dots[(idx + dir + dots.length) % dots.length]?.focus();
+      }}
+    >
+      {MARKER_COLOR_ORDER.map((c) => (
+        <button
+          key={c}
+          type="button"
+          role="menuitem"
+          className="menu-dot"
+          style={{ background: MARKER_COLORS[c] }}
+          aria-label={`Add ${c} marker at playhead`}
+          data-testid={`shell-menu-ruler-color-${c}`}
+          onClick={() => { menu.close(); addMarker(playhead, c); }}
+        />
+      ))}
+    </div>
+  );
+
+  const buildMenuItems = (): MenuItem[] => [
+    { id: 'add-marker', label: 'Add marker at playhead', onSelect: () => addMarker(playhead) },
+    { id: 'clear-inout', label: 'Clear in/out', onSelect: () => clearInOut() },
+    { id: 'loop', label: 'Loop playback', checked: loopEnabled, onSelect: () => setLoopEnabled(!loopEnabled) },
+    { id: 'marker-color', label: 'Marker color', sep: true, custom: markerDotRow },
+  ];
 
   const contentW = (duration + 4) * pxPerSec;
 
@@ -63,7 +110,21 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
       aria-valuetext={tc(playhead)}
       className="sticky top-0 z-30 shrink-0 cursor-pointer border-b border-hairline bg-shell"
       style={{ height: zoneH, width: contentW }}
+      tabIndex={-1} /* focusable host for the §4.9 Shift+F10 keyboard route */
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation(); // keep the timeline-empty menu out of it
+        menu.open(e.clientX, e.clientY, buildMenuItems(), 'ruler');
+      }}
+      onKeyDown={(e) => {
+        if (!isMenuKey(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        menu.openForElement(ref.current, buildMenuItems(), 'ruler');
+      }}
       onPointerDown={(e) => {
+        if (e.button !== 0) return; // right-button down must not seek — the menu follows
+        (e.currentTarget as HTMLElement).focus(); // roving focus for Shift+F10
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         seek(e.clientX);
       }}
@@ -138,6 +199,8 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
           {tc(hoverT)}
         </span>
       )}
+
+      {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
     </div>
   );
 }

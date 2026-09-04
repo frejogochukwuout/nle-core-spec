@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { useVariant } from './VariantProvider';
 import { DEFAULT_VARIANT, PRESETS, serializeVariant, type Accent, type ClipStyle, type Density, type HeaderStyle, type Theme, type Variant } from '../../lib/variants';
+import { useUi } from '../../state/useUiStore';
 import { ChevronDown, Copy, Check, RotateCcw, Keyboard, X, SlidersHorizontal } from 'lucide-react';
 
 function Seg<T extends string>({ value, options, onChange }: { value: T; options: { v: T; label: string; hint?: string }[]; onChange: (v: T) => void }) {
@@ -40,6 +41,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export function DebugOverlay() {
   const { variant, setVariant, overlayOpen, setOverlayOpen } = useVariant();
   const [copied, setCopied] = useState(false);
+  const pushToast = useUi((s) => s.pushToast);
   if (!overlayOpen) {
     return (
       <button
@@ -160,6 +162,27 @@ export function DebugOverlay() {
               { v: 'slim', label: '112px slim', hint: 'OpenCut teacher value (05 §10 note)' },
             ]}
           />
+        </Row>
+
+        {/* toast test — §6.4 notification region driver (info 4 s / success 6 s /
+            error persists; max-3 stack enforced by the store) */}
+        <Row label="Toast test">
+          <div className="flex gap-1">
+            {([
+              { kind: 'info', label: 'Info', title: 'Info toast', detail: 'auto-dismisses in 4 s' },
+              { kind: 'success', label: 'Success', title: 'Success toast', detail: 'auto-dismisses in 6 s' },
+              { kind: 'error', label: 'Error', title: 'Error toast', detail: 'persists until dismissed' },
+            ] as const).map((t) => (
+              <button
+                key={t.kind}
+                onClick={() => pushToast({ kind: t.kind, title: t.title, detail: t.detail })}
+                data-testid={`debug-btn-toast-${t.kind}`}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] border border-soft px-2 py-1.5 text-[11px] text-tmuted hover:bg-[var(--hover-overlay)] hover:text-tprimary"
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </Row>
 
         {/* spec note for current selection */}

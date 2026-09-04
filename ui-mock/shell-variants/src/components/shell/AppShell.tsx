@@ -22,6 +22,8 @@ import { ColorPage } from '../pages/ColorPage';
 import { DeliverPage } from '../pages/DeliverPage';
 import { sceneDuration } from '../../lib/mockData';
 import { useShortcuts } from '../../hooks/useShortcuts';
+import { ToastRegion } from './ToastRegion';
+import { ConfirmProvider } from './ConfirmDialog';
 
 /* ---------- effects library (compact mock of the Effects toggle §4.1) ---------- */
 const EFFECTS = [
@@ -117,6 +119,28 @@ function HSplitter({ onDrag }: { onDrag: (dy: number) => void }) {
 }
 
 /* ---------- shell ---------- */
+
+/* beforeunload-on-dirty (spec 18 §6.4) — SIMPLEST honest mock: "unsaved" =
+   pending undo history (past.length > 0). The scene.dirty flags are seeded
+   display state for the tab dots, not a real autosave lifecycle (spec 09
+   §6.1 events are not wired here), so they are deliberately NOT counted —
+   counting them would prompt on a freshly loaded project with zero edits.
+   When the real autosave dirty/flushed events land, this swaps to them. */
+function useBeforeUnloadGuard() {
+  const dirty = useUi((s) => s.past.length > 0);
+  useEffect(() => {
+    if (!dirty) {
+      window.onbeforeunload = null;
+      return;
+    }
+    window.onbeforeunload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    return () => { window.onbeforeunload = null; };
+  }, [dirty]);
+}
+
 export function AppShell() {
   const panels = useUi((s) => s.panels);
   const page = useUi((s) => s.page);
@@ -163,6 +187,9 @@ export function AppShell() {
      sheet renders it). F6 region cycling stays local, below. */
   useShortcuts(duration);
 
+  /* spec 18 §6.4: "unsaved changes" browser prompt while edits are pending */
+  useBeforeUnloadGuard();
+
   /* F6 panel-focus cycling — spec 18 §11.5 (normative) */
   const regionsRef = useRef<(HTMLElement | null)[]>([]);
   useEffect(() => {
@@ -188,7 +215,8 @@ export function AppShell() {
     : <Inspector />;
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-app" role="application" aria-label="NLE shell study">
+    <ConfirmProvider>
+      <div className="flex h-full w-full flex-col overflow-hidden bg-app" role="application" aria-label="NLE shell study">
       <a href="#timeline-scroll" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[99] focus:rounded focus:bg-inset focus:px-2 focus:py-1 focus:text-[11px] focus:text-tprimary">
         Skip to timeline
       </a>
@@ -239,6 +267,11 @@ export function AppShell() {
       <div ref={(el) => { regionsRef.current[5] = el; }} tabIndex={-1} className="shell-region">
         <AppDock />
       </div>
-    </div>
+
+      {/* spec 18 §6.4 — notification region (fixed bottom-right, above the
+          status strip; never steals focus) */}
+      <ToastRegion />
+      </div>
+    </ConfirmProvider>
   );
 }

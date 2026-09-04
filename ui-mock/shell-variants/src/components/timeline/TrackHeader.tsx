@@ -7,6 +7,7 @@
 import { Lock, Eye, EyeOff, Volume2, VolumeX, Headphones, Activity } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import type { TrackJSON } from '../../lib/mockData';
+import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 
 function toggleTrack(sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') {
   const { scenes } = useUi.getState();
@@ -39,6 +40,23 @@ function CtrlBtn({ track, sceneId, field, label, tip, on, onCls, children, testi
 export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; height: number; sceneId: string }) {
   const showVisibility = track.kind !== 'audio';
   const tall = height >= 48; // two-row layout; single compact row below 48px
+  const addTrack = useUi((s) => s.addTrack);
+  const menu = useContextMenu(); // §4.9 track-header menu
+
+  /* §4.9 track-header menu — direct toggles reuse the module-level
+     toggleTrack helper (the M/S/L buttons use it too). "Delete track" is
+     honestly disabled: the mock store has no deleteTrack command, so the
+     §6.4 with-clips confirmation has no real path here (deleteScene + the
+     clip-menu multi-delete carry the confirm consumers instead). */
+  const kindLabel = track.kind === 'main' ? 'video' : track.kind === 'overlay' ? 'text' : 'audio';
+  const buildMenuItems = (): MenuItem[] => [
+    { id: 'add-track', label: `Add ${kindLabel} track`, onSelect: () => addTrack(track.kind) },
+    { id: 'rename', label: 'Rename track', disabled: true, tip: 'mock: inline rename needs the track-name update command', sep: true },
+    { id: 'mute', label: 'Mute', checked: track.muted, sep: true, onSelect: () => toggleTrack(sceneId, track.id, 'muted') },
+    { id: 'solo', label: 'Solo', checked: track.solo, onSelect: () => toggleTrack(sceneId, track.id, 'solo') },
+    { id: 'lock', label: 'Lock', checked: track.locked, onSelect: () => toggleTrack(sceneId, track.id, 'locked') },
+    { id: 'delete-track', label: 'Delete track', danger: true, disabled: true, tip: 'mock: needs deleteTrack command', sep: true },
+  ];
   const badgeCls =
     track.kind === 'main'
       ? 'border-[var(--type-video)] text-[var(--type-video)]'
@@ -94,6 +112,21 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
       style={{ height, minHeight: height, overflow: 'hidden' }}
       data-testid={`shell-track-header-${track.id}`}
       title={`${track.name} · ${meta}`}
+      tabIndex={-1} /* focusable host for the §4.9 Shift+F10 keyboard route */
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        (e.currentTarget as HTMLElement).focus();
+        menu.open(e.clientX, e.clientY, buildMenuItems(), 'track');
+      }}
+      onKeyDown={(e) => {
+        /* fires for focus on the header itself OR any of its M/S/L buttons
+           (keydown bubbles to this host) */
+        if (!isMenuKey(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        menu.openForElement(e.currentTarget as HTMLElement, buildMenuItems(), 'track');
+      }}
     >
       {tall ? (
         <>
@@ -116,6 +149,7 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
           {track.solo && <Headphones size={10} className="shrink-0 text-[var(--solo)]" aria-label="Solo active" />}
         </div>
       )}
+      {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
     </div>
   );
 }

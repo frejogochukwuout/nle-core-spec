@@ -2,6 +2,7 @@ import { VariantProvider } from './components/debug/VariantProvider';
 import { DebugOverlay } from './components/debug/DebugOverlay';
 import { CheatSheet } from './components/shell/CheatSheet';
 import { AppShell } from './components/shell/AppShell';
+import { ErrorBoundary } from './components/shell/ErrorBoundary';
 
 /** Window-too-small overlay — spec 18 §3.2: below 1280×800 show an overlay
  *  rather than degrade. */
@@ -18,7 +19,11 @@ function TooSmall() {
 export default function App() {
   return (
     <VariantProvider>
-      <AppShell />
+      {/* spec 18 §6.4 global failure boundary — wraps the shell tree only, so
+          the debug overlay + cheat sheet stay reachable after a crash */}
+      <ErrorBoundary>
+        <AppShell />
+      </ErrorBoundary>
       <DebugOverlay />
       <CheatSheet />
       <TooSmall />

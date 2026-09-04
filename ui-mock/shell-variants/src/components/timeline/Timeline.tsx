@@ -8,11 +8,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUi, trackHeights } from '../../state/useUiStore';
 import { useVariant } from '../debug/VariantProvider';
-import { sceneDuration, type TrackJSON } from '../../lib/mockData';
+import { sceneDuration, mediaById, type TrackJSON } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
 import { Clip } from './Clip';
+import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
+import { POOL_DRAG_TYPE, isDroppable } from '../shell/MediaPool';
 
 export function Timeline() {
   const { variant } = useVariant();
@@ -24,9 +26,27 @@ export function Timeline() {
   const setZoom = useUi((s) => s.setZoom);
   const setSelection = useUi((s) => s.setSelection);
   const addTrack = useUi((s) => s.addTrack);
+  const addMarker = useUi((s) => s.addMarker);
+  const loadSampleProject = useUi((s) => s.loadSampleProject);
+  const pushToast = useUi((s) => s.pushToast);
+  const mediaDrag = useUi((s) => s.mediaDrag); // pool drag-to-lane state (18 §4.2)
+  const menu = useContextMenu(); // §4.9 timeline-empty menu
 
   const headersRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  /* §4.9 timeline-empty menu — right-click / Shift+F10 on the empty lane
+     surface. Clips and the ruler stopPropagation for their own menus, so
+     anything that reaches the scroll surface is empty lane. */
+  const buildMenuItems = (): MenuItem[] => [
+    { id: 'paste', label: 'Paste', shortcut: '⌘V', disabled: true, tip: 'mock: clipboard paste needs spec 15 §4.3.70' },
+    { id: 'add-marker', label: 'Add marker', onSelect: () => addMarker(useUi.getState().playhead) },
+    { id: 'add-track', label: 'Add track (audio)', onSelect: () => addTrack('audio') },
+    { id: 'load-sample', label: 'Load sample project', sep: true, onSelect: () => {
+      loadSampleProject();
+      pushToast({ kind: 'success', title: 'Sample project loaded', detail: '30 s demo · 3 video + 1 text + 1 audio + crossfade (18 §4.10)' });
+    } },
+  ];
 
   /* marquee rubber-band selection — rect in CONTENT coordinates (scroll
      offsets applied). Started by pointerdown on an empty lane background;
@@ -181,6 +201,25 @@ export function Timeline() {
         id="timeline-scroll"
         ref={scrollRef}
         className="relative min-h-0 flex-1 overflow-auto bg-timeline"
+        tabIndex={-1} /* focusable surface for the §4.9 Shift+F10 keyboard route */
+        onContextMenu={(e) => {
+          e.preventDefault();
+          menu.open(e.clientX, e.clientY, buildMenuItems(), 'timeline-empty');
+        }}
+        onKeyDown={(e) => {
+          if (!isMenuKey(e)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          menu.openForElement(scrollRef.current, buildMenuItems(), 'timeline-empty');
+        }}
+        onPointerDown={(e) => {
+          // roving focus for the keyboard route: empty-surface clicks focus
+          // the scroll surface; clips + the ruler focus themselves
+          const t = e.target as HTMLElement;
+          if (!t.closest('.clip-box') && !t.closest('[role="slider"]')) {
+            (e.currentTarget as HTMLElement).focus();
+          }
+        }}
         onScroll={onScrollSync}
         onWheel={onWheel}
         onPointerMove={moveMarquee}
@@ -192,11 +231,64 @@ export function Timeline() {
 
           {scene.tracks.map((track) => {
             const h = laneHeight(track.kind);
+            /* media-pool drag-to-lane (18 §4.2): lane = drop target while a
+               pool card drag is in flight; highlight + copy/not-allowed cursor
+               come from mediaDrag, drop commits an honest-mock toast (the
+               store has no insertElement action yet) */
+            const over = mediaDrag?.overTrackId === track.id;
+            const laneDropCls = over ? (mediaDrag && mediaDrag.allowed ? ' pool-lane-ok' : ' pool-lane-bad') : '';
             return (
               <div
                 key={track.id}
-                className="relative shrink-0 border-b border-hairline cursor-crosshair"
-                style={{ height: h, background: laneBg(track.kind), opacity: track.visible ? 1 : 0.35, cursor: track.locked ? 'not-allowed' : undefined }}
+                className={`relative shrink-0 border-b border-hairline cursor-crosshair${laneDropCls}`}
+                style={{
+                  height: h,
+                  background: laneBg(track.kind),
+                  opacity: track.visible ? 1 : 0.35,
+                  cursor: track.locked ? 'not-allowed' : over && mediaDrag ? (mediaDrag.allowed ? 'copy' : 'not-allowed') : undefined,
+                }}
+                onDragOver={(e) => {
+                  if (!e.dataTransfer.types.includes(POOL_DRAG_TYPE)) return;
+                  e.preventDefault();
+                  const md = useUi.getState().mediaDrag;
+                  if (!md) return;
+                  const media = mediaById(md.mediaId);
+                  const allowed = !!media && !track.locked && isDroppable(track.kind, media.type);
+                  e.dataTransfer.dropEffect = allowed ? 'copy' : 'none';
+                  if (md.overTrackId !== track.id || md.allowed !== allowed) {
+                    useUi.getState().setMediaDrag({ mediaId: md.mediaId, overTrackId: track.id, allowed });
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (!e.dataTransfer.types.includes(POOL_DRAG_TYPE)) return;
+                  if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+                  const md = useUi.getState().mediaDrag;
+                  if (md && md.overTrackId === track.id) {
+                    useUi.getState().setMediaDrag({ mediaId: md.mediaId, overTrackId: null, allowed: false });
+                  }
+                }}
+                onDrop={(e) => {
+                  if (!e.dataTransfer.types.includes(POOL_DRAG_TYPE)) return;
+                  e.preventDefault();
+                  const md = useUi.getState().mediaDrag;
+                  const media = md ? mediaById(md.mediaId) : undefined;
+                  if (md && media) {
+                    if (md.allowed && md.overTrackId === track.id) {
+                      useUi.getState().pushToast({
+                        kind: 'success',
+                        title: `Placed ${media.name} on ${track.badge}`,
+                        detail: 'mock: insertElement lands with the engine round (spec 15 §5.4 / 06 §5.9)',
+                      });
+                    } else {
+                      useUi.getState().pushToast({
+                        kind: 'error',
+                        title: `Can't place ${media.type} media on ${track.badge}`,
+                        detail: 'placement compatibility (spec 06 §5.9) — video→V, image→T, audio→A lanes',
+                      });
+                    }
+                  }
+                  useUi.getState().setMediaDrag(null);
+                }}
                 onPointerDown={(e) => {
                   // marquee starts only on the EMPTY lane background (target ===
                   // currentTarget ⇒ not a clip / transition marker). Clip drags
@@ -298,6 +390,8 @@ export function Timeline() {
           </div>
         </div>
       </div>
+
+      {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
     </div>
   );
 }
