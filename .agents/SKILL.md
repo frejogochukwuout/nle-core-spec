@@ -714,6 +714,14 @@ Output: integration review report with per-check verdict + issues list.
 
 38. **Tests that pin behavior need behavior-level assertions.** The PageUp bug survived a test that only asserted `playhead < 17` — a weak bound that a completely broken implementation satisfies. Assert exact landings (`toBeCloseTo(8.49, 4)`) wherever the math is deterministic.
 
+## R14 meta-learnings (re-audit + zero-no-op + both-directions spec scan)
+
+39. **"Fixed" reply comments can lie — re-audit against code, not claims.** The R13 PR reply claimed the mirror sentinel, focus race, origin guard, and reveal-snap were fixed; code review proved 5 of ~75 claimed fixes had never landed (grep PASSes were false positives: comments match, code doesn't). The re-audit method: build a mechanical grep battery FIRST (cheap PASS/FAIL), then manually inspect every FAIL and every "PASS" whose pattern could match a comment instead of code. Verification-not-claims applies retroactively to your OWN past claims.
+
+40. **The no-op sweep is an audit primitive: trace every handler to an observable.** "Ensure zero no-op" ≠ checking flagged buttons. The systematic method: enumerate every interactive element (button/onClick/role/slider/draggable/tabIndex), then for each trace ONE of four terminal states (store mutation with visible effect / local behavior / honest toast / aria-disabled+tip). The sweep found 12 dead buttons + 7 dead form controls + 1 functional-no-op toggle + 5 orphaned store actions BEYOND the review waves' finds — and two of the biggest fixes were pure wiring (store actions existed, buttons never called them).
+
+41. **Fresh sandbox = git recovers code, never process state.** The clone, tests, and PR all came back from origin; the runtime stack (Storybook-on-:3000 supervisor, spawntest route, runtime copy with .env/git/threads.db) did NOT — none of it is git-tracked. Write the restoration recipe into HANDOFF as you build infra (paths, commands, env keys, verification markers), or the next session rebuilds it from archaeology. Also re-verify platform assumptions: the reaper still kills setsid'd processes; only platform-next-server children survive.
+
 ## Summary
 
 The core insight from this session: **multi-round scout → audit → revise → integration review produces dramatically higher-quality specs than single-pass writing.** The audit step is non-negotiable — scouts make mistakes (especially fabrication), and only a fresh skeptical reader catches them. The integration step catches cross-stream inconsistencies that no individual scout could see.
