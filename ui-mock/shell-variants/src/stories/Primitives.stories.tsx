@@ -1,6 +1,7 @@
-/* Primitives stories — the leaf mixer controls from design doc v2.2 §6: the
-   dB-tapered fader, the pan knob, and the mock stereo meter. Fader + PanKnob
-   are plain controlled props, so the stories hold local state and the drag /
+/* Primitives stories — the leaf mixer controls from design doc v2.2 §4
+   (full strip anatomy): the dB-tapered fader, the pan knob, and the mock
+   stereo meter. Fader + PanKnob are plain controlled props, so the stories
+   hold local state and the drag /
    double-click-reset / keyboard grammar stays reviewable; StripMeter's rAF
    noise walk is driven by the store's `playing` flag, booted per story.
    NOTE — the Effects library is deliberately NOT here: EffectsPanel is

@@ -60,8 +60,7 @@ describe('JKL shuttle with 500 ms tap-accel', () => {
 
   it('same-direction taps within 500 ms accelerate 1× → 2× → 4× (capped)', () => {
     let now = 0;
-    const spy = vi.spyOn(performance, 'now').mockImplementation(() => now);
-    expect(spy).toBeTruthy();
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
     press({ key: 'l' });              // tap 1 → 1×
     expect(S().playRate).toBe(1);
     now = 100; press({ key: 'l' });   // tap 2 → 2×
@@ -250,12 +249,20 @@ describe('clip + selection keys', () => {
     expect(el('el-2').sourceStart).toBeCloseTo(3, 6);
   });
 
-  it('⌥[ / ⌥] ripple-trim to the playhead (alt combos read e.code)', () => {
-    press({ key: '[', code: 'BracketLeft', altKey: true }); // l-edge at 16
-    expect(el('el-2').startTime).toBe(16);
-    useUi.setState({ playhead: 26 });
-    press({ key: ']', code: 'BracketRight', altKey: true }); // r-edge at 26
-    expect(el('el-4').duration).toBe(2);
+  it('⌥[ / ⌥] ripple-trim closes the gap (alt combos read e.code)', () => {
+    // l-edge at 16: every clip containing ph 16 gets its head removed ripple-style —
+    // el-2 (8.5..17) keeps its start, shows its tail, downstream closes the gap
+    press({ key: '[', code: 'BracketLeft', altKey: true });
+    expect(el('el-2').startTime).toBe(8.5);                    // start kept
+    expect(el('el-2').duration).toBeCloseTo(1.0, 5);           // head removed
+    expect(el('el-2').sourceStart).toBeCloseTo(10.5, 5);       // source advanced
+    expect(el('el-3').startTime).toBeCloseTo(9.5, 5);          // gap closed
+    expect(el('el-4').startTime).toBeCloseTo(16.5, 5);
+    expect(el('el-6').duration).toBe(14);                      // audio 0..30 lost its head too
+    // r-edge at 20 on el-4 (now 16.5..22.5): the tail [20..22.5] is removed
+    useUi.setState({ playhead: 20 });
+    press({ key: ']', code: 'BracketRight', altKey: true });
+    expect(el('el-4').duration).toBeCloseTo(3.5, 5);           // 20 - 16.5
   });
 
   it('undo / redo with empty history pushes an info toast instead', () => {

@@ -11,6 +11,16 @@ import { useUi } from '../../state/useUiStore';
 const boot = (patch: UiPatch = {}) => renderShell(<SceneTabs />, { patch });
 
 describe('SceneTabs', () => {
+  it('Enter and Space activate a tab (role=tab keyboard contract, §11 a11y floor)', () => {
+    boot({});
+    const tab = screen.getByTestId('shell-scene-tab-sc-2');
+    fireEvent.keyDown(tab, { key: 'Enter' });
+    expect(store().activeSceneId).toBe('sc-2');
+    // back via Space on the first tab
+    fireEvent.keyDown(screen.getByTestId('shell-scene-tab-sc-1'), { key: ' ' });
+    expect(store().activeSceneId).toBe('sc-1');
+  });
+
   it('renders a tablist with one tab per scene; the active tab is selected (spec 18 §4.6)', () => {
     boot({});
     const tabs = screen.getByRole('tablist', { name: 'Scenes' });

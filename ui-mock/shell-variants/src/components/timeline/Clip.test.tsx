@@ -120,8 +120,10 @@ describe('Clip', () => {
     boot({ selection: [] });
     fireEvent.click(screen.getByTestId('clip-el-1'));
     expect(store().selection).toEqual(['el-1']);
+    // el-2 is A/V-linked to el-7 (spec 05 §12.3: selecting one selects both) —
+    // the pair joins the additive selection as a group
     fireEvent.click(screen.getByTestId('clip-el-2'), { shiftKey: true });
-    expect(store().selection).toEqual(['el-1', 'el-2']);
+    expect(store().selection).toEqual(['el-1', 'el-2', 'el-7']);
   });
 
   it('blade tool: crosshair cursor + click splits at the click position (spec 16 B / 15 split)', () => {

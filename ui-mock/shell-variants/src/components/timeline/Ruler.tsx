@@ -65,6 +65,10 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
 
   const buildMenuItems = (): MenuItem[] => [
     { id: 'add-marker', label: 'Add marker at playhead', onSelect: () => addMarker(playhead) },
+    { id: 'goto-marker', label: 'Go to Marker ›', disabled: true, tip: 'mock: marker navigation list not built' },
+    { id: 'clear-markers', label: 'Clear Markers in View', disabled: true, tip: 'mock: view-range tracking not built (⇧M deletes at playhead)' },
+    { id: 'mark-in', label: 'Mark In', shortcut: 'I', onSelect: () => useUi.getState().markIn() },
+    { id: 'mark-out', label: 'Mark Out', shortcut: 'O', onSelect: () => useUi.getState().markOut() },
     { id: 'clear-inout', label: 'Clear in/out', onSelect: () => clearInOut() },
     { id: 'loop', label: 'Loop playback', checked: loopEnabled, onSelect: () => setLoopEnabled(!loopEnabled) },
     { id: 'marker-color', label: 'Marker color', sep: true, custom: markerDotRow },

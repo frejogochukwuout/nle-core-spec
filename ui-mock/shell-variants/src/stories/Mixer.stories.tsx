@@ -1,8 +1,8 @@
-/* Mixer stories — the design-doc v2.2 §4 audio surfaces: the 3-state side
-   dock beside the multi-track lanes, a solo ChannelStrip, the Audio-focus
-   inspector swap (ChannelEditor), and the SoundLibrary pool swap. All
-   store-driven; the default mock mixer covers scene 1's audio tracks
-   (A1 dialogue / A2 bgm with duck-under). */
+/* Mixer stories — the design-doc v2.2 revision (end of file) audio surfaces:
+   the 3-state side dock beside the multi-track lanes, a solo ChannelStrip,
+   the Audio-focus inspector swap (ChannelEditor), and the SoundLibrary pool
+   swap. All store-driven; the default mock mixer covers scene 1's audio
+   tracks (A1 dialogue / A2 bgm with duck-under). */
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MixerDock } from '../components/mixer/MixerDock';

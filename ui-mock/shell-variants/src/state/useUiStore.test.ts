@@ -764,6 +764,113 @@ describe('useActiveScene', () => {
   });
 });
 
+describe('setMainBodyH (0 = auto sentinel)', () => {
+  it('preserves 0 as the §3.2 auto value (40% of viewport); drags clamp to 320..900', () => {
+    act(() => { S().setMainBodyH(0); });
+    expect(S().mainBodyH).toBe(0);
+    act(() => { S().setMainBodyH(-5); });
+    expect(S().mainBodyH).toBe(0); // negatives collapse to auto
+    act(() => { S().setMainBodyH(440); });
+    expect(S().mainBodyH).toBe(440);
+    act(() => { S().setMainBodyH(9999); });
+    expect(S().mainBodyH).toBe(900);
+  });
+});
+
+/* ---------- R13 review-fix regressions ---------- */
+
+describe('R13 review fixes', () => {
+  it('P1 fix: setMixerTrack on a track missing from the sidecar seeds full defaults (no partial record)', () => {
+    // addTrack('audio') creates a track the G-slice does not know yet
+    act(() => { S().addTrack('audio'); });
+    const newId = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.at(-1)!.id;
+    act(() => { S().setMixerTrack(newId, { fader: -10 }); });
+    const strip = S().mixer.tracks[newId];
+    expect(strip).toEqual({
+      fader: -10, pan: 0, inserts: [null, null], auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0,
+    });
+  });
+
+  it('P2 fix: undoing lock-all restores the lockAll flag too (no aria-pressed lie)', () => {
+    act(() => { S().toggleLockAll(); });
+    expect(S().lockAll).toBe(true);
+    act(() => { S().undo(); });
+    expect(S().lockAll).toBe(false); // flag restored alongside the doc
+    // doc restored to the fixture state: only tr-audio-2 is locked
+    const tracks = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks;
+    expect(tracks.map((t) => t.locked)).toEqual([false, false, false, true]);
+    // and a fresh lock-all after the undo still works in the right direction
+    act(() => { S().toggleLockAll(); });
+    expect(S().lockAll).toBe(true);
+    const fresh = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks; // re-fetch: history clones the doc
+    expect(fresh.map((t) => t.locked)).toEqual([true, true, true, true]);
+  });
+
+  it('P2 fix: deleteElements is inert on locked tracks (spec 18 §4.5 / the pinned clip-guard)', () => {
+    // el-7 lives on the LOCKED tr-audio-2 fixture track
+    act(() => { S().deleteElements(['el-7'], false); });
+    expect(el('el-7')).toBeDefined(); // survived
+    expect(S().past.length).toBe(0);  // true no-op — no history entry
+    expect(S().selection).toEqual(['el-2']); // not pruned either
+    // mixed selection: the unlocked half deletes, the locked half stays
+    act(() => { S().deleteElements(['el-2', 'el-7'], false); });
+    expect(() => el('el-2')).toThrow();
+    expect(el('el-7')).toBeDefined();
+  });
+
+  it('P2 fix: trimToPlayhead ripple-l removes the head and closes the gap (deleteElements ripple model)', () => {
+    act(() => { S().setPlayhead(16); S().trimToPlayhead('l', true); });
+    const e = el('el-2'); // was 8.5..17
+    expect(e.startTime).toBe(8.5);               // clip keeps its start
+    expect(e.duration).toBeCloseTo(1.0, 5);      // head [8.5..16] removed
+    expect(e.sourceStart).toBeCloseTo(10.5, 5);  // source advanced past the head
+    expect(el('el-3').startTime).toBeCloseTo(9.5, 5);  // downstream closed
+    expect(el('el-4').startTime).toBeCloseTo(16.5, 5);
+  });
+
+  it('P2 fix: trimToPlayhead ripple-r removes the tail; downstream abuts the new end', () => {
+    act(() => { S().setPlayhead(10); S().trimToPlayhead('r', true); });
+    expect(el('el-1').duration).toBe(8.5); // ph 10 sits past el-1 — untouched
+    const e2 = el('el-2'); // was 8.5..17 — the tail [10..17] is REMOVED (7 s)
+    expect(e2.duration).toBe(1.5);                 // 10 - 8.5
+    expect(el('el-3').startTime).toBeCloseTo(10, 5);   // 17 - 7 — abuts el-2's new end
+    expect(el('el-3').startTime).toBeCloseTo(e2.startTime + e2.duration, 5);
+    expect(el('el-4').startTime).toBeCloseTo(17, 5);   // 24 - 7
+  });
+
+  it('P2 fix: trimToPlayhead is a true no-op when the playhead is outside every clip', () => {
+    act(() => { S().setPlayhead(30.5); S().trimToPlayhead('l', true); });
+    expect(S().past.length).toBe(0);
+    expect(mainEls()).toHaveLength(4);
+  });
+
+  it('spec 05 §12.3: selectElement takes the A/V pair as a group, both directions, additive toggle', () => {
+    act(() => { S().selectElement('el-2', false); });
+    expect(S().selection).toEqual(['el-2', 'el-7']);
+    act(() => { S().selectElement('el-7', false); }); // from the other side
+    expect(S().selection).toEqual(['el-7', 'el-2']);
+    act(() => { S().setSelection(['el-1']); S().selectElement('el-2', true); });
+    expect(S().selection).toEqual(['el-1', 'el-2', 'el-7']);
+    act(() => { S().selectElement('el-2', true); }); // toggle the pair off together
+    expect(S().selection).toEqual(['el-1']);
+  });
+
+  it('toggleTrackCmd on unknown ids is a true no-op (no history entry)', () => {
+    const past = S().past.length;
+    act(() => { S().toggleTrackCmd('sc-1', 'nope', 'muted'); });
+    expect(S().past.length).toBe(past);
+    act(() => { S().toggleTrackCmd('no-scene', 'tr-main', 'muted'); });
+    expect(S().past.length).toBe(past);
+  });
+
+  it('setPlaying(true) preserves the shuttle rate; false resets it', () => {
+    act(() => { S().setShuttle(4); S().setPlaying(false); });
+    expect(S().playRate).toBe(1);
+    act(() => { S().setShuttle(2); S().setPlaying(true); });
+    expect(S().playRate).toBe(2);
+  });
+});
+
 describe('trackHeights (spec 05 §12.2)', () => {
   it('filmstrip: main 80 / audio 60 / overlay 60', () => {
     expect(trackHeights('main', 'filmstrip')).toBe(80);

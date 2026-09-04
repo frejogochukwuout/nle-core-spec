@@ -1,6 +1,6 @@
 /* MixerDock — the mixer surface docked to the RIGHT of the multi-track
-   lanes (design doc v2.2 §4, user direction: "side by side with
-   multi-track", not a short row under the timeline).
+   lanes (design doc v2.2 revision — end of file; user direction:
+   "side by side with multi-track", not a short row under the timeline).
 
    Three states (same store state machine as the old MixerRow):
    - collapsed: not rendered.

@@ -36,11 +36,27 @@ export function CheatSheet() {
     }
   }, [open]);
 
-  /* Esc closes (capture — beats the shell deselect handler) */
+  /* Esc closes (capture — beats the shell deselect handler) + Tab is
+     trapped inside the modal (spec 16 §7.3: "the modal is a focus trap;
+     Tab cycles within"). Same two-stop wrap pattern as ConfirmDialog. */
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.stopPropagation(); close(false); }
+      if (e.key === 'Tab') {
+        const sheet = document.querySelector('[data-testid="shell-cheatsheet"]');
+        if (!sheet) return;
+        const focusables = Array.from(
+          sheet.querySelectorAll<HTMLElement>('button, input, [tabindex]:not([tabindex="-1"])'),
+        ).filter((el) => !el.hasAttribute('disabled'));
+        if (focusables.length === 0) return;
+        e.preventDefault();
+        const idx = focusables.indexOf(document.activeElement as HTMLElement);
+        const next = e.shiftKey
+          ? (idx <= 0 ? focusables.length - 1 : idx - 1)
+          : (idx === focusables.length - 1 || idx === -1 ? 0 : idx + 1);
+        focusables[next].focus();
+      }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);

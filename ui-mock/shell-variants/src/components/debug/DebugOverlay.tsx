@@ -164,13 +164,14 @@ export function DebugOverlay() {
           />
         </Row>
 
-        {/* toast test — §6.4 notification region driver (info 4 s / success 6 s /
-            error persists; max-3 stack enforced by the store) */}
+        {/* toast test — §6.4 notification region driver (info/success 4 s,
+            persist 6 s, error persists until dismissed; max-3 stack enforced
+            by the store) */}
         <Row label="Toast test">
           <div className="flex gap-1">
             {([
               { kind: 'info', label: 'Info', title: 'Info toast', detail: 'auto-dismisses in 4 s' },
-              { kind: 'success', label: 'Success', title: 'Success toast', detail: 'auto-dismisses in 6 s' },
+              { kind: 'success', label: 'Success', title: 'Success toast', detail: 'auto-dismisses in 4 s' },
               { kind: 'error', label: 'Error', title: 'Error toast', detail: 'persists until dismissed' },
             ] as const).map((t) => (
               <button

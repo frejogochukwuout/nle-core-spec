@@ -49,7 +49,9 @@ export const ViewerDefault: StoryObj = {
 /** In-canvas overlays suppressed through the store-bootable path — the
  *  §4.3/§9 rule “overlays hidden while a tool drag is active” (tool: blade).
  *  The eye toggle is store state (viewerOverlays); the composited text
- *  overlay and the name/TC chips must all disappear here. */
+ *  overlay and the name/TC chips must all disappear here. Mock approximation
+ *  (registered, PLAN item 23): the mock hides overlays whenever the active
+ *  tool ≠ select, not only while a drag is running (Viewer.tsx). */
 export const ViewerOverlaysHidden: StoryObj = {
   name: 'Viewer — in-canvas overlays hidden (blade tool)',
   parameters: { layout: 'padded' },

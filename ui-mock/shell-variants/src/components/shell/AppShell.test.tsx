@@ -8,9 +8,10 @@
    dependent compact behavior is never simulated via resize. */
 
 import { describe, expect, it, afterEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
+import { CheatSheet } from './CheatSheet';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 
 /** 1280×800 host (§3.2 minimum) — jsdom ignores geometry, but the size keeps
@@ -27,6 +28,29 @@ function renderAppShell(patch?: UiPatch) {
 afterEach(() => {
   document.querySelectorAll('body > [data-appshell-host]').forEach((el) => el.remove());
 });
+
+/* ---------- R13-D2 additions (test-gap closure from the R13-W1c review):
+   real splitter-seam drags (the R12 inspector +dx regression), the rAF
+   playback loop, F6/⇧F6 region cycling, and the dock cheat-sheet entry. All
+   drive the REAL handlers (pointer events at the separators, window F6
+   keydowns, drag events at the lanes) instead of boot-patching results. ---------- */
+
+/** App.tsx composition: AppShell with its sibling CheatSheet modal (App.tsx
+ *  mounts them side by side — the dock button must open the real sheet). */
+function renderAppShellWithCheatSheet(patch?: UiPatch) {
+  const host = document.createElement('div');
+  host.setAttribute('data-appshell-host', '');
+  host.style.width = '1280px';
+  host.style.height = '800px';
+  document.body.appendChild(host);
+  return renderShell(
+    <>
+      <AppShell />
+      <CheatSheet />
+    </>,
+    { patch, container: host },
+  );
+}
 
 describe('AppShell region structure (spec 18 §3)', () => {
   it('renders the full region stack: toolbar, media pool, viewer, inspector, timeline, status strip, dock', () => {
@@ -206,5 +230,155 @@ describe('inspector tab bar + toolbar panel toggles', () => {
     // only the media-pool seam survives — the inspector seam unmounts with the rail
     expect(screen.getAllByRole('separator', { name: 'Resize panel' })).toHaveLength(1);
     expect(screen.getByTestId('shell-viewer')).toBeInTheDocument();
+  });
+});
+
+describe('splitter seams (R12 regression — spec 18 §3.2)', () => {
+  /** Both V-seams share the "Resize panel" label (registered deviation), so
+   *  locate each by the panel its NEXT sibling wraps: the media seam precedes
+   *  the viewer region, the inspector seam precedes the right rail. */
+  const seamBefore = (testid: string): HTMLElement => {
+    const panel = screen.getByTestId(testid);
+    const sep = screen.getAllByRole('separator', { name: 'Resize panel' }).find(
+      (el) => (el.nextElementSibling as HTMLElement | null)?.contains(panel),
+    );
+    if (!sep) throw new Error(`no "Resize panel" seam precedes ${testid}`);
+    return sep;
+  };
+
+  it('inspector seam: dragging LEFT widens the right-docked rail (pins the R12 +dx runaway fix)', () => {
+    renderAppShell();
+    const sep = seamBefore('shell-inspector');
+    // 340 → dragging the seam left (dx −60) must WIDEN the rail to 400
+    fireEvent.pointerDown(sep, { pointerId: 1, button: 0, clientX: 600 });
+    fireEvent.pointerMove(sep, { pointerId: 1, buttons: 1, clientX: 540 });
+    expect(store().inspectorW).toBe(400);
+    // the start ref resets each move, so drags are incremental: −20 more → 420
+    fireEvent.pointerMove(sep, { pointerId: 1, buttons: 1, clientX: 520 });
+    expect(store().inspectorW).toBe(420);
+    // dragging RIGHT narrows it back (+40 → 380) — direction pinned both ways
+    fireEvent.pointerMove(sep, { pointerId: 1, buttons: 1, clientX: 560 });
+    expect(store().inspectorW).toBe(380);
+  });
+
+  it('media-pool seam: dragging RIGHT widens the left-docked pool (mediaW + dx)', () => {
+    renderAppShell();
+    const sep = seamBefore('shell-viewer');
+    fireEvent.pointerDown(sep, { pointerId: 1, button: 0, clientX: 300 });
+    fireEvent.pointerMove(sep, { pointerId: 1, buttons: 1, clientX: 340 }); // dx +40
+    expect(store().mediaW).toBe(320); // 280 + 40
+    fireEvent.pointerMove(sep, { pointerId: 1, buttons: 1, clientX: 320 }); // dx −20
+    expect(store().mediaW).toBe(300);
+  });
+
+  it('timeline H-seam drag resizes mainBodyH; double-click resets each seam (§3.2)', () => {
+    renderAppShell({ mainBodyH: 400, inspectorW: 420, mediaW: 360 });
+    const hSep = screen.getByRole('separator', { name: 'Resize timeline' });
+    fireEvent.pointerDown(hSep, { pointerId: 1, button: 0, clientY: 500 });
+    fireEvent.pointerMove(hSep, { pointerId: 1, buttons: 1, clientY: 540 }); // dy +40
+    expect(store().mainBodyH).toBe(440);
+    // dbl-click resets — the V-seams return to the §3.2 structural defaults
+    fireEvent.doubleClick(seamBefore('shell-inspector'));
+    expect(store().inspectorW).toBe(340);
+    fireEvent.doubleClick(seamBefore('shell-viewer'));
+    expect(store().mediaW).toBe(280);
+    // H-seam reset returns to 0 = the auto sentinel (40% of viewport, §3.2) —
+    // R13 fix: setMainBodyH clamped 0 into [320,900] so the reset landed at
+    // 320 and "auto" was unreachable; 0 is now preserved as the auto value.
+    fireEvent.doubleClick(hSep);
+    expect(store().mainBodyH).toBe(0);
+  });
+});
+
+describe('playback loop (mock engine — spec 18 §3.2 playback)', () => {
+  it('playing: true advances the playhead through the rAF loop', async () => {
+    renderAppShell({ playing: true });
+    // rAF stub = 16 ms setTimeout (setup.ts) → real-timer waitFor suffices
+    await waitFor(() => expect(store().playhead).toBeGreaterThan(16));
+    expect(store().playing).toBe(true); // mid-timeline — no auto-stop
+    act(() => store().setPlaying(false)); // stop the loop before teardown
+  });
+
+  it('forward playback auto-stops and clamps the playhead to the scene duration', async () => {
+    renderAppShell({ playing: true, playhead: 29.9 }); // sc-1 duration = 30 s
+    await waitFor(() => {
+      expect(store().playing).toBe(false);
+      expect(store().playhead).toBe(30);
+    }, { timeout: 3000 });
+  });
+
+  it('loopEnabled: crossing loop.end wraps back to loop.start and keeps playing', async () => {
+    renderAppShell({ playing: true, playhead: 16.9, loopEnabled: true, loop: { start: 2, end: 17 } });
+    // < 16.9 is only reachable AFTER the wrap (forward play starts at 16.9)
+    await waitFor(() => {
+      expect(store().playhead).toBeLessThan(16.9);
+      expect(store().playhead).toBeGreaterThanOrEqual(2); // wrapped to loop.start
+    }, { timeout: 3000 });
+    expect(store().playing).toBe(true); // loop ≠ auto-stop
+    act(() => store().setPlaying(false)); // stop the loop before teardown
+  });
+
+  it('reverse playback (JKL playRate −1) auto-stops at 0', async () => {
+    renderAppShell({ playing: true, playRate: -1, playhead: 1 });
+    await waitFor(() => {
+      expect(store().playing).toBe(false);
+      expect(store().playhead).toBe(0);
+    }, { timeout: 5000 });
+  });
+});
+
+describe('F6 region cycling (spec 18 §11.5)', () => {
+  const pressF6 = (shift = false) =>
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true, shiftKey: shift }),
+      );
+    });
+  const activeRegionHolds = (testid: string) =>
+    expect(document.activeElement).toContainElement(screen.getByTestId(testid));
+
+  it('collapsed mixer: F6 walks the 6 focus stops in order and wraps', () => {
+    renderAppShell(); // mixerState collapsed → the mixer is not a stop
+    pressF6(); activeRegionHolds('shell-toolbar'); // from body → first region
+    pressF6(); activeRegionHolds('shell-mediapool');
+    pressF6(); activeRegionHolds('shell-viewer');
+    pressF6(); activeRegionHolds('shell-inspector');
+    pressF6(); activeRegionHolds('shell-timeline');
+    pressF6(); activeRegionHolds('shell-dock'); // last stop
+    pressF6(); activeRegionHolds('shell-toolbar'); // wraps to the first
+  });
+
+  it('Shift+F6 cycles backwards and wraps at both ends', () => {
+    renderAppShell();
+    pressF6(); pressF6(); pressF6(); // → viewer (stop 3)
+    activeRegionHolds('shell-viewer');
+    pressF6(true); activeRegionHolds('shell-mediapool'); // reverse
+    pressF6(true); activeRegionHolds('shell-toolbar'); // reverse from stop 1
+    pressF6(true); activeRegionHolds('shell-dock'); // wraps to the last stop
+  });
+
+  it('mixerState full: the mixer dock joins the cycle as the 7th stop (§11.5 amendment)', () => {
+    renderAppShell({ mixerState: 'full' });
+    pressF6(); pressF6(); pressF6(); pressF6(); pressF6(); pressF6(); // → dock
+    activeRegionHolds('shell-dock');
+    pressF6(); // stop 7 — the visible mixer dock region
+    activeRegionHolds('mixer-dock-full');
+    expect(document.activeElement).not.toContainElement(screen.getByTestId('shell-timeline'));
+    // R13 fix: the deepest-region match now resolves the NESTED mixer stop
+    // (it sits inside the timeline-block region) — F6 from the mixer wraps
+    // to the toolbar instead of oscillating dock ↔ mixer.
+    pressF6(); activeRegionHolds('shell-toolbar');
+  });
+});
+
+describe('app dock cheat-sheet button (spec 16 §7.3 entry point)', () => {
+  it('the dock Keyboard button opens the cheat-sheet modal (store flag + DOM)', async () => {
+    const user = userEvent.setup();
+    renderAppShellWithCheatSheet();
+    expect(screen.queryByTestId('shell-cheatsheet')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Keyboard cheat sheet' }));
+    expect(store().cheatOpen).toBe(true);
+    expect(screen.getByTestId('shell-cheatsheet')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Keyboard cheat sheet' })).toBeInTheDocument();
   });
 });

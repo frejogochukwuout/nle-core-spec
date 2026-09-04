@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { useVariantClipStyle } from '../../state/variantHooks';
-import { mediaById, type ElementJSON, type TrackJSON } from '../../lib/mockData';
+import { mediaById, findElement, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
@@ -207,13 +207,36 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       });
     };
     return [
-      { id: 'open-in-viewer', label: 'Open in viewer', onSelect: () => pushToast({ kind: 'info', title: 'Open in viewer', detail: `mock: source preview deferred to v2 (18 §8.5) — ${el.name}` }) },
-      { id: 'split', label: 'Split at playhead', shortcut: '⌘B', sep: true, onSelect: () => {
+      /* §4.9 clip-menu enumeration — Cut/Copy/Paste are honest disabled rows
+         (the mock has no clipboard model); the real commands live below. */
+      { id: 'cut', label: 'Cut', shortcut: '⌘X', disabled: true, tip: 'mock: no clipboard — Delete + ⌘D instead' },
+      { id: 'copy', label: 'Copy', shortcut: '⌘C', disabled: true, tip: 'mock: no clipboard — ⌘D duplicates in place' },
+      { id: 'paste', label: 'Paste', shortcut: '⌘V', disabled: true, tip: 'mock: no clipboard (timeline toolbar carries the same disabled row)' },
+      { id: 'open-in-viewer', label: 'Open in viewer', sep: true, onSelect: () => pushToast({ kind: 'info', title: 'Open in viewer', detail: `mock: v1.1 source preview is the §4.3 plain-<video> fallback (not built here; dual viewer = §8.5 v2) — dbl-click a pool card reveals instead (§4.2) — ${el.name}` }) },
+      { id: 'split', label: 'Split at playhead', shortcut: '⌘B', onSelect: () => {
         const t = useUi.getState().playhead;
         // fan-out; real shell sends ONE batched split command (spec 15 §7)
         targets.forEach((id) => splitElement(id, t));
       } },
       { id: 'duplicate', label: 'Duplicate', shortcut: '⌘D', onSelect: () => duplicateElements(targets) },
+      { id: 'remove-effects', label: 'Remove Effects', disabled: targets.length === 0 || !targets.some((id) => (findElement(useUi.getState().scenes, id)?.element.effects?.length ?? 0) > 0), tip: 'clears the effect stack of every selected clip', sep: true, onSelect: () => {
+        targets.forEach((id) => useUi.getState().setElementField(id, { effects: [] }));
+      } },
+      { id: 'add-transition', label: 'Add Transition…', onSelect: () => {
+        // default crossfade (spec 09 TransitionJSON) per selected clip
+        targets.forEach((id) => useUi.getState().setTransition(id, {}));
+      } },
+      { id: 'rename', label: 'Rename', disabled: true, tip: 'mock: name edits live in the Inspector (Properties →)' },
+      { id: 'reveal', label: 'Reveal in Media Pool', disabled: !el.mediaId, tip: el.mediaId ? `selects ${el.mediaId} in the pool` : 'text clips have no media asset', onSelect: () => {
+        if (!el.mediaId) return;
+        const s = useUi.getState();
+        s.setMediaSelection([el.mediaId!]);
+        if (!s.panels.mediaPool) s.togglePanel('mediaPool');
+        requestAnimationFrame(() => {
+          const pool = document.querySelector('[data-testid="shell-mediapool"]');
+          (pool?.closest('.shell-region') as HTMLElement | null)?.focus();
+        });
+      } },
       { id: 'delete', label: 'Delete', shortcut: '⌫', danger: true, sep: true, onSelect: () => deleteSelected(false) },
       { id: 'ripple-delete', label: 'Ripple delete', shortcut: '⇧⌫', danger: true, onSelect: () => deleteSelected(true) },
       { id: 'detach-audio', label: 'Detach audio', disabled: true, tip: 'mock: not in spec 15 union', sep: true },

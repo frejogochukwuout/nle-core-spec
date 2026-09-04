@@ -359,7 +359,12 @@ export function MediaPool() {
       .getState()
       .scenes.reduce((n, sc) => n + sc.tracks.reduce((k, t) => k + t.elements.filter((el) => el.mediaId === m.id).length, 0), 0);
     return [
-      { id: 'reveal', label: 'Reveal in timeline', onSelect: () => reveal(m) },
+      /* §4.9 media-menu enumeration — Insert/Rename/Properties are honest
+         disabled rows (mock limits), the wired commands follow. */
+      { id: 'insert-at-playhead', label: 'Insert at Playhead', disabled: true, tip: 'mock: drag the card onto a lane instead (§4.2)' },
+      { id: 'rename', label: 'Rename', disabled: true, tip: 'mock: name edits not modeled' },
+      { id: 'properties', label: 'Properties', disabled: true, tip: 'mock: media inspector panel is not specced' },
+      { id: 'reveal', label: 'Reveal in timeline', sep: true, onSelect: () => reveal(m) },
       { id: 'copy', label: 'Copy', shortcut: '⌘C', onSelect: () => pushToast({ kind: 'info', title: `Copied "${m.name}" (mock)`, detail: 'real shell: copy (spec 15 §4.3.69) — mock has no clipboard' }) },
       { id: 'moveto', label: 'Move to…', disabled: true, tip: 'mock: flat pool — no bins (18 §8.14)' },
       {

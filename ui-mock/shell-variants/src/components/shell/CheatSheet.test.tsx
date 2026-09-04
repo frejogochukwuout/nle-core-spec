@@ -106,4 +106,17 @@ describe('CheatSheet (spec 16 §7.3)', () => {
     expect(store().toasts.map((t) => t.title)).toContain('Sample project loaded');
     expect(store().toasts.find((t) => t.title === 'Sample project loaded')!.kind).toBe('success');
   });
+
+  it('Tab is trapped inside the modal (spec 16 §7.3 focus trap): wraps at both ends', () => {
+    renderShell(<CheatSheet />, { patch: { cheatOpen: true } });
+    const search = screen.getByTestId('cheatsheet-search');
+    const close = screen.getByLabelText('Close cheat sheet');
+    // focus the LAST focusable (close button) → Tab wraps to the first (search)
+    close.focus();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(search);
+    // Shift+Tab from the first wraps back to the last
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true, shiftKey: true }));
+    expect(document.activeElement).toBe(close);
+  });
 });

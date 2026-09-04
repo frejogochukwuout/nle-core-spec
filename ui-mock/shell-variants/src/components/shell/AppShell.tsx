@@ -201,7 +201,11 @@ export function AppShell() {
       e.preventDefault();
       const regions = regionsRef.current.filter(Boolean) as HTMLElement[];
       if (regions.length === 0) return;
-      const focusedIdx = regions.findIndex((r) => r.contains(document.activeElement));
+      // deepest-region match: the mixer stop (7th) is NESTED inside the
+      // timeline-block stop (5th) — a plain findIndex would always match the
+      // parent and F6-from-mixer would oscillate instead of cycling.
+      let focusedIdx = -1;
+      regions.forEach((r, i) => { if (r.contains(document.activeElement)) focusedIdx = i; });
       const next = e.shiftKey
         ? (focusedIdx <= 0 ? regions.length - 1 : focusedIdx - 1)
         : (focusedIdx === regions.length - 1 ? 0 : focusedIdx + 1);

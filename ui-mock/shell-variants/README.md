@@ -17,10 +17,37 @@ npm run dev        # http://localhost:5173/mockup/
 npm run build      # static bundle → dist/ (base: /mockup/)
 ```
 
+Node `^20.19.0 || >=22.12.0` required — Vite 8's engine floor (`vite@8.2.2`
+lists exactly that range; this repo was developed on Node 24).
+
 A built copy is synced into the platform preview app's `public/mockup` and
 served at the preview root. **The platform preview URL now serves Storybook
 10 directly on port 3000** (see “Review serving” below) — the standalone
 Vite app remains the interactive mock for local dev.
+
+## Tests
+
+```bash
+npm test            # vitest run — 33 files / 461 tests (jsdom)
+npm run test:watch  # vitest in watch mode
+npm run test:ui     # vitest --ui dashboard
+npm run typecheck   # tsc --noEmit
+```
+
+A jsdom unit/component suite by design — visual review is Storybook's job
+(`npm run storybook`); pixel-level checks are out of scope for the mock.
+Tests are co-located with what they cover: `*.test.tsx` / `*.test.ts` next
+to the component or module under test (33 files across `src/components/**`,
+`src/state`, `src/lib`, `src/hooks`). `src/test/setup.ts` polyfills the jsdom
+gaps the shell hits (ResizeObserver, IntersectionObserver, `matchMedia`,
+`scrollIntoView`, `requestAnimationFrame`, pointer capture) and enforces the
+per-test store-reset contract — after every test the Zustand store is
+re-hydrated from its pristine snapshot while the app's localStorage keys,
+location hash, and variant data-attrs are wiped, so module-level singletons
+never leak between tests (mirrors the Storybook `withStoreReset` decorator).
+`src/test/helpers.tsx` mounts leaves through the app's real provider stack
+(`renderShell`) plus `pressKey`/`store` assertion helpers. No CI workflow
+yet — the suite is the per-round local gate.
 
 ## Storybook 10 (THE design-review surface)
 
@@ -91,7 +118,9 @@ the overlay — deviations are surfaced, never hidden.
 - Zoom slider genuinely rescales time→px geometry; snapping magnet (N) toggles snap; tool keys V/B/T/Y/U
 - Media pool: live search (200ms debounce), sort, grid/list, offline-asset badge
 - Inspector: 4 spec-18 tabs, source-asset card, selection-driven
-- Color + Deliver pages swap the right rail (page dock: 3 pages per §4.8)
+- Color, Audio + Deliver pages swap the right rail (page dock: 4 pages —
+  Edit / Color / Audio / Deliver, ⌘1–⌘4: spec 18 §4.8's three pages plus the
+  audio-focus 4th page per docs/DESIGN-audio-mode.md — see R11 below)
 - Splitters resize panels; double-click resets (§3.2)
 - `?` opens the keyboard cheat-sheet modal
 
@@ -103,6 +132,11 @@ tests can target the same surface.
 - Presets B/C deviate from the v1 single-dark-theme rule (18 §8.14 / §9) — they exist to test that decision.
 - `blocks` clip mode + slim headers deviate from spec 05 §7/§12.2 canonical rendering — they mirror the davinci mock / OpenCut teacher values.
 - Tool keys follow spec 16 (V/B/T/Y/U, N=snap). Note: spec 18 §4.5's parenthetical keys (A/','/S) disagree with spec 16 §3.2 — flagged as a spec-consistency finding.
+- Dock tooltips claim **⌘3 = Deliver**, but spec 16 §3.8/App A bind ⌘3 =
+  Effects workspace and leave Deliver unbound — pre-existing drift, kept
+  and registered for the seal round (the mock's ⌘4 Audio page takes spec
+  16's registered-but-orphaned ⌘4 binding instead; the drift is also labeled
+  on the Chrome story).
 - Playback, media decode, and all engine behavior are fake — this is a UI/UX artifact, not an engine (see specs 01-07 for the real thing).
 
 ## Review process
@@ -119,8 +153,11 @@ Findings from the rounds that belong to the SPEC (not this mock):
 2. **18 §4.5 vs 16 §3.2 tool-key conflict** (A/','/S vs V/B/T/Y/U + N).
 3. **`--accent-focus` has no AA text pair** in resolve/studio (≈3.9-4.0:1 both
    ways) — spec 18 §9 assigns primary buttons to it; needs a decision.
-4. **Status strip 12px vs the 11px type floor** (§3.1 vs §11.12) — this mock
-   uses 14px; the spec values are in tension.
+4. **Status strip 12px vs the 11px type floor** (§3.1 vs §11.12) — no mock
+   deviation since R11: the strip is 12px per §3.1 carrying 11px type
+   (StatusStrip.tsx `text-[11px]`), exactly at the §11.12 floor. The earlier
+   14px deviation is gone; the spec-side question — is 11px type in a 12px
+   strip comfortable enough to bless? — stays flagged for the seal round.
 
 ## Layout
 
@@ -133,10 +170,15 @@ src/
   lib/timecode.ts       SMPTE NDF TC @ 24fps
   lib/waveform.ts       seeded deterministic waveforms
   state/useUiStore.ts   zustand UI store + doc slice (drag/trim/split commits)
+  state/mockMixer.ts    mock G-layer sidecar (per-track strips + aux buses, spec 20 §4.2 shape)
   components/debug/     VariantProvider + DebugOverlay (ctrl+`)
   components/shell/     Toolbar2, MediaPool, Viewer, Inspector, Dock, status, cheat sheet
   components/timeline/  toolbar, scene tabs, ruler, headers, lanes, clips, playhead
+  components/mixer/     MixerDock, ChannelStrip, MixerPrimitives, ChannelEditor, SoundLibrary
   components/pages/     Color + Deliver (right-rail swaps)
+  stories/              10 story files + decorators.tsx (71 stories, per-story store reset)
+  test/                 setup.ts (jsdom polyfills + per-test store reset) + helpers.tsx (renderShell)
+  *.test.ts(x)          co-located next to the source under test (33 files — see Tests)
 screenshots/            captured presets + pages (committed)
 ```
 

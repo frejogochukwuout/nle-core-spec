@@ -54,6 +54,15 @@ export function SceneTabs() {
             tabIndex={active ? 0 : -1}
             data-testid={`shell-scene-tab-${sc.id}`}
             onClick={() => setActiveScene(sc.id)}
+            onKeyDown={(e) => {
+              // role="tab" promises keyboard operation (§11 a11y floor) —
+              // Enter/Space activate; global Tab is repurposed by spec 16 §3.3,
+              // so the tablist carries its own activation keys.
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setActiveScene(sc.id);
+              }
+            }}
             className={`relative flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-hairline pl-3.5 pr-2.5 ${
               active ? 'bg-shell text-tprimary' : 'text-tmuted hover:bg-[var(--hover-overlay)]'
             }`}

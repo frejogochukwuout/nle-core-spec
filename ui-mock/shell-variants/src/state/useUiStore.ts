@@ -82,8 +82,8 @@ interface UiState {
   toasts: Toast[];
   saveAttempt: number;
   simulateSaveFail: boolean;
-  past: { scenes: SceneJSON[]; activeSceneId: string }[];
-  future: { scenes: SceneJSON[]; activeSceneId: string }[];
+  past: { scenes: SceneJSON[]; activeSceneId: string; lockAll?: boolean }[];
+  future: { scenes: SceneJSON[]; activeSceneId: string; lockAll?: boolean }[];
   // ---- audio focus mode (design doc docs/DESIGN-audio-mode.md v2.1) ----
   mixer: MockMixerScene;      // mock G-slice (spec 20 §4.2 shape)
   mixerState: MixerDockState;
@@ -177,11 +177,15 @@ const MAX_PPS = 240;
    Returning undefined from `mutate` = no-op: NOTHING is set (no history
    entry) — this is the contract the no-pollution comments in splitElement /
    removeMarkersAt / deleteScene describe. (R13: previously a no-op still
-   pushed a history entry; the store test-suite pins the fixed behavior.) */
+   pushed a history entry; the store test-suite pins the fixed behavior.)
+   The snapshot carries `lockAll` alongside the doc because toggleLockAll
+   fans out into the doc AND flips the view flag atomically — undoing one
+   half of that pair left the flag inverted (aria-pressed lying, next toggle
+   doing the OPPOSITE of its label). */
 const HISTORY = 50;
 function withHistory(set: (partial: any) => void, get: () => UiState, mutate: (scenes: SceneJSON[]) => SceneJSON[] | void) {
   const s = get();
-  const before = { scenes: clone(s.scenes), activeSceneId: s.activeSceneId };
+  const before = { scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll };
   const next = mutate(clone(s.scenes));
   if (next === undefined) return; // no-op — no history entry
   set({
@@ -190,6 +194,13 @@ function withHistory(set: (partial: any) => void, get: () => UiState, mutate: (s
     ...(next ? { scenes: next } : {}),
   });
 }
+
+/* default strip for audio tracks that appear in the mixer before the G-slice
+   knows about them (addTrack → drag a fader before entering audio focus).
+   Same shape enterAudioFocus seeds; R13: without this, setMixerTrack spread
+   `undefined` into a partial record and the next ChannelStrip render crashed
+   on `strip.inserts[0]` — caught by the code review wave. */
+const DEFAULT_MIXER_TRACK: MixerTrackSettings = { fader: -6, pan: 0, inserts: [null, null], auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0 };
 
 let toastSeq = 1;
 
@@ -301,9 +312,19 @@ export const useUi = create<UiState>((set, get) => ({
   }),
   setSelection: (ids) => set({ selection: ids }),
   selectElement: (id, additive) => set((s) => {
-    if (!additive) return { selection: [id] };
-    const has = s.selection.includes(id);
-    return { selection: has ? s.selection.filter((x) => x !== id) : [...s.selection, id] };
+    // spec 05 §12.3 linked selection: "selecting one selects both" — the A/V
+    // pair (el-2 ↔ el-7 in the fixture) enters/leaves the selection as a
+    // group. Moves stay independent (sync-lock is 06 §6, a seal item).
+    const pairOf = (target: string): string[] => {
+      const hit = findEl(s.scenes, target);
+      const other = hit?.el.linkedTo;
+      return other && other !== target ? [target, other] : [target];
+    };
+    const group = pairOf(id);
+    if (!additive) return { selection: group };
+    const groupSelected = group.every((x) => s.selection.includes(x));
+    if (groupSelected) return { selection: s.selection.filter((x) => !group.includes(x)) };
+    return { selection: [...s.selection.filter((x) => !group.includes(x)), ...group] };
   }),
   selectTrackElements: (trackId, additive) => set((s) => {
     const sc = s.scenes.find((x) => x.id === s.activeSceneId);
@@ -335,7 +356,7 @@ export const useUi = create<UiState>((set, get) => ({
   setMasterVolume: (v) => set({ masterVolume: clamp(v, 0, 1) }),
   setMediaW: (w) => set({ mediaW: clamp(w, 200, 480) }),
   setInspectorW: (w) => set({ inspectorW: clamp(w, 280, 560) }),
-  setMainBodyH: (h) => set({ mainBodyH: clamp(h, 320, 900) }),
+  setMainBodyH: (h) => set({ mainBodyH: h <= 0 ? 0 : clamp(h, 320, 900) }), // 0 = auto (40% of viewport, spec 18 §3.2)
   setCheatOpen: (v) => set({ cheatOpen: v }),
   setMediaSelection: (ids) => set({ mediaSelection: ids }),
   toggleMediaSelection: (id, additive, range) => set((s) => {
@@ -407,15 +428,19 @@ export const useUi = create<UiState>((set, get) => ({
   exitAudioFocus: () => set({ page: 'edit', audioLaneBoost: false }),
   setMixerState: (m) => set({ mixerState: m }),
   cycleMixerState: () => set((s) => {
-    // design doc v2.2 §4: Edit — collapsed → bridge → full (compact is now a
-    // height-driven property of the dock, not a 4th state); Audio — bridge ↔ full
+    // design doc v2.2 revision (end of file): Edit — collapsed → bridge →
+    // full (compact is now a height-driven property of the dock, not a 4th
+    // state); Audio — bridge ↔ full
     if (s.page === 'audio') return { mixerState: s.mixerState === 'full' ? 'bridge' : 'full' };
     return { mixerState: s.mixerState === 'collapsed' ? 'bridge' : s.mixerState === 'bridge' ? 'full' : 'collapsed' };
   }),
   setAudioLaneBoost: (v) => set({ audioLaneBoost: v }),
   setStripFocus: (id) => set({ stripFocus: id }),
   setMixerTrack: (trackId, patch) => set((s) => ({
-    mixer: { ...s.mixer, tracks: { ...s.mixer.tracks, [trackId]: { ...s.mixer.tracks[trackId], ...patch } } },
+    // ?? DEFAULT_MIXER_TRACK: a track missing from the sidecar (added after
+    // boot, before enterAudioFocus syncs it) must never persist a partial
+    // record — ChannelStrip/ChannelEditor read strip.inserts unguarded.
+    mixer: { ...s.mixer, tracks: { ...s.mixer.tracks, [trackId]: { ...(s.mixer.tracks[trackId] ?? DEFAULT_MIXER_TRACK), ...patch } } },
   })),
   setAuxBus: (bus, patch) => set((s) => ({
     mixer: { ...s.mixer, buses: { ...s.mixer.buses, [bus]: { ...s.mixer.buses[bus], ...patch } } },
@@ -432,9 +457,10 @@ export const useUi = create<UiState>((set, get) => ({
     const prev = s.past[s.past.length - 1];
     return {
       past: s.past.slice(0, -1),
-      future: [{ scenes: clone(s.scenes), activeSceneId: s.activeSceneId }, ...s.future].slice(0, HISTORY),
+      future: [{ scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll }, ...s.future].slice(0, HISTORY),
       scenes: prev.scenes,
       activeSceneId: prev.activeSceneId,
+      ...(prev.lockAll !== undefined ? { lockAll: prev.lockAll } : {}),
     };
   }),
   redo: () => set((s) => {
@@ -442,9 +468,10 @@ export const useUi = create<UiState>((set, get) => ({
     const next = s.future[0];
     return {
       future: s.future.slice(1),
-      past: [...s.past, { scenes: clone(s.scenes), activeSceneId: s.activeSceneId }].slice(-HISTORY),
+      past: [...s.past, { scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll }].slice(-HISTORY),
       scenes: next.scenes,
       activeSceneId: next.activeSceneId,
+      ...(next.lockAll !== undefined ? { lockAll: next.lockAll } : {}),
     };
   }),
 
@@ -515,16 +542,21 @@ export const useUi = create<UiState>((set, get) => ({
     return scenes;
   }),
   deleteElements: (ids, ripple) => withHistory(set, get, (scenes) => {
-    set((st) => ({ selection: st.selection.filter((id) => !ids.includes(id)) }));
+    const removedIds: string[] = [];
     for (const sc of scenes) for (const t of sc.tracks) {
+      if (t.locked) continue; // locked tracks are inert — same guard as trimToPlayhead / drag / marquee
       const removed = t.elements.filter((e) => ids.includes(e.id));
+      if (removed.length === 0) continue;
+      removedIds.push(...removed.map((e) => e.id));
       t.elements = t.elements.filter((e) => !ids.includes(e.id));
-      if (ripple && removed.length > 0) {
+      if (ripple) {
         const earliest = Math.min(...removed.map((e) => e.startTime));
         const dur = removed.reduce((a, e) => Math.max(a, e.startTime + e.duration), earliest) - earliest;
         t.elements.forEach((e) => { if (e.startTime > earliest) e.startTime = Math.max(earliest, e.startTime - dur); });
       }
     }
+    if (removedIds.length === 0) return; // nothing deletable (all locked / unknown ids) — no-op, no history
+    set((st) => ({ selection: st.selection.filter((id) => !removedIds.includes(id)) }));
     return scenes;
   }),
   duplicateElements: (ids) => withHistory(set, get, (scenes) => {
@@ -557,24 +589,47 @@ export const useUi = create<UiState>((set, get) => ({
   trimToPlayhead: (edge, ripple) => withHistory(set, get, (scenes) => {
     const s = get();
     const ph = snapToFrame(s.playhead);
+    let changed = false;
     for (const sc of scenes) for (const t of sc.tracks) {
       if (t.locked) continue;
+      // ripple bookkeeping per track: [removed span end, removed span length]
+      let rippleEnd: number | null = null;
+      let rippleLen = 0;
       for (const e of t.elements) {
         if (edge === 'l' && ph > e.startTime && ph < e.startTime + e.duration - 0.1) {
           const cut = ph - e.startTime;
           if (e.sourceStart !== undefined) e.sourceStart += cut;
           e.duration -= cut;
-          e.startTime = ph;
+          if (ripple) {
+            // ripple-l = the head region is REMOVED and the gap closes (same
+            // model as deleteElements' ripple): the clip KEEPS its start and
+            // shows its tail (sourceStart advanced); everything from the old
+            // end left-shifts by the removed head.
+            rippleEnd = e.startTime + e.duration + cut; // old end (upstream boundary)
+            rippleLen = cut;
+          } else {
+            e.startTime = ph;
+          }
+          changed = true;
         } else if (edge === 'r' && ph > e.startTime + 0.1 && ph < e.startTime + e.duration) {
+          const removed = e.startTime + e.duration - ph;
           e.duration = ph - e.startTime;
+          if (ripple) {
+            // ripple-r = the tail region is removed; downstream abuts the new end
+            rippleEnd = ph + removed; // old end (upstream boundary)
+            rippleLen = removed;
+          }
+          changed = true;
         }
       }
-      if (ripple) {
-        // close gaps left by the trim (simplified: shift later elements left by the delta)
-        // mock-level approximation of ripple delete-close
-        t.elements.sort((a, b) => a.startTime - b.startTime);
+      if (ripple && rippleEnd !== null) {
+        for (const e of t.elements) {
+          if (e.startTime >= rippleEnd - 0.001) e.startTime = Math.max(0, e.startTime - rippleLen);
+        }
+        t.elements.sort((a, b) => a.startTime - b.startTime); // keep lanes ordered after shifts
       }
     }
+    if (!changed) return; // playhead outside any clip — no-op, no history
     return scenes;
   }),
   setElementField: (id, patch) => withHistory(set, get, (scenes) => {

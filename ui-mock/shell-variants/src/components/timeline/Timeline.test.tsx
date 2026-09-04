@@ -159,3 +159,59 @@ describe('Timeline', () => {
     expect(store().pxPerSec).toBe(46); // exp-symmetric factors round-trip
   });
 });
+
+/* R13-D2 addition (R13-W1c gap #4): the lane dragover handler computes
+   mediaDrag.allowed itself (POOL_DRAG_TYPE guard + isDroppable + locked).
+   The earlier §4.2 tests boot mediaDrag via store patch, so an isDroppable
+   regression would keep them green — these fire REAL drag events at the
+   lanes and assert the computed {overTrackId, allowed} per pairing. */
+describe('pool-drag overTrack/allowed computation (spec 18 §4.2)', () => {
+  it('dragover computes per-lane compatibility: video ok on V1, rejected on A1 (type mismatch)', () => {
+    boot({ mediaDrag: { mediaId: 'm-01', overTrackId: null, allowed: false } });
+    fireEvent.dragOver(laneOf('el-1'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    expect(store().mediaDrag).toEqual({ mediaId: 'm-01', overTrackId: 'tr-main', allowed: true });
+    expect(laneOf('el-1').className).toContain('pool-lane-ok'); // highlight follows the computation
+    fireEvent.dragOver(laneOf('el-6'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    expect(store().mediaDrag).toEqual({ mediaId: 'm-01', overTrackId: 'tr-audio-1', allowed: false });
+    expect(laneOf('el-6').className).toContain('pool-lane-bad');
+  });
+
+  it('audio media is allowed on A1 but rejected on the LOCKED A2 lane', () => {
+    boot({ mediaDrag: { mediaId: 'm-06', overTrackId: null, allowed: false } });
+    fireEvent.dragOver(laneOf('el-6'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    expect(store().mediaDrag).toEqual({ mediaId: 'm-06', overTrackId: 'tr-audio-1', allowed: true });
+    // type matches (audio → audio) but tr-audio-2 ships locked: true → not allowed
+    fireEvent.dragOver(laneOf('el-7'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    expect(store().mediaDrag).toEqual({ mediaId: 'm-06', overTrackId: 'tr-audio-2', allowed: false });
+  });
+
+  it('image media over the overlay/text lane is the third allowed pairing (isDroppable matrix)', () => {
+    boot({ mediaDrag: { mediaId: 'm-08', overTrackId: null, allowed: false } });
+    fireEvent.dragOver(laneOf('el-5'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    expect(store().mediaDrag).toEqual({ mediaId: 'm-08', overTrackId: 'tr-overlay-1', allowed: true });
+  });
+
+  it('drag payloads without the pool type are ignored; dragleave clears the hovered lane', () => {
+    boot({ mediaDrag: { mediaId: 'm-01', overTrackId: null, allowed: false } });
+    // an external-file drag (no POOL_DRAG_TYPE) never drives the lane state
+    fireEvent.dragOver(laneOf('el-1'), { dataTransfer: { types: ['Files'] } });
+    expect(store().mediaDrag).toEqual({ mediaId: 'm-01', overTrackId: null, allowed: false });
+    fireEvent.dragOver(laneOf('el-1'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    expect(store().mediaDrag?.overTrackId).toBe('tr-main');
+    // leaving the lane (to a non-child target) drops the hover state
+    fireEvent.dragLeave(laneOf('el-1'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    expect(store().mediaDrag).toEqual({ mediaId: 'm-01', overTrackId: null, allowed: false });
+  });
+
+  it('dropping on a dragover-COMPUTED allowed lane commits the honest-mock toast', () => {
+    boot({ mediaDrag: { mediaId: 'm-06', overTrackId: null, allowed: false } });
+    fireEvent.dragOver(laneOf('el-6'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    expect(store().mediaDrag?.allowed).toBe(true); // computed by the real handler, not boot-patched
+    fireEvent.drop(laneOf('el-6'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    expect(store().mediaDrag).toBeNull();
+    expect(store().toasts.at(-1)!.kind).toBe('success');
+    expect(store().toasts.at(-1)!.title).toBe('Placed ocean_ambience.wav on A1');
+    // honest mock: the drop commits a toast only — insertElement lands with
+    // the engine round (spec 15 §5.4), so no element is added to the doc
+  });
+});
