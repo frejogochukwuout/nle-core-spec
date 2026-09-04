@@ -1,12 +1,14 @@
 # PLAN — Long-Horizon Task Tracker (nle-core-spec)
 
 **Created:** 2026-09-02 (Round 8 wrap-up — user directive: push/backup every micro milestone; PLAN tracks the long horizon, HANDOFF tracks the next session only)
-**Current round:** 12 (UI/UX mockup) COMPLETE through `5550902` — seal round remains
+**Current round:** 14 (audit + zero-no-op + both-ways spec scan) COMPLETE through R14 HEAD — seal round remains
 **Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec
 
 ---
 
 ## UI/UX direction track (R10 `390fd48` → R11 `e0eaed2` → R12 `5550902`+ → R13 `b8d504f`+)
+
+**R14 (2026-09-05) landed (comment-audit + zero-no-op + both-directions spec scan):** the full **90-comment PR corpus was re-inventoried and re-audited** (74 inline + 11 issue + 5 reviews; every finding verified against code — the audit caught 5 fixes claimed-but-not-landed in the R13 reply, all now fixed: gh.ts pagination origin guard, ghsync per-comment mirror sentinel (self-healing duplicate-echo), anchor walk-up tag re-verification, cross-story focus retry-until-ack, and the vendor `prestorybook` prebuild (CX6's P1 — `npm run storybook` now builds the addon itself)). **Zero-no-op sweep:** every interactive element re-audited; the dead cluster landed real wiring — zoom cluster + ⌘\ + ±/⌘0 (spec 16 §3.8), marker-color dropdown + ⌘⇧←/→ marker nav, ⌘⇧I/O, ⌘S/⌘E, ⌘⇧M, [ ] non-ripple trim, ⇧J/L, ⇧,/. ×10, tool-radiogroup arrows + Toolbar2 roving (§11.1), effects drag-to-clip, Color/Deliver form controls, Deliver §4.2 empty/failed rows, Viewer loading/error rows, mixer auxPreFader/auxB/aux-on toggles, SoundLibrary sort, bracket drag + slider grammar, Clip Enter/Space, two-way scroll sync, height menu rows, add-track above/below, DebugOverlay copy-failure + save-fail drill. **Store laws:** loop ordering (start ≤ end, the inverted-window hang is dead), link-toggle gating (N4's reference answer), split linkedTo law, MIN_DUR unification, duplicate-at single undo, multi-track viewer resolution, loadSample mixer rebuild, ⌘M any-kind focused track. **Suite: 511 → 596 tests, tsc clean.** **Both-directions spec audit:** candidates file grew to §E (15 net-new N-findings incl. 2 P1s — ElementJSON container home, Link A/V contract vacuum; strengthenings to A2/A5/A6/B1-B3; 19 new C-registrations C10-C28) + comment posted to GitHub issue #2.
 
 **R13 (2026-09-04) landed (test + PR + review-gate round):** the mock got its **test program** — Vitest 5 + RTL + jsdom, **33 files / 511 tests**, co-located `*.test.tsx`, per-test store-reset contract (`src/test/setup.ts`), provider-stack helpers; PR **#1** opened (base `ui-baseline` @ `ce16d33`, head `main`, 143 files ≤ 300) which pulled in **CodeRabbit + Codex + three maintainer review waves**; five fix rounds closed every P1/P2 (only P3s remain, deliberately): store bug-hunt (deep-clone undo, no-op history pollution, dead ⌥⇧M, setMixerTrack partial strips, lockAll/selection-in-undo, locked-track law, ripple trim + target constraint, id collisions, range-param stub), keyboard/a11y parity (Tab scoping, slider grammar on scrub rows, splitters/menu tabs/cards keyboard-operable, danger-dialog cancel-first, violet AA), §4.9 menu enumerations completed, §6.4 keyboard multi-delete confirm, annotakit hotkeys remapped off the shell's keys + vendor functional fixes with dist rebuilt. **Direction-2 output: `.agents/SPEC-REVISION-CANDIDATES.md` + GitHub issue #2 (17 entries: 6 spec-vs-spec conflicts, 4 missing canon answers, 9 mock registrations C1-C9, seal staleness flags).**
 
@@ -19,7 +21,7 @@
 **Next steps (in order):**
 1. **USER REACTION remains the gate** — now with TWO surfaces: the PR (#1, CodeRabbit review + the candidates issue #2) and the live pins (public URL → annotakit → GH issue mirror). Tour the presets + Audio focus; answer DESIGN-audio-mode.md §11 q1-q9.
 2. **PR #1 close-out** — remaining open items are P3-only (the maintainer's corpus lists them; batch as a polish round or fold into wiring); re-run CodeRabbit on the final commit; merge or keep open per the user's call.
-3. **Seal round inherits THREE new inputs:** seal items 10-25 + `SPEC-REVISION-CANDIDATES.md` (17 entries — A1-A6 conflicts need pick-one amendments, B1-B4 missing canon answers, C1-C9 registrations) + the R13 test suite as the regression harness for any wiring.
+3. **Seal round inherits THREE new inputs:** seal items 10-25 + `SPEC-REVISION-CANDIDATES.md` (R14: A1-A6 conflicts + N1-N15 net-new findings incl. 2 P1s, B1-B4 + strengthenings, C1-C9 + C10-C28 registrations, D staleness flags — the file is now the complete spec-amendment worklist) + the 596-test suite as the regression harness for any wiring.
 4. P1 wiring (spec 14) inherits the token set + component structure + `shell-*` testids + the 511-test suite; the audio-focus surfaces become the spec-18 mixer-panel section the seal round must write.
 
 **Seal additions from the mockup reviews (spec-side findings, not mock bugs):**

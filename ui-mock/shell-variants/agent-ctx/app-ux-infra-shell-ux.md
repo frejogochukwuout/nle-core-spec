@@ -15,8 +15,8 @@ Status: complete — `npx tsc --noEmit` exit 0.
   unnamed → `shell-menu` + `shell-menu-item-<id>`. **MediaPool agent: consume
   this API — do not fork a second menu.**
 - `src/components/shell/ToastRegion.tsx` — bottom-right, above status strip+dock;
-  role status (info/success/persist) / alert (error); info 4s, success 6s,
-  error+persist until dismissed; `shell-toast-<n>` bottom-up (newest=0);
+  role status (info/success/persist) / alert (error); info 4s, success 4s,
+  persist 6s (warning-class), error no timer (until dismissed); `shell-toast-<n>` bottom-up (newest=0);
   Info/CheckCircle2/TriangleAlert 14px sw1.6; 200ms slide-in.
 - `src/components/shell/ConfirmDialog.tsx` — `ConfirmProvider` + `useConfirm()`:
   `confirm({title, body, confirmLabel, danger, onConfirm})`; alertdialog,

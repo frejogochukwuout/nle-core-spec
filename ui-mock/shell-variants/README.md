@@ -150,6 +150,15 @@ tests can target the same surface.
   16's registered-but-orphaned ⌘4 binding instead; the drift is also labeled
   on the Chrome story).
 - Playback, media decode, and all engine behavior are fake — this is a UI/UX artifact, not an engine (see specs 01-07 for the real thing).
+- **R14 (2026-09-05):** every remaining intentional simplification is inventoried
+  in `../../.agents/SPEC-REVISION-CANDIDATES.md` §E (C10–C28) — the C-table
+  above stays as the historical R12/R13 set. Net-new spec-side amendments found
+  by the R14 both-directions audit live in the same file (N1–N15) and are
+  mirrored on GitHub issue #2. The zero-no-op sweep also landed: every visible
+  control is now wired (real state, real local behavior, honest toast, or
+  aria-disabled + tip) — including the zoom cluster + ⌘\ binding, the
+  marker-color menu, effects drag-to-clip, Color/Deliver form controls, and
+  the mixer aux toggles.
 
 ## Review process
 

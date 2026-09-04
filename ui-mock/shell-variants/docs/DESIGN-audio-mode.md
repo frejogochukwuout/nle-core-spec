@@ -82,11 +82,11 @@ On BGM/Music-role strips and in the channel editor's Track section, a **"Duck un
 
 - ⌘4 → Audio focus; ⌘1-3 unchanged from the current mock (Edit/Color/Deliver — noting the pre-existing ⌘3/Deliver drift registered in §10).
 - **No new chords.** ⌘⇧M is spec 16 §3.5's "mute all tracks" (conflict resolution #17 — closed, not reopenable). The mixer state cycles via its toolbar button and F6+keyboard once focused; if a chord is wanted, it gets registered at seal (candidates: none currently unbound and sane).
-- Faders/pan are sliders: arrow keys ±1 dB / ±5%, Home = −∞, End = **+6 dB max** (unity 0 dB is mid-scale, covered by dbl-click reset), page keys = coarse steps.
+- Faders/pan are sliders: arrow keys ±1 dB / ±5%, Home = −∞, End = **+6 dB max**, page keys = coarse steps. Taper honesty (R14 correction): `dbToSlider = (db+60)/66` is linear-in-dB, so unity 0 dB sits at **91% travel** (the tick confirms) — NOT mid-scale. Double-click reset to 0 dB is the unity gesture.
 
 ## 7. Roles: Dialogue / BGM / SFX / Music
 
-Spec 09 has no role field (only the FCPXML `<sequence role>` attr echoes it; BGM/SFX appear as use-cases in 14 §2.1 + 20 §7). The mock keeps roles OUT of TrackJSON/MediaRecord (mockData's discipline: spec-09-shaped fields only) — they live in the mock G-slice as a `roles: Record<trackId|mediaId, Role>` map, commented "seal decision: spec-09 field vs client tag". Roles drive Sound Library grouping, ducking default source, strip chips.
+Spec 09 has no role field (only the FCPXML `<sequence role>` attr echoes it; BGM/SFX appear as use-cases in 14 §2.1 + 20 §7). The mock keeps roles OUT of TrackJSON/MediaRecord (mockData's discipline: spec-09-shaped fields only) — they live in the mock G-slice as a `roles: Record<trackId, Role>` map, commented "seal decision: spec-09 field vs client tag". Roles drive Sound Library grouping, ducking default source, strip chips. R14 correction: media-level roles (Sound Library grouping) are a SECOND, component-local mediaId-keyed map (`MEDIA_ROLES` in SoundLibrary.tsx) — the "single Record<trackId|mediaId, Role>" wording above was aspirational. Registered as candidate N-net (two-registry deviation); merging them is a seal decision.
 
 ## 8. Declared non-goals (visible questions, not silence)
 
