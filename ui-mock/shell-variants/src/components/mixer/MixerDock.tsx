@@ -62,10 +62,12 @@ function BridgeRail() {
         })}
       </div>
       {/* master cluster pinned to the rail bottom — same store values as
-          the toolbar/strip masters (design doc §4.5 single source) */}
+          the toolbar/strip masters (design doc §4.5 single source). R15-A2:
+          ONE 'master' engine key across bridge rail / master strip / toolbar
+          (was 'master-bridge' — three sims disagreed). */}
       <div className="flex shrink-0 flex-col items-center gap-1 border-t border-hairline px-1 py-1.5">
         <span className="mono text-[10px] font-semibold uppercase tracking-wide text-tprimary">MST</span>
-        <StripMeter trackId="master-bridge" db={masterMuted ? -60 : masterVolume * 66 - 60} height={36} width={4} label="Master" />
+        <StripMeter trackId="master" db={masterMuted ? -60 : masterVolume * 66 - 60} height={36} width={4} label="Master" />
         <button
           onClick={toggleMasterMute}
           aria-pressed={masterMuted}

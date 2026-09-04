@@ -7,8 +7,10 @@
 import { describe, expect, it } from 'vitest';
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import { MixerDock } from './MixerDock';
+import { TimelineToolbar } from '../timeline/TimelineToolbar';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
+import { __setLevel } from '../../lib/meterEngine';
 
 const boot = (patch: UiPatch = {}) => renderShell(<MixerDock />, { patch });
 
@@ -27,6 +29,26 @@ describe('MixerDock', () => {
     expect(within(rail).getByTestId('bridge-A2')).toBeInTheDocument();
     expect(within(rail).getByTitle(/A1: -3\.0 dB/)).toBeInTheDocument(); // G-slice fader drives the meter
     expect(within(rail).getByText('MST')).toBeInTheDocument();
+    // R15-A2: the rail's master meter rides the ONE 'master' engine key with
+    // the toolbar/strip values (was the third 'master-bridge' key)
+    expect(within(rail).getByTitle(/Master: -8\.5 dB/)).toBeInTheDocument();
+  });
+
+  it('bridge master + toolbar micro-meter share ONE master engine key (R15-A2 unification)', () => {
+    renderShell(
+      <>
+        <MixerDock />
+        <TimelineToolbar />
+      </>,
+      { patch: { mixerState: 'bridge' } },
+    );
+    const meters = screen.getAllByTitle(/Master: -8\.5 dB/);
+    expect(meters).toHaveLength(2); // bridge cluster + toolbar micro — one key, two views
+    act(() => { __setLevel('master', -12); });
+    for (const m of meters) {
+      const fill = m.querySelector('[data-channel="l"] > div') as HTMLElement;
+      expect(fill.style.clipPath).toBe('inset(20% 0 0 0)'); // both read (−12+60)/60 = 0.8
+    }
   });
 
   it('the bridge master mute shares the toolbar/strip store values (design doc §4.5 single source)', () => {

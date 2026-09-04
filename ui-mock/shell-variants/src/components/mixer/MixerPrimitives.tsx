@@ -1,12 +1,19 @@
-/* Mixer primitives — fader / pan knob / mock meter.
-   Drag grammar (SCOUT-R8-C, the one portable part): Shift+drag = fine mode,
-   double-click = reset. Faders and knobs are keyboard-operable sliders
-   (design doc §6): plain arrows ±1 dB (fader) / ±5 (pan), Shift+arrows =
-   fine step 0.2 dB / 1, Home = −∞, End = +6, Page = ±6 dB. */
+/* Mixer primitives — fader / pan knob / stereo strip meter.
+   R15-A1: the knob is a DAW-grammar dial (270° SVG arc + dasharray + indicator
+   line ABOVE center, vertical drag 200px/full-range, Shift ×0.2 fine,
+   non-passive wheel, pointer-release-only detent) restyled to OUR tokens —
+   no imported orange, no oklch sheet (design v2 borrow discipline).
+   R15-A2: StripMeter is a view over the shared stereo metering engine
+   (lib/meterEngine): dB-linear display [−60,0], token palette anchored to the
+   well, LED segments, 1px peak line, mute/clip states.
+   Fader drag grammar (SCOUT-R8-C): Shift+drag = fine, double-click = reset,
+   full keyboard grammar (design doc §6). */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useUi } from '../../state/useUiStore';
 import { dbLabel, dbToSlider, sliderToDb } from '../../state/mockMixer';
+import { useMeter } from '../../lib/meterEngine';
+
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 /* ---------- vertical fader (dB-tapered) ---------- */
 export function Fader({ db, onChange, height = 96, fillHeight = false, ariaLabel }: {
@@ -66,9 +73,10 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, ariaLabel
         {[6, 0, -12, -24, -48, -60].map((t) => (
           <span key={t} className="absolute left-0 h-px w-[3px] bg-tfaint" style={{ bottom: `${dbToSlider(t) * 100}%` }} aria-hidden="true" />
         ))}
-        {/* thumb */}
+        {/* thumb — A0 fader-thumb token pair (flat cap; unity notch + scale
+            column are the A3 wave, deliberately not here) */}
         <span
-          className="absolute left-1/2 h-[10px] w-[12px] -translate-x-1/2 rounded-[2px] border border-strong bg-[linear-gradient(180deg,#d8d8d8,#9a9a9e)] shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+          className="absolute left-1/2 h-[10px] w-[12px] -translate-x-1/2 rounded-[2px] border border-strong bg-[linear-gradient(180deg,var(--fader-thumb-1),var(--fader-thumb-2))] shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
           style={{ bottom: `calc(${dbToSlider(db) * 100}% - 5px)` }}
           aria-hidden="true"
         />
@@ -77,107 +85,255 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, ariaLabel
   );
 }
 
-/* ---------- pan knob ---------- */
-export function PanKnob({ pan, onChange, size = 22, ariaLabel }: {
-  pan: number; onChange: (pan: number) => void; size?: number; ariaLabel: string;
+/* ---------- generic knob (R15-A1) ----------
+   DAW-exact interaction grammar, NLE-tuned visuals:
+   - angle law −135..+135 (270° sweep), t = (v−min)/(max−min)
+   - vertical drag: Δv = −(clientY − startY)·range/200; Shift ×0.2
+   - pointer capture on currentTarget (NOT the child under the pointer) with
+     a hasPointerCapture-guarded release + pointercancel reset
+   - non-passive native wheel listener (React onWheel is passive → the page
+     scrolls); step = range·0.02, Shift ×0.2
+   - double-click → defaultValue; detent snaps to defaultValue when |v−detent|
+     ≤ 2 at POINTER RELEASE only (C2: keyboard detent breaks ±1 fine steps)
+   - keyboard grammar is OURS (kept as-is; no detent on keys)
+   PanKnob below is the pan-flavoured wrapper (C/L/R format, ±100, ±5/±1). */
+const ARC_PATH = 'M 20 80 A 40 40 0 1 1 80 80';
+const ARC_LEN = 183.5; // measured path length (C2-verified; 188.5 is ~3% long)
+
+export function Knob({ value, onChange, min, max, size = 22, ariaLabel, format, defaultValue, step, fineStep }: {
+  value: number; onChange: (v: number) => void; min: number; max: number; size?: number;
+  ariaLabel: string; /** aria-valuetext + persistent label + bubble text */
+  format: (v: number) => string;
+  /** double-click reset target + pointer-release detent target */
+  defaultValue?: number;
+  /** keyboard steps (ours: pan uses 5 / 1) */
+  step?: number; fineStep?: number;
 }) {
-  const drag = useRef<{ startX: number; startPan: number } | null>(null);
-  const angle = -135 + ((pan + 100) / 200) * 270;
-  const label = pan === 0 ? 'C' : pan < 0 ? `L${Math.abs(Math.round(pan))}` : `R${Math.round(pan)}`;
+  const range = max - min;
+  const kbStep = step ?? Math.round(range * 0.025);
+  const kbFine = fineStep ?? Math.max(1, Math.round(range * 0.005));
+
+  // the wheel handler must read the LATEST controlled value + callback without
+  // re-binding the native listener every render
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const [dragging, setDragging] = useState(false);
+  const [hover, setHover] = useState(false);
+  const drag = useRef<{ startY: number; startValue: number; lastValue: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // non-passive native wheel (preventDefault works; the page never scrolls)
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const fine = e.shiftKey ? 0.2 : 1;
+      const dir = e.deltaY < 0 ? 1 : -1;
+      onChangeRef.current(clamp(valueRef.current + dir * range * 0.02 * fine, min, max));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [min, max, range]);
+
+  const releasePointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    try {
+      if (el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    } catch { /* capture already released — jsdom/browsers can disagree */ }
+  };
+
+  const t = (value - min) / range;
+  const angle = -135 + t * 270;
+  const label = format(value);
+  const dash = ((angle + 135) / 270) * ARC_LEN;
+
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div className="relative flex flex-col items-center gap-0.5">
+      {/* value bubble — hover + drag only, mono tabular-nums (persistent label
+          below the dial stays; the bubble is the precision readout) */}
+      {(hover || dragging) && (
+        <span
+          data-testid="knob-bubble"
+          className="mono absolute -top-6 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-[var(--radius-sm)] border border-strong bg-inset px-1 py-px text-[10px] leading-none text-tprimary"
+        >
+          {label}
+        </span>
+      )}
       <div
+        ref={rootRef}
         role="slider"
         tabIndex={0}
         aria-label={ariaLabel}
-        aria-valuemin={-100}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(pan)}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={Math.round(value)}
         aria-valuetext={label}
-        className="relative cursor-grab rounded-full border border-strong bg-inset active:cursor-grabbing"
-        style={{ width: size, height: size }}
+        className="relative cursor-ns-resize touch-none select-none rounded-full border border-strong"
+        style={{
+          width: size,
+          height: size,
+          background: `radial-gradient(circle at 35% 30%, var(--knob-face-1), var(--knob-face-2) 65%)`,
+          boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3)',
+        }}
         onPointerDown={(e) => {
-          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-          drag.current = { startX: e.clientX, startPan: pan };
+          // capture on the CURRENT target (never the child under the pointer —
+          // release would throw NotFoundError); guarded: synthetic/inactive
+          // pointer ids throw on capture (browsers + test automation)
+          try {
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          } catch { /* inactive pointer id — drag still works, capture is best-effort */ }
+          drag.current = { startY: e.clientY, startValue: value, lastValue: value };
+          setDragging(true);
         }}
         onPointerMove={(e) => {
-          if (e.buttons !== 1 || !drag.current) return;
-          const d = (e.clientX - drag.current.startX) * (e.shiftKey ? 0.25 : 1);
-          onChange(Math.min(100, Math.max(-100, drag.current.startPan + d)));
+          if (!drag.current || e.buttons !== 1) return;
+          const fine = e.shiftKey ? 0.2 : 1;
+          const dv = -(e.clientY - drag.current.startY) * (range / 200) * fine;
+          const v = clamp(drag.current.startValue + dv, min, max);
+          drag.current.lastValue = v;
+          onChange(v);
         }}
-        onDoubleClick={() => onChange(0)}
+        onPointerUp={(e) => {
+          if (!drag.current) return;
+          const v = drag.current.lastValue;
+          drag.current = null;
+          setDragging(false);
+          releasePointer(e);
+          // detent: pointer-release ONLY (C2 — keyboard ±1 must pass through)
+          if (defaultValue !== undefined && Math.abs(v - defaultValue) <= 2) onChange(defaultValue);
+        }}
+        onPointerCancel={(e) => {
+          drag.current = null;
+          setDragging(false);
+          releasePointer(e);
+        }}
+        onDoubleClick={() => {
+          if (defaultValue !== undefined) onChange(defaultValue);
+        }}
         onKeyDown={(e) => {
-          if (e.key === 'ArrowLeft') { e.preventDefault(); onChange(Math.max(-100, pan - (e.shiftKey ? 1 : 5))); }
-          else if (e.key === 'ArrowRight') { e.preventDefault(); onChange(Math.min(100, pan + (e.shiftKey ? 1 : 5))); }
+          const s = e.shiftKey ? kbFine : kbStep;
+          if (e.key === 'ArrowRight') { e.preventDefault(); onChange(clamp(value + s, min, max)); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); onChange(clamp(value - s, min, max)); }
         }}
+        onPointerEnter={() => setHover(true)}
+        onPointerLeave={() => setHover(false)}
       >
-        <span
-          className="absolute left-1/2 top-full h-[7px] w-[2px] -translate-x-1/2 rounded-full bg-tprimary"
-          style={{ transform: `translateX(-50%) rotate(${angle}deg)`, transformOrigin: '50% 0%' }}
-          aria-hidden="true"
-        />
+        {/* dial face — SVG viewBox 0 0 100 100, absolutely inset, inert.
+            Round caps read as endpoints — NO endpoint ticks (sub-pixel at
+            22/24px, C2). Indicator line sits ABOVE center (y 35→20, the C2
+            antiphase fix) with stroke 7 (≈1.5px at 22px). */}
+        <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+          <path data-testid="knob-track-arc" d={ARC_PATH} fill="none" stroke="var(--knob-track)" strokeWidth={6} strokeLinecap="round" />
+          <path
+            data-testid="knob-active-arc"
+            d={ARC_PATH}
+            fill="none"
+            stroke="var(--knob-active)"
+            strokeWidth={6}
+            strokeLinecap="round"
+            strokeDasharray={`${dash} ${ARC_LEN}`}
+            style={{ transition: dragging ? 'none' : 'stroke-dasharray 100ms linear' }}
+          />
+          <line
+            data-testid="knob-indicator"
+            x1={50} y1={35} x2={50} y2={20}
+            transform={`rotate(${angle} 50 50)`}
+            stroke="var(--knob-active)"
+            strokeWidth={7}
+            strokeLinecap="round"
+          />
+          <circle cx={50} cy={50} r={4.5} fill="var(--text-primary)" opacity={0.2} />
+        </svg>
       </div>
       <span className="mono text-[10px] text-tmuted">{label}</span>
     </div>
   );
 }
 
-/* ---------- mock stereo meter — rAF runs ONLY while the transport is
-   playing or the bars are still decaying; an idle, settled meter stops
-   scheduling frames entirely and re-arms from the store's play-state
-   edge (R13 fix: the loop used to spin at 60 fps forever). Seeded noise
-   walk; aria-hidden with a textual dB exposed via title (focus/query only
-   — design doc §4: never aria-live, no 60fps announcement spam) */
-export function StripMeter({ trackId, db, height = 88, width = 7, duckAmount = 0, fillHeight = false, label }: {
+/* ---------- pan knob (C/L/R flavour of the generic dial) ---------- */
+const panLabel = (v: number) => (v === 0 ? 'C' : v < 0 ? `L${Math.abs(Math.round(v))}` : `R${Math.round(v)}`);
+
+export function PanKnob({ pan, onChange, size = 22, ariaLabel }: {
+  pan: number; onChange: (pan: number) => void; size?: number; ariaLabel: string;
+}) {
+  return (
+    <Knob
+      value={pan}
+      onChange={onChange}
+      min={-100}
+      max={100}
+      size={size}
+      ariaLabel={ariaLabel}
+      format={panLabel}
+      defaultValue={0}
+      step={5}
+      fineStep={1}
+    />
+  );
+}
+
+/* ---------- stereo strip meter — a view over the shared engine (R15-A2) ----------
+   Display range [−60, 0] dBFS dB-linear: fill fraction = clamp((db+60)/60);
+   db ≥ 0 → full + clip state. The palette gradient is anchored to the WELL via
+   clip-path so the stops agree with the dB zones (amber 70% = −18 dB,
+   red 90% = −6 dB). LED segments: 3px repeating overlay (4 coarse chunks for
+   the 14px micro-meter). Peak line: 1px white/90 at the dB-linear peak
+   position. Muted: opacity 0.2 + data-state. Title keeps the pinned contract
+   (fader dB + live peak; 4 test files pin it). aria-hidden — never a live
+   region (design doc §4). */
+export function StripMeter({ trackId, db, height = 88, width = 7, duckAmount = 0, fillHeight = false, coarse = false, label }: {
   trackId: string; db: number; height?: number; width?: number; duckAmount?: number;
   /** rail/strip mode: no inline height — fill the flex parent instead */
-  fillHeight?: boolean; label: string;
+  fillHeight?: boolean;
+  /** micro-meter (toolbar, 14px): 4 coarse chunks, no 3px LED segments */
+  coarse?: boolean;
+  label: string;
 }) {
-  const [level, setLevel] = useState(0);
-  const phase = useRef((trackId.charCodeAt(0) + trackId.length) * 0.7);
-  const levelRef = useRef(0);
-
-  useEffect(() => {
-    let raf = 0;
-    const tick = () => {
-      raf = 0;
-      if (useUi.getState().playing) {
-        phase.current += 0.18;
-        const base = db <= -59.5 ? 0.02 : Math.pow(10, db / 20) * 0.9;
-        const wobble = 0.72 + 0.28 * Math.sin(phase.current) * Math.sin(phase.current * 0.61 + 1.7);
-        const ducked = base * (1 - duckAmount * 0.75);
-        const next = Math.min(1, ducked * wobble);
-        levelRef.current = next;
-        setLevel(next);
-        raf = requestAnimationFrame(tick);
-      } else {
-        // idle: decay the tail to zero, then STOP scheduling frames — no
-        // idle 60fps churn; one static (zero) frame remains on screen
-        const next = levelRef.current < 0.01 ? 0 : levelRef.current * 0.8;
-        levelRef.current = next;
-        setLevel(next);
-        if (next > 0) raf = requestAnimationFrame(tick);
-      }
-    };
-    const start = () => { if (raf === 0) raf = requestAnimationFrame(tick); };
-    start();
-    // re-arm on play/pause transitions (replaces the old always-on module
-    // subscription — each meter now owns its loop lifecycle)
-    const unsub = useUi.subscribe((s, prev) => {
-      if (s.playing !== prev.playing) start();
-    });
-    return () => { if (raf !== 0) cancelAnimationFrame(raf); unsub(); };
-  }, [db, duckAmount]);
+  // the engine owns the signal (program sim, duck, solo-in-place, master
+  // aggregation); the db prop stays the title's fader readout and the
+  // generic-key fallback source (store-backed keys read the G-slice directly)
+  const snap = useMeter(trackId, { db, duckAmount });
+  const peak = Math.max(snap.l.peakDb, snap.r.peakDb);
+  const peakText = peak <= -60 ? '−∞' : `${peak > 0 ? '+' : ''}${peak.toFixed(1)} dB`;
+  const state = snap.muted ? 'muted' : snap.l.clipped || snap.r.clipped ? 'clip' : undefined;
 
   return (
     <div
-      className={`relative flex items-end gap-[1px] overflow-hidden rounded-[2px] border border-hairline bg-black/70 ${fillHeight ? 'h-full min-h-0 w-full' : ''}`}
+      className={`meter-well relative flex items-stretch gap-px overflow-hidden rounded-[2px] border border-hairline ${snap.muted ? 'opacity-20' : ''} ${fillHeight ? 'h-full min-h-0 w-full' : ''}`}
       style={fillHeight ? undefined : { height, width: width * 2 + 1 }}
       aria-hidden="true"
-      title={`${label}: ${dbLabel(db)} · peak ${Math.round(level * 100)}%`}
+      data-state={state}
+      title={`${label}: ${dbLabel(db)} · peak ${peakText}`}
     >
-      <span className="h-full w-full origin-bottom scale-y-[var(--m)] bg-[linear-gradient(180deg,#e8c331_72%,#d9913a_86%,#fa1024_94%)]" style={{ ['--m' as any]: level }} />
-      <span className="h-full w-full origin-bottom scale-y-[var(--m)] bg-[linear-gradient(180deg,#e8c331_72%,#d9913a_86%,#fa1024_94%)]" style={{ ['--m' as any]: level * 0.97 }} />
+      {(['l', 'r'] as const).map((ch) => {
+        const c = snap[ch];
+        const pct = Math.round(c.level * 10000) / 100;
+        const peakPct = c.peakDb <= -60 ? null : Math.round(Math.min(1, (c.peakDb + 60) / 60) * 10000) / 100;
+        return (
+          <div key={ch} data-channel={ch} className="relative min-w-0 flex-1 overflow-hidden">
+            {/* fill: full-height gradient layer clipped from the top — the
+                stops stay at absolute dB positions (amber = −18, red = −6) */}
+            <div
+              className="absolute inset-x-0 bottom-0 h-full"
+              style={{
+                background: c.clipped
+                  ? 'var(--meter-red)'
+                  : 'linear-gradient(to top, var(--meter-green) 0%, var(--meter-amber) 70%, var(--meter-red) 90%)',
+                clipPath: `inset(${100 - pct}% 0 0 0)`,
+                transition: 'clip-path 50ms linear, background 100ms linear',
+              }}
+            />
+            <div className={`pointer-events-none absolute inset-0 ${coarse ? 'meter-segments-coarse' : 'meter-segments'}`} />
+            {peakPct !== null && (
+              <div data-testid="meter-peak" className="pointer-events-none absolute inset-x-0 h-px bg-white/90" style={{ bottom: `${peakPct}%` }} />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -306,7 +306,9 @@ export function TimelineToolbar() {
       >
         {masterMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
       </button>
-      <StripMeter trackId="toolbar-master" db={masterMuted ? -60 : masterVolume * 66 - 60} height={14} width={4} label="Master" />
+      {/* R15-A2: the shared engine's ONE master key + the micro-meter variant
+          (14px: 4 coarse chunks, no 3px LED segments, same palette/engine) */}
+      <StripMeter trackId="master" db={masterMuted ? -60 : masterVolume * 66 - 60} height={14} width={4} coarse label="Master" />
       <input
         type="range"
         min={0}

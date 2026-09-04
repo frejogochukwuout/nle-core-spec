@@ -101,6 +101,30 @@
   --mk-purple: #af5bd6;
   --mk-pink: #f265a8;
   --mk-gray: #91919e;
+
+  /* ---- R15 audio overhaul (A0) — meters / knobs / faders ----
+     Meter hues are bright in BOTH darks AND light: the well stays near-black
+     in every skin, so the bars always read against it (C2: do NOT deepen).
+     --knob-active is the control-active accent — deliberately its own token,
+     NOT --accent-selection (state-only per spec 18 §9). */
+  --meter-green: #22c55e;     /* 0% .. −18 dB zone */
+  --meter-amber: #eab308;     /* 70% stop = −18 dB */
+  --meter-red: #ef4444;       /* 90% stop = −6 dB, clip */
+  --meter-well: #0a0a0c;      /* near-black in all skins (bars punch against it) */
+  --knob-track: rgba(230, 230, 230, 0.10);  /* text-primary @ 10% (fg/10) */
+  --knob-active: #e8b34b;     /* gold family — the theme's primary accent hue */
+  --knob-face-1: #3a3a3e;     /* radial-gradient pair, highlight → shade */
+  --knob-face-2: #171719;
+  --fader-thumb-1: #d8d8d8;   /* light-gray pair (dark skins) */
+  --fader-thumb-2: #9a9a9e;
+  --fader-cap-accent-1: #eec36a;  /* master accent-tinted cap (A4 consumes) */
+  --fader-cap-accent-2: #a87f2d;
+  /* role colors — single set reusing the --mk-* ramp (not 12 hexes);
+     light overrides below tune the 4 role hues for text-adjacent uses */
+  --mk-role-dialogue: var(--mk-blue);
+  --mk-role-bgm: var(--mk-purple);
+  --mk-role-sfx: var(--mk-orange);
+  --mk-role-music: var(--mk-pink);
 }
 
 /* ---- studio theme: modern elevated dark (exploratory direction B) ---- */
@@ -153,6 +177,21 @@
   --fade-line: rgba(255, 255, 255, 0.92);
   --waveform: #52e08a;
   --clip-label-text: #e2ecf5;
+
+  /* R15 audio A0 — same meter trio (well is dark here too), studio-blued knob
+     faces, studio gold as the knob-active accent. mk-role ramp inherits :root. */
+  --meter-green: #22c55e;
+  --meter-amber: #eab308;
+  --meter-red: #ef4444;
+  --meter-well: #0a0a0f;
+  --knob-track: rgba(240, 240, 245, 0.10);
+  --knob-active: #f2bd62;
+  --knob-face-1: #3c3c46;
+  --knob-face-2: #121217;
+  --fader-thumb-1: #dcdce2;
+  --fader-thumb-2: #96969f;
+  --fader-cap-accent-1: #f5cd7d;
+  --fader-cap-accent-2: #b3852f;
 }
 
 /* ---- light theme: editorial / web-first (exploratory direction C) ---- */
@@ -215,6 +254,29 @@
   --rec: #e5484d;
   --solo: #d9a90f;
   --mute-warn: #c07a28;
+
+  /* R15 audio A0 — meter hues stay BRIGHT (the well is near-black even here,
+     so the bars read exactly as in the darks); knob face flips to a light
+     dial with the darkened gold accent (4.5:1+ on the light face); fader
+     thumb flips to a darker neutral pair. */
+  --meter-green: #22c55e;
+  --meter-amber: #eab308;
+  --meter-red: #ef4444;
+  --meter-well: #0c0c10;      /* + border-strong ring — see .meter-well in app.css */
+  --knob-track: rgba(29, 29, 35, 0.14);
+  --knob-active: #8a5f14;     /* the light skin's darkened accent gold */
+  --knob-face-1: #f2f2f6;
+  --knob-face-2: #cbcbd6;
+  --fader-thumb-1: #6a6a74;   /* darker neutral pair on light */
+  --fader-thumb-2: #3f3f49;
+  --fader-cap-accent-1: #a87f24;
+  --fader-cap-accent-2: #6e561a;
+  /* role hues deepened for the light skin's text-adjacent uses (A4 role chips);
+     fills may use either set — both stay on the --mk-* hue families */
+  --mk-role-dialogue: #0069c0;
+  --mk-role-bgm: #8a3fb8;
+  --mk-role-sfx: #c25410;
+  --mk-role-music: #d43d8a;
 }
 
 /* ---- density ---- */

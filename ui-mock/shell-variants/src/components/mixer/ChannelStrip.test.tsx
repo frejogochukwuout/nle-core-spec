@@ -8,6 +8,7 @@ import { fireEvent, screen, within } from '@testing-library/react';
 import { ChannelStrip, AuxStrip } from './ChannelStrip';
 import { renderPlain, store } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
+import { meterGetSnapshot } from '../../lib/meterEngine';
 
 /** Strip harness reading the track from the store (fresh on doc mutations). */
 function Strip({ trackId, compact = false, focused = false, flashing = false }: {
@@ -86,6 +87,15 @@ describe('ChannelStrip', () => {
     expect(g('tr-audio-2').pan).toBe(4); // fine mode ±1
   });
 
+  it('the pan knob is the DAW-floor 24px in the full dock, 22px squeezed (R15-A1)', () => {
+    const { rerender } = renderPlain(<Strip trackId="tr-audio-2" />);
+    const knob = screen.getByRole('slider', { name: 'A2 pan' });
+    expect(knob.style.width).toBe('24px');
+    expect(knob.style.height).toBe('24px');
+    rerender(<Strip trackId="tr-audio-2" compact />);
+    expect(screen.getByRole('slider', { name: 'A2 pan' }).style.width).toBe('22px');
+  });
+
   it('insert slots, aux send and output bus write through setMixerTrack (spec 20 §4.2)', () => {
     renderPlain(<Strip trackId="tr-audio-1" />);
     expect(screen.getByLabelText('Insert slot 1')).toHaveValue('EQ'); // A1 ships EQ in slot 1
@@ -128,6 +138,14 @@ describe('ChannelStrip', () => {
     expect(a2).toHaveTextContent('ON');
     fireEvent.click(a2);
     expect(store().mixer.buses.a2.on).toBe(false);
+  });
+
+  it('aux return meters use the unified engine keys (auxA/auxB) and honor bus ON/OFF (R15-A2)', () => {
+    renderPlain(<AuxStrip bus="a1" compact={false} />);
+    renderPlain(<AuxStrip bus="a2" compact={false} />);
+    // ONE key per bus (was 'aux-a1'/'aux-a2' before the registry unification)
+    expect(meterGetSnapshot('auxA').muted).toBe(false); // a1 Reverb boots ON
+    expect(meterGetSnapshot('auxB').muted).toBe(true); // a2 Spare boots OFF → honest silent return
   });
 
   it('the BGM strip renders the duck-under row and its controls (spec 20 §12.2)', () => {

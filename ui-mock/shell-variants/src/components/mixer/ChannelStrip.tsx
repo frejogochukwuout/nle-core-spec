@@ -91,9 +91,10 @@ export function ChannelStrip({ track, sceneId, compact, focused, flashing, onStr
         <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} fillHeight ariaLabel={`${track.name} fader`} />
       </div>
 
-      {/* pan below the fader */}
+      {/* pan below the fader — DAW floor 24px in the full dock, 22 when the
+          dock squeezes to compact (R15-A1) */}
       <div className="flex shrink-0 justify-center">
-        <PanKnob pan={strip.pan} onChange={(pan) => setMixerTrack(track.id, { pan })} ariaLabel={`${track.name} pan`} />
+        <PanKnob pan={strip.pan} onChange={(pan) => setMixerTrack(track.id, { pan })} size={compact ? 22 : 24} ariaLabel={`${track.name} pan`} />
       </div>
 
       {/* M/S/L — same commands as the track header (one source of truth) */}
@@ -190,7 +191,8 @@ export function AuxStrip({ bus, compact }: { bus: 'a1' | 'a2'; compact: boolean 
       <span className="mono text-[10px] font-semibold text-tmuted">A{bus === 'a1' ? '1' : '2'}</span>
       <span className="w-full truncate text-center text-[10px] text-tprimary">{settings.name}</span>
       <div className="flex min-h-[110px] w-full shrink-0 items-stretch justify-center gap-1.5 py-1">
-        {!compact && <StripMeter trackId={`aux-${bus}`} db={settings.returnGain} fillHeight label={`Aux ${bus}`} />}
+        {/* R15-A2: ONE engine key per bus — 'auxA'/'auxB' (unified registry) */}
+        {!compact && <StripMeter trackId={bus === 'a1' ? 'auxA' : 'auxB'} db={settings.returnGain} fillHeight label={`Aux ${bus}`} />}
         <Fader db={settings.returnGain} onChange={(db) => setAuxBus(bus, { returnGain: db })} fillHeight ariaLabel={`Aux ${bus} return`} />
       </div>
       {/* bus output enable — spec 20 §4.2 AuxBusSettings.on: real toggle via

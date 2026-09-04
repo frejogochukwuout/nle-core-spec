@@ -7,6 +7,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { useUi } from '../state/useUiStore';
+import { __reset as resetMeterEngine } from '../lib/meterEngine';
 
 /* React 19 act() contract — RTL calls act() internally. */
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -65,10 +66,15 @@ if (!('requestAnimationFrame' in window)) {
     clearTimeout(id as unknown as ReturnType<typeof setTimeout>);
 }
 
-/* Pointer capture APIs (Clip drag path uses setPointerCapture when present). */
+/* Pointer capture APIs (Clip drag + the R15 knob drag path use
+   setPointerCapture; the knob's guarded release also probes hasPointerCapture,
+   which jsdom lacks — without the stub it throws "not a function"). */
 if (!Element.prototype.setPointerCapture) {
   Element.prototype.setPointerCapture = () => { /* no-op */ };
   Element.prototype.releasePointerCapture = () => { /* no-op */ };
+}
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
 }
 
 /* ---- containment (the withStoreReset contract, per-test) ---- */
@@ -80,6 +86,9 @@ afterEach(() => {
   cleanup();
   // replace semantics — full re-hydration of the pristine module state
   useUi.setState(useUi.getInitialState(), true);
+  // meterEngine is a module-level singleton too (keys, ballistics, rAF loop) —
+  // same containment contract: every test starts from a silent, stopped engine
+  resetMeterEngine();
   for (const key of LS_KEYS) {
     try { window.localStorage.removeItem(key); } catch { /* storage unavailable */ }
   }

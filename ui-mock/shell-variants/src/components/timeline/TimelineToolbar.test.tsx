@@ -107,6 +107,17 @@ describe('TimelineToolbar', () => {
     expect(meter).toHaveAttribute('aria-hidden', 'true'); // never aria-live
     expect(meter.getAttribute('title')).toContain('Master: -8.5 dB'); // 0.78 × 66 − 60
   });
+
+  it('the micro-meter rides the ONE master engine key and swaps 3px LEDs for 4 coarse chunks (R15-A2)', () => {
+    boot({});
+    const meter = screen.getByTitle(/Master: -8\.5 dB/);
+    const l = meter.querySelector('[data-channel="l"]')!;
+    expect(l.querySelector('.meter-segments')).toBeNull(); // no 3px LED lines at 14px
+    expect(l.querySelector('.meter-segments-coarse')).not.toBeNull(); // 4 coarse chunks
+    // same palette/engine as the strip meters: token gradient anchored to the well
+    expect((l.querySelector('div') as HTMLElement).style.background).toContain('var(--meter-green)');
+    expect((l.querySelector('div') as HTMLElement).style.background).toContain('var(--meter-amber) 70%');
+  });
 });
 
 /* R14 no-op sweep wiring — view options, the marker-color dropdown (shared

@@ -68,6 +68,30 @@ body {
 .hairline-b { border-bottom: 1px solid var(--border-hairline); }
 .hairline-t { border-top: 1px solid var(--border-hairline); }
 
+/* ---- R15 audio (A2) — meter well + LED segments ----
+   Unlayered on purpose (same tier as .mono/.vsep): the light-skin
+   border-strong ring must outrank the border-hairline UTILITY on the meter
+   root (utilities layer would otherwise win — see the .icon-btn-sm note). */
+.meter-well { background: var(--meter-well); }
+[data-theme="light"] .meter-well { border-color: var(--border-strong); }
+/* LED segment overlay — 1px dark lines every 3px over the fill (the well is
+   near-black in every skin, so plain black lines are theme-stable) */
+.meter-segments {
+  background-image: repeating-linear-gradient(
+    to top,
+    transparent 0 2px,
+    rgba(0, 0, 0, 0.5) 2px 3px
+  );
+}
+/* micro-meter variant (toolbar, 14px): 4 coarse chunks instead of 3px LEDs */
+.meter-segments-coarse {
+  background-image: repeating-linear-gradient(
+    to top,
+    transparent 0 calc(25% - 1px),
+    rgba(0, 0, 0, 0.5) calc(25% - 1px) 25%
+  );
+}
+
 /* ============================================================
    SHARED CONTROL LANGUAGE (davinci-mock grammar, token-driven)
    ============================================================ */
