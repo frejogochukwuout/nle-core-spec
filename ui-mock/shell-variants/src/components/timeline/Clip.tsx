@@ -248,7 +248,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
           borderRight: `1px solid var(--clip-audio-edge)`,
         }}
       >
-        {clipLabel(isAudio ? '#eafff0' : 'var(--clip-label-text)')}
+        {clipLabel(isAudio ? 'var(--clip-audio-label)' : 'var(--clip-label-text)')}
       </div>
     );
   } else if (isAudio) {
