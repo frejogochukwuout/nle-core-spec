@@ -1,43 +1,42 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-03, end of the shell-variants mockup session (pushed through the final wrap-up commit)
+**Written:** 2026-09-04, end of the R11 mockup-completeness + audio-focus session (pushed through `e0eaed2`)
 **Scope of this file:** IMMEDIATE next session ONLY. Long horizon lives in `.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`.
 
 ---
 
-## The artifact this session produced
+## What this session produced
 
-`ui-mock/shell-variants/` — an interactive TSX mockup of the spec-18 UI shell with a **direction-variant system** (Ctrl + ` Variant Explorer):
+`ui-mock/shell-variants/` — the mockup grew from "direction study" to near-spec-complete shell:
 
-- **A — Resolve Classic**: spec-18 §9 canon tokens, flush chrome, gold state accents, red playhead, filmstrip clips (spec 05 §7), 160px TC-readout headers.
-- **B — Modern Studio**: elevated dark — floating rounded panels on a darker base, violet accents, comfortable density, slim 112px headers, 8px clip radius.
-- **C — Editorial Light**: light surfaces with near-black monitor surround, banded lanes, dark-on-light clip labels — the living test of 18 §8.14's light-theme rejection.
-- Independent dimensions (theme / density / clip rendering / accent / header style), persistence + URL-hash share links, mock-level interactions (clip move/trim/blade-split with 10px snap, playhead drag + transport, media search/sort, scene tabs, color + deliver pages, cheat sheet `?`).
-
-Three sub-agent UX peer-review rounds landed at: **"NO MAJORS REMAIN — direction study is valid for user review."** Screenshots of every preset/page are committed under `ui-mock/shell-variants/screenshots/`.
+- **Layout overhauled to spec-18 geometry** (splitter-owned 12px seams, 12px scrub/status, TrackHeader 2-row fit in 160px with names, sticky ruler, full-viewport playhead).
+- **The five missing v1.1 surfaces**: context menus (§4.9), toasts + confirms + error boundary (§6.4), state rows, wheel/pointer grammar (native non-passive listener), sample project + 40-key cheat-sheet-generated map (JKL, undo, ripple-trim, marquee, Alt-dup, Esc-cancel).
+- **Audio focus mode** — the answer to "where's the mixer / DAW↔NLE switch": peer-reviewed design in `ui-mock/shell-variants/docs/DESIGN-audio-mode.md` v2.1, implemented: 4th dock page (⌘4), 3-state mixer row (collapsed/bridge/full), channel strips + ducking row (spec 20 §12.2 mock answer), ChannelEditor (Clip S-layer + Track G-layer), Sound Library with roles, escalation gesture, Esc exit.
+- **Storybook 9** review surface (29 stories, `npm run storybook`).
+- Review gates passed: R11 code review majors all fixed; re-check verdict **NO MAJORS REMAIN** (remaining minors: 10px floor in dense strips vs 11px normative — documented deviation; ⌘M focuses audio tracks only).
 
 ## Next session's task: THE USER REACTION (this is the gate)
 
-1. **Tour the three presets** (or the dimension toggles): the platform preview serves the static build at the root route; locally `cd ui-mock/shell-variants && npm i && npm run dev` → http://localhost:5173/mockup/. Ctrl + ` opens the Variant Explorer; the pill button bottom-right is the fallback. Per-preset screenshots: `screenshots/preset-{a,b,c}-*.png`.
-2. **Capture the direction decision** (A / B / C / hybrid + dimension preferences). If the user wants tuning, edit `src/lib/variants.ts` presets + `src/styles/tokens.css` — everything is token-driven; no layout surgery needed for palette/radius/density changes.
-3. **Then** (only after the decision): fold it into PLAN's UI/UX track step 3 — the chosen token set becomes the blueprint for P1's shell wiring — and register the four spec-side findings (PLAN items 10-13: playhead provenance, tool-key conflict, accent-focus AA pair, status-strip size) as seal-round checklist rows.
+1. **Tour**: preview panel (port 3000 root route) or `cd ui-mock/shell-variants && npm i && npm run dev` → :5173/mockup/. Presets A/B/C via Ctrl+\`; **Audio focus** via dock button or ⌘4; mixer 3-state via the timeline-toolbar AudioLines button; escalation = dbl-click an audio clip.
+2. **Capture decisions** (each is a DESIGN-audio-mode.md §11 question): focus mode vs page split; mixer states/defaults; levels redundancy; channel-editor shape; ducking row; escalation gesture; Sound Library. Plus the standing A/B/C direction choice.
+3. **Then**: feed decisions into tokens/mixer; the surviving audio design gets lifted into the spec-18 mixer-panel section at seal (PLAN items 14-18 register the spec-side findings).
 
 ## Repo state at handoff
 
 | Repo | Commit | Notes |
 |---|---|---|
-| nle-core-spec (canon) | final wrap-up commit after `390fd48` | 21 specs unchanged + `ui-mock/shell-variants/` (app + media + screenshots + README with deviations & review log) |
-
-No other repo was touched this session. The mock's stack follows spec 00 §4 (React 19 + Vite + Tailwind 4 + Zustand) — the platform's Next.js app is only the preview vehicle (static build synced to its `public/mockup/`).
+| nle-core-spec (canon) | `e0eaed2` | 21 specs unchanged; `ui-mock/shell-variants/` (app + storybook + docs/DESIGN-audio-mode.md + screenshots incl. preset-a-audio-focus.png) |
 
 ## Mechanics to reuse (this session's working patterns)
 
-- **Variant system**: `data-theme/density/clipstyle/accent/headerstyle` attributes drive CSS-variable token blocks; presets are plain data in `lib/variants.ts`; share links = `#v=theme:studio,...` (parsed on boot, localStorage fallback).
-- **Sub-agent review loop**: 3 personas (pro editor / product designer / a11y+spec), each with screenshots + repo paths + the `z-ai vision` CLI; REQUIRE live interaction tests (agent-browser) — R2's worst bug (drag teleport) and R3's (dead CSS class) were only catchable live. Iterate until an explicit "NO MAJORS REMAIN" verdict; resume the same reviewer agent for re-checks (Task tool `resume`).
-- **Environment gotchas** (see SKILL #19-22): work in the clone at `/home/z/repos/nle-core-spec` (watchdog); `bash /home/z/my-project/scripts/vite-up.sh` re-raises the dev server (it is reaped between tool calls); agent-browser screenshots need ABSOLUTE paths (relative paths resolve in the daemon's cwd); set viewport 1920×1080 before testing or the window-too-small overlay blocks everything; rebuild + `cp -r dist /home/z/my-project/public/mockup` after changes to refresh the preview.
+- **Design-decision loop**: write the design doc → fresh-context peer reviewer (general-purpose agent) → fold refinements → resume the SAME reviewer for the re-check (verdict-gated: "SOUND WITH REFINEMENTS" → "APPROVED FOR IMPLEMENTATION"). Cheap, keeps context, extremely effective.
+- **Parallel implementation on disjoint files**: the orchestrator pre-adds ALL store state/actions first (one big store edit), then dispatches feature agents that consume (never edit) the store + own disjoint file sets. Zero merge conflicts.
+- **Zustand v5 law** (SKILL #24): selectors MUST return stable references — `?? {…}` / `.filter()` in the selector loops useSyncExternalStore (React infinite update). Module-level constants or select the container object.
+- **Wheel grammar**: React onWheel is passive — preventDefault is a no-op; use a native `addEventListener('wheel', fn, {passive:false})` in a useEffect.
+- **Env gotchas** (unchanged): clone at `/home/z/nle-core-spec` (watchdog!), `bash /home/z/my-project/scripts/vite-up.sh` (server reaped between calls; pkill pattern is `node_modules/vite`), agent-browser screenshots need ABSOLUTE paths + `set viewport 1920 1080` first; restart vite (pkill + up) after big file changes — HMR goes stale and lies (reports module errors that a restart clears).
 
 ## Standing cautions
 
-- Never edit web-daw-core's `copy`-class files by hand (file-class law; sync overwrites).
-- The spec set is CONTRACT + GAP + ACCEPTANCE (Decision 14): the mock deliberately does NOT amend specs — its findings are registered in PLAN items 10-13 for the seal round instead.
-- Push at every micro milestone (never lose work to infra failure); `git fetch` before push.
+- Never edit web-daw-core's `copy`-class files (file-class law).
+- The spec set is CONTRACT + GAP + ACCEPTANCE (Decision 14): the mock does NOT amend specs — R11 spec findings are registered as PLAN items 14-18 for the seal round.
+- Push at every micro milestone; `git fetch` before push; never force push.

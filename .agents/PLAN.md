@@ -1,26 +1,33 @@
 # PLAN — Long-Horizon Task Tracker (nle-core-spec)
 
 **Created:** 2026-09-02 (Round 8 wrap-up — user directive: push/backup every micro milestone; PLAN tracks the long horizon, HANDOFF tracks the next session only)
-**Current round:** 9 COMPLETE (pushed @ `4bc8c4d`) — seal round remains
+**Current round:** 11 (UI/UX mockup) COMPLETE through `e0eaed2` — seal round remains
 **Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec
 
 ---
 
-## UI/UX direction track (NEW 2026-09-03, pushed through `390fd48`+)
+## UI/UX direction track (R10 `390fd48` → R11 `e0eaed2`+)
+
+**R11 (2026-09-04) landed:** layout overhaul to spec-18 geometry; the five v1.1 surfaces (context menus §4.9, toasts §6.4, state rows, pointer/wheel grammar, sample project); media-pool drag-to-lane/multi-select; 40-key map w/ JKL + undo; **Audio focus mode** per peer-reviewed `ui-mock/shell-variants/docs/DESIGN-audio-mode.md` v2.1 (4th dock page ⌘4, 3-state mixer, channel editor = S/G seam, sidechain ducking = spec 20 §12.2 mock answer, escalation gesture); **Storybook 9** (29 stories). Review gates: code review → all majors fixed → re-check verdict **NO MAJORS REMAIN**.
 
 `ui-mock/shell-variants/` — interactive TSX mockup of the spec-18 shell (React 19 + Vite per 00 §4) with a ctrl+` Variant Explorer: direction presets **A Resolve Classic** (spec-canonical), **B Modern Studio** (elevated dark, violet), **C Editorial Light** (tests the 18 §8.14 rejection). Three sub-agent review rounds (pro-editor / product-designer / a11y+spec) → R3 verdict: **NO MAJORS REMAIN — valid for user review**. Mock-level interactions live (drag/trim/split with snap, playhead, search, variants persist + share links).
 
 **Next steps (in order):**
-1. **USER REACTION** — the user tours the three presets (preview panel or `npm run dev` in `ui-mock/shell-variants/`); the direction decision (A/B/C or a hybrid) is the gate for everything below.
-2. Feed the decision into the shell-variants token layer; optionally tune B's elevation further (cosmetic carry-over from R3).
-3. P1 wiring (spec 14) then inherits the chosen token set + component structure + `shell-*` testids — the mockup is the design-side blueprint for the one greenfield surface.
-4. Fold the four spec findings from the review rounds into the SEAL round (items 10-13 above).
+1. **USER REACTION (the gate)** — tour the three presets AND the new Audio focus mode (dock "Audio" / ⌘4); answer the 7 questions in DESIGN-audio-mode.md §11 (focus-mode weight, mixer states, levels redundancy, channel editor, escalation, sound library). The direction decision (A/B/C/hybrid + audio-focus shape) gates everything below.
+2. Feed the decisions into the shell-variants token layer + mixer shape; tune as directed.
+3. P1 wiring (spec 14) inherits the chosen token set + component structure + `shell-*` testids; the audio-focus surfaces become the spec-18 mixer-panel section the seal round must write.
+4. Fold the spec findings into the SEAL round (items 10-13 + the R11 items below).
 
 **Seal additions from the mockup reviews (spec-side findings, not mock bugs):**
 10. **18 §9 playhead provenance error** — table says `--accent-selection #e8b34b (mock playhead gold)` but the davinci mock's playhead is RED (#fa1024, `.playhead-line`); spec must decide the canonical playhead treatment (mock follows the actual mock: red time indicators, gold = state/selection).
 11. **18 §4.5 tool-key conflict vs 16 §3.2** (A/','/S vs V/B/T/Y/U + N) — pick one, amend the other.
 12. **`--accent-focus` has no AA text pair** in resolve/studio (≈3.9-4.0:1 both directions) though 18 §9 assigns primary buttons to it — needs an `--accent-focus-contrast`-class decision.
-13. **18 §3.1 12px status strip vs §11.12 11px type floor** — internally in tension; mock used 14px.
+13. **18 §3.1 12px status strip vs §11.12 11px type floor** — internally in tension; mock used 12px.
+14. **R11: workspace keymap mismatch** — spec 16 §3.8/App A binds ⌘3 = Effects workspace, no Deliver binding; spec 18 dock ships Edit/Color/Deliver. The mock binds ⌘4 (per 16) + ⌘1-3 (per 18 tooltips). Seal must reconcile.
+15. **R11: F6 region count** — 18 §11.5 enumerates six regions; the mixer row is a seventh (mock adds it; amendment or fold-into-timeline decision).
+16. **R11: meter deferral (18 §8.13) vs always-on master micro-meter + header micro-meters** — seal decides whether these count as "meters panel."
+17. **R11: automation-curve UX home (20 §12.1)** — the mock ships a visible placeholder (Automation — M2 watermark); the seal round inherits the question.
+18. **R11: the C15 re-litigation needs formalizing** — DESIGN-audio-mode.md §9 argues it (D13 postdates the ruling); the seal round should either ratify the mixer surface as the spec-18 mixer-panel section or reject with the ledger.
 
 ---
 

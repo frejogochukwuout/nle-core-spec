@@ -533,6 +533,32 @@ A UI mock for direction validation must still honor the target spec's testids, t
 
 ---
 
+## Round-11 Meta-Learnings (mockup-completeness + audio-focus sessions — 2026-09-04)
+
+### 24. Zustand v5: unstable selector results infinite-loop useSyncExternalStore
+
+A selector like `useUi(s => s.mixer.tracks[id]) ?? {default}` or `s.scenes.find(...)?.tracks.filter(...)` returns a NEW reference on every getSnapshot call; React's useSyncExternalStore sees the snapshot "change" after every render and re-renders forever → "Maximum update depth exceeded" crashing the whole tree through the error boundary. Fix patterns: module-level constant defaults (`const DEFAULT_STRIP = {...}` outside the component), select the CONTAINER object (`useUi(s => s.mixer)` — stable until a real change) and read fields locally, or derive arrays outside the selector. Scan every new `useUi((s) => …)` for object/array literals inside the selector argument.
+
+### 25. React's delegated wheel handlers are passive — preventDefault silently fails
+
+`onWheel={(e) => e.preventDefault()}` in React does NOTHING (React 17+ attaches delegated passive listeners; you get a console warning at best) — so ⌘/Ctrl+wheel zoom-to-cursor triggers the BROWSER zoom instead. The fix is a native listener in a useEffect: `el.addEventListener('wheel', fn, {passive: false})` (+ cleanup, + a ref for changing values like pxPerSec). Symptom in testing: zoom "works" but the page also zooms / Shift+wheel double-scrolls.
+
+### 26. The design-decision loop: doc → fresh peer review → fold → resume for re-check
+
+For any non-trivial design decision (this round: the DAW/NLE switch), the sequence that worked: (1) write the decision as a standalone design doc with an evidence table citing specs; (2) dispatch a FRESH-context sub-agent to peer-review it (citation audit + contradiction hunt + UX critique + ranked refinements + a verdict); (3) fold refinements into v2; (4) RESUME the same reviewer agent for the re-check (it remembers its own findings; verdict becomes the gate). Two rounds cost ~30 min and caught: a hard shortcut conflict, a wrong arithmetic claim (the reviewer even admitted its own error next round), and a state-model honesty issue. Verdict-gated review of DECISIONS, not just code.
+
+### 27. Parallel feature agents on disjoint files require the orchestrator to own the shared state first
+
+N agents implementing N features in one working tree conflict only on shared files (store, AppShell, app.css). The pattern that ran clean: the orchestrator writes ONE comprehensive store upgrade FIRST (every field + action every agent will need, typechecked), then dispatches agents with "store is READ-ONLY — use these exact actions" + disjoint file ownership lists + permission to append only to app.css's @layer components. Zero clobbering across 5 agents. When an action doesn't exist, agents do honest-mock toasts instead of editing the store.
+
+### 28. Pointer-capture + event bubbling double-dispatches commits
+
+Trim handles nested inside a draggable clip: `setPointerCapture` retargets pointer events to the handle, but the events still BUBBLE to the parent — a shared `onPointerUp` on both levels commits the trim twice (two undo entries per gesture). Fix: `stopPropagation` in the handle-level handlers (or check `e.target === e.currentTarget`). Any drag/commit path with nested interactive layers needs this check.
+
+### 29. VLM/tool transcripts eat bracket-escape sequences — verify before "fixing" corruption
+
+A grep/tool output showed `MARKER_PALETTEarkerColorIdx` where the file actually contained `MARKER_PALETTE[markerColorIdx` — the `[m` was consumed as an ANSI escape in the output pipeline. The FILE WAS FINE (tsc passed). Rule: when output "looks corrupted" but the typechecker/build is green, re-read the file another way before editing — don't chase display artifacts.
+
 ## GitHub Operations
 
 When pushing a large spec set to a new GitHub repo:
