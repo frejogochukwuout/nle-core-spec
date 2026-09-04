@@ -112,7 +112,7 @@ export const DockAudio: StoryObj = {
   ),
 };
 
-/** Deliver active (⌘3): export/handoff tab pressed. */
+/** Deliver active (⌘3 — MOCK DRIFT, registered: spec 16 §3.8/App A bind ⌘3 = Effects workspace, Deliver unbound; spec 18 dock tooltips carry the same drift, PLAN item 14): export/handoff tab pressed. */
 export const DockDeliver: StoryObj = {
   name: 'App dock — Deliver page',
   render: () => <DockStory patch={{ page: 'deliver' }} />,

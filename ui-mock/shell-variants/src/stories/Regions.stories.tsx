@@ -4,11 +4,11 @@
    covers the default grid/list views and the four inspector tabs): this file
    covers the state variants each region still needs reviewed.
 
-   Viewer caveat read from source: zoom + the in-canvas-overlay eye toggle are
-   LOCAL component state (no store field), and the safe-area-guides button is
-   a non-wired mock (no state at all). Coverable store paths are booted here:
-   overlays hide via the tool-drag rule (tool ≠ select), zoom 50% is driven
-   through the toolbar select by a play step. */
+   Store paths since R12 W4: the in-canvas-overlays eye toggle AND the
+   safe-area guides are store-level UI prefs (viewerOverlays /
+   viewerSafeGuides, spec 18 §4.3 "UI pref" + §6.2 view-state home) — both are
+   directly bootable below. Only zoom remains component-local; its 50% story
+   drives the toolbar select via a play step (native-setter technique). */
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Viewer } from '../components/shell/Viewer';

@@ -149,16 +149,18 @@ export function Viewer({ duration }: { duration: number }) {
             </div>
           )}
 
-          {/* safe-area guides (viewer UI pref) — broadcast convention:
-              90% action-safe + 80% title-safe centered rects, thin lines */}
+      {/* safe-area guides (viewer UI pref) — broadcast convention:
+              90% action-safe + 80% title-safe centered rects, thin lines
+              (labels: 10px strip-family floor + drop-shadow like the
+              other in-canvas chips — spec 18 §11.12 / §9) */}
           {safeGuides && (
             <div className="pointer-events-none absolute inset-0" data-testid="shell-viewer-safe-guides" aria-hidden="true">
               <div className="absolute inset-[5%] border border-white/45" />
               <div className="absolute inset-[10%] border border-white/25" />
-              <span className="absolute left-[5.5%] top-[5.5%] mono text-[9px] font-medium text-white/60">
+              <span className="absolute left-[5.5%] top-[5.5%] mono text-[10px] font-medium text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
                 action safe 90%
               </span>
-              <span className="absolute left-[10.5%] bottom-[10.5%] mono text-[9px] font-medium text-white/45">
+              <span className="absolute left-[10.5%] bottom-[10.5%] mono text-[10px] font-medium text-white/55 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
                 title safe 80%
               </span>
             </div>

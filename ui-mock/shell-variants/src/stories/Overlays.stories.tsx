@@ -160,9 +160,12 @@ export const VariantExplorerOpen: StoryObj = {
   ),
 };
 
-/* ---- toast region — remaining kinds + the max-3 cap (§6.4) -----------------
+/* ---- toast region — remaining kinds + the max-3 cap -----------------
    Kind machine: info/success 4 s, persist (warning-class) 6 s, error has no
-   timer; the store's pushToast caps the stack at the newest 3. */
+   timer. DEVIATION, honestly labeled: spec 18 §6.4 says the stack caps at 3
+   with the OLDEST COLLAPSING TO AN ICON ROW — the mock's pushToast DROPS the
+   oldest instead (registered as a seal item). This story shows the mock's
+   actual behavior, not the spec's. */
 
 /** Booted stack, oldest→newest like pushToast appends: the persist card rides
  *  the 6 s warning-class timer; the error card has no timer and stays. */
@@ -187,8 +190,9 @@ export const ToastErrorAndPersist: StoryObj = {
   ),
 };
 
-/** Max-3 stack cap demo: four error-kind toasts pushed on mount — the store
- *  keeps only the newest three, so “Render job 1” never renders (§6.4). */
+/** Max-3 stack cap demo (MOCK DEVIATION from §6.4 — registered): four
+ *  error-kind toasts pushed on mount — the store DROPS the oldest (the spec
+ *  would collapse it to an icon row), so “Render job 1” never renders. */
 function ToastStackScenario() {
   useEffect(() => {
     const s = useUi.getState();
@@ -196,7 +200,7 @@ function ToastStackScenario() {
       s.pushToast({
         kind: 'error',
         title: `Render job ${n} failed`,
-        detail: n === 1 ? 'pushed first — dropped by the max-3 cap' : 'kept — the newest three only (§6.4)',
+        detail: n === 1 ? 'pushed first — dropped by the max-3 cap (mock drops; §6.4 spec: collapse to icon row)' : 'kept — the newest three only',
       });
     }
   }, []);

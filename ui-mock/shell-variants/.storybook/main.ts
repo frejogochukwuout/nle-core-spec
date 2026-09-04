@@ -31,15 +31,11 @@ const config: StorybookConfig = {
   // server is only reachable behind the platform edge / sandbox network, so
   // allowedHosts: true (the documented "allow all" value) is the robust
   // choice — it also survives sandbox recycles where the internal hostname
-  // (c-<uuid>) changes.
+  // (c-<uuid>) changes. The builder-vite framework forwards core.allowedHosts
+  // into vite's server.allowedHosts (verified: node_modules
+  // @storybook/builder-vite/dist/index.js) — no viteFinal needed.
   core: {
     allowedHosts: true,
-  },
-  viteFinal: async (viteConfig) => {
-    const allowed = ['.space-z.ai'];
-    viteConfig.server = { ...(viteConfig.server ?? {}), allowedDevHosts: allowed };
-    viteConfig.preview = { ...(viteConfig.preview ?? {}), allowedDevHosts: allowed };
-    return viteConfig;
   },
 };
 

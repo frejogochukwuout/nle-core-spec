@@ -40,7 +40,7 @@ Caddy proxies the platform edge straight to it. `core.allowedHosts: true`
 in `.storybook/main.ts` (the edge rewrites the Host header; storybook 10's
 host validation would 403 otherwise).
 
-70 stories across 10 groups — every shell region, chrome strip, timeline
+71 stories across 10 groups — every shell region, chrome strip, timeline
 leaf, mixer surface, page, overlay, and primitive is surfaced:
 
 | Story file | What it covers |
@@ -53,7 +53,7 @@ leaf, mixer surface, page, overlay, and primitive is surfaced:
 | `Shell.stories.tsx` (title "Shell/Components") | Media pool grid/list, Viewer, Inspector ×4 tabs, status-strip autosave states, toast region, open context menu, cheat sheet |
 | `Overlays.stories.tsx` | Confirm dialogs (scene delete / multi-delete), ErrorBoundary crash fallback, Variant explorer open, toast error/persist + max-3 stack |
 | `Pages.stories.tsx` | Color page, Deliver page (+ preset pick), Channel editor empty state |
-| `Regions.stories.tsx` | Viewer ×3 (program / overlays-hidden / safe-guides / zoom), Media pool offline + no-results, Inspector empty + multi-select mixed |
+| `Regions.stories.tsx` | Viewer ×4 (program / overlays-hidden / safe-guides / zoom), Media pool offline + no-results, Inspector empty + multi-select mixed |
 | `Primitives.stories.tsx` | Fader (fixed + fill-height), PanKnob, StripMeter (static / playing / duck-under) |
 
 Review-workflow mapping: open the sidebar tree side-by-side, screenshot at the

@@ -41,7 +41,7 @@ function BridgeRail() {
       aria-label="Mixer meter bridge"
     >
       <div className="flex shrink-0 justify-center border-b border-hairline py-[3px]">
-        <span className="mono text-[9px] font-semibold uppercase tracking-wide text-tfaint">MIX</span>
+        <span className="mono text-[10px] font-semibold uppercase tracking-wide text-tfaint">MIX</span>
       </div>
       {/* per-track vertical meters — each track flexes an equal share */}
       <div className="flex min-h-0 flex-1 flex-col gap-1 px-1 py-1">
@@ -49,7 +49,7 @@ function BridgeRail() {
           const strip = mixer.tracks[t.id];
           return (
             <div key={t.id} className="flex min-h-[30px] flex-1 flex-col items-center gap-0.5" data-testid={`bridge-${t.badge}`}>
-              <span className="mono text-[9px] font-semibold text-[var(--type-audio)]">{t.badge}</span>
+              <span className="mono text-[10px] font-semibold text-[var(--type-audio)]">{t.badge}</span>
               <StripMeter
                 trackId={t.id}
                 db={strip?.fader ?? -6}
@@ -64,13 +64,13 @@ function BridgeRail() {
       {/* master cluster pinned to the rail bottom — same store values as
           the toolbar/strip masters (design doc §4.5 single source) */}
       <div className="flex shrink-0 flex-col items-center gap-1 border-t border-hairline px-1 py-1.5">
-        <span className="mono text-[9px] font-semibold uppercase tracking-wide text-tprimary">MST</span>
+        <span className="mono text-[10px] font-semibold uppercase tracking-wide text-tprimary">MST</span>
         <StripMeter trackId="master-bridge" db={masterMuted ? -60 : masterVolume * 66 - 60} height={36} width={4} label="Master" />
         <button
           onClick={toggleMasterMute}
           aria-pressed={masterMuted}
           aria-label="Master mute"
-          className={`mono flex h-[14px] w-[14px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${masterMuted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-inset text-tmuted'}`}
+          className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${masterMuted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-inset text-tmuted'}`}
         >M</button>
         <button
           className="icon-btn icon-btn-sm"
@@ -118,7 +118,7 @@ function FullDock() {
   return (
     <div
       ref={ref}
-      className="flex h-full min-h-0 shrink-0 items-stretch border-l border-hairline bg-shell"
+      className="flex h-full min-h-0 max-w-[60%] shrink-0 items-stretch overflow-x-auto border-l border-hairline bg-shell"
       data-testid="mixer-dock-full"
       role="group"
       aria-label="Audio mixer"
@@ -134,7 +134,7 @@ function FullDock() {
           <ChevronsRight size={12} strokeWidth={1.7} />
         </button>
         <span
-          className="mono select-none text-[9px] font-semibold uppercase tracking-[0.18em] text-tfaint"
+          className="mono select-none text-[10px] font-semibold uppercase tracking-[0.18em] text-tfaint"
           style={{ writingMode: 'vertical-rl' }}
           aria-hidden="true"
         >

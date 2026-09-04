@@ -1,4 +1,4 @@
-/* Storybook 9 preview — the review surface for the shell-variants mockup.
+/* Storybook 10 preview — the review surface for the shell-variants mockup.
 
    - imports the app's own stylesheet (tokens + component CSS) so stories are
      pixel-identical to the standalone build;

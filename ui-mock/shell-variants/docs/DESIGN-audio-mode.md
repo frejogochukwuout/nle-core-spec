@@ -33,7 +33,7 @@ Scope honesty: this surface covers the *core* of spec 20's recorded M2 scope (mi
 1. **Page dock button "Audio"** between Color and Deliver — same grammar as Edit/Color/Deliver, `aria-current="page"`, tooltip "Audio focus (⌘4)".
 2. **⌘4** — occupies the orphaned-but-registered binding. (The larger workspace-keymap mismatch — spec 16 binds ⌘3 = Effects, spec 18's dock ships Deliver with no ⌘ binding — is a PRE-EXISTING drift this design does not claim to close; registered in §10.)
 3. **Escalation gesture (mock preview of M3):** double-click an **audio clip** in Edit mode → Audio focus + that clip's track strip focused+flashed. Discoverability backstops: a cheat-sheet row and a clip context-menu item **"Mix this track…"** (mock-level; would amend spec 18 §4.9's menu list at seal). Single-click stays selection. Note: if dual-viewer (18 §8.5, deferred) ever lands, its natural dbl-click-to-source gesture would compete for this binding — flagged, not resolved.
-4. **Mixer toggle in the timeline toolbar** — opens the mixer row without leaving Edit (button-only; no new chord — see §6).
+4. **Mixer toggle in the timeline toolbar** — opens the mixer dock without leaving Edit (button-only; no new chord — see §6).
 
 ### 3.2 What changes in Audio focus (and nothing else does)
 | Region | Edit mode | Audio focus |
@@ -57,6 +57,8 @@ Dock button, ⌘1 (Edit), or **Esc always exits Audio→Edit** (one rule, no pat
 - No dual documents: leaving Audio focus keeps every edit; nothing bounces/commits at mode level.
 
 ## 4. The mixer strip row — three states (the 1280×800 arithmetic)
+
+> **[SUPERSEDED by the v2.2 revision (end of file) — read both]:** the mixer is now a RIGHT-SIDE DOCK beside the multi-track lanes, not a bottom row. The state machine, strip anatomy vocabulary, and drag grammar below remain the source for those aspects; the placement, heights, and compact trigger changed.**
 
 Vertical budget at the spec floor 1280×800: chrome = dock 42 + status 12 + toolbar2 34 + HSplitter 6 + timeline-toolbar 34 + tabs 26 = **154px** (already includes toolbar+tabs); main body min 320px per 18 §3.2 → timeline block ≈ 326px, minus ~26px ruler → **~300px for lanes+mixer**. A full 176px mixer leaves ~150px of lanes — tight (~1.5 boosted audio lanes) but workable; the bridge leaves ~294px. Therefore the row is a **three-state machine** (auto-compact below ~850px viewport height):
 
@@ -108,7 +110,7 @@ Spec 09 has no role field (only the FCPXML `<sequence role>` attr echoes it; BGM
 ## 11. What the user should react to
 
 1. Focus mode (4th dock page, ⌘4) vs. hard page split — right weight?
-2. Mixer under the timeline with three states (collapsed default in Edit, full in Audio) — vs. only-in-Audio-page.
+2. ~~Mixer under the timeline~~ **[superseded by v2.2: mixer BESIDE the lanes]** — three states (collapsed default in Edit, full in Audio) — vs. only-in-Audio-page.
 3. Always-on levels: master micro-meter in the timeline toolbar + track micro-meters in headers (every mode).
 4. Channel editor as the S/G seam (Clip section + Track section) — and ducking row (source/amount/attack/release) as the sidechain UX.
 5. Escalation gesture (dbl-click audio clip → Audio focus + strip focus) as the M3 preview.

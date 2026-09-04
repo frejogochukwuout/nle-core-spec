@@ -154,6 +154,7 @@ export function AppShell() {
   const setMainBodyH = useUi((s) => s.setMainBodyH);
   const scenes = useUi((s) => s.scenes);
   const activeSceneId = useUi((s) => s.activeSceneId);
+  const mixerVisible = useUi((s) => s.mixerState !== 'collapsed');
   const scene = scenes.find((s) => s.id === activeSceneId) ?? scenes[0];
   const duration = sceneDuration(scene);
 
@@ -268,9 +269,14 @@ export function AppShell() {
         <SceneTabs />
         <div className="flex min-h-0 flex-1">
           <Timeline />
-          <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0">
-            <MixerDock />
-          </div>
+          {/* F6 region 7 (spec 18 §11.5 amendment): only a focus stop while
+              the dock is actually visible — a collapsed dock must not leave
+              an invisible zero-width F6 stop in the cycle */}
+          {mixerVisible && (
+            <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0">
+              <MixerDock />
+            </div>
+          )}
         </div>
       </div>
 

@@ -16,7 +16,7 @@ export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' |
 export type Page = 'edit' | 'color' | 'audio' | 'deliver';
 export type InspectorTab = 'video' | 'audio' | 'effects' | 'transition';
 export type ToastKind = 'info' | 'success' | 'error' | 'persist';
-export type MixerRowState = 'collapsed' | 'bridge' | 'full';
+export type MixerDockState = 'collapsed' | 'bridge' | 'full';
 
 export interface Toast {
   id: number;
@@ -76,7 +76,7 @@ interface UiState {
   future: { scenes: SceneJSON[]; activeSceneId: string }[];
   // ---- audio focus mode (design doc docs/DESIGN-audio-mode.md v2.1) ----
   mixer: MockMixerScene;      // mock G-slice (spec 20 §4.2 shape)
-  mixerState: MixerRowState;
+  mixerState: MixerDockState;
   audioLaneBoost: boolean;
   stripFocus: string | null;
   stripFlash: number;
@@ -134,7 +134,7 @@ interface UiState {
   toggleTrackCmd: (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') => void;
   enterAudioFocus: (trigger: 'dock' | 'shortcut' | 'escalation', trackId?: string) => void;
   exitAudioFocus: () => void;
-  setMixerState: (m: MixerRowState) => void;
+  setMixerState: (m: MixerDockState) => void;
   cycleMixerState: () => void;
   setAudioLaneBoost: (v: boolean) => void;
   setStripFocus: (id: string | null) => void;
@@ -347,7 +347,9 @@ export const useUi = create<UiState>((set, get) => ({
   }),
   pushToast: (t) => set((s) => {
     const toast: Toast = { ...t, id: toastSeq++ };
-    // max-3 stack (spec 18 §6.4)
+    // max-3 stack — MOCK DEVIATION from spec 18 §6.4 (registered seal item):
+    // the spec says the OLDEST toast collapses to an icon row; the mock DROPS
+    // it. Timings (4s info/success, 6s persist, no timer on error) are exact.
     const next = [...s.toasts, toast];
     return { toasts: next.length > 3 ? next.slice(next.length - 3) : next };
   }),
@@ -390,7 +392,8 @@ export const useUi = create<UiState>((set, get) => ({
   exitAudioFocus: () => set({ page: 'edit', audioLaneBoost: false }),
   setMixerState: (m) => set({ mixerState: m }),
   cycleMixerState: () => set((s) => {
-    // design doc §4: Edit — collapsed → bridge → full-compact; Audio — bridge ↔ full
+    // design doc v2.2 §4: Edit — collapsed → bridge → full (compact is now a
+    // height-driven property of the dock, not a 4th state); Audio — bridge ↔ full
     if (s.page === 'audio') return { mixerState: s.mixerState === 'full' ? 'bridge' : 'full' };
     return { mixerState: s.mixerState === 'collapsed' ? 'bridge' : s.mixerState === 'bridge' ? 'full' : 'collapsed' };
   }),

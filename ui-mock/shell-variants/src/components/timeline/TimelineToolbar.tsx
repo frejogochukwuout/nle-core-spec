@@ -182,10 +182,12 @@ export function TimelineToolbar() {
 
       <div className="vsep" />
 
-      {/* master audio + always-on micro-meter (design doc §3.2 — zero new regions) */}
+      {/* master audio + always-on micro-meter (design doc §3.2 — zero new regions).
+          ⌘M tooltip honesty: spec 16 §3.5 binds ⌘M to FOCUSED-track mute; the
+          mock falls back to master only when nothing is focused (registered). */}
       <button
         className={`icon-btn ${masterMuted ? 'toggled' : ''}`}
-        data-tip="Mute master (⌘M)"
+        data-tip="Mute master (⌘M when no track focused)"
         aria-label="Mute master"
         aria-pressed={masterMuted}
         onClick={toggleMasterMute}
