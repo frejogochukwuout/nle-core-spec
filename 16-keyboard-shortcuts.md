@@ -1,7 +1,7 @@
 # 16 — Keyboard Shortcuts: Comprehensive Interaction Spec
 
 **Stream:** Keyboard interaction layer (UI → engine command bus)
-**Status:** v1.0 (NEW — authored under task TEST-03)
+**Status:** v1.1 (Round 15 amendment pass — A1/A6/N8/N11/N12/N15 resolutions + C2-extension registration per `.agents/SPEC-REVISION-CANDIDATES.md`, ARCH-R15 §4; original v1.0 authored under task TEST-03)
 **Primary teacher:** FCP/Premiere/DaVinci Resolve muscle-memory conventions + FreeCut `config/hotkeys.ts` + OpenCut-classic `OC-Actions/definitions.ts`
 **Consumers:** UI keyboard handler (`src/ui/keyboard/`), test harness (`tests/e2e/keyboard.spec.ts`), cheat-sheet modal (`src/ui/cheat-sheet/`)
 **Predecessor:** `05-timeline.md` §19 (unified shortcut table — ~50 actions)
@@ -13,7 +13,7 @@
 
 | Area | Before (spec 05 §19) | After (this spec) |
 |---|---|---|
-| Shortcut count | ~50 actions (union of 2 repos) | **180 bindings** across 13 categories (~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings), every common NLE action covered |
+| Shortcut count | ~50 actions (union of 2 repos) | **181 bindings** (180 at v1.0 + `Option+R` from the R15/A6 amendment) across 13 categories (~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings), every common NLE action covered |
 | Mapping target | "FCP/Premiere equivalent" column | **`EngineCommand` discriminator** + manager-method cross-ref (§12) |
 | Conflict handling | 5 conflicts noted, resolutions inline | **Full conflict table** (§6) covering 18 disambiguation cases (12 original + 6 audit-flagged direct conflicts resolved in §6.1 #13–#18) |
 | Test integration | "Keyboard test: Press each shortcut, assert correct command fires" | **4 named patterns** + Playwright recipes (§4, §9) + test enumeration appendix (§A) |
@@ -69,7 +69,7 @@ Comprehensive keyboard shortcuts serve two purposes:
 
 4. **Modifier keys for variants.** `Shift+arrow` for 10-frame nudge vs `arrow` for 1-frame. `Shift+J`/`Shift+L` for 2× shuttle vs `J`/`L` for 1×. `Cmd+Shift+B` for split-all-tracks vs `Cmd+B` for split-focused. The pattern: **Shift = "more"** (10× frames, 2× speed, all tracks), **Cmd = "global"** (file, project, all-tracks).
 
-5. **Context-sensitive.** `Delete` deletes the selected clip (no ripple); `Backspace` ripple-deletes; both work without modifier. `B` selects razor tool when not in razor mode, but in razor mode `B` + click splits at the click point. Resolution rules are explicit (§6) — no implicit "last tool wins" behavior.
+5. **Context-sensitive.** `Delete` and `Backspace` both delete the selected clip (no ripple — aliases); `Shift+Delete` (⇧⌫) is the ONLY ripple-delete chord (Round 15 amendment, A1 — resolves the 16 §3.4 vs 18 §4.9 conflict; the mock implements 18's form). `B` selects razor tool when not in razor mode, but in razor mode `B` + click splits at the click point. Resolution rules are explicit (§6) — no implicit "last tool wins" behavior.
 
 6. **Discoverable.** Tooltips show shortcuts (`Space — Play/Pause`). `?` opens the cheat-sheet modal (§7.3) listing every shortcut grouped by category, searchable. The cheat sheet is auto-generated from the same `ShortcutMap` the handler uses — there is no second source of truth.
 
@@ -137,7 +137,7 @@ Organized by category. For each shortcut:
 | `Option+X` | Clear in + out (both) | `{ type: 'setLoop', params: { start: null, end: null } }` | Always | Option+X |
 | `Cmd+Shift+G` | Loop playback toggle | `{ type: 'toggleLoopPlayback' }` | Always | Cmd+L ⚠ conflict |
 
-**In/out points are `setLoop` halves** — spec 15 has no dedicated in/out-point commands; the mark-in/mark-out surface is expressed at the wire level as `setLoop`'s `start`/`end` (spec 15 §4.3.29), which is why `I`/`O` and their clear variants emit the rows above. Spec 03 §3.4's in/out-point behavior is the playback-side consumer of this window.
+**In/out points are `setLoop` halves** — spec 15 has no dedicated in/out-point commands; the mark-in/mark-out surface is expressed at the wire level as `setLoop`'s `start`/`end` (spec 15 §4.3.29), which is why `I`/`O` and their clear variants emit the rows above. Spec 03 §3.4's in/out-point behavior is the playback-side consumer of this window. **(Round 15 amendment, N12 — this is the canonical in/out model: 05 §11.2 is RETIRED by this resolution (R15).)** 05 §11.2's dedicated `InOutPoints` interface and its `G`-to-clear binding do not carry: clearing is `Cmd+Shift+I` / `Cmd+Shift+O` / `Option+X` (rows above), `G` is unbound in this spec (`Cmd+Shift+G` is loop-playback toggle, §3.1), and 18 §4.3/§4.9 already consume the halves form. The 05-side retirement edit lands in the parallel R15 05 pass.
 
 **JKL multi-tap semantics:** `J` and `L` are stateful — each consecutive press within 500 ms of the previous increments speed by 1× (capped at 4×). Pressing `K` or `Space` resets the counter. The resolver tracks tap-count in a closure; the emitted `EngineCommand` always carries the absolute target rate, not a delta, so tests can assert directly on rate.
 
@@ -152,7 +152,8 @@ Organized by category. For each shortcut:
 | `T` | Trim tool (rollover edit between adjacent clips) | `{ type: 'selectTool', params: { tool: 'roll' } }` | Always | T |
 | `Y` | Slip tool | `{ type: 'selectTool', params: { tool: 'slip' } }` | Always | Y |
 | `U` | Slide tool | `{ type: 'selectTool', params: { tool: 'slide' } }` | Always | U |
-| `R` | Ripple mode toggle (global, affects all delete/insert ops) | `{ type: 'toggleRipple' }` | Always | (none) |
+| `R` | Ripple tool (selects the ripple editing tool) | `{ type: 'selectTool', params: { tool: 'ripple' } }` | Always | (none) |
+| `Option+R` | Ripple mode toggle (global editing pref — affects all delete/insert/trim ops) | `{ type: 'toggleRipple' }` (UI) | Always | (none) |
 | `N` | Snap toggle (global, affects all drag/trim/move ops) | `{ type: 'toggleSnap' }` | Always | N |
 | `Escape` (when tool active) | Return to select tool | `{ type: 'selectTool', params: { tool: 'select' } }` | When non-select tool active | Esc |
 
@@ -160,12 +161,14 @@ Organized by category. For each shortcut:
 
 **`toggleSnap` greenfield (audit Issue #14):** snap is a UI-layer concern (timeline viewport snapping during drag/trim/move). Spec 01's `TimelineManager` interface does not have a `toggleSnap` method. This spec therefore routes `toggleSnap` to `uiStore.timeline.toggleSnap()` (Zustand) — see §8.3 resolver + §12 cross-reference. The flag is 📝 NEW greenfield on the UI store; spec 01 may absorb it in a future revision. `toggleRipple` is NOT greenfield — `engine.command.isRippleEnabled` IS on EditorCore (spec 01 §3.1 line 215).
 
+**R-key resolution (Round 15 amendment, A6):** `R` selects the ripple **TOOL** (`selectTool {tool:'ripple'}`, matching spec 18 §4.5's tool inventory — spec 15 §4.3.45's enum member); ripple **MODE** — the global editing pref that makes delete/insert/trim ops ripple — is NOT a tool: it rides `Option+R` above (or a transport-cluster toggle in 18 §4.5) and persists as `TimelineViewState.rippleMode` (spec 09 §3.1 — a view-level UI pref, both homes stated: ⌥R is the binding, `rippleMode` is the stored state). This collapses the three prior claimants: 16 §3.2's old `R` = mode toggle, 18 §4.5's ripple tool, and spec 15 §13.5's registry example mapping `R` → `selectTool razor` (that example row is corrected by this resolution — razor is `B` per §3.2; the 15-side text fix rides the R15 spec pass). The mock's binding (`R` → `setTool('ripple')`) implements this form.
+
 ### 3.3 Selection
 
 | Key | Action | EngineCommand | Context | FCP equiv |
 |---|---|---|---|---|
-| `Tab` | Select next clip (timeline order) | `{ type: 'selectElements', params: { elements: [<next>], mode: 'replace' } }` | Always | Tab |
-| `Shift+Tab` | Select previous clip | `{ type: 'selectElements', params: { elements: [<prev>], mode: 'replace' } }` | Always | Shift+Tab |
+| `Tab` | Select next clip (timeline order) | `{ type: 'selectElements', params: { elements: [<next>], mode: 'replace' } }` | Timeline region focused (N11) | Tab |
+| `Shift+Tab` | Select previous clip | `{ type: 'selectElements', params: { elements: [<prev>], mode: 'replace' } }` | Timeline region focused (N11) | Shift+Tab |
 | `Cmd+A` | Select all clips on focused track | `{ type: 'selectElements', params: { elements: <allOnTrack>, mode: 'replace' } }` | When track focused | Cmd+A |
 | `Cmd+Shift+A` | Select all clips in timeline | `{ type: 'selectElements', params: { elements: <all>, mode: 'replace' } }` | Always | Cmd+Shift+A |
 | `Escape` | Deselect all | `{ type: 'selectElements', params: { elements: [], mode: 'replace' } }` | Always (when no tool override) | Esc |
@@ -181,6 +184,8 @@ Organized by category. For each shortcut:
 
 **Spatial-neighbor resolution:** `<above>`, `<below>`, `<next>`, `<prev>` are computed by the resolver (not by the shortcut handler) by querying `engine.timeline.getElementsInTrack({ trackId })` and finding the element whose `[startTime, startTime+duration)` interval overlaps `<currentTime>`. If multiple clips overlap the playhead on the target track, the nearest clip *edge* wins. The resolution rules are part of the `EngineCommandResolver` contract (§8.3), not the keyboard handler — so tests can exercise them directly.
 
+**(Round 15 registration, C2 extension):** `Shift+Up`/`Shift+Down` (add clip above/below), `Cmd+Shift+Up`/`Cmd+Shift+Down` (move clips between tracks), and `F` (find-playhead) are **implemented-pending** in the mock (`useShortcuts.ts`'s ArrowUp/Down branch covers single-level track focus only) — the §3.3 rows above STAND as spec; the deviation is registered in the C-ledger (SPEC-REVISION-CANDIDATES §E.3), not amended.
+
 ### 3.4 Editing Ops
 
 | Key | Action | EngineCommand | Context | FCP equiv |
@@ -191,17 +196,17 @@ Organized by category. For each shortcut:
 | `S` | Split at playhead (alt, single-key) | `{ type: 'split', params: { time: <currentTime>, trackIds: null } }` | Always (alt binding) | S |
 | `Q` | Split + delete left half (ripple-close left) | `{ type: 'splitAndRemove', params: { time: <currentTime>, side: 'left', ripple: true } }` | When clip under playhead | Q |
 | `W` | Split + delete right half (ripple-close right) | `{ type: 'splitAndRemove', params: { time: <currentTime>, side: 'right', ripple: true } }` | When clip under playhead | W |
-| `[` | Trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', delta: <trimDelta>, ripple: false } }` | When clip selected | [ |
-| `]` | Trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', delta: <trimDelta>, ripple: false } }` | When clip selected | ] |
-| `Option+[` | Ripple-trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', delta: <trimDelta>, ripple: true } }` | When clip selected | Option+[ |
-| `Option+]` | Ripple-trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', delta: <trimDelta>, ripple: true } }` | When clip selected | Option+] |
+| `[` | Trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', delta: <trimDelta>, ripple: false } }` | When clip selected or under playhead (N15) | [ |
+| `]` | Trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', delta: <trimDelta>, ripple: false } }` | When clip selected or under playhead (N15) | ] |
+| `Option+[` | Ripple-trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', delta: <trimDelta>, ripple: true } }` | When clip selected or under playhead (N15) | Option+[ |
+| `Option+]` | Ripple-trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', delta: <trimDelta>, ripple: true } }` | When clip selected or under playhead (N15) | Option+] |
 | `,` | Slip left 1 frame (source-window shift) | `{ type: 'slip', params: { elementId: <primarySelection>, delta: -4000 } }` | When clip selected, slip tool active | , |
 | `.` | Slip right 1 frame | `{ type: 'slip', params: { elementId: <primarySelection>, delta: 4000 } }` | When clip selected, slip tool active | . |
 | `Shift+,` | Slip left 10 frames | `{ type: 'slip', params: { elementId: <primarySelection>, delta: -40000 } }` | When clip selected | Shift+, |
 | `Shift+.` | Slip right 10 frames | `{ type: 'slip', params: { elementId: <primarySelection>, delta: 40000 } }` | When clip selected | Shift+. |
 | `Delete` | Delete selected (no ripple, leaves gap) | `{ type: 'delete', params: { elements: <selection>, ripple: false } }` | When clip selected | Delete |
-| `Backspace` | Ripple delete (closes gap) | `{ type: 'delete', params: { elements: <selection>, ripple: true } }` | When clip selected | Shift+Delete |
-| `Cmd+Delete` | Ripple delete (alt, matches §19 recommendation) | `{ type: 'delete', params: { elements: <selection>, ripple: true } }` | When clip selected | Cmd+Delete |
+| `Backspace` | Delete selection (alias of `Delete`, no ripple) | `{ type: 'delete', params: { elements: <selection>, ripple: false } }` | When clip selected | Delete |
+| `Shift+Delete` | Ripple delete (closes gap) — the only ripple-delete chord | `{ type: 'delete', params: { elements: <selection>, ripple: true } }` | When clip selected | Shift+Delete |
 | `Cmd+X` | Cut (copy + ripple delete) | `{ type: 'cut', params: { elements: <selected> } }` | When clip selected | Cmd+X |
 | `Cmd+C` | Copy (to clipboard) | `{ type: 'copy', params: { elements: <selected> } }` | When clip selected | Cmd+C |
 | `Cmd+V` | Paste at playhead (insert mode) | `{ type: 'paste', params: { atTime: <currentTime>, ripple: true } }` | Always | Cmd+V |
@@ -214,6 +219,10 @@ Organized by category. For each shortcut:
 | `Cmd+Option+L` | Toggle A/V link on selected | `{ type: 'toggleAVLink', params: { elementIds: <selected> } }` | When clip selected | Cmd+Option+L |
 
 **Slip vs. nudge:** Slip and nudge are both "delta on a clip" but operate on different fields. Slip shifts the *source* window (`sourceStart` / `sourceEnd`) while keeping timeline position fixed. Nudge shifts *timeline position* (`startTime`) while keeping the source window fixed. Both use `,` / `.` as keys — disambiguated by the active tool: **slip tool active → slip**, **any other tool → nudge**. See §6 conflict table.
+
+**Delete-chord resolution (Round 15 amendment, A1):** `Delete`/`Backspace` are aliases for plain delete (no ripple); `Shift+Delete` (⇧⌫) is the ONLY ripple-delete chord; the `Cmd+Delete` alt row is dropped (18 §4.9's clip-menu row — Ripple delete `⇧⌫` — already matched this form). This resolves the 16 §3.4 vs 18 §4.9 conflict (the mock implements 18's form: `useShortcuts.ts`'s Delete/Backspace branch; cheat-sheet row `clips-ripple-delete` = `⇧Delete`).
+
+**Trim-to-playhead targeting (Round 15 amendment, N15):** `[` / `]` (and their `Option+` ripple variants) target **all selected elements** when ≥1 is selected; with **no selection**, the clip under the playhead on the **focused track** (fallback: main track); **ACTIVE scene only** — no cross-scene fan-out. Multi-select fan-out issues one `trim` per element, batched per spec 15 §7. The mock's R13 P1 fix is the reference contract.
 
 ### 3.5 Track Ops
 
@@ -256,15 +265,17 @@ Organized by category. For each shortcut:
 
 | Key | Action | EngineCommand | Context | FCP equiv |
 |---|---|---|---|---|
-| `M` | Add marker at playhead (or edit existing if one is at playhead) | `{ type: 'toggleBookmark', params: { time: <currentTime> } }` | Always | M |
+| `M` | Add marker at playhead (always adds — see the N8 note below) | `{ type: 'addMarker', params: { time: <currentTime> } }` | Always | M |
 | `Shift+M` | Delete marker at playhead | `{ type: 'removeBookmark', params: { time: <currentTime> } }` | When marker at playhead | Shift+M |
 | `Option+M` | Edit marker (open dialog, focus name field) | (UI only — opens marker dialog via uiStore; EngineCommand `updateBookmark` fires on save) | When marker at playhead | (none) |
 | `Cmd+Option+M` | Delete all markers | `{ type: 'batch', label: 'Delete all markers', commands: ... }` | Always | (none) |
-| `Option+Shift+M` | Edit marker color (cycle through 8 colors) | `{ type: 'updateBookmark', params: { time: <currentTime>, updates: { color: <nextColor> } } }` | When marker at playhead | (none) |
+| `Option+Shift+M` | Add marker at playhead with cycled color (next in the 8-color palette) | `{ type: 'addMarker', params: { time: <currentTime>, color: <nextColor> } }` | Always | (none) |
 | `Up` (in marker nav mode) | Jump to previous marker | `{ type: 'seekToMarker', params: { direction: -1 } }` | Always | Cmd+Up |
 | `Down` (in marker nav mode) | Jump to next marker | `{ type: 'seekToMarker', params: { direction: 1 } }` | Always | Cmd+Down |
 
 **Marker color palette:** 8 colors — red, orange, yellow, green, blue, purple, pink, gray. Cycle order matches FCP. Color is stored on the bookmark (`Bookmark.color: string`).
+
+**M-key behavior (Round 15 amendment, N8 — DECIDED):** the mock's proven behavior is adopted: `M` **always adds** a marker at the playhead — there is no toggle/edit-at-playhead semantics (the v1.0 row's "or edit existing if one is at playhead" was undefined behavior: one gesture, one meaning, and the always-add form is pinned by the mock's tests). Editing an existing marker is `Option+M`'s dialog; deleting is `Shift+M` — the three verbs stay three keys. `Option+Shift+M` likewise **always adds** (with the next palette color) rather than cycling an existing marker's color. Command verbs on the two amended rows are aligned to spec 15 §4.3.49's shipped `addMarker` (spec 15 wins per §0.2); the remaining bookmark verbs (`toggleBookmark`/`removeBookmark`/`updateBookmark`) retire into the marker family via the A2 unification (09-side R15 pass).
 
 ### 3.8 View / Zoom
 
@@ -519,7 +530,7 @@ await page.evaluate(async (cmd) => {
 
 Track focus and selection are **orthogonal**:
 
-- **Track focus** determines which track receives `Cmd+A`, mute/solo/lock ops, and `Tab` navigation. There is exactly one focused track at a time (default: topmost track).
+- **Track focus** determines which track receives `Cmd+A`, mute/solo/lock ops, and `Tab` navigation. There is exactly one focused track at a time — **initialized to the TOPMOST track on scene load/switch** (Round 15 amendment, N11: the mock initialized focus to null and invented per-key fallbacks; the explicit init rule removes them — every fallback site reads the initialized focus instead).
 - **Selection** is the set of selected clips, which can span multiple tracks. `Tab` walks the focused track's clips in time order; `Up`/`Down` move the selection to the clip on the adjacent track *at the same time*.
 
 This separation lets a test do "select all on track 2, then nudge up to track 1" via: `Cmd+Down` (focus track 2) → `Cmd+A` (select all on track 2) → `Cmd+Shift+Up` (move selected up to track 1).
@@ -556,7 +567,7 @@ Some keys have multiple meanings depending on context. **Every conflict is resol
 | 9 | `Cmd+Shift+F` | Toggle fullscreen preview | Open Scene Browser (FreeCut) | **`Cmd+Shift+F` = fullscreen preview** (browser context). Scene Browser is `Cmd+Option+B`. | §3.8 |
 | 10 | `Cmd+L` | Lock focused track (this spec) | Loop playback toggle (some editors) | **`Cmd+L` = lock track.** Loop playback is `Cmd+Shift+G` (avoids Cmd+L entirely). | §3.5 |
 | 11 | `Cmd+1`–`Cmd+9` | Switch workspace (§3.8) | Apply effect preset (§3.11, no Cmd) | **Workspace = `Cmd+1`–`Cmd+9`.** Effect presets = `1`–`9` (no modifier). No conflict — different modifiers. | §3.8 vs §3.11 |
-| 12 | `Tab` | Select next clip (timeline focused) | Cycle focus in effects panel (effects panel focused) | **Panel focus determines op.** Effects panel focused → cycle effects; otherwise → select next clip. | §3.3 vs §3.11 |
+| 12 | `Tab` | Select next clip (timeline region focused) | Cycle focus in effects panel (effects panel focused) | **Panel focus determines op.** Effects panel focused → cycle effects; timeline region focused → select next clip. (Round 15 amendment, N11 — §3.3's context column now reads "Timeline region focused", reconciling its old "Always" with this row.) | §3.3 vs §3.11 |
 | 13 | `Cmd+Option+L` | Toggle A/V link (when clip selected) | Unlock all tracks (always) | **`Cmd+Option+L` = A/V link toggle (clip-context priority).** Unlock-all-tracks reassigned to `Cmd+Shift+Option+L` (4-key chord). | §3.4 vs §3.5 (audit Issue #8 fix) |
 | 14 | `Cmd+Option+E` | Export current frame (always) | Reset all effects (when clip selected) | **`Cmd+Option+E` = export frame (Always-active primary).** Reset-all-effects reassigned to `Cmd+Shift+Option+E`. | §3.9 vs §3.11 (audit Issue #8 fix) |
 | 15 | `Cmd+Option+M` | Delete all markers (always) | Unmute all tracks (always) | **`Cmd+Option+M` = delete all markers.** Unmute-all-tracks reassigned to `Cmd+Shift+Option+M`. | §3.7 vs §3.5 (audit Issue #8 fix) |
@@ -1469,7 +1480,7 @@ The `ShortcutMap` is a `Map<ShortcutKey, ShortcutDescriptor[]>` (note: array of 
 - **User overrides** (v2) — merged over default from `localStorage`.
 - **Context predicates** — each descriptor carries a `contextPredicate(ctx)` that returns `true` if the shortcut is active in the current context (selected clip exists, tool active, panel focused, etc.). Predicates receive the full `ResolverContext` (engine + uiStore) so they can evaluate UI-layer context (keyframe panel focused, color page active, etc.).
 - **Allow-in-text-input flag** — `Cmd+` shortcuts set this to `true`; single-key shortcuts set to `false`.
-- **Multi-descriptor-per-key support** — when two shortcuts share a key (e.g., `K` = pause / add-keyframe, `R` = ripple-toggle / reset-color-grade), the `register()` call appends a second descriptor. At lookup time, the handler iterates the descriptor array and picks the first whose `contextPredicate(ctx)` returns `true`. Direct conflicts (two descriptors both `Always` active) are flagged as errors at register time.
+- **Multi-descriptor-per-key support** — when two shortcuts share a key (e.g., `K` = pause / add-keyframe, `R` = ripple-tool / reset-color-grade), the `register()` call appends a second descriptor. At lookup time, the handler iterates the descriptor array and picks the first whose `contextPredicate(ctx)` returns `true`. Direct conflicts (two descriptors both `Always` active) are flagged as errors at register time.
 
 > **Audit fix (Issue #8):** The original spec 16 used `Map<ShortcutKey, ShortcutDescriptor>` and threw on any duplicate registration. That invariant was incompatible with the Appendix A bindings that legitimately share a key across disjoint contexts (e.g., `K` = pause when keyframe panel NOT focused vs. `K` = add-keyframe when keyframe panel focused). The refactor to `Map<ShortcutKey, ShortcutDescriptor[]>` resolves this without losing the dev-time invariant: `register()` still throws for true conflicts (two descriptors both `Always`), but allows context-disjoint duplicates.
 
@@ -1568,7 +1579,7 @@ export class ShortcutMap {
       contextPredicate: (ctx) => ctx.uiStore.keyframes.isPanelFocused(),
       fcpEquiv: 'K',
     });
-    // ... ~178 more entries mirroring §3 (180 total — see Appendix A)
+    // ... ~178 more entries mirroring §3 (181 total — see Appendix A)
     return m;
   }
 
@@ -1966,7 +1977,7 @@ Spec 05 §19 documented the *union* of FreeCut + OpenCut-classic shortcuts as a 
 | `alt+c` (FreeCut) = split at cursor | `B` (razor) + click = split at click | Razor tool + click is more discoverable than a chord |
 | (none) | `Cmd+Shift+B` = split all tracks | New — addresses test need for "split everything at playhead" |
 
-**Net change:** this spec defines **180 bindings** across 13 categories (~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings — see Appendix A footer for the collapsing rule) vs §19's ~50, with explicit conflict resolution for all 12 disambiguation cases (§6) plus 6 audit-flagged direct conflicts resolved in §6.1 #13–#18. §19's union table remains useful as a *reference* for "what do FCP/Premiere/FreeCut/OpenCut-classic do" — this spec is the *normative* definition for our NLE.
+**Net change:** this spec defines **181 bindings** across 13 categories (180 at v1.0 + `Option+R` from the R15/A6 amendment; ~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings — see Appendix A footer for the collapsing rule) vs §19's ~50, with explicit conflict resolution for all 12 disambiguation cases (§6) plus 6 audit-flagged direct conflicts resolved in §6.1 #13–#18. §19's union table remains useful as a *reference* for "what do FCP/Premiere/FreeCut/OpenCut-classic do" — this spec is the *normative* definition for our NLE.
 
 ---
 
@@ -2097,11 +2108,12 @@ kbd-tool-zoom               | Z                  | Zoom tool                    
 kbd-tool-trim               | T                  | Trim tool                          | tools     | Always
 kbd-tool-slip               | Y                  | Slip tool                          | tools     | Always
 kbd-tool-slide              | U                  | Slide tool                         | tools     | Always
-kbd-toggle-ripple           | R                  | Ripple mode toggle                 | tools     | Always
+kbd-tool-ripple             | R                  | Ripple tool                        | tools     | Always
+kbd-toggle-ripple-mode      | Option+R           | Ripple mode toggle (UI pref)       | tools     | Always
 kbd-toggle-snap             | N                  | Snap toggle                        | tools     | Always
 kbd-tool-escape             | Escape             | Return to select tool              | tools     | When non-select tool active
-kbd-select-next             | Tab                | Select next clip                   | selection | Always
-kbd-select-prev             | Shift+Tab          | Select previous clip               | selection | Always
+kbd-select-next             | Tab                | Select next clip                   | selection | Timeline region focused
+kbd-select-prev             | Shift+Tab          | Select previous clip               | selection | Timeline region focused
 kbd-select-add-next         | Option+Tab         | Add next clip to selection         | selection | Always
 kbd-select-add-prev         | Option+Shift+Tab   | Add previous clip to selection     | selection | Always
 kbd-select-all-track        | Cmd+A              | Select all on focused track       | selection | When track focused
@@ -2121,17 +2133,17 @@ kbd-split-all               | Cmd+Shift+B        | Split all tracks at playhead 
 kbd-split-alt               | S                  | Split at playhead (alt binding)     | editing   | Always
 kbd-split-remove-left       | Q                  | Split + delete left half           | editing   | When clip under playhead
 kbd-split-remove-right      | W                  | Split + delete right half          | editing   | When clip under playhead
-kbd-trim-start-to-playhead  | [                  | Trim clip start to playhead        | editing   | When clip selected
-kbd-trim-end-to-playhead    | ]                  | Trim clip end to playhead          | editing   | When clip selected
-kbd-ripple-trim-start       | Option+[          | Ripple-trim clip start             | editing   | When clip selected
-kbd-ripple-trim-end         | Option+]          | Ripple-trim clip end               | editing   | When clip selected
+kbd-trim-start-to-playhead  | [                  | Trim clip start to playhead        | editing   | When clip selected or under playhead
+kbd-trim-end-to-playhead    | ]                  | Trim clip end to playhead          | editing   | When clip selected or under playhead
+kbd-ripple-trim-start       | Option+[          | Ripple-trim clip start             | editing   | When clip selected or under playhead
+kbd-ripple-trim-end         | Option+]          | Ripple-trim clip end               | editing   | When clip selected or under playhead
 kbd-slip-left-1             | ,                  | Slip left 1 frame                  | editing   | When clip selected, slip tool
 kbd-slip-right-1            | .                  | Slip right 1 frame                 | editing   | When clip selected, slip tool
 kbd-slip-left-10            | Shift+,            | Slip left 10 frames                | editing   | When clip selected
 kbd-slip-right-10           | Shift+.            | Slip right 10 frames               | editing   | When clip selected
 kbd-delete                  | Delete             | Delete (no ripple)                 | editing   | When clip selected
-kbd-ripple-delete           | Backspace          | Ripple delete                      | editing   | When clip selected
-kbd-ripple-delete-alt       | Cmd+Delete         | Ripple delete (alt)                | editing   | When clip selected
+kbd-delete-alias            | Backspace          | Delete selection (alias of Delete) | editing   | When clip selected
+kbd-ripple-delete           | Shift+Delete       | Ripple delete                      | editing   | When clip selected
 kbd-cut                     | Cmd+X              | Cut (copy + ripple delete)         | editing   | When clip selected
 kbd-copy                    | Cmd+C              | Copy                                | editing   | When clip selected
 kbd-paste-insert            | Cmd+V              | Paste at playhead (insert)         | editing   | Always
@@ -2250,7 +2262,7 @@ kbd-context-help            | F1                 | Contextual help              
 kbd-close-modal             | Escape             | Close modal / cancel                | help      | When modal open
 ```
 
-**Total bindings: 180 rows** (including alt bindings and per-preset rows). Each row maps 1:1 to a test in `tests/e2e/keyboard.spec.ts`. Unique actions: **~110** (after parameterizing: effect presets 1–9 counted as 1 unique action, effect toggles 1–9 as 1, panel toggles as 1, workspace switches as 1, alt bindings merged with primaries — collapsing rule: 180 → ~150 → ~120 → ~110). This 180 / ~110 split is the canonical binding count referenced in §0 TL;DR, §16 test matrix, and §11 net-change summary.
+**Total bindings: 181 rows** (180 at v1.0 + `Option+R` from the R15/A6 amendment; the A1 delete-family re-row is count-neutral — Backspace-alias + `Shift+Delete`-ripple replace Backspace-ripple + `Cmd+Delete`-ripple-alt, the latter dropped). Each row maps 1:1 to a test in `tests/e2e/keyboard.spec.ts`. Unique actions: **~110** (after parameterizing: effect presets 1–9 counted as 1 unique action, effect toggles 1–9 as 1, panel toggles as 1, workspace switches as 1, alt bindings merged with primaries — collapsing rule: 181 → ~150 → ~120 → ~110). This 181 / ~110 split is the canonical binding count referenced in §0 TL;DR, §16 test matrix, and §11 net-change summary (spec 15 §13.5's "180 bindings" citation predates the R15 pass — flagged for the 15-side sync).
 
 ---
 
@@ -2300,12 +2312,12 @@ For implementers. Each `EngineCommand` type maps to a `Command` subclass (or dir
 
 ## 16. Appendix C — Test Matrix
 
-Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status column tracks implementation. **Counts aligned to Appendix A's 180-row canonical registry** (see Appendix A footer for the collapsing rule that derives ~110 unique actions).
+Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status column tracks implementation. **Counts aligned to Appendix A's 181-row canonical registry** (see Appendix A footer for the collapsing rule that derives ~110 unique actions).
 
 | Category | Tests planned | Tests written | Status |
 |---|---|---|---|
 | Playback (§3.1) | 22 | 0 | pending Phase 2 |
-| Tools (§3.2) | 10 | 0 | pending Phase 2 |
+| Tools (§3.2) | 11 | 0 | pending Phase 2 |
 | Selection (§3.3) | 16 | 0 | pending Phase 2 |
 | Editing (§3.4) | 26 | 0 | pending Phase 2–3 |
 | Track ops (§3.5) | 13 | 0 | pending Phase 3 |
@@ -2317,9 +2329,9 @@ Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status co
 | Effects (§3.11) | 22 | 0 | pending Phase 4 |
 | Keyframes (§3.12) | 20 | 0 | pending Phase 5 |
 | Help (§3.13) | 5 | 0 | pending Phase 6 |
-| **Total** | **180** | **0** | — |
+| **Total** | **181** | **0** | — |
 
-(The 180 count is the canonical Appendix A row count — see §0 TL;DR. Tests cover all 180 rows, with effect presets (1–9) and effect toggles (1–9) parameterized into 2 unique-action test groups (9 + 9 = 18 rows → 2 parameterized tests). Adjusted unique-action test count: ~110. Multi-tap JKL combos (`J`×2, `J`×3, `L`×2, `L`×3, `K`+`J`, `K`+`L`) are tested via the base `J`/`L`/`K` testIds with timed multi-press sequences — see §9.2 JKL shuttle recipe and Appendix A scope note.)
+(The 181 count is the canonical Appendix A row count — see §0 TL;DR. Tests cover all 181 rows, with effect presets (1–9) and effect toggles (1–9) parameterized into 2 unique-action test groups (9 + 9 = 18 rows → 2 parameterized tests). Adjusted unique-action test count: ~110. Multi-tap JKL combos (`J`×2, `J`×3, `L`×2, `L`×3, `K`+`J`, `K`+`L`) are tested via the base `J`/`L`/`K` testIds with timed multi-press sequences — see §9.2 JKL shuttle recipe and Appendix A scope note.)
 
 ---
 

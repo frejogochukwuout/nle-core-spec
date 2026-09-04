@@ -4768,7 +4768,7 @@ test('every command type has a dispatcher case', () => {
 > - **`ElementJSON`** — canonical in spec 09 §3.1. The wire-protocol's `InsertCommand.params.element` (§4.3.9 `ElementSpec`) and `TrimCommand`'s trim-edge dispatcher description use field names `trimStart` / `trimEnd`; spec 09's canonical `ElementJSON` uses `sourceStart` / `sourceDuration`. See spec 09 §3.1 for the canonical type.
 > - **`MediaStorageRef`** — canonical in spec 09 §3.1. Spec 09 defines `type: 'opfs' | 'remote'` with required `path`. The wire-protocol's `ImportMediaCommandSchema.params.asset.storage` (§11.1) uses `kind: 'opfs' | 'url' | 'inline'` with optional `path`/`url` — a more flexible alias; spec 09 is canonical.
 > - **`MediaColorInfo`** — canonical in spec 09 §3.1. Spec 09 requires `primaries`, `transfer`, `matrix`, `range`. The wire-protocol's `ImportMediaCommandSchema.params.asset.colorInfo` (§11.1) only carries `primaries` and `transfer` (drops `matrix`/`range` — those are derived at probe time). Spec 09 is canonical; the wire-protocol's slimmer shape is a command-input convenience.
-> - **`Marker` / marker storage location** — canonical in spec 09 §3.1. Spec 09 stores `markers: Marker[]` at the **project level** on `ProjectJSON`. Earlier drafts of this spec (§4.3.49 AddMarkerCommand) incorrectly described markers as "stored at the scene level"; the canonical location is the project-level `markers` array. The mapping for `AddMarkerCommand` / `DeleteMarkerCommand` / `UpdateMarkerCommand` should update the project-level array (e.g., via a greenfield `engine.project.updateMarkers(...)`), not `engine.timeline.updateTracks(...)` as the §4.2 table's shorthand suggests. See spec 09 §3.1 for the canonical `Marker` type and storage location.
+> - **`Marker` / marker storage location** — canonical in spec 09 §3.1. **(Round 15 amendment, resolving this note's historical claim):** markers are now **PER SCENE** — `SceneJSON.markers: Marker[]` with one unified type `Marker {id, time, label?, color?}` (the A2 unification absorbs the former Bookmark shape; project-level markers are retired). The earlier R7 note here asserted the project-level array as canonical — that reading is superseded by the A2 ruling (mock + opencut-timeline both store per-scene; OT's bookmark family is the wire surface that 15 §13.15 renames into `addMarker/updateMarker/deleteMarker`). The `AddMarkerCommand` / `DeleteMarkerCommand` / `UpdateMarkerCommand` mappings target the ACTIVE scene's markers (via the scene-scoped editing core), not a project-level array. See spec 09 §3.1 (R15) for the canonical `Marker` type and storage location.
 
 ### 13.4 Spec 12 (testing strategy)
 
@@ -4779,7 +4779,7 @@ test('every command type has a dispatcher case', () => {
 
 ### 13.5 Spec 16 (keyboard shortcuts — shipped, TEST-03)
 
-Every keyboard shortcut maps to an `EngineCommand` — spec 16 §3 (180 bindings across 13 categories) is that table. Spec 16's §0.2 declares this spec's union canonical ("where this spec and spec 15 both define a command name, spec 15 wins"), and its §8.3 resolver fills `<runtime>` params (currentTime, selectedIds, focusedTrackId) before calling `engine.command.apply()`. Spec 16 also defines UI-layer extensions (viewport zoom, panel focus, snap toggle — routed to the UI store, not `apply()`); see spec 16 §0.2 and spec 18 (UI shell) for the dispatch split. Export bindings (`Cmd+E` etc.) dispatch the §4.3.74-76 commands.
+Every keyboard shortcut maps to an `EngineCommand` — spec 16 §3 (**181 bindings** across 13 categories, per its Round-15 census sync) is that table. Spec 16's §0.2 declares this spec's union canonical ("where this spec and spec 15 both define a command name, spec 15 wins"), and its §8.3 resolver fills `<runtime>` params (currentTime, selectedIds, focusedTrackId) before calling `engine.command.apply()`. Spec 16 also defines UI-layer extensions (viewport zoom, panel focus, snap toggle — routed to the UI store, not `apply()`); see spec 16 §0.2 and spec 18 (UI shell) for the dispatch split. Export bindings (`Cmd+E` etc.) dispatch the §4.3.74-76 commands.
 
 The shortcut registry (realized as spec 16 §3 + its Appendix A flat registry) is a `{ shortcut: string, command: EngineCommand }` table. Example:
 
@@ -4790,7 +4790,7 @@ const shortcutRegistry = {
   'Cmd+Shift+Z': { type: 'redo' },
   'Cmd+C':       { type: 'copy', params: { elements: '<selection>' } },
   'Cmd+V':       { type: 'paste', params: { atTime: '<playhead>' } },
-  'R':           { type: 'selectTool', params: { tool: 'razor' } },
+  'R':           { type: 'selectTool', params: { tool: 'ripple' } },  // A6 ruling (R15): R = ripple TOOL; ⌥R toggles ripple mode. B is the razor key per 16 §3.2.
   // ... etc
 };
 ```

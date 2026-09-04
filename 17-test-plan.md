@@ -1,7 +1,7 @@
 # 17 — Overall Test Plan: Methodology, Test Matrix, Per-Module Template
 
 **Stream:** Test methodology (umbrella)
-**Status:** v1.1 (Round 8 — §13A added: facet coverage matrix, NFR verification recipes, a11y spot suite, absorbed-semantics fixtures, wire-protocol conformance suite, seam property tests, UI-shell v1.1 facet tests; §2.5 gains the error-path-census + NFR-recipe rules). Supersedes the methodology portions of `12-testing-strategy.md`
+**Status:** v1.2 (Round 15 — §17A added: the app-tier roof suites (Decision 17 / ARCH-R15 §3 — S1-S5 table, regression-continuity law, CI composition, pin-lockset assertion); §13A.7 re-tier row re-baselined to the R15 verified counts (engine 274+265+318; OT 423; WDC 721; mock 596) + three new facet rows; §13A.5 audio-seam citation corrected post-M1.6 (bridge + its tests live in nle-engine); §18.5 header re-baselined. v1.1 (Round 8 — §13A added: facet coverage matrix, NFR verification recipes, a11y spot suite, absorbed-semantics fixtures, wire-protocol conformance suite, seam property tests, UI-shell v1.1 facet tests; §2.5 gains the error-path-census + NFR-recipe rules). Supersedes the methodology portions of `12-testing-strategy.md`
 **Spec file:** `17-test-plan.md`
 **Owner:** Test architecture (this stream)
 **Consumers:** Every per-spec author (01–12), CI engineering, QA lead, implementation team
@@ -2271,7 +2271,7 @@ Properties (fast-check, 1,000 runs each in the nightly, 100 in PR-scope):
 - **Never-loss invariant**: total element count is preserved through projection (the cheap oracle that catches silent drops — the engine's pre-4D-A persistence silently dropped image/adjustment clips; this property is the regression test for that class)
 - **No-readback invariant**: no editing op consumes engine-state output (a static-architecture check: the editing-wire dispatcher's dependency graph contains no path from the projection back into SceneTracks)
 - **Taxonomy warning path**: 5-kind TrackType input maps to the 3-kind wire taxonomy with `text/graphic/effect → overlay` + a warning recorded (never data loss, never a crash)
-- **Audio-domain seam properties (spec 20 §5, web-daw-core's suites as the executable reference)**: merge laws (same-media adjacent segments merge phase-continuously; fades block; rate boundaries never merge), null-parity ≥60 dB offline-vs-realtime, canonical send/return (no dry leak), pan law −3 dB at strip level — pinned by `nle-audio-core-derisk.test.ts` H0-H7 + `nle-bridge.test.ts` C1/H8-H12 (737/737)
+- **Audio-domain seam properties (spec 20 §5, web-daw-core's suites as the executable reference)**: merge laws (same-media adjacent segments merge phase-continuously; fades block; rate boundaries never merge), null-parity ≥60 dB offline-vs-realtime, canonical send/return (no dry leak), pan law −3 dB at strip level — pinned by WDC's `nle-audio-core-derisk.test.ts` (H0-H7 incl. H3, **721/721 — Round 15 re-run**) + the bridge suite NOW AT nle-engine `tests/vitest/nle-bridge.test.ts` (37 tests, C1/H8-H17; relocated verbatim with the bridge per WDC's M1.6 — the old in-WDC nle-bridge citation is superseded)
 
 ### 13A.6 UI shell v1.1 facet tests (T3 — spec 18 v1.1)
 
@@ -2319,7 +2319,10 @@ Every facet added or materially amended in Rounds 7-8, with its verification. (L
 | NFR: a11y floor | 00 §6A, 18 §11 | NF | T3 | §13A.2 | zero critical/serious + spot assertions |
 | NFR: error-path discipline | 00 §6A | NF | T1 | §13A.4.2 | census green |
 | NFR: persistence robustness | 00 §6A, 09 §11 | NF | T1 | §13A.1 fixture battery | hydrate-with-warnings, never crash |
-| Reference-repo re-tiering (engine 202, OT 297, web-daw-core 737) | 19 §12, 00 D14 | NF (process) | — | all three suites re-tier per §2.1 (engine 202 → T1/T2; OT 297 → T1/T2/T3; web-daw-core 737 → T1/T2 with null-test gates as the audio T1); count discipline (declared == scraped) | zero count drift |
+| Projector parity vs engine-native Timeline oracle (Round 15) | 00 D12.1, 14 §2.1, 19 §2.4.1 | F | T2 | §17A S4: parity corpus, pixel-exact vs the engine `Timeline` oracle — primary venue is ENGINE CI (its ~8-min real-WebGPU milestone runner + vitest); app S4 nightly adds the Xvfb+SwiftShader venue | parity green on the corpus (audio + stills) |
+| Event-staircase completeness + mapping (Round 15) | 15 §9, 18 §5 | F | T1 | §17A S1/S2 rows: every spec-15 §9 `EngineEvent` emitted-or-justified; engine-name↔spec-name mapping register (a C-register row, same discipline as C7); playhead mirror, export progress, meters rows asserted | zero unmapped events; S2 event rows green |
+| Routing-dispatch completeness (78-member disposition) (Round 15) | 15 §4.1A | F | T1 + mechanical | §17A S5 battery: routing-disposition table check — every implemented row cites a module pin SHA; every DEFERRED row dispatches typed `NOT_IMPLEMENTED` + cites a phase or signed deferral; exhaustive-switch compiles | zero unowned union members; the switch is honest |
+| Reference-repo re-tiering (Round 15: engine 274+265+318, OT 423, WDC 721, ui-mock 596) | 19 §12, 00 D14 | NF (process) | — | re-baselined to the **Round 15 verified counts**: engine 274 vitest (237 engine + 37 bridge) + 265 browser milestone rows + 318 probes → T1/T2 (its CI runs 3 jobs — the re-tier is de facto done engine-side); OT 423 (303 in-page + 120 real-mouse) → T1/T2/T3 (the real-mouse phases ARE Tier-3-grade, in-repo); WDC 721 → T1 (null-test gates are the audio T1; 1 CI gate job); ui-mock 596 → **T1 local** (no CI workflow — ported into the app at A3, retires as a repo after A7); count discipline (declared == scraped) | zero count drift |
 
 **Coverage-gap check (the enforcement rule):** a spec facet introduced by any future round must land in this matrix (or §3.1) in the same PR that introduces it — the §14.4 author checklist gains this as step 0. The 00-master §6A NFR table and this matrix cross-reference each other bidirectionally; neither may gain a row without the other.
 
@@ -2687,6 +2690,33 @@ For each spec 01 through 12:
 
 ---
 
+## 17A. The App-Tier Suites — The Roof (Round 15, Decision 17)
+
+> This section lands ARCH-R15 §3 (Ruling 3) as canon. **The principle — four walls, one roof:** module repos keep their full gates UNDILUTED (engine: 3-job CI, 274 vitest + 265 browser rows + 318 probes; OT: 423 incl. the 120 real-mouse phases; WDC: 721 + tsc behind its `gate` job; mock: 596 + tsc, **local only — the mock has no CI and is not required to add one: it is ported into the app at A3 and retires as a repo after A7**). The app does NOT re-test module internals — with the one sanctioned exception of S3(a), which re-runs OT's real-mouse phases specifically to verify the VIEW COMPONENT in the app's host context (bundler/CSS/React), not the engine semantics. The app tests ONLY the seams and the wired whole. All counts below are the PR2-corrected figures from ARCH-R15 §3.2.
+
+### 17A.1 The five suites
+
+| Suite | Tier (this spec's naming) | What it pins | Size |
+|---|---|---|---|
+| **S1 seam contracts** | Tier-1 (vitest) | Projector laws (per 00 D12.1 + 14 §2.1 + SCOUT-A §4): timebase round-trips, transition-window translation, keyframe normalization; one-wayness of EDITING state (telemetry excluded — the event staircase is the UP seam); bus routing completeness (every union member → one home or typed `NOT_IMPLEMENTED`); event-completeness + mapping; S/G/E trackId-only invariant | ~100-140 |
+| **S2 state WYSIWYG** | Tier-1 (vitest) | Every UI path (store action → bus) vs direct `apply()` → identical state; undo/redo via wire == via store; event-suite rows (playhead mirror, export progress, meters); scene-switch preservation | ~80-120 |
+| **S3 wired shell** | Tier-3 (Playwright, real mouse) | **(a)** **view-component verification in app context**: OT's 120 real-mouse phases re-run against the app-owned `/dev/view-fixture` page replicating the `__VIEW_TEST__` contract — catches CSS cascade/preflight drift, alias breakage, React-version issues; NOT app-path integration. **(b)** **~200 mock view-state/chrome tests ported near-verbatim** (panel toggles, toasts, dialogs, geometry, keymap mirror). **(c)** **spec 18 §12 command-capture suite (~60) — THE app-path integration surface** (replaces the mock's doc-slice tests, which do not survive the store swap). **(d)** 3-5 screenshot-parity rows (timeline region vs OT `/view`) | ~380-440 total |
+| **S4 render/audio parity** | Tier-2 (Xvfb+SwiftShader per engine law — measured at A0, not asserted) | **Projector parity** vs the engine-native `Timeline` oracle, pixel-exact on the corpus (primary venue: ENGINE CI's ~8-min real-WebGPU milestone runner + vitest — see §13A.7's facet row); audio: offline parity + realtime behavioral pins (A4-v1); **the true realtime-vs-offline NULL gate is net-new rig work** (A4-v2 — the engine's CR-A #6 one-engine-per-instance guard blocks the cheap route); export smoke (m24/m26/m28/m29 patterns) | ~30-50 |
+| **S5 spec-conformance battery** | mechanical | App-layer extension of `battery_r9.py`: routing-disposition table check; testid census; keymap ledger; **pin-lockset assertion** (parse the engine's `git submodule status` at the app's engine SHA and compare against the app's OT/WDC pins — the app's pins must be ≥ the engine's and move only WITH the engine pin); gap-register freshness (every row cites a pin SHA) | ~35 checks |
+
+### 17A.2 The regression-continuity law (port-then-swap)
+
+**Every behavior pinned in a module test that assembly REWIRES must appear in the app's suites BEFORE the rewire lands** — port-then-swap, never swap-then-hope. This is OT's own pin-proven-to-fail law (a test only counts as regression insurance if it has been proven to fail) applied to assembly: the mock's ~200 ported tests precede the store swap (A3); the command-capture suite precedes the command-bus rewire; the projector parity corpus precedes any consumer re-point (A1). A rewire landing without its app-side port first is a process failure triaged as a real bug (§13.4), not a re-baseline.
+
+### 17A.3 CI composition (the roof's jobs)
+
+- **Fast lane (push):** materialize the 3 submodules (the engine ci.yml:39-53 PAT recipe, `persist-credentials: false` + `::add-mask::`) + `tsc` (~90k vendored LOC ≈ 1-2 min — measured at A0, not asserted) + **S1 + S2 + S5** (< 5 min target, measured).
+- **PR + nightly:** + **S3** (the real-mouse/wired-shell suite).
+- **Nightly:** + **S4** (the engine's Xvfb:99 + `--use-webgpu-adapter=swiftshader --enable-unsafe-swiftshader --use-vulkan=swiftshader` Chromium recipe, copied verbatim) + **HEAD-follow bump PRs** — the write-scoped credential opens a bump PR on upstream module movement and never pushes main; the one-day integration-owner bump ritual; PAT runbook written before the first rotation (read PAT spans 3 repos).
+- This composes with, and does not replace, §9's module-repo CI graph: each module repo keeps its own gates (§9.2) and the app roof adds the cross-module lanes above.
+
+---
+
 ## 18. Test Plan for This Stream (Meta)
 
 This section documents how this spec itself was tested for correctness.
@@ -2726,15 +2756,14 @@ This section documents how this spec itself was tested for correctness.
 
 ### 18.5 Code References — nle-engine (reference, NOT canon)
 
-nle-engine (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room
-FreeCut-port **in-between reference, NOT canon**. Its test reality is single-tier (one
-Playwright-driven in-app harness) — the pattern this spec's three-tier methodology corrects;
-its own audit independently recommends the same split. Where engine and spec conflict,
+nle-engine (github.com/bearachprema/nle-engine — **Round 15 re-baseline: ~52k LOC (51,968) across 58 files in `src/lib/nle/`; 274/274 vitest + 265/265 browser milestone rows (31 milestones, real-WebGPU re-run) + 318 probe checks; tsc 0; 453-name API freeze + 52-edge layer fence; review ledger closed, zero open P2**) is a clean-room
+FreeCut-port **in-between reference, NOT canon**. Its R7-era test reality was single-tier (one
+Playwright-driven in-app harness — the pattern this spec's three-tier methodology corrects; its own audit independently recommended the same split); as of Round 15 the engine's CI runs three venues (Node vitest / browser milestones / probes) — the C4 re-tiering has de facto converged engine-side, and the remaining re-tier surface is the app's (§17A). Where engine and spec conflict,
 **the spec wins**. Full reconciliation: `19-code-references.md`.
 
 | Spec 17 section | nle-engine file:line | Verified quote | Status | Note |
 |---|---|---|---|---|
-| §2.1 Tier 1 (Vitest) | `scripts/run-nle-tests.mjs:90` | `browser = await chromium.launch({` | CORRECTIVE | All 124 tests run in one browser page; no Node tier |
+| §2.1 Tier 1 (Vitest) | `scripts/run-nle-tests.mjs:90` | `browser = await chromium.launch({` | CORRECTIVE (R7-era; **superseded at Round 15** — the engine now runs a Node vitest tier: 274 tests, 3-job CI) | Was: all tests in one browser page, no Node tier |
 | §2.1 Tier 1 | `gaps/audit/G-test-coverage.md:255` | `Two-tier runner: extract all CPU-only tests` | CORRECTIVE (converging) | Engine's own audit recommends the same tier split |
 | §2.1 Tier 2/3 harness | `scripts/run-nle-tests.mjs:27` | `const CHROME_FLAGS = [` | ALIGNED | Xvfb + software-Vulkan launch pattern proven in-container |
 | §9 CI strategy | `.agents/DECISIONS.md:218` | `Tests run via Playwright with Chrome under Xvfb + SwiftShader` | ALIGNED | Engine Decision 12 matches spec 12's software-GPU CI |
