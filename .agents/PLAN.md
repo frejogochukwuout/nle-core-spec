@@ -1,12 +1,14 @@
 # PLAN — Long-Horizon Task Tracker (nle-core-spec)
 
 **Created:** 2026-09-02 (Round 8 wrap-up — user directive: push/backup every micro milestone; PLAN tracks the long horizon, HANDOFF tracks the next session only)
-**Current round:** 11 (UI/UX mockup) COMPLETE through `e0eaed2` — seal round remains
+**Current round:** 12 (UI/UX mockup) COMPLETE through `5550902` — seal round remains
 **Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec
 
 ---
 
-## UI/UX direction track (R10 `390fd48` → R11 `e0eaed2`+)
+## UI/UX direction track (R10 `390fd48` → R11 `e0eaed2` → R12 `5550902`+)
+
+**R12 (2026-09-04) landed (user-feedback round):** mixer relocated to a RIGHT-SIDE DOCK beside the multi-track lanes (design doc v2.2 — 3 states preserved: 44px bridge rail / full strip row with fill-height faders); inspector seam direction fixed (was inverted+runaway) + Inspector/MediaPool fill their columns (w-full); playhead triangle re-centered on the bar centerline (was 2px off); **Storybook 10.6 + annotakit 0.4.0** (vendored, pin-comments with component/file:line digests, sqlite store, GitHub issue mirror ACTIVE) served at the platform preview URL via `storybook dev --port 3000` under a supervisor; **71 stories** (every shell region, chrome strip, timeline leaf, mixer surface, page, overlay, primitive); viewer overlays + safe-area guides became store-level UI prefs (real 90/80% guides); review gates: code review NO MAJORS + spec review 1 major (type floor) — all closed.
 
 **R11 (2026-09-04) landed:** layout overhaul to spec-18 geometry; the five v1.1 surfaces (context menus §4.9, toasts §6.4, state rows, pointer/wheel grammar, sample project); media-pool drag-to-lane/multi-select; 40-key map w/ JKL + undo; **Audio focus mode** per peer-reviewed `ui-mock/shell-variants/docs/DESIGN-audio-mode.md` v2.1 (4th dock page ⌘4, 3-state mixer, channel editor = S/G seam, sidechain ducking = spec 20 §12.2 mock answer, escalation gesture); **Storybook 9** (29 stories). Review gates: code review → all majors fixed → re-check verdict **NO MAJORS REMAIN**.
 
@@ -24,10 +26,17 @@
 12. **`--accent-focus` has no AA text pair** in resolve/studio (≈3.9-4.0:1 both directions) though 18 §9 assigns primary buttons to it — needs an `--accent-focus-contrast`-class decision.
 13. **18 §3.1 12px status strip vs §11.12 11px type floor** — internally in tension; mock used 12px.
 14. **R11: workspace keymap mismatch** — spec 16 §3.8/App A binds ⌘3 = Effects workspace, no Deliver binding; spec 18 dock ships Edit/Color/Deliver. The mock binds ⌘4 (per 16) + ⌘1-3 (per 18 tooltips). Seal must reconcile.
-15. **R11: F6 region count** — 18 §11.5 enumerates six regions; the mixer row is a seventh (mock adds it; amendment or fold-into-timeline decision).
+15. **R11/R12: F6 region count** — 18 §11.5 enumerates six regions; the mixer DOCK is a seventh (mock registers it conditionally — visible states only, no invisible collapsed stop; amendment or fold-into-timeline decision).
 16. **R11: meter deferral (18 §8.13) vs always-on master micro-meter + header micro-meters** — seal decides whether these count as "meters panel."
 17. **R11: automation-curve UX home (20 §12.1)** — the mock ships a visible placeholder (Automation — M2 watermark); the seal round inherits the question.
-18. **R11: the C15 re-litigation needs formalizing** — DESIGN-audio-mode.md §9 argues it (D13 postdates the ruling); the seal round should either ratify the mixer surface as the spec-18 mixer-panel section or reject with the ledger.
+18. **R11: the C15 re-litigation needs formalizing** — DESIGN-audio-mode.md §9 argues it (D13 postdates the ruling); the seal round should either ratify the mixer surface as the spec-18 mixer-panel section or reject with the ledger. **R12: the mixer is now a right-side DOCK (v2.2) — the ratification question now carries the dock placement.**
+19. **R12: strip-family 10px type floor exception** — the console vocabulary (strips/rail/guides) runs 10px against §11.12's categorical 11px (R11 accepted 10px-in-strips informally; now needs formal ratification or a 11px pass).
+20. **R12: toast max-3 overflow deviation** — mock DROPS the oldest; §6.4 says collapse-to-icon-row (labeled in story + store; decide at seal).
+21. **R12: ⌘M master-fallback extension** — spec 16 §3.5 binds ⌘M to focused-track mute only; the mock falls back to master when nothing focused (tooltip now honest; register the extension).
+22. **R12: 90%/80% safe-guide convention unregistered** — no spec text constrains the percentages; ratify the broadcast convention when §4.3 is sealed.
+23. **R12: overlays-hidden approximation** — mock hides in-canvas overlays whenever tool ≠ select; §4.3 says tool-DRAG. Register.
+24. **R12: mockMixer masterVolume placement** — spec 20 §4.2 puts scene master in the mixer slice; the mock keeps it in the UI store (docblock over-claims). Register with the G-layer conformance pass.
+25. **R12: mixer testids not shell-namespaced** — adopt `shell-*` names when the spec-18 mixer-panel section is written (mixer-dock-*/mixer-strip-*/btn-mixer-state today).
 
 ---
 

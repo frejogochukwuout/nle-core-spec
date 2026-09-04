@@ -559,6 +559,22 @@ Trim handles nested inside a draggable clip: `setPointerCapture` retargets point
 
 A grep/tool output showed `MARKER_PALETTEarkerColorIdx` where the file actually contained `MARKER_PALETTE[markerColorIdx` — the `[m` was consumed as an ANSI escape in the output pipeline. The FILE WAS FINE (tsc passed). Rule: when output "looks corrupted" but the typechecker/build is green, re-read the file another way before editing — don't chase display artifacts.
 
+### 30. Sandbox process persistence: children of the platform's app server survive; your own spawns don't
+
+Agent-session bash spawns (even setsid/nohup/disown) are REAPED between tool calls, but processes parented to the platform's next-server (boot-time, platform cgroup) survive indefinitely. The bridge: an API route on the platform app that `child_process.spawn`s a command — the child inherits the server's persistence, and when the server is later killed the child orphans to init and KEEPS LIVING. This is how a dev server meant for a public preview URL gets a permanent life: spawn a supervisor (respawn-loop) as a next-server child, let it take over the port. Key sequencing: spawn BEFORE killing the app server (you lose the spawner otherwise).
+
+### 31. Public-URL 403 "Invalid host" through platform edges: validate WHERE the host check lives before blaming the proxy
+
+Chain: public URL -> platform edge (Function Compute) -> sandbox Caddy -> dev server. The edge REWRITES the Host header (observed: not the public domain, and not the container hostname). Two independent host gates exist: Caddy (platform-generated config, unreadable) and Storybook 10 core-server (`core.allowedHosts`, default = local only). Caddy happily proxied ANY host; the 403 text came from Storybook. Diagnostic that found it: `curl -H "Host: <public>" http://127.0.0.1:<dev-port>/` directly, bypassing edge+Caddy — isolated the layer. Fix: `core.allowedHosts: true` for a sandboxed review server (safe — only edge-reachable). Also: Vite 8 has NO `allowedDevHosts` option (it's `server.allowedHosts`, and builder-vite forwards core.allowedHosts into it) — a confidently-written dead config is still dead; grep the installed package before trusting option names.
+
+### 32. Storybook as the review surface changes the mock's persistence contract
+
+When the user reviews in Storybook rather than a static preview: (a) every element needs a STORY (component + its states — sub-agents write these well on disjoint files with a conventions brief: decorators, StoreBoot patches, PanelBox, and "typecheck must pass, don't touch other files"); (b) the pin-comment addon turns review into structured data (component chain + file:line + DOM selector per pin) — the agent consumes threads via REST, resolves by PATCHing the FULL document back (no DELETE); (c) a dev-server-only addon means the review URL must serve `storybook dev`, not a static build — which is exactly when lesson 30's supervisor pattern pays off.
+
+### 33. Empirical geometry verification beats VLM eyeballing for layout bugs
+
+User-reported "layout is broken" triage: reproduce in a real browser, then MEASURE (getBoundingClientRect on the panel roots, the seam, the playhead bar vs its triangle) — the inspector bug turned out to be TWO distinct defects (inverted seam math + missing w-full making a flex child content-width), and the playhead offset was an exact 2px svg-centering error, none of which a VLM would have precisely located. Use VLM only for the final "does it look right" pass — with an explicit "do NOT generate code/HTML" leash (it drifts into mockup generation when asked open-ended questions about UI screenshots).
+
 ## GitHub Operations
 
 When pushing a large spec set to a new GitHub repo:
