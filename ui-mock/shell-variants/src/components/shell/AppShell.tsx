@@ -21,6 +21,7 @@ import { Timeline } from '../timeline/Timeline';
 import { ColorPage } from '../pages/ColorPage';
 import { DeliverPage } from '../pages/DeliverPage';
 import { sceneDuration } from '../../lib/mockData';
+import { useShortcuts } from '../../hooks/useShortcuts';
 
 /* ---------- effects library (compact mock of the Effects toggle §4.1) ---------- */
 const EFFECTS = [
@@ -130,7 +131,7 @@ export function AppShell() {
   const scene = scenes.find((s) => s.id === activeSceneId) ?? scenes[0];
   const duration = sceneDuration(scene);
 
-  /* playback loop (rAF; mock "engine") */
+  /* playback loop (rAF; mock "engine") — honors JKL playRate (shuttle) */
   const playing = useUi((s) => s.playing);
   useEffect(() => {
     if (!playing) return;
@@ -140,10 +141,14 @@ export function AppShell() {
       const dt = (now - last) / 1000;
       last = now;
       const s = useUi.getState();
-      let t = s.playhead + dt;
-      if (s.loopEnabled && t >= s.loop.end) t = s.loop.start;
-      if (t >= duration) {
+      let t = s.playhead + dt * s.playRate;
+      if (s.loopEnabled && s.playRate > 0 && t >= s.loop.end) t = s.loop.start;
+      if (s.playRate > 0 && t >= duration) {
         t = duration;
+        useUi.getState().setPlaying(false);
+      }
+      if (s.playRate < 0 && t <= 0) {
+        t = 0;
         useUi.getState().setPlaying(false);
       }
       useUi.setState({ playhead: t });
@@ -153,45 +158,10 @@ export function AppShell() {
     return () => cancelAnimationFrame(raf);
   }, [playing, duration]);
 
-  /* keyboard (spec 16 core set — skip when typing; expanded map lands with the
-     keyboard-completeness pass) */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      const s = useUi.getState();
-      switch (e.key) {
-        case ' ': e.preventDefault(); s.togglePlay(); break;
-        case 'ArrowLeft': e.preventDefault(); s.nudgePlayhead(e.shiftKey ? -10 : -1); break;
-        case 'ArrowRight': e.preventDefault(); s.nudgePlayhead(e.shiftKey ? 10 : 1); break;
-        case 'Home': s.setPlayhead(0); break;
-        case 'End': s.setPlayhead(duration); break;
-        case 'PageUp': case 'PageDown': {
-          e.preventDefault();
-          const main = scene.tracks.find((tr) => tr.kind === 'main');
-          const edges = (main?.elements ?? []).flatMap((el) => [el.startTime, el.startTime + el.duration]).sort((a, b) => a - b);
-          const dir = e.key === 'PageDown' ? 1 : -1;
-          const next = edges.find((x) => (dir === 1 ? x > s.playhead + 0.01 : x < s.playhead - 0.01));
-          if (next !== undefined) s.setPlayhead(dir === 1 ? next + 0.01 : Math.max(0, next - 0.01));
-          break;
-        }
-        case 'i': case 'I': s.markIn(); break;
-        case 'o': case 'O': s.markOut(); break;
-        case 'm': s.addMarker(s.playhead); break;
-        case 'v': case 'V': s.setTool('select'); break;
-        case 'b': case 'B': s.setTool('blade'); break;
-        case 't': case 'T': s.setTool('roll'); break;
-        case 'y': case 'Y': s.setTool('slip'); break;
-        case 'u': case 'U': s.setTool('slide'); break;
-        case 'r': case 'R': s.setTool('ripple'); break;
-        case 'n': case 'N': s.toggleSnap(); break;
-        case '?': s.setCheatOpen(!s.cheatOpen); break;
-        case 'Escape': s.setSelection([]); break;
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [duration, scene]);
+  /* keyboard — spec 16 implemented set via the single useShortcuts hook
+     (SHORTCUT_MAP in lib/shortcutMap.ts is the documented twin; the cheat
+     sheet renders it). F6 region cycling stays local, below. */
+  useShortcuts(duration);
 
   /* F6 panel-focus cycling — spec 18 §11.5 (normative) */
   const regionsRef = useRef<(HTMLElement | null)[]>([]);

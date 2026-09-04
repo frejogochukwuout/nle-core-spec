@@ -236,3 +236,108 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
 
 /* selection-safe text */
 ::selection { background: var(--accent-selection); color: var(--accent-contrast); }
+
+/* ============================================================
+   INSPECTOR FIELD CONTRACTS (spec 18 §4.4) — appended, token-driven
+   ============================================================ */
+@layer components {
+  /* invalid NumberField: red 1px border; the inline message renders under
+     the field via .num-field-msg. !important is deliberate — the invalid
+     state must outrank the border-soft utility on the same element. */
+  .num-field-invalid,
+  .num-field-invalid:focus {
+    border-color: var(--danger, #e5484d) !important;
+  }
+  .num-field-msg {
+    position: absolute;
+    top: calc(100% + 3px);
+    right: 0;
+    z-index: 30;
+    white-space: nowrap;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--danger, #e5484d);
+    background: var(--bg-inset);
+    border: 1px solid var(--danger, #e5484d);
+    border-radius: var(--radius-sm);
+    padding: 3px 6px;
+    pointer-events: none;
+  }
+
+  /* committed-value readout (effect param badges) */
+  .insp-badge {
+    font-family: var(--tc-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--text-muted);
+    background: var(--bg-inset);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    padding: 0 6px;
+    white-space: nowrap;
+  }
+
+  /* multi-select "values differ" indicator (spec 18 §4.4) */
+  .chip-mixed {
+    display: inline-flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--text-muted);
+    background: var(--bg-inset);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 3px 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* compact action chip (quick-seek, add transition, toggle chips, remove) */
+  .mini-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--text-muted);
+    background: var(--bg-inset);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    padding: 3px 7px;
+    white-space: nowrap;
+    transition: color var(--motion-fast) ease, border-color var(--motion-fast) ease;
+  }
+  .mini-btn:hover { color: var(--text-primary); border-color: var(--border-strong); }
+  .mini-btn[aria-pressed="true"] { color: var(--text-primary); border-color: var(--accent-selection); }
+  /* aria-disabled (not native disabled) so the explanatory data-tip still
+     hovers on the mock-unavailable actions */
+  .mini-btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+  .mini-btn[aria-disabled="true"]:hover { color: var(--text-muted); border-color: var(--border-soft); }
+
+  /* compact icon button — !important is deliberate: the unlayered .icon-btn
+     rule (height: var(--ctrl-h)) outranks layered utilities, so the size
+     override must win by importance, not layer order */
+  .icon-btn-sm { height: 18px !important; }
+}
+
+/* ---- keyboard/interaction completeness pass (token-driven skins) ---- */
+@layer components {
+  /* marquee rubber-band rect — timeline multi-select (spec 05 §9 grammar):
+     dashed 1px accent border + 10%-alpha accent fill, never a hit target */
+  .timeline-marquee {
+    border: 1px dashed var(--accent-selection);
+    background: color-mix(in srgb, var(--accent-selection) 10%, transparent);
+    pointer-events: none;
+  }
+  /* Alt-drag duplicate ghost — 50%-opacity copy pinned at the clip's
+     original position while the duplicate gesture is in flight */
+  .clip-drag-ghost {
+    border: 1px dashed var(--border-strong);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}

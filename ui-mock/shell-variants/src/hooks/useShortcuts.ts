@@ -1,0 +1,242 @@
+/* useShortcuts — spec 16 keyboard layer for the shell mock. ONE window
+   keydown listener; SHORTCUT_MAP (lib/shortcutMap.ts) is the documented
+   twin (cheat sheet). §8.5 text-input guard; JKL multi-tap shuttle with an
+   800 ms accel window; ⌘ = metaKey || ctrlKey (spec 16 conventions), ⌥ =
+   altKey exactly. F6 region cycling stays in AppShell (spec 18 §11.5). */
+
+import { useEffect, useRef } from 'react';
+import { useUi } from '../state/useUiStore';
+import type { Marker } from '../lib/mockData';
+
+const MARKER_PALETTE: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
+const JKL_WINDOW_MS = 800; // multi-tap accel window (task spec: 800 ms)
+
+interface JklState {
+  dir: 1 | -1; // shuttle direction of the last J/L press
+  t: number;   // timestamp of the last J/L press
+  taps: number; // consecutive same-direction taps (capped at 3 → 4×)
+}
+
+/** Installs the global shortcut handler. `duration` = active scene duration
+ *  (Home/End). Everything else is read fresh from the store per event. */
+export function useShortcuts(duration: number) {
+  const jklRef = useRef<JklState | null>(null);
+  const markerColorIdx = useRef(0); // ⇧M palette cursor (red → orange → …)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      /* §8.5 — skip when typing in a field. (The real shell keeps Cmd+combos
+         alive here; the mock suppresses everything for simplicity.) */
+      const tgt = e.target as HTMLElement | null;
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'SELECT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return;
+
+      const s = useUi.getState();
+      if (s.cheatOpen) return; // cheat-sheet modal owns the keyboard (Esc handled locally)
+
+      const cmd = e.metaKey || e.ctrlKey;
+      const alt = e.altKey;
+      const key = e.key;
+      const lower = key.length === 1 ? key.toLowerCase() : key;
+      const now = performance.now();
+
+      /* ---- JKL shuttle: tap-accel 1× → 2× → 4×, reset on K / Space ---- */
+      if (!cmd && !alt && (lower === 'j' || lower === 'l')) {
+        const dir: 1 | -1 = lower === 'l' ? 1 : -1;
+        const prev = jklRef.current;
+        const taps = prev && prev.dir === dir && now - prev.t < JKL_WINDOW_MS ? Math.min(prev.taps + 1, 3) : 1;
+        jklRef.current = { dir, t: now, taps };
+        s.setShuttle(dir * (taps === 1 ? 1 : taps === 2 ? 2 : 4));
+        return;
+      }
+      if (!cmd && !alt && lower === 'k') {
+        jklRef.current = null;
+        s.setShuttle(0);
+        return;
+      }
+
+      /* ---- non-modifier structural keys ---- */
+      switch (key) {
+        case ' ':
+          e.preventDefault();
+          jklRef.current = null;
+          s.togglePlay();
+          return;
+        case 'ArrowLeft':
+          e.preventDefault();
+          s.nudgePlayhead(e.shiftKey ? -10 : -1);
+          return;
+        case 'ArrowRight':
+          e.preventDefault();
+          s.nudgePlayhead(e.shiftKey ? 10 : 1);
+          return;
+        case 'ArrowUp':
+          e.preventDefault();
+          s.moveFocusedTrack(-1);
+          return;
+        case 'ArrowDown':
+          e.preventDefault();
+          s.moveFocusedTrack(1);
+          return;
+        case 'Home':
+          e.preventDefault();
+          s.setPlayhead(0);
+          return;
+        case 'End':
+          e.preventDefault();
+          s.setPlayhead(duration);
+          return;
+        case 'PageUp':
+        case 'PageDown': {
+          // prev/next edit point on the main track (moved from AppShell)
+          e.preventDefault();
+          const sc = s.scenes.find((x) => x.id === s.activeSceneId);
+          const main = sc?.tracks.find((tr) => tr.kind === 'main');
+          const edges = (main?.elements ?? [])
+            .flatMap((el) => [el.startTime, el.startTime + el.duration])
+            .sort((a, b) => a - b);
+          const dir = key === 'PageDown' ? 1 : -1;
+          const next = edges.find((x) => (dir === 1 ? x > s.playhead + 0.01 : x < s.playhead - 0.01));
+          if (next !== undefined) s.setPlayhead(dir === 1 ? next + 0.01 : Math.max(0, next - 0.01));
+          return;
+        }
+        case 'Tab':
+          e.preventDefault();
+          s.selectNeighbors(e.shiftKey ? -1 : 1);
+          return;
+        case 'Delete':
+        case 'Backspace':
+          if (s.selection.length === 0) return;
+          e.preventDefault();
+          s.deleteElements(s.selection, e.shiftKey); // ⇧Delete = ripple
+          return;
+        case 'Escape':
+          if (s.tool !== 'select') s.setTool('select');
+          else if (s.selection.length > 0) s.setSelection([]);
+          return;
+      }
+
+      /* ---- ⌘ combos (⌘ = metaKey || ctrlKey; unmatched ⌘ combos swallowed) ---- */
+      if (cmd && !alt) {
+        if (lower === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) {
+            if (s.future.length > 0) s.redo();
+            else s.pushToast({ kind: 'info', title: 'Nothing to redo' });
+          } else {
+            if (s.past.length > 0) s.undo();
+            else s.pushToast({ kind: 'info', title: 'Nothing to undo' });
+          }
+          return;
+        }
+        if (lower === 'a') {
+          e.preventDefault();
+          if (e.shiftKey) {
+            s.setSelection([]);
+          } else {
+            const main = s.scenes.find((x) => x.id === s.activeSceneId)?.tracks.find((tr) => tr.kind === 'main');
+            if (main) s.selectTrackElements(main.id, false);
+          }
+          return;
+        }
+        if (lower === 'b' && !e.shiftKey) {
+          // split clip under playhead (main track) at playhead
+          e.preventDefault();
+          const main = s.scenes.find((x) => x.id === s.activeSceneId)?.tracks.find((tr) => tr.kind === 'main');
+          const el = main?.elements.find((x) => s.playhead > x.startTime && s.playhead < x.startTime + x.duration);
+          if (el) s.splitElement(el.id, s.playhead);
+          return;
+        }
+        if (lower === 'd' && !e.shiftKey) {
+          e.preventDefault();
+          if (s.selection.length > 0) s.duplicateElements(s.selection);
+          return;
+        }
+        if (lower === 'm') {
+          e.preventDefault();
+          s.toggleMasterMute();
+          return;
+        }
+        if (lower === 'g' && e.shiftKey) {
+          e.preventDefault();
+          s.setLoopEnabled(!s.loopEnabled);
+          return;
+        }
+        if (key === '1') {
+          e.preventDefault();
+          s.setPage('edit');
+          return;
+        }
+        if (key === '2') {
+          e.preventDefault();
+          s.setPage('color');
+          return;
+        }
+        if (key === '3') {
+          e.preventDefault();
+          s.setPage('deliver');
+          return;
+        }
+        if (lower === 'i') {
+          // real shell opens the OS file picker; mock explains the drop path
+          e.preventDefault();
+          s.pushToast({ kind: 'info', title: 'Import media', detail: 'File picker is mock — drop files on the Media Pool' });
+          return;
+        }
+        return;
+      }
+
+      /* ---- ⌥ combos (⌥ = e.altKey exactly; e.code because Mac alt-key
+         layouts remap e.key — ⌥[ types “, ⌥X types ≈) ---- */
+      if (alt) {
+        if (e.code === 'BracketLeft') {
+          e.preventDefault();
+          s.trimToPlayhead('l', true);
+          return;
+        }
+        if (e.code === 'BracketRight') {
+          e.preventDefault();
+          s.trimToPlayhead('r', true);
+          return;
+        }
+        if (e.code === 'KeyX') {
+          e.preventDefault();
+          s.clearInOut();
+          return;
+        }
+        return;
+      }
+
+      /* ---- plain single-key bindings (tools, in/out, markers, slip) ---- */
+      switch (lower) {
+        case 'v': s.setTool('select'); return;
+        case 'b': s.setTool('blade'); return;
+        case 't': s.setTool('roll'); return;
+        case 'y': s.setTool('slip'); return;
+        case 'u': s.setTool('slide'); return;
+        case 'r': s.setTool('ripple'); return;
+        case 'n': s.toggleSnap(); return;
+        case 'i': s.markIn(); return;
+        case 'o': s.markOut(); return;
+        case 'm': {
+          if (e.shiftKey) {
+            const color = MARKER_PALETTE[markerColorIdx.current % MARKER_PALETTE.length];
+            markerColorIdx.current = (markerColorIdx.current + 1) % MARKER_PALETTE.length;
+            s.addMarker(s.playhead, color);
+          } else {
+            s.addMarker(s.playhead);
+          }
+          return;
+        }
+        case ',': if (s.selection.length > 0) s.slipNudge(s.selection, -1); return;
+        case '.': if (s.selection.length > 0) s.slipNudge(s.selection, 1); return;
+      }
+
+      if (key === '?') {
+        s.setCheatOpen(!s.cheatOpen);
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [duration]);
+}

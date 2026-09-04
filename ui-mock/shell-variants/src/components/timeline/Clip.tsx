@@ -5,7 +5,7 @@
    Selected = accent outline + tint; locked = stripes (legible, not faded);
    drag = optimistic preview + live TC bubble; commit on release (18 §5). */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { useVariantClipStyle } from '../../state/variantHooks';
@@ -21,7 +21,7 @@ interface ClipProps {
   snapTargets: number[];
 }
 
-type DragState = { mode: 'move' | 'l' | 'r'; startX: number; origStart: number; origDur: number; cur: number } | null;
+type DragState = { mode: 'move' | 'l' | 'r'; startX: number; origStart: number; origDur: number; cur: number; alt: boolean } | null;
 
 export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps) {
   const clipStyle = useVariantClipStyle();
@@ -31,11 +31,31 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   const splitElement = useUi((s) => s.splitElement);
   const moveElement = useUi((s) => s.moveElement);
   const trimElement = useUi((s) => s.trimElement);
+  const duplicateElements = useUi((s) => s.duplicateElements);
   const snap = useUi((s) => s.snap);
 
   const [drag, setDrag] = useState<DragState>(null);
   const [hover, setHover] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const dragCancelled = useRef(false); // Esc during a drag → drop dispatches nothing
+  const suppressClick = useRef(false); // swallow the trailing click after a gesture (alt-drop / Esc-cancel)
+  const dragOn = drag !== null;
+
+  /* Escape cancels an active drag (preview snaps back, nothing commits).
+     Capture-phase + stopPropagation so the shell Esc cascade (tool →
+     deselect) doesn't also fire while a gesture is in flight. */
+  useEffect(() => {
+    if (!dragOn) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      dragCancelled.current = true;
+      suppressClick.current = true; // the trailing click must not select either
+      setDrag(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [dragOn]);
 
   const selected = selection.includes(el.id);
   const locked = track.locked;
@@ -69,8 +89,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     if (locked) return;
     if (tool === 'blade') return; // handled by click
     if (e.button !== 0) return;
+    dragCancelled.current = false;
+    suppressClick.current = false; // fresh gesture — clear any stale suppression
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setDrag({ mode: 'move', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime });
+    setDrag({ mode: 'move', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: e.altKey });
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -78,7 +100,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     const dt = (e.clientX - drag.startX) / pxPerSec;
     if (drag.mode === 'move') {
       const { t } = applySnap(drag.origStart + dt, false);
-      setDrag({ ...drag, cur: t });
+      setDrag({ ...drag, cur: t, alt: e.altKey }); // Alt held? = duplicate gesture
     } else if (drag.mode === 'l') {
       const { t } = applySnap(drag.origStart + dt, false);
       const maxStart = drag.origStart + drag.origDur - 0.25;
@@ -90,14 +112,42 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   };
 
   const onPointerUp = () => {
-    if (!drag) return;
-    if (drag.mode === 'move' && Math.abs(drag.cur - drag.origStart) > 1e-6) moveElement(el.id, drag.cur);
+    if (!drag) {
+      dragCancelled.current = false; // stale flag after an Esc-cancelled drag
+      return;
+    }
+    if (dragCancelled.current) {
+      // Esc was pressed mid-gesture: restore the element, dispatch nothing
+      dragCancelled.current = false;
+      setDrag(null);
+      return;
+    }
+    if (drag.mode === 'move') {
+      if (drag.alt && Math.abs(drag.cur - drag.origStart) > 1e-6) {
+        // Alt+drag = duplicate: spawn a copy at the drop position, original
+        // stays put. duplicateElements() selects the new ids, so read the new
+        // id straight back from the store, then move it to the drop time. The
+        // trailing click is suppressed so the new copy stays selected.
+        suppressClick.current = true;
+        duplicateElements([el.id]);
+        const newId = useUi.getState().selection[0];
+        if (newId) moveElement(newId, drag.cur);
+      } else if (!drag.alt && Math.abs(drag.cur - drag.origStart) > 1e-6) {
+        moveElement(el.id, drag.cur);
+      }
+    }
     if (drag.mode === 'l') trimElement(el.id, 'l', drag.cur, drag.origStart + drag.origDur - drag.cur);
     if (drag.mode === 'r') trimElement(el.id, 'r', el.startTime, drag.cur - el.startTime);
     setDrag(null);
   };
 
   const onClick = (e: React.MouseEvent) => {
+    if (suppressClick.current) {
+      // gesture just ended (alt-duplicate drop or Esc-cancel) — the synthesized
+      // click would otherwise re-select the original and clobber the result
+      suppressClick.current = false;
+      return;
+    }
     if (locked) return;
     if (tool === 'blade') {
       const rect = ref.current?.getBoundingClientRect();
@@ -199,13 +249,38 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     );
   }
 
-  return (
+  /* Alt+drag duplicate gesture: faded ghost copy pinned at the ORIGINAL
+     position (visual only — the dragged preview is the copy-in-flight; on
+     drop the store duplicates and the original never moves). */
+  const showGhost = drag !== null && drag.mode === 'move' && drag.alt;
+  const ghost = showGhost ? (
     <div
-      ref={ref}
-      role="button"
-      aria-label={`${el.name}, ${tc(el.startTime)}`}
-      data-testid={`clip-${el.id}`}
-      className={`clip-box absolute top-[2px] bottom-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''}`}
+      data-testid={`clip-ghost-${el.id}`}
+      aria-hidden="true"
+      className="clip-drag-ghost absolute top-[2px] bottom-[2px] rounded-[2px]"
+      style={{
+        left: drag.origStart * pxPerSec,
+        width: Math.max(6, el.duration * pxPerSec),
+        background: isAudio
+          ? 'linear-gradient(to bottom, var(--clip-audio-a), var(--clip-audio-b))'
+          : isText
+            ? 'var(--clip-text)'
+            : 'var(--clip-video)',
+      }}
+    >
+      {clipLabel(isAudio ? 'var(--clip-audio-label)' : isText ? 'var(--clip-text-label)' : 'var(--clip-label-text)')}
+    </div>
+  ) : null;
+
+  return (
+    <>
+      {ghost}
+      <div
+        ref={ref}
+        role="button"
+        aria-label={`${el.name}, ${tc(el.startTime)}`}
+        data-testid={`clip-${el.id}`}
+        className={`clip-box absolute top-[2px] bottom-[2px] ${drag ? 'z-10' : ''} ${selected ? 'z-[5]' : ''}`}
       style={{
         left: geo.left,
         width: Math.max(6, geo.width),
@@ -260,7 +335,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
               e.stopPropagation();
               if (tool !== 'select') return;
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-              setDrag({ mode: 'l', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime });
+              setDrag({ mode: 'l', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: false });
             }}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -272,7 +347,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
               e.stopPropagation();
               if (tool !== 'select') return;
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-              setDrag({ mode: 'r', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime + el.duration });
+              setDrag({ mode: 'r', startX: e.clientX, origStart: el.startTime, origDur: el.duration, cur: el.startTime + el.duration, alt: false });
             }}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -296,5 +371,6 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         <span className="mono absolute left-1 top-1 rounded-sm bg-black/55 px-1 text-[11px] font-bold text-white">F</span>
       )}
     </div>
+    </>
   );
 }

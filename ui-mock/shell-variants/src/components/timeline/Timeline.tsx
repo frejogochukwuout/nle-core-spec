@@ -5,7 +5,7 @@
    per-track lanes + clips. Wheel grammar (spec 18 §5A): Cmd/Ctrl+wheel =
    zoom-to-cursor, Shift+wheel = fast horizontal pan, plain wheel = vertical. */
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUi, trackHeights } from '../../state/useUiStore';
 import { useVariant } from '../debug/VariantProvider';
 import { sceneDuration, type TrackJSON } from '../../lib/mockData';
@@ -27,6 +27,73 @@ export function Timeline() {
 
   const headersRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  /* marquee rubber-band selection — rect in CONTENT coordinates (scroll
+     offsets applied). Started by pointerdown on an empty lane background;
+     a <4px release is a click → clears selection (replaces the old plain
+     empty-lane deselect); Escape mid-drag cancels without changing it. */
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const marqueeOn = marquee !== null;
+
+  const toContent = (e: { clientX: number; clientY: number }): { x: number; y: number } | null => {
+    const sc = scrollRef.current;
+    if (!sc) return null;
+    const box = sc.getBoundingClientRect();
+    return { x: e.clientX - box.left + sc.scrollLeft, y: e.clientY - box.top + sc.scrollTop };
+  };
+
+  const startMarquee = (e: React.PointerEvent) => {
+    const p = toContent(e);
+    if (!p) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setMarquee({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+  };
+
+  const moveMarquee = (e: React.PointerEvent) => {
+    if (!marquee) return;
+    const p = toContent(e);
+    if (!p) return;
+    setMarquee({ ...marquee, x1: p.x, y1: p.y });
+  };
+
+  const finishMarquee = () => {
+    const m = marquee;
+    setMarquee(null);
+    if (!m) return;
+    if (Math.hypot(m.x1 - m.x0, m.y1 - m.y0) < 4) {
+      setSelection([]); // click-no-drag on empty lane → deselect (kept behavior)
+      return;
+    }
+    const tMin = Math.min(m.x0, m.x1) / pxPerSec;
+    const tMax = Math.max(m.x0, m.x1) / pxPerSec;
+    const yTop = Math.min(m.y0, m.y1);
+    const yBot = Math.max(m.y0, m.y1);
+    const ids: string[] = [];
+    let top = zoneH; // first lane starts below the ruler zone
+    for (const track of scene.tracks) {
+      const h = laneHeight(track.kind);
+      if (!track.locked && yBot > top && yTop < top + h) {
+        for (const el of track.elements) {
+          if (tMax > el.startTime && tMin < el.startTime + el.duration) ids.push(el.id);
+        }
+      }
+      top += h;
+    }
+    setSelection(ids);
+  };
+
+  /* Escape cancels an active marquee (capture — beats the shell Esc handler) */
+  useEffect(() => {
+    if (!marqueeOn) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setMarquee(null);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [marqueeOn]);
 
   const duration = sceneDuration(scene);
   const contentW = (duration + 4) * pxPerSec;
@@ -116,6 +183,9 @@ export function Timeline() {
         className="relative min-h-0 flex-1 overflow-auto bg-timeline"
         onScroll={onScrollSync}
         onWheel={onWheel}
+        onPointerMove={moveMarquee}
+        onPointerUp={finishMarquee}
+        onPointerCancel={() => setMarquee(null)}
       >
         <div id="timeline-content" className="relative" style={{ width: contentW, minHeight: '100%' }}>
           <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} playhead={playhead} />
@@ -125,11 +195,15 @@ export function Timeline() {
             return (
               <div
                 key={track.id}
-                className="relative shrink-0 border-b border-hairline"
-                style={{ height: h, background: laneBg(track.kind), opacity: track.visible ? 1 : 0.35, cursor: track.locked ? 'not-allowed' : 'default' }}
+                className="relative shrink-0 border-b border-hairline cursor-crosshair"
+                style={{ height: h, background: laneBg(track.kind), opacity: track.visible ? 1 : 0.35, cursor: track.locked ? 'not-allowed' : undefined }}
                 onPointerDown={(e) => {
-                  // click on empty lane background clears selection (no-op on clips — they stop propagation)
-                  if (e.target === e.currentTarget) setSelection([]);
+                  // marquee starts only on the EMPTY lane background (target ===
+                  // currentTarget ⇒ not a clip / transition marker). Clip drags
+                  // stop propagation concerns aside: clips are children, so a
+                  // pointerdown on them never reaches this branch.
+                  if (e.target !== e.currentTarget || e.button !== 0 || track.locked) return;
+                  startMarquee(e);
                 }}
               >
                 {track.elements.map((el) => (
@@ -165,6 +239,22 @@ export function Timeline() {
               </div>
             );
           })}
+
+          {/* ---- marquee rubber-band rect (dashed accent border + 10% alpha
+               fill via .timeline-marquee; geometry in content coords) ---- */}
+          {marquee && (
+            <div
+              data-testid="timeline-marquee"
+              className="timeline-marquee absolute z-[35]"
+              aria-hidden="true"
+              style={{
+                left: Math.min(marquee.x0, marquee.x1),
+                top: Math.min(marquee.y0, marquee.y1),
+                width: Math.abs(marquee.x1 - marquee.x0),
+                height: Math.abs(marquee.y1 - marquee.y0),
+              }}
+            />
+          )}
 
           {/* empty-scene state row (spec 18 §4.2 state table): no tracks at all */}
           {scene.tracks.length === 0 && (
