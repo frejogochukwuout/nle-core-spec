@@ -134,7 +134,7 @@ function RulerStory() {
   const playhead = useUi((s) => s.playhead);
   return (
     <div className="w-full">
-      <Ruler scene={scene} duration={sceneDuration(scene)} pxPerSec={pxPerSec} playhead={playhead} />
+      <Ruler scene={scene} duration={sceneDuration(scene)} pxPerSec={pxPerSec} playhead={playhead} contentW={(sceneDuration(scene) + 4) * pxPerSec} view={{ scrollLeft: 0, viewportW: 1200 }} />
       {/* a lane-ish backdrop so the ruler reads in context */}
       <div className="h-[60px] w-full border-b border-hairline" style={{ background: 'var(--lane-video)' }} aria-hidden="true" />
     </div>

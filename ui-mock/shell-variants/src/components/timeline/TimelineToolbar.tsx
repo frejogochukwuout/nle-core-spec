@@ -38,9 +38,13 @@ const TOOLS: { id: ToolId; tip: string; icon: React.ReactNode }[] = [
   { id: 'stretch', tip: 'Rate stretch', icon: <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 3v14" strokeDasharray="2 2" /><path d="M20 3v14" strokeDasharray="2 2" /><path d="M7 10h10" /><path d="M14 7l3 3-3 3" /><path d="M10 7l-3 3 3 3" /></svg> },
 ];
 
-const MIN_PPS = 8, MAX_PPS = 240;
-const ppsToSlider = (pps: number) => (Math.log(pps / MIN_PPS) / Math.log(MAX_PPS / MIN_PPS)) * 100;
-const sliderToPps = (v: number) => MIN_PPS * Math.pow(MAX_PPS / MIN_PPS, v / 100);
+/* R15 T1 — zoom math from the shared pixel lib (single source; this file
+   previously carried its own 8–240 bounds + log map). The slider maps
+   EXPONENTIALLY against the DYNAMIC min (spec-05 §5.2): slider 0 ⇔ fit-with-
+   headroom (content = 25% of viewport). All zoom mutations route through the
+   zoom bus so the controller captures pre-zoom scroll (two-regime anchoring). */
+import { zoomToSlider, sliderToZoomPps } from '../../lib/pixel';
+import { zoomBus } from '../../lib/zoomController';
 
 export function TimelineToolbar() {
   const tool = useUi((s) => s.tool);
@@ -52,8 +56,8 @@ export function TimelineToolbar() {
   const toggleLink = useUi((s) => s.toggleLink);
   const toggleLockAll = useUi((s) => s.toggleLockAll);
   const pxPerSec = useUi((s) => s.pxPerSec);
+  const zoomMinPps = useUi((s) => s.zoomMinPps);
   const setZoom = useUi((s) => s.setZoom);
-  const zoomStep = useUi((s) => s.zoomStep);
   const playhead = useUi((s) => s.playhead);
   const addMarker = useUi((s) => s.addMarker);
   const masterMuted = useUi((s) => s.masterMuted);
@@ -63,7 +67,6 @@ export function TimelineToolbar() {
   const mixerState = useUi((s) => s.mixerState);
   const cycleMixerState = useUi((s) => s.cycleMixerState);
   const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
-  const zoomFit = useUi((s) => s.zoomFit);
   const pushToast = useUi((s) => s.pushToast);
   const menu = useContextMenu(); // §4.9 marker-color dropdown (R14 no-op sweep)
   const sliderRef = useRef<HTMLInputElement>(null); // magnifier focuses the zoom slider
@@ -96,6 +99,12 @@ export function TimelineToolbar() {
       return;
     }
     setZoom((measureLanes() * 0.8) / span);
+    // center the span after the zoom re-render (R15: routed via rAF so the
+    // new content width is laid out first)
+    requestAnimationFrame(() => {
+      const scEl = document.getElementById('timeline-scroll');
+      if (scEl) scEl.scrollLeft = Math.max(0, tMin * useUi.getState().pxPerSec - scEl.clientWidth / 2);
+    });
   };
 
   return (
@@ -228,17 +237,17 @@ export function TimelineToolbar() {
       <div className="vsep" />
 
       {/* zoom cluster (R14 no-op sweep — all three icon buttons were dead).
-          Fit: same math as the real ⌘\ binding (spec 16 §3.8). Selection:
-          span-fit at 80% of the lane viewport. Magnifier: focuses the zoom
-          slider — chosen over zoomStep(1.5) (the + button already does that)
-          so the click has a DISTINCT honest effect: exposing the slider's
-          own keyboard grammar (spec 18 §11.3). */}
+          R15 T1: fit + ± route through the zoom bus (controller pre-capture /
+          two-regime anchoring); the slider maps exponentially against the
+          DYNAMIC min (spec-05 §5.2); ± step factor 1.7 (canonical, spec-16
+          §3.8 revision R15-1). Magnifier: focuses the zoom slider (distinct
+          honest effect — exposing the slider's keyboard grammar, spec 18 §11.3). */}
       <button
         className="icon-btn"
         data-testid="shell-timeline-toolbar-btn-zoom-fit"
         data-tip="Zoom to fit (⌘\)"
         aria-label="Zoom to fit"
-        onClick={() => zoomFit(measureLanes(), sceneDuration(scene))}
+        onClick={() => zoomBus.zoomFit(measureLanes(), sceneDuration(scene))}
       >
         <ScanSearch size={15} strokeWidth={1.5} />
       </button>
@@ -261,20 +270,20 @@ export function TimelineToolbar() {
           <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" />
         </svg>
       </button>
-      <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomStep(1 / 1.5)} data-tip="Zoom out (−)" aria-label="Zoom out">−</button>
+      <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomBus.zoomOut()} data-tip="Zoom out (−)" aria-label="Zoom out">−</button>
       <input
         ref={sliderRef}
         type="range"
         min={0}
         max={100}
         step={0.5}
-        value={ppsToSlider(pxPerSec)}
-        onChange={(e) => setZoom(sliderToPps(Number(e.target.value)))}
+        value={zoomToSlider(pxPerSec, zoomMinPps) * 100}
+        onChange={(e) => zoomBus(sliderToZoomPps(Number(e.target.value) / 100, zoomMinPps))}
         aria-label="Timeline zoom"
         aria-valuetext={`${Math.round(pxPerSec)} px/s`} /* §11.3 slider contract */
         className="w-[90px]"
       />
-      <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomStep(1.5)} data-tip="Zoom in (+)" aria-label="Zoom in">+</button>
+      <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomBus.zoomIn()} data-tip="Zoom in (+)" aria-label="Zoom in">+</button>
       <span className="mono hidden shrink-0 pl-1 text-[11px] text-tmuted xl:inline">{Math.round(pxPerSec)} px/s</span>
 
       <div className="vsep" />

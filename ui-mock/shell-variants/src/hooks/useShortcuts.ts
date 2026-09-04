@@ -7,13 +7,13 @@
 import { useEffect, useRef } from 'react';
 import { useUi } from '../state/useUiStore';
 import { snapToFrame } from '../lib/timecode';
+import { zoomBus } from '../lib/zoomController';
+import { DEFAULT_PPS } from '../lib/pixel';
 import type { Marker } from '../lib/mockData';
 import type { ConfirmFn } from '../components/shell/ConfirmDialog';
 
 const MARKER_PALETTE: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
 const JKL_WINDOW_MS = 500; // multi-tap accel window (task spec: 500 ms)
-const DEFAULT_PPS = 46;    // store's boot pxPerSec — ⌘0 "reset zoom" target
-
 interface JklState {
   dir: 1 | -1; // shuttle direction of the last J/L press
   t: number;   // timestamp of the last J/L press
@@ -259,9 +259,10 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           return;
         }
         if (key === '0') {
-          // spec 16 §3.8 ⌘0 — reset zoom to the boot default
+          // spec 16 §3.8 ⌘0 — reset zoom to the boot default (R15 T1: routed
+          // through the zoom bus so the controller anchors the scroll)
           e.preventDefault();
-          s.setZoom(DEFAULT_PPS);
+          zoomBus(DEFAULT_PPS);
           return;
         }
         if (key === '\\') {
@@ -269,7 +270,7 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           // advertised this chord since R12; the binding is real now)
           e.preventDefault();
           const w = document.getElementById('timeline-scroll')?.clientWidth ?? 900;
-          s.zoomFit(w, duration);
+          zoomBus.zoomFit(w, duration);
           return;
         }
         if ((key === 'ArrowLeft' || key === 'ArrowRight')) {
@@ -368,12 +369,13 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
         case ',': if (s.selection.length > 0) s.slipNudge(s.selection, e.shiftKey ? -10 : -1); return;
         case '.': if (s.selection.length > 0) s.slipNudge(s.selection, e.shiftKey ? 10 : 1); return;
         /* spec 16 §3.4 ⇧,/⇧. = 10-frame slip ladder (R14 — was 1-frame only);
-           spec 16 §3.8 zoom keys use the same 1.5× steps as the toolbar buttons */
+           spec 16 §3.8 zoom keys: ×1.7 canonical step (R15 T1 revision,
+           same factor as the toolbar buttons) via the zoom bus */
         case '[': s.trimToPlayhead('l', false); return; // spec 16 §3.4: non-ripple trim start
         case ']': s.trimToPlayhead('r', false); return; // spec 16 §3.4: non-ripple trim end
         case '=':
-        case '+': s.zoomStep(1.5); return;
-        case '-': s.zoomStep(1 / 1.5); return;
+        case '+': zoomBus.zoomIn(); return;
+        case '-': zoomBus.zoomOut(); return;
       }
 
       if (key === '?') {

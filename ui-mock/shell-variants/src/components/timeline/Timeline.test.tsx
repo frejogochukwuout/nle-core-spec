@@ -151,12 +151,25 @@ describe('Timeline', () => {
     expect(scene1().markers).toHaveLength(5); // 4 fixtures + the playhead marker
   });
 
-  it('⌘+wheel zooms the timeline through the native non-passive listener (spec 18 §5A wheel grammar)', () => {
+  it('⌘+wheel zooms via the rAF-coalesced accumulator (capped ±30, exp(−Δ/300)) — R15 T1 canonical wheel grammar', async () => {
     boot({});
     fireEvent.wheel(scrollEl(), { ctrlKey: true, deltaY: -100 });
+    // the accumulator applies ONE factor per animation frame — flush it
+    await new Promise((r) => requestAnimationFrame(r));
     expect(store().pxPerSec).toBeGreaterThan(46);
+    expect(store().pxPerSec).toBeCloseTo(46 * Math.exp(30 / 300), 5); // delta capped at −30
     fireEvent.wheel(scrollEl(), { ctrlKey: true, deltaY: 100 });
-    expect(store().pxPerSec).toBe(46); // exp-symmetric factors round-trip
+    await new Promise((r) => requestAnimationFrame(r));
+    expect(store().pxPerSec).toBeCloseTo(46, 5); // exp-symmetric round-trip (float residue)
+  });
+
+  it('plain wheel with shift scrolls horizontally in ±40px clamped steps (R15 T1 manual-scroll law)', () => {
+    boot({});
+    const el = scrollEl();
+    const before = el.scrollLeft;
+    el.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 400, right: 800, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    fireEvent.wheel(el, { shiftKey: true, deltaY: 300 });
+    expect(el.scrollLeft).toBe(before + 40); // clamped to HORIZONTAL_WHEEL_STEP_PX
   });
 });
 

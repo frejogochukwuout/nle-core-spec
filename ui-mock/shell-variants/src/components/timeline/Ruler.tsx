@@ -1,12 +1,17 @@
-/* Ruler — spec 05 §7/§14.3: DOM ticks + labels, click-to-seek, in/out +
-   loop shading with BRACKETS (band stays visible when loop is off — dimmed,
-   never erased), markers (spec 16 §3.7 palette), frame ticks at high zoom.
-   44px zone in readout mode (labels + 22px tick strip), 22px slim. */
+/* Ruler — spec 05 §7/§14.3 + R15 T1 CapCut-tier ticks (canonical
+   ruler-utils): adaptive label/tick intervals from frame-tier tables
+   (labels ≥ 120 px, ticks ≥ 18 px, tick divides label evenly), labels
+   MM:SS / H:MM:SS at second boundaries and `Xf` between, ticks virtualized
+   to the visible window + buffer. Still: click-to-seek, in/out + loop
+   shading with BRACKETS, markers (spec 16 §3.7 palette). 44px zone in
+   readout mode (labels + tick strip), 22px slim. */
 
 import { useRef, useState } from 'react';
 import { useUi } from '../../state/useUiStore';
 import { useHeaderStyle } from '../../state/variantHooks';
-import { snapToFrame, tc, tcRuler } from '../../lib/timecode';
+import { snapToFrame, tc } from '../../lib/timecode';
+import { snapPxToDeviceGrid } from '../../lib/pixel';
+import { getRulerConfig, shouldShowLabel, formatRulerLabel, getRulerWindow, tickTimes } from '../../lib/rulerTiers';
 import type { Marker, SceneJSON } from '../../lib/mockData';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 
@@ -59,7 +64,7 @@ export function markerColorItems(
   return [{ id: 'marker-color', label: 'Marker color', sep: true, custom: dotRow }];
 }
 
-export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSON; duration: number; pxPerSec: number; playhead: number }) {
+export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: { scene: SceneJSON; duration: number; pxPerSec: number; playhead: number; contentW: number; view: { scrollLeft: number; viewportW: number } }) {
   const headerStyle = useHeaderStyle();
   const zoneH = headerStyle === 'readout' ? 44 : 22;
   const setPlayhead = useUi((s) => s.setPlayhead);
@@ -138,12 +143,14 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
     ...markerColorItems((c) => { menu.close(); addMarker(playhead, c); }),
   ];
 
-  const contentW = (duration + 4) * pxPerSec;
-
-  // adaptive density (spec 05 tick/label spacing rules, simplified)
-  const labelEvery = pxPerSec >= 120 ? 2 : pxPerSec >= 20 ? 5 : 15;
-  const minorEvery = pxPerSec >= 20 ? 1 : 5;
-  const frameTicks = pxPerSec >= 110; // sub-second reference for trim/blade work
+  /* R15 T1 — CapCut tiers (lib/rulerTiers, canonical ruler-utils): adaptive
+     intervals from the frame/second tier tables; DOM ticks virtualized to the
+     visible window (tick count no longer linear in duration × zoom).
+     contentW comes from the Timeline's single-source pixel math (dedup — the
+     ruler previously recomputed (dur+4)·pps on its own). */
+  const { labelInterval, tickInterval } = getRulerConfig(pxPerSec);
+  const win = getRulerWindow(view.scrollLeft, view.viewportW, pxPerSec, tickInterval, duration, contentW);
+  const ticks = tickTimes(win, tickInterval);
 
   const seek = (clientX: number) => {
     const box = ref.current?.getBoundingClientRect();
@@ -152,21 +159,11 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
     setPlayhead(Math.max(0, snapToFrame((clientX - box.left) / pxPerSec)));
   };
 
-  const ticks: number[] = [];
-  for (let t = 0; t <= duration + 2; t += minorEvery) ticks.push(t);
-  const frameTickList: number[] = [];
-  if (frameTicks) {
-    const step = pxPerSec >= 200 ? 1 / 24 : 2 / 24; // every 1-2 frames
-    for (let t = 0; t <= duration + 2; t += step) frameTickList.push(t);
-  }
-  const labels: number[] = [];
-  for (let t = 0; t <= duration + 2; t += labelEvery) labels.push(t);
-
   const tickH = headerStyle === 'readout' ? 12 : 7;
-  const isMajor = (t: number) => Math.abs(t % labelEvery) < 1e-6;
+  const isMajor = (t: number) => shouldShowLabel(t, labelInterval);
 
-  const bandLeft = loop.start * pxPerSec;
-  const bandW = Math.max(2, (loop.end - loop.start) * pxPerSec);
+  const bandLeft = snapPxToDeviceGrid(loop.start * pxPerSec);
+  const bandW = Math.max(2, snapPxToDeviceGrid((loop.end - loop.start) * pxPerSec));
 
   return (
     <div
@@ -222,28 +219,29 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
       onLostPointerCapture={() => { seeking.current = false; }}
       onPointerLeave={() => setHoverT(null)}
     >
-      {/* frame ticks (sub-second reference) */}
-      {frameTickList.map((t, i) => (
-        <div key={`f${i}`} className="absolute bottom-0 w-px" style={{ left: t * pxPerSec, height: 4, background: 'var(--text-faint)', opacity: 0.35 }} />
-      ))}
+      {/* ticks — virtualized CapCut-tier window (major = on the label grid) */}
+      {ticks.map((t) => {
+        const major = isMajor(t);
+        return (
+          <div
+            key={t}
+            className="absolute bottom-0 w-px"
+            style={{ left: snapPxToDeviceGrid(t * pxPerSec), height: major ? tickH : tickH * 0.55, background: 'var(--text-faint)', opacity: major ? 0.9 : 0.45 }}
+            data-testid={major ? 'ruler-tick-major' : 'ruler-tick-minor'}
+          />
+        );
+      })}
 
-      {/* minor + major ticks */}
-      {ticks.map((t) => (
-        <div
-          key={t}
-          className="absolute bottom-0 w-px"
-          style={{ left: t * pxPerSec, height: isMajor(t) ? tickH : tickH * 0.55, background: 'var(--text-faint)', opacity: isMajor(t) ? 0.9 : 0.45 }}
-        />
-      ))}
-
-      {/* labels */}
-      {labels.map((t) => (
+      {/* labels — canonical format: MM:SS at second boundaries (H:MM:SS at
+          hours), `Xf` (frames within the second) between */}
+      {ticks.filter((t) => shouldShowLabel(t, labelInterval)).map((t) => (
         <span
-          key={t}
+          key={`l${t}`}
           className="mono absolute select-none text-[11px] text-tmuted"
-          style={{ left: t * pxPerSec + 4, top: headerStyle === 'readout' ? 5 : 1 }}
+          style={{ left: snapPxToDeviceGrid(t * pxPerSec) + 4, top: headerStyle === 'readout' ? 5 : 1 }}
+          data-testid="ruler-label"
         >
-          {tcRuler(t, frameTicks)}
+          {formatRulerLabel(t)}
         </span>
       ))}
 
@@ -296,7 +294,7 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
           data-tip={`${m.label} · ${tc(m.time)}`}
           data-tip-top
           className="absolute z-[6]"
-          style={{ left: m.time * pxPerSec - 5, top: headerStyle === 'readout' ? 22 : 5 }}
+          style={{ left: snapPxToDeviceGrid(m.time * pxPerSec) - 5, top: headerStyle === 'readout' ? 22 : 5 }}
           aria-label={`Marker ${m.label}`}
         >
           <svg width="10" height="13" viewBox="0 0 10 13" aria-hidden="true">

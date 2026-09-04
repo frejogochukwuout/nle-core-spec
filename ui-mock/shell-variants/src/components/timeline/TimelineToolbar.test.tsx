@@ -57,15 +57,18 @@ describe('TimelineToolbar', () => {
     expect(scene1().markers.at(-1)!.time).toBe(16);
   });
 
-  it('zoom buttons step and the slider maps log-scale to px/s (spec 18 §4.5 zoom cluster)', () => {
+  it('zoom buttons step ×1.7 (canonical) and the slider maps exponentially vs the dynamic min (R15 T1)', () => {
     boot({});
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
-    expect(store().pxPerSec).toBeCloseTo(69, 0);
+    expect(store().pxPerSec).toBeCloseTo(78.2, 0); // 46 × 1.7 (ZOOM_BUTTON_FACTOR)
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
     expect(store().pxPerSec).toBeCloseTo(46, 0);
     // input[type=range] → implicit role=slider; disambiguates from the zoom-search button
     fireEvent.change(screen.getByRole('slider', { name: 'Timeline zoom' }), { target: { value: '100' } });
-    expect(store().pxPerSec).toBeCloseTo(240, 0); // slider top = MAX_PPS
+    expect(store().pxPerSec).toBeCloseTo(5000, 0); // slider top = 100× zoom (canonical domain)
+    fireEvent.change(screen.getByRole('slider', { name: 'Timeline zoom' }), { target: { value: '0' } });
+    // slider bottom = the DYNAMIC min (zoom-to-fit with 25% headroom, spec-05 §5.2)
+    expect(store().pxPerSec).toBeCloseTo(store().zoomMinPps, 1);
   });
 
   it('the mixer button cycles Edit-page states collapsed → bridge → full → collapsed (design doc v2.2 §4)', () => {

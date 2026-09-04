@@ -6,12 +6,14 @@ import { describe, expect, it } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Ruler } from './Ruler';
+import { getRulerWindow } from '../../lib/rulerTiers';
 import { renderShell, store } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 
 function RulerHarness({ pxPerSec = 46, playhead = 16, duration = 30 }: { pxPerSec?: number; playhead?: number; duration?: number }) {
   const scene = useUi.getState().scenes.find((s) => s.id === 'sc-1')!;
-  return <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} playhead={playhead} />;
+  const contentW = (duration + 4) * pxPerSec;
+  return <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} playhead={playhead} contentW={contentW} view={{ scrollLeft: 0, viewportW: 1200 }} />;
 }
 
 const boot = (props: { pxPerSec?: number; playhead?: number; duration?: number } = {}) => renderShell(<RulerHarness {...props} />);
@@ -48,14 +50,34 @@ describe('Ruler', () => {
     expect(screen.queryByLabelText('Marker Best take')).toBeNull(); // sc-2 marker stays in sc-2
   });
 
-  it('label density adapts: frames appear in ruler labels only at high zoom (spec 05 tick rules)', () => {
+  it('CapCut tier tables adapt label density: MM:SS grids at default, Xf frame labels only at high zoom (R15 T1 canonical ruler-utils)', () => {
     const coarse = boot({});
-    expect(screen.getByText('00:05')).toBeInTheDocument();
-    expect(screen.queryByText('00:02:00')).toBeNull();
+    // 46 pps → label interval 3 s (first second-multiplier with pps·m ≥ 120)
+    expect(screen.getByText('00:03')).toBeInTheDocument();
+    expect(screen.queryByText('00:05')).toBeNull(); // 5 s is not on the 3 s grid
+    expect(screen.queryByText('15f')).toBeNull(); // frame labels only when the label tier is sub-second
     coarse.unmount();
-    boot({ pxPerSec: 120 });
-    expect(screen.getByText('00:02:00')).toBeInTheDocument(); // tcRuler with frames at ≥110 px/s
-    expect(screen.getByText('00:00:00')).toBeInTheDocument();
+    const mid = boot({ pxPerSec: 120 });
+    // 120 pps → label interval 1 s (120 ≥ 120)
+    expect(screen.getByText('00:02')).toBeInTheDocument();
+    expect(screen.queryByText('15f')).toBeNull();
+    mid.unmount();
+    boot({ pxPerSec: 240 });
+    // 240 pps → label interval 15 frames (0.625 s): sub-second labels are `Xf`
+    // (15f recurs at 0.625, 5.625, 10.625… — every 5 s the 15f phase repeats)
+    expect(screen.getAllByText('15f').length).toBeGreaterThan(0);
+    expect(screen.getByText('00:05')).toBeInTheDocument(); // 5 s = 15f × 8, on the grid
+  });
+
+  it('ticks are virtualized: the visible window only, with buffer (R15 T1)', () => {
+    // 46 pps, 30 s → tick interval 1 s = 31 ticks total; a 0-viewport window
+    // still renders the buffer head (tick 0); scrollLeft=6000 (beyond content)
+    // renders none of the early ticks
+    const w = getRulerWindow(0, 400, 46, 1, 30, 34 * 46);
+    expect(w.fromTick).toBe(0);
+    expect(w.toTick).toBeGreaterThan(400 / 46); // viewport plus buffer
+    const far = getRulerWindow(6000, 400, 46, 1, 30, 34 * 46);
+    expect(far.fromTick).toBeGreaterThan(100); // early ticks culled
   });
 
   it('the §4.9 ruler menu: add-marker inserts at the playhead; loop is a checkbox (spec 18 §4.9)', () => {

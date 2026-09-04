@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import { project, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation } from '../lib/mockData';
 import { clamp, snapToFrame } from '../lib/timecode';
+import { PPS_MIN as MIN_PPS, PPS_MAX as MAX_PPS } from '../lib/pixel';
 import { createMixerScene, type MockMixerScene, type MixerTrackSettings, type DuckingSettings, type AuxBusSettings } from './mockMixer';
 
 export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch';
@@ -63,6 +64,8 @@ interface UiState {
   loop: { start: number; end: number };
   selection: string[];
   pxPerSec: number;
+  /** dynamic minimum pps (spec-05 §5.2) — slider bottom / reconcile floor */
+  zoomMinPps: number;
   panels: { mediaPool: boolean; effects: boolean; inspector: boolean };
   mediaView: 'grid' | 'list';
   search: string;
@@ -125,6 +128,7 @@ interface UiState {
   selectTrackElements: (trackId: string, additive: boolean) => void;
   selectNeighbors: (dir: 1 | -1) => void;
   setZoom: (px: number) => void;
+  setZoomMin: (pps: number) => void;
   zoomStep: (factor: number) => void;
   zoomFit: (containerW: number, duration: number) => void;
   togglePanel: (p: keyof UiState['panels']) => void;
@@ -180,8 +184,6 @@ interface UiState {
   loadSampleProject: () => void;
 }
 
-const MIN_PPS = 8;
-const MAX_PPS = 240;
 /* one minimum-duration law for every trim-family mutation (R14 review):
    trim handles enforced 0.25s while ⌥[/⌥[ and the blade could leave 0.1s
    slivers — both behaviors were individually test-pinned, freezing the
@@ -241,6 +243,7 @@ export const useUi = create<UiState>((set, get) => ({
   loop: { ...project.loop },
   selection: ['el-2'],
   pxPerSec: 46,
+  zoomMinPps: 5, // reconciled to the dynamic fit-min by the Timeline mount
   panels: { mediaPool: true, effects: false, inspector: true },
   mediaView: 'grid',
   search: '',
@@ -408,9 +411,17 @@ export const useUi = create<UiState>((set, get) => ({
     const next = cur === -1 ? (dir === 1 ? 0 : els.length - 1) : clamp(cur + dir, 0, els.length - 1);
     return { selection: [els[next].id] };
   }),
-  setZoom: (px) => set({ pxPerSec: clamp(px, MIN_PPS, MAX_PPS) }),
-  zoomStep: (factor) => set((s) => ({ pxPerSec: clamp(s.pxPerSec * factor, MIN_PPS, MAX_PPS) })),
-  zoomFit: (containerW, duration) => set({ pxPerSec: clamp((containerW - 24) / (duration + 2), MIN_PPS, MAX_PPS) }),
+  setZoom: (px) => set((s) => ({ pxPerSec: clamp(px, Math.max(MIN_PPS, s.zoomMinPps), MAX_PPS) })),
+  // dynamic min (spec-05 §5.2): view state write from the Timeline's live
+  // measurement; also reconciles a now-out-of-bounds zoom UP to the min
+  setZoomMin: (pps) => set((s) => {
+    const min = clamp(pps, MIN_PPS, MAX_PPS);
+    const patch: Partial<UiState> = { zoomMinPps: min };
+    if (s.pxPerSec < min) patch.pxPerSec = min;
+    return patch as UiState;
+  }),
+  zoomStep: (factor) => set((s) => ({ pxPerSec: clamp(s.pxPerSec * factor, Math.max(MIN_PPS, s.zoomMinPps), MAX_PPS) })),
+  zoomFit: (containerW, duration) => set((s) => ({ pxPerSec: clamp((containerW - 24) / (Math.max(duration, 0.001) + 2), Math.max(MIN_PPS, s.zoomMinPps), MAX_PPS) })),
   togglePanel: (p) => set((s) => ({ panels: { ...s.panels, [p]: !s.panels[p] } })),
   setMediaView: (v) => set({ mediaView: v }),
   setSearch: (s) => set({ search: s }),

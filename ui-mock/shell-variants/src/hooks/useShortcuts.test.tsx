@@ -448,10 +448,10 @@ describe('R14: zoom key family (spec 16 §3.8)', () => {
     press({ key: '\\', ctrlKey: true });
     expect(S().pxPerSec).toBeCloseTo((900 - 24) / 32, 4); // jsdom: no #timeline-scroll → 900px fallback
   });
-  it('+ / − step zoom by the toolbar 1.5× factors', () => {
+  it('+ / − step zoom by the canonical ×1.7 factor (R15 T1, spec-16 §3.8 revision)', () => {
     const before = S().pxPerSec;
     press({ key: '+' });
-    expect(S().pxPerSec).toBeCloseTo(before * 1.5, 4);
+    expect(S().pxPerSec).toBeCloseTo(before * 1.7, 4);
     press({ key: '-' });
     expect(S().pxPerSec).toBeCloseTo(before, 4);
   });

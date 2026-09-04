@@ -162,15 +162,25 @@ describe('transport + playhead', () => {
 /* ---------- zoom ---------- */
 
 describe('zoom', () => {
-  it('setZoom / zoomStep clamp to 8..240 px/s', () => {
+  it('setZoom / zoomStep clamp to the canonical 5..5000 px/s zoom domain (R15 T1: pps = 50 × zoom ∈ [0.1, 100])', () => {
     act(() => { S().setZoom(2); });
-    expect(S().pxPerSec).toBe(8);
+    expect(S().pxPerSec).toBe(5);
     act(() => { S().setZoom(9999); });
-    expect(S().pxPerSec).toBe(240);
+    expect(S().pxPerSec).toBe(5000);
     act(() => { S().setZoom(46); S().zoomStep(4); });
     expect(S().pxPerSec).toBe(184);
     act(() => { S().zoomStep(100); });
-    expect(S().pxPerSec).toBe(240); // clamped
+    expect(S().pxPerSec).toBe(5000); // clamped
+  });
+
+  it('setZoomMin stores the dynamic fit-min (spec-05 §5.2) and reconciles zoom below it', () => {
+    act(() => { S().setZoom(46); S().setZoomMin(20); });
+    expect(S().zoomMinPps).toBe(20);
+    expect(S().pxPerSec).toBe(46); // above the min: untouched
+    act(() => { S().setZoom(10); });
+    expect(S().pxPerSec).toBe(20); // below the min: reconciled up
+    act(() => { S().setZoomMin(2); });
+    expect(S().zoomMinPps).toBe(5); // static floor 0.1 zoom
   });
 
   it('zoomFit solves px/s from container width and duration', () => {

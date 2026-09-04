@@ -1,15 +1,20 @@
 /* Timeline — spec 18 §3.1/§4.7 + spec 05 internals (mock-level):
    160px (or 112px slim) header column with big TC readout, native-scroll
    lanes area, sticky ruler (scrolls horizontally with content, stays visible
-   vertically), playhead (3px + head) spanning the FULL scroll viewport,
-   per-track lanes + clips. Wheel grammar (spec 18 §5A): Cmd/Ctrl+wheel =
-   zoom-to-cursor, Shift+wheel = fast horizontal pan, plain wheel = vertical. */
+   vertically), playhead (2px line + head, spec-05 §14.3 canonical) spanning
+   the FULL scroll viewport, per-track lanes + clips.
+   R15 T1 wheel grammar (spec-18 §5A revision R15-2 + canonical): Cmd/Ctrl+
+   wheel = rAF-coalesced zoom (capped ±30, exp(−Δ/300)) through the zoom
+   controller (two-regime playhead anchor, spec-05 §5.2); plain wheel:
+   horizontal when shift or |δX|>|δY| (±40px clamped manual), else vertical. */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useUi, trackHeights } from '../../state/useUiStore';
 import { useVariant } from '../debug/VariantProvider';
 import { sceneDuration, mediaById, type TrackJSON } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
+import { dynamicContentWidth, snapPxToDeviceGrid, zoomMinPps, PLAYHEAD_LINE_PX, HORIZONTAL_WHEEL_STEP_PX } from '../../lib/pixel';
+import { zoomController, createWheelZoomAccumulator } from '../../lib/zoomController';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
 import { Clip } from './Clip';
@@ -33,6 +38,12 @@ export function Timeline() {
 
   const headersRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  /* R15 T1 — reactive scroll/viewport state: drives the Ruler's tick
+     virtualization window + the dynamic content width (the canonical cost —
+     the ruler re-renders on scroll; React batches the events). */
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const [viewportW, setViewportW] = useState(0);
 
   /* §4.9 timeline-empty menu — right-click / Shift+F10 on the empty lane
      surface. Clips and the ruler stopPropagation for their own menus, so
@@ -121,7 +132,12 @@ export function Timeline() {
   }, [marqueeOn]);
 
   const duration = sceneDuration(scene);
-  const contentW = (duration + 4) * pxPerSec;
+  /* R15 T1 — dynamic content width from the shared pixel lib (canonical
+     dynamicTimelineWidth: content + 0.75→0.15 padding, floored at viewport;
+     replaces (dur+4)·pps). Single source — the Ruler receives it as a prop
+     (dedup: it recomputed its own (dur+4)·pps before). */
+  const zoomMin = useUi((s) => s.zoomMinPps);
+  const contentW = dynamicContentWidth(duration, pxPerSec, viewportW || 900, zoomMin);
   const zoneH = variant.headerStyle === 'readout' ? 44 : 22;
   const colW = variant.headerStyle === 'readout' ? 160 : 112;
 
@@ -169,36 +185,102 @@ export function Timeline() {
     if (headersRef.current) syncVertical(headersRef.current, scrollRef.current);
   };
 
-  /* wheel grammar (spec 18 §5A) — NATIVE listener: React's delegated wheel
-     handlers are passive, so preventDefault would be a silent no-op (browser
-     zoom would hijack ⌘+wheel). Anchored at the pointer's time-position. */
+  /* wheel grammar R15 T1 (canonical use-timeline-zoom): ONE non-passive
+     capture listener. Zoom path (ctrl/meta): rAF-coalesced accumulator —
+     deltas accumulate, ONE capped (±30) exp(−Δ/300) factor per animation
+     frame (event-count independent), routed through the zoom controller so
+     pre-zoom scroll is captured at request time (two-regime anchoring).
+     Non-zoom: preventDefault + manual scroll — horizontal (shift or
+     |δX|>|δY|) → scrollLeft ±min(|raw|, 40); else scrollTop += deltaY. */
   const ppsRef = useRef(pxPerSec);
   ppsRef.current = pxPerSec;
+  const durRef = useRef(duration);
+  durRef.current = duration;
   useEffect(() => {
     const sc = scrollRef.current;
     if (!sc) return;
+    const wheelZoom = createWheelZoomAccumulator({
+      isZoomEvent: (e) => e.ctrlKey || e.metaKey,
+      onApplyFactor: (factor) => {
+        zoomController.setZoomLevel(ppsRef.current * factor, { duration: durRef.current });
+      },
+    });
     const onWheelNative = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const box = sc.getBoundingClientRect();
-        const anchorX = e.clientX - box.left + sc.scrollLeft;
-        const anchorT = anchorX / ppsRef.current;
-        const factor = Math.exp(-e.deltaY * 0.0018);
-        useUi.getState().setZoom(ppsRef.current * factor);
-        requestAnimationFrame(() => {
-          const newPps = useUi.getState().pxPerSec;
-          sc.scrollLeft = Math.max(0, anchorT * newPps - (e.clientX - sc.getBoundingClientRect().left));
-        });
-      } else if (e.shiftKey) {
-        // fast horizontal pan (×10)
-        e.preventDefault();
-        sc.scrollBy({ left: e.deltaY * 10, behavior: 'instant' as ScrollBehavior });
+      if (wheelZoom.handleWheel(e)) return;
+      e.preventDefault();
+      const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      if (horizontal) {
+        const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+        sc.scrollLeft += Math.sign(raw) * Math.min(Math.abs(raw), HORIZONTAL_WHEEL_STEP_PX);
+      } else {
+        sc.scrollTop += e.deltaY;
       }
-      // plain wheel: native vertical scroll (and horizontal trackpad pan)
     };
-    sc.addEventListener('wheel', onWheelNative, { passive: false });
-    return () => sc.removeEventListener('wheel', onWheelNative);
+    sc.addEventListener('wheel', onWheelNative, { passive: false, capture: true });
+    return () => {
+      sc.removeEventListener('wheel', onWheelNative, { capture: true });
+      wheelZoom.destroy();
+    };
   }, []);
+
+  /* zoom controller lifecycle: attach the scroller, run applyZoomLayout in a
+     layout effect after the zoom re-render (anchoring math needs the NEW
+     scrollWidth), reset stale anchor state on scene switch. */
+  useLayoutEffect(() => {
+    zoomController.attach({
+      getScroller: () => scrollRef.current,
+    });
+    return () => zoomController.detach();
+  }, []);
+  const ppsForLayout = pxPerSec; // dependency below: re-run after every zoom re-render
+  useLayoutEffect(() => {
+    zoomController.applyZoomLayout(duration);
+  }, [ppsForLayout, duration]);
+  useEffect(() => {
+    zoomController.reset(); // scene switch: anchor state stale by construction
+  }, [scene.id]);
+
+  /* viewport measurement + dynamic min reconcile (spec-05 §5.2): ResizeObserver
+     on the lanes scroller → viewportW + zoomMinPps = fit-with-25%-headroom;
+     jsdom has no RO → the 900 fallback matches the old measureLanes pattern. */
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc || typeof ResizeObserver === 'undefined') {
+      setViewportW(900);
+      useUi.getState().setZoomMin(zoomMinPps(900, duration));
+      return;
+    }
+    const ro = new ResizeObserver(() => {
+      const w = sc.clientWidth || 900;
+      setViewportW(w);
+      useUi.getState().setZoomMin(zoomMinPps(w, durRef.current));
+    });
+    ro.observe(sc);
+    const w = sc.clientWidth || 900;
+    setViewportW(w);
+    useUi.getState().setZoomMin(zoomMinPps(w, duration));
+    return () => ro.disconnect();
+  }, []);
+  // duration changes re-derive the min (scene switch / load sample)
+  useEffect(() => {
+    useUi.getState().setZoomMin(zoomMinPps(viewportW || 900, duration));
+  }, [duration, viewportW]);
+
+  /* playhead follow-scroll (canonical playhead-controller playback update):
+     while PLAYING (never mid-scrub), when the playhead pixel leaves the
+     viewport, re-center it. Clamp [0, scrollW − viewW]. */
+  const playing = useUi((s) => s.playing);
+  useEffect(() => {
+    if (!playing) return;
+    const sc = scrollRef.current;
+    if (!sc) return;
+    const px = playhead * pxPerSec;
+    const viewW = sc.clientWidth;
+    if (px < sc.scrollLeft || px > sc.scrollLeft + viewW) {
+      sc.scrollLeft = Math.max(0, Math.min(px - viewW / 2, sc.scrollWidth - viewW));
+      setScrollLeft(sc.scrollLeft);
+    }
+  }, [playhead, playing, pxPerSec]);
 
   const laneBg = (kind: TrackJSON['kind']) =>
     kind === 'main' ? 'var(--lane-video)' : kind === 'audio' ? 'var(--lane-audio)' : 'var(--lane-overlay)';
@@ -264,13 +346,16 @@ export function Timeline() {
             (e.currentTarget as HTMLElement).focus();
           }
         }}
-        onScroll={onScrollSync}
+        onScroll={() => {
+          onScrollSync();
+          setScrollLeft(scrollRef.current?.scrollLeft ?? 0);
+        }}
         onPointerMove={moveMarquee}
         onPointerUp={finishMarquee}
         onPointerCancel={() => setMarquee(null)}
       >
         <div id="timeline-content" className="relative" style={{ width: contentW, minHeight: '100%' }}>
-          <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} playhead={playhead} />
+          <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} playhead={playhead} contentW={contentW} view={{ scrollLeft, viewportW: viewportW || 900 }} />
 
           {scene.tracks.map((track) => {
             const h = laneHeight(track.kind);
@@ -398,15 +483,17 @@ export function Timeline() {
             </div>
           )}
 
-          {/* ---- playhead (3px line + head, spec 05 §14.3) — spans full viewport ---- */}
-          <div className="pointer-events-none absolute bottom-0 top-0 z-40" style={{ left: playhead * pxPerSec, height: '100%' }} aria-hidden="true">
+          {/* ---- playhead (2px line + head, spec-05 §14.3 canonical) — spans
+               full viewport; line center-aligned (left = px − 1), device-grid
+               snapped ---- */}
+          <div className="pointer-events-none absolute bottom-0 top-0 z-40" style={{ left: snapPxToDeviceGrid(playhead * pxPerSec) - PLAYHEAD_LINE_PX / 2, height: '100%' }} aria-hidden="true">
             <div
-              className="absolute bottom-0 top-0 -translate-x-1/2"
-              style={{ width: 3, background: 'var(--playhead)', boxShadow: '0 0 1px rgba(0,0,0,0.8)' }}
+              className="absolute bottom-0 top-0"
+              style={{ width: PLAYHEAD_LINE_PX, background: 'var(--playhead)', boxShadow: '0 0 1px rgba(0,0,0,0.8)' }}
             />
             <div
               className="pointer-events-auto sticky top-0 z-40 cursor-col-resize"
-              style={{ top: 0, width: 18, height: zoneH + 6, marginLeft: -9 }}
+              style={{ top: 0, width: 18, height: zoneH + 6, marginLeft: -(18 / 2) + PLAYHEAD_LINE_PX / 2 }}
               onPointerDown={(e) => {
                 (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
                 e.stopPropagation();
@@ -427,8 +514,8 @@ export function Timeline() {
               }}
             >
               <svg width="18" height="13" viewBox="0 0 18 13" className="mt-[1px] block">
-                {/* triangle apex at x=9 = the 18px head's center = the 3px
-                    bar's -50% center — one shared centerline (was 2px off) */}
+                {/* triangle apex at x=9 + the marginLeft offset lands ON the
+                    2px line's center (px) — one shared centerline */}
                 <path d="M3.5 0h11v6.2L9 11.5 3.5 6.2V0z" fill="var(--playhead)" stroke="rgba(0,0,0,0.35)" strokeWidth="0.5" />
               </svg>
             </div>
