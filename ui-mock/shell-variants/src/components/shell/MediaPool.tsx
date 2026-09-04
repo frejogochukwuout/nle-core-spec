@@ -512,7 +512,7 @@ export function MediaPool() {
   });
 
   return (
-    <div data-testid="shell-mediapool" className="flex h-full min-h-0 flex-col bg-shell">
+    <div data-testid="shell-mediapool" className="flex h-full w-full min-h-0 min-w-0 flex-col bg-shell">
       {/* header row — import + search + sort/dir + view (never wraps, §9) */}
       <div className="flex items-center gap-1 border-b border-hairline px-2 py-1.5">
         <button

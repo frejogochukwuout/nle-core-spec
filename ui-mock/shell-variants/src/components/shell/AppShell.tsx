@@ -10,6 +10,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { Toolbar2 } from './Toolbar2';
+import { MixerDock } from '../mixer/MixerDock';
 import { MediaPool } from './MediaPool';
 import { Viewer } from './Viewer';
 import { Inspector } from './Inspector';
@@ -20,7 +21,6 @@ import { SceneTabs } from '../timeline/SceneTabs';
 import { Timeline } from '../timeline/Timeline';
 import { ColorPage } from '../pages/ColorPage';
 import { DeliverPage } from '../pages/DeliverPage';
-import { MixerRow } from '../mixer/MixerRow';
 import { ChannelEditor } from '../mixer/ChannelEditor';
 import { SoundLibrary } from '../mixer/SoundLibrary';
 import { sceneDuration } from '../../lib/mockData';
@@ -247,8 +247,9 @@ export function AppShell() {
           <Viewer duration={duration} />
         </div>
 
+        {/* right-docked panel: dragging the seam LEFT (dx<0) widens it */}
         {panels.inspector && (
-          <VSplitter onDrag={(dx) => setInspectorW(dx === 0 ? 340 : useUi.getState().inspectorW + dx)} />
+          <VSplitter onDrag={(dx) => setInspectorW(dx === 0 ? 340 : useUi.getState().inspectorW - dx)} />
         )}
         {panels.inspector && (
           <div ref={(el) => { regionsRef.current[3] = el; }} tabIndex={-1} className="shell-region panel-shadow z-10 flex h-full min-h-0 shrink-0" style={{ width: inspectorW }}>
@@ -259,13 +260,17 @@ export function AppShell() {
 
       <HSplitter onDrag={(dy) => setMainBodyH(dy === 0 ? 0 : (useUi.getState().mainBodyH || window.innerHeight * 0.4) + dy)} />
 
-      {/* ---- timeline block + mixer row (design doc §4 — 7th F6 region) ---- */}
+      {/* ---- timeline block + mixer dock (design doc v2.2 §4 — the mixer
+          sits SIDE BY SIDE with the multi-track lanes, not under them;
+          7th F6 region) ---- */}
       <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />
-        <Timeline />
-        <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region">
-          <MixerRow />
+        <div className="flex min-h-0 flex-1">
+          <Timeline />
+          <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0">
+            <MixerDock />
+          </div>
         </div>
       </div>
 

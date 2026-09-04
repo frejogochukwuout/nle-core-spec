@@ -8,8 +8,10 @@ import { useUi } from '../../state/useUiStore';
 import { dbLabel, dbToSlider, sliderToDb } from '../../state/mockMixer';
 
 /* ---------- vertical fader (dB-tapered) ---------- */
-export function Fader({ db, onChange, height = 96, ariaLabel }: {
-  db: number; onChange: (db: number) => void; height?: number; ariaLabel: string;
+export function Fader({ db, onChange, height = 96, fillHeight = false, ariaLabel }: {
+  db: number; onChange: (db: number) => void; height?: number;
+  /** side-dock mode: the track fills the strip's centerpiece height */
+  fillHeight?: boolean; ariaLabel: string;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ startY: number; startDb: number } | null>(null);
@@ -23,7 +25,7 @@ export function Fader({ db, onChange, height = 96, ariaLabel }: {
   }, [onChange]);
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className={`flex flex-col items-center gap-1 ${fillHeight ? 'self-stretch' : ''}`}>
       <span className="mono text-[10px] text-tmuted">{dbLabel(db)}</span>
       <div
         ref={trackRef}
@@ -34,8 +36,8 @@ export function Fader({ db, onChange, height = 96, ariaLabel }: {
         aria-valuemax={6}
         aria-valuenow={Math.round(db)}
         aria-valuetext={dbLabel(db)}
-        className="relative w-[14px] cursor-ns-resize rounded-[3px] bg-inset"
-        style={{ height }}
+        className={`relative w-[14px] cursor-ns-resize rounded-[3px] bg-inset ${fillHeight ? 'min-h-[80px] flex-1' : ''}`}
+        style={fillHeight ? undefined : { height }}
         onPointerDown={(e) => {
           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
           const box = trackRef.current!.getBoundingClientRect();
@@ -125,8 +127,10 @@ export function PanKnob({ pan, onChange, size = 22, ariaLabel }: {
 let meterPlaying = false;
 useUi.subscribe((s) => { meterPlaying = s.playing; });
 
-export function StripMeter({ trackId, db, height = 88, width = 7, duckAmount = 0, label }: {
-  trackId: string; db: number; height?: number; width?: number; duckAmount?: number; label: string;
+export function StripMeter({ trackId, db, height = 88, width = 7, duckAmount = 0, fillHeight = false, label }: {
+  trackId: string; db: number; height?: number; width?: number; duckAmount?: number;
+  /** rail/strip mode: no inline height — fill the flex parent instead */
+  fillHeight?: boolean; label: string;
 }) {
   const [level, setLevel] = useState(0);
   const phase = useRef((trackId.charCodeAt(0) + trackId.length) * 0.7);
@@ -151,8 +155,8 @@ export function StripMeter({ trackId, db, height = 88, width = 7, duckAmount = 0
 
   return (
     <div
-      className="relative flex items-end gap-[1px] overflow-hidden rounded-[2px] border border-hairline bg-black/70"
-      style={{ height, width: width * 2 + 1 }}
+      className={`relative flex items-end gap-[1px] overflow-hidden rounded-[2px] border border-hairline bg-black/70 ${fillHeight ? 'h-full min-h-0 w-full' : ''}`}
+      style={fillHeight ? undefined : { height, width: width * 2 + 1 }}
       aria-hidden="true"
       title={`${label}: ${dbLabel(db)} · peak ${Math.round(level * 100)}%`}
     >

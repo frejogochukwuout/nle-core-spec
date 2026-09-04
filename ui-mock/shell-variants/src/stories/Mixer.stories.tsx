@@ -1,11 +1,11 @@
-/* Mixer stories — the design-doc §4 audio surfaces: the 3-state row under the
-   timeline, a solo ChannelStrip, the Audio-focus inspector swap
-   (ChannelEditor), and the SoundLibrary pool swap. All store-driven; the
-   default mock mixer covers scene 1's audio tracks (A1 dialogue / A2 bgm
-   with duck-under). */
+/* Mixer stories — the design-doc v2.2 §4 audio surfaces: the 3-state side
+   dock beside the multi-track lanes, a solo ChannelStrip, the Audio-focus
+   inspector swap (ChannelEditor), and the SoundLibrary pool swap. All
+   store-driven; the default mock mixer covers scene 1's audio tracks
+   (A1 dialogue / A2 bgm with duck-under). */
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { MixerRow } from '../components/mixer/MixerRow';
+import { MixerDock } from '../components/mixer/MixerDock';
 import { ChannelStrip } from '../components/mixer/ChannelStrip';
 import { ChannelEditor } from '../components/mixer/ChannelEditor';
 import { SoundLibrary } from '../components/mixer/SoundLibrary';
@@ -19,44 +19,60 @@ const meta: Meta = {
 
 export default meta;
 
-/* ---- the 3-state row (rendered where the shell puts it: timeline above) --- */
+/* ---- the 3-state side dock (rendered where the shell puts it: right of
+   the multi-track lanes) --------------------------------------------------- */
 
-function MixerRowStory({ patch }: { patch: UiPatch }) {
+function MixerDockStory({ patch }: { patch: UiPatch }) {
   return (
     <>
       <StoreBoot patch={patch} />
-      <div className="flex h-screen flex-col bg-app">
-        <div className="mono flex flex-1 items-center justify-center text-[11px] text-tmuted">
-          ( timeline sits here in the real shell — mixer row preview only )
+      <div className="flex h-screen bg-app">
+        <div className="mono flex min-w-0 flex-1 items-center justify-center text-[11px] text-tmuted">
+          ( multi-track lanes sit here in the real shell — mixer dock preview only )
         </div>
-        <MixerRow />
+        <MixerDock />
       </div>
     </>
   );
 }
 
-/** ~176px strip row: per-track ChannelStrips + aux returns + master. */
-export const FullRow: StoryObj = {
-  name: 'Mixer — Full row',
+/** Classic strip row: per-track ChannelStrips + aux returns + master, fader
+ *  room = the timeline area's height. */
+export const FullDock: StoryObj = {
+  name: 'Mixer — Full dock (side by side)',
   parameters: { layout: 'fullscreen' },
-  render: () => <MixerRowStory patch={{ mixerState: 'full' }} />,
+  render: () => <MixerDockStory patch={{ mixerState: 'full' }} />,
 };
 
-/** ~32px meter bridge: badge + name + meter + M/S/L chips + master cluster. */
-export const Bridge: StoryObj = {
-  name: 'Mixer — Bridge',
+/** 44px meter-bridge rail: vertical stereo meter per track + master cluster. */
+export const BridgeRail: StoryObj = {
+  name: 'Mixer — Bridge rail',
   parameters: { layout: 'fullscreen' },
-  render: () => <MixerRowStory patch={{ mixerState: 'bridge' }} />,
+  render: () => <MixerDockStory patch={{ mixerState: 'bridge' }} />,
+};
+
+/** Collapse path: state = collapsed renders nothing (bounds-check story). */
+export const Collapsed: StoryObj = {
+  name: 'Mixer — Collapsed (renders nothing)',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ mixerState: 'collapsed' }} />
+      <div className="flex h-[200px] items-center justify-center bg-app text-[11px] text-tmuted">
+        ( mixer dock collapsed — nothing rendered here )
+      </div>
+    </>
+  ),
 };
 
 /* ---- ChannelStrip solo ----------------------------------------------------- */
 
-function StripSolo() {
+function StripSolo({ compact = false }: { compact?: boolean }) {
   const track = useUi((s) => s.scenes[0].tracks.find((t): t is TrackJSON => t.id === 'tr-audio-2'));
   if (!track) return null;
   return (
-    <div className="flex h-[420px] items-stretch border border-hairline">
-      <ChannelStrip track={track} sceneId="sc-1" compact={false} focused onStripClick={() => { /* demo */ }} />
+    <div className={`flex items-stretch border border-hairline ${compact ? 'h-[260px]' : 'h-[460px]'}`}>
+      <ChannelStrip track={track} sceneId="sc-1" compact={compact} focused onStripClick={() => { /* demo */ }} />
     </div>
   );
 }
@@ -69,6 +85,18 @@ export const ChannelStripSolo: StoryObj = {
     <>
       <StoreBoot patch={{ stripFocus: 'tr-audio-2' }} />
       <StripSolo />
+    </>
+  ),
+};
+
+/** Compact strip: what the dock shows when the timeline area is short. */
+export const ChannelStripCompact: StoryObj = {
+  name: 'Mixer — ChannelStrip compact',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ stripFocus: 'tr-audio-2' }} />
+      <StripSolo compact />
     </>
   ),
 };

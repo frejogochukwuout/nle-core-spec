@@ -393,8 +393,10 @@ export function Timeline() {
                 setPlayhead(t);
               }}
             >
-              <svg width="14" height="13" viewBox="0 0 13 13" className="mt-[1px]">
-                <path d="M1 0h11v6.2L6.5 11.5 1 6.2V0z" fill="var(--playhead)" stroke="rgba(0,0,0,0.35)" strokeWidth="0.5" />
+              <svg width="18" height="13" viewBox="0 0 18 13" className="mt-[1px] block">
+                {/* triangle apex at x=9 = the 18px head's center = the 3px
+                    bar's -50% center — one shared centerline (was 2px off) */}
+                <path d="M3.5 0h11v6.2L9 11.5 3.5 6.2V0z" fill="var(--playhead)" stroke="rgba(0,0,0,0.35)" strokeWidth="0.5" />
               </svg>
             </div>
           </div>

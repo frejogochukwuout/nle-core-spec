@@ -20,7 +20,7 @@ export const Edit: StoryObj = {
 };
 
 /** Audio focus (design doc §3): SoundLibrary swaps the pool, ChannelEditor
- *  swaps the inspector, mixer row expands to full, audio lanes boost. */
+ *  swaps the inspector, mixer dock expands to full, audio lanes boost. */
 export const AudioFocus: StoryObj = {
   name: 'Full Shell — Audio Focus',
   render: () => (

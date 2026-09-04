@@ -167,12 +167,12 @@ export function TimelineToolbar() {
 
       <div className="vsep" />
 
-      {/* mixer row state — design doc §4: Edit cycles collapsed→bridge→full-compact;
+      {/* mixer dock state — design doc v2.2 §4: Edit cycles collapsed→bridge→full;
           Audio toggles bridge↔full. No chord (⌘⇧M is spec 16 §3.5 mute-all). */}
       <button
         className={`icon-btn ${mixerState !== 'collapsed' ? 'toggled' : ''}`}
-        data-tip="Mixer (collapsed / meter bridge / full)"
-        aria-label="Toggle mixer row"
+        data-tip="Mixer dock (bridge / full, beside the lanes)"
+        aria-label="Toggle mixer dock"
         aria-pressed={mixerState !== 'collapsed'}
         onClick={cycleMixerState}
         data-testid="btn-mixer-state"

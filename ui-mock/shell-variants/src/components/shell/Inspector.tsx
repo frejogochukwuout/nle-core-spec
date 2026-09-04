@@ -752,7 +752,7 @@ export function Inspector() {
   const activeTab = visibleTabs.some((t) => t.id === tab) ? tab : visibleTabs[0]?.id ?? 'video';
 
   return (
-    <div data-testid="shell-inspector" className="flex h-full min-h-0 flex-col bg-shell">
+    <div data-testid="shell-inspector" className="flex h-full w-full min-h-0 min-w-0 flex-col bg-shell">
       {/* inspector toolbar — actions only (chrome trimmed per review) */}
       <div className="flex items-center gap-1.5 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
         <button className="icon-btn icon-btn-sm" data-tip="Inspector history" aria-label="Inspector history">
