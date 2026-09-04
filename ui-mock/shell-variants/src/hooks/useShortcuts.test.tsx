@@ -272,17 +272,20 @@ describe('clip + selection keys', () => {
   });
 
   it('⌥[ / ⌥] ripple-trim closes the gap (alt combos read e.code)', () => {
-    // l-edge at 16: every clip containing ph 16 gets its head removed ripple-style —
-    // el-2 (8.5..17) keeps its start, shows its tail, downstream closes the gap
+    // l-edge at 16 on the SELECTED el-2 (8.5..17): the head region is removed
+    // ripple-style — el-2 keeps its start, shows its tail, downstream closes
+    // the gap; the unselected audio bed under the same playhead is untouched
+    // (P1 target constraint)
     press({ key: '[', code: 'BracketLeft', altKey: true });
     expect(el('el-2').startTime).toBe(8.5);                    // start kept
     expect(el('el-2').duration).toBeCloseTo(1.0, 5);           // head removed
     expect(el('el-2').sourceStart).toBeCloseTo(10.5, 5);       // source advanced
     expect(el('el-3').startTime).toBeCloseTo(9.5, 5);          // gap closed
     expect(el('el-4').startTime).toBeCloseTo(16.5, 5);
-    expect(el('el-6').duration).toBe(14);                      // audio 0..30 lost its head too
-    // r-edge at 20 on el-4 (now 16.5..22.5): the tail [20..22.5] is removed
-    useUi.setState({ playhead: 20 });
+    expect(el('el-6').duration).toBe(30);                      // NOT selected → untouched
+    // clear the selection → main-track fallback targets el-4 (16.5..22.5);
+    // r-edge at 20 removes the tail [20..22.5]
+    useUi.setState({ playhead: 20, selection: [] });
     press({ key: ']', code: 'BracketRight', altKey: true });
     expect(el('el-4').duration).toBeCloseTo(3.5, 5);           // 20 - 16.5
   });

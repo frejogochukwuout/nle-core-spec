@@ -21,10 +21,10 @@ describe('Viewer (spec 18 §4.3)', () => {
     expect(scrub).toHaveAttribute('aria-valuenow', '384'); // 16 s × 24 fps
     expect(scrub).toHaveAttribute('aria-valuemax', '720'); // 30 s × 24 fps
     expect(scrub).toHaveAttribute('aria-valuetext', '00:00:16:00');
-    // playhead 16 → el-2 drives the monitor; role="img" + aria-label make the
-    // program surface's accessible name match the visible surface (R13 fix)
-    expect(container.querySelector('img')).toHaveAttribute('aria-label', 'Program monitor: Marina interview');
-    expect(container.querySelector('img')).toHaveAttribute('role', 'img');
+    // playhead 16 → el-2 drives the monitor; the program surface's accessible
+    // name lives in real alt text — one name, one channel (R13 fix: the old
+    // alt="" + aria-label pair marked the img decorative and dropped the name)
+    expect(container.querySelector('img')).toHaveAttribute('alt', 'Program monitor: Marina interview');
   });
 
   it('composites the text overlay at the playhead; past the last clip the frame is empty', () => {

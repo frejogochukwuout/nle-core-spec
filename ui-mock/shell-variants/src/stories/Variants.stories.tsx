@@ -14,7 +14,7 @@ const meta: Meta = {
 
 export default meta;
 
-type PresetStory = StoryObj<{ presetId: 'A' | 'B' | 'C' }>;
+type PresetStory = StoryObj; // no args: presetStory(id) ignores args — no controllable-knob generic (R13 review: dead args type)
 
 const presetStory = (id: 'A' | 'B' | 'C', name: string): PresetStory => {
   const preset = PRESETS.find((p) => p.id === id)!;

@@ -35,6 +35,13 @@ const preview: Preview = {
     a11y: {
       context: '#storybook-root',
     },
+    /* annotakit hotkeys REMAPPED off the shell's own plain keys (R13 review:
+       the defaults r/l/d/? collided with the ripple tool, JKL shuttle L, and
+       the cheat sheet '?' — one keypress fired BOTH layers). pin stays 'c'
+       (no shell collision); region/layer/drawer/help move to g/h/f/q. */
+    annotakit: {
+      hotkeys: { pin: 'c', region: 'g', layer: 'h', drawer: 'f', help: 'q' },
+    },
   },
   decorators: [withStoreReset, withVariantProvider],
 };

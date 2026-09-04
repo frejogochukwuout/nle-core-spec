@@ -623,13 +623,25 @@ export const useUi = create<UiState>((set, get) => ({
   trimToPlayhead: (edge, ripple) => withHistory(set, get, (scenes) => {
     const s = get();
     const ph = snapToFrame(s.playhead);
+    /* target constraint (R13 P1): the trim hits the SELECTION when one exists,
+       else the clip under the playhead on the main track — always scoped to
+       the ACTIVE scene. The original fan-out hit every unlocked clip under
+       the playhead across ALL scenes and tracks: one ⌥[ press silently
+       destroyed unselected material (sc-2 selects, the music bed...). */
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    const targetSet = new Set(s.selection.length > 0
+      ? s.selection
+      : (sc.tracks.find((t) => t.kind === 'main' && !t.locked)?.elements ?? []).map((e) => e.id));
+    if (targetSet.size === 0) return;
     let changed = false;
-    for (const sc of scenes) for (const t of sc.tracks) {
+    for (const t of sc.tracks) {
       if (t.locked) continue;
       // ripple bookkeeping per track: [removed span end, removed span length]
       let rippleEnd: number | null = null;
       let rippleLen = 0;
       for (const e of t.elements) {
+        if (!targetSet.has(e.id)) continue;
         if (edge === 'l' && ph > e.startTime && ph < e.startTime + e.duration - 0.1) {
           const cut = ph - e.startTime;
           if (e.sourceStart !== undefined) e.sourceStart += cut;
@@ -663,7 +675,7 @@ export const useUi = create<UiState>((set, get) => ({
         t.elements.sort((a, b) => a.startTime - b.startTime); // keep lanes ordered after shifts
       }
     }
-    if (!changed) return; // playhead outside any clip — no-op, no history
+    if (!changed) return; // playhead outside any target clip — no-op, no history
     return scenes;
   }),
   setElementField: (id, patch) => withHistory(set, get, (scenes) => {

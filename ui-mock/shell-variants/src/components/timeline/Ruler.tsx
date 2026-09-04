@@ -6,7 +6,7 @@
 import { useRef, useState } from 'react';
 import { useUi } from '../../state/useUiStore';
 import { useHeaderStyle } from '../../state/variantHooks';
-import { tc, tcRuler } from '../../lib/timecode';
+import { snapToFrame, tc, tcRuler } from '../../lib/timecode';
 import type { Marker, SceneJSON } from '../../lib/mockData';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 
@@ -28,6 +28,11 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
   const setLoopEnabled = useUi((s) => s.setLoopEnabled);
   const menu = useContextMenu(); // §4.9 ruler menu
   const ref = useRef<HTMLDivElement>(null);
+  /* gesture-origin gate: only the ruler's OWN press may seek — a drag that
+     started on the track headers / toolbar must not scrub the playhead when
+     it crosses the ruler (R13 review: `buttons === 1` alone made any
+     left-drag an accidental seek with no undo trail). */
+  const seeking = useRef(false);
   const [hoverT, setHoverT] = useState<number | null>(null);
 
   /* §4.9 ruler menu — marker at playhead, in/out clearing, loop toggle, and
@@ -84,7 +89,8 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
   const seek = (clientX: number) => {
     const box = ref.current?.getBoundingClientRect();
     if (!box) return;
-    setPlayhead(Math.max(0, (clientX - box.left) / pxPerSec));
+    // frame-grid discipline (R13 review: raw pixel times landed off-grid)
+    setPlayhead(Math.max(0, snapToFrame((clientX - box.left) / pxPerSec)));
   };
 
   const ticks: number[] = [];
@@ -121,22 +127,38 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
         menu.open(e.clientX, e.clientY, buildMenuItems(), 'ruler');
       }}
       onKeyDown={(e) => {
-        if (!isMenuKey(e)) return;
-        e.preventDefault();
-        e.stopPropagation();
-        menu.openForElement(ref.current, buildMenuItems(), 'ruler');
+        if (isMenuKey(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          menu.openForElement(ref.current, buildMenuItems(), 'ruler');
+          return;
+        }
+        // slider contract (spec 18 §11.3): the ruler is keyboard-operable —
+        // ←/→ nudge ±1 frame (⇧ ×10), Home/End jump (R13 review: role=slider
+        // was keyboard-dead)
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          useUi.getState().nudgePlayhead((e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1));
+        } else if (e.key === 'Home' || e.key === 'End') {
+          e.preventDefault();
+          useUi.getState().setPlayhead(e.key === 'Home' ? 0 : duration);
+        }
       }}
       onPointerDown={(e) => {
         if (e.button !== 0) return; // right-button down must not seek — the menu follows
         (e.currentTarget as HTMLElement).focus(); // roving focus for Shift+F10
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        seeking.current = true;
         seek(e.clientX);
       }}
       onPointerMove={(e) => {
         const box = ref.current?.getBoundingClientRect();
         if (box) setHoverT(Math.max(0, (e.clientX - box.left) / pxPerSec));
-        if (e.buttons === 1) seek(e.clientX);
+        if (seeking.current && e.buttons === 1) seek(e.clientX);
       }}
+      onPointerUp={() => { seeking.current = false; }}
+      onPointerCancel={() => { seeking.current = false; }}
+      onLostPointerCapture={() => { seeking.current = false; }}
       onPointerLeave={() => setHoverT(null)}
     >
       {/* frame ticks (sub-second reference) */}

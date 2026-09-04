@@ -637,17 +637,27 @@ describe('slipNudge', () => {
 });
 
 describe('trimToPlayhead', () => {
-  it('l-edge: trims clip start to the playhead (unlocked tracks only)', () => {
+  it("l-edge: trims the SELECTED clip's start to the playhead (unlocked tracks only)", () => {
     act(() => { S().setPlayhead(16); S().trimToPlayhead('l', false); });
-    const e = el('el-2'); // 8.5..17.0 contains 16
+    const e = el('el-2'); // selection ['el-2'] contains 16
     expect(e.startTime).toBe(16);
     expect(e.duration).toBeCloseTo(1.0, 5);
     expect(e.sourceStart).toBeCloseTo(10.5, 5); // 3.0 + 7.5
+    // P1 target constraint: the audio bed under the same playhead is UNTOUCHED
+    expect(el('el-6').duration).toBe(30);
   });
 
-  it('r-edge: trims clip end to the playhead', () => {
-    act(() => { S().setPlayhead(4); S().trimToPlayhead('r', false); });
-    expect(el('el-1').duration).toBe(4);
+  it('r-edge: with no selection, trims the main-track clip under the playhead', () => {
+    act(() => { S().setSelection([]); S().setPlayhead(4); S().trimToPlayhead('r', false); });
+    expect(el('el-1').duration).toBe(4); // main-track fallback target
+  });
+
+  it('P1 fix: one keypress never destroys unselected material — other scenes and unselected tracks untouched', () => {
+    // sc-2's selects sit under the playhead too (0..19.5) — they must survive
+    act(() => { S().setPlayhead(10); S().trimToPlayhead('r', true); });
+    expect(el('s2-1').duration).toBe(6.25); // sc-2 untouched
+    expect(el('s2-2').duration).toBe(7.75);
+    expect(el('el-6').duration).toBe(30);   // audio bed untouched (not selected)
   });
 
   it('skips locked tracks (tr-audio-2 is locked in the fixture)', () => {

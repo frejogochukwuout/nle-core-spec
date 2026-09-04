@@ -27,7 +27,8 @@ describe('Ruler', () => {
     expect(r).toHaveAttribute('aria-valuenow', '384'); // 16 s × 24
     expect(r).toHaveAttribute('aria-valuetext', '00:00:16:00');
     fireEvent.pointerDown(r, { pointerId: 1, button: 0, clientX: 200 });
-    expect(store().playhead).toBeCloseTo(200 / 46, 5);
+    // R13: seeks snap to the frame grid — 200/46 = 4.3478 s = frame 104.35 → 104 (4.3333 s)
+    expect(store().playhead).toBeCloseTo(104 / 24, 5);
   });
 
   it('scrubbing with the button held keeps seeking (drag-to-seek)', () => {

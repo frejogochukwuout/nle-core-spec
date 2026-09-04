@@ -42,7 +42,10 @@ export function AppDock() {
           return (
             <button
               key={p.id}
-              onClick={() => (p.id === 'audio' ? useUi.getState().enterAudioFocus('dock') : setPage(p.id))}
+              // Audio is a TOGGLE like ⌘4 (spec 16 §3.8): re-clicking the active
+              // audio tab EXITS focus mode instead of re-running enterAudioFocus
+              // (R13 review: re-entry reset a user-chosen bridge state + re-flashed)
+              onClick={() => (p.id === 'audio' ? (page === 'audio' ? useUi.getState().exitAudioFocus() : useUi.getState().enterAudioFocus('dock')) : setPage(p.id))}
               data-testid={`shell-dock-page-${p.id}`}
               data-tip={p.tip}
               aria-label={p.label}

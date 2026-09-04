@@ -69,7 +69,7 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(screen.getByRole('button', { name: 'Retry job' })).toBeInTheDocument();
   });
 
-  it('preset CTA carries the accent-selection pair styling (9.1:1, resolved spec finding)', () => {
+  it('preset CTA carries the accent-selection pair styling (AA per accent: gold 9.1 / ember 6.0 / violet 5.05)', () => {
     render(<DeliverPage />);
     const cta = screen.getByTestId('shell-deliver-btn-export-fcpxml');
     expect(cta).toHaveStyle({ background: 'var(--accent-selection)', color: 'var(--accent-contrast)' });

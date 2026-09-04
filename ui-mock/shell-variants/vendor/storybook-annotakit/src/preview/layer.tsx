@@ -973,7 +973,17 @@ function DrawerCard(props: {
           <div
             key={t.id}
             className={`annota-thread-row${t.id === props.activeThread ? ' is-active' : ''}${t.status === 'resolved' ? ' is-resolved' : ''}`}
+            role="button"
+            tabIndex={0}
+            aria-label={`Thread #${t.number} — ${t.status === 'open' ? 'open' : 'resolved'} — ${t.comments[0]?.body?.split('\n')[0]?.slice(0, 60) ?? '(no text)'}`}
             onClick={() => props.onSelect(t.id)}
+            onKeyDown={(e) => {
+              /* keyboard parity (R13 review) — mirror of the manager card fix */
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                props.onSelect(t.id);
+              }
+            }}
           >
             <div className="annota-thread-title">
               <span className={`annota-dot${t.status === 'resolved' ? ' is-resolved' : status === 'orphan' ? ' is-orphan' : ''}`} />

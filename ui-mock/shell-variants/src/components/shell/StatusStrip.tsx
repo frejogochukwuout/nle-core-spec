@@ -87,7 +87,7 @@ export function StatusStrip() {
           aria-label="Save failed — retry"
         >
           <span className="h-[5px] w-[5px] rounded-full bg-[var(--danger)]" />
-          Save failed — retrying
+          Save failed — click to retry
         </button>
       )}
       <span aria-live="polite" className="mono">

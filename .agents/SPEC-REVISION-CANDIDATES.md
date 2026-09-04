@@ -116,6 +116,8 @@ at commit `ebc1604`; cross-checked with `.agents/PLAN.md` seal items 14–25.
 | C5 | ⌘B splits the main-track clip under playhead (spec: focused track only; ⌘⇧B all-tracks absent) | 16 §3.4 | `useShortcuts.ts` ⌘B |
 | C6 | e.key-primary dispatch (spec 16 §8.4 prefers event.code lookup) | 16 §8.4 | `useShortcuts.ts` |
 | C7 | Viewer zoom ladder = Fit/1.5×/2×/4× magnification labels (R13 honesty fix); spec 18 §3.3 enumerates Fit/50%/100%/200% whose "percent" semantics are unanchored (the old mock's "100%" was 2× fit) — spec should adopt magnification or pixel-anchored semantics at seal | 18 §3.3 | `Viewer.tsx` zoom select |
+| C8 | `role="application"` on the shell root is spec-MANDATED (18 §11.3) but kills SR browse-mode app-wide; the maintainer review flagged it. With full keyboard coverage + F6 cycling the landmark is defensible, but the seal round should either bless it explicitly (with the keyboard-coverage caveat) or scope application-mode to the timeline region | 18 §11.3 | `AppShell.tsx` root div |
+| C9 | 12px splitter/trim hit targets are spec-MANDATED (18 §3.2: "12px interactive hit; visual line is 6px") but sit under the §11 a11y floor's 24px minimum — spec-internal tension; R13 mitigation: splitters are now keyboard-resizable (arrow keys = 8px steps) | 18 §3.2 vs §11 | `AppShell.tsx` SPLIT_HIT, `Clip.tsx` trim handles |
 
 ## D. Seal-item staleness flags (from R13-W1b)
 

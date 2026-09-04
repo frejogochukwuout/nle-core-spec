@@ -336,6 +336,7 @@ function ReviewPanel(): React.ReactElement {
           value={author}
           onChange={(e) => saveAuthor(e.target.value)}
           placeholder="your name"
+          aria-label="Author name"
           title="Author name (shared with the preview composer)"
         />
         <button style={{ padding: '3px 9px', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderRadius: 6, border: `1px solid ${theme.appBorderColor}`, background: 'transparent', color: theme.textColor }} onClick={() => setGhOpen((v) => !v)} title="GitHub lifecycle sync">
@@ -423,6 +424,9 @@ function ReviewPanel(): React.ReactElement {
         return (
           <div
             key={t.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`Thread #${t.number} by ${t.author ?? 'anonymous'} — ${t.status === 'open' ? 'open' : 'resolved'} — ${t.comments[0]?.body?.slice(0, 60) ?? '(no text)'}`}
             style={{
               padding: '6px 6px 6px 8px',
               margin: '5px 0',
@@ -433,6 +437,15 @@ function ReviewPanel(): React.ReactElement {
               opacity: t.status === 'open' ? 1 : 0.75,
             }}
             onClick={() => focusThread(t)}
+            onKeyDown={(e) => {
+              /* keyboard parity (R13 review): the card is the gate for reply +
+                 resolve — pointer-only divs made the panel's core actions
+                 unreachable by keyboard */
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                focusThread(t);
+              }
+            }}
           >
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <span style={chip(t.status === 'open' ? '#f59e0b22' : '#16a34a22', t.status === 'open' ? '#b45309' : '#15803d')}>
@@ -504,6 +517,7 @@ function ThreadActions(props: {
     <div style={{ display: 'flex', gap: 6, marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
       <input
         style={{ flex: 1, padding: '3px 8px', fontSize: 12, borderRadius: 6, border: `1px solid ${theme.appBorderColor}`, background: 'transparent', color: theme.textColor }}
+        aria-label={`Reply to thread #${props.thread.number}`}
         placeholder="reply…"
         value={body}
         onChange={(e) => setBody(e.target.value)}

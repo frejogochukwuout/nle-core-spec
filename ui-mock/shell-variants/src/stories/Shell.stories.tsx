@@ -161,7 +161,7 @@ export const StatusFailed: StoryObj = {
 
 /* ---- toast region ---------------------------------------------------------------- */
 
-/** Fires one toast per kind: info (4 s), success (6 s), persist (stays).
+/** Fires one toast per kind: info/success (4 s), persist (6 s), error persists.
  *  Max-3 stack is enforced by the store. */
 function ToastScenario() {
   useEffect(() => {

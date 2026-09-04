@@ -68,11 +68,16 @@ const SPLIT_HIT = 12; // §3.2: 12px interactive hit; visual line is the 6px --s
 
 function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
   const start = useRef(0);
+  const keyStep = (dir: 1 | -1) => onDrag(dir * 8); // §11 a11y floor: separator is keyboard-operable (arrows = 8px steps)
   return (
     <div
       className="group relative z-10 flex shrink-0 cursor-col-resize items-center justify-center bg-app"
       style={{ width: SPLIT_HIT }}
       onDoubleClick={() => onDrag(0)}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); keyStep(-1); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); keyStep(1); }
+      }}
       onPointerDown={(e) => {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         start.current = e.clientX;
@@ -95,11 +100,16 @@ function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
 
 function HSplitter({ onDrag }: { onDrag: (dy: number) => void }) {
   const start = useRef(0);
+  const keyStep = (dir: 1 | -1) => onDrag(dir * 8); // arrows = 8px steps
   return (
     <div
       className="group relative z-10 flex shrink-0 cursor-row-resize items-center justify-center bg-app"
       style={{ height: SPLIT_HIT }}
       onDoubleClick={() => onDrag(0)}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowUp') { e.preventDefault(); keyStep(-1); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); keyStep(1); }
+      }}
       onPointerDown={(e) => {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         start.current = e.clientY;

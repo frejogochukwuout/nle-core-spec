@@ -114,7 +114,9 @@ export function DeliverPage() {
         </div>
 
         {/* export CTA — accent-focus has no AA text pair in resolve/studio
-            (recorded spec finding); use the accent-selection pair (9.1:1) */}
+            (recorded spec finding); use the accent-selection pair — per accent:
+            gold 9.1:1 / ember 6.0:1 / violet 5.05:1 (R13: violet darkened from
+            #7b5cff after a live AA measurement caught 3.99:1) */}
         <button
           data-testid="shell-deliver-btn-export-fcpxml"
           className="mb-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius)] px-3 py-2.5 text-[12px] font-semibold transition-opacity hover:opacity-90"

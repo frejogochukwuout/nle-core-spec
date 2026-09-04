@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Play, Pause, ChevronDown, ChevronLeft, ChevronRight, SkipBack, SkipForward, Repeat, Flag, Frame, Eye } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { mediaById, type ElementJSON, type SceneJSON } from '../../lib/mockData';
-import { tc } from '../../lib/timecode';
+import { snapToFrame, tc } from '../../lib/timecode';
 
 function mainElementAt(scene: SceneJSON, time: number): ElementJSON | null {
   const t = scene.tracks.find((tr) => tr.kind === 'main');
@@ -93,7 +93,9 @@ export function Viewer({ duration }: { duration: number }) {
   const seekFromEvent = (clientX: number) => {
     const box = scrubRef.current?.getBoundingClientRect();
     if (!box) return;
-    setPlayhead(((clientX - box.left) / box.width) * duration);
+    // frame-grid discipline: seeks land ON the frame grid like every other
+    // playhead mover (R13 review: raw pixel-derived times landed off-grid)
+    setPlayhead(snapToFrame(((clientX - box.left) / box.width) * duration));
   };
 
   /* fit-anchored magnification ladder — honest labels for what the code
@@ -146,10 +148,16 @@ export function Viewer({ duration }: { duration: number }) {
           className="relative aspect-video max-h-full max-w-full overflow-hidden rounded-[var(--radius)] bg-black"
           style={zoomStyle}
         >
+          {/* one name, one channel: real alt text (alt="" would mark the
+              monitor decorative and drop the name from the a11y tree —
+              R13 review caught alt="" + aria-label conflicting) */}
           {img && !img.offline ? (
-            <img src={img.thumbnail} alt="" role="img" aria-label={`Program monitor: ${el?.name ?? 'empty'}`} className="h-full w-full object-cover" />
+            <img src={img.thumbnail} alt={`Program monitor: ${el?.name ?? 'empty'}`} className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] text-[13px] text-tmuted">
+            <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] text-[13px] text-[#9a9aa5]">
+              {/* theme-invariant on-canvas text: the monitor surround is always
+                  near-black, so the light theme's --text-muted (3.1:1 here) must
+                  not leak onto it — fixed #9a9aa5 measures ~7:1 (R13 review) */}
               {img?.offline ? 'Media offline' : 'No media — import or drop a file'}
             </div>
           )}
@@ -212,6 +220,19 @@ export function Viewer({ duration }: { duration: number }) {
           if (e.buttons === 1) seekFromEvent(e.clientX);
         }}
         onPointerLeave={() => setHoverX(null)}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          // slider contract (spec 18 §11.3): the scrub row is keyboard-operable —
+          // ←/→ nudge ±1 frame (⇧ ×10), Home/End jump (same grammar as the
+          // transport keys; R13 review: role=slider was keyboard-dead)
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            useUi.getState().nudgePlayhead((e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1));
+          } else if (e.key === 'Home' || e.key === 'End') {
+            e.preventDefault();
+            useUi.getState().setPlayhead(e.key === 'Home' ? 0 : duration);
+          }
+        }}
         role="slider"
         aria-label="Scrub timeline"
         aria-valuemin={0}

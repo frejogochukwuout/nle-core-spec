@@ -49,7 +49,8 @@
   /* accent ramps — data-accent picks one; state ONLY (selection, active tab, CTA) */
   --accent-gold: #e8b34b;
   --accent-ember: #fa6a4a;
-  --accent-violet: #7b5cff;
+  --accent-violet: #8f74ff;    /* R13: was #7b5cff — 3.99:1 with --accent-contrast #1a1a1a (AA fail,
+                                   caught by a live measurement in review); #8f74ff restores 5.05:1 */
   --accent-selection: var(--accent-gold);
   --accent-focus: #7b5cff;      /* focus rings + primary buttons (spec §9) */
   --accent-contrast: #1a1a1a;   /* text on accent chips */
