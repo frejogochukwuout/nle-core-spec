@@ -289,6 +289,7 @@ Amendment: 16 §3.4 (or 06's trim family) states that resolution.
 | C26 | Buses fixed pair {a1,a2} + outputBus 0|1|2 (see N14); auxPreFader/auxB/aux-on now REAL toggles | 20 §4.2 | `mockMixer.ts`/`ChannelStrip.tsx` |
 | C27 | Fader taper linear-in-dB (unity 0dB at 91% travel, dbl-click reset) — DESIGN doc corrected R14 (was claiming mid-scale) | DESIGN-audio §6 | `mockMixer.ts` dbToSlider |
 | C28 | Timeline zoom ladder 8–240 px/s vs 05 §5.2's 5–5,000 (see N13) | 05 §5.2 | `useUiStore.ts` MIN_PPS/MAX_PPS |
+| C29 | Mock 09-shape deltas beyond N1/N3: `MediaRecord.size` display strings ("1.8 GB") vs numeric bytes; `colorInfo`/`storage` omitted; `SceneJSON.isMain` dropped (flat tracks); transition presentations stored as display names vs 09's registry keys | 09 §3.1 | `mockData.ts` docblock + shapes |
 
 ### E.4 Fixed-not-registered this round (evidence the seal round can cite)
 

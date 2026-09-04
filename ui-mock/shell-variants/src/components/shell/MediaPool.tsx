@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { project, type MediaRecord, type MediaType, type TrackKind } from '../../lib/mockData';
-import { tc, totalDuration, clamp } from '../../lib/timecode';
+import { tc, totalDuration, clamp, snapToFrame } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
 import { ContextMenu, useContextMenu, isMenuKey, type MenuItem } from './ContextMenu';
 
@@ -328,7 +328,9 @@ export function MediaPool() {
     setActiveId(m.id);
     setAnchorId(m.id);
     const el = activeScene.tracks.flatMap((t) => t.elements).find((e) => e.mediaId === m.id);
-    if (el) setPlayhead(el.startTime + 0.1);
+    // frame-grid discipline (R14 review: +0.1s raw offset landed off-grid —
+    // 0.1s is 2.4 frames at 24fps); snap keeps the playhead on the lattice
+    if (el) setPlayhead(snapToFrame(el.startTime + 1 / 24));
     else pushToast({ kind: 'info', title: `"${m.name}" is not on ${activeScene.name}`, detail: 'reveal jumps to the first clip using this asset in the active scene (mock)' });
   };
 

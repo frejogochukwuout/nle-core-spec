@@ -147,7 +147,7 @@ describe('MediaPool (spec 18 §4.2)', () => {
     fireEvent.keyDown(region, { key: ' ' });
     expect(S().mediaSelection).toEqual(['m-02', 'm-07']); // Space toggles the active option
     fireEvent.keyDown(region, { key: 'Enter' });
-    expect(S().playhead).toBeCloseTo(8.6, 6); // reveal → el-7 (m-07) start 8.5 + 0.1
+    expect(S().playhead).toBeCloseTo(8.5 + 1 / 24, 6); // reveal → el-7 (m-07): +1 frame, ON the grid (R14)
     expect(S().mediaSelection).toEqual(['m-07']);
   });
 
@@ -155,7 +155,7 @@ describe('MediaPool (spec 18 §4.2)', () => {
     await renderPool();
     fireEvent.dblClick(cardByName('sunset_timelapse')); // m-05 backs el-4 at 24.0
     expect(S().mediaSelection).toEqual(['m-05']);
-    expect(S().playhead).toBe(24.1);
+    expect(S().playhead).toBe(24 + 1 / 24); // +1 frame, ON the 24fps grid (R14: was 24.1 — 2.4 frames off)
   });
 
   /* ---- offline asset + footer ---- */
