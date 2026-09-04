@@ -4,7 +4,7 @@
 **Status:** v1.0 (Round 9 — new spec per Decision 13; source analysis: `audits/ARCH-R9-three-domain-strategy.md` §1.4/§3, web-daw-core `README.md`/`PLAN.md`/`HANDOFF.md`/`docs/track-model.md`, all read at `bc68ee0`)
 **Spec file:** `20-audio-core.md` (single canon file per 00-master §2.5)
 **Primary teacher:** web-daw-core (`github.com/bearachprema/web-daw-core`, private) — the DAW-grade engine extracted from web-daw `main@913d0d7`
-**Baseline:** 737/737 tests green in Node (~70 s), `tsc --noEmit` clean, zero runtime deps, manifest-synced from the only LIVING ancestor (web-daw)
+**Baseline:** 737/737 tests green in Node (~70 s), `tsc --noEmit` clean, zero runtime deps, manifest-synced from the only LIVING ancestor (web-daw) — *(R9-era field; superseded by the R15 re-baseline line below — 721/721 PURE core after the M1.6 bridge relocation)*
 **R15 re-baseline + amendments (SCOUT-R15-C, verified by running):** web-daw-core @ `374711c` — **721/721** re-run, `tsc --noEmit` clean, **zero submodules** (the bridge relocated to nle-engine at M1.6); nle-engine @ `f526e67` — **274/274** vitest + **265/265** browser rows + **318** probe checks (its `vendor/web-daw-core` pin `5243c49` sits one docs-only commit behind WDC HEAD). Amendments: §4.1/§4.2/§5/§6.2/§11 bridge-home corrections (M1.6 relocation), §4.2 G-surface authoring contract (A4), §6.5/§10/§12.4 retirement rows CLOSED (AudioMixer deleted @`20fa266`; direct mix retired @`abdf9ee`), §7 M2 re-scoped as the app's A4 phase (ARCH-R15 §3.4)
 
 ---
@@ -27,7 +27,7 @@ What this spec deliberately does NOT own: playback clock law (`AudioContext.curr
 
 ## 3. The three-layer track model (S / G / E) — spec law
 
-The answer to "do we need a broader track than video/audio (MIDI, buses, signal passing)?" is: **track is three coordinated layers that meet at a single key** (web-daw-core `docs/track-model.md` §1, de-risked by `test/nle-bridge.test.ts` C1/H8-H12):
+The answer to "do we need a broader track than video/audio (MIDI, buses, signal passing)?" is: **track is three coordinated layers that meet at a single key** (web-daw-core `docs/track-model.md` §1, de-risked by the NLE bridge tests — now at `nle-engine/tests/vitest/nle-bridge.test.ts` per the M1.6 relocation, C1/H8-H12):
 
 ```
 Layer S — STRUCTURE   opencut-timeline SceneTracks        (editing: what/where)

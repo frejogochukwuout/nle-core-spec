@@ -266,16 +266,16 @@ Organized by category. For each shortcut:
 | Key | Action | EngineCommand | Context | FCP equiv |
 |---|---|---|---|---|
 | `M` | Add marker at playhead (always adds — see the N8 note below) | `{ type: 'addMarker', params: { time: <currentTime> } }` | Always | M |
-| `Shift+M` | Delete marker at playhead | `{ type: 'removeBookmark', params: { time: <currentTime> } }` | When marker at playhead | Shift+M |
-| `Option+M` | Edit marker (open dialog, focus name field) | (UI only — opens marker dialog via uiStore; EngineCommand `updateBookmark` fires on save) | When marker at playhead | (none) |
+| `Shift+M` | Delete marker at playhead | `{ type: 'deleteMarker', params: { time: <currentTime> } }` | When marker at playhead | Shift+M |
+| `Option+M` | Edit marker (open dialog, focus name field) | (UI only — opens marker dialog via uiStore; EngineCommand `updateMarker` fires on save) | When marker at playhead | (none) |
 | `Cmd+Option+M` | Delete all markers | `{ type: 'batch', label: 'Delete all markers', commands: ... }` | Always | (none) |
 | `Option+Shift+M` | Add marker at playhead with cycled color (next in the 8-color palette) | `{ type: 'addMarker', params: { time: <currentTime>, color: <nextColor> } }` | Always | (none) |
 | `Up` (in marker nav mode) | Jump to previous marker | `{ type: 'seekToMarker', params: { direction: -1 } }` | Always | Cmd+Up |
 | `Down` (in marker nav mode) | Jump to next marker | `{ type: 'seekToMarker', params: { direction: 1 } }` | Always | Cmd+Down |
 
-**Marker color palette:** 8 colors — red, orange, yellow, green, blue, purple, pink, gray. Cycle order matches FCP. Color is stored on the bookmark (`Bookmark.color: string`).
+**Marker color palette:** 8 colors — red, orange, yellow, green, blue, purple, pink, gray. Cycle order matches FCP. Color is stored on the marker (`Marker.color: string` — the A2 amendment's unified type; the old `Bookmark.color` shape is absorbed).
 
-**M-key behavior (Round 15 amendment, N8 — DECIDED):** the mock's proven behavior is adopted: `M` **always adds** a marker at the playhead — there is no toggle/edit-at-playhead semantics (the v1.0 row's "or edit existing if one is at playhead" was undefined behavior: one gesture, one meaning, and the always-add form is pinned by the mock's tests). Editing an existing marker is `Option+M`'s dialog; deleting is `Shift+M` — the three verbs stay three keys. `Option+Shift+M` likewise **always adds** (with the next palette color) rather than cycling an existing marker's color. Command verbs on the two amended rows are aligned to spec 15 §4.3.49's shipped `addMarker` (spec 15 wins per §0.2); the remaining bookmark verbs (`toggleBookmark`/`removeBookmark`/`updateBookmark`) retire into the marker family via the A2 unification (09-side R15 pass).
+**M-key behavior (Round 15 amendment, N8 — DECIDED):** the mock's proven behavior is adopted: `M` **always adds** a marker at the playhead — there is no toggle/edit-at-playhead semantics (the v1.0 row's "or edit existing if one is at playhead" was undefined behavior: one gesture, one meaning, and the always-add form is pinned by the mock's tests). Editing an existing marker is `Option+M`'s dialog; deleting is `Shift+M` — the three verbs stay three keys. `Option+Shift+M` likewise **always adds** (with the next palette color) rather than cycling an existing marker's color. Command verbs on the two amended rows are aligned to spec 15 §4.3.49's shipped `addMarker` (spec 15 wins per §0.2); the remaining bookmark verbs (`toggleBookmark`/`removeBookmark`/`updateBookmark`) retire into the marker family via the A2 unification (09-side R15 pass). **A2-rename execution note (single owner — dated 2026-09-06, R15 fix wave; shared verbatim by 09 §3.1A):** the §3.7 binding rows above now speak the unified marker family's verbs (`deleteMarker`, `updateMarker`, `Marker.color`); the union's Bookmark block (spec 15 §4.3.39-42) retires at the next union-version bump per §4.1A's Bookmark row. ONE owner for the remaining fold: **spec 15 §13.15's C7 worklist** (the OT-side rename pass at A2).
 
 ### 3.8 View / Zoom
 
@@ -2262,7 +2262,7 @@ kbd-context-help            | F1                 | Contextual help              
 kbd-close-modal             | Escape             | Close modal / cancel                | help      | When modal open
 ```
 
-**Total bindings: 181 rows** (180 at v1.0 + `Option+R` from the R15/A6 amendment; the A1 delete-family re-row is count-neutral — Backspace-alias + `Shift+Delete`-ripple replace Backspace-ripple + `Cmd+Delete`-ripple-alt, the latter dropped). Each row maps 1:1 to a test in `tests/e2e/keyboard.spec.ts`. Unique actions: **~110** (after parameterizing: effect presets 1–9 counted as 1 unique action, effect toggles 1–9 as 1, panel toggles as 1, workspace switches as 1, alt bindings merged with primaries — collapsing rule: 181 → ~150 → ~120 → ~110). This 181 / ~110 split is the canonical binding count referenced in §0 TL;DR, §16 test matrix, and §11 net-change summary (spec 15 §13.5's "180 bindings" citation predates the R15 pass — flagged for the 15-side sync).
+**Total bindings: 181 rows** (180 at v1.0 + `Option+R` from the R15/A6 amendment; the A1 delete-family re-row is count-neutral — Backspace-alias + `Shift+Delete`-ripple replace Backspace-ripple + `Cmd+Delete`-ripple-alt, the latter dropped). Each row maps 1:1 to a test in `tests/e2e/keyboard.spec.ts`. Unique actions: **~110** (after parameterizing: effect presets 1–9 counted as 1 unique action, effect toggles 1–9 as 1, panel toggles as 1, workspace switches as 1, alt bindings merged with primaries — collapsing rule: 181 → ~150 → ~120 → ~110). This 181 / ~110 split is the canonical binding count referenced in §0 TL;DR, §16 test matrix, and §11 net-change summary (spec 15 §13.5's citation now reads **181 bindings** — the R15 15-side sync landed; its old "180 bindings" text predates the R15 pass).
 
 ---
 

@@ -58,7 +58,7 @@ We adopt OpenCut-classic's approach: **DOM everywhere — including filmstrip th
 
 ```
 <Timeline>
-  ├─ <TimelineToolbar>           (tools: select, razor, ripple mode toggle, snap toggle)
+  ├─ <TimelineToolbar>           (tools: select, razor, ripple tool (R; ⌥R toggles ripple mode), snap toggle)
   ├─ <TimelineHeader>             (track headers, sequence tabs)
   ├─ <TimelineContent>
   │   ├─ <TimelineRuler>          (DOM-based, time markers)
@@ -555,16 +555,16 @@ function handleDrop(e: React.DragEvent, targetTrack: Track, targetTime: MediaTim
 | `J/K/L` | Reverse / pause / forward (shuttle) |
 | `I/O` | Set in/out point |
 | `A/S` | Snap on/off toggle |
-| `R` | Ripple mode toggle |
+| `R` | Ripple tool (`selectTool {tool:'ripple'}`); ⌥R toggles ripple mode (Round 15 amendment: A1/A6 propagation) |
 | `B` | Razor tool |
 | `V` | Select tool |
 | `H` | Hand tool |
 | `Z` | Zoom tool |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo |
 | `Cmd+C` / `Cmd+V` | Copy / paste |
-| `Cmd+X` | Cut (ripple delete) |
-| `Delete` | Delete |
-| `Backspace` | Ripple delete |
+| `Cmd+X` | Cut (the `cut` command — clipboard copy+plain delete) |
+| `Delete` | Delete (no ripple) |
+| `Backspace` | Delete — plain-delete alias of `Delete`; `Shift+Delete` (⇧⌫) is the ONLY ripple-delete chord (Round 15 amendment: A1/A6 propagation) |
 | `Left/Right` | Frame back / forward |
 | `Shift+Left/Right` | 10 frames back / forward |
 | `Cmd+Left/Right` | Go to start / end |
@@ -1167,7 +1167,7 @@ Every file path below is absolute within its reference repo. **OC** = `/tmp/open
 
 ### 16.5. Code References — opencut-timeline (the editing-domain core per Decision 12; contract still canon)
 
-> opencut-timeline (`github.com/bearachprema/opencut-timeline` @ `4e39b67`, ~24.5k LOC total: ~8.7k engine core + 3.0k controllers + 3.8k React components + 9.0k testing, **297/297 tests — "FINAL as a distilled opencut timeline"** per its own HANDOFF, real-mouse + fuzz + review-regression suites included) is a clean-room OpenCut-classic timeline port **built with this spec set in hand** (its README cites Decision-2 types and the spec-15 wire protocol). Per Decision 12 it is the **EDITING-domain normative core**: the executable reference for this stream's entire scope — the OC tables in §16.1 describe the ORIGINAL; OT is the running, tested version of the same algorithms, and its W4 React components + controllers have LANDED (this spec's §4 component hierarchy and §14.4 controller contracts now have an executable implementation). Where OT code conflicts with this spec, **the spec wins** (the known deltas: prefixed headless command names (C7), 5-kind TrackType taxonomy, `TIMELINE_INDICATOR_LINE_WIDTH_PX = 2` vs OC's 3px — OC's verified read wins for the visual constant, pending an OT-side correction).
+> opencut-timeline (`github.com/bearachprema/opencut-timeline` @ `0412e41` — Round 15 re-baseline, ~42k LOC total: ~9.7k engine core + ~3.2k controllers + ~7.4k React view (≈20.2k implementation) + ~21.6k test harness (in-page 12.4k + real-mouse scripts 6.5k + fixtures 2.0k), **423/423 tests (303 in-page + 120 real-mouse, re-run Round 15)** — the W8 classic-parity UI round + W9 full-repo review are landed and terminal, **zero open P1/P2** per its own HANDOFF, real-mouse + fuzz + review-regression suites included) is a clean-room OpenCut-classic timeline port **built with this spec set in hand** (its README cites Decision-2 types and the spec-15 wire protocol). Per Decision 12 it is the **EDITING-domain normative core**: the executable reference for this stream's entire scope — the OC tables in §16.1 describe the ORIGINAL; OT is the running, tested version of the same algorithms, and its **W8 classic-parity React components + controllers have landed and are terminal** (this spec's §4 component hierarchy and §14.4 controller contracts now have an executable implementation). Where OT code conflicts with this spec, **the spec wins** (the known deltas: prefixed headless command names (C7 — 24 types since W5, worklist refreshed R15), 5-kind TrackType taxonomy, `TIMELINE_INDICATOR_LINE_WIDTH_PX = 2` vs OC's 3px — OC's verified read wins for the visual constant, pending an OT-side correction).
 
 | Spec section | OT file:line | Key exports / behavior | Status | Note |
 |---|---|---|---|---|
@@ -1196,7 +1196,7 @@ Every file path below is absolute within its reference repo. **OC** = `/tmp/open
 | Waveform | `render/waveform.ts:26/:90/:118` | `computeWaveformPeaks`/`drawWaveform`/`measureDrawnColumnHeight` | ALIGNED | Feeds §7.2 |
 | Compositor seam | `render/placeholder-compositor.ts:116` | `setTracks()/renderFrame(t)` Canvas2D contract | ALIGNED | Decision 12.4's render seam (unchanged from 11.4, strengthened) — engine's WebGPU compositor plugs in behind; the one-way projector feeds `setTracks` |
 | Virtual media | `media/virtual-media.ts:39-135` | `TEST_COLORS`/`TEST_TONES_HZ`/`MediaRegistry`/`goertzelPower` | REFERENCE | Test-only media (mirrors nle-engine pattern) |
-| Headless API | `headless/api.ts:38-102` | 18-type prefixed union; `CommandResult {ok, code…}`; `apply`/`applyBatch` atomic | CORRECTIVE | C7 rename pass chartered (spec 19 §6): `timeline.*`/`track.*` prefixes are NOT spec-15 shape |
+| Headless API | `headless/api.ts:38-102` | 24-type prefixed union (since W5; 18 at the R8 sweep); `CommandResult {ok, code…}`; `apply`/`applyBatch` atomic | CORRECTIVE | C7 rename pass chartered (spec 19 §6; worklist refreshed R15 in spec 15 §13.15): `timeline.*`/`track.*` prefixes are NOT spec-15 shape |
 
 ### 16.5A. Round-15 amendment — the projector clauses (ARCH-R15 §2.2; Decision 16)
 
@@ -1656,9 +1656,12 @@ engine instance). See spec 17 §6.1.]
 - `keyboard-delete-no-ripple` — `Delete` issues `delete` (spec 15
   §5.1.7) with `params.ripple = false`; selected elements removed,
   downstream elements unchanged
-- `keyboard-backspace-ripple-delete` — `Backspace` issues `delete` with
-  `params.ripple = true`; downstream elements shift left by deleted
-  duration
+- `keyboard-delete-chord-family` — per A1: `Delete` and `Backspace` both
+  issue `delete` (spec 15 §5.1.7) with `params.ripple = false` (aliases —
+  selected elements removed, downstream elements unchanged);
+  `Shift+Delete` (⇧⌫) is the ONLY chord issuing `delete` with
+  `params.ripple = true` (downstream elements shift left by deleted
+  duration) (Round 15 amendment: A1/A6 propagation)
 - `keyboard-duplicate-cmd-d` — `Cmd+D` issues `duplicate` (spec 15
   §5.1.9) with `params.placement = { type: "alwaysNew", position:
   "highest" }`; new element appears on a fresh track with byte-identical
@@ -1667,10 +1670,11 @@ engine instance). See spec 17 §6.1.]
   to clipboard (no state change); subsequent `Cmd+V` issues `insert`
   (spec 15 §5.1.8) per clipboard entry at playhead; total element count
   grows by `selection.size`
-- `keyboard-cut-cmd-x-is-copy-plus-ripple-delete` — `Cmd+X` produces
-  the same `SceneState` as `Cmd+C` followed by `Backspace` (ripple
-  delete of selection); clipboard populated, selection removed, gaps
-  closed
+- `keyboard-cut-cmd-x-issues-cut-command` — `Cmd+X` issues the `cut`
+  command (spec 15 §4.3.69 — the CopyCommand+DeleteCommand batch, plain
+  delete; NOT a `Cmd+C`-then-`Backspace` macro); clipboard populated,
+  selection removed, undo restores the deleted elements while the
+  clipboard is left untouched (Round 15 amendment: A1/A6 propagation)
 - `keyboard-tab-selects-next-clip` — `Tab` advances selection to the
   element with the smallest `startTime` greater than the current
   selection's `startTime`; wraps to first element at end of timeline
@@ -1715,9 +1719,13 @@ engine instance). See spec 17 §6.1.]
 - `keyboard-a-toggles-snap` — `A` flips
   `TimelineViewState.snapEnabled`; subsequent drag does not snap (verify
   via `move` state diff: dragged element lands at unmodified `pixelToTime(x)`)
-- `keyboard-r-toggles-ripple-mode` — `R` flips
-  `TimelineViewState.rippleMode`; subsequent `Delete` issues `delete`
-  with `params.ripple = true` (regardless of `Backspace` vs `Delete`)
+- `keyboard-r-selects-ripple-tool` — per A6: `R` issues `selectTool` with
+  `params.tool = 'ripple'` (a TOOL, matching spec 18 §4.5's inventory —
+  NOT a mode toggle); `Option+R` (⌥R) is the ripple-MODE toggle (flips
+  `TimelineViewState.rippleMode`) — while `rippleMode` is on, `Delete`/
+  `Backspace` issue `delete` with `params.ripple = true`; while off, they
+  stay plain deletes and ⇧⌫ remains the only chord-level ripple
+  (Round 15 amendment: A1/A6 propagation)
 - `keyboard-m-adds-marker-at-playhead` — `M` issues `addMarker` with
   `params.time = currentTime`; `SceneState.markers` grows by 1
 - `keyboard-plus-minus-zoom-in-out` — `+` multiplies `pixelsPerSecond`

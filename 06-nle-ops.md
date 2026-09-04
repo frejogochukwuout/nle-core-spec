@@ -2364,9 +2364,9 @@ For multi-select move architecture, **OpenCut-classic's `group-move/` is the can
 | `src/features/timeline/stores/commands/types.ts` | 53 | `TimelineSnapshot`, `TimelineCommand` (`{type, payload}`), `CommandEntry` |
 | `src/features/timeline/stores/timeline-command-store.ts` | 286 | `useTimelineCommandStore` — snapshot-based undo/redo with per-context stacks |
 
-### 10.4. nle-engine op-coverage (runtime-domain core per Decision 12 — Round-9 re-baseline @ `624a76b`)
+### 10.4. nle-engine op-coverage (runtime-domain core per Decision 12 — re-baselined Round 15 @ `f526e67`)
 
-> nle-engine (github.com/bearachprema/nle-engine @ 624a76b) implements ~20 of this spec's op families as public methods on its `Timeline` class (timeline/timeline.ts, 6,972 LOC, 102 public methods) with **202 passing tests after Waves 4D-5C** (real A/V export, 25/25 milestones) — the strongest ALIGNED subsystem in the reference repo. The deltas are architectural (class-based mutating manager vs this spec's pure-op + command layer; flat N-track array vs `SceneTracks`; 19-op JSON-RPC wire surface vs spec 15's 78-type union) plus three absent families (track-state toggles, snap, splitAndRemove). Where engine code conflicts, **the spec wins**; see `19-code-references.md`. Per **Decision 12.3**, the engine's FreeCut-side op families (roll/slip/slide/rateStretch/retime/insert-edit-3-point/sync-lock) are **port-scheduled INTO opencut-timeline's ops layer** as pure functions over SceneTracks (acceptance: OT's 297-test suite + the ported engine tests; the engine's implementations remain its internal fallback until each port lands). The engine's timeline as a whole is re-specified as the runtime domain's **render-scheduling projection** (Decision 12.1) — its editing surface is no longer a second normative home.
+> nle-engine (github.com/bearachprema/nle-engine @ `f526e67` — Round 15 re-baseline) implements ~20 of this spec's op families as public methods on its `Timeline` class (timeline/timeline.ts, 6,972 LOC, 102 public methods) with **274/274 vitest + 265/265 browser milestone rows (31 milestones, real WebGPU) + 318 probe checks** (real A/V export decode-verified) — the strongest ALIGNED subsystem in the reference repo. The deltas are architectural (class-based mutating manager vs this spec's pure-op + command layer; flat N-track array vs `SceneTracks`; 19-op JSON-RPC wire surface — re-typed INTERNAL transport per Decision 16 — vs spec 15's 78-type union) plus three absent families (track-state toggles, snap, splitAndRemove). Where engine code conflicts, **the spec wins**; see `19-code-references.md`. Per **Decision 12.3**, the engine's FreeCut-side op families (roll/slip/slide/rateStretch/retime/insert-edit-3-point/sync-lock) are **port-scheduled INTO opencut-timeline's ops layer** as pure functions over SceneTracks (acceptance: OT's 423-test suite — the R15 re-baseline — + the ported engine tests; the engine's implementations remain its internal fallback until each port lands). The engine's timeline as a whole is re-specified as the runtime domain's **render-scheduling projection** (Decision 12.1) — its editing surface is no longer a second normative home.
 
 | Spec 06 op (§) | nle-engine timeline.ts:line | verified signature | status |
 |---|---|---|---|
@@ -2397,9 +2397,9 @@ For multi-select move architecture, **OpenCut-classic's `group-move/` is the can
 
 §7 note (Round 7, updated Round 8): the snapshot stored by a drag-coalesced `TracksSnapshotCommand` must cover the full field set incl. keyframes — the engine's `snapshotsEqual` ignored them (keyframe-only edits stopped being undoable; engine P0.6). **Fixed in Wave 4A** (timeline.ts:1772-1803, now compares keyframes + compositions + backgroundColor via JSON-deep; m20 20.7 regression-tested). The counter-example stays in spec 19 §6 as documentation. Residual field-gap: `busAudioEq` exists in FreeCut's 17-field equality but not in the engine model — our spec 06 §7 / spec 15 §14.1 full-field bar covers it by construction.
 
-### 10.5. opencut-timeline op-coverage (the algorithm home per Decision 12.3 — re-baselined Round 9 @ `4e39b67`)
+### 10.5. opencut-timeline op-coverage (the algorithm home per Decision 12.3 — re-baselined Round 15 @ `0412e41`)
 
-> opencut-timeline (github.com/bearachprema/opencut-timeline @ `4e39b67`, `src/lib/timeline/`, **297/297 tests — final-round hardened**) implements the OpenCut-side op families — and per **Decision 12.3 is the single normative algorithm home** this spec's ops converge into. Where it conflicts with this spec, **the spec wins** (known deltas: prefixed headless command names — C7 rename; 5-kind TrackType taxonomy; group-shape trim — correctly so, per §5.2A).
+> opencut-timeline (github.com/bearachprema/opencut-timeline @ `0412e41` — Round 15 re-baseline, `src/lib/timeline/`, **423/423 tests (303 in-page + 120 real-mouse, re-run Round 15) — the W8 classic-parity UI + W9 full-repo review landed and terminal, zero open P1/P2**) implements the OpenCut-side op families — and per **Decision 12.3 is the single normative algorithm home** this spec's ops converge into. Where it conflicts with this spec, **the spec wins** (known deltas: prefixed headless command names — C7 rename, 24 types since W5, worklist refreshed R15 in spec 15 §13.15; 5-kind TrackType taxonomy; group-shape trim — correctly so, per §5.2A).
 
 | Spec 06 op (§) | OT file:line | Verified export | Status | Note |
 |---|---|---|---|---|
@@ -2421,7 +2421,7 @@ For multi-select move architecture, **OpenCut-classic's `group-move/` is the can
 | Undo (snapshot + transactions) | `ops/timeline-core.ts:102-207` | `UndoStack` w/ `beginTransaction`, suspended eviction, 100-cap | ALIGNED+ | Transaction discipline absorbed into spec 15 §7.1A (Round 8) |
 | Core class | `ops/timeline-core.ts:209-907` | `TimelineCore` (986 LOC) | ALIGNED | Manager-method names match spec 15 §4.2 1:1 |
 
-**The algorithm home (Decision 12.3, supersedes the R8 division of labor):** opencut-timeline's ops layer owns split/trim-group/move-group/ripple-diff/insert-placement/duplicate + the interaction controllers (as landed); nle-engine's FreeCut-side families (roll/slip/slide/rateStretch/retime/freezeFrame/range-removal/sync-lock) **port into it** per spec 14 §2.1's port plan — the engine's versions remain internal fallback until each port lands. All families wrap in the spec 15 command layer (OT via C7 rename; the engine's editing-wire duty is retired — its C2 scope is the runtime command subset only).
+**The algorithm home (Decision 12.3, supersedes the R8 division of labor):** opencut-timeline's ops layer owns split/trim-group/move-group/ripple-diff/insert-placement/duplicate + the interaction controllers (as landed); nle-engine's FreeCut-side families (roll/slip/slide/rateStretch/retime/freezeFrame/range-removal/sync-lock) **port into it** per spec 14 §4.1 / 05 §16.5A's op-port table — the engine's versions remain internal fallback until each port lands. All families wrap in the spec 15 command layer (OT via C7 rename; the engine's editing-wire duty is retired — its C2 scope is the runtime command subset only).
 
 ---
 
@@ -3294,11 +3294,12 @@ Shortcuts are bound per spec 16 and dispatched from the UI shell (spec 18: the t
 - `keyboard-split-and-remove-right-w` — `W` issues `splitAndRemove({ side:
   'right', ripple: true })`
 - `keyboard-delete` — `Delete` issues `deleteElements({ ripple: false })`
-- `keyboard-ripple-delete-backspace` — `Backspace` issues
-  `deleteElements({ ripple: true })`
-- `keyboard-ripple-delete-shift-delete` — `Shift+Delete` is the alt
-  binding for ripple-delete (same `EngineCommand` as `Backspace`); verify
-  via state
+- `keyboard-delete-backspace-alias` — `Backspace` issues
+  `deleteElements({ ripple: false })` — a plain-delete alias of `Delete`, NOT
+  a ripple chord (Round 15 amendment: A1/A6 propagation)
+- `keyboard-ripple-delete-shift-delete` — `Shift+Delete` (⇧⌫) is the ONLY
+  ripple-delete chord: it issues `deleteElements({ ripple: true })`; verify
+  via state (Round 15 amendment: A1/A6 propagation)
 - `keyboard-trim-left-bracket` — `[` issues `updateElementTrim({ edge:
   'start', targetTime: <currentTime>, ripple: false })`
 - `keyboard-trim-right-bracket` — `]` issues `updateElementTrim({ edge:
@@ -3312,9 +3313,14 @@ Shortcuts are bound per spec 16 and dispatched from the UI shell (spec 18: the t
 - `keyboard-slip-comma-period` — `,` / `.` (slip tool active) slip
   ±1 frame via `{ type: 'slip' }`; verifies the §6 disambiguation rule
   (same key, different op by tool-mode)
-- `keyboard-ripple-toggle-r` — `R` flips `engine.command.isRippleEnabled`;
-  subsequent `Delete` behaves as ripple-delete (state WYSIWYG with the
-  flag flipped)
+- `keyboard-ripple-tool-r-mode-option-r` — per A6: `R` selects the ripple
+  TOOL (`selectTool { tool: 'ripple' }`, matching spec 18 §4.5's tool
+  inventory); `Option+R` (⌥R) is the ripple-MODE toggle (flips the global
+  editing pref, persisted as `TimelineViewState.rippleMode` per spec 09
+  §3.1) — while the mode is on, `Delete`/`Backspace` behave as
+  ripple-delete (state WYSIWYG with the flag flipped); while off, they are
+  plain deletes and ⇧⌫ remains the only chord-level ripple
+  (Round 15 amendment: A1/A6 propagation)
 - `keyboard-snap-toggle-n` — `N` flips `uiStore.timeline.snapEnabled`;
   subsequent trims snap (or don't) accordingly
 - `mouse-trim-handle-drag` — `page.mouse.move()` on

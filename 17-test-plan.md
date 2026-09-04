@@ -723,7 +723,7 @@ by the broader renderer tests in spec 04.]
 
 - `keyboard-split-cmd-b` — `Cmd+B` issues `splitElements({ splitTime:
   currentTime })`; resulting state matches direct API call
-- `keyboard-delete-backspace` — `Backspace` issues `deleteElements({ ids:
+- `keyboard-delete-backspace` — `Backspace` issues `deleteElements({ elements:
   selection })` with ripple=false; `Shift+Backspace` issues ripple delete
 - `keyboard-trim-left-bracket` — `[` trims the head of the selected
   element to the playhead position
@@ -2262,7 +2262,7 @@ Vitest fixtures pinning the Round-8 absorbed semantics (spec 05 §8.3 contract n
 5. **Determinism replay (T1)**: same `(ProjectJSON, EngineCommand[])` → byte-identical `SceneState` across two runs with `idSeed` fixed (spec 15 §1.1 / §10.4); the engine's deterministic-id counter is reset between runs (the OT `resetIdCounterForTests` pattern is the approved mechanism).
 6. **State-change envelope (T2)**: every mutating command's success result carries a `stateChange` payload consistent with the post-state snapshot (the delta IS the spec's multi-consumer sync mechanism — asserted, not assumed).
 
-### 13A.5 Projector property tests (T1 — spec 14 P1's mandatory deliverable; re-typed R9 from the retired bidirectional adapter per Decision 12.1)
+### 13A.5 Projector property tests (T1 — the projector's mandatory deliverable per spec 14 §3's A1 row; "spec 14 P1" at R9; re-typed R9 from the retired bidirectional adapter per Decision 12.1)
 
 Properties (fast-check, 1,000 runs each in the nightly, 100 in PR-scope):
 
@@ -2298,7 +2298,7 @@ Every facet added or materially amended in Rounds 7-8, with its verification. (L
 | Export commands (FCPXML/master/frame) | 15 §4.3.74-76 | F | T1/T3 | artifact in `CommandResult.data` + Deliver-page button test (spec 18 §12) | round-trip file + button-emits-command |
 | RenameProject/DeleteProject | 15 §4.3.77/78 | F | T1 | schema sweep + manager round-trip | project list state consistent |
 | TransitionSpec 2-layer model | 07 §6.1A, 15 §11 | F | T1 | Zod schema + TS interface conformance | both layers validate independently |
-| SceneTracks ↔ flat seam | 14 P1, 00 D11 | F | T1 | §13A.5 property tests | both identity laws + never-loss |
+| SceneTracks ↔ flat seam | 00 D11 (R8; superseded — the one-way projector per D12.1/D16, spec 14 §3 A1) | F | T1 | §13A.5 property tests | both identity laws + never-loss |
 | Zero-anchor semantics (4 rules) | 05 §14.5A | F | T1 | §13A.3 fixtures | all four rules pinned |
 | Drag threshold / coordinate-space / mixed-group | 05 §8.3 | F | T1/T3 | §13A.3 + boundary test at 5 px | strict-`>` boundary holds |
 | Snap threshold (screen-space, closest-wins) | 05 §9 | F | T1 | §13A.3 fixture | formula + tie-break pinned |
@@ -2319,7 +2319,7 @@ Every facet added or materially amended in Rounds 7-8, with its verification. (L
 | NFR: a11y floor | 00 §6A, 18 §11 | NF | T3 | §13A.2 | zero critical/serious + spot assertions |
 | NFR: error-path discipline | 00 §6A | NF | T1 | §13A.4.2 | census green |
 | NFR: persistence robustness | 00 §6A, 09 §11 | NF | T1 | §13A.1 fixture battery | hydrate-with-warnings, never crash |
-| Projector parity vs engine-native Timeline oracle (Round 15) | 00 D12.1, 14 §2.1, 19 §2.4.1 | F | T2 | §17A S4: parity corpus, pixel-exact vs the engine `Timeline` oracle — primary venue is ENGINE CI (its ~8-min real-WebGPU milestone runner + vitest); app S4 nightly adds the Xvfb+SwiftShader venue | parity green on the corpus (audio + stills) |
+| Projector parity vs engine-native Timeline oracle (Round 15) | 00 D12.1, 14 §3 A1, 05 §16.5A | F | T2 | §17A S4: parity corpus, pixel-exact vs the engine `Timeline` oracle — primary venue is ENGINE CI (its ~8-min real-WebGPU milestone runner + vitest); app S4 nightly adds the Xvfb+SwiftShader venue | parity green on the corpus (audio + stills) |
 | Event-staircase completeness + mapping (Round 15) | 15 §9, 18 §5 | F | T1 | §17A S1/S2 rows: every spec-15 §9 `EngineEvent` emitted-or-justified; engine-name↔spec-name mapping register (a C-register row, same discipline as C7); playhead mirror, export progress, meters rows asserted | zero unmapped events; S2 event rows green |
 | Routing-dispatch completeness (78-member disposition) (Round 15) | 15 §4.1A | F | T1 + mechanical | §17A S5 battery: routing-disposition table check — every implemented row cites a module pin SHA; every DEFERRED row dispatches typed `NOT_IMPLEMENTED` + cites a phase or signed deferral; exhaustive-switch compiles | zero unowned union members; the switch is honest |
 | Reference-repo re-tiering (Round 15: engine 274+265+318, OT 423, WDC 721, ui-mock 596) | 19 §12, 00 D14 | NF (process) | — | re-baselined to the **Round 15 verified counts**: engine 274 vitest (237 engine + 37 bridge) + 265 browser milestone rows + 318 probes → T1/T2 (its CI runs 3 jobs — the re-tier is de facto done engine-side); OT 423 (303 in-page + 120 real-mouse) → T1/T2/T3 (the real-mouse phases ARE Tier-3-grade, in-repo); WDC 721 → T1 (null-test gates are the audio T1; 1 CI gate job); ui-mock 596 → **T1 local** (no CI workflow — ported into the app at A3, retires as a repo after A7); count discipline (declared == scraped) | zero count drift |
@@ -2698,7 +2698,7 @@ For each spec 01 through 12:
 
 | Suite | Tier (this spec's naming) | What it pins | Size |
 |---|---|---|---|
-| **S1 seam contracts** | Tier-1 (vitest) | Projector laws (per 00 D12.1 + 14 §2.1 + SCOUT-A §4): timebase round-trips, transition-window translation, keyframe normalization; one-wayness of EDITING state (telemetry excluded — the event staircase is the UP seam); bus routing completeness (every union member → one home or typed `NOT_IMPLEMENTED`); event-completeness + mapping; S/G/E trackId-only invariant | ~100-140 |
+| **S1 seam contracts** | Tier-1 (vitest) | Projector laws (per 00 D12.1 + 14 §3 A1 + SCOUT-A §4): timebase round-trips, transition-window translation, keyframe normalization; one-wayness of EDITING state (telemetry excluded — the event staircase is the UP seam); bus routing completeness (every union member → one home or typed `NOT_IMPLEMENTED`); event-completeness + mapping; S/G/E trackId-only invariant | ~100-140 |
 | **S2 state WYSIWYG** | Tier-1 (vitest) | Every UI path (store action → bus) vs direct `apply()` → identical state; undo/redo via wire == via store; event-suite rows (playhead mirror, export progress, meters); scene-switch preservation | ~80-120 |
 | **S3 wired shell** | Tier-3 (Playwright, real mouse) | **(a)** **view-component verification in app context**: OT's 120 real-mouse phases re-run against the app-owned `/dev/view-fixture` page replicating the `__VIEW_TEST__` contract — catches CSS cascade/preflight drift, alias breakage, React-version issues; NOT app-path integration. **(b)** **~200 mock view-state/chrome tests ported near-verbatim** (panel toggles, toasts, dialogs, geometry, keymap mirror). **(c)** **spec 18 §12 command-capture suite (~60) — THE app-path integration surface** (replaces the mock's doc-slice tests, which do not survive the store swap). **(d)** 3-5 screenshot-parity rows (timeline region vs OT `/view`) | ~380-440 total |
 | **S4 render/audio parity** | Tier-2 (Xvfb+SwiftShader per engine law — measured at A0, not asserted) | **Projector parity** vs the engine-native `Timeline` oracle, pixel-exact on the corpus (primary venue: ENGINE CI's ~8-min real-WebGPU milestone runner + vitest — see §13A.7's facet row); audio: offline parity + realtime behavioral pins (A4-v1); **the true realtime-vs-offline NULL gate is net-new rig work** (A4-v2 — the engine's CR-A #6 one-engine-per-instance guard blocks the cheap route); export smoke (m24/m26/m28/m29 patterns) | ~30-50 |

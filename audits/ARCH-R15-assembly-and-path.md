@@ -1,6 +1,6 @@
 # ARCH-R15 — Implementation Path + Assembly Architecture + Execution Plan
 
-**Round:** 15 (2026-09-05). **Status:** v2 — post peer-review (REVIEW-R15-ARCH: SOUND-WITH-AMENDMENTS; REVIEW-R15-EXEC: BUILDABLE-WITH-CHANGES; all amendments folded; re-review gate pending).
+**Round:** 15 (2026-09-05). **Status:** v2.1 — re-review gate PASSED (R15-PR1b SOUND/SIGNED OFF + R15-PR2b BUILDABLE/SIGNED OFF; all folds landed).
 **Inputs:** SCOUT-R15-A/B/C/D (all four ran their gates in-sandbox: 274 vitest + 265 browser rows + 318 probes; 423/423; 721/721; 596/596) + the two peer reviews (≈20 claims re-verified against code by PR1; dev-loop/bundle/CI claims verified by PR2).
 **Preceded by:** ARCH-R9 (Decisions 12/13/14). This document EXECUTES D12/D14 and adds the layer R9 deferred: **how the four codebases become ONE app.**
 
@@ -125,7 +125,7 @@ nle-app (NEW — the assembly repo, the only greenfield surface)
 
 **Routing-disposition table (NEW, per PR1 M2 — normative, lives in spec 15 §4.1A at landing):** one row per spec-15 union member, home ∈ {OT, engine, app, DEFERRED}. DEFERRED members (≈20+: effects/masks/transitions/clipboard ×15, markers ×3 project-level, tool/selection-controller trio, setRate/setLoop, solo/lock toggles, wave-2 ops until A2.5) dispatch to a typed `NOT_IMPLEMENTED` CommandResult code (registered as a spec-15 §6.3 amendment) — the exhaustive-switch check compiles AND is honest. The table is battery-checked (S5): implemented rows must cite a module pin SHA; DEFERRED rows must cite a phase or a user-signed deferral.
 
-**Union versioning:** spec 15 §15.1's `ProtocolVersion` envelope rides the bus from day 1; the version constant lives in the app's commands module and is bumped only with union membership changes.
+**Union versioning:** spec 15 §10.1's `ProtocolVersion` envelope rides the bus from day 1; the version constant lives in the app's commands module and is bumped only with union membership changes.
 
 ### 2.3bis The event staircase UP (NEW, per PR1 MAJOR-1 — the architecture's missing half)
 
@@ -168,7 +168,7 @@ Module repos keep their full gates UNDILUTED (engine 3-job CI; OT 423 incl. 120 
 
 | Suite | Tier (spec-17 naming) | What it pins | Size (corrected) |
 |---|---|---|---|
-| **S1 seam contracts** | Tier-1 (vitest) | Projector laws (per 00 D12.1 + 14 §2.1 + SCOUT-A §4): timebase round-trips, transition-window translation, keyframe normalization; one-wayness of EDITING state (telemetry excluded — §2.3bis); bus routing completeness (every union member → one home or typed NOT_IMPLEMENTED); event-completeness + mapping; S/G/E trackId-only invariant | ~100-140 |
+| **S1 seam contracts** | Tier-1 (vitest) | Projector laws (per 00 D12.1 + 14 §3 A1 + SCOUT-A §4): timebase round-trips, transition-window translation, keyframe normalization; one-wayness of EDITING state (telemetry excluded — §2.3bis); bus routing completeness (every union member → one home or typed NOT_IMPLEMENTED); event-completeness + mapping; S/G/E trackId-only invariant | ~100-140 |
 | **S2 state WYSIWYG** | Tier-1 (vitest) | Every UI path (store action → bus) vs direct `apply()` → identical state; undo/redo via wire == via store; **event-suite rows (playhead mirror, progress, meters)**; scene-switch preservation | ~80-120 |
 | **S3 wired shell** | Tier-3 (Playwright, real mouse) | (a) **View-component verification in app context:** OT's 120 real-mouse phases re-run against the app-owned `/dev/view-fixture` page replicating the `__VIEW_TEST__` contract (catches CSS cascade/preflight drift, alias breakage, React-version issues — NOT app-path integration); (b) **~200 mock view-state/chrome tests ported near-verbatim** (panel toggles, toasts, dialogs, geometry, keymap mirror); (c) **spec 18 §12 command-capture suite (~60)** — THE app-path integration surface (replaces the mock's doc-slice tests, which do not survive the store swap); (d) 3-5 screenshot-parity rows (timeline region vs OT /view) | ~380-440 total |
 | **S4 render/audio parity** | Tier-2 (Xvfb+SwiftShader per engine law — measured at A0, not asserted) | Projector parity (vs engine-native Timeline oracle, pixel-exact on the corpus); audio: offline parity + realtime behavioral pins (A4-v1); the true realtime-vs-offline NULL gate is net-new rig work (A4-v2 — CR-A #6 blocks the cheap route); export smoke (m24/m26/m28/m29 patterns) | ~30-50 |
@@ -219,7 +219,7 @@ Every behavior pinned in a module test that assembly REWIRES must appear in the 
 | 00-master | NEW Decisions 15 (evolve-in-place; D10 supersession note: repos re-typed from references to product), 16 (assembly: app repo, submodules+lockset, ENGINE-home projector, bus+events two-staircase law, multi-scene-app-level, D12.2/C2 JSON-RPC re-typing supersession), 17 (roof-test strategy); position statement → five-repo topology |
 | 14-implementation | REWRITTEN as the assembly plan: posture table replaced by §3.4 (week−1 + A0-A7b); the gap register becomes the normative worklist (per-domain tables citing module pins) |
 | 19-code-references | Re-baseline all four repos @ R15 SHAs + SCOUT corrections (engine 52k LOC; 265 rows; OT 24 commands; JSON-RPC restated; pin distances) |
-| 15-wire-protocol | §4.1A routing-disposition table NEW (78 rows); §6.3 `NOT_IMPLEMENTED` code + error-code refinement note; §13.15 worklist refreshed to 24-command reality + C7 execution chartered; §9 event mapping (engine-name↔spec-name register); §15.1 versioning-at-bus note |
+| 15-wire-protocol | §4.1A routing-disposition table NEW (78 rows); §6.3 `NOT_IMPLEMENTED` code + error-code refinement note; §13.15 worklist refreshed to 24-command reality + C7 execution chartered; §9 event mapping (engine-name↔spec-name register — §9.5); §10.1 versioning-at-bus note |
 | 05-timeline | §16.5 amended (projector clauses: engine-home, retirement-as-substrate, parity corpus); op-port table (families → OT wave 1/2) |
 | 17-test-plan | Roof-suite table (S1-S5, corrected labels/sizes) + CI composition + regression-continuity law + Tier naming |
 | 09-project-model | Multi-scene = app-level ruling; N1 container ruling (inline elements); A2/A3/A4/B1/B2/N3 amendments (per SPEC-REVISION-CANDIDATES) |
