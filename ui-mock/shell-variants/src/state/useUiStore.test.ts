@@ -226,17 +226,14 @@ describe('selection semantics', () => {
 /* ---------- media pool selection ---------- */
 
 describe('media pool state', () => {
-  it('toggleMediaSelection replaces / additive-toggles / range-toggles', () => {
+  it('toggleMediaSelection replaces / additive-toggles (range selection is MediaPool-owned)', () => {
     expect(S().mediaSelection).toEqual(['m-02']); // boot default
-    act(() => { S().toggleMediaSelection('m-01', false, false); });
+    act(() => { S().toggleMediaSelection('m-01', false); });
     expect(S().mediaSelection).toEqual(['m-01']);
-    act(() => { S().toggleMediaSelection('m-03', true, false); });
+    act(() => { S().toggleMediaSelection('m-03', true); });
     expect(S().mediaSelection).toEqual(['m-01', 'm-03']);
-    act(() => { S().toggleMediaSelection('m-01', true, false); });
+    act(() => { S().toggleMediaSelection('m-01', true); });
     expect(S().mediaSelection).toEqual(['m-03']);
-    // range behaves as additive-toggle in the mock (anchor approximation)
-    act(() => { S().toggleMediaSelection('m-05', true, true); });
-    expect(S().mediaSelection).toEqual(['m-03', 'm-05']);
   });
 
   it('setMediaDrag tracks the ghost (mediaId/overTrackId/allowed)', () => {
@@ -868,6 +865,58 @@ describe('R13 review fixes', () => {
     expect(S().playRate).toBe(1);
     act(() => { S().setShuttle(2); S().setPlaying(true); });
     expect(S().playRate).toBe(2);
+  });
+  it('R13 fix: setActiveScene re-derives lockAll from the target scene (no stale pressed-state)', () => {
+    act(() => { S().toggleLockAll(); });
+    expect(S().lockAll).toBe(true);
+    act(() => { S().setActiveScene('sc-2'); });
+    expect(S().lockAll).toBe(false); // sc-2 has nothing locked
+    act(() => { S().setActiveScene('sc-1'); });
+    expect(S().lockAll).toBe(true); // sc-1 was fully locked
+  });
+
+  it('R13 fix: undo/redo restore the SELECTION alongside the doc (no dangling ids)', () => {
+    act(() => { S().duplicateElements(['el-2']); });
+    expect(S().selection[0]).toMatch(/^el-2-d/);
+    act(() => { S().undo(); });
+    expect(S().selection).toEqual(['el-2']); // pre-duplicate selection restored — the dupe id is gone
+    act(() => { S().redo(); });
+    expect(S().selection[0]).toMatch(/^el-2-d/); // valid again after redo
+  });
+
+  it('R13 fix: id collisions are impossible — same-millisecond creates get unique ids', () => {
+    act(() => { S().addMarker(1); S().addMarker(2); }); // same ms in practice
+    const markers = S().scenes.find((sc) => sc.id === 'sc-1')!.markers;
+    const ids = markers.map((m) => m.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('R13 fix: press-release trim/move gestures record no history entry', () => {
+    act(() => { S().trimElement('el-2', 'l', 8.5, 8.5); }); // identical values
+    expect(S().past.length).toBe(0);
+    act(() => { S().moveElement('el-3', 17.0); }); // unchanged start
+    expect(S().past.length).toBe(0);
+    act(() => { S().setEffectParam('el-1', 'fx-1', 'radius', 0); }); // param… fx-1 has no params yet — this CREATES one
+    expect(S().past.length).toBe(1); // creating a param is a change (undefined → 0)
+    act(() => { S().setEffectParam('el-1', 'fx-1', 'radius', 0); }); // identical re-set
+    expect(S().past.length).toBe(1); // no second entry
+  });
+
+  it('R13 fix: locked tracks are inert for store mutations (split/slip/duplicate/inspector writes)', () => {
+    // el-7 sits on the LOCKED tr-audio-2
+    act(() => { S().splitElement('el-7', 12); });
+    expect(S().past.length).toBe(0);
+    act(() => { S().slipNudge(['el-7'], 24); });
+    expect(S().past.length).toBe(0);
+    expect(el('el-7').sourceStart).toBe(3);
+    act(() => { S().duplicateElements(['el-7']); });
+    expect(S().past.length).toBe(0);
+    act(() => { S().setElementField('el-7', { volume: 0.1 }); });
+    expect(S().past.length).toBe(0);
+    expect(el('el-7').volume).toBe(0.8); // unchanged
+    act(() => { S().setTransition('el-7', { duration: 1 }); });
+    expect(S().past.length).toBe(0);
+    expect(el('el-7').transitionOut).toBeUndefined();
   });
 });
 

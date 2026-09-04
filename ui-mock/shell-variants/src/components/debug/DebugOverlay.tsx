@@ -15,6 +15,9 @@ function Seg<T extends string>({ value, options, onChange }: { value: T; options
         <button
           key={o.v}
           onClick={() => onChange(o.v)}
+          /* segmented control: toggle-button semantics — aria-pressed
+             exposes the selected segment to assistive tech (R13 fix) */
+          aria-pressed={value === o.v}
           data-tip={o.hint}
           className={`flex-1 rounded-[var(--radius)] border px-2 py-[5px] text-[11px] transition-colors ${
             value === o.v

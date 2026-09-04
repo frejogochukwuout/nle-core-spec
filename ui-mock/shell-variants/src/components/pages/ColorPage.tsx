@@ -7,12 +7,14 @@ import { Contrast, Spline, Pipette, Circle } from 'lucide-react';
 function Wheel({ label, tint }: { label: string; tint: string }) {
   return (
     <div className="flex flex-col items-center gap-1.5">
+      {/* decorative mock dial — no interaction, so role="slider" was a lie
+         (an AT user would expect arrow keys); honest role=img with a name
+         (R13 fix). Real shell: draggable 2D lift/gamma/gain/offset wheels. */}
       <div
         className="relative h-[78px] w-[78px] rounded-full border border-strong"
         style={{ background: `radial-gradient(circle at 42% 38%, ${tint} 0%, var(--bg-inset) 72%)` }}
-        role="slider"
-        aria-label={`${label} color wheel`}
-        aria-valuetext="centered"
+        role="img"
+        aria-label={`${label} color wheel (static mock)`}
       >
         <div className="absolute left-1/2 top-1/2 h-[4px] w-[4px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-tprimary" />
         <div className="absolute left-1/2 top-1/2 h-[1.5px] w-[24px] -translate-x-1/2 -translate-y-1/2 bg-tfaint" />

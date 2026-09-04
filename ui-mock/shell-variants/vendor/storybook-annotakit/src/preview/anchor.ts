@@ -134,7 +134,11 @@ function extractTextQuote(el: HTMLElement, textNodes: Text[]): TextQuote | undef
     n = walker.nextNode();
   }
   if (!own) return undefined;
-  const exact = clip(normalizeText(own.data), 80);
+  // The stored exact must be a CLEAN substring of the canvas text: an embedded
+  // ellipsis never occurs in the live DOM, so the includes()-based resolution
+  // (and the occurrenceIndex count below) would never match. Truncate hard and
+  // trim — the DISPLAY layer may add its own ellipsis.
+  const exact = normalizeText(own.data).slice(0, 80).trim();
   if (!exact) return undefined;
 
   const idx = textNodes.indexOf(own);

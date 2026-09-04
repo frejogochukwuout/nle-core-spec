@@ -116,6 +116,27 @@ describe('Inspector (spec 18 §4.4)', () => {
     expect(el('el-4').opacity).toBe(0.8);
   });
 
+  it("mixed regression: entering EXACTLY the first element's value still fans out (R13 CodeRabbit fix)", () => {
+    boot({ selection: ['el-1', 'el-4'] }); // opacity 100% vs 90% → mixed, value = 100 (first)
+    const field = screen.getByLabelText('Opacity — mixed values; typing sets all selected');
+    // one change to '100' — it equals the aggregate (= el-1's own value); the
+    // old r.v !== value guard short-circuited the settle so el-4 kept 0.9.
+    // The mixed field must commit unconditionally so the write reaches BOTH.
+    fireEvent.change(field, { target: { value: '100' } });
+    fireEvent.blur(field);
+    expect(el('el-1').opacity).toBe(1);
+    expect(el('el-4').opacity).toBe(1);
+    // settled: the field is no longer mixed and shows the common value
+    expect(screen.getByLabelText('Opacity value')).toHaveValue('100%');
+  });
+
+  it('blurring an UNTOUCHED mixed field writes nothing (no phantom fan-out)', () => {
+    boot({ selection: ['el-1', 'el-4'] });
+    fireEvent.blur(screen.getByLabelText('Opacity — mixed values; typing sets all selected'));
+    expect(el('el-1').opacity).toBe(1);
+    expect(el('el-4').opacity).toBe(0.9);
+  });
+
   /* ---- NumberField contract (§4.4) ---- */
 
   it('invalid input: aria-invalid + alert + no dispatch; blur reverts the display', () => {

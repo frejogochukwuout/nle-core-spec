@@ -60,6 +60,18 @@ in `.env`). The addon needs the DEV server — a static `storybook build`
 shows a “dev only” note. Reviewer flow: press **C** → click an element →
 comment → **⌘/Ctrl+Enter**; **R** = region pin; **L** = hide/show pins.
 
+**Fresh clone / first run:** the vendored addon ships as TypeScript source;
+its `dist/` build output is gitignored, so a clean checkout has none and
+Storybook will refuse to boot with an explicit `[storybook-annotakit]` error.
+Build it once before the first `npm run storybook` (or before the supervised
+:3000 review server):
+
+```bash
+cd vendor/storybook-annotakit
+npm install      # if node_modules is absent
+npm run build    # tsup → dist/server.cjs + manager.mjs + preview.mjs
+```
+
 **Review serving (R12):** the public review URL is served by
 `storybook dev --port 3000` under a supervisor (`scripts/sb-supervisor.mjs`
 in the platform workspace) that replaces the old `next dev` on :3000 —

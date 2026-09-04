@@ -248,10 +248,18 @@ function jsonStore(storePath: string): Store {
     try {
       const parsed = JSON.parse(await fs.readFile(storePath, 'utf8')) as Partial<Doc>;
       doc = { threads: parsed.threads ?? [], counters: parsed.counters ?? {}, tombstones: parsed.tombstones ?? [] };
-    } catch {
-      doc = { threads: [], counters: {}, tombstones: [] };
+      loaded = true;
+    } catch (err) {
+      // A MISSING file is a legitimate empty store (first boot) — cache it.
+      // Any other failure (transient EBUSY, parse error…) must NOT be cached:
+      // keep the last-known doc, leave `loaded` false, and the next read
+      // retries. (Old behavior: one failed read cached an EMPTY doc forever —
+      // and the next write persisted that empty doc, wiping the file.)
+      if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+        doc = { threads: [], counters: {}, tombstones: [] };
+        loaded = true;
+      }
     }
-    loaded = true;
   };
 
   const persist = async (): Promise<void> => {
@@ -262,13 +270,19 @@ function jsonStore(storePath: string): Store {
   };
 
   const mutate = <T>(fn: () => Promise<T> | T): Promise<T> => {
-    queue = queue.then(async () => {
+    // Chain discipline mirrors ghsync's `run` mutex: the CALLER sees the real
+    // error, but the queue itself survives it — chaining naively onto a
+    // rejected promise would wedge every later write after one transient
+    // load/persist failure.
+    const exec = async (): Promise<T> => {
       await load();
       const out = await fn();
       await persist();
       return out;
-    });
-    return queue as Promise<T>;
+    };
+    const p = queue.then(exec, exec);
+    queue = p.catch(() => undefined); // keep the chain alive through failures
+    return p;
   };
 
   const loadRead = async (): Promise<void> => {

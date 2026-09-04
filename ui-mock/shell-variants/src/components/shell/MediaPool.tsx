@@ -349,7 +349,7 @@ export function MediaPool() {
       return;
     }
     setAnchorId(m.id); // anchor = last single-clicked item
-    if (additive) toggleMediaSelection(m.id, true, false);
+    if (additive) toggleMediaSelection(m.id, true);
     else setMediaSelection([m.id]);
   };
 
@@ -480,7 +480,7 @@ export function MediaPool() {
         e.preventDefault();
         e.stopPropagation();
         setAnchorId(m.id);
-        toggleMediaSelection(m.id, true, false);
+        toggleMediaSelection(m.id, true);
         return;
       }
       default:

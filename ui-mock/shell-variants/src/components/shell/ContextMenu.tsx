@@ -89,11 +89,21 @@ interface ContextMenuProps extends ContextMenuState {
 
 export function ContextMenu({ x, y, items, name, onClose }: ContextMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [pos, setPos] = useState({ left: x, top: y });
 
   const base = name ? `shell-menu-${name}` : 'shell-menu';
   const itemTid = (id: string) => (name ? `${base}-${id}` : `${base}-item-${id}`);
+
+  /* roving candidates in DOM order: every menuitem descendant — command
+     items AND the focusable children custom rows render (MenuItem.custom is
+     arbitrary ReactNode, e.g. the ruler's 8-color palette dots). Disabled
+     command items are skipped (§9 aria-disabled, no focus stop). */
+  const rovingItems = () =>
+    Array.from(
+      rootRef.current?.querySelectorAll<HTMLElement>(
+        '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]',
+      ) ?? [],
+    ).filter((el) => el.getAttribute('aria-disabled') !== 'true');
 
   /* clamp to viewport once measured + focus the first enabled item */
   useLayoutEffect(() => {
@@ -103,8 +113,8 @@ export function ContextMenu({ x, y, items, name, onClose }: ContextMenuProps) {
       left: Math.max(4, Math.min(x, window.innerWidth - el.offsetWidth - 4)),
       top: Math.max(4, Math.min(y, window.innerHeight - el.offsetHeight - 4)),
     });
-    const first = items.findIndex((it) => !it.disabled && !it.custom);
-    if (first !== -1) itemRefs.current[first]?.focus();
+    const first = rovingItems()[0];
+    if (first) first.focus();
     else el.focus();
   }, [x, y, items]);
 
@@ -114,7 +124,9 @@ export function ContextMenu({ x, y, items, name, onClose }: ContextMenuProps) {
     it.onSelect?.();
   };
 
-  /* roving arrows over enabled command items (custom rows own Left/Right);
+  /* roving arrows over the DOM-order menuitem list (custom-row children
+     included); skip-disabled + wrap preserved. Custom rows may keep their own
+     Left/Right handling (events bubble up to this handler otherwise);
      stopPropagation keeps every shell shortcut (spec 16) out while open */
   const onKeydown = (e: React.KeyboardEvent) => {
     e.stopPropagation();
@@ -127,13 +139,13 @@ export function ContextMenu({ x, y, items, name, onClose }: ContextMenuProps) {
       e.preventDefault();
       e.stopPropagation();
       const dir: 1 | -1 = e.key === 'ArrowDown' ? 1 : -1;
-      const eligible = items.map((it, i) => ({ it, i })).filter(({ it }) => !it.disabled && !it.custom);
+      const eligible = rovingItems();
       if (eligible.length === 0) return;
-      const cur = eligible.findIndex(({ i }) => itemRefs.current[i] === document.activeElement);
+      const cur = eligible.findIndex((m) => m === document.activeElement);
       const next = cur === -1
         ? (dir === 1 ? 0 : eligible.length - 1)
         : (dir === 1 ? (cur + 1) % eligible.length : (cur - 1 + eligible.length) % eligible.length);
-      itemRefs.current[eligible[next].i]?.focus();
+      eligible[next].focus();
       return;
     }
     if (e.key === 'Tab') {
@@ -164,7 +176,7 @@ export function ContextMenu({ x, y, items, name, onClose }: ContextMenuProps) {
         style={pos}
         onKeyDown={onKeydown}
       >
-        {items.map((it, i) => (
+        {items.map((it) => (
           <React.Fragment key={it.id}>
             {it.sep && <div className="menu-sep" role="separator" aria-orientation="horizontal" />}
             {it.custom ? (
@@ -177,7 +189,6 @@ export function ContextMenu({ x, y, items, name, onClose }: ContextMenuProps) {
                 role={it.checked !== undefined ? 'menuitemcheckbox' : 'menuitem'}
                 aria-checked={it.checked}
                 aria-disabled={it.disabled || undefined}
-                ref={(el) => { itemRefs.current[i] = el; }}
                 data-testid={itemTid(it.id)}
                 data-tip={it.tip}
                 className={`menu-item${it.danger ? ' is-danger' : ''}`}

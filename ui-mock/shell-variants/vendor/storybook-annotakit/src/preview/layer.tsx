@@ -305,24 +305,6 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
     };
   }, [apiOk, resolveAll]);
 
-  /* ---- channel: manager commands ---- */
-  useEffect(() => {
-    const ch = sbChannel();
-    const onFocus = (threadId: string) => {
-      focusThread(threadId);
-    };
-    const onToggle = (state: unknown) => {
-      const next = typeof state === 'boolean' ? state : !visible;
-      setVisible(next);
-    };
-    ch.on(FOCUS_THREAD, onFocus);
-    ch.on(TOGGLE_LAYER, onToggle);
-    return () => {
-      ch.removeListener(FOCUS_THREAD, onFocus);
-      ch.removeListener(TOGGLE_LAYER, onToggle);
-    };
-  });
-
   const emitLayerState = useCallback((v: boolean) => {
     try {
       sbChannel().emit(LAYER_STATE, v);
@@ -349,6 +331,28 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
     },
     [anchors],
   );
+
+  /* ---- channel: manager commands ----
+   * Explicit deps (was: NO array → re-subscribed on every render). The effect
+   * must live AFTER focusThread's declaration: the deps array is evaluated
+   * during render, so referencing focusThread before its `const` initializer
+   * would be a TDZ ReferenceError. */
+  useEffect(() => {
+    const ch = sbChannel();
+    const onFocus = (threadId: string) => {
+      focusThread(threadId);
+    };
+    const onToggle = (state: unknown) => {
+      const next = typeof state === 'boolean' ? state : !visible;
+      setVisible(next);
+    };
+    ch.on(FOCUS_THREAD, onFocus);
+    ch.on(TOGGLE_LAYER, onToggle);
+    return () => {
+      ch.removeListener(FOCUS_THREAD, onFocus);
+      ch.removeListener(TOGGLE_LAYER, onToggle);
+    };
+  }, [focusThread, visible]);
 
   /* ---- capture modes ---- */
   const enterMode = useCallback((m: 'pin' | 'region' | 'idle') => {

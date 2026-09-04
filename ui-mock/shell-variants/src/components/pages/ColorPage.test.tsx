@@ -1,8 +1,10 @@
 /* ColorPage — spec 18 §4.8 color-focus right rail. Static grading mock:
    these tests pin the STRUCTURE (region root, the 4 wheels, primaries
    sliders, curves + scopes, LUT/qualifier) plus the §15.3 single-column
-   deferral note. Wheels are role=slider with accessible names; sliders are
-   labeled inputs (§11 a11y floor). No store interaction — renderPlain. */
+   deferral note. Wheels are decorative dials exposed as role="img" with
+   accessible names (R13 fix — role=slider promised interaction the mock
+   never had); sliders are labeled inputs (§11 a11y floor). No store
+   interaction — renderPlain. */
 
 import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
@@ -19,11 +21,13 @@ describe('ColorPage (spec 18 §4.8 color-focus rail)', () => {
   it('renders all four wheels — Lift / Gamma / Gain / Offset (§4.8)', () => {
     render(<ColorPage />);
     for (const label of ['Lift', 'Gamma', 'Gain', 'Offset']) {
-      const wheel = screen.getByRole('slider', { name: `${label} color wheel` });
-      expect(wheel).toBeInTheDocument();
-      // each wheel also exposes its centered mock position (§11 valuetext)
-      expect(wheel).toHaveAttribute('aria-valuetext', 'centered');
+      // R13 fix: decorative dials are role=img (no keyboard promise), not sliders
+      expect(screen.getByRole('img', { name: `${label} color wheel (static mock)` })).toBeInTheDocument();
     }
+    // the ONLY sliders on the page are the interactive labeled inputs —
+    // no wheel masquerades as a slider
+    expect(screen.getAllByRole('slider').map((s) => s.getAttribute('aria-label')))
+      .toEqual(['Contrast', 'Pivot', 'Saturation', 'Qualifier hue']);
   });
 
   it('renders the primaries sliders with their fixture values', () => {

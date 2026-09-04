@@ -1,6 +1,7 @@
 /* SceneTabs component tests — scene switching (spec 09 §6 multi-scene /
    18 §4.6), dirty dot, +scene creation, delete-with-clips confirmation
-   (spec 18 §6.4), direct empty-scene delete, and the last-scene guard. */
+   (spec 18 §6.4), direct empty-scene delete, the last-scene guard, and the
+   tablist keyboard contract (Enter/Space + arrow roving with activation). */
 
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
@@ -19,6 +20,28 @@ describe('SceneTabs', () => {
     // back via Space on the first tab
     fireEvent.keyDown(screen.getByTestId('shell-scene-tab-sc-1'), { key: ' ' });
     expect(store().activeSceneId).toBe('sc-1');
+  });
+
+  it('ArrowLeft/Right move focus AND activate, wrapping at both ends (R13 CodeRabbit fix)', () => {
+    boot({});
+    const sc1 = screen.getByTestId('shell-scene-tab-sc-1');
+    const sc2 = screen.getByTestId('shell-scene-tab-sc-2');
+    sc1.focus();
+    // move-and-activate (automatic activation): one keystroke switches scenes
+    fireEvent.keyDown(sc1, { key: 'ArrowRight' });
+    expect(store().activeSceneId).toBe('sc-2');
+    expect(sc2).toHaveFocus();
+    // forward wrap from the last tab
+    fireEvent.keyDown(sc2, { key: 'ArrowRight' });
+    expect(store().activeSceneId).toBe('sc-1');
+    expect(sc1).toHaveFocus();
+    // backward wrap from the first tab
+    fireEvent.keyDown(sc1, { key: 'ArrowLeft' });
+    expect(store().activeSceneId).toBe('sc-2');
+    expect(sc2).toHaveFocus();
+    // tabIndex roving follows the active tab (0 on active, -1 otherwise)
+    expect(sc2).toHaveAttribute('tabindex', '0');
+    expect(sc1).toHaveAttribute('tabindex', '-1');
   });
 
   it('renders a tablist with one tab per scene; the active tab is selected (spec 18 §4.6)', () => {

@@ -1,17 +1,18 @@
 /* ConfirmDialog — spec 18 §6.4 destructive-action confirmation: focus-trapped
-   alertdialog, confirm-button-first focus, Esc / ⌘. cancel, two-stop Tab
-   trap, backdrop pointer-down cancel (dialog content excluded), danger
-   styling, and the useConfirm() provider contract. */
+   alertdialog, WAI-aligned initial focus (danger → cancel-first, non-danger →
+   confirm-first), Esc / ⌘. cancel, two-stop Tab trap, backdrop pointer-down
+   cancel (dialog content excluded), danger styling, and the useConfirm()
+   provider contract. */
 
 import { describe, expect, it, afterEach, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ConfirmProvider, useConfirm } from './ConfirmDialog';
 import { renderShell, renderPlain } from '../../test/helpers';
 
 afterEach(() => { vi.restoreAllMocks(); });
 
 /** the consumer contract: confirm(opts) from any leaf under the provider */
-function Harness({ onConfirm }: { onConfirm: () => void }) {
+function Harness({ onConfirm, danger = true }: { onConfirm: () => void; danger?: boolean }) {
   const confirm = useConfirm();
   return (
     <button
@@ -19,7 +20,7 @@ function Harness({ onConfirm }: { onConfirm: () => void }) {
         title: 'Delete scene?',
         body: 'This removes 3 clips.',
         confirmLabel: 'Delete',
-        danger: true,
+        danger,
         onConfirm,
       })}
     >
@@ -28,8 +29,8 @@ function Harness({ onConfirm }: { onConfirm: () => void }) {
   );
 }
 
-function mountDialog(onConfirm: () => void) {
-  const utils = renderShell(<Harness onConfirm={onConfirm} />);
+function mountDialog(onConfirm: () => void, danger = true) {
+  const utils = renderShell(<Harness onConfirm={onConfirm} danger={danger} />);
   fireEvent.click(screen.getByRole('button', { name: 'open' }));
   return utils;
 }
@@ -46,9 +47,13 @@ describe('ConfirmDialog (spec 18 §6.4)', () => {
     expect(screen.getByTestId('shell-confirm-cancel')).toHaveTextContent('Cancel');
   });
 
-  it('focus lands on the confirm button when the dialog opens', () => {
-    mountDialog(() => {});
-    // destructive default = confirm is the safe-to-review stop first
+  it('initial focus follows the danger flag: danger → CANCEL (safe) button, non-danger → confirm', () => {
+    // R13 fix (WAI dialog guidance): destructive confirms start on the safe
+    // stop — Delete must be a deliberate keypress, undo is the safety net
+    mountDialog(() => {}, true);
+    expect(screen.getByTestId('shell-confirm-cancel')).toHaveFocus();
+    cleanup();
+    mountDialog(() => {}, false);
     expect(screen.getByTestId('shell-confirm-confirm')).toHaveFocus();
   });
 
@@ -80,7 +85,7 @@ describe('ConfirmDialog (spec 18 §6.4)', () => {
   });
 
   it('Tab cycles the two-stop focus trap; Shift+Tab walks back', () => {
-    mountDialog(() => {});
+    mountDialog(() => {}, false); // non-danger: confirm-first, as the trap walk assumes
     const confirm = screen.getByTestId('shell-confirm-confirm');
     const cancel = screen.getByTestId('shell-confirm-cancel');
     expect(confirm).toHaveFocus();

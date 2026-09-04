@@ -56,6 +56,10 @@
 
   /* time indicators — dedicated (the mock's playhead is #fa1024 red) */
   --playhead: #fa1024;
+  /* KNOWN QUIRK (report): --inout-band is defined (and theme-tuned) but
+     consumed NOWHERE — the in/out + loop bands paint var(--accent-selection)
+     directly (Viewer.tsx scrub row, Ruler.tsx band). Either wire the bands
+     to this token or drop it in a seal-round token sweep. */
   --inout-band: rgba(232, 179, 75, 0.22);
 
   /* type ramp (track badges / media badges — 18 §9 "one hue ramp") */
@@ -182,6 +186,10 @@
   --accent-contrast: #fffdf7;
 
   --playhead: #e5484d;
+  /* in/out band: the :root gold rgba is invisible against light lanes —
+     light keeps a band-ified version of its darkened accent gold
+     (#8a5f14, same source as --accent-gold) */
+  --inout-band: rgba(138, 95, 20, 0.20);
 
   --type-video: #5a7ba6;
   --type-audio: #3d9e66;

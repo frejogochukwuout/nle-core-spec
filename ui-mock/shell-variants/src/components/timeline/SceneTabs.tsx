@@ -61,6 +61,21 @@ export function SceneTabs() {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 setActiveScene(sc.id);
+                return;
+              }
+              // Left/Right move focus AND activate (common tablist pattern —
+              // "automatic activation"; chosen over move-only because Tab is
+              // repurposed and Enter is the only other activator, so arrows
+              // doing double duty keeps scene switching one keystroke).
+              // Wraps at both ends; the tabIndex roving follows the store.
+              if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                const dir = e.key === 'ArrowRight' ? 1 : -1;
+                const idx = scenes.findIndex((s) => s.id === sc.id);
+                const next = scenes[(idx + dir + scenes.length) % scenes.length];
+                if (next.id === sc.id) return; // single scene — nothing to rove
+                setActiveScene(next.id);
+                document.querySelector<HTMLElement>(`[data-testid="shell-scene-tab-${next.id}"]`)?.focus();
               }
             }}
             className={`relative flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-hairline pl-3.5 pr-2.5 ${

@@ -54,8 +54,10 @@ export function useShortcuts(duration: number) {
         return;
       }
 
-      /* ---- non-modifier structural keys ---- */
-      switch (key) {
+      /* ---- non-modifier structural keys (⌘/⌥ must NOT fall through here:
+         ⌘Delete previously deleted instead of being swallowed as an
+         unmatched ⌘ combo per spec 16, and ⌥ arrows hit the nudge path) ---- */
+      if (!cmd && !alt) switch (key) {
         case ' ':
           e.preventDefault();
           jklRef.current = null;
@@ -95,13 +97,25 @@ export function useShortcuts(duration: number) {
             .flatMap((el) => [el.startTime, el.startTime + el.duration])
             .sort((a, b) => a - b);
           const dir = key === 'PageDown' ? 1 : -1;
-          const next = edges.find((x) => (dir === 1 ? x > s.playhead + 0.01 : x < s.playhead - 0.01));
+          // forward: first edge after the playhead; backward: NEAREST edge
+          // before it (find on ascending edges grabs the EARLIEST — the R13
+          // review caught PageUp always landing near t=0)
+          const next = dir === 1
+            ? edges.find((x) => x > s.playhead + 0.01)
+            : [...edges].reverse().find((x) => x < s.playhead - 0.01);
           if (next !== undefined) s.setPlayhead(dir === 1 ? next + 0.01 : Math.max(0, next - 0.01));
           return;
         }
         case 'Tab':
-          e.preventDefault();
-          s.selectNeighbors(e.shiftKey ? -1 : 1);
+          // spec 16 §3.3 Tab = neighbor-clip selection — but ONLY while focus
+          // lives inside the timeline region. Elsewhere Tab keeps its a11y
+          // navigation role: F6 region cycling hands focus to regions whose
+          // controls must stay Tab-reachable (R13 review: the global hijack
+          // made keyboard navigation impossible outside text fields).
+          if (document.activeElement?.closest?.('[data-testid="shell-timeline"]')) {
+            e.preventDefault();
+            s.selectNeighbors(e.shiftKey ? -1 : 1);
+          }
           return;
         case 'Delete':
         case 'Backspace':

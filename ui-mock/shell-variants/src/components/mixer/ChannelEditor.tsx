@@ -24,6 +24,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function NumField({ value, min, max, step = 0.1, unit, onCommit, ariaLabel }: {
   value: number; min: number; max: number; step?: number; unit?: string; onCommit: (v: number) => void; ariaLabel: string;
 }) {
+  /* uncontrolled by design (§4.4-style commit-on-blur); callers MUST key the
+     usage on the element id — React reuses the instance across selection
+     changes otherwise, and the stale defaultValue of the PREVIOUS clip would
+     both display and commit to the newly selected clip (R13 CodeRabbit fix). */
   return (
     <input
       type="number"
@@ -80,7 +84,7 @@ export function ChannelEditor() {
               <span className="min-w-0 flex-1 truncate text-[11px] text-tprimary">{el.name}</span>
             </div>
             <Row label="Gain dB">
-              <NumField value={((el.volume ?? 1) * 20 - 20)} min={-48} max={12} step={0.5} ariaLabel="Clip gain"
+              <NumField key={el.id} value={((el.volume ?? 1) * 20 - 20)} min={-48} max={12} step={0.5} ariaLabel="Clip gain"
                 onCommit={(dbv) => setElementField(el.id, { volume: Math.max(0.001, (dbv + 20) / 20) })} />
               <input type="range" min={-48} max={12} step={0.5} defaultValue={((el.volume ?? 1) * 20 - 20)}
                 key={`${el.id}-${el.volume}`}
@@ -90,11 +94,11 @@ export function ChannelEditor() {
                 aria-label="Clip gain slider (commit on release)" />
             </Row>
             <Row label="Fade in">
-              <NumField value={el.audioFadeIn ?? 0} min={0} max={10} step={0.1} unit="s" ariaLabel="Audio fade in"
+              <NumField key={el.id} value={el.audioFadeIn ?? 0} min={0} max={10} step={0.1} unit="s" ariaLabel="Audio fade in"
                 onCommit={(v) => setElementField(el.id, { audioFadeIn: v })} />
             </Row>
             <Row label="Fade out">
-              <NumField value={el.audioFadeOut ?? 0} min={0} max={10} step={0.1} unit="s" ariaLabel="Audio fade out"
+              <NumField key={el.id} value={el.audioFadeOut ?? 0} min={0} max={10} step={0.1} unit="s" ariaLabel="Audio fade out"
                 onCommit={(v) => setElementField(el.id, { audioFadeOut: v })} />
             </Row>
             <p className="mt-1 text-[10px] leading-[1.4] text-tfaint">

@@ -21,9 +21,10 @@ describe('Viewer (spec 18 §4.3)', () => {
     expect(scrub).toHaveAttribute('aria-valuenow', '384'); // 16 s × 24 fps
     expect(scrub).toHaveAttribute('aria-valuemax', '720'); // 30 s × 24 fps
     expect(scrub).toHaveAttribute('aria-valuetext', '00:00:16:00');
-    // playhead 16 → el-2 drives the monitor; alt="" yields role=presentation,
-    // so the source name rides on the aria-label (jsdom role computation)
+    // playhead 16 → el-2 drives the monitor; role="img" + aria-label make the
+    // program surface's accessible name match the visible surface (R13 fix)
     expect(container.querySelector('img')).toHaveAttribute('aria-label', 'Program monitor: Marina interview');
+    expect(container.querySelector('img')).toHaveAttribute('role', 'img');
   });
 
   it('composites the text overlay at the playhead; past the last clip the frame is empty', () => {
@@ -35,12 +36,21 @@ describe('Viewer (spec 18 §4.3)', () => {
     expect(screen.getByText('No media — import or drop a file')).toBeInTheDocument();
   });
 
-  it('zoom select magnifies the frame (Fit = 100% width, 100% = 200%)', () => {
+  it('zoom ladder: honest fit-anchored labels with matching magnifications', () => {
     const { container } = render(<Viewer duration={DUR} />);
     const img = container.querySelector('img')!;
-    expect((img.parentElement as HTMLElement).style.width).toBe('100%');
-    fireEvent.change(screen.getByLabelText('Viewer zoom'), { target: { value: '100%' } });
+    expect((img.parentElement as HTMLElement).style.width).toBe('100%'); // Fit = 1× fit
+    const select = screen.getByLabelText('Viewer zoom') as HTMLSelectElement;
+    // labels match the ACTUAL multipliers of the fit width (R13 fix: the old
+    // 50%/100%/200% were container percentages, not magnifications)
+    expect(select.options).toHaveLength(4);
+    for (const label of ['Fit', '1.5×', '2×', '4×']) {
+      expect(within(select).getByRole('option', { name: label })).toBeInTheDocument();
+    }
+    fireEvent.change(select, { target: { value: '2×' } });
     expect((img.parentElement as HTMLElement).style.width).toBe('200%');
+    fireEvent.change(select, { target: { value: '4×' } });
+    expect((img.parentElement as HTMLElement).style.width).toBe('400%');
   });
 
   it('Eye toggle hides the in-canvas overlays (store pref, §4.3 viewer-toolbar)', () => {
@@ -113,5 +123,59 @@ describe('Viewer (spec 18 §4.3)', () => {
     expect(S().scenes[0].markers).toHaveLength(6);
     expect(S().scenes[0].markers.at(-1)!.color).toBe('red');
     expect(flag).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('the chevron button is the keyboard-open path and expands the palette (R13 fix)', () => {
+    render(<Viewer duration={DUR} />);
+    const chevron = screen.getByRole('button', { name: 'Marker color' });
+    expect(chevron).toHaveAttribute('aria-haspopup', 'menu');
+    expect(chevron).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(chevron);
+    expect(chevron).toHaveAttribute('aria-expanded', 'true');
+    // radio state is honest: with the 4 fixture markers, a plain flag click
+    // would add colors[4 % 8] = blue — that dot is the checked one
+    const menu = screen.getByRole('menu', { name: 'Marker color' });
+    expect(within(menu).getByRole('menuitemradio', { name: 'Marker color blue' }))
+      .toHaveAttribute('aria-checked', 'true');
+    expect(within(menu).getByRole('menuitemradio', { name: 'Marker color red' }))
+      .toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('Esc dismisses the palette via the local capture listener; selection survives', () => {
+    useUi.setState({ selection: ['el-2'] });
+    render(<Viewer duration={DUR} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Marker color' }));
+    expect(screen.getByRole('menu', { name: 'Marker color' })).toBeInTheDocument();
+    // capture-phase Esc closes the popover and stops the global Esc ladder
+    // (useShortcuts deselect) from also firing — CheatSheet pattern
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    expect(screen.queryByRole('menu', { name: 'Marker color' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Marker color' })).toHaveAttribute('aria-expanded', 'false');
+    expect(S().selection).toEqual(['el-2']); // Esc consumed by the popover, not the ladder
+  });
+
+  it('pointer-down outside the palette dismisses it; inside the safe zone it stays', () => {
+    render(<Viewer duration={DUR} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Marker color' }));
+    // pointer-down on the trigger zone (chevron) keeps it open — toggle is a click
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Marker color' }));
+    expect(screen.getByRole('menu', { name: 'Marker color' })).toBeInTheDocument();
+    // pointer-down on a palette dot does not dismiss before the click lands
+    fireEvent.pointerDown(screen.getByRole('menuitemradio', { name: 'Marker color green' }));
+    expect(screen.getByRole('menu', { name: 'Marker color' })).toBeInTheDocument();
+    // pointer-down anywhere else closes
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('menu', { name: 'Marker color' })).not.toBeInTheDocument();
+  });
+
+  it('NaN-safe: duration 0 (empty scene) renders 0% positions, never NaN%', () => {
+    render(<Viewer duration={0} />);
+    const scrub = screen.getByTestId('shell-viewer-scrub');
+    // pct() guards the divide — playhead, loop band and boundary ticks all
+    // paint 0% instead of NaN% when the scene duration is 0
+    expect(screen.getByTestId('shell-viewer-scrub-playhead').style.left).toBe('0%');
+    expect(scrub.querySelector('[style*="NaN"]')).toBeNull();
   });
 });

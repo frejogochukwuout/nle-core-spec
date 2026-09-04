@@ -1,13 +1,18 @@
 /* DeliverPage — spec 18 §4.8 / specs 10-11 export rail. Presets are local
-   React state (no store): these tests pin the three preset buttons, the
-   preset→CTA label coupling, the render-settings block, and the job queue
-   (done rows + one running row with progress + retry, §6.4 error UX).
-   No store/variant interaction — renderPlain. */
+   React state; the toast queue lives in the store. These tests pin the
+   three preset buttons, the preset→CTA label coupling, the render-settings
+   block, the job queue (done rows + one running row with progress + retry,
+   §6.4 error UX), and the honest-mock export behavior (R13: CTA + Reveal/
+   Retry push info toasts — no encode ever runs — and the CTA appends a
+   static queued job row). */
 
 import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DeliverPage } from './DeliverPage';
+import { useUi } from '../../state/useUiStore';
+
+const S = () => useUi.getState();
 
 describe('DeliverPage (spec 18 §4.8 export rail)', () => {
   it('renders the deliver region root with the project metadata row (§4.1)', () => {
@@ -70,13 +75,34 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(cta).toHaveStyle({ background: 'var(--accent-selection)', color: 'var(--accent-contrast)' });
   });
 
-  it('queue retry button is present but the render flow itself is mock-only (no store writes)', () => {
+  it('export CTA is preset-aware and honest: info toast + static queued job row (R13 fix)', async () => {
+    const user = userEvent.setup();
     render(<DeliverPage />);
-    // no start-render side channel exists in the mock: the CTA has no handler
-    // wired (aria stays a plain button) — pinned so wiring it later is a
-    // deliberate, reviewed change
-    const cta = screen.getByTestId('shell-deliver-btn-export-fcpxml');
-    expect(cta.tagName).toBe('BUTTON');
-    expect(cta).not.toHaveAttribute('disabled');
+    // default preset = FCPXML — the toast names it and says what actually runs
+    await user.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+    expect(S().toasts).toHaveLength(1);
+    expect(S().toasts[0].kind).toBe('info');
+    expect(S().toasts[0].title).toBe('Export queued: FCPXML 1.10');
+    expect(S().toasts[0].detail).toBe('render queue is mock — no encode runs');
+    // a static queued row is appended (4th job) — it never progresses
+    expect(screen.getAllByTestId('shell-deliver-job')).toHaveLength(4);
+    expect(screen.getByText('Beach Doc — Rough Cut.fcpxml')).toBeInTheDocument();
+    // switching the preset makes the NEXT export preset-aware
+    await user.click(screen.getByTestId('shell-deliver-preset-master'));
+    await user.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+    expect(S().toasts.at(-1)!.title).toBe('Export queued: Master · H.264');
+    expect(screen.getAllByTestId('shell-deliver-job')).toHaveLength(5);
+    expect(screen.getByText('Beach Doc — Rough Cut.mp4')).toBeInTheDocument();
+  });
+
+  it('Reveal and Retry per-job buttons push honest info toasts (R13 fix)', async () => {
+    const user = userEvent.setup();
+    render(<DeliverPage />);
+    await user.click(screen.getAllByRole('button', { name: 'Reveal file' })[0]);
+    expect(S().toasts[0]).toMatchObject({ kind: 'info', title: 'Reveal file' });
+    expect(S().toasts[0].detail).toBe('render queue is mock — no file was written');
+    await user.click(screen.getByRole('button', { name: 'Retry job' }));
+    expect(S().toasts[1]).toMatchObject({ kind: 'info', title: 'Retry Interview selects master.mp4' });
+    expect(S().toasts[1].detail).toBe('render queue is mock — no encode runs');
   });
 });

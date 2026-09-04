@@ -35,7 +35,17 @@ async function loadIndex(): Promise<StoryIndex | null> {
 }
 
 function indexPromise(): Promise<StoryIndex | null> {
-  indexCache ??= loadIndex();
+  if (!indexCache) {
+    // Cache ONLY a successful load: a failed one (null) resets the cache so
+    // the NEXT read retries — /index.json can arrive late while the dev
+    // server is still warming up, and a cached failure would silently strip
+    // importPath/componentPath from every pin for the whole session.
+    // Concurrent callers still share the in-flight attempt.
+    indexCache = loadIndex().then((idx) => {
+      if (!idx) indexCache = null;
+      return idx;
+    });
+  }
   return indexCache;
 }
 

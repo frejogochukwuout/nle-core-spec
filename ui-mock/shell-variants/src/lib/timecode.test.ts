@@ -71,11 +71,19 @@ describe('frame / clamp / snapToFrame / totalDuration', () => {
     // already-clean values are stable (idempotent)
     expect(snapToFrame(8.5)).toBe(8.5);
   });
+});
 
-  it('totalDuration renders m:ss', () => {
+describe('totalDuration', () => {
+  it('renders m:ss', () => {
     expect(totalDuration(62.4)).toBe('1:02');
     expect(totalDuration(0)).toBe('0:00');
     expect(totalDuration(65)).toBe('1:05');
+  });
+
+  it('R13 fix: minute rollover rounds BEFORE the split (no ":60")', () => {
+    expect(totalDuration(119.6)).toBe('2:00'); // was "1:60"
+    expect(totalDuration(59.9)).toBe('1:00');
+    expect(totalDuration(120.4)).toBe('2:00');
   });
 });
 
@@ -121,6 +129,17 @@ describe('parseTc — spec 18 §4.4 field grammar', () => {
     // Grammar per source: 2-3 group short forms, LAST group = frames.
     // '01:08:12' → 1m 8s + 12f = 68.5s
     expect(parseTc('01:08:12')).toBeCloseTo(68.5);
+  });
+
+  it('R13 fix: seconds/minutes above 59 in the group forms are typos → null', () => {
+    expect(parseTc('00:75:12')).toBeNull(); // SS=75 in MM:SS:FF
+    expect(parseTc('75:12')).toBeNull(); // SS=75 in SS:FF
+    expect(parseTc('01:60:12')).toBeNull(); // SS=60 — boundary typo
+    expect(parseTc('24:75')).toBeNull(); // FF=75 — frame overflow path
+    // 2-group with SS ≤ 59 stays valid
+    expect(parseTc('59:23')).toBeCloseTo(59 + 23 / 24);
+    // hours (3-digit first group) are unbounded by design
+    expect(parseTc('100:00:00:00')).toBeCloseTo(360000);
   });
 });
 

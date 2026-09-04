@@ -82,8 +82,8 @@ interface UiState {
   toasts: Toast[];
   saveAttempt: number;
   simulateSaveFail: boolean;
-  past: { scenes: SceneJSON[]; activeSceneId: string; lockAll?: boolean }[];
-  future: { scenes: SceneJSON[]; activeSceneId: string; lockAll?: boolean }[];
+  past: { scenes: SceneJSON[]; activeSceneId: string; lockAll?: boolean; selection?: string[] }[];
+  future: { scenes: SceneJSON[]; activeSceneId: string; lockAll?: boolean; selection?: string[] }[];
   // ---- audio focus mode (design doc docs/DESIGN-audio-mode.md v2.1) ----
   mixer: MockMixerScene;      // mock G-slice (spec 20 §4.2 shape)
   mixerState: MixerDockState;
@@ -132,7 +132,7 @@ interface UiState {
   setMainBodyH: (h: number) => void;
   setCheatOpen: (v: boolean) => void;
   setMediaSelection: (ids: string[]) => void;
-  toggleMediaSelection: (id: string, additive: boolean, range: boolean) => void;
+  toggleMediaSelection: (id: string, additive: boolean) => void;
   setMediaDrag: (d: UiState['mediaDrag']) => void;
   setFocusedTrack: (id: string | null) => void;
   moveFocusedTrack: (dir: 1 | -1) => void;
@@ -185,7 +185,7 @@ const MAX_PPS = 240;
 const HISTORY = 50;
 function withHistory(set: (partial: any) => void, get: () => UiState, mutate: (scenes: SceneJSON[]) => SceneJSON[] | void) {
   const s = get();
-  const before = { scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll };
+  const before = { scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll, selection: [...s.selection] };
   const next = mutate(clone(s.scenes));
   if (next === undefined) return; // no-op — no history entry
   set({
@@ -203,6 +203,12 @@ function withHistory(set: (partial: any) => void, get: () => UiState, mutate: (s
 const DEFAULT_MIXER_TRACK: MixerTrackSettings = { fader: -6, pan: 0, inserts: [null, null], auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0 };
 
 let toastSeq = 1;
+/* monotonic id suffix — Date.now() alone collides on same-millisecond creates
+   (two rapid markers → identical ids → broken React keys + removal hits both;
+   the R13 test suite pins id-uniqueness as a mock invariant, so the counter
+   makes the invariant actually hold). */
+let idSeq = 0;
+const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}-${idSeq++}`;
 
 export const useUi = create<UiState>((set, get) => ({
   page: 'edit',
@@ -252,11 +258,22 @@ export const useUi = create<UiState>((set, get) => ({
     // leaving audio focus by ANY route resets the lane boost (design §3.3)
     ...(s.page === 'audio' && p !== 'audio' ? { audioLaneBoost: false } : {}),
   })),
-  setActiveScene: (id) => set((s) => ({ activeSceneId: id, selection: [] })),
+  setActiveScene: (id) => set((s) => {
+    // lockAll is scene-derived view state — re-derive on switch so the toolbar
+    // pressed-state never lies about the newly active scene (R13: previously
+    // the flag stuck from the previous scene and the next click did the
+    // OPPOSITE of its label on the fresh scene)
+    const sc = s.scenes.find((x) => x.id === id);
+    return {
+      activeSceneId: id,
+      selection: [],
+      ...(sc ? { lockAll: sc.tracks.every((t) => t.locked) } : {}),
+    };
+  }),
   createScene: () => withHistory(set, get, (scenes) => {
     const n = scenes.length + 1;
     const sc: SceneJSON = {
-      id: `sc-${Date.now()}`,
+      id: nextId('sc-'),
       name: `Scene ${n}`,
       tracks: [
         { id: `t-ov-${n}`, kind: 'overlay', name: `Text 1`, badge: `T1`, muted: false, solo: false, locked: false, visible: true, elements: [] },
@@ -307,7 +324,7 @@ export const useUi = create<UiState>((set, get) => ({
     const s = get();
     const sc = scenes.find((x) => x.id === s.activeSceneId)!;
     const colors: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
-    sc.markers.push({ id: `mk-${Date.now()}`, time: snapToFrame(time), label: 'Marker', color: color ?? colors[sc.markers.length % 8] });
+    sc.markers.push({ id: nextId('mk-'), time: snapToFrame(time), label: 'Marker', color: color ?? colors[sc.markers.length % 8] });
     return scenes;
   }),
   setSelection: (ids) => set({ selection: ids }),
@@ -359,14 +376,11 @@ export const useUi = create<UiState>((set, get) => ({
   setMainBodyH: (h) => set({ mainBodyH: h <= 0 ? 0 : clamp(h, 320, 900) }), // 0 = auto (40% of viewport, spec 18 §3.2)
   setCheatOpen: (v) => set({ cheatOpen: v }),
   setMediaSelection: (ids) => set({ mediaSelection: ids }),
-  toggleMediaSelection: (id, additive, range) => set((s) => {
-    if (range) {
-      // shift-range over the flat filtered list (MediaPool supplies order via mediaSelection; mock: anchor = first)
-      const anchor = s.mediaSelection[0];
-      void anchor;
-      const has = s.mediaSelection.includes(id);
-      return { mediaSelection: has ? s.mediaSelection.filter((x) => x !== id) : [...s.mediaSelection, id] };
-    }
+  toggleMediaSelection: (id, additive) => set((s) => {
+    // range selection is OWNED by MediaPool (it has the flat filtered order +
+    // the click anchor); this action only handles replace/additive-toggle.
+    // (R13: the old `range` param was a stub behaving as additive-toggle —
+    // signature advertised behavior the store never had.)
     if (!additive) return { mediaSelection: [id] };
     const has = s.mediaSelection.includes(id);
     return { mediaSelection: has ? s.mediaSelection.filter((x) => x !== id) : [...s.mediaSelection, id] };
@@ -457,10 +471,11 @@ export const useUi = create<UiState>((set, get) => ({
     const prev = s.past[s.past.length - 1];
     return {
       past: s.past.slice(0, -1),
-      future: [{ scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll }, ...s.future].slice(0, HISTORY),
+      future: [{ scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll, selection: [...s.selection] }, ...s.future].slice(0, HISTORY),
       scenes: prev.scenes,
       activeSceneId: prev.activeSceneId,
       ...(prev.lockAll !== undefined ? { lockAll: prev.lockAll } : {}),
+      ...(prev.selection !== undefined ? { selection: [...prev.selection] } : {}),
     };
   }),
   redo: () => set((s) => {
@@ -468,34 +483,44 @@ export const useUi = create<UiState>((set, get) => ({
     const next = s.future[0];
     return {
       future: s.future.slice(1),
-      past: [...s.past, { scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll }].slice(-HISTORY),
+      past: [...s.past, { scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll, selection: [...s.selection] }].slice(-HISTORY),
       scenes: next.scenes,
       activeSceneId: next.activeSceneId,
       ...(next.lockAll !== undefined ? { lockAll: next.lockAll } : {}),
+      ...(next.selection !== undefined ? { selection: [...next.selection] } : {}),
     };
   }),
 
   // ---- document mutations (mock-level; real shell = EngineCommand) ----
+  /* locked-track law: every element-level mutation is inert on locked tracks
+     (spec 18 §4.5 lock; gestures already gate at the component level — these
+     store guards close the keyboard/command surface: ⌘B, Delete, ⌘D, slip,
+     inspector fan-out writes). Track-level flags (M/S/L) stay togglable. */
   moveElement: (id, startTime) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, id);
-    if (hit) hit.el.startTime = snapToFrame(Math.max(0, startTime));
+    if (!hit || hit.track.locked) return;
+    const next = snapToFrame(Math.max(0, startTime));
+    if (next === hit.el.startTime) return; // unchanged gesture — no history entry
+    hit.el.startTime = next;
     return scenes;
   }),
   trimElement: (id, edge, newStart, newDur) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, id);
-    if (hit) {
-      const prevStart = hit.el.startTime;
-      hit.el.startTime = snapToFrame(Math.max(0, newStart));
-      hit.el.duration = snapToFrame(Math.max(0.25, newDur));
-      if (hit.el.sourceStart !== undefined && edge === 'l') hit.el.sourceStart = Math.max(0, hit.el.sourceStart + (hit.el.startTime - prevStart));
-    }
+    if (!hit || hit.track.locked) return;
+    const start = snapToFrame(Math.max(0, newStart));
+    const dur = snapToFrame(Math.max(0.25, newDur));
+    if (start === hit.el.startTime && dur === hit.el.duration) return; // press-release without movement — no history
+    const prevStart = hit.el.startTime;
+    hit.el.startTime = start;
+    hit.el.duration = dur;
+    if (hit.el.sourceStart !== undefined && edge === 'l') hit.el.sourceStart = Math.max(0, hit.el.sourceStart + (start - prevStart));
     return scenes;
   }),
   splitElement: (id, time) => withHistory(set, get, (scenes) => {
     // pre-validate against the CURRENT doc so no-op splits don't pollute history
     const pre = findEl(get().scenes, id);
     const preCut = snapToFrame(time);
-    if (!pre || preCut - pre.el.startTime <= 0.1 || preCut - pre.el.startTime >= pre.el.duration - 0.1) return;
+    if (!pre || pre.track.locked || preCut - pre.el.startTime <= 0.1 || preCut - pre.el.startTime >= pre.el.duration - 0.1) return;
     for (const sc of scenes) for (const t of sc.tracks) {
       const idx = t.elements.findIndex((e) => e.id === id);
       if (idx === -1) continue;
@@ -513,6 +538,7 @@ export const useUi = create<UiState>((set, get) => ({
   }),
   toggleEffect: (elementId, fxId) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, elementId);
+    if (hit?.track.locked) return;
     if (hit?.el.effects) {
       const fx = hit.el.effects.find((f) => f.id === fxId);
       if (fx) fx.enabled = !fx.enabled;
@@ -521,22 +547,24 @@ export const useUi = create<UiState>((set, get) => ({
   }),
   addEffectToElement: (elementId, fx) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, elementId);
-    if (hit) {
-      if (!hit.el.effects) hit.el.effects = [];
-      hit.el.effects.push({ ...fx, id: `fx-${Date.now()}` });
-    }
+    if (!hit || hit.track.locked) return;
+    if (!hit.el.effects) hit.el.effects = [];
+    hit.el.effects.push({ ...fx, id: nextId('fx-') });
     return scenes;
   }),
   removeEffect: (elementId, fxId) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, elementId);
-    if (hit?.el.effects) hit.el.effects = hit.el.effects.filter((f) => f.id !== fxId);
+    if (!hit || hit.track.locked) return;
+    if (hit.el.effects) hit.el.effects = hit.el.effects.filter((f) => f.id !== fxId);
     return scenes;
   }),
   setEffectParam: (elementId, fxId, param, value) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, elementId);
-    const fx = hit?.el.effects?.find((f) => f.id === fxId);
+    if (!hit || hit.track.locked) return;
+    const fx = hit.el.effects?.find((f) => f.id === fxId);
     if (fx) {
       if (!fx.params) fx.params = {};
+      if (fx.params[param] === value) return; // unchanged — no history entry
       fx.params[param] = value;
     }
     return scenes;
@@ -560,30 +588,36 @@ export const useUi = create<UiState>((set, get) => ({
     return scenes;
   }),
   duplicateElements: (ids) => withHistory(set, get, (scenes) => {
-    const s = get();
     const newIds: string[] = [];
     for (const sc of scenes) for (const t of sc.tracks) {
+      if (t.locked) continue; // locked tracks are inert
       const dupes: ElementJSON[] = [];
       for (const e of t.elements) {
         if (ids.includes(e.id)) {
-          const copy: ElementJSON = { ...e, id: `${e.id}-d${Date.now()}`, startTime: e.startTime + e.duration };
+          const copy: ElementJSON = { ...e, id: nextId(`${e.id}-d`), startTime: e.startTime + e.duration };
           dupes.push(copy);
           newIds.push(copy.id);
         }
       }
       t.elements.push(...dupes);
     }
-    set({ selection: newIds.length ? newIds : s.selection });
+    if (newIds.length === 0) return; // nothing duplicable — no history entry
+    set({ selection: newIds });
     return scenes;
   }),
   slipNudge: (ids, frames) => withHistory(set, get, (scenes) => {
-    for (const sc of scenes) for (const t of sc.tracks) for (const e of t.elements) {
-      if (!ids.includes(e.id)) continue;
-      if (e.sourceStart === undefined) continue;
-      // slip: shift source window, keep placement
-      const next = e.sourceStart + frames / 24;
-      if (next >= 0) e.sourceStart = next;
+    let changed = false;
+    for (const sc of scenes) for (const t of sc.tracks) {
+      if (t.locked) continue; // locked tracks are inert
+      for (const e of t.elements) {
+        if (!ids.includes(e.id)) continue;
+        if (e.sourceStart === undefined) continue;
+        // slip: shift source window, keep placement
+        const next = e.sourceStart + frames / 24;
+        if (next >= 0 && next !== e.sourceStart) { e.sourceStart = next; changed = true; }
+      }
     }
+    if (!changed) return; // nothing slipped (all locked / no sourceStart / unchanged) — no history
     return scenes;
   }),
   trimToPlayhead: (edge, ripple) => withHistory(set, get, (scenes) => {
@@ -634,15 +668,15 @@ export const useUi = create<UiState>((set, get) => ({
   }),
   setElementField: (id, patch) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, id);
-    if (hit) Object.assign(hit.el, patch);
+    if (!hit || hit.track.locked) return;
+    Object.assign(hit.el, patch);
     return scenes;
   }),
   setTransition: (id, patch) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, id);
-    if (hit) {
-      if (!hit.el.transitionOut) hit.el.transitionOut = { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 };
-      Object.assign(hit.el.transitionOut, patch);
-    }
+    if (!hit || hit.track.locked) return;
+    if (!hit.el.transitionOut) hit.el.transitionOut = { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 };
+    Object.assign(hit.el.transitionOut, patch);
     return scenes;
   }),
   addTrack: (kind) => withHistory(set, get, (scenes) => {
@@ -652,7 +686,7 @@ export const useUi = create<UiState>((set, get) => ({
     const n = sameKind.length + 1;
     const prefix = kind === 'audio' ? 'A' : kind === 'overlay' ? 'T' : 'V';
     const track: TrackJSON = {
-      id: `t-${kind}-${Date.now()}`,
+      id: nextId(`t-${kind}-`),
       kind,
       name: kind === 'audio' ? `Audio ${n}` : kind === 'overlay' ? `Text ${n}` : `Video ${n}`,
       badge: `${prefix}${n}`,

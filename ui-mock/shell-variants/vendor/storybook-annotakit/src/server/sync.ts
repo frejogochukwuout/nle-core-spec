@@ -55,29 +55,39 @@ function redact(text: string): string {
     .replace(/ghp_[A-Za-z0-9]+/g, 'ghp_***');
 }
 
-interface GitResult { ok: boolean; out: string }
+interface GitResult { ok: boolean; out: string; err: string }
 
-/** Async git (spawn) — the debounced path; never blocks the event loop. */
+/** Both captured streams joined for diagnostics (each already redacted). */
+function bothStreams(r: GitResult): string {
+  return r.out && r.err ? `${r.out}\n${r.err}` : r.out || r.err;
+}
+
+/** Async git (spawn) — the debounced path; never blocks the event loop.
+ *  stderr is piped AND captured: git writes its rejections there (`! [rejected]`,
+ *  `failed to push some refs`) — stdout-only capture made push failures
+ *  invisible and the non-fast-forward recovery below unmatchable. */
 function gitAsync(root: string, args: string[], timeoutMs: number): Promise<GitResult> {
   return new Promise((resolve) => {
     let out = '';
+    let errOut = '';
     let settled = false;
     const finish = (ok: boolean): void => {
       if (settled) return;
       settled = true;
-      resolve({ ok, out: redact(out).slice(0, 300) });
+      resolve({ ok, out: redact(out).slice(0, 300), err: redact(errOut).slice(0, 300) });
     };
     const child = spawn('git', ['--no-optional-locks', '-C', root, ...args], {
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
       finish(false);
     }, timeoutMs);
-    child.stdout.on('data', (d: Buffer) => (out += d.toString()));
+    child.stdout?.on('data', (d: Buffer) => (out += d.toString()));
+    child.stderr?.on('data', (d: Buffer) => (errOut += d.toString()));
     child.on('error', (err) => {
       clearTimeout(timer);
-      out += `spawn error: ${err.message}`;
+      errOut += `spawn error: ${err.message}`;
       finish(false);
     });
     child.on('close', (code) => {
@@ -87,17 +97,22 @@ function gitAsync(root: string, args: string[], timeoutMs: number): Promise<GitR
   });
 }
 
-/** Sync git (execFileSync) — shutdown flush only, where blocking is accepted. */
+/** Sync git (execFileSync) — shutdown flush only, where blocking is accepted.
+ *  stderr is piped too so failures are as legible as the async path. */
 function gitSyncExec(root: string, args: string[], timeoutMs: number): GitResult {
   try {
     const out = spawnSync('git', ['--no-optional-locks', '-C', root, ...args], {
       encoding: 'utf8',
       timeout: timeoutMs,
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
-    return { ok: out.status === 0, out: redact(String(out.stdout ?? '') || String(out.stderr ?? '')).slice(0, 300) };
+    return {
+      ok: out.status === 0,
+      out: redact(String(out.stdout ?? '')).slice(0, 300),
+      err: redact(String(out.stderr ?? '')).slice(0, 300),
+    };
   } catch (err) {
-    return { ok: false, out: redact(err instanceof Error ? err.message : String(err)).slice(0, 300) };
+    return { ok: false, out: '', err: redact(err instanceof Error ? err.message : String(err)).slice(0, 300) };
   }
 }
 
@@ -156,7 +171,7 @@ export function createAutoSync(opts: {
 
       const add = await gitAsync(root, ['add', '--', relStore], timeoutMs);
       if (!add.ok) {
-        logOnce(`git add failed (${add.out})`);
+        logOnce(`git add failed (${bothStreams(add)})`);
         state = 'error: git add';
         return false;
       }
@@ -172,7 +187,7 @@ export function createAutoSync(opts: {
         timeoutMs,
       );
       if (!commit.ok) {
-        logOnce(`git commit failed (${commit.out})`);
+        logOnce(`git commit failed (${bothStreams(commit)})`);
         state = 'error: git commit';
         return false;
       }
@@ -183,7 +198,8 @@ export function createAutoSync(opts: {
           return true;
         }
         let push = await gitAsync(root, pushArgs(repo, branch), timeoutMs);
-        if (!push.ok && /non-fast-forward|fetch first|rejected \(fetch first\)|failed to push/i.test(push.out)) {
+        // git writes rejections to STDERR — match against BOTH captured streams.
+        if (!push.ok && /non-fast-forward|fetch first|rejected \(fetch first\)|failed to push/i.test(bothStreams(push))) {
           // a collaborator/agent pushed meanwhile — rebase our store commits on
           // top and retry once. Conflicts (someone else's threads.db) abort
           // cleanly: local data is safe, the state says what to do.
@@ -198,7 +214,7 @@ export function createAutoSync(opts: {
           }
         }
         if (!push.ok) {
-          logOnce(`git push failed (${push.out})${ghToken() ? '' : ' — no ANNOTAKIT_GH_TOKEN in .env?'}`);
+          logOnce(`git push failed (${bothStreams(push)})${ghToken() ? '' : ' — no ANNOTAKIT_GH_TOKEN in .env?'}`);
           state = 'committed; push failed';
           return false;
         }

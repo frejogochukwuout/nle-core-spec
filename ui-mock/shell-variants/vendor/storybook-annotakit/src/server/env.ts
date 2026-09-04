@@ -179,9 +179,3 @@ export function currentBranch(root: string): string | null {
 export function isGitRepo(root: string): boolean {
   return git(root, ['rev-parse', '--is-inside-work-tree']) === 'true';
 }
-
-/** A push URL with the token embedded (https form, works for classic PATs). */
-export function pushUrlFor(repo: string, token: string | undefined): string {
-  const base = `https://github.com/${repo}.git`;
-  return token ? `https://x-access-token:${token}@github.com/${repo}.git` : base;
-}

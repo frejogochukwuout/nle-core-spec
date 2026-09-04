@@ -34,9 +34,10 @@ export function snapToFrame(seconds: number, fps: number = FPS): number {
 }
 
 export function totalDuration(secs: number): string {
-  const m = Math.floor(secs / 60);
-  const s = Math.round(secs % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
+  // round FIRST, then split — rounding after the modulo can render ":60"
+  // at minute rollover (e.g. 119.6 → "1:60" instead of "2:00")
+  const total = Math.round(secs);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
 /* ---- shared time-field parser (spec 18 §4.4 field contracts) ----------
@@ -58,11 +59,14 @@ export function parseTc(input: string, fps: number = FPS): number | null {
     const parts = s.split(':').map(Number);
     const ff = parts[parts.length - 1];
     if (ff >= fps) return null; // frame overflow reads as a typo, not a guess
+    // right-to-left places: frames, seconds, minutes, hours. Seconds and
+    // minutes above 59 are typos too ("00:75:12") — reject instead of
+    // silently reading them as durations.
     let secs = 0;
-    let unit = 1; // right-to-left places: seconds, minutes, hours
-    for (let i = parts.length - 2; i >= 0; i--) {
-      secs += parts[i] * unit;
-      unit *= 60;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const pos = parts.length - 2 - i; // 0 = seconds, 1 = minutes, 2 = hours
+      if (pos <= 1 && parts[i] > 59) return null;
+      secs += parts[i] * (pos === 0 ? 1 : pos === 1 ? 60 : 3600);
     }
     return secs + ff / fps;
   }

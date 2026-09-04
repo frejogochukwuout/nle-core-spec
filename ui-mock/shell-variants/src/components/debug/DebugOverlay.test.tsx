@@ -63,9 +63,14 @@ describe('dimension segments (independent of presets)', () => {
     const user = userEvent.setup();
     const { container } = renderShell(<DebugOverlay />);
     await user.click(screen.getByRole('button', { name: 'Open variant explorer' }));
+    // segmented controls expose the selected segment via aria-pressed (R13 fix)
+    expect(screen.getByRole('button', { name: 'Resolve' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Studio' })).toHaveAttribute('aria-pressed', 'false');
     await user.click(screen.getByRole('button', { name: 'Studio' })); // seg button (name is exact-matched)
     expect(shellRoot(container)).toHaveAttribute('data-theme', 'studio');
     expect(shellRoot(container)).toHaveAttribute('data-accent', 'gold'); // untouched
+    expect(screen.getByRole('button', { name: 'Studio' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Resolve' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('Accent segment swaps the accent token (ember)', async () => {

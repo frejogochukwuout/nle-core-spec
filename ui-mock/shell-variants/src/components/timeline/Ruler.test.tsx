@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Ruler } from './Ruler';
 import { renderShell, store } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
@@ -79,5 +80,26 @@ describe('Ruler', () => {
     expect(added.time).toBe(16);
     expect(added.color).toBe('red');
     expect(screen.queryByTestId('shell-menu-ruler')).not.toBeInTheDocument(); // menu closed
+  });
+
+  it('keyboard: arrows rove into the custom color row and Enter picks a color (R13 CodeRabbit fix)', async () => {
+    const user = userEvent.setup();
+    boot({ playhead: 16 });
+    fireEvent.contextMenu(ruler(), { clientX: 30, clientY: 30 });
+    // initial focus = first enabled item (add-marker); ArrowDown walks the
+    // enabled command items (goto-marker/clear-markers disabled → skipped)
+    // and keeps going INTO the custom palette row's dots — custom rows are
+    // part of the roving order now, not pointer-only
+    await user.keyboard('{ArrowDown>5}'); // add-marker → mark-in → mark-out → clear-inout → loop → red dot
+    expect(screen.getByTestId('shell-menu-ruler-color-red')).toHaveFocus();
+    // roving continues across the dots (DOM order) and wraps
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByTestId('shell-menu-ruler-color-orange')).toHaveFocus();
+    // Enter activates the focused dot (button semantics) → colored marker
+    await user.keyboard('{Enter}');
+    const added = scene1().markers.at(-1)!;
+    expect(added.color).toBe('orange');
+    expect(added.time).toBe(16);
+    expect(screen.queryByTestId('shell-menu-ruler')).not.toBeInTheDocument(); // closed after select
   });
 });

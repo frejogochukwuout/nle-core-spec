@@ -1,8 +1,12 @@
 /* DeliverPage — spec 18 §4.8 / specs 10-11: FCPXML export, optional cloud
-   master, render settings, progress list (job rows + retry per §6.4). */
+   master, render settings, progress list (job rows + retry per §6.4).
+   Honest mock: the export CTA / Reveal / Retry never run an encode — each
+   pushes an info toast that says the render queue is mock, and the CTA
+   appends a static queued job row (it never progresses). */
 
-import { FileVideo, FileCode2, Camera, Download, RefreshCw, CheckCircle2, LoaderCircle } from 'lucide-react';
+import { FileVideo, FileCode2, Camera, Download, RefreshCw, CheckCircle2, LoaderCircle, Clock } from 'lucide-react';
 import { useState } from 'react';
+import { useUi } from '../../state/useUiStore';
 
 const PRESETS = [
   { id: 'fcpxml', icon: FileCode2, name: 'FCPXML 1.10', desc: 'Handoff to FCP / Resolve / Premiere', badge: 'primary' },
@@ -10,14 +14,36 @@ const PRESETS = [
   { id: 'frame', icon: Camera, name: 'Current frame · PNG', desc: 'Playhead frame export', badge: '' },
 ];
 
-const JOBS = [
+type Job = { id: string; name: string; progress: number; state: 'done' | 'running' | 'queued'; time: string };
+
+const JOBS: Job[] = [
   { id: 'j-1', name: 'Beach Doc — v3 master.mp4', progress: 100, state: 'done', time: '2m ago' },
   { id: 'j-2', name: 'Beach Doc — v3.fcpxml', progress: 100, state: 'done', time: '2m ago' },
   { id: 'j-3', name: 'Interview selects master.mp4', progress: 38, state: 'running', time: '' },
 ];
 
+/* file suffix for a queued row per preset — keeps the honest-mock story */
+const EXPORT_EXT: Record<string, string> = { fcpxml: 'fcpxml', master: 'mp4', frame: 'png' };
+
+const MOCK_RENDER_DETAIL = 'render queue is mock — no encode runs';
+
 export function DeliverPage() {
   const [preset, setPreset] = useState('fcpxml');
+  const [jobs, setJobs] = useState<Job[]>(JOBS);
+  const pushToast = useUi((s) => s.pushToast);
+
+  /** honest-mock export: toast the preset + append a static queued row */
+  const queueExport = () => {
+    const p = PRESETS.find((x) => x.id === preset)!;
+    pushToast({ kind: 'info', title: `Export queued: ${p.name}`, detail: MOCK_RENDER_DETAIL });
+    setJobs((prev) => [...prev, {
+      id: `j-${prev.length + 1}`,
+      name: `Beach Doc — Rough Cut.${EXPORT_EXT[preset]}`,
+      progress: 0,
+      state: 'queued',
+      time: '',
+    }]);
+  };
 
   return (
     <div data-testid="shell-deliver" className="flex h-full w-full min-h-0 flex-col bg-panel">
@@ -93,6 +119,7 @@ export function DeliverPage() {
           data-testid="shell-deliver-btn-export-fcpxml"
           className="mb-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius)] px-3 py-2.5 text-[12px] font-semibold transition-opacity hover:opacity-90"
           style={{ background: 'var(--accent-selection)', color: 'var(--accent-contrast)' }}
+          onClick={queueExport}
         >
           <Download size={13} />
           Export {PRESETS.find((p) => p.id === preset)?.name}
@@ -101,10 +128,14 @@ export function DeliverPage() {
         {/* job list */}
         <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Jobs</div>
         <div className="flex flex-col gap-1.5">
-          {JOBS.map((j) => (
+          {jobs.map((j) => (
             <div key={j.id} className="flex items-center gap-2.5 rounded-[var(--radius)] border border-soft px-2.5 py-2" data-testid="shell-deliver-job">
               {j.state === 'done' ? (
                 <CheckCircle2 size={14} className="shrink-0 text-[var(--mk-green)]" />
+              ) : j.state === 'queued' ? (
+                /* static queued row — the honest-mock export artifact; it
+                   never progresses (no encode runs) */
+                <Clock size={14} className="shrink-0 text-tmuted" />
               ) : (
                 <LoaderCircle size={14} className="shrink-0 animate-spin text-accent" />
               )}
@@ -120,9 +151,23 @@ export function DeliverPage() {
                 )}
               </div>
               {j.state === 'done' ? (
-                <button className="icon-btn !h-[22px]" data-tip="Reveal file" aria-label="Reveal file"><Download size={12} /></button>
+                <button
+                  className="icon-btn !h-[22px]"
+                  data-tip="Reveal file"
+                  aria-label="Reveal file"
+                  onClick={() => pushToast({ kind: 'info', title: 'Reveal file', detail: 'render queue is mock — no file was written' })}
+                >
+                  <Download size={12} />
+                </button>
               ) : (
-                <button className="icon-btn !h-[22px]" data-tip="Retry" aria-label="Retry job"><RefreshCw size={12} /></button>
+                <button
+                  className="icon-btn !h-[22px]"
+                  data-tip="Retry"
+                  aria-label="Retry job"
+                  onClick={() => pushToast({ kind: 'info', title: `Retry ${j.name}`, detail: MOCK_RENDER_DETAIL })}
+                >
+                  <RefreshCw size={12} />
+                </button>
               )}
             </div>
           ))}

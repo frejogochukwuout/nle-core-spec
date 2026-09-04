@@ -146,12 +146,14 @@ describe('transport keys', () => {
     expect(S().playhead).toBe(0);
   });
 
-  it('PageUp / PageDn jump between main-track edit points', () => {
-    // playhead 16; edit edges: 0, 8.5, 17, 24, 30 + el boundaries
+  it('PageUp / PageDn jump between main-track edit points (nearest-prev, not earliest)', () => {
+    // playhead 16; main-track edges: 0, 8.5, 17, 24, 30
     press({ key: 'PageDown' });
-    expect(S().playhead).toBeGreaterThan(16);
+    expect(S().playhead).toBeCloseTo(17.01, 4); // first edge after 16
     press({ key: 'PageUp' });
-    expect(S().playhead).toBeLessThan(17);
+    expect(S().playhead).toBeCloseTo(8.49, 4); // NEAREST edge before 17.01 — R13 fix (was: earliest → ~0)
+    press({ key: 'PageUp' });
+    expect(S().playhead).toBe(0); // next lower edge is 0 → clamped at 0
   });
 
   it('I / O mark in/out at the playhead', () => {
@@ -192,11 +194,24 @@ describe('tool keys', () => {
 /* ---- selection + clips ---- */
 
 describe('clip + selection keys', () => {
-  it('Tab / ⇧Tab walk main-track neighbors', () => {
+  it('Tab / ⇧Tab walk main-track neighbors — scoped to focus inside the timeline region (a11y nav kept elsewhere)', () => {
+    // R13 fix: the global Tab hijack made keyboard navigation impossible
+    // outside text fields; Tab now selects neighbors ONLY while focus lives
+    // inside the timeline region.
+    const timeline = document.createElement('div');
+    timeline.setAttribute('data-testid', 'shell-timeline');
+    timeline.tabIndex = -1;
+    document.body.appendChild(timeline);
+    (timeline as HTMLElement).focus();
     press({ key: 'Tab' });
     expect(S().selection).toEqual(['el-3']);
     press({ key: 'Tab', shiftKey: true });
     expect(S().selection).toEqual(['el-2']);
+    timeline.remove();
+    // focus back on body → Tab does NOT hijack (no selection change)
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    press({ key: 'Tab' });
+    expect(S().selection).toEqual(['el-2']); // unchanged — default Tab navigation flows
   });
 
   it('Delete removes the selection; ⇧Delete ripple-deletes', () => {
@@ -209,6 +224,13 @@ describe('clip + selection keys', () => {
     press({ key: 'Delete', shiftKey: true });
     expect(() => el('el-3')).toThrow();
     expect(el('el-4').startTime).toBeLessThan(24); // gap closed
+  });
+
+  it('⌘Delete is swallowed as an unmatched ⌘ combo (structural keys no longer fire under modifiers)', () => {
+    press({ key: 'Delete', metaKey: true });
+    expect(el('el-2')).toBeDefined(); // survived — R13 guard
+    press({ key: 'Delete', altKey: true });
+    expect(el('el-2')).toBeDefined();
   });
 
   it('Delete with an empty selection does nothing (no preventDefault crash)', () => {

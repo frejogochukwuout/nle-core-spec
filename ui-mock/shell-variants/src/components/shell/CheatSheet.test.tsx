@@ -97,6 +97,10 @@ describe('CheatSheet (spec 16 §7.3)', () => {
   it('the footer loads the 30 s sample project (§4.10), closes, and toasts success', async () => {
     const user = userEvent.setup();
     renderShell(<CheatSheet />, { patch: { cheatOpen: true } });
+    // user-facing copy (R13 fix): the fixture rationale lives in a code
+    // comment, not in the UI string
+    expect(screen.getByText('Try it with the 30 s sample project (spec 18 §4.10)')).toBeInTheDocument();
+    expect(screen.queryByText(/doubles as the test fixture/)).not.toBeInTheDocument();
     await user.click(screen.getByTestId('cheatsheet-load-sample'));
     const sc = store().scenes.find((s) => s.id === store().activeSceneId)!;
     expect(sc.tracks.flatMap((t) => t.elements.map((e) => e.id))).toContain('el-sample-v1');

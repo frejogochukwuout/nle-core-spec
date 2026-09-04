@@ -4,9 +4,10 @@
    components use plain pointerdown/move/up, so direct dispatch works. */
 
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { Fader, PanKnob, StripMeter } from './MixerPrimitives';
 import { sliderToDb } from '../../state/mockMixer';
+import { useUi } from '../../state/useUiStore';
 
 const fakeRect = (height: number, width = 14): DOMRect =>
   ({ top: 0, left: 0, right: width, bottom: height, width, height, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
@@ -126,5 +127,19 @@ describe('StripMeter', () => {
   it('shows −∞ for a fully-cold fader', () => {
     render(<StripMeter trackId="t2" db={-60} label="M" height={40} width={4} />);
     expect(screen.getByTitle(/M: −∞/)).toBeInTheDocument();
+  });
+
+  it('idle transport: the rAF loop stops once the meter settles (R13 fix)', async () => {
+    expect(useUi.getState().playing).toBe(false);
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
+    render(<StripMeter trackId="t1" db={-6} label="A1" height={40} width={4} />);
+    // idle + level 0: exactly ONE frame fires (the settle), then no more
+    // scheduling — the old loop span at 60 fps forever
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+    const settled = rafSpy.mock.calls.length;
+    expect(settled).toBeGreaterThanOrEqual(1); // the single settle frame
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+    expect(rafSpy.mock.calls.length).toBe(settled); // loop STOPPED while idle
+    rafSpy.mockRestore();
   });
 });

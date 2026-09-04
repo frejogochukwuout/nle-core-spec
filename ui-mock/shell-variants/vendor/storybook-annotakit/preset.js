@@ -15,6 +15,28 @@
  */
 
 const path = require('node:path');
+const fs = require('node:fs');
+
+// Fresh-clone guard: dist/ is gitignored (built artifact), so a clean checkout
+// has none of the preset's targets. Fail FAST with ONE actionable message
+// instead of a cryptic "Cannot find module './dist/server.cjs'" deep inside
+// Storybook's boot. We deliberately do NOT auto-spawn a build from here —
+// a surprise compiler run inside a dev-server boot is worse than a clear ask.
+const DIST_ENTRIES = ['dist/server.cjs', 'dist/manager.mjs', 'dist/preview.mjs'];
+const missingDist = DIST_ENTRIES.filter((rel) => !fs.existsSync(path.join(__dirname, rel)));
+if (missingDist.length) {
+  const message = [
+    '[storybook-annotakit] vendored addon is not built yet — dist/ is missing',
+    `  missing: ${missingDist.join(', ')}`,
+    '  Fix (one-time per fresh clone):',
+    '    cd vendor/storybook-annotakit',
+    '    npm install          # if node_modules is absent',
+    '    npm run build        # tsup → dist/server.cjs + manager.mjs + preview.mjs',
+    '  then restart storybook dev.',
+  ].join('\n');
+  console.error(message);
+  throw new Error(message);
+}
 
 const server = () => require('./dist/server.cjs');
 

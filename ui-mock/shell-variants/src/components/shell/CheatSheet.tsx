@@ -3,8 +3,9 @@
    searchable (200 ms debounce, matches action/desc/keys), sections in
    SHORTCUT_GROUPS order, per-row data-testid={`shortcut-${action}`} so
    tests can assert cheat-sheet completeness. Esc closes (capture — beats
-   the shell handler); footer loads the 30s sample project (spec 18 §4.10),
-   doubling as the test fixture. */
+   the shell handler); the footer offers the 30s sample project (spec 18
+   §4.10) as a one-click way to try every shortcut — it also doubles as the
+   deterministic test fixture (see the footer's code comment). */
 
 import { useEffect, useMemo, useState } from 'react';
 import { X, Search, FolderOpen } from 'lucide-react';
@@ -146,7 +147,10 @@ export function CheatSheet() {
 
         <div className="flex items-center gap-2 border-t border-hairline bg-raised px-4 py-2.5 text-[11px] text-tmuted">
           <FolderOpen size={13} strokeWidth={1.6} />
-          Footer: load the 30s sample project (spec 18 §4.10) — doubles as the test fixture.
+          Try it with the 30 s sample project (spec 18 §4.10)
+          {/* dev note: the loader is ALSO the deterministic store fixture
+              under src/lib/mockData.ts (§4.10 counts) — test suites boot
+              through loadSampleProject(); user-facing copy stays clean */}
           <button
             data-testid="cheatsheet-load-sample"
             className="ml-auto rounded-[var(--radius-sm)] text-accent underline-offset-2 hover:underline"

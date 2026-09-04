@@ -153,11 +153,16 @@ function NumberField({
 
   const revert = () => { setText(blank ? '' : fmt(value)); setError(null); };
 
-  /** settle pending input now (Enter / blur) — one commit, only if changed */
+  /** settle pending input now (Enter / blur) — one commit. Non-mixed keeps
+   *  the no-op guard (r.v !== value); a MIXED multi-select field commits
+   *  unconditionally: `value` is only the FIRST selected element's aggregate
+   *  while the others differ, so typing exactly that number must still fan
+   *  the write out to every selected element (§4.4 "typing sets all
+   *  selected" — R13 CodeRabbit fix). */
   const settle = () => {
     clearTimer();
     const r = validate(text);
-    if (r.v !== null && r.v !== value) commitRef.current(r.v);
+    if (r.v !== null && (blank || r.v !== value)) commitRef.current(r.v);
     return r;
   };
 

@@ -5,9 +5,13 @@
      const confirm = useConfirm();
      confirm({ title, body, confirmLabel, danger, onConfirm });
 
-   Consumers (per the task): SceneTabs close-tab with clips, clip-menu
-   multi-delete with ≥ 5 selected elements. Everything else commits
-   directly — undo is the safety net (§6.4). */
+   Initial focus follows the WAI-ARIA dialog guidance + the mock's undo-is-
+   the-safety-net story: for danger requests focus starts on the CANCEL
+   (safe) button — the destructive action is a deliberate step, not the
+   default; non-danger requests keep confirm-first. Consumers (per the
+   task): SceneTabs close-tab with clips, clip-menu multi-delete with
+   ≥ 5 selected elements. Everything else commits directly — undo is the
+   safety net (§6.4). */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -63,8 +67,10 @@ function ConfirmDialog({ req, onCancel, onConfirm }: { req: ConfirmOptions; onCa
   const confirmRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
-  /* confirm button focused on open (per the task contract) */
-  useEffect(() => { confirmRef.current?.focus(); }, []);
+  /* initial focus: danger → the CANCEL (safe) button (R13 fix — destructive
+     confirms must not default-focus the dangerous action); non-danger →
+     confirm-first as before. Re-runs on every new request object. */
+  useEffect(() => { (req.danger ? cancelRef : confirmRef).current?.focus(); }, [req]);
 
   const onKey = (e: React.KeyboardEvent) => {
     e.stopPropagation(); // the modal owns the keyboard while open (cheat-sheet pattern)

@@ -5,8 +5,8 @@
    cluster, RIGHT = loop, mark-in I, mark-out O, add-marker M + compact palette).
    WebGPU canvas stand-in = static frame of the element under the playhead. */
 
-import { useRef, useState } from 'react';
-import { Play, Pause, ChevronLeft, ChevronRight, SkipBack, SkipForward, Repeat, Flag, Frame, Eye } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Play, Pause, ChevronDown, ChevronLeft, ChevronRight, SkipBack, SkipForward, Repeat, Flag, Frame, Eye } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { mediaById, type ElementJSON, type SceneJSON } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
@@ -29,6 +29,10 @@ function MarkIcon({ dir }: { dir: 'l' | 'r' }) {
 }
 
 const MARKER_PALETTE = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'] as const;
+/* the store's plain flag-click / M cycles an 8-color wheel (spec 16 §3.7);
+   the compact palette shows the first 6 — aria-checked marks the color a
+   plain click would add next (honest radio state, no fake default) */
+const MARKER_CYCLE = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'] as const;
 
 export function Viewer({ duration }: { duration: number }) {
   const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
@@ -46,6 +50,7 @@ export function Viewer({ duration }: { duration: number }) {
   const setLoopEnabled = useUi((s) => s.setLoopEnabled);
 
   const scrubRef = useRef<HTMLDivElement>(null);
+  const markerRef = useRef<HTMLSpanElement>(null);
   const [hoverX, setHoverX] = useState<number | null>(null);
   const [zoom, setZoom] = useState('Fit');
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -61,7 +66,29 @@ export function Viewer({ duration }: { duration: number }) {
   const img = el ? mediaById(el.mediaId) : undefined;
   const boundaries = scene.tracks.find((t) => t.kind === 'main')?.elements ?? [];
 
-  const pct = (t: number) => `${(t / duration) * 100}%`;
+  /* duration 0 (empty scene) would render NaN% — every pct() caller paints
+     0% instead (R13 fix: NaN-safe empty scene) */
+  const pct = (t: number) => (duration > 0 ? `${(t / duration) * 100}%` : '0%');
+
+  /* palette dismissal while open (R13 fix): outside pointerdown closes (the
+     trigger + palette span is the safe zone); Esc closes via a CAPTURE
+     listener that stops propagation — the global Esc ladder in useShortcuts
+     deselects, this popover consumes Esc locally (CheatSheet pattern). */
+  useEffect(() => {
+    if (!paletteOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); setPaletteOpen(false); }
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (markerRef.current && !markerRef.current.contains(e.target as Node)) setPaletteOpen(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [paletteOpen]);
 
   const seekFromEvent = (clientX: number) => {
     const box = scrubRef.current?.getBoundingClientRect();
@@ -69,10 +96,12 @@ export function Viewer({ duration }: { duration: number }) {
     setPlayhead(((clientX - box.left) / box.width) * duration);
   };
 
-  const zoomOptions = ['Fit', '50%', '100%', '200%'];
-  // zoom mock: Fit = letterbox-fill; 50/100/200 = fixed magnification of the
-  // fit-size frame (overflow-auto on the monitor lets 100/200 scroll)
-  const m = zoom === 'Fit' ? 1 : zoom === '50%' ? 0.5 : zoom === '100%' ? 2 : 4;
+  /* fit-anchored magnification ladder — honest labels for what the code
+     does: Fit = letterbox-fill (1× fit width), the rest multiply the fit
+     width (overflow-auto lets ≥2× scroll). The old 50/100/200% labels were
+     container-percentages, not magnifications (R13 fix). */
+  const zoomOptions = ['Fit', '1.5×', '2×', '4×'] as const;
+  const m = zoom === 'Fit' ? 1 : zoom === '1.5×' ? 1.5 : zoom === '2×' ? 2 : 4;
   const zoomStyle: React.CSSProperties = zoom === 'Fit'
     ? { width: '100%' }
     : { width: `${m * 100}%`, maxWidth: 'none', maxHeight: 'none', flexShrink: 0 };
@@ -118,7 +147,7 @@ export function Viewer({ duration }: { duration: number }) {
           style={zoomStyle}
         >
           {img && !img.offline ? (
-            <img src={img.thumbnail} alt="" aria-label={`Program monitor: ${el?.name ?? 'empty'}`} className="h-full w-full object-cover" />
+            <img src={img.thumbnail} alt="" role="img" aria-label={`Program monitor: ${el?.name ?? 'empty'}`} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] text-[13px] text-tmuted">
               {img?.offline ? 'Media offline' : 'No media — import or drop a file'}
@@ -204,7 +233,7 @@ export function Viewer({ duration }: { duration: number }) {
             <div key={b.id} className="absolute top-1/2 h-[5px] w-px -translate-y-1/2 bg-tfaint" style={{ left: pct(b.startTime) }} />
           ))}
           {/* playhead marker — dedicated time color */}
-          <div className="absolute top-1/2 h-[11px] w-[2px] -translate-y-1/2 rounded-sm" style={{ left: pct(playhead), background: 'var(--playhead)' }} />
+          <div data-testid="shell-viewer-scrub-playhead" className="absolute top-1/2 h-[11px] w-[2px] -translate-y-1/2 rounded-sm" style={{ left: pct(playhead), background: 'var(--playhead)' }} />
           {/* hover TC tooltip — floats above the row */}
           {hoverX !== null && (
             <span
@@ -267,7 +296,7 @@ export function Viewer({ duration }: { duration: number }) {
             <Repeat size={13} strokeWidth={1.6} />
           </button>
           {/* marker button + compact color palette (spec 18 §4.3) */}
-          <span className="relative flex items-center">
+          <span ref={markerRef} className="relative flex items-center">
             <button
               className="icon-btn !h-[20px] !w-[20px]"
               onClick={() => { addMarker(playhead); setPaletteOpen(false); }}
@@ -279,12 +308,26 @@ export function Viewer({ duration }: { duration: number }) {
             >
               <Flag size={13} strokeWidth={1.6} />
             </button>
+            {/* explicit keyboard-open path: a labelled chevron toggle next to
+                the flag (R13 fix — the palette was right-click-only) */}
+            <button
+              className="icon-btn !h-[20px] !w-[16px]"
+              onClick={() => setPaletteOpen(!paletteOpen)}
+              data-tip="Marker color palette"
+              aria-label="Marker color"
+              aria-haspopup="menu"
+              aria-expanded={paletteOpen}
+            >
+              <ChevronDown size={11} strokeWidth={1.8} />
+            </button>
             {paletteOpen && (
               <span className="absolute right-0 top-[110%] z-50 flex items-center gap-1 rounded-[var(--radius)] border border-strong bg-inset p-1" role="menu" aria-label="Marker color">
                 {MARKER_PALETTE.map((c) => (
                   <button
                     key={c}
+                    type="button"
                     role="menuitemradio"
+                    aria-checked={c === MARKER_CYCLE[scene.markers.length % MARKER_CYCLE.length]}
                     aria-label={`Marker color ${c}`}
                     className="h-[12px] w-[12px] rounded-full border border-black/40 hover:scale-110"
                     style={{ background: `var(--mk-${c})` }}

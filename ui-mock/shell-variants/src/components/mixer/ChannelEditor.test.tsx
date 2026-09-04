@@ -52,20 +52,39 @@ describe('ChannelEditor', () => {
   });
 
   it('clip-gain commit writes the S-layer element volume (design doc: strip fader ≠ clip gain)', () => {
-    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    // el-6 (tr-audio-1, UNLOCKED) — el-7 sits on the locked tr-audio-2 whose
+    // inspector writes are inert by the R13 locked-track store guard
+    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' });
     const input = screen.getByLabelText('Clip gain');
     fireEvent.change(input, { target: { value: '0' } });
     fireEvent.blur(input);
-    expect(el('el-7').volume).toBe(1);
-    expect(g('tr-audio-2').fader).toBe(-12); // G layer untouched by the S edit
+    expect(el('el-6').volume).toBe(1);
+    expect(g('tr-audio-1').fader).toBe(-3); // G layer untouched by the S edit
   });
 
   it('fade-in commit writes audioFadeIn on the element (17 §6.1 parity)', () => {
-    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' });
     const input = screen.getByLabelText('Audio fade in');
     fireEvent.change(input, { target: { value: '2.5' } });
     fireEvent.blur(input);
-    expect(el('el-7').audioFadeIn).toBe(2.5);
+    expect(el('el-6').audioFadeIn).toBe(2.5);
+  });
+
+  it('NumFields resync on selection change — no stale display, no stale write (R13 CodeRabbit fix)', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    expect(screen.getByLabelText('Clip gain')).toHaveValue(-4);   // el-7 volume 0.8 → −4 dB
+    expect(screen.getByLabelText('Audio fade in')).toHaveValue(0);
+    // switch the CLIP section to el-6 (volume 0.35 → −13 dB, fades 1.0 / 2.0)
+    act(() => { useUi.setState({ selection: ['el-6'] }); });
+    expect(screen.getByText('ocean_ambience')).toBeInTheDocument();
+    expect(screen.getByLabelText('Clip gain')).toHaveValue(-13);  // remounted, not the stale −4
+    expect(screen.getByLabelText('Audio fade in')).toHaveValue(1);
+    expect(screen.getByLabelText('Audio fade out')).toHaveValue(2);
+    // blur without editing: the uncontrolled field must NOT write el-7's −4
+    // into el-6 (the original bug) — it re-commits el-6's own −13 dB
+    fireEvent.blur(screen.getByLabelText('Clip gain'));
+    expect(el('el-6').volume).toBeCloseTo(0.35, 6);
+    expect(el('el-7').volume).toBe(0.8); // untouched
   });
 
   it('the G-layer fader/pan respond to the keyboard grammar (design doc §6)', () => {

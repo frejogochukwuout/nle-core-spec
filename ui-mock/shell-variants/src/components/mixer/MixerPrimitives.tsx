@@ -1,7 +1,8 @@
 /* Mixer primitives — fader / pan knob / mock meter.
    Drag grammar (SCOUT-R8-C, the one portable part): Shift+drag = fine mode,
-   double-click = reset. Faders are keyboard-operable sliders (design doc §6:
-   arrows ±1 dB / ±5%, Home = −∞, End = +6, Page = ±6 dB). */
+   double-click = reset. Faders and knobs are keyboard-operable sliders
+   (design doc §6): plain arrows ±1 dB (fader) / ±5 (pan), Shift+arrows =
+   fine step 0.2 dB / 1, Home = −∞, End = +6, Page = ±6 dB. */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useUi } from '../../state/useUiStore';
@@ -121,12 +122,12 @@ export function PanKnob({ pan, onChange, size = 22, ariaLabel }: {
   );
 }
 
-/* ---------- mock stereo meter (rAF while playing; seeded noise walk) ----------
-   aria-hidden with a textual dB exposed via title (focus/query only —
-   design doc §4: never aria-live, no 60fps announcement spam) */
-let meterPlaying = false;
-useUi.subscribe((s) => { meterPlaying = s.playing; });
-
+/* ---------- mock stereo meter — rAF runs ONLY while the transport is
+   playing or the bars are still decaying; an idle, settled meter stops
+   scheduling frames entirely and re-arms from the store's play-state
+   edge (R13 fix: the loop used to spin at 60 fps forever). Seeded noise
+   walk; aria-hidden with a textual dB exposed via title (focus/query only
+   — design doc §4: never aria-live, no 60fps announcement spam) */
 export function StripMeter({ trackId, db, height = 88, width = 7, duckAmount = 0, fillHeight = false, label }: {
   trackId: string; db: number; height?: number; width?: number; duckAmount?: number;
   /** rail/strip mode: no inline height — fill the flex parent instead */
@@ -134,23 +135,38 @@ export function StripMeter({ trackId, db, height = 88, width = 7, duckAmount = 0
 }) {
   const [level, setLevel] = useState(0);
   const phase = useRef((trackId.charCodeAt(0) + trackId.length) * 0.7);
+  const levelRef = useRef(0);
 
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      if (meterPlaying) {
+      raf = 0;
+      if (useUi.getState().playing) {
         phase.current += 0.18;
         const base = db <= -59.5 ? 0.02 : Math.pow(10, db / 20) * 0.9;
         const wobble = 0.72 + 0.28 * Math.sin(phase.current) * Math.sin(phase.current * 0.61 + 1.7);
         const ducked = base * (1 - duckAmount * 0.75);
-        setLevel(Math.min(1, ducked * wobble));
+        const next = Math.min(1, ducked * wobble);
+        levelRef.current = next;
+        setLevel(next);
+        raf = requestAnimationFrame(tick);
       } else {
-        setLevel((l) => (l < 0.01 ? 0 : l * 0.8));
+        // idle: decay the tail to zero, then STOP scheduling frames — no
+        // idle 60fps churn; one static (zero) frame remains on screen
+        const next = levelRef.current < 0.01 ? 0 : levelRef.current * 0.8;
+        levelRef.current = next;
+        setLevel(next);
+        if (next > 0) raf = requestAnimationFrame(tick);
       }
-      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const start = () => { if (raf === 0) raf = requestAnimationFrame(tick); };
+    start();
+    // re-arm on play/pause transitions (replaces the old always-on module
+    // subscription — each meter now owns its loop lifecycle)
+    const unsub = useUi.subscribe((s, prev) => {
+      if (s.playing !== prev.playing) start();
+    });
+    return () => { if (raf !== 0) cancelAnimationFrame(raf); unsub(); };
   }, [db, duckAmount]);
 
   return (
