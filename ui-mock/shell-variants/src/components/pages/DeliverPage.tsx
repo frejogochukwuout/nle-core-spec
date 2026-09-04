@@ -20,7 +20,7 @@ export function DeliverPage() {
   const [preset, setPreset] = useState('fcpxml');
 
   return (
-    <div data-testid="shell-deliver" className="flex h-full min-h-0 flex-col bg-panel">
+    <div data-testid="shell-deliver" className="flex h-full w-full min-h-0 flex-col bg-panel">
       <div className="flex items-center gap-2 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
         <span className="text-[12px] font-semibold text-tprimary">Deliver</span>
         <span className="text-[11px] text-tfaint">export &amp; handoff</span>

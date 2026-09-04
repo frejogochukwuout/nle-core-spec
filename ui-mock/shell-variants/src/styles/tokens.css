@@ -18,6 +18,7 @@
 
   /* control metrics — overridden by [data-density="comfortable"] */
   --ctrl-h: 24px;
+  --split-visual: 6px;
   --bar-h: 34px;
   --pad-px: 8px;
 
@@ -210,6 +211,7 @@
 /* ---- density ---- */
 [data-density="comfortable"] {
   --ctrl-h: 28px;
+  --split-visual: 6px;
   --bar-h: 40px;
   --pad-px: 12px;
 }

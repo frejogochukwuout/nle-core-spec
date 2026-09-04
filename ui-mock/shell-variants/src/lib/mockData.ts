@@ -57,6 +57,7 @@ export interface TrackJSON {
   solo: boolean;
   locked: boolean;
   visible: boolean;
+  waveform?: boolean;  // mock-level view pref (real home: UI store per spec 18 §4.7)
   elements: ElementJSON[];
 }
 

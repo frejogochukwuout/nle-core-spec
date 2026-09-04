@@ -36,7 +36,7 @@ function Slider({ label, value, unit = '' }: { label: string; value: number; uni
 
 export function ColorPage() {
   return (
-    <div data-testid="shell-color" className="flex h-full min-h-0 flex-col bg-panel">
+    <div data-testid="shell-color" className="flex h-full w-full min-h-0 flex-col bg-panel">
       <div className="flex items-center gap-2 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
         <span className="text-[12px] font-semibold text-tprimary">Color</span>
         <span className="text-[11px] text-tmuted">single-column simplified stack (spec 18 §4.8)</span>

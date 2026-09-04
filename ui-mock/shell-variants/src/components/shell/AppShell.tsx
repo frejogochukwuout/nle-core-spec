@@ -1,8 +1,10 @@
 /* AppShell — spec 18 §3 layout: toolbar2 / mainbody (media pool + viewer +
    inspector) / timeline block (toolbar, scene tabs, timeline) / status strip /
-   app dock. Splitters: 6px visual / 12px interactive, double-click resets
-   (§3.2). Page dock swaps the right rail (Edit → Inspector, Color → grading
-   stack, Deliver → export panel). */
+   app dock. Splitters: 6px visual line / 12px interactive hit target,
+   double-click resets (§3.2). Splitters OWN the seam lines — adjacent panels
+   carry no borders (single-source seams, no double hairlines). Page dock
+   swaps the right rail (Edit → Inspector, Color → grading stack, Deliver →
+   export panel) — all at the same resizable inspectorW. */
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
@@ -34,10 +36,10 @@ const EFFECTS = [
 
 function EffectsPanel() {
   return (
-    <div data-testid="shell-effects" className="flex h-full min-h-0 w-[220px] shrink-0 flex-col border-r border-hairline bg-shell">
+    <div data-testid="shell-effects" className="flex h-full min-h-0 w-[220px] shrink-0 flex-col bg-shell">
       <div className="flex items-center gap-2 border-b border-hairline px-2.5 py-1.5">
         <Sparkles size={12} className="text-accent" />
-        <span className="text-[11.5px] font-semibold text-tprimary">Effects</span>
+        <span className="text-[11px] font-semibold text-tprimary">Effects</span>
       </div>
       <div className="scroll-y min-h-0 flex-1 p-1.5">
         {['Blur', 'Stylize', 'Transition'].map((cat) => (
@@ -55,12 +57,16 @@ function EffectsPanel() {
   );
 }
 
-/* ---------- splitters (§3.2: 6px visual, 12px hit, dbl-click resets) ---------- */
+/* ---------- splitters (§3.2: 6px visual line, 12px hit target, dbl-click resets) ---------- */
+const SPLIT_HIT = 12;
+const SPLIT_VISUAL = 6;
+
 function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
   const start = useRef(0);
   return (
     <div
-      className="group relative z-10 flex w-[6px] shrink-0 cursor-col-resize items-center justify-center"
+      className="group relative z-10 flex shrink-0 cursor-col-resize items-center justify-center bg-app"
+      style={{ width: SPLIT_HIT }}
       onDoubleClick={() => onDrag(0)}
       onPointerDown={(e) => {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -73,8 +79,11 @@ function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
       }}
       role="separator"
       aria-orientation="vertical"
+      aria-label="Resize panel"
     >
-      <div className="h-[90%] w-px bg-hairline transition-colors group-hover:bg-accent" />
+      <div className="h-full w-[var(--split-visual)] flex items-center justify-center">
+        <div className="h-[96%] w-px bg-hairline transition-colors group-hover:bg-accent" />
+      </div>
     </div>
   );
 }
@@ -83,7 +92,8 @@ function HSplitter({ onDrag }: { onDrag: (dy: number) => void }) {
   const start = useRef(0);
   return (
     <div
-      className="group relative z-10 flex h-[6px] shrink-0 cursor-row-resize items-center justify-center border-y border-hairline bg-shell"
+      className="group relative z-10 flex shrink-0 cursor-row-resize items-center justify-center bg-app"
+      style={{ height: SPLIT_HIT }}
       onDoubleClick={() => onDrag(0)}
       onPointerDown={(e) => {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -96,8 +106,11 @@ function HSplitter({ onDrag }: { onDrag: (dy: number) => void }) {
       }}
       role="separator"
       aria-orientation="horizontal"
+      aria-label="Resize timeline"
     >
-      <div className="h-px w-[100%] transition-colors group-hover:bg-accent" />
+      <div className="flex h-[var(--split-visual)] w-full items-center justify-center">
+        <div className="h-px w-[96%] bg-hairline transition-colors group-hover:bg-accent" />
+      </div>
     </div>
   );
 }
@@ -140,7 +153,8 @@ export function AppShell() {
     return () => cancelAnimationFrame(raf);
   }, [playing, duration]);
 
-  /* keyboard (spec 16 core set — skip when typing) */
+  /* keyboard (spec 16 core set — skip when typing; expanded map lands with the
+     keyboard-completeness pass) */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
@@ -151,7 +165,8 @@ export function AppShell() {
         case 'ArrowLeft': e.preventDefault(); s.nudgePlayhead(e.shiftKey ? -10 : -1); break;
         case 'ArrowRight': e.preventDefault(); s.nudgePlayhead(e.shiftKey ? 10 : 1); break;
         case 'Home': s.setPlayhead(0); break;
-        case 'End': s.setPlayhead(duration); break;        case 'PageUp': case 'PageDown': {
+        case 'End': s.setPlayhead(duration); break;
+        case 'PageUp': case 'PageDown': {
           e.preventDefault();
           const main = scene.tracks.find((tr) => tr.kind === 'main');
           const edges = (main?.elements ?? []).flatMap((el) => [el.startTime, el.startTime + el.duration]).sort((a, b) => a - b);
@@ -198,12 +213,12 @@ export function AppShell() {
   }, []);
 
   const rightPanel: ReactNode =
-    page === 'color' ? <div className="flex h-full min-h-0 w-[340px] shrink-0"><ColorPage /></div>
-    : page === 'deliver' ? <div className="flex h-full min-h-0 w-[340px] shrink-0"><DeliverPage /></div>
+    page === 'color' ? <ColorPage />
+    : page === 'deliver' ? <DeliverPage />
     : <Inspector />;
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-shell" role="application" aria-label="NLE shell study">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-app" role="application" aria-label="NLE shell study">
       <a href="#timeline-scroll" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[99] focus:rounded focus:bg-inset focus:px-2 focus:py-1 focus:text-[11px] focus:text-tprimary">
         Skip to timeline
       </a>
@@ -214,7 +229,7 @@ export function AppShell() {
 
       {/* ---- main body ---- */}
       <div
-        className="mainbody flex shrink-0 overflow-hidden border-b border-hairline"
+        className="mainbody flex shrink-0 overflow-hidden"
         style={{ height: mainBodyH || '40%', minHeight: 320 }}
       >
         {panels.mediaPool && (

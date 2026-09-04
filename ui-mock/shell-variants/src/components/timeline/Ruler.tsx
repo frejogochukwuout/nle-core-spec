@@ -61,7 +61,7 @@ export function Ruler({ scene, duration, pxPerSec, playhead }: { scene: SceneJSO
       aria-valuemax={Math.round(duration * 24)}
       aria-valuenow={Math.round(playhead * 24)}
       aria-valuetext={tc(playhead)}
-      className="relative shrink-0 cursor-pointer border-b border-hairline bg-shell"
+      className="sticky top-0 z-30 shrink-0 cursor-pointer border-b border-hairline bg-shell"
       style={{ height: zoneH, width: contentW }}
       onPointerDown={(e) => {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);

@@ -37,6 +37,7 @@ interface UiState {
   inspectorW: number;
   mainBodyH: number;
   cheatOpen: boolean;
+  simulateSaveFail: boolean;
   scenes: SceneJSON[];
   mediaSelection: string | null;
 
@@ -54,7 +55,7 @@ interface UiState {
   setLoopEnabled: (v: boolean) => void;
   markIn: () => void;
   markOut: () => void;
-  addMarker: (time: number) => void;
+  addMarker: (time: number, color?: Marker['color']) => void;
   setSelection: (ids: string[]) => void;
   selectElement: (id: string, additive: boolean) => void;
   setZoom: (px: number) => void;
@@ -71,11 +72,14 @@ interface UiState {
   setInspectorW: (w: number) => void;
   setMainBodyH: (h: number) => void;
   setCheatOpen: (v: boolean) => void;
+  setSimulateSaveFail: (v: boolean) => void;
+  retrySave: () => void;
   setMediaSelection: (id: string | null) => void;
   moveElement: (id: string, startTime: number) => void;
   trimElement: (id: string, edge: 'l' | 'r', newStart: number, newDur: number) => void;
   splitElement: (id: string, time: number) => void;
   toggleEffect: (elementId: string, fxId: string) => void;
+  addTrack: (kind: TrackJSON['kind']) => void;
 }
 
 const MIN_PPS = 8;
@@ -105,6 +109,7 @@ export const useUi = create<UiState>((set, get) => ({
   inspectorW: 340,
   mainBodyH: 0, // 0 = auto (40% of viewport per spec 18 §3.2)
   cheatOpen: false,
+  simulateSaveFail: false,
   scenes: clone(project.scenes),
   mediaSelection: 'm-02',
 
@@ -121,11 +126,11 @@ export const useUi = create<UiState>((set, get) => ({
   setLoopEnabled: (v) => set({ loopEnabled: v }),
   markIn: () => set((s) => ({ loop: { ...s.loop, start: snapToFrame(s.playhead) } })),
   markOut: () => set((s) => ({ loop: { ...s.loop, end: snapToFrame(s.playhead) } })),
-  addMarker: (time) => set((s) => {
+  addMarker: (time, color) => set((s) => {
     const scenes = clone(s.scenes);
     const sc = scenes.find((x) => x.id === s.activeSceneId)!;
     const colors: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
-    sc.markers.push({ id: `mk-${Date.now()}`, time: snapToFrame(time), label: 'Marker', color: colors[sc.markers.length % 8] });
+    sc.markers.push({ id: `mk-${Date.now()}`, time: snapToFrame(time), label: 'Marker', color: color ?? colors[sc.markers.length % 8] });
     return { scenes };
   }),
   setSelection: (ids) => set({ selection: ids }),
@@ -148,6 +153,8 @@ export const useUi = create<UiState>((set, get) => ({
   setInspectorW: (w) => set({ inspectorW: clamp(w, 280, 560) }),
   setMainBodyH: (h) => set({ mainBodyH: clamp(h, 320, 900) }),
   setCheatOpen: (v) => set({ cheatOpen: v }),
+  setSimulateSaveFail: (v) => set({ simulateSaveFail: v }),
+  retrySave: () => set({ simulateSaveFail: false }),
   setMediaSelection: (id) => set({ mediaSelection: id }),
 
   // ---- document mutations (mock-level; real shell = EngineCommand) ----
@@ -197,6 +204,29 @@ export const useUi = create<UiState>((set, get) => ({
         if (fx) fx.enabled = !fx.enabled;
       }
     }
+    return { scenes };
+  }),
+
+  // add a track at the end of its kind-group (mock-level; real shell = wire command)
+  addTrack: (kind) => set((s) => {
+    const scenes = clone(s.scenes);
+    const sc = scenes.find((x) => x.id === s.activeSceneId)!;
+    const sameKind = sc.tracks.filter((t) => t.kind === kind);
+    const n = sameKind.length + 1;
+    const prefix = kind === 'audio' ? 'A' : kind === 'overlay' ? 'T' : 'V';
+    const track: TrackJSON = {
+      id: `t-${kind}-${Date.now()}`,
+      kind,
+      name: kind === 'audio' ? `Audio ${n}` : kind === 'overlay' ? `Text ${n}` : `Video ${n}`,
+      badge: `${prefix}${n}`,
+      muted: false, solo: false, locked: false, visible: true,
+      waveform: kind === 'audio' ? true : undefined,
+      elements: [],
+    };
+    // audio tracks render below main (spec 05 §12.1)
+    const mainIdx = sc.tracks.findIndex((t) => t.kind === 'main');
+    const insertAt = kind === 'audio' ? sc.tracks.length : mainIdx + 1;
+    sc.tracks.splice(insertAt, 0, track);
     return { scenes };
   }),
 }));

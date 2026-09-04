@@ -91,7 +91,7 @@ body {
 .icon-btn {
   display: flex; align-items: center; justify-content: center;
   height: var(--ctrl-h);
-  aspect-ratio: 1.08;
+  aspect-ratio: 1;
   border-radius: var(--radius);
   color: var(--text-muted);
   transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
@@ -210,7 +210,7 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: 3px 7px;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 .field:focus { border-color: var(--accent-focus); }
 

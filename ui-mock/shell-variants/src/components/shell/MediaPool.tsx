@@ -161,7 +161,7 @@ export function MediaPool() {
   return (
     <div
       data-testid="shell-mediapool"
-      className="panel-shadow flex h-full min-h-0 flex-col border-r border-hairline bg-shell"
+      className="flex h-full min-h-0 flex-col bg-shell"
     >
       {/* pool header — search + sort + view in one row */}
       <div className="flex items-center gap-1.5 border-b border-hairline px-2 py-1.5">
