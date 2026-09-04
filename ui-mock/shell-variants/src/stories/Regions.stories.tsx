@@ -48,12 +48,20 @@ export const ViewerDefault: StoryObj = {
 
 /** In-canvas overlays suppressed through the store-bootable path — the
  *  §4.3/§9 rule “overlays hidden while a tool drag is active” (tool: blade).
- *  The eye toggle itself is local state; the composited text overlay and the
- *  name/TC chips must all disappear here. */
+ *  The eye toggle is store state (viewerOverlays); the composited text
+ *  overlay and the name/TC chips must all disappear here. */
 export const ViewerOverlaysHidden: StoryObj = {
   name: 'Viewer — in-canvas overlays hidden (blade tool)',
   parameters: { layout: 'padded' },
   render: () => <ViewerPanel patch={{ tool: 'blade' }} />,
+};
+
+/** Safe-area guides on (viewer UI pref, store state): 90% action-safe +
+ *  80% title-safe centered rects with labels over the program frame. */
+export const ViewerSafeGuides: StoryObj = {
+  name: 'Viewer — safe-area guides on',
+  parameters: { layout: 'padded' },
+  render: () => <ViewerPanel patch={{ viewerSafeGuides: true }} />,
 };
 
 /** Zoom 50% (play step drives the toolbar select — the only control surface):

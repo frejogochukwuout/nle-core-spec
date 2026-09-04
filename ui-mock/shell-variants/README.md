@@ -18,23 +18,43 @@ npm run build      # static bundle → dist/ (base: /mockup/)
 ```
 
 A built copy is synced into the platform preview app's `public/mockup` and
-served at the preview root.
+served at the preview root. **The platform preview URL now serves Storybook
+10 directly on port 3000** (see “Review serving” below) — the standalone
+Vite app remains the interactive mock for local dev.
 
-## Storybook (design-review surface)
+## Storybook 10 (THE design-review surface)
 
-The same components, second surface: **`npm run storybook`** (port 6006) boots
-Storybook 9 (react-vite builder) over this app — the standalone Vite app stays
-untouched and remains the interactive mock. `npm run build-storybook` emits a
-static review site to `storybook-static/` (gitignored). Stories live in
-`src/stories/*.stories.tsx`; `.storybook/` holds the config.
+**`npm run storybook`** (port 6006) boots **Storybook 10.6** (react-vite
+builder) over this app with the **storybook-annotakit** review addon
+(vendored at `vendor/storybook-annotakit`): pin comments on live stories,
+threads in the bottom dock, digest/export REST on the dev server
+(`/annotakit/api/*`), optional GitHub-issue mirror via `ANNOTAKIT_GH_TOKEN`
+in `.env`). The addon needs the DEV server — a static `storybook build`
+shows a “dev only” note. Reviewer flow: press **C** → click an element →
+comment → **⌘/Ctrl+Enter**; **R** = region pin; **L** = hide/show pins.
+
+**Review serving (R12):** the public review URL is served by
+`storybook dev --port 3000` under a supervisor (`scripts/sb-supervisor.mjs`
+in the platform workspace) that replaces the old `next dev` on :3000 —
+Caddy proxies the platform edge straight to it. `core.allowedHosts: true`
+in `.storybook/main.ts` (the edge rewrites the Host header; storybook 10's
+host validation would 403 otherwise).
+
+70 stories across 10 groups — every shell region, chrome strip, timeline
+leaf, mixer surface, page, overlay, and primitive is surfaced:
 
 | Story file | What it covers |
 |---|---|
 | `AppShell.stories.tsx` | Full shell on each page: Edit / Audio Focus / Color / Deliver |
 | `Variants.stories.tsx` | Presets A / B / C as complete shells — the fixed, screenshot-friendly A/B/C comparison (per-dimension exploration stays in the app's ctrl+\` overlay) |
-| `Mixer.stories.tsx` | Mixer row (full + bridge), solo ChannelStrip, Channel editor, Sound library |
+| `Chrome.stories.tsx` | Toolbar2 ×3, AppDock ×4, TimelineToolbar ×4, SceneTabs ×2, TrackHeader columns ×2 (incl. audio-focus minifaders), Effects-panel-on full shell |
+| `Mixer.stories.tsx` | Mixer dock (full side-by-side + bridge rail + collapsed), ChannelStrip solo + compact, Channel editor, Sound library |
 | `Timeline.stories.tsx` | Timeline default + blocks clip-style, clip anatomy states (selected / offline / fades / locked / badges), ruler + markers |
 | `Shell.stories.tsx` (title "Shell/Components") | Media pool grid/list, Viewer, Inspector ×4 tabs, status-strip autosave states, toast region, open context menu, cheat sheet |
+| `Overlays.stories.tsx` | Confirm dialogs (scene delete / multi-delete), ErrorBoundary crash fallback, Variant explorer open, toast error/persist + max-3 stack |
+| `Pages.stories.tsx` | Color page, Deliver page (+ preset pick), Channel editor empty state |
+| `Regions.stories.tsx` | Viewer ×3 (program / overlays-hidden / safe-guides / zoom), Media pool offline + no-results, Inspector empty + multi-select mixed |
+| `Primitives.stories.tsx` | Fader (fixed + fill-height), PanKnob, StripMeter (static / playing / duck-under) |
 
 Review-workflow mapping: open the sidebar tree side-by-side, screenshot at the
 default 1920×1080 viewport (1440×900 and the 1280×800 floor are in the viewport
@@ -42,9 +62,9 @@ toolbar), and attach story links (`?path=/story/…`) to review notes. Every sto
 renders in a fresh state — a global decorator snapshots the Zustand store at
 module load and re-hydrates it per story (plus wipes the app's
 localStorage/hash persistence), so interactions never leak between stories.
-Install note: Storybook 9's react-vite builder peers on Vite ^5–^7 while this
-app pins Vite 8 — `.npmrc` sets `legacy-peer-deps=true` (verified: boots clean,
-all stories render, `tsc --noEmit` passes).
+Install note: the builder peers can lag this app's Vite pin — `.npmrc` keeps
+`legacy-peer-deps=true` (verified on SB 10.6 + Vite 8: boots clean, all
+stories render, `tsc --noEmit` passes).
 
 ## Direction variants — Ctrl + `
 

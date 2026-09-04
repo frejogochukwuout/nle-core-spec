@@ -46,6 +46,10 @@ interface UiState {
   playing: boolean;
   playRate: number;            // JKL shuttle: 0=pause, 1,2,4 forward, -1,-2,-4 reverse
   loopEnabled: boolean;
+  // viewer UI prefs (spec 18 §4.3 viewer-toolbar) — store-level so the mock
+  // state is testable/pinnable, not component-local
+  viewerOverlays: boolean;   // in-canvas overlays toggle (Eye)
+  viewerSafeGuides: boolean; // action/title safe-area guides (Frame)
   loop: { start: number; end: number };
   selection: string[];
   pxPerSec: number;
@@ -92,6 +96,8 @@ interface UiState {
   setPlaying: (p: boolean) => void;
   setShuttle: (rate: number) => void;
   setLoopEnabled: (v: boolean) => void;
+  toggleViewerOverlays: () => void;
+  toggleViewerSafeGuides: () => void;
   markIn: () => void;
   markOut: () => void;
   clearInOut: () => void;
@@ -183,6 +189,8 @@ export const useUi = create<UiState>((set, get) => ({
   playing: false,
   playRate: 1,
   loopEnabled: false,
+  viewerOverlays: true,
+  viewerSafeGuides: false,
   loop: { ...project.loop },
   selection: ['el-2'],
   pxPerSec: 46,
@@ -264,6 +272,8 @@ export const useUi = create<UiState>((set, get) => ({
   setPlaying: (p) => set({ playing: p, ...(p ? {} : { playRate: 1 }) }),
   setShuttle: (rate) => set({ playRate: rate, playing: rate !== 0 }),
   setLoopEnabled: (v) => set({ loopEnabled: v }),
+  toggleViewerOverlays: () => set((s) => ({ viewerOverlays: !s.viewerOverlays })),
+  toggleViewerSafeGuides: () => set((s) => ({ viewerSafeGuides: !s.viewerSafeGuides })),
   markIn: () => set((s) => ({ loop: { ...s.loop, start: snapToFrame(s.playhead) } })),
   markOut: () => set((s) => ({ loop: { ...s.loop, end: snapToFrame(s.playhead) } })),
   clearInOut: () => set((s) => ({ loop: { ...s.loop, start: 0, end: s.scenes.find((x) => x.id === s.activeSceneId) ? (function () { const sc = s.scenes.find((x) => x.id === s.activeSceneId)!; let d = 0; for (const t of sc.tracks) for (const e of t.elements) d = Math.max(d, e.startTime + e.duration); return d || 30; })() : 30 } })),

@@ -114,3 +114,34 @@ Spec 09 has no role field (only the FCPXML `<sequence role>` attr echoes it; BGM
 5. Escalation gesture (dbl-click audio clip → Audio focus + strip focus) as the M3 preview.
 6. Sound Library = audio-filtered pool with role grouping (includes audio-bearing video).
 7. **Levels redundancy**: master micro-meter + header micro-meters + optional bridge — triple coverage right, or should Edit default to bridge instead of collapsed?
+
+---
+
+# REVISION v2.2 (R12) — the mixer moves BESIDE the multi-track lanes
+
+**Trigger:** direct user review feedback — "mixer layout makes no sense it should be side by side with multi-track." The bottom-row placement (§4 above) starved the strips: 176px of height meant faders crammed next to pan knobs, meters squeezed to 84px, the whole console vocabulary compressed into a strip of UI that also had to compete with lanes for vertical budget (the 1280×800 arithmetic above existed BECAUSE the row stole height from lanes).
+
+## What changed
+
+- **MixerRow (bottom row) → MixerDock (right-side dock).** The mixer now sits side by side with the multi-track lanes: `[track headers | lanes | mixer dock]`, sharing the timeline area's full HEIGHT instead of stealing its width-and-height from below. The dock spans the timeline block's lane region (below TimelineToolbar/SceneTabs, right of the lanes).
+- **Strip anatomy gets real room.** The centerpiece is now a fill-height stereo meter beside a fill-height dB fader (min 80px, grows with the dock); pan sits below; inserts/sends/bus/ducking stack in a scrollable lower section. Compact mode (dock < 260px tall — main-body drag) drops the lower stack and slims strips 108px → 84px.
+- **Three states preserved (same store machine, same button):**
+  - **collapsed** — not rendered.
+  - **bridge** — was a 32px bottom row, now a **44px right rail**: per-track vertical stereo meters (badge + fill-height meter) + master cluster pinned bottom (meter + mute + collapse).
+  - **full** — classic console row: strips side by side, aux returns + master, 22px vertical-label header column (collapse chevron).
+- **Cycle semantics unchanged:** Edit cycles collapsed → bridge → full; Audio focus toggles bridge ↔ full. Escalation (dbl-click audio clip) still expands to full + strip focus flash.
+- **F6 7th-region registration unchanged** (the dock takes over the old row's slot in the cycle).
+- **1280×800 arithmetic revised:** the dock takes WIDTH, not height. Lanes keep ~1280 − 160 (headers) − 22 − strips×84/108. With scene 1's 2 audio tracks + 2 aux + master ≈ 490px full / 44px bridge — lanes ≈ 630px full at the floor. Acceptable; the dock collapses in one click.
+
+## What did NOT change
+
+Store shape (`mixerState`, mock G-slice, ducking, roles), single-source-of-truth toggles (M/S/L emit the same commands as track headers), drag grammar (Shift+drag fine, dbl-click reset), a11y posture (role=group, keyboard faders, meters aria-hidden + title-only), ChannelEditor, SoundLibrary, escalation, Esc.
+
+## Bridge-state trade, declared
+
+The old bridge carried per-track M/S/L chips; the 44px rail is meters-only (the track headers carry the same commands at the same height, one click away). If review misses the chips, the rail can widen to ~64px and take them back — registered as a §11 reaction question.
+
+## §11 additions for user reaction
+
+8. Side-by-side dock vs. the old bottom row — is THIS the right adjacency (mixer beside lanes), and is full-dock width (~490px at scene-1 scale) acceptable at your window size?
+9. Bridge as a meters-only rail (44px) — keep slim, or widen to bring back per-track M/S/L?

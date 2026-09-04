@@ -47,9 +47,14 @@ export function Viewer({ duration }: { duration: number }) {
 
   const scrubRef = useRef<HTMLDivElement>(null);
   const [hoverX, setHoverX] = useState<number | null>(null);
-  const [overlaysOn, setOverlaysOn] = useState(true);
   const [zoom, setZoom] = useState('Fit');
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // viewer UI prefs — store-level (spec 18 §4.3): testable/pinnable mock state
+  const overlaysOn = useUi((s) => s.viewerOverlays);
+  const safeGuides = useUi((s) => s.viewerSafeGuides);
+  const toggleOverlays = useUi((s) => s.toggleViewerOverlays);
+  const toggleSafeGuides = useUi((s) => s.toggleViewerSafeGuides);
 
   const el = mainElementAt(scene, playhead);
   const overlayEl = overlayElementAt(scene, playhead);
@@ -91,11 +96,17 @@ export function Viewer({ duration }: { duration: number }) {
           data-tip="Toggle in-canvas overlays"
           aria-label="Toggle in-canvas overlays"
           aria-pressed={overlaysOn}
-          onClick={() => setOverlaysOn(!overlaysOn)}
+          onClick={toggleOverlays}
         >
           <Eye size={13} strokeWidth={1.6} />
         </button>
-        <button className="icon-btn !h-[20px]" data-tip="Safe area guides (UI pref)" aria-label="Toggle safe area guides">
+        <button
+          className={`icon-btn !h-[20px] ${safeGuides ? 'toggled' : ''}`}
+          data-tip="Safe area guides (UI pref)"
+          aria-label="Toggle safe area guides"
+          aria-pressed={safeGuides}
+          onClick={toggleSafeGuides}
+        >
           <Frame size={13} strokeWidth={1.6} />
         </button>
       </div>
@@ -134,6 +145,21 @@ export function Viewer({ duration }: { duration: number }) {
             <div className="pointer-events-none absolute bottom-[14%] left-1/2 -translate-x-1/2 text-center">
               <span className="text-[20px] font-semibold uppercase tracking-[0.22em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
                 {overlayEl.name}
+              </span>
+            </div>
+          )}
+
+          {/* safe-area guides (viewer UI pref) — broadcast convention:
+              90% action-safe + 80% title-safe centered rects, thin lines */}
+          {safeGuides && (
+            <div className="pointer-events-none absolute inset-0" data-testid="shell-viewer-safe-guides" aria-hidden="true">
+              <div className="absolute inset-[5%] border border-white/45" />
+              <div className="absolute inset-[10%] border border-white/25" />
+              <span className="absolute left-[5.5%] top-[5.5%] mono text-[9px] font-medium text-white/60">
+                action safe 90%
+              </span>
+              <span className="absolute left-[10.5%] bottom-[10.5%] mono text-[9px] font-medium text-white/45">
+                title safe 80%
               </span>
             </div>
           )}
