@@ -1,5 +1,7 @@
 node_modules/
-dist/
+# dist IS TRACKED (kit dogfood #6, sibling-stream convention): a fresh clone
+# boots Storybook with zero build steps. Rebuild via `npm run vendor:build`
+# (or `npm run build` here) + COMMIT when the kit source changes.
 examples/nimbus/node_modules/
 examples/nimbus/dist-storybook/
 examples/nimbus/sb.log
