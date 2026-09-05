@@ -7,6 +7,7 @@
    position, not a toast). */
 
 import { useState, type DragEvent as ReactDragEvent } from 'react';
+import { Film, Image as ImageIcon, AudioLines } from 'lucide-react';
 import { useMini } from '../state/useMini';
 import { thumbGradientFor } from '../lib/filmstrip';
 import { fmtTimecode } from '../lib/timecode';
@@ -26,6 +27,15 @@ export const poolDrag: { current: string | null } = { current: null };
 /** Can media of this kind land on a track of that kind? (D3.2 routing) */
 export function isDroppable(trackKind: TrackKind, mediaKind: Media['kind']): boolean {
   return trackKind === (mediaKind === 'audio' ? 'audio' : 'video');
+}
+
+/** Kind glyph for the pool thumb corner (R18g port of the reviewer's
+ *  sibling-app feedback #28/#30: "an icon would be better… the standard
+ *  NLE way" — video/image/audio get icon badges, not text pills). */
+function KindIcon({ kind }: { kind: Media['kind'] }) {
+  if (kind === 'audio') return <AudioLines size={12} aria-hidden="true" />;
+  if (kind === 'image') return <ImageIcon size={12} aria-hidden="true" />;
+  return <Film size={12} aria-hidden="true" />;
 }
 
 function MediaCard({ media }: { media: Media }) {
@@ -63,7 +73,13 @@ function MediaCard({ media }: { media: Media }) {
         aria-hidden="true"
         style={{ background: thumbGradientFor(media) }}
       >
-        <span className="mini-media-card__kind">{media.kind}</span>
+      <span
+        className="mini-media-card__kind"
+        aria-hidden="true"
+        title={media.kind}
+      >
+        <KindIcon kind={media.kind} />
+      </span>
       </span>
       <span className="mini-media-card__meta">
         <span className="mini-media-card__name">{media.name}</span>

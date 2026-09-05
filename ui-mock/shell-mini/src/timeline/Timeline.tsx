@@ -30,13 +30,14 @@ import {
   Magnet,
   ZoomOut,
   ZoomIn,
-  ArrowLeftToLine,
-  ArrowRightToLine,
   FoldHorizontal,
   Film,
   Eye,
   EyeOff,
 } from 'lucide-react';
+/* R18g (thread #23): purpose-drawn trim glyphs — the lucide
+   ArrowLeftToLine/ArrowRightToLine pair read as jump-to-start/end */
+import { TrimStartIcon, TrimEndIcon } from '../lib/icons';
 import { useMini } from '../state/useMini';
 import { useKeys } from '../hooks/useKeys';
 import {
@@ -129,7 +130,7 @@ function ToolsRow() {
           onClick={() => cutHead()}
           data-testid="mini-btn-cuthead"
         >
-          <ArrowLeftToLine />
+          <TrimStartIcon />
         </button>
         <button
           type="button"
@@ -139,7 +140,7 @@ function ToolsRow() {
           onClick={() => cutTail()}
           data-testid="mini-btn-cuttail"
         >
-          <ArrowRightToLine />
+          <TrimEndIcon />
         </button>
         <button
           type="button"

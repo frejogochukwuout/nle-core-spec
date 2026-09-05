@@ -33,10 +33,11 @@
   text-overflow: ellipsis;
 }
 
-.mini-topbar__transport {
-  display: flex;
-  align-items: center;
-  gap: var(--canvas-editor-space-sm);
+/* R18g (thread #25): .mini-topbar__transport removed — the transport
+   (play + timecode) now lives in the Viewer below the video. */
+
+/* the Export CTA pins to the right edge where the transport was */
+.mini-topbar .mini-cta {
   margin-left: auto;
 }
 
@@ -78,6 +79,11 @@
 .mini-media-card {
   display: flex;
   flex-direction: column;
+  /* R18g (thread #17): cards keep their NATURAL height and the list
+     scrolls. The old implicit flex-shrink (floored by overflow:hidden,
+     which zeroes min-height:auto) squashed the cards to "vertical fit"
+     (57px cards, 25px thumbs) — the reviewer wanted overflow+scroll. */
+  flex: 0 0 auto;
   border: none;
   border-radius: var(--canvas-editor-radius-control);
   background: var(--canvas-quick-cut-item-surface);
@@ -114,18 +120,21 @@
   opacity: 0.55;
 }
 
+/* kind badge — ICON chip, not text (R18g port of the reviewer's sibling
+   feedback #28/#30: "an icon would be better… the standard NLE way") */
 .mini-media-card__kind {
   position: absolute;
   top: var(--canvas-editor-space-sm);
   left: var(--canvas-editor-space-sm);
-  padding: 1px 6px;
-  border-radius: var(--canvas-editor-radius-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 18px;
+  border-radius: var(--canvas-editor-radius-control);
   background: var(--canvas-quick-cut-audio-label-surface);
   color: var(--canvas-editor-text-muted);
-  font-size: 10px;
-  line-height: 1.5;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  pointer-events: none;
 }
 
 .mini-media-card__meta {
@@ -165,7 +174,10 @@
   flex: 1 1 auto;
   min-height: 0;
   margin: var(--canvas-editor-space-md);
-  border-radius: var(--canvas-radius-lg);
+  /* R18g (thread #21): the video itself is SQUARE — no rounded edge on
+     screen content. The recessed-monitor depth survives via the inset
+     ring + inner shadow, which read fine on square corners. */
+  border-radius: 0;
   background: #000;
   /* R18d: screen-well depth (feedback #13) — inset ring + inner shadow
      so the viewer reads as a recessed monitor, not a flat rect */
@@ -184,29 +196,69 @@
   opacity: 0.92;
 }
 
-.mini-viewer__info {
-  position: absolute;
-  z-index: 2;
-  left: var(--canvas-editor-space-lg);
-  bottom: var(--canvas-editor-space-lg);
+/* R18g (threads #24/#25): RH-style transport row BELOW the video —
+   grid [1fr auto 1fr]: timecode left · play center · media name right.
+   Replaces both the in-stage info overlay (name + big tc) and the
+   topbar transport (moved here wholesale). */
+.mini-viewer__transport {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  padding: 0 var(--canvas-editor-space-lg) var(--canvas-editor-space-md);
+}
+
+.mini-viewer__tcgroup {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--canvas-editor-space-xs);
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
 }
 
-.mini-viewer__name {
-  color: var(--canvas-text-primary);
-  font-size: 13px;
-  font-weight: 600;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-}
-
-.mini-viewer__tc {
+.mini-viewer__tc-cur {
   color: var(--canvas-editor-text-strong);
-  font-size: 26px;
-  letter-spacing: 0.04em;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+
+.mini-viewer__tc-sep,
+.mini-viewer__tc-total {
+  color: var(--canvas-editor-text-muted);
+}
+
+.mini-viewer__playbtn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--canvas-editor-text-default);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.mini-viewer__playbtn:hover {
+  background: var(--canvas-editor-control-surface);
+  color: var(--canvas-editor-text-primary);
+}
+
+.mini-viewer__playbtn:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 2px;
+}
+
+.mini-viewer__transportmeta {
+  justify-self: end;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--canvas-editor-text-muted);
+  font-size: 11px;
 }
 
 .mini-viewer__empty {
@@ -226,40 +278,6 @@
   color: var(--canvas-text-tertiary);
   max-width: 260px;
   text-align: center;
-}
-
-/* play overlay pill — RH dark-translucent (extraction §4, audit m6) */
-.mini-viewer__play {
-  position: absolute;
-  z-index: 3;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 48px;
-  height: 48px;
-  border: 1px solid var(--canvas-editor-border-subtle);
-  border-radius: var(--canvas-editor-radius-pill);
-  background: rgba(20, 20, 22, 0.72);
-  box-shadow: rgba(0, 0, 0, 0.22) 0 6px 20px;
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  color: var(--canvas-editor-text-strong);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: opacity 0.16s, background 0.15s, border-color 0.15s;
-}
-
-.mini-viewer__play:hover {
-  background: rgba(28, 28, 30, 0.82);
-  border-color: rgba(255, 255, 255, 0.16);
-  color: #fff;
-}
-
-.mini-viewer__play:focus-visible {
-  outline: rgba(255, 255, 255, 0.62) solid 2px;
-  outline-offset: 2px;
 }
 
 /* ---- inspector -------------------------------------------------- */

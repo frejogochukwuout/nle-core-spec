@@ -2,7 +2,15 @@
    Layout-only drag handle: 6px hit area, 2px bar that lights on hover.
    Pointer-capture drag, keyboard arrows (±8px, shift = ±32px),
    double-click resets to the initial value. aria=separator with value
-   semantics. Sizes live in the PARENT (App) — the splitter is dumb. */
+   semantics. Sizes live in the PARENT (App) — the splitter is dumb.
+
+   R18g (thread #20 — BUG: "adjust direction is wrong here drags right
+   for left"): `invert` flips the drag + arrow-key direction. Use it when
+   the panel being sized sits to the RIGHT of the handle (inspector):
+   dragging the boundary right must SHRINK that panel, and ArrowRight
+   means "push the boundary right" (narrower), not "grow it". The pool
+   splitter (panel on the left) and the row splitter keep the normal
+   direction — the reviewer confirmed those feel correct. */
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
@@ -14,12 +22,14 @@ export interface SplitterProps {
   initial: number;
   onChange: (v: number) => void;
   label: string;
+  /** R18g: panel sits right of the handle → dragging right shrinks it */
+  invert?: boolean;
 }
 
 const STEP = 8;
 const BIG_STEP = 32;
 
-export function Splitter({ orientation, value, min, max, initial, onChange, label }: SplitterProps) {
+export function Splitter({ orientation, value, min, max, initial, onChange, label, invert = false }: SplitterProps) {
   const [active, setActive] = useState(false);
   /** drag session: pointerId + pointer position + size at start */
   const g = useRef<{ pointerId: number | null; startPos: number; startSize: number }>({
@@ -47,8 +57,11 @@ export function Splitter({ orientation, value, min, max, initial, onChange, labe
     const gs = g.current;
     if (gs.pointerId === null || e.pointerId !== gs.pointerId) return;
     const pos = isRow ? e.clientY : e.clientX;
-    // vertical bar → horizontal sizing; horizontal bar → vertical sizing
-    const delta = isRow ? -(pos - gs.startPos) : pos - gs.startPos;
+    // vertical bar → horizontal sizing; horizontal bar → vertical sizing.
+    // isRow negates because the timeline grows UPWARD when the boundary
+    // moves up; invert (R18g) flips a right-side panel's growth axis.
+    let delta = isRow ? -(pos - gs.startPos) : pos - gs.startPos;
+    if (invert) delta = -delta;
     onChange(clamp(gs.startSize + delta));
   };
 
@@ -90,8 +103,10 @@ export function Splitter({ orientation, value, min, max, initial, onChange, labe
           if (e.key === 'ArrowUp') nudge(1, e);
           else if (e.key === 'ArrowDown') nudge(-1, e);
         } else {
-          if (e.key === 'ArrowLeft') nudge(-1, e);
-          else if (e.key === 'ArrowRight') nudge(1, e);
+          // R18g invert: ArrowRight = push the boundary right → for a
+          // right-side panel that SHRINKS it ("nudge toward right edge")
+          if (e.key === 'ArrowLeft') nudge(invert ? 1 : -1, e);
+          else if (e.key === 'ArrowRight') nudge(invert ? -1 : 1, e);
         }
       }}
     />

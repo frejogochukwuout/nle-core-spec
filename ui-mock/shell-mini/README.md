@@ -88,7 +88,10 @@ Run it at boot or any time; safe twice.
   floored at the edited clip's new end) keeps off-grid docs overlap-free.
 - **Cut styles** (R18e, feedback #7 — the RH 裁剪开始 / 裁剪结束
   operations): `[` discards the selected clip's head at the playhead, `]`
-  discards the tail; both ripple-aware; keyboard + toolbar buttons.
+  discards the tail; both ripple-aware; keyboard + toolbar buttons. The
+  toolbar glyphs are purpose-drawn trim marks (clip rect + dim discarded
+  block + playhead line — R18g, feedback #23: the lucide arrow-to-line
+  pair read as jump-to-start/end).
 - **Clips:** filmstrip video clips (toggleable to media-kind color
   blocks — feedback #15), waveform audio clips with REAL deterministic
   envelope bars (feedback #12, discrete-bar RH grammar kept), selection
@@ -106,14 +109,26 @@ Run it at boot or any time; safe twice.
 - **Undo/redo:** whole-doc snapshots (max 50), one entry per gesture,
   Esc cancels a live drag, interaction lock mid-gesture. Ripple ops and
   inserts round-trip exactly.
-- **Shell:** topbar (transport + TC + honest Export toast), media pool
-  (8 assets — enough to genuinely scroll), viewer (clip-under-playhead +
-  TC, inset screen-well depth), inspector (read-only facts + nudge ±0.5s
-  + a structured empty state), toasts, and RESIZABLE PANELS (R18d,
-  feedback #13): pool/inspector width splitters + a timeline-height
-  splitter (drag up → lanes grow taller, real NLE behavior; double-click
-  resets; keyboard ±8px / shift ±32px). Snap is OFF by default (feedback
-  #10 — the magnet is a deliberate opt-in now).
+- **Shell:** topbar (brand + honest Export toast — the transport moved
+  down, R18g feedback #24/#25), media pool (8 assets at NATURAL card
+  height, genuinely overflow+scroll — R18g feedback #17: the old cards
+  squashed to vertical-fit), viewer (clip-under-playhead in a SQUARE
+  screen-well + an RH-grammar transport row below the video: timecode
+  left · play center · media name right, grid [1fr auto 1fr]), inspector
+  (read-only facts + nudge ±0.5s + a structured empty state), toasts,
+  and RESIZABLE PANELS (R18d, feedback #13): pool/inspector width
+  splitters + a timeline-height splitter (drag up → lanes grow taller,
+  real NLE behavior; double-click resets; keyboard ±8px / shift ±32px).
+  Splitter hover shows a shaded SKY accent bar (R18g feedback #19 —
+  RH's own handles light blue; same accent family as the drop outline)
+  and the inspector splitter drags with boundary semantics (drag right
+  shrinks — R18g feedback #20 fixed the inverted direction). Snap is
+  OFF by default (feedback #10 — the magnet is a deliberate opt-in now).
+- **Radii** (R18g, feedback #18/#21/#22): panels 20→8px, controls 8→4px,
+  clips near-square (2px — big clip corners read as gaps between cuts),
+  the video frame square (screen content is never rounded), Export CTA
+  6px. Documented deviation from the RH-verbatim token set (see
+  tokens.css — original values kept in comments).
 
 ## What's OUT (deliberate — the deviations register)
 
@@ -137,15 +152,21 @@ Run it at boot or any time; safe twice.
 6. ~~Snap-guide indicator deferred~~ — **DONE (R18e):** the 2px guide
    paints at the engaged magnet target. The main-row gutter is 8px
    (splitters live in it) vs the root's 12px — registered.
+7. **Tightened radii** (R18g, feedback #18/#21/#22): the RH-verbatim
+   geometry tokens are overridden (panel 20→8, control 8→4, clip 2, video
+   frame 0) — the reviewer's live judgment over the snapshot's roundness.
+   Original values kept inline in tokens.css for provenance.
 
 ## Layout
 
 ```
 src/
-  styles/tokens.css      RH token set (extraction §2, verbatim)
+  styles/tokens.css      RH token set (extraction §2) + documented R18g
+                         radius deviations (original values in comments)
   styles/app.css         Tailwind 4 + shared chrome grammar
   timeline/timeline.css  the qc- quick-cut anatomy port (hand-CSS)
   timeline/Timeline.tsx  tools/ruler/lanes/clips/playhead (one file)
+  lib/icons.tsx          purpose-drawn trim-start/trim-end glyphs (R18g)
   lib/geometry.ts        the interaction laws (pure, fully tested)
   lib/timecode.ts        MM:SS.d formatting
   lib/mockData.ts        seed doc + media (deterministic)

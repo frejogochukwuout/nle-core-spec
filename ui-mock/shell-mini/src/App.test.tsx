@@ -33,6 +33,18 @@ describe('shell regions', () => {
     expect(screen.getByTestId('mini-media-m-title')).toBeInTheDocument();
     expect(screen.getByTestId('mini-media-m-interview')).toBeInTheDocument();
   });
+
+  /* R18g port of the reviewer's sibling feedback #28/#30: kind badge is an
+   * ICON chip (standard NLE way), not a text pill */
+  it('media kind badges render icon glyphs, not text', () => {
+    renderApp();
+    const kinds = screen.getAllByTitle(/^(video|image|audio)$/);
+    expect(kinds.length).toBe(8); // all seed assets
+    for (const badge of kinds) {
+      expect(badge.querySelector('svg')).not.toBeNull();
+      expect(badge.textContent).toBe(''); // icon-only, the word lives on title/aria
+    }
+  });
 });
 
 describe('media → timeline', () => {
@@ -144,11 +156,23 @@ describe('inspector', () => {
 });
 
 describe('topbar', () => {
-  it('timecode shows playhead / contentEnd', () => {
+  it('timecode shows playhead / contentEnd (R18g: lives in the viewer transport now)', () => {
     renderApp();
-    expect(screen.getByTestId('mini-tc')).toHaveTextContent('00:00.0 / 00:12.5');
+    const tc = screen.getByTestId('mini-tc');
+    expect(tc).toHaveTextContent('00:00.0 / 00:12.5');
+    // the transport row is inside the VIEWER, below the video (thread #24/#25)
+    expect(tc.closest('[data-testid="mini-viewer"]')).not.toBeNull();
+    expect(tc.closest('[data-testid="mini-viewer-transport"]')).not.toBeNull();
     setStore(() => S().setPlayhead(3.25));
     expect(screen.getByTestId('mini-tc')).toHaveTextContent('00:03.2 / 00:12.5');
+  });
+
+  it('the play control moved from the topbar into the viewer transport (thread #25)', () => {
+    renderApp();
+    const play = screen.getByTestId('mini-btn-play');
+    expect(play.closest('[data-testid="mini-viewer-transport"]')).not.toBeNull();
+    const topbar = screen.getByTestId('mini-topbar');
+    expect(topbar.querySelector('[data-testid="mini-btn-play"]')).toBeNull();
   });
 
   it('Export CTA is honest (toast, no navigation)', () => {
@@ -162,8 +186,9 @@ describe('viewer', () => {
   it('shows the clip under the playhead', () => {
     renderApp();
     setStore(() => S().setPlayhead(1)); // inside c1 (drone)
-    // the viewer's info name (bottom-left) — disambiguate from the media-pool card
+    // pool card + the transport meta on the right of the transport row
     expect(screen.getAllByText('drone_launch.mp4').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByTestId('mini-viewer-meta')).toHaveTextContent('drone_launch.mp4');
   });
 
   it('empty state past the last video clip', () => {
@@ -211,6 +236,37 @@ describe('splitters', () => {
     expect(screen.getByRole('separator', { name: 'Media pool width' })).toHaveAttribute('aria-valuenow', '252');
     fireEvent.keyDown(pool, { key: 'ArrowRight', shiftKey: true });
     expect(screen.getByRole('separator', { name: 'Media pool width' })).toHaveAttribute('aria-valuenow', '284');
+  });
+
+  /* R18g (thread #20 — BUG): the inspector sits RIGHT of its handle, so
+     dragging the boundary right must SHRINK it. Old code grew it. */
+  it('inspector splitter: drag RIGHT shrinks, drag LEFT grows (boundary semantics)', () => {
+    renderApp();
+    const insp = screen.getByTestId('mini-splitter-inspector-width');
+    fireEvent.pointerDown(insp, { button: 0, pointerId: 7, clientX: 700 });
+    fireEvent.pointerMove(insp, { pointerId: 7, clientX: 740 }); // boundary right 40px → inspector -40
+    expect(insp).toHaveAttribute('aria-valuenow', '200');
+    fireEvent.pointerMove(insp, { pointerId: 7, clientX: 680 }); // boundary left of start → inspector +20
+    expect(insp).toHaveAttribute('aria-valuenow', '260');
+    fireEvent.pointerUp(insp, { pointerId: 7, clientX: 680 });
+  });
+
+  it('inspector splitter: ArrowRight shrinks (pushes boundary right), ArrowLeft grows', () => {
+    renderApp();
+    const insp = screen.getByTestId('mini-splitter-inspector-width');
+    fireEvent.keyDown(insp, { key: 'ArrowRight' });
+    expect(insp).toHaveAttribute('aria-valuenow', '232');
+    fireEvent.keyDown(insp, { key: 'ArrowLeft', shiftKey: true });
+    expect(insp).toHaveAttribute('aria-valuenow', '264');
+  });
+
+  it('pool splitter keeps the normal direction (drag right grows the pool)', () => {
+    renderApp();
+    const pool = screen.getByTestId('mini-splitter-media-pool-width');
+    fireEvent.pointerDown(pool, { button: 0, pointerId: 9, clientX: 300 });
+    fireEvent.pointerMove(pool, { pointerId: 9, clientX: 350 });
+    expect(pool).toHaveAttribute('aria-valuenow', '310');
+    fireEvent.pointerUp(pool, { pointerId: 9, clientX: 350 });
   });
 
   it('keyboard + drag on the timeline splitter change its height value', () => {

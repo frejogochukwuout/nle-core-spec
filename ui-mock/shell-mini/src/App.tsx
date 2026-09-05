@@ -42,8 +42,11 @@ export default function App() {
           label="Media pool width"
         />
         <Viewer />
+        {/* R18g (thread #20): invert — the inspector sits RIGHT of this
+            handle, so dragging right shrinks it (the old code grew it) */}
         <Splitter
           orientation="vertical"
+          invert
           value={inspW}
           min={INSP_W.min}
           max={INSP_W.max}

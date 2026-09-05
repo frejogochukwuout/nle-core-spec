@@ -116,7 +116,10 @@ body {
   height: 34px;
   padding: 0 16px;
   border: none;
-  border-radius: var(--canvas-editor-radius-pill);
+  /* R18g: was the full 999px pill — with panels/controls tightened
+     (feedback #18) the pill CTA read as a mismatch; small radius keeps
+     a hint of CTA identity in the tightened grammar */
+  border-radius: 6px;
   background: var(--rh-green);
   color: #06251b;
   font-size: 13px;
@@ -256,7 +259,11 @@ body {
 
 .mini-splitter:hover::before,
 .mini-splitter.is-active::before {
-  background: var(--mini-splitter-hover);
+  /* R18g (thread #19): shaded accent bar on hover — RH's own resize
+     handles light up blue (#3b82f6); we use the same interaction-accent
+     family as the pool→timeline drop outline (#38bdf8). */
+  background: var(--mini-splitter-hover-accent);
+  box-shadow: 0 0 8px var(--mini-splitter-hover-glow);
   height: 56px;
 }
 

@@ -82,6 +82,34 @@ below — it is COMPLETE on origin and its standing items are preserved.
   waves + VLM passes; wave-2 verdict: only P3s remain (ripple start-trim
   frozen-left drag feel — documented law + tooltip hints; split/cut grid
   quantize; 8px main-row gutter; timeline→shell DnD import coupling).
+- **R18c UPDATE — PR #17 MERGED upstream (v0.5.1, then v0.5.2):** the
+  maintainer validated + merged our subdir fix and a follow-up
+  adoption-hardening PR (#19, the 7 sibling fixes) — upstream HEAD is
+  v0.5.2. The vendored kit here is still v0.5.0 + our patch; upgrading
+  the vendor to v0.5.2 = drop the local patch (registered as a follow-up
+  chore; do it in a quiet window, not mid-feedback-wave).
+- **R18g — feedback wave 2 (annotakit issues #17-#25 on OUR stories,
+  ALL fixed + thread-resolved, GH issues auto-closed):** pool cards
+  natural height + true overflow/scroll (the flex overflow:hidden
+  min-height trap — cards were squashed to 57px vertical-fit); radii
+  tightened per reviewer (panels 20→8, controls 8→4, clips 2px near-
+  square, video frame SQUARE, Export 6px — documented token deviation,
+  originals in comments); splitter hover = shaded sky accent bar
+  (rgba(56,189,248,.78), RH's own handles light blue) + INSPECTOR DRAG
+  DIRECTION BUG fixed (invert prop — boundary semantics: drag right
+  shrinks the right-side panel; keyboard follows; regression-tested +
+  live-verified); purpose-drawn trim icons replace the lucide arrow-to-
+  line pair (clip rect + dim discarded block + playhead line — VLM
+  verified they read as trim-head/tail); TRANSPORT MOVED below the video
+  (RH grammar grid [1fr auto 1fr]: tc left · play center · name right) —
+  topbar is brand+Export only now; pool kind badges are ICONS (Film/
+  Image/AudioLines — ported from the reviewer's sibling-app feedback
+  #28/#30, "the standard NLE way"). 163/163 tests, tsc clean, build
+  green. NOTE: the reviewer is ALSO live-reviewing the SIBLING's
+  shell-variants app (threads land in the SHARED store → GH issues
+  #26-#36 in our repo) — those are the sibling agent's queue, not ours;
+  our timeline scroll-end was checked and does NOT have their #36
+  crop-off bug (we keep a min 8s runway + full-width lane surfaces).
 - **R18 correction (what was REVERTED):** the R16 "storybook can't serve
   publicly, static-mount it instead" verdict was wrong; the workaround
   infrastructure was removed — `public/stories/` (8.4MB), the

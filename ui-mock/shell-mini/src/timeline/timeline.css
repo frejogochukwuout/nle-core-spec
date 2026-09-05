@@ -462,7 +462,9 @@
   top: var(--canvas-editor-clip-inset);
   bottom: var(--canvas-editor-clip-inset);
   min-width: 1px;
-  border-radius: var(--canvas-editor-radius-control);
+  /* R18g (thread #22): near-square clips — the old 8px corners left
+     notches between adjacent clips that read as gaps in the cut */
+  border-radius: var(--mini-radius-clip);
   box-shadow: none;
   cursor: default;
   overflow: hidden;
