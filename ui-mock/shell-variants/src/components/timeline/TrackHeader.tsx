@@ -1,0 +1,237 @@
+/* TrackHeader — spec 05 §10 / 18 §4.7: badge + name, per-track M/S/L(/V)
+   buttons → track commands. Reference grammar (davinci mock): tall lanes get
+   TWO rows (row 1: badge + name + meta; row 2: controls), short lanes get a
+   single compact control row — everything fits the fixed 160px column with
+   no horizontal overflow. */
+
+import { Lock, Eye, EyeOff, Volume2, VolumeX, Headphones, Activity, SlidersHorizontal } from 'lucide-react';
+import { useUi } from '../../state/useUiStore';
+import type { TrackJSON } from '../../lib/mockData';
+import { dbToSlider, sliderToDb } from '../../state/mockMixer';
+import { useMeter } from '../../lib/meterEngine';
+import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
+
+// single source of truth: the undoable store command (headers, strips, bridge)
+const toggleTrack = (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') =>
+  useUi.getState().toggleTrackCmd(sceneId, trackId, field);
+
+/* R15-A4 — audio track-header micro-meter (v2.2 §3.2 promise, never
+   implemented until now): a 4px view-only vertical level display fed by the
+   SHARED metering engine — the same useMeter(trackId) key the channel
+   strips / bridge rail read, so the header and the strip can never disagree.
+   Zero interaction: aria-hidden, pointer-events-none. No LED segments (a 4px
+   column can't carry them) and mono-collapsed to the louder channel; clip
+   latches red like the strip meters; effectiveMute dims it.
+   Compact-safe: rendered ONLY on tall lanes (height ≥ 48) — the compact
+   single-row layout has no vertical room for a readable level display
+   (documented judgment; the mixer dock + toolbar master micro remain the
+   glance sources there). */
+function HeaderMicroMeter({ trackId, badge }: { trackId: string; badge: string }) {
+  const snap = useMeter(trackId);
+  const level = Math.max(snap.l.level, snap.r.level);
+  const clipped = snap.l.clipped || snap.r.clipped;
+  const pct = Math.round(level * 10000) / 100;
+  return (
+    <div
+      data-testid={`track-micrometer-${badge}`}
+      aria-hidden="true"
+      className={`pointer-events-none absolute inset-y-[3px] right-0 w-[4px] select-none overflow-hidden rounded-[1px] bg-[var(--meter-well)] ${snap.muted ? 'opacity-20' : ''}`}
+    >
+      <div
+        data-testid={`track-micrometer-${badge}-fill`}
+        className="absolute inset-x-0 bottom-0 h-full"
+        style={{
+          background: clipped
+            ? 'var(--meter-red)'
+            : 'linear-gradient(to top, var(--meter-green) 0%, var(--meter-amber) 70%, var(--meter-red) 90%)',
+          clipPath: `inset(${100 - pct}% 0 0 0)`,
+        }}
+      />
+    </div>
+  );
+}
+
+function CtrlBtn({ track, sceneId, field, label, tip, on, onCls, children, testid }: {
+  track: TrackJSON; sceneId: string; field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform';
+  label: string; tip: string; on: boolean; onCls: string; children: React.ReactNode; testid: string;
+}) {
+  return (
+    <button
+      onClick={() => toggleTrack(sceneId, track.id, field)}
+      data-testid={testid}
+      className={`mono flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[2px] border text-[10px] font-bold ${on ? onCls : 'border-strong bg-inset text-tmuted hover:text-tprimary'}`}
+      aria-label={`${label} track ${track.name}`}
+      aria-pressed={on}
+      data-tip={tip}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; height: number; sceneId: string }) {
+  const showVisibility = track.kind !== 'audio';
+  const tall = height >= 48; // two-row layout; single compact row below 48px
+  const audioFocus = useUi((s) => s.page === 'audio');
+  const strip = useUi((s) => s.mixer.tracks[track.id]);
+  const setMixerTrack = useUi((s) => s.setMixerTrack);
+  const addTrack = useUi((s) => s.addTrack);
+  const trackHeightPref = useUi((s) => s.trackHeightPref);
+  const setTrackHeightPref = useUi((s) => s.setTrackHeightPref);
+  const focused = useUi((s) => s.focusedTrackId === track.id);
+  const setFocusedTrack = useUi((s) => s.setFocusedTrack);
+  const menu = useContextMenu(); // §4.9 track-header menu
+
+  /* §4.9 track-header menu — direct toggles reuse the module-level
+     toggleTrack helper (the M/S/L buttons use it too). "Delete track" is
+     honestly disabled: the mock store has no deleteTrack command, so the
+     §6.4 with-clips confirmation has no real path here (deleteScene + the
+     clip-menu multi-delete carry the confirm consumers instead). */
+  const kindLabel = track.kind === 'main' ? 'video' : track.kind === 'overlay' ? 'text' : 'audio';
+  const buildMenuItems = (): MenuItem[] => [
+    /* §4.9 add-track above/below: explicit insertion at THIS header's index —
+       user direction wins over the spec 05 §12.1 kind-ordering law (which
+       governs the default no-position route only; see the store's addTrack). */
+    { id: 'add-above', label: `Add ${kindLabel} track above`, onSelect: () => addTrack(track.kind, 'above', track.id) },
+    { id: 'add-below', label: `Add ${kindLabel} track below`, onSelect: () => addTrack(track.kind, 'below', track.id) },
+    /* §4.9 Height rows (spec 18 §4.9 "Height: Compact/Normal/Tall — (UI)
+       pref"): single-choice group — ContextMenu renders checked items as
+       menuitemcheckbox (no radio role in its vocabulary; mock-level
+       acceptable). null = auto → no row checked. The pref is GLOBAL (all
+       lanes), the mock's answer to the B3 state-home seal item. */
+    { id: 'height-compact', label: 'Height: Compact', checked: trackHeightPref === 'compact', sep: true, onSelect: () => setTrackHeightPref('compact') },
+    { id: 'height-normal', label: 'Height: Normal', checked: trackHeightPref === 'normal', onSelect: () => setTrackHeightPref('normal') },
+    { id: 'height-tall', label: 'Height: Tall', checked: trackHeightPref === 'tall', onSelect: () => setTrackHeightPref('tall') },
+    { id: 'rename', label: 'Rename track', disabled: true, tip: 'mock: inline rename needs the track-name update command', sep: true },
+    { id: 'mute', label: 'Mute', checked: track.muted, sep: true, onSelect: () => toggleTrack(sceneId, track.id, 'muted') },
+    { id: 'solo', label: 'Solo', checked: track.solo, onSelect: () => toggleTrack(sceneId, track.id, 'solo') },
+    { id: 'lock', label: 'Lock', checked: track.locked, onSelect: () => toggleTrack(sceneId, track.id, 'locked') },
+    { id: 'delete-track', label: 'Delete track', danger: true, disabled: true, tip: 'mock: needs deleteTrack command', sep: true },
+  ];
+  const badgeCls =
+    track.kind === 'main'
+      ? 'border-[var(--type-video)] text-[var(--type-video)]'
+      : track.kind === 'overlay'
+        ? 'border-[var(--type-overlay)] text-[var(--type-overlay)]'
+        : 'border-[var(--type-audio)] text-[var(--type-audio)]';
+
+  const badge = (
+    <span className={`mono flex h-[20px] w-[30px] shrink-0 items-center justify-center rounded-[2px] border text-[11px] font-semibold ${badgeCls}`}>
+      {track.badge}
+    </span>
+  );
+
+  const meta = track.kind === 'audio' ? '48 kHz' : track.kind === 'main' ? '1920×1080' : 'text';
+
+  const controls = (
+    <div className="flex items-center gap-1">
+      <CtrlBtn track={track} sceneId={sceneId} field="muted" label="Mute" tip="Mute"
+        on={track.muted} onCls="border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black"
+        testid={`shell-track-${track.badge}-btn-mute`}>
+        {track.muted ? <VolumeX size={10} /> : <Volume2 size={10} />}
+      </CtrlBtn>
+      <CtrlBtn track={track} sceneId={sceneId} field="solo" label="Solo" tip="Solo"
+        on={track.solo} onCls="border-[var(--solo)] bg-[var(--solo)] text-black"
+        testid={`shell-track-${track.badge}-btn-solo`}>
+        S
+      </CtrlBtn>
+      <CtrlBtn track={track} sceneId={sceneId} field="locked" label="Lock" tip="Lock"
+        on={track.locked} onCls="border-accent bg-accent/20 text-accent"
+        testid={`shell-track-${track.badge}-btn-lock`}>
+        <Lock size={10} />
+      </CtrlBtn>
+      {showVisibility && (
+        <CtrlBtn track={track} sceneId={sceneId} field="visible" label="Toggle visibility" tip="Visibility"
+          on={!track.visible} onCls="border-strong bg-inset text-tfaint"
+          testid={`shell-track-${track.badge}-btn-visibility`}>
+          {track.visible ? <Eye size={10} /> : <EyeOff size={10} />}
+        </CtrlBtn>
+      )}
+      {track.kind === 'audio' && tall && (
+        <CtrlBtn track={track} sceneId={sceneId} field="waveform" label="Waveform view" tip="Waveform / clip view"
+          on={track.waveform !== false} onCls="border-strong bg-inset text-tprimary"
+          testid={`shell-track-${track.badge}-btn-waveform`}>
+          <Activity size={10} />
+        </CtrlBtn>
+      )}
+    </div>
+  );
+
+  return (
+    <div
+      className={`relative flex shrink-0 flex-col justify-center gap-[3px] border-b border-hairline bg-raised px-2 ${focused ? 'shadow-[inset_2px_0_0_0_var(--accent-selection)]' : ''}`}
+      style={{ height, minHeight: height, overflow: 'hidden' }}
+      data-testid={`shell-track-header-${track.id}`}
+      title={`${track.name} · ${meta}`}
+      aria-current={focused ? 'true' : undefined} /* the focused track — ↑/↓ move this focus */
+      tabIndex={-1} /* focusable host for the §4.9 Shift+F10 keyboard route */
+      onPointerDown={() => {
+        /* pointer focus feeds the ↑/↓ / ⌘A / ⌘M focused-track family —
+           setFocusedTrack was store-surface-only before (R14 no-op sweep) */
+        if (useUi.getState().focusedTrackId !== track.id) setFocusedTrack(track.id);
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        (e.currentTarget as HTMLElement).focus();
+        menu.open(e.clientX, e.clientY, buildMenuItems(), 'track');
+      }}
+      onKeyDown={(e) => {
+        /* fires for focus on the header itself OR any of its M/S/L buttons
+           (keydown bubbles to this host) */
+        if (!isMenuKey(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        menu.openForElement(e.currentTarget as HTMLElement, buildMenuItems(), 'track');
+      }}
+    >
+      {tall ? (
+        <>
+          <div className="flex w-full items-center gap-1.5">
+            {badge}
+            <span className="min-w-0 flex-1 truncate text-[11px] text-tprimary">{track.name}</span>
+            {track.solo && <Headphones size={10} className="shrink-0 text-[var(--solo)]" aria-label="Solo active" />}
+            <span className="mono shrink-0 text-[10px] text-tfaint">{meta}</span>
+          </div>
+          <div className="flex w-full items-center gap-1">
+            {controls}
+            <div className="grow" />
+          </div>
+          {audioFocus && track.kind === 'audio' && (
+            <div className="flex w-full items-center gap-1.5" data-testid={`track-minifader-${track.badge}`}>
+              <Volume2 size={9} className="shrink-0 text-tfaint" aria-hidden="true" />
+              <input
+                type="range" min={0} max={100} step={1}
+                value={Math.round(dbToSlider(strip?.fader ?? -6) * 100)}
+                onChange={(e) => setMixerTrack(track.id, { fader: sliderToDb(+e.target.value / 100) })}
+                className="h-[8px] min-w-0 flex-1 green-fill"
+                style={{ ['--fill' as any]: `${Math.round(dbToSlider(strip?.fader ?? -6) * 100)}%` }}
+                aria-label={`${track.name} gain (G layer)`}
+              />
+              <button
+                className="icon-btn !h-[14px] !w-[14px] shrink-0"
+                data-tip="Automation lane — M2 (spec 20 §12.1)"
+                aria-label="Automation lane placeholder"
+                aria-disabled="true" /* honesty contract: no local mutation possible (M2 audio path) — the tip explains */
+                data-testid={`track-automation-${track.badge}`}
+              >
+                <SlidersHorizontal size={9} strokeWidth={1.6} />
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        /* compact single row: badge + controls; name via title attr */
+        <div className="flex w-full items-center gap-1.5">
+          {badge}
+          {controls}
+          {track.solo && <Headphones size={10} className="shrink-0 text-[var(--solo)]" aria-label="Solo active" />}
+        </div>
+      )}
+      {/* A4: view-only audio micro-meter on the tall header's right edge —
+          see HeaderMicroMeter for the compact-safety note */}
+      {track.kind === 'audio' && tall && <HeaderMicroMeter trackId={track.id} badge={track.badge} />}
+      {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
+    </div>
+  );
+}

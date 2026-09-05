@@ -1,7 +1,7 @@
 # 05 — Timeline: UI, Data Model, Virtualization, Interactions
 
 **Stream:** Timeline component (DOM-based, virtualized)
-**Status:** Refined by sub-agent scout (SCOUT-05) — open questions answered with source code references. Round-8 amendments: §5.2 zoom reworded (implementable multiplier model), §8.3 drag contract notes + canonical move shape, §9 screen-space snap threshold, §14.5A magnetic zero-anchor (all absorbed from the opencut-timeline reference), §16.5 opencut-timeline code-reference table
+**Status:** Refined by sub-agent scout (SCOUT-05) — open questions answered with source code references. Round-8 amendments: §5.2 zoom reworded (implementable multiplier model), §8.3 drag contract notes + canonical move shape, §9 screen-space snap threshold, §14.5A magnetic zero-anchor (all absorbed from the opencut-timeline reference), §16.5 opencut-timeline code-reference table. **Round-15 amendments:** §11.1 markers per-scene + ruler-seeks (A2/N10), §11.2 InOutPoints superseded by setLoop halves (N12), §5.2 zoom-ladder mock registration (N13/C28), §16.5A projector clauses (ARCH-R15 §2.2) — per `.agents/SPEC-REVISION-CANDIDATES.md`
 **Primary teacher:** OpenCut-classic DOM approach + FreeCut's per-element NLE op UI
 **Spec file:** `05-timeline.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 **Reference repos audited:** `/tmp/opencut-classic` (archived MIT), `/tmp/freecut` (MIT); **opencut-timeline** (github.com/bearachprema/opencut-timeline, landed Round 8) is the live executable code reference for this stream's algorithmic core (components pending its W4); see spec 19 §3.2 and §16.5 below.
@@ -58,7 +58,7 @@ We adopt OpenCut-classic's approach: **DOM everywhere — including filmstrip th
 
 ```
 <Timeline>
-  ├─ <TimelineToolbar>           (tools: select, razor, ripple mode toggle, snap toggle)
+  ├─ <TimelineToolbar>           (tools: select, razor, ripple tool (R; ⌥R toggles ripple mode), snap toggle)
   ├─ <TimelineHeader>             (track headers, sequence tabs)
   ├─ <TimelineContent>
   │   ├─ <TimelineRuler>          (DOM-based, time markers)
@@ -144,6 +144,7 @@ const useTimelineViewStore = create<TimelineViewState>((set, get) => ({
 - The zoom slider maps to the multiplier **exponentially** (`sliderToZoom`/`zoomToSlider`), not linearly, so perceived zoom speed is uniform across the range
 - Playhead-anchored zoom above a 15% slider position, scroll-anchored below (OpenCut-classic `zoom-controller.ts` pattern, §16.1)
 - Derived invariant: at any zoom, `pixelToTime(timeToPixel(t))` round-trips to the same frame after DPR snapping (`snapPixelToDeviceGrid`, §16.5) — this is the frame-accuracy guarantee the old formulation was reaching for
+- **(Round 15 amendment, N13 — registration, not a spec change):** the ui-mock ships 8–240 px/s as its zoom ladder — a REGISTERED mock simplification (C28), not a ruling. This spec's ladder stands: dynamic zoom-to-fit minimum over the 5 px/s static floor, 100× max (5,000 px/s). **Frame-accurate editing at max zoom is the requirement** — the mock's coarse ladder exercises frame-grid discipline only at coarse zoom, so the app (not the spec) owns closing that gap at the seal/A-rounds.
 
 ### 5.3 Time ↔ pixel conversion
 
@@ -554,16 +555,16 @@ function handleDrop(e: React.DragEvent, targetTrack: Track, targetTime: MediaTim
 | `J/K/L` | Reverse / pause / forward (shuttle) |
 | `I/O` | Set in/out point |
 | `A/S` | Snap on/off toggle |
-| `R` | Ripple mode toggle |
+| `R` | Ripple tool (`selectTool {tool:'ripple'}`); ⌥R toggles ripple mode (Round 15 amendment: A1/A6 propagation) |
 | `B` | Razor tool |
 | `V` | Select tool |
 | `H` | Hand tool |
 | `Z` | Zoom tool |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo |
 | `Cmd+C` / `Cmd+V` | Copy / paste |
-| `Cmd+X` | Cut (ripple delete) |
-| `Delete` | Delete |
-| `Backspace` | Ripple delete |
+| `Cmd+X` | Cut (the `cut` command — clipboard copy+plain delete) |
+| `Delete` | Delete (no ripple) |
+| `Backspace` | Delete — plain-delete alias of `Delete`; `Shift+Delete` (⇧⌫) is the ONLY ripple-delete chord (Round 15 amendment: A1/A6 propagation) |
 | `Left/Right` | Frame back / forward |
 | `Shift+Left/Right` | 10 frames back / forward |
 | `Cmd+Left/Right` | Go to start / end |
@@ -647,7 +648,7 @@ Spec 18 fixes the header column at 160px (DaVinci mock `#track-headers`); OpenCu
 User can place markers (with optional labels) at any time:
 
 ```ts
-interface Marker {
+interface Marker {               // (Round 15 amendment, A2) per-scene — see 09 §3.1A
   id: string;
   time: MediaTime;
   label?: string;
@@ -655,20 +656,11 @@ interface Marker {
 }
 ```
 
-Stored on the project (not per-scene). Click on ruler to add marker.
+**(Round 15 amendment, A2 + N10):** markers are stored **per scene** (`SceneJSON.markers` — 09 §3.1A's unified ruling: one `Marker` type, Bookmark absorbed, project-level home retired). Plain click or drag on the ruler **seeks** (§4.1's `TimelineRuler` click-to-seek; §8.6's drag contract) — the seed's "click on ruler to add marker" claim is RETIRED. Markers are added via `M` (16 §3.7), the toolbar's marker button + color presets, the command palette, and 18 §4.9's ruler menu.
 
 ### 11.2 In/Out points
 
-For range playback and export range:
-
-```ts
-interface InOutPoints {
-  in: MediaTime | null;
-  out: MediaTime | null;
-}
-```
-
-Press `I` to set in, `O` to set out, `G` to clear.
+**(Round 15 amendment, N12 — SUPERSEDED):** the dedicated `InOutPoints` model (was here: `{in, out}` + `I`/`O` to set, `G` to clear) is struck — in/out points are the two halves of the loop window: `setLoop` (15 §4.3.29), keyed `I`/`O`, cleared via ⌘⇧I/⌘⇧O halves and ⌥X both (16 §3.1's note; 18 §4.3/§4.9). Zero width = no-op loop; `end > start` is the validation invariant (N5). No persisted shape — 09 §3.1A's N12/N5 note.
 
 ---
 
@@ -1175,7 +1167,7 @@ Every file path below is absolute within its reference repo. **OC** = `/tmp/open
 
 ### 16.5. Code References — opencut-timeline (the editing-domain core per Decision 12; contract still canon)
 
-> opencut-timeline (`github.com/bearachprema/opencut-timeline` @ `4e39b67`, ~24.5k LOC total: ~8.7k engine core + 3.0k controllers + 3.8k React components + 9.0k testing, **297/297 tests — "FINAL as a distilled opencut timeline"** per its own HANDOFF, real-mouse + fuzz + review-regression suites included) is a clean-room OpenCut-classic timeline port **built with this spec set in hand** (its README cites Decision-2 types and the spec-15 wire protocol). Per Decision 12 it is the **EDITING-domain normative core**: the executable reference for this stream's entire scope — the OC tables in §16.1 describe the ORIGINAL; OT is the running, tested version of the same algorithms, and its W4 React components + controllers have LANDED (this spec's §4 component hierarchy and §14.4 controller contracts now have an executable implementation). Where OT code conflicts with this spec, **the spec wins** (the known deltas: prefixed headless command names (C7), 5-kind TrackType taxonomy, `TIMELINE_INDICATOR_LINE_WIDTH_PX = 2` vs OC's 3px — OC's verified read wins for the visual constant, pending an OT-side correction).
+> opencut-timeline (`github.com/bearachprema/opencut-timeline` @ `0412e41` — Round 15 re-baseline, ~42k LOC total: ~9.7k engine core + ~3.2k controllers + ~7.4k React view (≈20.2k implementation) + ~21.6k test harness (in-page 12.4k + real-mouse scripts 6.5k + fixtures 2.0k), **423/423 tests (303 in-page + 120 real-mouse, re-run Round 15)** — the W8 classic-parity UI round + W9 full-repo review are landed and terminal, **zero open P1/P2** per its own HANDOFF, real-mouse + fuzz + review-regression suites included) is a clean-room OpenCut-classic timeline port **built with this spec set in hand** (its README cites Decision-2 types and the spec-15 wire protocol). Per Decision 12 it is the **EDITING-domain normative core**: the executable reference for this stream's entire scope — the OC tables in §16.1 describe the ORIGINAL; OT is the running, tested version of the same algorithms, and its **W8 classic-parity React components + controllers have landed and are terminal** (this spec's §4 component hierarchy and §14.4 controller contracts now have an executable implementation). Where OT code conflicts with this spec, **the spec wins** (the known deltas: prefixed headless command names (C7 — 24 types since W5, worklist refreshed R15), 5-kind TrackType taxonomy, `TIMELINE_INDICATOR_LINE_WIDTH_PX = 2` vs OC's 3px — OC's verified read wins for the visual constant, pending an OT-side correction).
 
 | Spec section | OT file:line | Key exports / behavior | Status | Note |
 |---|---|---|---|---|
@@ -1204,7 +1196,45 @@ Every file path below is absolute within its reference repo. **OC** = `/tmp/open
 | Waveform | `render/waveform.ts:26/:90/:118` | `computeWaveformPeaks`/`drawWaveform`/`measureDrawnColumnHeight` | ALIGNED | Feeds §7.2 |
 | Compositor seam | `render/placeholder-compositor.ts:116` | `setTracks()/renderFrame(t)` Canvas2D contract | ALIGNED | Decision 12.4's render seam (unchanged from 11.4, strengthened) — engine's WebGPU compositor plugs in behind; the one-way projector feeds `setTracks` |
 | Virtual media | `media/virtual-media.ts:39-135` | `TEST_COLORS`/`TEST_TONES_HZ`/`MediaRegistry`/`goertzelPower` | REFERENCE | Test-only media (mirrors nle-engine pattern) |
-| Headless API | `headless/api.ts:38-102` | 18-type prefixed union; `CommandResult {ok, code…}`; `apply`/`applyBatch` atomic | CORRECTIVE | C7 rename pass chartered (spec 19 §6): `timeline.*`/`track.*` prefixes are NOT spec-15 shape |
+| Headless API | `headless/api.ts:38-102` | 24-type prefixed union (since W5; 18 at the R8 sweep); `CommandResult {ok, code…}`; `apply`/`applyBatch` atomic | CORRECTIVE | C7 rename pass chartered (spec 19 §6; worklist refreshed R15 in spec 15 §13.15): `timeline.*`/`track.*` prefixes are NOT spec-15 shape |
+
+### 16.5A. Round-15 amendment — the projector clauses (ARCH-R15 §2.2; Decision 16)
+
+The R15 assembly ruling amends this stream's code-reference posture with four projector clauses (full ruling: `audits/ARCH-R15-assembly-and-path.md` §2.2; the impact-map row "§16.5 amended" resolves HERE):
+
+1. **The projector is ENGINE-home.** `nle-engine/src/lib/nle/projector/` — a fenced, ADDITIVE engine module (D9's additive-change rule; same-commit freeze-list update) importing opencut-timeline's `SceneTracks` TYPE-ONLY, exactly per the existing precedent (`nle-engine/src/lib/nle/bridge/scene-to-segments.ts:43` — `import type { SceneTracks, … }`, zero runtime dep on OT). The app's `src/projector/` is a THIN call site. Rationale: the projector owns rate/timebase reconciliation, transition-window translation, keyframe normalization, composition mapping — that IS timeline semantics; app-home would create the third timeline-semantics home Decision 12 eliminated.
+2. **Contract:** `projectScene(scene: SceneTracks, ctx) → engine ingestion`, feeding render + the audio path + export. ONE-WAY by law (D12): *editing state* never flows engine→OT (telemetry flows UP a separate seam — ARCH-R15 §2.3bis).
+3. **The engine `Timeline` class is the parity ORACLE while the projector matures; retirement = permanent internal test substrate.** Parity gates (pixel-exact on a shared fixture corpus) run in **engine CI** (its 8-min real-WebGPU milestone venue + vitest). "Retirement" means every engine consumer re-points to projector-ingested structures + the wire re-points — at that point the class becomes the engine's **permanent internal test substrate** (its 265-row browser runner keeps driving it) unless a later engine-side decision deletes it; deletion is an engine-internal call, not an app-round promise.
+4. **Op-port table (engine → opencut-timeline, waves 1–2).** The engine Timeline's op families port INTO OT's engine layer — algorithms carried, tests carried, OT's W8-f/W9 panel re-convened per wave:
+
+| Op family | Engine source (`timeline.ts`) | Wave | Destination |
+|---|---|---|---|
+| slip | `:4143` | 1 (A2) | OT ops + invariant system + carried tests |
+| slide | `:4246` | 1 (A2) | OT ops |
+| rollingTrim | `:2984` | 1 (A2) | OT ops |
+| rateStretch | `:3155` | 1 (A2) | OT ops |
+| retime / freezeFrame / rangeRemoval (closeGap, joinItems) | `:7163` / `:6158` / `:7319` | 2 (A2.5) | OT ops + model extensions if spec'd |
+
+(Wave/phase ownership: ARCH-R15 §2.3 item 2 + §3.4's A2/A2.5 rows.)
+
+### 16.5A. Round-15 amendment — the projector clauses (ARCH-R15 §2.2; Decision 16)
+
+The R15 assembly ruling amends this stream's code-reference posture with four projector clauses (full ruling: `audits/ARCH-R15-assembly-and-path.md` §2.2; the impact-map row "§16.5 amended" resolves HERE):
+
+1. **The projector is ENGINE-home.** `nle-engine/src/lib/nle/projector/` — a fenced, ADDITIVE engine module (D9's additive-change rule; same-commit freeze-list update) importing opencut-timeline's `SceneTracks` TYPE-ONLY, exactly per the existing precedent (`nle-engine/src/lib/nle/bridge/scene-to-segments.ts:43` — `import type { SceneTracks, … }`, zero runtime dep on OT). The app's `src/projector/` is a THIN call site. Rationale: the projector owns rate/timebase reconciliation, transition-window translation, keyframe normalization, composition mapping — that IS timeline semantics; app-home would create the third timeline-semantics home Decision 12 eliminated.
+2. **Contract:** `projectScene(scene: SceneTracks, ctx) → engine ingestion`, feeding render + the audio path + export. ONE-WAY by law (D12): *editing state* never flows engine→OT (telemetry flows UP a separate seam — ARCH-R15 §2.3bis).
+3. **The engine `Timeline` class is the parity ORACLE while the projector matures; retirement = permanent internal test substrate.** Parity gates (pixel-exact on a shared fixture corpus) run in **engine CI** (its 8-min real-WebGPU milestone venue + vitest). "Retirement" means every engine consumer re-points to projector-ingested structures + the wire re-points — at that point the class becomes the engine's **permanent internal test substrate** (its 265-row browser runner keeps driving it) unless a later engine-side decision deletes it; deletion is an engine-internal call, not an app-round promise.
+4. **Op-port table (engine → opencut-timeline, waves 1–2).** The engine Timeline's op families port INTO OT's engine layer — algorithms carried, tests carried, OT's W8-f/W9 panel re-convened per wave:
+
+| Op family | Engine source (`timeline.ts`) | Wave | Destination |
+|---|---|---|---|
+| slip | `:4143` | 1 (A2) | OT ops + invariant system + carried tests |
+| slide | `:4246` | 1 (A2) | OT ops |
+| rollingTrim | `:2984` | 1 (A2) | OT ops |
+| rateStretch | `:3155` | 1 (A2) | OT ops |
+| retime / freezeFrame / rangeRemoval (closeGap, joinItems) | `:7163` / `:6158` / `:7319` | 2 (A2.5) | OT ops + model extensions if spec'd |
+
+(Wave/phase ownership: ARCH-R15 §2.3 item 2 + §3.4's A2/A2.5 rows.)
 
 ### 16.6. Inline-code classification (R9 sampled audit — 00-master §2.5.2 enforcement)
 
@@ -1645,9 +1675,12 @@ engine instance). See spec 17 §6.1.]
 - `keyboard-delete-no-ripple` — `Delete` issues `delete` (spec 15
   §5.1.7) with `params.ripple = false`; selected elements removed,
   downstream elements unchanged
-- `keyboard-backspace-ripple-delete` — `Backspace` issues `delete` with
-  `params.ripple = true`; downstream elements shift left by deleted
-  duration
+- `keyboard-delete-chord-family` — per A1: `Delete` and `Backspace` both
+  issue `delete` (spec 15 §5.1.7) with `params.ripple = false` (aliases —
+  selected elements removed, downstream elements unchanged);
+  `Shift+Delete` (⇧⌫) is the ONLY chord issuing `delete` with
+  `params.ripple = true` (downstream elements shift left by deleted
+  duration) (Round 15 amendment: A1/A6 propagation)
 - `keyboard-duplicate-cmd-d` — `Cmd+D` issues `duplicate` (spec 15
   §5.1.9) with `params.placement = { type: "alwaysNew", position:
   "highest" }`; new element appears on a fresh track with byte-identical
@@ -1656,10 +1689,11 @@ engine instance). See spec 17 §6.1.]
   to clipboard (no state change); subsequent `Cmd+V` issues `insert`
   (spec 15 §5.1.8) per clipboard entry at playhead; total element count
   grows by `selection.size`
-- `keyboard-cut-cmd-x-is-copy-plus-ripple-delete` — `Cmd+X` produces
-  the same `SceneState` as `Cmd+C` followed by `Backspace` (ripple
-  delete of selection); clipboard populated, selection removed, gaps
-  closed
+- `keyboard-cut-cmd-x-issues-cut-command` — `Cmd+X` issues the `cut`
+  command (spec 15 §4.3.69 — the CopyCommand+DeleteCommand batch, plain
+  delete; NOT a `Cmd+C`-then-`Backspace` macro); clipboard populated,
+  selection removed, undo restores the deleted elements while the
+  clipboard is left untouched (Round 15 amendment: A1/A6 propagation)
 - `keyboard-tab-selects-next-clip` — `Tab` advances selection to the
   element with the smallest `startTime` greater than the current
   selection's `startTime`; wraps to first element at end of timeline
@@ -1704,9 +1738,13 @@ engine instance). See spec 17 §6.1.]
 - `keyboard-a-toggles-snap` — `A` flips
   `TimelineViewState.snapEnabled`; subsequent drag does not snap (verify
   via `move` state diff: dragged element lands at unmodified `pixelToTime(x)`)
-- `keyboard-r-toggles-ripple-mode` — `R` flips
-  `TimelineViewState.rippleMode`; subsequent `Delete` issues `delete`
-  with `params.ripple = true` (regardless of `Backspace` vs `Delete`)
+- `keyboard-r-selects-ripple-tool` — per A6: `R` issues `selectTool` with
+  `params.tool = 'ripple'` (a TOOL, matching spec 18 §4.5's inventory —
+  NOT a mode toggle); `Option+R` (⌥R) is the ripple-MODE toggle (flips
+  `TimelineViewState.rippleMode`) — while `rippleMode` is on, `Delete`/
+  `Backspace` issue `delete` with `params.ripple = true`; while off, they
+  stay plain deletes and ⇧⌫ remains the only chord-level ripple
+  (Round 15 amendment: A1/A6 propagation)
 - `keyboard-m-adds-marker-at-playhead` — `M` issues `addMarker` with
   `params.time = currentTime`; `SceneState.markers` grows by 1
 - `keyboard-plus-minus-zoom-in-out` — `+` multiplies `pixelsPerSecond`

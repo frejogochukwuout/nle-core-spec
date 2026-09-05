@@ -1,0 +1,600 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Map runtime CSS vars into Tailwind's theme so utilities like
+   bg-shell / text-muted / border-hairline re-skin with data-attrs */
+@theme inline {
+  --color-app: var(--bg-app);
+  --color-shell: var(--bg-shell);
+  --color-panel: var(--bg-panel);
+  --color-raised: var(--bg-raised);
+  --color-timeline: var(--bg-timeline);
+  --color-inset: var(--bg-inset);
+  --color-frame: var(--bg-frame);
+  --color-hairline: var(--border-hairline);
+  --color-soft: var(--border-soft);
+  --color-strong: var(--border-strong);
+  --color-accent: var(--accent-selection);
+  --color-focus: var(--accent-focus);
+  --color-tprimary: var(--text-primary);
+  --color-tmuted: var(--text-muted);
+  --color-tfaint: var(--text-faint);
+  --color-wave: var(--waveform);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--tc-mono);
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+body {
+  background: #000;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+/* control resets MUST live in @layer base — unlayered author CSS would
+   outrank Tailwind's @layer utilities and silently kill bg/border/color
+   utilities on <button> (R2 design review, cascade finding) */
+@layer base {
+  button { font-family: inherit; background: none; border: none; color: inherit; cursor: default; }
+  input, select { font-family: inherit; }
+}
+:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 2px;
+}
+::placeholder { color: var(--text-faint); }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+.mono { font-family: var(--tc-mono); font-variant-numeric: tabular-nums; }
+.hairline-r { border-right: 1px solid var(--border-hairline); }
+.hairline-b { border-bottom: 1px solid var(--border-hairline); }
+.hairline-t { border-top: 1px solid var(--border-hairline); }
+
+/* ---- R15 audio (A2) — meter well + LED segments ----
+   Unlayered on purpose (same tier as .mono/.vsep): the light-skin
+   border-strong ring must outrank the border-hairline UTILITY on the meter
+   root (utilities layer would otherwise win — see the .icon-btn-sm note). */
+.meter-well { background: var(--meter-well); }
+[data-theme="light"] .meter-well { border-color: var(--border-strong); }
+/* LED segment overlay — 1px dark lines every 3px over the fill (the well is
+   near-black in every skin, so plain black lines are theme-stable) */
+.meter-segments {
+  background-image: repeating-linear-gradient(
+    to top,
+    transparent 0 2px,
+    rgba(0, 0, 0, 0.5) 2px 3px
+  );
+}
+/* micro-meter variant (toolbar, 14px): 4 coarse chunks instead of 3px LEDs */
+.meter-segments-coarse {
+  background-image: repeating-linear-gradient(
+    to top,
+    transparent 0 calc(25% - 1px),
+    rgba(0, 0, 0, 0.5) calc(25% - 1px) 25%
+  );
+}
+
+/* ============================================================
+   SHARED CONTROL LANGUAGE (davinci-mock grammar, token-driven)
+   ============================================================ */
+.vsep {
+  width: 1px; height: 18px; background: var(--border-soft);
+  margin: 0 8px; flex-shrink: 0;
+}
+
+.toolbtn {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--text-muted);
+  padding: 5px 9px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+  white-space: nowrap;
+}
+.toolbtn:hover { background: var(--hover-overlay); color: var(--text-primary); }
+.toolbtn.active { color: var(--text-primary); background: var(--active-overlay); }
+
+.icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  height: var(--ctrl-h);
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+  flex-shrink: 0;
+}
+.icon-btn:hover { background: var(--hover-overlay); color: var(--text-primary); }
+.icon-btn.toggled { color: var(--text-primary); background: var(--active-overlay); }
+.icon-btn.boxed.toggled {
+  background: transparent;
+  border: 1.4px solid var(--text-primary);
+}
+.icon-btn.disabled { opacity: .4; pointer-events: auto; cursor: not-allowed; }
+.icon-btn svg { pointer-events: none; }
+
+.tc-chip {
+  font-family: var(--tc-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* elevation for studio/light panels */
+.panel-shadow { box-shadow: var(--shadow-panel); }
+
+/* studio/light: floating-panel mainbody — real elevation for the B/C
+   direction study (resolve stays flush, mock-authentic) */
+[data-theme="studio"] .mainbody,
+[data-theme="light"] .mainbody {
+  gap: 2px;
+  padding: 8px;
+  background: var(--bg-app);
+}
+[data-theme="studio"] .mainbody > *:not([role="separator"]),
+[data-theme="light"] .mainbody > *:not([role="separator"]) {
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* timeline clips follow the theme radius (2px resolve / 8px studio) */
+.clip-box { border-radius: var(--radius); }
+
+/* locked clips — stripes, not opacity (stays legible in every theme) */
+.locked-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    rgba(0, 0, 0, 0.18) 6px 12px
+  );
+}
+
+/* tooltip (CSS-only, 500ms delay per spec 18 §9) */
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%; top: calc(100% + 7px);
+  transform: translateX(-50%) translateY(-2px);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) ease;
+  z-index: 90;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+  transition-delay: 500ms;
+}
+[data-tip-top]::after { top: auto; bottom: calc(100% + 7px); transform: translateX(-50%) translateY(2px); }
+
+/* range inputs — mock grammar */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  background: var(--border-soft);
+  border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px; height: 11px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #d8d8d8;
+  box-shadow: 0 0 2px rgba(0,0,0,.6);
+  border: none;
+}
+input[type="range"].green-fill::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, var(--type-audio) 0%, var(--type-audio) var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
+}
+[data-theme="light"] input[type="range"]::-webkit-slider-thumb { background: #4a4a52; }
+
+/* text inputs */
+.field {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 3px 7px;
+  font-size: 11px;
+}
+.field:focus { border-color: var(--accent-focus); }
+
+/* dock tabs — icon-only in resolve, icon+label in studio/light;
+   the accessible name survives display:none via aria-label */
+[data-theme="resolve"] .dock-tab .dock-label { display: none; }
+.dock-tab .dock-label { font-size: 11px; }
+
+/* generic panel scroll region */
+.scroll-y { overflow-y: auto; overflow-x: hidden; }
+
+/* window-too-small overlay — spec 18 §3.2 */
+.window-too-small { display: none; }
+@media (max-width: 1279px), (max-height: 799px) {
+  .window-too-small { display: flex; }
+}
+
+/* F6 region focus targets — spec 18 §11.5 (2px region outline when focused) */
+.shell-region:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: -2px;
+}
+
+/* selection-safe text */
+::selection { background: var(--accent-selection); color: var(--accent-contrast); }
+
+/* ============================================================
+   INSPECTOR FIELD CONTRACTS (spec 18 §4.4) — appended, token-driven
+   ============================================================ */
+@layer components {
+  /* invalid NumberField: red 1px border; the inline message renders under
+     the field via .num-field-msg. !important is deliberate — the invalid
+     state must outrank the border-soft utility on the same element. */
+  .num-field-invalid,
+  .num-field-invalid:focus {
+    border-color: var(--danger, #e5484d) !important;
+  }
+  .num-field-msg {
+    position: absolute;
+    top: calc(100% + 3px);
+    right: 0;
+    z-index: 30;
+    white-space: nowrap;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--danger, #e5484d);
+    background: var(--bg-inset);
+    border: 1px solid var(--danger, #e5484d);
+    border-radius: var(--radius-sm);
+    padding: 3px 6px;
+    pointer-events: none;
+  }
+
+  /* committed-value readout (effect param badges) */
+  .insp-badge {
+    font-family: var(--tc-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--text-muted);
+    background: var(--bg-inset);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    padding: 0 6px;
+    white-space: nowrap;
+  }
+
+  /* multi-select "values differ" indicator (spec 18 §4.4) */
+  .chip-mixed {
+    display: inline-flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--text-muted);
+    background: var(--bg-inset);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 3px 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* compact action chip (quick-seek, add transition, toggle chips, remove) */
+  .mini-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--text-muted);
+    background: var(--bg-inset);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    padding: 3px 7px;
+    white-space: nowrap;
+    transition: color var(--motion-fast) ease, border-color var(--motion-fast) ease;
+  }
+  .mini-btn:hover { color: var(--text-primary); border-color: var(--border-strong); }
+  .mini-btn[aria-pressed="true"] { color: var(--text-primary); border-color: var(--accent-selection); }
+  /* aria-disabled (not native disabled) so the explanatory data-tip still
+     hovers on the mock-unavailable actions */
+  .mini-btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+  .mini-btn[aria-disabled="true"]:hover { color: var(--text-muted); border-color: var(--border-soft); }
+
+  /* compact icon button — !important is deliberate: the unlayered .icon-btn
+     rule (height: var(--ctrl-h)) outranks layered utilities, so the size
+     override must win by importance, not layer order */
+  .icon-btn-sm { height: 18px !important; }
+}
+
+/* ---- keyboard/interaction completeness pass (token-driven skins) ---- */
+@layer components {
+  /* marquee rubber-band rect — timeline multi-select (spec 05 §9 grammar):
+     dashed 1px accent border + 10%-alpha accent fill, never a hit target */
+  .timeline-marquee {
+    border: 1px dashed var(--accent-selection);
+    background: color-mix(in srgb, var(--accent-selection) 10%, transparent);
+    pointer-events: none;
+  }
+  /* Alt-drag duplicate ghost — 50%-opacity copy pinned at the clip's
+     original position while the duplicate gesture is in flight */
+  .clip-drag-ghost {
+    border: 1px dashed var(--border-strong);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+/* ============================================================
+   CONTEXT MENUS / TOASTS / CONFIRM DIALOG (spec 18 §4.9 + §6.4)
+   — appended, token-driven
+   ============================================================ */
+@layer components {
+  /* ---- context menu chrome (§4.9): 220px pop, 28px items ---- */
+  .menu-pop {
+    position: fixed;
+    width: 220px;
+    background: var(--bg-inset);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+    padding: 3px 0;
+    z-index: 93;
+    animation: menu-in var(--motion-base) ease;
+  }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    height: 28px;
+    padding: 0 8px 0 10px;
+    font-size: 12px;
+    line-height: 1.2;
+    color: var(--text-primary);
+    cursor: default;
+    text-align: left;
+    transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+  }
+  .menu-item:hover { background: var(--hover-overlay); }
+  .menu-item.is-danger { color: var(--danger); }
+  .menu-item.is-danger:hover { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+  /* §9 disabled language: 40% opacity + not-allowed; aria-disabled (not
+     native disabled) keeps the honest-mock data-tip hoverable */
+  .menu-item[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
+  .menu-item[aria-disabled="true"]:hover { background: transparent; }
+  .menu-check {
+    width: 14px;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .menu-sc {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding-left: 16px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .menu-sep { height: 1px; margin: 3px 8px; background: var(--border-soft); }
+  /* custom row (ruler marker palette): role="group", owns its activation */
+  .menu-row {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 10px;
+  }
+  .menu-dot {
+    height: 13px;
+    width: 13px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.45);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    padding: 0;
+    transition: transform var(--motion-fast) ease;
+  }
+  .menu-dot:hover { transform: scale(1.3); }
+
+  /* ---- toast region (§6.4): bottom-right, above status strip + dock ---- */
+  .toast-region {
+    position: fixed;
+    right: 10px;
+    bottom: 64px; /* 12px status strip + 42px app dock + 10px gap (§3.1) */
+    z-index: 85;
+    display: flex;
+    flex-direction: column; /* oldest→newest top→bottom; newest sits lowest */
+    gap: 6px;
+    width: 300px;
+    max-width: calc(100vw - 20px);
+    pointer-events: none; /* the region never steals focus / blocks clicks */
+  }
+  .toast-card {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: var(--bg-inset);
+    border: 1px solid var(--border-strong);
+    border-left-width: 2px;
+    border-left-color: var(--border-strong);
+    border-radius: var(--radius);
+    padding: 8px 6px 8px 10px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+    animation: toast-in var(--motion-base) ease;
+  }
+  .toast-card.is-info { border-left-color: var(--accent-focus); }
+  .toast-card.is-success { border-left-color: var(--mk-green); }
+  .toast-card.is-error { border-left-color: var(--danger); }
+  .toast-card.is-persist { border-left-color: var(--mute-warn); }
+  .toast-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 18px;
+    width: 18px;
+    flex-shrink: 0;
+    margin: -2px -2px 0 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+  }
+  .toast-close:hover { color: var(--text-primary); background: var(--hover-overlay); }
+
+  /* ---- destructive confirm (§6.4): focus-trapped alertdialog ---- */
+  .confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 94;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+  }
+  .confirm-dialog {
+    width: 340px;
+    max-width: calc(100vw - 32px);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+    padding: 14px 16px 16px;
+    animation: menu-in var(--motion-base) ease;
+  }
+  .confirm-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 14px;
+    flex-shrink: 0;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 600;
+    transition: opacity var(--motion-fast) ease, background-color var(--motion-fast) ease;
+  }
+  .confirm-btn:hover { opacity: 0.88; }
+  .confirm-btn.danger { background: var(--danger); color: #fff; }
+  .confirm-btn.primary { background: var(--accent-selection); color: var(--accent-contrast); }
+  .confirm-btn.ghost {
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+    background: transparent;
+  }
+  .confirm-btn.ghost:hover { opacity: 1; background: var(--hover-overlay); }
+}
+
+/* entry motion for menus / toasts / dialogs — zeroed by the global
+   prefers-reduced-motion rule at the top of this file */
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ============================================================
+   MEDIA POOL (spec 18 §4.2 v1.1) — skeleton, import drop overlay,
+   drag ghost, lane drop feedback
+   ============================================================ */
+@layer components {
+  /* loading skeleton — 1 Hz pulse; the global prefers-reduced-motion rule
+     at the top of this file zeroes the animation */
+  .skel {
+    background: var(--bg-inset);
+    border-radius: var(--radius-sm);
+    animation: skel-pulse 1s ease-in-out infinite;
+  }
+
+  /* whole-body file-import drop overlay (dashed accent) */
+  .pool-drop-overlay {
+    position: absolute;
+    inset: 4px;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1.5px dashed var(--accent-selection);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--accent-selection) 10%, transparent);
+    pointer-events: none; /* drag hit-testing passes through to the body */
+  }
+
+  /* §4.2 v1.1 drag ghost: thumbnail + name at the pointer, 50% opacity */
+  .pool-drag-ghost {
+    position: fixed;
+    z-index: 96;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-inset);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 4px 10px 4px 4px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  /* lane drop feedback while a pool drag hovers a lane (Timeline.tsx):
+     accent ring = compatible, danger ring = incompatible; the cursor
+     (copy / not-allowed) is set inline from mediaDrag */
+  .pool-lane-ok { box-shadow: inset 0 0 0 2px var(--accent-selection); }
+  .pool-lane-bad { box-shadow: inset 0 0 0 2px var(--danger); }
+}
+
+@keyframes skel-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+/* escalation strip flash — 3 pulses in 1.2s (design doc §3.1) */
+@keyframes strip-flash {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  25%, 75% { box-shadow: 0 0 0 2px var(--accent-selection); }
+}
+.mixer-strip[data-flash='on'] { animation: strip-flash 1.2s ease-in-out; }

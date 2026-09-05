@@ -265,6 +265,44 @@ Each command type is defined below in §4.3 with:
 - Whether it's undoable (most are; some like `SaveProjectCommand` are not)
 - An example JSON payload (§5)
 
+### 4.1A Routing-disposition table (Round 15 — normative; the app bus's implementation map)
+
+**What this is:** Decision 16's completeness instrument. Every union member is assigned ONE home: **OT** (opencut-timeline headless API — the editing SSOT), **ENGINE** (nle-engine union façade — the service slice), **APP** (nle-app-level semantics), or **DEFERRED** (typed `NOT_IMPLEMENTED` — see §4.1B). The app bus's exhaustive-switch dispatch compiles against THIS table; DEFERRED members return `{ok:false, code:'NOT_IMPLEMENTED'}` honestly rather than silently missing. The battery (spec 17) verifies: implemented rows cite a module pin SHA; DEFERRED rows cite a phase or a user-signed deferral. **Baseline (Round 15):** OT @`0412e41` implements 24 of 78 (with prefixed names pending C7 + form deltas in §13.15); the engine's JSON-RPC surface (19 edit ops) is INTERNAL transport (Decision 12.2-amended) and does not count toward this table. **Member census (R15 fix):** the rows below sum to exactly 78 of 78 union members — Timeline 17 + Track 7 + Playback 5 + Project 7 + Scene 4 + Bookmark 4 + Media 2 + Selection 4 + Marker 3 + Effect 5 + Mask 4 + Transition 3 + Keyframe 4 + Clipboard 3 + Undo/redo 2 + Snapshot 1 + Export 3 = **78**.
+
+| Category | Members (78) | Home | Status @ R15 → phase |
+|---|---|---|---|
+| **Timeline** | `insert`, `move`, `trim`, `split`, `delete`, `duplicate`, `updateElements` | OT | implemented (C7 rename pending) → A2 |
+| | `ripple` | OT | implemented as the `rippleDelete` wrapper (spec keeps `delete{ripple:true}` canonical — §13.15) |
+| | `roll`, `slip`, `slide`, `rateStretch` | OT (op-port) | NOT in OT (engine algorithms at timeline.ts:2984/4143/4246/3155) → A2 wave 1 |
+| | `retime`, `freezeFrame`, `rangeRemoval` | OT (op-port) | → A2.5 |
+| | `toggleElementVisibility`, `toggleElementMuted` | OT (wire addition) | engine-layer ops exist (timeline-core.ts:906/:950), not on the wire → A2 wave 1 |
+| **Track** | `toggleTrackMute`, `toggleTrackVisibility`, `addTrack`, `deleteTrack` | OT | implemented (C7 rename pending) |
+| | `reorderTrack` | OT | → A2/A2.5 |
+| | `toggleTrackSolo`, `toggleTrackLock` | OT | → A2 wave 1 (solo semantics per spec 20 §4.2 S/G placement — see 09's A4 amendment) |
+| **Playback** | `play`, `pause`, `seek` | OT | implemented |
+| | `setRate`, `setLoop` | APP (transport slice) | engine Player supports the semantics (player.ts rate/loop surfaces); wire forms → A3 (with the §13.15 loop invariant N5) |
+| **Selection** | `selectElements` | OT | implemented |
+| | `selectTool`, `selectTrack`, `marqueeSelect` | APP (controller layer) | OT controllers implement the semantics (view-layer, not wire) → A3; marquee form decision at A3 |
+| **Project** | `create/load/save/close/updateSettings/rename/delete` (7) | APP | project slice is app-level (Decision 16 law 4) → A5 (save/load with ProjectJSON persistence) |
+| **Scene** | `createScene/deleteScene/renameScene/switchScene` (4) | APP | app-level multi-scene → A5 |
+| **Bookmark** | `toggleBookmark`, `removeBookmark`, `updateBookmark`, `moveBookmark` (4) | OT | renamed into the unified marker family per the A2 amendment (09 A2 + §13.15's C7 fold: `addMarker/updateMarker/deleteMarker` semantics — toggle≈add/delete, move≈update position); the union block retires at the next union-version bump → A2 |
+| **Media** | `importMedia`, `deleteMedia` | APP | media registry + probe (engine `probeMedia` exists headless-side) → A3; real decode per D6 posture |
+| **Marker** | `addMarker`, `updateMarker`, `deleteMarker` (3) | OT | bookmark family (toggle/remove/move) exists; the A2-amendment unifies Marker/Bookmark into ONE per-scene family → A2 |
+| **Effect** | `addEffect` + 4 more (5) | ENGINE | engine effects registry exists (44 GPU effects); wire = engine façade + OT model extension (SceneTracks effect shapes — spec 06/07 gap work) → DEFERRED past A3 pending the model extension |
+| **Mask** | 4 | ENGINE | as effects → DEFERRED past A3 |
+| **Transition** | `addTransition`, `updateTransition`, `removeTransition` (3) | ENGINE (engine has the registry; OT models transitions element-hung — projector translation A1) | wire → DEFERRED past A3 |
+| **Keyframe** | `upsertKeyframes`, `removeKeyframes`, `retimeKeyframe`, `updateKeyframeCurves` (4; upsert/remove are plural batch forms, `retimeKeyframe` is singular per the union) | OT | per-key singular forms implemented for upsert/remove/retime (form delta in §13.15); `updateKeyframeCurves` has no OT form yet → A2 wave 1-2; batch engine-ops exist (timeline-core.ts:1210/:1437) |
+| **Clipboard** | `copy`, `cut`, `paste` (3) | APP | greenfield (mock registers C19) → A7a |
+| **Undo/redo** | `undo`, `redo` | OT | implemented |
+| **Snapshot** | `snapshot` | APP (test seam) | readouts exist (OT out-of-band readouts; engine headless) → A2/A3 |
+| **Export** | `exportFCPXML`, `exportMaster`, `exportFrame` (3) | ENGINE | engine export orchestrator exists (mediabunny A/V); FCPXML is A6 greenfield |
+
+**Reading of the table at R15:** implemented = 24 (all OT) + the engine service surface exists but the union façade is A2 work. DEFERRED families (effects/masks/transitions/clipboard ≈ 15 members) are honestly typed `NOT_IMPLEMENTED` until their phase lands — the union's *contract* (§4.3 schemas) remains normative for all 78; only *dispatch* is phased. This is the difference between the spec being aspirational (union as wish-list) and honest (union as typed contract + phased dispatch map).
+
+#### 4.1B `NOT_IMPLEMENTED` error code (Round 15 amendment — registers into §6.3's error-code table)
+
+The `CommandResult.code` union gains `NOT_IMPLEMENTED` (distinct from `INVALID_PARAMS`/`NOT_FOUND`/`CONFLICT`/`NOOP`/`INTERNAL_ERROR`): returned by the app bus for any union member whose routing-disposition row (§4.1A) is DEFERRED. Carries `data: {member: string, phase?: string}` so callers and tests can distinguish "not yet built" from "wrong usage". Registered here so the exhaustive-switch law (§4.4) can compile against the full 78-member union from day one. The engine façade and OT headless API may also emit it for their not-yet-wired members.
+
 ### 4.2 Command → manager method mapping
 
 Every command type maps 1:1 to a manager method on `EditorCore`. This mapping is enforced by the `applyCommand()` dispatcher in `CommandManager` (see §4.4). Adding a new command type without a corresponding manager method (or vice versa) is a compile error.
@@ -1487,7 +1525,7 @@ export interface AddMarkerCommand {
 }
 ```
 
-**Maps to:** `engine.timeline.updateTracks(...)` (markers are stored at the scene level; the patch adds a new marker to `scene.markers`).
+**Maps to:** the ACTIVE scene's `markers` (per the A2 amendment — `SceneJSON.markers: Marker[]`, one unified type, spec 09 §3.1; via the scene-scoped editing core — see §13.3's Round-15 note; NOT a project-level array). The patch adds a new marker.
 
 **Undoable:** ✅.
 
@@ -1502,7 +1540,7 @@ export interface DeleteMarkerCommand {
 }
 ```
 
-**Maps to:** `engine.timeline.updateTracks(...)` (removes marker from `scene.markers`).
+**Maps to:** removes the marker from the ACTIVE scene's `markers` (per-scene per the A2 amendment — §13.3's Round-15 note; via the scene-scoped editing core).
 
 **Undoable:** ✅.
 
@@ -1519,7 +1557,7 @@ export interface UpdateMarkerCommand {
 }
 ```
 
-**Maps to:** `engine.timeline.updateTracks(...)`.
+**Maps to:** patches the marker in the ACTIVE scene's `markers` (per-scene per the A2 amendment — §13.3's Round-15 note; via the scene-scoped editing core).
 
 **Undoable:** ✅.
 
@@ -2824,6 +2862,7 @@ export interface CommandError {
    * - 'PROJECT_NOT_FOUND' — renameProject/deleteProject target does not exist (§4.3.77-78)
    * - 'PROJECT_ACTIVE' — deleteProject called on the active project (§4.3.78)
    * - 'NOOP' — command semantically valid but clamped to a no-op at current bounds — e.g. a trim whose delta is fully absorbed by the source-bounds clamp, a move whose delta snaps back to the same position. Distinct from ELEMENT_NOT_FOUND (Round 8, adopted from opencut-timeline api.ts:198-208: "NOOP is not NOT_FOUND"; tests assert the distinction)
+   * - 'NOT_IMPLEMENTED' — union member whose routing-disposition row (§4.1A) is DEFERRED: the app bus (and the engine façade / OT for their not-yet-wired members) returns it honestly rather than silently missing; carries `data: {member, phase?}` so callers distinguish "not yet built" from "wrong usage" (Round 15 — see §4.1B)
    * - 'INTERNAL_ERROR' — unexpected exception (see `message` for details)
    */
   code: string;
@@ -3370,6 +3409,10 @@ Each event is one `data:` line followed by a blank line. The JSON payload matche
 2. SSE auto-reconnects on network drop.
 3. SSE works through HTTP proxies that block WebSocket upgrades.
 
+### 9.5 Event-name mapping register (Round 15 — engine-name↔spec-name)
+
+`EngineEvent` above is the **spec-side** event vocabulary; the engine (nle-engine) and OT emit their own names (the Player's `framechange/timeupdate/statechange/ratechange/seeked/ended/error`, the export orchestrator's `onProgress` progress callbacks, OT's `core.subscribe()` readouts). The **engine-name↔spec-name mapping register** is owned by the app's `nle-app/src/events/` adapter, which normalizes the three event models into ONE stream shaped like §9's `EngineEvent` (the event staircase UP — ARCH-R15 §2.3bis). Mapping discipline: each engine-name→spec-name pair is a **C-register row** (same discipline as C7's command renames — a named, versioned deviation table, not a silent shim); event-completeness and mapping coverage are spec 17's S1/S2 roof-suite rows.
+
 ---
 
 ## 10. Versioning
@@ -3396,6 +3439,8 @@ export interface ProtocolVersion {
 ```
 
 **Current version:** `{ major: 1, minor: 0 }` (this is the initial release of the spec).
+
+**Versioning at the bus (Round 15):** the `ProtocolVersion`-carrying envelope (§10.2) rides the app's command bus from day 1 (ARCH-R15 §2.3 — the bus is where the 78-member union contract is enforced); the version constant lives in the app's commands module and is bumped only with union membership changes, with the §4.1 union + §4.1A routing-disposition table as the membership contract the bump tracks.
 
 ### 10.2 `Envelope`
 
@@ -4731,7 +4776,7 @@ test('every command type has a dispatcher case', () => {
 > - **`ElementJSON`** — canonical in spec 09 §3.1. The wire-protocol's `InsertCommand.params.element` (§4.3.9 `ElementSpec`) and `TrimCommand`'s trim-edge dispatcher description use field names `trimStart` / `trimEnd`; spec 09's canonical `ElementJSON` uses `sourceStart` / `sourceDuration`. See spec 09 §3.1 for the canonical type.
 > - **`MediaStorageRef`** — canonical in spec 09 §3.1. Spec 09 defines `type: 'opfs' | 'remote'` with required `path`. The wire-protocol's `ImportMediaCommandSchema.params.asset.storage` (§11.1) uses `kind: 'opfs' | 'url' | 'inline'` with optional `path`/`url` — a more flexible alias; spec 09 is canonical.
 > - **`MediaColorInfo`** — canonical in spec 09 §3.1. Spec 09 requires `primaries`, `transfer`, `matrix`, `range`. The wire-protocol's `ImportMediaCommandSchema.params.asset.colorInfo` (§11.1) only carries `primaries` and `transfer` (drops `matrix`/`range` — those are derived at probe time). Spec 09 is canonical; the wire-protocol's slimmer shape is a command-input convenience.
-> - **`Marker` / marker storage location** — canonical in spec 09 §3.1. Spec 09 stores `markers: Marker[]` at the **project level** on `ProjectJSON`. Earlier drafts of this spec (§4.3.49 AddMarkerCommand) incorrectly described markers as "stored at the scene level"; the canonical location is the project-level `markers` array. The mapping for `AddMarkerCommand` / `DeleteMarkerCommand` / `UpdateMarkerCommand` should update the project-level array (e.g., via a greenfield `engine.project.updateMarkers(...)`), not `engine.timeline.updateTracks(...)` as the §4.2 table's shorthand suggests. See spec 09 §3.1 for the canonical `Marker` type and storage location.
+> - **`Marker` / marker storage location** — canonical in spec 09 §3.1. **(Round 15 amendment, resolving this note's historical claim):** markers are now **PER SCENE** — `SceneJSON.markers: Marker[]` with one unified type `Marker {id, time, label?, color?}` (the A2 unification absorbs the former Bookmark shape; project-level markers are retired). The earlier R7 note here asserted the project-level array as canonical — that reading is superseded by the A2 ruling (mock + opencut-timeline both store per-scene; OT's bookmark family is the wire surface that 15 §13.15 renames into `addMarker/updateMarker/deleteMarker`). The `AddMarkerCommand` / `DeleteMarkerCommand` / `UpdateMarkerCommand` mappings target the ACTIVE scene's markers (via the scene-scoped editing core), not a project-level array. See spec 09 §3.1 (R15) for the canonical `Marker` type and storage location.
 
 ### 13.4 Spec 12 (testing strategy)
 
@@ -4742,7 +4787,7 @@ test('every command type has a dispatcher case', () => {
 
 ### 13.5 Spec 16 (keyboard shortcuts — shipped, TEST-03)
 
-Every keyboard shortcut maps to an `EngineCommand` — spec 16 §3 (180 bindings across 13 categories) is that table. Spec 16's §0.2 declares this spec's union canonical ("where this spec and spec 15 both define a command name, spec 15 wins"), and its §8.3 resolver fills `<runtime>` params (currentTime, selectedIds, focusedTrackId) before calling `engine.command.apply()`. Spec 16 also defines UI-layer extensions (viewport zoom, panel focus, snap toggle — routed to the UI store, not `apply()`); see spec 16 §0.2 and spec 18 (UI shell) for the dispatch split. Export bindings (`Cmd+E` etc.) dispatch the §4.3.74-76 commands.
+Every keyboard shortcut maps to an `EngineCommand` — spec 16 §3 (**181 bindings** across 13 categories, per its Round-15 census sync) is that table. Spec 16's §0.2 declares this spec's union canonical ("where this spec and spec 15 both define a command name, spec 15 wins"), and its §8.3 resolver fills `<runtime>` params (currentTime, selectedIds, focusedTrackId) before calling `engine.command.apply()`. Spec 16 also defines UI-layer extensions (viewport zoom, panel focus, snap toggle — routed to the UI store, not `apply()`); see spec 16 §0.2 and spec 18 (UI shell) for the dispatch split. Export bindings (`Cmd+E` etc.) dispatch the §4.3.74-76 commands.
 
 The shortcut registry (realized as spec 16 §3 + its Appendix A flat registry) is a `{ shortcut: string, command: EngineCommand }` table. Example:
 
@@ -4753,7 +4798,7 @@ const shortcutRegistry = {
   'Cmd+Shift+Z': { type: 'redo' },
   'Cmd+C':       { type: 'copy', params: { elements: '<selection>' } },
   'Cmd+V':       { type: 'paste', params: { atTime: '<playhead>' } },
-  'R':           { type: 'selectTool', params: { tool: 'razor' } },
+  'R':           { type: 'selectTool', params: { tool: 'ripple' } },  // A6 ruling (R15): R = ripple TOOL; ⌥R toggles ripple mode. B is the razor key per 16 §3.2.
   // ... etc
 };
 ```
@@ -4816,13 +4861,13 @@ nle-engine (github.com/bearachprema/nle-engine, 37,958 LOC) is a clean-room Free
 | §4.2 mapping (adapter surface) | `timeline/timeline.ts:2275` | `splitClip(` | ALIGNED | The 102-method class surface is the manager layer `apply()` dispatches to |
 | §13.8 playback commands | `playback/player.ts:1889` | `ratechange: { playbackRate: number };` | ENGINE-GAP | Zero playback ops on the engine's wire surface despite Player rate support |
 
-### 13.15 Code References — opencut-timeline (the editing-domain command surface per Decision 12) — added Round 8, amended Round 9
+### 13.15 Code References — opencut-timeline (the editing-domain command surface per Decision 12) — added Round 8, amended Round 9, **refreshed Round 15 (24-command reality)**
 
-The timeline-side headless surface (`src/lib/timeline/headless/api.ts`). It is **structurally the spec-15 skeleton** (same `EngineCommand`/`CommandResult` envelope idea, same single-dispatcher design, atomic `applyBatch`) with two systemic deltas: **prefixed command names (C7)** and **coarse error codes**. Full command-by-command table: SCOUT-R8-A §3.2.
+The timeline-side headless surface (`src/lib/timeline/headless/api.ts`). It is **structurally the spec-15 skeleton** (same `EngineCommand`/`CommandResult` envelope idea, same single-dispatcher design, atomic `applyBatch`, never-throws `apply()`) with two systemic deltas: **prefixed command names (C7 — deliberately deferred by the repo, DECISIONS #9, pending this spec's own conflict resolution which Round 15 now supplies)** and **coarse error codes**. Full command-by-command table: SCOUT-R8-A §3.2 (R8-era) + SCOUT-R15-B §4 (current).
 
-| Spec 15 contract | opencut-timeline (file:line) | Status | Delta |
+| Spec 15 contract | opencut-timeline (file:line @ `0412e41`) | Status | Delta |
 |---|---|---|---|
-| §4.1 bare type discriminator | `headless/api.ts:38-87` — 18 types, all `timeline.*`/`track.*`-prefixed | **CORRECTIVE (C7)** | Premise refuted (00-master:234/:562 are bare — the repo mistook §4.2's manager-method column for the command union). Rename pass: `timeline.insert`→`insert`, `timeline.trim`→`trim`, `timeline.split`→`split`, `timeline.delete`→`delete`, `timeline.move`→`move`, `timeline.duplicate`→`duplicate`, `timeline.updateElements`→`updateElements`, `timeline.seek/play/pause/selectElements/undo/redo`→bare, `track.toggleMute/toggleVisibility`→`toggleTrackMute/toggleTrackVisibility`, `track.add`→`addTrack`, `track.remove`→`deleteTrack` |
+| §4.1 bare type discriminator | `headless/api.ts:39-125` — **24 types** (since W5; the R8-era "18" citation was stale), all `timeline.*`/`track.*`-prefixed | **CORRECTIVE (C7)** | Premise refuted (00-master:234/:562 are bare — the repo mistook §4.2's manager-method column for the command union). **Rename pass (24):** `timeline.insert/trim/split/delete/move/duplicate/updateElements/seek/play/pause/selectElements/undo/redo`→bare; `timeline.rippleDelete`→wrapper (see row below); `track.toggleMute/toggleVisibility`→`toggleTrackMute/toggleTrackVisibility`; `track.add`→`addTrack`; `track.remove`→`deleteTrack`; **`timeline.toggleBookmark/removeBookmark/moveBookmark`→ the unified marker family** (fold with the 09 A2-amendment: `addMarker/updateMarker/deleteMarker` semantics — toggle≈add/delete, move≈update position); **`timeline.upsertKeyframe/removeKeyframe/retimeKeyframe`→ singular per-key forms** of `upsertKeyframes/removeKeyframes/retimeKeyframe` (upsert/remove are plural in the union, retime is singular — §4.1A; batch engine-ops exist at timeline-core.ts:1210/:1437 — align wire forms) |
 | §4.3.3 MoveCommand | `ops/group-move.ts:69-74` — `PlannedElementMove {elementId, sourceTrackId, targetTrackId, newStartTime}` | **ALIGNED (exact)** | Field-for-field match incl. `PlannedTrackCreation`; repo implements only the movePlan form — add the simple `{elementIds, delta, targetTrackId}` form |
 | §4.3.1 SplitCommand | `headless/api.ts:60` — `{elements, splitTimeTicks, retainSide}` | CONVERGENT | Element-addressing + retainSide match; spec's `time`/`trackIds` (split-at-time across tracks) is the superset; repo lacks `rightElementIdSeed` (internal counter instead — align to `idSeed` at wire) |
 | §4.3.2 TrimCommand | `headless/api.ts:52` — `{elements: ElementRef[], side: 'left'\|'right', deltaTicks}` | CONVERGENT | Group+side is the controller-layer shape; wire shape stays single-element+edge (spec 06 §5.2 documents the mapping) |
@@ -4831,9 +4876,10 @@ The timeline-side headless surface (`src/lib/timeline/headless/api.ts`). It is *
 | §6.1 StateChange | absent — out-of-band readouts (`getTracks/getScene/getSelection/getPlayhead` :385-403) | CORRECTIVE | Add `stateChange` to results OR spec-note that readouts serve T1 tests (in-protocol `snapshot` is the spec-15 way) |
 | §7 batch semantics | `headless/api.ts:346-381` — `applyBatch` | **AHEAD** | The five transaction invariants (eviction-suspended, depth-anchored rollback, redo clear, undo/redo-in-batch rejection, intra-batch overlap guard) EXCEED spec §7.1's atomicity — absorbed as §7.1A (R8) |
 | §4.3.4 ripple | `timeline.rippleDelete` (:69) | CONVERGENT | Documented convenience wrapper — spec keeps `delete{ripple:true}`/RippleCommand as canonical (spec 06 §5.4 note) |
-| command coverage | 17 of 18 have spec-15 counterparts; 60 of 78 spec-15 commands absent (roll/slip/slide/rateStretch/retime/freezeFrame/rangeRemoval/sync-lock/scenes/bookmarks/effects/masks/transitions/keyframes/clipboard/export/…) | ENGINE-GAP | Its own gaps doc charts W5/W6 for these; the C7 rename is the prerequisite |
+| command coverage | **24 of 78** spec-15 commands implemented (23 map 1:1 + `rippleDelete` wrapper); 54 absent (roll/slip/slide/rateStretch/retime/freezeFrame/rangeRemoval + scenes/project/media/effects/masks/transitions/clipboard/export/marker-forms/…) | ENGINE-GAP | The op-family port is A2 wave 1/2 (spec 14 §4.1); the full disposition for all 78 members is the **routing-disposition table (§4.1A, Round 15)** — the C7 rename + param alignment (this table) is the A2 prerequisite |
+| §4.3.29 SetLoopCommand | no ordering invariant | **CORRECTIVE (N5)** | `end > start` becomes a validation invariant (INVALID_PARAMS otherwise) or the engine swaps halves; the inverted-window hang was a REAL mock bug (R13 found, R14 fixed: mark-in/out now move the other half — start ≤ end always; zero-width = no-op loop) |
 
-**The binding convergence statement (Decision 11.2, amended by Decision 12.2 in Round 9):** spec 15's bare `EngineCommand` is the **only** wire protocol. Both reference repos converge to it — opencut-timeline via the C7 rename + param alignment (this table is the worklist) and as the **implementation home of the EDITING command subset**; nle-engine via the C2 dispatcher adapter (§13.14), **scoped in Round 9 to the RUNTIME command subset only** (render/export/media/scenes — its JSON-RPC+$ref surface retires; it no longer owes the editing subset, which the op-family port lands in OT). Neither repo's current surface is spec-15-conformant; both are executable evidence of what the dispatcher must handle. The AUDIO command family (track volume/mute/solo, audio-effect parameters) targets the G layer of the three-layer track model (spec 20 §8 — MixerTrackSettings sidecar keyed by trackId, applied via `updateFromTrack`, zero timeline invalidation); per-command audio rows join this table's conformance pass at the seal round, after C7.
+**The binding convergence statement (Decision 11.2, amended by Decision 12.2 in Round 9, transport clause re-typed by Decision 16 in Round 15):** spec 15's bare `EngineCommand` is the **only** wire protocol, enforced at the **app bus** (Decision 16) and the engine's union façade. opencut-timeline converges via the C7 rename + param alignment (this table is the worklist) and is the **implementation home of the EDITING command subset**; nle-engine's JSON-RPC+$ref surface is **re-typed as INTERNAL transport** (the headless/cloud venue — Decision 12.2's retirement clause is superseded by this re-typing), owing the **service subset through its union façade** (A2). The routing-disposition table (§4.1A) is the single implementation map. The AUDIO command family (track volume/mute/solo, audio-effect parameters) targets the G layer of the three-layer track model (spec 20 §8 — MixerTrackSettings sidecar keyed by trackId, applied via `updateFromTrack`, zero timeline invalidation); per-command audio rows join this table's conformance pass at A2, after C7.
 
 ---
 

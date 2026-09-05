@@ -1,47 +1,260 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-02, end of Round 9 (pushed @ `4bc8c4d`)
-**Scope of this file:** IMMEDIATE next session ONLY. Long horizon lives in `.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`.
+**Written:** 2026-09-05 (late), end of the R18 session (user-corrected serving
+layout: the full Storybook dev server owns :3000; R16 workaround stack
+reverted; core history: R16 `96ea0db` → `be1f141` → the origin-merge commit →
+R17 parallel-stream merge `3fb3360`). Parallel R15-UI round content is folded
+below — it is COMPLETE on origin and its standing items are preserved.
+**Scope of this file:** IMMEDIATE next session ONLY. Long horizon lives in
+`.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`
+(R15-UI = #47-51, R16 = #53-58 — renumbered after the collision).
+
+> **Per-env :3000 ownership (user directive, R17):** there are TWO parallel
+> streams with SEPARATE sandboxes. The shell-mini stream's env serves
+> shell-mini (as described below — that's THEIR env). The shell-variants
+> stream's env (chat `4deec8a5`) serves **shell-variants' own Storybook 10.6
+> dev on :3000** via `ui-mock/shell-variants/scripts/sb3000.py` (double-fork
+> daemon, PPID=1) from the persistent runtime copy at
+> `/home/z/my-project/shell-variants` — same Host law
+> (`core.allowedHosts: true`), same restorer pattern
+> (`scripts/boot-restore.sh`, iso `/home/z/my-project/.zscripts/dev.sh`),
+> plus the orphan `annotakit` branch on origin for threads.db git-push
+> durability. "Serve YOURS in this env" — do not cross-stream-serve.
 
 ---
 
-## Restore context first (10 min)
+## What is LIVE right now (the headline — R18 layout)
 
-1. `/home/z/my-project/worklog.md` — tail (Round-9 record)
-2. `audits/ARCH-R9-three-domain-strategy.md` — **the round's ruling** (three domains; read §2-5 for the reasoning, §7 for the seal watch items)
-3. `00-master-spec.md` — Decisions 12/13/14 + §2.5 doc governance (v5.0)
-4. `.agents/PLAN.md` — seal-round priority order
-5. Repo states + PATs: see worklog Round-9 bootstrap entry (NOTE: a second PAT was issued for the three bearachprema repos — engine/OT/web-daw-core; the spec repo PAT is unchanged)
+- **The public preview URL IS the full Storybook dev server (R18, user
+  directive):** `https://preview-chat-<chat_id>.space-z.ai/` (the hostname
+  embeds THIS chat's id from the gateway metadata) → edge → Caddy :81 →
+  localhost:3000 → **`storybook dev -p 3000`** (`scripts/sb3000.py`,
+  double-fork daemon, PPID=1, `core.allowedHosts: true`). Same-origin means
+  everything works through the real edge: manager UI, story tree, story
+  selection, iframe canvases, `/index.json` (30 stories), HMR,
+  deep links (`/?path=/story/…`). Verified end-to-end post-switch (browser
+  pass: story DOM renders, zero page errors) + a live kill→restore→
+  public-200 cycle.
+- **The app is the localhost dev surface on :3001** (`scripts/dev3000.py`;
+  `vite.config.ts` port 3001) — for the agent dev loop only, NOT public.
+- **Pin-comment review surface LIVE (R18b):** storybook-annotakit v0.5 is
+  vendored at `vendor/storybook-annotakit/` (dist tracked — boots without
+  building), FIRST in `.storybook/main.ts` addons. At the public URL the
+  toolbar carries Pin (⌥C) / Region (⌥R) / Threads (⌥D) / Hide (⌥L), and
+  reviewer pins are same-origin REST through the edge — verified live
+  (thread created via the public URL's own API, visible in the manager UI,
+  drawer badge, delete → tombstone → orphan-branch push → GH issue closed).
+  Store: `.git/annotakit/threads.db` (branch-switch-proof) → orphan
+  `annotakit` branch on GitHub — **SHARED with the sibling stream's env**
+  (their `db=annotakit@shell-variants` commits appear in the branch log;
+  the kit's logical merge reconciles both) — plus a 1:1 GitHub-issue mirror.
+  Agent surface: `GET /annotakit/api/health` → agentSurfaces (rest +
+  digests + github); `GET /annotakit/api/threads`, `/export?format=md`,
+  POST/DELETE threads, POST `/sync`. Token: `.env` in shell-mini
+  (gitignored — **recreate after a recycle**: PAT from chat +
+  `ANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec`).
+- **Upstream contribution filed (R18c):** the vendored `refHasOurReadme`
+  patch is reported upstream — melodietexoss/storybook-annotakit **issue
+  #16** (full cwd-relative-ls-tree diagnosis + repro + improvement
+  candidates: machine-readable git-sync health, POST /sync forcing a git
+  cycle, absent-vs-foreign A14 log split, README adoption marker) and
+  **PR #17** (`fix/subdir-ref-has-readme-cwd` — same colon-path fix,
+  rebuilt tracked dist, new `subdir` regression case in their
+  store-robustness suite: unpatched 4/8 FAIL / patched 8/8, full suite
+  9/9). NOT pushed to upstream main (user directive: PR-only so the
+  author can verify + generalize). When PR #17 merges, drop the local
+  vendor patch in favor of upstream v0.5.x.
+- **R18e/R18f — the feedback wave (annotakit issues #7-#16, ALL fixed +
+  thread-resolved):** ripple edit (toggle, delete/end-trim/start-trim
+  follower-shift laws, snapshot-idempotent previews, delta-quantize +
+  floor overlap guard); RH cut styles `[`/`]` (裁剪开始/裁剪结束, ripple-aware);
+  pool→timeline DnD (drop outline #38bdf8 + insertionAt placement: exact
+  spot → next gap → tail); filmstrip↔color-block toggle; audio-lane eye
+  (hidden = collapsed restore bar, itself a drop target); REAL waveform
+  envelopes (deterministic FNV hash, discrete bars, inline+CSS sized —
+  the invisible-SVG replaced-element trap is documented + regression-
+  tested); snap OFF by default; playhead Enter no-op; splitters (pool/
+  inspector width + timeline height with flex-tall lanes); visual polish
+  (panel elevation + borders, vignette bg — dots removed, viewer screen-
+  well, lane contrast, group dividers, uppercase heads, desaturated
+  filmstrips, 8 pool assets). useKeys moved INTO Timeline (solo stories
+  get the shortcuts). 158/158 tests, tsc clean. Two sub-agent review
+  waves + VLM passes; wave-2 verdict: only P3s remain (ripple start-trim
+  frozen-left drag feel — documented law + tooltip hints; split/cut grid
+  quantize; 8px main-row gutter; timeline→shell DnD import coupling).
+- **R18c UPDATE — PR #17 MERGED upstream (v0.5.1, then v0.5.2):** the
+  maintainer validated + merged our subdir fix and a follow-up
+  adoption-hardening PR (#19, the 7 sibling fixes) — upstream HEAD is
+  v0.5.2. The vendored kit here is still v0.5.0 + our patch; upgrading
+  the vendor to v0.5.2 = drop the local patch (registered as a follow-up
+  chore; do it in a quiet window, not mid-feedback-wave).
+- **R18g — feedback wave 2 (annotakit issues #17-#25 on OUR stories,
+  ALL fixed + thread-resolved, GH issues auto-closed):** pool cards
+  natural height + true overflow/scroll (the flex overflow:hidden
+  min-height trap — cards were squashed to 57px vertical-fit); radii
+  tightened per reviewer (panels 20→8, controls 8→4, clips 2px near-
+  square, video frame SQUARE, Export 6px — documented token deviation,
+  originals in comments); splitter hover = shaded sky accent bar
+  (rgba(56,189,248,.78), RH's own handles light blue) + INSPECTOR DRAG
+  DIRECTION BUG fixed (invert prop — boundary semantics: drag right
+  shrinks the right-side panel; keyboard follows; regression-tested +
+  live-verified); purpose-drawn trim icons replace the lucide arrow-to-
+  line pair (clip rect + dim discarded block + playhead line — VLM
+  verified they read as trim-head/tail); TRANSPORT MOVED below the video
+  (RH grammar grid [1fr auto 1fr]: tc left · play center · name right) —
+  topbar is brand+Export only now; pool kind badges are ICONS (Film/
+  Image/AudioLines — ported from the reviewer's sibling-app feedback
+  #28/#30, "the standard NLE way"). 163/163 tests, tsc clean, build
+  green. NOTE: the reviewer is ALSO live-reviewing the SIBLING's
+  shell-variants app (threads land in the SHARED store → GH issues
+  #26-#36 in our repo) — those are the sibling agent's queue, not ours;
+  our timeline scroll-end was checked and does NOT have their #36
+  crop-off bug (we keep a min 8s runway + full-width lane surfaces).
+- **R18 correction (what was REVERTED):** the R16 "storybook can't serve
+  publicly, static-mount it instead" verdict was wrong; the workaround
+  infrastructure was removed — `public/stories/` (8.4MB), the
+  `previewRedirect` query-shim (+8 tests, 101→93), `scripts/sb6007.py`.
+  SKILL.md Law 3 is now the corrected law; #61 and #64 record the lesson.
+  Don't rebuild any of it.
+- **The Host-header law still applies to any Vite surface** (the R16
+  go-live bug): the FC edge rewrites the request Host to `...fcapp.run`;
+  Caddy passes Host through untouched; Vite's default `server.allowedHosts`
+  (localhost/IP only) 403s it. Fix = `allowedHosts: ['.space-z.ai',
+  '.fcapp.run']` in vite.config.ts (committed, kept). Verification rule: a
+  localhost curl is a FALSE PASS for public liveness — probe with
+  `curl -H 'Host: preview-chat-<id>.fcapp.run' http://127.0.0.1:81/` or
+  agent-browser on the real public URL. (SB 10.6 allows all hosts by
+  default — the banner says so — but `core.allowedHosts: true` is committed
+  as belt-and-braces.)
+- **Persistence layers (all needed, all verified):**
+  1. *Reaper escape:* both daemons double-forked (fork→setsid→fork→exec;
+      grandchild reparents to PID 1; survives per-toolcall tree-kill;
+      `nohup`/`setsid` alone die).
+  2. *Recycle resurrection:* `/home/z/my-project/.zscripts/dev.sh`
+     (harness boot hook, PAT-free — restores repo from the newest
+     `/home/sync/nle-core-spec-*.bundle`, npm ci if needed, re-launches;
+     idempotent; frees :3000 from half-dead tenants — inspecting their cwd
+     first; MUST-SUCCEED on the storybook `/index.json` probe, best-effort
+     app on :3001; canonical copy committed at
+     `ui-mock/shell-mini/scripts/boot-restore.sh`). Tested live: kill →
+     boot-restore → storybook restored → public 200. NOTE: dev.sh only
+     auto-runs if the harness executes .zscripts/dev.sh at boot — otherwise
+     the next agent session runs it as FIRST ACTION.
+  3. *Durable state:* GitHub origin + gitlab mirror + /home/sync bundle+
+     tarball refreshed at every wrap-up.
 
-## Repository states at handoff
+## FIRST ACTIONS for the next session (in order)
 
-| Repo | Commit | Notes |
-|---|---|---|
-| nle-core-spec (canon) | `4bc8c4d` | Round 9 complete: 21 specs (00-20) + ARCH-R9 + R9 review + battery_r9 48/48 |
-| nle-engine | `624a76b` | Waves 4A→5C complete: 202/202, 25/25 milestones, ~47k LOC, real A/V export. **M1.5 audio wiring (vendor/web-daw-core) NOT yet landed** — it is the next convergence duty (Decision 13) |
-| opencut-timeline | `4e39b67` | **"FINAL as a distilled opencut timeline"** — 297/297, components+controllers+hardening landed, SEAMS.md written. Remaining: P3 polish + **C7 rename (open)** |
-| web-daw-core | `bc68ee0` | 737/737, M1 bridge + triangle de-risk landed. M1.5 engine-side wiring open; M2 (mixer surface) not started |
-| cloudcut-nle | `ux-spec` @ `9b9f68a` | Integrated ours-wins (spec 18 v1.1); watch for branch evolution |
+1. **Fresh sandbox = git recovers code, never process state.** Clone the repo
+   (PAT comes from the user in chat — NEVER commit it; GitHub's secret
+   scanner blocks token-bearing pushes, and the GitLab PAT likewise stays in
+   `.git/config` + chat only), `git fetch` BOTH remotes FIRST — a parallel
+   session may have pushed again. NEVER force push.
+2. **Ensure the STORYBOOK is LIVE on :3000** (the preview URL depends on it):
+   run `bash /home/z/my-project/.zscripts/dev.sh` (idempotent — installs,
+   launches, frees the port if needed; PAT-free via the /home/sync bundle;
+   gates on the /index.json asset-chain probe). If the sandbox is FRESH (no
+   /home/z/my-project/.zscripts — harness didn't restore repo.tar): clone
+   with the PAT from chat, `npm ci`, then `python3 scripts/sb3000.py` (and
+   `python3 scripts/dev3000.py` for the localhost app on :3001). ALSO
+   recreate `ui-mock/shell-mini/.env` (gitignored — dies with the clone):
+   `ANNOTAKIT_GH_TOKEN=<PAT>` + `ANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec`
+   — without it the review surface degrades to local mode (REST works, no
+   GitHub mirror / orphan-branch durability). Verify PUBLIC liveness with
+   the forged-Host probe (see the Host-header law above), not just
+   localhost. If port 3000 is already bound by the platform's own Next.js
+   dev server (fresh sandboxes with the bootstrap template) or a stale
+   tenant, dev.sh inspects its cwd then frees it — the user directive (R18)
+   is that the **shell-mini Storybook dev server owns :3000**.
+3. **Baseline gates before editing anything:** `npm run test` (93/93),
+   `npm run typecheck` (clean), `npm run build`, `npm run build-storybook`.
+4. **gitlab remote** (WAF blocks ~1/3 of pushes — just retry a few times):
+   `git remote add gitlab https://oauth2:<GLPAT>@gitlab.com/ansgareutychisO/nle-core-spec.git`
 
-All four repos are ACTIVELY DEVELOPED ("still finalizing" per the user) — `git fetch`/`git pull` every one before any analysis; re-baseline line-number citations with fresh greps (R8 lesson: every engine citation moved; R9 confirmed it again with 4D-B→5C).
+## The two live threads (both COMPLETE rounds, standing items below)
 
-## Next session's task: the SEAL ROUND (or a Round-9 delta if repos advanced)
+### R16 — shell-mini (this thread; the user is currently driving THIS one)
 
-Default scope = `.agents/PLAN.md`'s seal priority order (which equals 19 §12 + ARCH-R9 §7). First actions:
+Minimal NLE shell mockup under `ui-mock/shell-mini/`, simplified from
+shell-variants, skinned with `ui-mock/RH-timeline-editor.html`, Storybook
+included. 93 tests / tsc / vite build / storybook-static all green.
+Contract = `ui-mock/shell-mini/docs/DESIGN-mvp.md` v2.1 (design audit +
+code review both folded); skin ground truth =
+`docs/RH-skin-extraction.md`. Deviations register = shell-mini README.
 
-1. **Fetch/pull all repos; diff engine vs `624a76b`, OT vs `4e39b67`, web-daw-core vs `bc68ee0`.** The user said all three are "still finalizing" — a delta is LIKELY. If any advanced: scout the delta FIRST (its HANDOFF/gaps/DECISIONS docs), then apply the seal items against the new state. Pay special attention to: engine `vendor/web-daw-core` appearing (M1.5!), OT's C7 rename (types losing their `timeline.*` prefixes), web-daw-core M1.5/M2 movement.
-2. **If M1.5 landed in the engine**: verify per ARCH-R9 §7.1 (submodule + parity gate + EXECUTED AudioMixer retirement + audio-mix.ts end-state) — this is PLAN item 1 and the biggest single seal event.
-3. **If nothing moved**: the C7-rename charter and the decision-reconciliation sign-off lines (PLAN items 3-4) are pure spec-side work — safe to start immediately.
+**Standing items:**
+- **USER REACTION pass** — the review surface is the full Storybook at the
+  preview URL root (R18). The v0.2 candidate list is in
+  PLAN.md R16 section; DnD media→timeline is the top candidate.
+- v0.2 candidates: DnD, annotakit wiring, keyboard clip-focus, snap-guide
+  indicator, 18px node-space gutter, waveform w/ amplitude variation.
 
-## Round-9 mechanics to reuse
+### R15-UI — shell-variants parity + audio (parallel thread, landed on origin)
 
-- **The challenge round pattern**: when the user pushes back on an architecture, re-derive from measured facts (LOC matrices, test assets, who-owns-what tables), not from prior-round conclusions — the R9 rulings each started with a fresh evidence table (ARCH-R9 §1).
-- **The domain-decomposition lens**: overlap between two repos is resolved by asking "is this ONE domain duplicated, or TWO domains that each need a home?" — the answer differs for timeline (was duplicate → merged) vs audio (two domains → layered seam).
-- **Battery discipline**: fix → full battery re-run → recalibrate; exempt-window logic must look BEFORE AND AFTER each hit (R9 lesson: a `superseded` marker 240 chars after a phrase is still context).
-- **Rename mechanics** (if another suffix-era ever appears): git rm seed + git mv + header self-reference rewrite + path sed on LIVE docs only, historical round records untouched.
+Timeline parity T1-T9 (canonical zoom via zoomController, CapCut ruler
+tiers, full gesture discipline, 2D cross-track drag, ripple interval-diff,
+trim laws, all 5 tool gestures, snap upgrade, clip virtualization) +
+audio overhaul A0-A5 (tokens, SVG Knob, stereo meterEngine, dB-linear
+StripMeter, fader scale, TrackHeader micro-meters, 83 stories).
+596→788 tests, review rounds V1→F1→V2 SHIP; PR #1 summary posted.
+
+**Standing items:**
+1. CodeRabbit re-review harvest on the 14-commit PR #1 range (triage P3s).
+2. Deferred P3s (V2): duplicateAndMove raw-API misuse edges; snap-ON
+   head-drag raw fallthrough.
+3. G.4 deferral ledger (engine-team questions): roll B-source-tail bound
+   rate≠1, preview batch-atomicity, seek-click 500ms gate deviation.
+4. Cross-round integration: when the assembly A-phases (spec 14) start
+   wiring the REAL engine, the shell-variants libs (timelinePlacement/
+   trimLaws/ripple/pixel) are the adapter seam to verify against OT's
+   24-command headless API.
+5. Their runtime chain (supervisor + instrumentation.ts booting Storybook
+   on :3000 inside THEIR sandbox's my-project) is NOT present in the
+   current sandbox — do not assume :3000 is theirs.
+
+## Restoration recipe (fresh sandbox)
+
+| Repo | State |
+|---|---|
+| nle-core-spec (canon) | GitHub `main` + gitlab mirror both current through the R16-continuation merge |
+| nle-engine / opencut-timeline / web-daw-core | sealed, untouched by R16 |
+
+1. `git clone https://<GHPAT>@github.com/frejogochukwuout/nle-core-spec /home/z/nle-core-spec` — clone OUTSIDE `/home/z/my-project` (the watchdog force-checkouts that path every ~20s; work only in the clone or on main).
+2. Add the gitlab backup remote (see FIRST ACTIONS #4).
+3. `cd ui-mock/shell-mini && npm ci` → run gates (93/93, tsc, build, sb).
+4. `python3 scripts/dev3000.py` → verify :3000 + preview URL.
+5. Reference repos (PAT-accessible, private, for the R15-UI standing
+   items): `bearachprema/opencut-timeline`, `zmmac1/web-daw-ui`,
+   `bearachprema/web-daw-core`.
+6. Read `.agents/PLAN.md` (R16 + R15-UI entries) + this file +
+   `SKILL.md` #47-51 + #53-58 + the `/home/z/my-project/worklog.md` tail
+   (session-local; may be missing in a fresh sandbox).
+
+## Mechanics to reuse (R16-tested)
+
+- **Double-fork is the ONLY process-persistence pattern that works** on
+  this container (verified dead: `nohup &`, `setsid &`, `disown`; verified
+  alive: fork→setsid→fork→exec, grandchild reparents to PID 1).
+- Skin extraction from a SingleFile DOM snapshot: `agent-browser open
+  file://…` → `eval` computed styles + CSS-rule dump (grep `quick-cut` in
+  styleSheets) → VLM on crops for gestalt; **trust the extracted CSS over
+  the VLM's color/layout claims** (it hallucinated "missing dot grid" that
+  pixel-sampling disproved; but it DID catch real text collisions).
+- The audit→fold→implement→review→fix loop caught real bugs both rounds;
+  write interaction tests against the SEED early (a seed with no slack is
+  a UX bug hiding as "deterministic simplicity").
+- Container danger zones: the terminal command filter (never loop
+  filtered commands; stop instantly on any 403/"broken session"), the
+  control-plane ports (12600/19001/19005/19006 — no curl matrices), and
+  the bash toolcall reaping (double-fork everything long-running).
 
 ## Standing cautions
 
-- Never edit web-daw-core's `copy`-class files by hand (file-class law; sync overwrites).
-- The spec set is now CONTRACT + GAP + ACCEPTANCE (Decision 14): new spec text should state boundary contracts, deltas, and acceptance — not re-describe internals the repos already document (their SKILL/DECISIONS docs).
-- The 6 historical round records keep their point-in-time `.refined.md` paths **by design** — do "fix" them.
+- Never force push (git is the disk; a faulty local + force = data death).
+- PATs live in chat + local `.git/config` ONLY (secret scanner).
+- Parallel sessions are ACTIVE — `git fetch` before EVERY push; merge, never force.
+- The mock does NOT amend specs; deviations live in the mock's README;
+  spec-side findings go to `.agents/SPEC-REVISION-CANDIDATES.md`.
+- The shell-variants' annotakit addon is NOT wired into shell-mini — do
+  not assume pin-comment tooling works there (deliberate D2 cut, see
+  DESIGN-mvp.md).

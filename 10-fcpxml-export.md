@@ -1662,7 +1662,7 @@ The `<sequence>` element only allows `(note?, spine, metadata?)` as children (DT
 
 The `start` attribute is relative to the parent clip's local timeline (not the sequence timeline).
 
-**Action:** Move marker emission into the clip-building functions (`buildAssetClip`, `buildAudioClip`, etc.). For project-level markers (not attached to a specific clip), emit them on the closest preceding clip in the spine, or on a `<gap>` element placed at the marker's timecode.
+**Action:** Move marker emission into the clip-building functions (`buildAssetClip`, `buildAudioClip`, etc.). For scene-scoped markers not attached to a specific clip (per the A2 amendment — markers are PER SCENE, not project-level), emit them on the closest preceding clip in the spine, or on a `<gap>` element placed at the marker's timecode.
 
 ### Correction #11: Seed's `media-rep kind="original-mediarep"` is wrong; valid kinds are `original-media` and `proxy-media`
 
