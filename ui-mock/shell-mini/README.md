@@ -25,8 +25,22 @@ npm run dev         # http://localhost:3000/ — dedicated port; on the Z-contai
 npm test            # vitest — 4 files / 93 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
-npm run storybook   # http://localhost:6007 — 30 stories, 4 groups
-                    # (externally: /?XTransformPort=6007 while running)
+npm run storybook   # dev server (HMR, localhost:6007) — run via
+                    # `python3 scripts/sb6007.py` (double-fork daemon)
+```
+
+**Viewing Storybook at the public preview URL** (on the Z-container): the
+dev server can't serve externally (?XTransformPort doesn't propagate to
+sub-resource URLs; dev iframe uses root-absolute Vite paths). Instead the
+**static build is mounted inside the app**: `/stories/index.html` off the
+public URL — e.g. `https://preview-chat-<chat-id>.space-z.ai/stories/index.html`
+(single story full-screen: `/stories/iframe.html?id=<story-id>&viewMode=story`).
+That mount is the committed `public/stories/` directory. After changing
+stories, refresh it:
+
+```bash
+npm run build-storybook && rm -rf public/stories && cp -r storybook-static public/stories
+# then commit public/stories (git-is-the-disk)
 ```
 
 **Cold-start resurrection (container recycle):** `scripts/boot-restore.sh`

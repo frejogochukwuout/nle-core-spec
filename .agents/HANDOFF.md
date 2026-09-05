@@ -12,12 +12,23 @@ COMPLETE on origin and its standing items are preserved.
 
 ## What is LIVE right now (the headline)
 
-- **The public preview URL serves the shell-mini app — verified end-to-end**
-  (agent-browser through the real edge: DNS → FC edge → Caddy :81 → Vite,
-  title + a11y tree + playback TC advance all confirmed). The URL pattern is
-  `https://preview-chat-<chat_id>.space-z.ai/` (the hostname embeds THIS
-  chat's id from the gateway metadata) — also reachable via the Preview
-  Panel / "Open in New Tab" button.
+- **The public preview URL serves the shell-mini app AND the Storybook review
+  surface — both verified end-to-end** (agent-browser through the real edge +
+  VLM on screenshots). URL pattern: `https://preview-chat-<chat_id>.space-z.ai/`
+  (the hostname embeds THIS chat's id from the gateway metadata).
+  - App: `/` — the RH-skinned mini NLE shell.
+  - Storybook manager: `/stories/index.html` (NOT bare `/stories/` — the
+    directory path falls to the app's SPA fallback).
+  - Single story full-screen: `/stories/iframe.html?id=<story-id>&viewMode=story`.
+- **Why Storybook is a static mount, not a port:** ?XTransformPort CANNOT
+  serve multi-asset UIs (the query doesn't propagate to sub-resource URLs —
+  they fall to :3000 and 404), and the SB dev iframe's root-absolute Vite
+  paths escape any sub-path proxy. The static build (`storybook-static/`)
+  is fully relative → copied to `public/stories/` (committed) → served by
+  the app's own Host-allowed Vite. After story changes:
+  `npm run build-storybook && cp -r storybook-static public/stories` + commit.
+  Full verified law-set: `.agents/SKILL.md` "preview-URL serving reference"
+  (Laws 1-5) — read it before any go-live/port claim.
 - **The Host-header law (the bug that made it "not live" while the process
   was up):** the FC edge rewrites the request Host to `...fcapp.run`; Caddy
   passes Host through untouched; Vite's default `server.allowedHosts`
@@ -41,9 +52,10 @@ COMPLETE on origin and its standing items are preserved.
      FIRST ACTION.
   3. *Durable state:* GitHub origin + gitlab mirror + /home/sync bundle+
      tarball refreshed at every wrap-up.
-- Storybook: `npm run storybook` → :6007 (externally
-  `/?XTransformPort=6007`); a leftover session-started instance may still
-  be running — it dies on recycle; restart with the same command.
+- Storybook: dev server (HMR, localhost) via `python3 scripts/sb6007.py`
+  (double-fork daemon, :6007, log sb.log); the PUBLIC review surface is the
+  static mount at `/stories/index.html` (see above) — they are different
+  artifacts with different jobs.
 
 ## FIRST ACTIONS for the next session (in order)
 

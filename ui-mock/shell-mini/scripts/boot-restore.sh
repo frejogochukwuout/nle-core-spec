@@ -65,12 +65,18 @@ if [ ! -d node_modules ]; then
   npm ci --no-audit --no-fund || { echo "npm ci FAILED"; exit 1; }
 fi
 
-# 3. Launch (double-fork daemon — survives per-toolcall process reaping).
+# 3. Launch the app (double-fork daemon — survives per-toolcall reaping).
 echo "launching dev3000.py"
 python3 scripts/dev3000.py
 sleep 3
 if curl -s -m 2 -o /dev/null http://127.0.0.1:3000/; then
-  echo "RESTORED — :3000 serving (check public preview URL)"
+  echo "APP RESTORED — :3000 serving (public: / and /stories/index.html)"
 else
   echo "WARNING — launch issued but :3000 not answering yet (check dev.log in shell-mini)"
 fi
+
+# 4. Launch the localhost dev storybook (best-effort, non-fatal — the PUBLIC
+#    storybook is the static build at /stories/ served by the app itself;
+#    6007 is only the HMR dev loop for agent sessions).
+echo "launching sb6007.py (best-effort)"
+python3 scripts/sb6007.py || echo "storybook dev launch failed (non-fatal)"

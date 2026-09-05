@@ -771,3 +771,111 @@ These patterns generalize beyond browser NLEs to any complex engine + UI system 
 59. **"Serving on localhost" is a FALSE PASS for public liveness — the edge rewrites the Host header.** The R16 port-3000 go-live reported "LIVE" on the strength of `curl localhost:81 → 200`; the user's browser got Vite's 403 "Blocked request: This host is not allowed" the whole time. The chain is four layers, and each has its own failure mode: (1) process alive (reaper), (2) port bound (crash → port free), (3) proxy forwards (Caddy passes Host untouched), (4) **backend accepts the Host** — dev servers (Vite, Storybook) default-allow only localhost/IPs, and platform edges rewrite Host (`...fcapp.run`, `...space-z.ai`). Probe layer 4 explicitly: `curl -H 'Host: <edge-style-host>' http://127.0.0.1:81/`, and call the app live ONLY after a real public-URL browser pass (agent-browser through the edge). The other session's note had already documented this exact trap for Storybook (`core.allowedHosts`) — read sibling-session failure notes BEFORE claiming a go-live class of win.
 
 60. **Process persistence is three different problems: reaper, recycle, and nothing-starts-it.** (a) The per-toolcall reaper kills the whole descendant tree — only double-fork (grandchild reparents to PID 1) survives; `nohup`/`setsid`/`disown` all die. (b) A container recycle kills even the double-forked daemon (FC scale-to-zero) — only durable storage survives: remotes + /home/sync. (c) After recycle, NOTHING re-launches your app unless you've wired a boot hook: the harness runs `/home/z/my-project/.zscripts/dev.sh` at boot in some sandbox variants — write it idempotent + PAT-free (restore from the newest `/home/sync/*.bundle` via glob, not a PAT-embedded clone; creds in an untracked boot script get archived into repo.tar), test it live by killing the daemon and running the hook, and keep a canonical copy committed in the repo so a fresh clone can re-install the hook in one cp. Each layer needs its own verification; surviving one says nothing about the next.
+
+61. **A second UI cannot ride ?XTransformPort, and a dev server cannot ride a sub-path — but a static build can.** Verified while exposing Storybook at the public URL: the query survives the edge and routes the DOCUMENT request to :6007, but sub-resource URLs (relative or absolute) never carry the query → they fall to :3000 → 404 → the manager HTML loads and its JS never executes. The dev server's iframe is worse: root-absolute Vite paths (`/@vite/client`, `/@id/__x00__virtual:/…`) escape any sub-path prefix. The winning pattern: build static (`npm run build-storybook`), copy `storybook-static/` → `public/stories/` of the app (static output is fully relative — sub-path-safe by construction), commit it, serve it from the app's already-Host-allowed Vite. Entry must be the explicit file `/stories/index.html` (bare `/stories/` falls to the SPA fallback and serves the app). Full law-set in the reference section below.
+
+---
+
+## Z-container preview-URL serving — the verified reference (R16 continuation)
+
+Written after the port-3000 go-live false-pass (#59) and the Storybook
+external-surface investigation. Every line was verified empirically in this
+sandbox (forged-Host probes + real public-URL browser passes + VLM on
+screenshots); claims inherited from other sessions' notes are marked.
+
+### The chain
+
+```
+browser → https://preview-chat-<chat_id>.space-z.ai/   (chat_id from gateway metadata)
+        → FC edge (rewrites request Host to ...fcapp.run)
+        → Caddy :81 (platform-owned, ALWAYS running, Host passes untouched)
+            ├─ request carries ?XTransformPort=NNNN → localhost:NNNN
+            └─ otherwise → localhost:3000 (unconditionally)
+```
+
+Caddy needs no "trigger to serve": the moment ANY process binds :3000 it
+becomes the public site; if nothing binds, the edge/Caddy layer errors
+(upstream down). The preview URL host embeds THIS chat's id — it is not
+discoverable from inside the container (no env vars), but it is derivable
+from the chat gateway metadata.
+
+### Law 1 — the backend must ACCEPT the edge Host
+
+- **Vite dev server:** default allowlist = localhost/IPs only → every public
+  request dies with `403 Blocked request. This host ("…fcapp.run") is not
+  allowed.` Fix: `server.allowedHosts: ['.space-z.ai', '.fcapp.run']`
+  (dot-prefix matches any subdomain).
+- **Storybook 10.6 dev:** allows ALL hosts by default — startup banner says
+  `Other allowed hosts: all (insecure)`; verified 200 with a forged edge
+  Host. Older Storybook versions threw "Invalid host" (a sibling session
+  fixed theirs via `core.allowedHosts`) — PROBE, don't assume either way.
+- **Static files served by the app (Vite publicDir):** no Host check at all —
+  immune by construction. (This is why the static-build mount in Law 4 needs
+  zero extra plumbing.)
+
+### Law 2 — liveness is 4 layers; a localhost curl is a FALSE PASS
+
+`process alive (reaper!) → port bound → Caddy forwards → backend accepts
+Host.` Probe the last layer with the edge's Host:
+
+```bash
+curl -H 'Host: preview-chat-<id>.fcapp.run' http://127.0.0.1:81/
+```
+
+…and call the app live ONLY after a real public-URL browser pass
+(agent-browser through the edge) that includes an interaction (click/play)
+and an asset-load check — a 200 HTML fetch proves neither JS execution nor
+sub-asset loading (see the XTransformPort manager trap in Law 3: title
+loads, UI never boots).
+
+### Law 3 — ?XTransformPort: query-scoped; documents yes, UIs no (verified)
+
+- The query **does survive the public edge** (verified: the SB manager HTML
+  was served from :6007 at the public URL WITH the query; an older
+  sibling-session note claimed it did not survive — don't inherit that
+  claim, or any unprobed claim, across sandbox variants).
+- But Caddy's query route applies ONLY to requests that carry the query. A
+  multi-asset page (manager, SPA, any dev-server UI) references scripts and
+  styles by plain paths (relative `./sb-manager/…` OR absolute `/@vite/…`);
+  browsers do not propagate the query to sub-resource URLs → those requests
+  fall to :3000 → 404 → the UI never boots. Verified: SB manager at the
+  public URL with the query = title renders, `hasManagerUI: false`, zero
+  executed scripts.
+- What DOES work through XTransformPort: single-endpoint fetches where EVERY
+  request explicitly carries the query (`fetch('/api/x?XTransformPort=3030')`)
+  and websockets at path `/` (`io('/?XTransformPort=3003')` — platform rule:
+  WS path must be `/`).
+- HMR websockets through the public edge fail regardless (Vite falls back to
+  polling and reconnects) — cosmetic for review surfaces.
+
+### Law 4 — serving a SECOND UI (e.g. Storybook) at the public URL
+
+Don't fight the one-port rule with dev-server proxy meshes — two dead ends,
+both verified:
+- XTransformPort: broken for multi-asset UIs (Law 3).
+- Sub-path proxy to a dev server: the SB dev iframe uses root-absolute Vite
+  paths (`/@vite/client`, `/@id/__x00__virtual:/@storybook/builder-vite/…`)
+  that escape any prefix and would collide with the app's own Vite paths.
+
+**The pattern that works end-to-end (verified + VLM-confirmed):** mount the
+STATIC build under the app's origin:
+1. `npm run build-storybook`
+2. `cp -r storybook-static public/stories` — the static output is FULLY
+   relative (`./sb-manager/*`, `./sb-addons/*`, `./assets/*`), hence
+   sub-path-safe by construction.
+3. Commit `public/stories` (git-is-the-disk; zero build steps at boot).
+4. Entry URLs (public): `…/stories/index.html` for the manager — NOT bare
+   `/stories/` (trailing-slash directory requests fall to the app's SPA
+   fallback and serve the APP); `…/stories/iframe.html?id=<story-id>&viewMode=story`
+   for a full-screen single story.
+5. Rebuild + recopy + commit when stories change. The DEV storybook (HMR,
+   localhost-only) runs via `scripts/sb6007.py` (double-fork daemon, :6007).
+
+### Law 5 — persistence is three different problems
+
+See #60 for the full law. Layer summary with the concrete artifacts:
+reaper → double-fork daemons (`scripts/dev3000.py` app, `scripts/sb6007.py`
+storybook dev); recycle → `scripts/boot-restore.sh` (iso
+`/home/z/my-project/.zscripts/dev.sh`, idempotent + PAT-free, restores from
+the newest `/home/sync/nle-core-spec-*.bundle`); durability → GitHub origin +
+gitlab mirror + `/home/sync` bundle/tarball refreshed at every wrap-up.
