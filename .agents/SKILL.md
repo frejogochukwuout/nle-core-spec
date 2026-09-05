@@ -887,3 +887,196 @@ storybook dev); recycle → `scripts/boot-restore.sh` (iso
 `/home/z/my-project/.zscripts/dev.sh`, idempotent + PAT-free, restores from
 the newest `/home/sync/nle-core-spec-*.bundle`); durability → GitHub origin +
 gitlab mirror + `/home/sync` bundle/tarball refreshed at every wrap-up.
+
+## R17 meta-learnings (shell-variants takes :3000 in its own env — parallel-stream serving split)
+
+62. **Per-env port ownership: when parallel streams share a REPO but not a SANDBOX, :3000 is owned per-ENV, not per-repo.** Two streams were both landing in `nle-core-spec` (shell-mini + shell-variants); each sandbox has its own Caddy/edge, so the "who serves :3000" question is answered per-environment by user directive — "serve YOURS in this env." The failure mode it prevents: an agent from stream A rebuilds what stream B already built (a whole sb-supervisor stack existed in MY env that only ever served shell-mini's predecessor), or worse, kills the other stream's daemon believing it stale. On any port-3000 takeover: (1) identify WHAT is running before killing it (process cwd, not just the command line — `node vite.js` could be either app), (2) check `git ls-remote` for parallel pushes FIRST (the sibling pushed 3× during this session; rebase, never force), (3) document the ownership split in the SHARED HANDOFF so the next session of either stream reads one truth.
+
+63. **A recycle doesn't just kill processes — it leaves the boot hook pointing at ghosts, and NOTHING tells you.** After the container recycle: the overlay clone (`/home/z/nle-core-spec`) was gone, the runtime copy was gone, AND the harness boot hook `.zscripts/dev.sh` (tracked in the my-project repo, force-checked-out) ran a `package.json` dev script pointing at `sb-supervisor.mjs` — a file that died with the recycle → `MODULE_NOT_FOUND` → wait_for_service fails → no server, no restart, no retry, ever. The boot log (`sb-boot.log`) held the answer the whole time. Law: after any recycle, read the boot logs BEFORE inventing a new serving stack, and make the boot hook's failure mode loud (a dev.sh that exits 0 with a warning is worse than one that fails hard — the harness won't tell you either way).
+
+## Serving the shell-variants review surface on :3000 — the verified reference (R17)
+
+This is the SIBLING pattern to the "Z-container preview-URL serving" section
+above (that one = shell-mini: static-build mount under an app that owns the
+port). This one = **the dev Storybook IS the app on :3000** — the full
+shell-variants review surface (Storybook 10.6 + annotakit, 83 stories) served
+directly at the public URL. Every line below was verified live in this
+sandbox (kill→restore→public-200 cycle included).
+
+### The stack (what runs where)
+
+```
+browser → https://preview-chat-<chat_id>.space-z.ai/
+        → FC edge (rewrites Host to …fcapp.run)
+        → Caddy :81 (platform, always up) → localhost:3000
+        → Storybook 10.6 DEV (storybook dev -p 3000)
+            ├── manager + 83 stories (React 19 + Vite 8, HMR live)
+            ├── /annotakit/api/*  → vendored addon server (SQLite threads.db)
+            └── git auto-sync: threads.db → annotakit-store branch → GitHub
+
+serving host = /home/z/my-project/shell-variants   (persistent-volume RUNTIME copy)
+source of truth = /home/z/nle-core-spec            (repo checkout; dies on recycle)
+boot hook = /home/z/my-project/.zscripts/dev.sh    (iso of scripts/boot-restore.sh)
+launcher = scripts/sb3000.py                       (double-fork daemon, PPID=1)
+```
+
+The runtime copy is NOT the repo checkout — it is a second working tree on
+the persistent volume with its OWN `node_modules` (263MB, survives recycles
+when the volume does), its own `.env` (token), and its own git repo whose
+branch `annotakit-store` tracks `threads.db` (the main repo gitignores it;
+the runtime repo's .gitignore is deliberately INVERTED — see gotcha 6).
+
+### The launch recipe (from nothing to public-200)
+
+```bash
+# 1. repo (PAT from chat; never committed)
+git clone https://<PAT>@github.com/frejogochukwuout/nle-core-spec.git /home/z/nle-core-spec
+git -C /home/z/nle-core-spec remote add gitlab https://<GLPAT>@gitlab.com/ansgareutychisO/nle-core-spec.git
+
+# 2. runtime copy on the persistent volume
+cp -a /home/z/nle-core-spec/ui-mock/shell-variants /home/z/my-project/shell-variants
+cd /home/z/my-project/shell-variants
+npm ci --no-audit --no-fund          # ~4 min; esbuild allow-scripts warning is benign
+
+# 3. vendored annotakit dist — MANDATORY, gitignored, see gotcha 4
+npm run vendor:build                 # tsup → dist/{server.cjs,manager.mjs,preview.mjs}
+
+# 4. token (gitignored; never in tracked files — secret scanner blocks pushes)
+printf 'ANNOTAKIT_GH_TOKEN=<PAT>\nANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec\n' > .env
+
+# 5. runtime git store (annotakit git-push durability) — see gotcha 6
+git init -b annotakit-store && git add -A && git commit -m "runtime store base"
+git remote add origin https://<PAT>@github.com/frejogochukwuout/nle-core-spec.git
+git push -u origin annotakit-store
+
+# 6. launch (double-fork; PPID=1) + verify
+python3 scripts/sb3000.py
+curl -s localhost:3000/annotakit/api/health         # {"ok":true,…,"durability":"git-push"}
+curl -H 'Host: preview-chat-<id>.fcapp.run' http://127.0.0.1:81/   # 200
+# then the REAL public URL + sub-assets (gotcha 8)
+```
+
+### The gotchas (every one bitten-then-verified this session)
+
+1. **The reaper kills ALL bash descendants — only double-fork survives.**
+   Verified twice: `setsid nohup sleep` AND `setsid nohup next dev` both
+   died between tool calls (dev.log even emptied). Only the
+   fork→setsid→fork pattern (grandchild reparents to PID 1) survives.
+   `scripts/sb3000.py` is the canonical implementation; verify with
+   `ps -o ppid= -p <pid>` → `1`. Prior sessions' claims that "children of
+   the platform's app server survive" were true THEN (app server had a
+   spawn-route) but are NOT a property you can rely on — the platform tree
+   itself changes between harness versions.
+
+2. **A recycle kills even the PPID=1 daemon; only durable storage + a boot
+   hook bring it back.** The stack died mid-session and twice across
+   sessions. Three layers, each verified: (a) daemon survives toolcalls
+   (PPID=1), (b) `boot-restore.sh` (iso `.zscripts/dev.sh`) rebuilds
+   everything from the newest `/home/sync/nle-core-spec-*.bundle` (PAT-free
+   — a PAT embedded in `.zscripts/*` gets archived into the my-project
+   repo.tar by the watchdog), (c) remotes (GitHub + GitLab + bundle)
+   refreshed at every wrap-up. The restorer gates on the HEALTH ENDPOINT,
+   not a bare 200 (a half-dead tenant can bind the port and still 500) and
+   kills half-dead tenants before relaunching.
+
+3. **The harness boot hook is the ONLY auto-start — and it fails silently.**
+   `.zscripts/dev.sh` runs at boot (when the harness executes it); a missing
+   target (MODULE_NOT_FOUND) leaves :3000 dead forever with no retry and no
+   alert. After any recycle: READ the boot log first. Also: the my-project
+   watchdog auto-commits working-tree changes — a replaced hook persists
+   (verify `git -C /home/z/my-project log --oneline -- .zscripts/dev.sh`),
+   but `dev.log` (untracked) survives force-checkouts. Keep the canonical
+   copy of the hook committed IN THE REPO (`scripts/boot-restore.sh`) so a
+   fresh session re-installs it with one `cp`.
+
+4. **The vendored addon ships WITHOUT its dist.** `vendor/storybook-annotakit/dist/`
+   is gitignored (build artifact) — a fresh clone cannot boot Storybook
+   (explicit `[storybook-annotakit]` error; SB dev refuses to start). Run
+   `npm run vendor:build` (tsup, ~3s). AND verify the dist content by
+   grepping for the fix markers in `dist/server.cjs` / `dist/preview.mjs`
+   — the R13 audit caught a "dist rebuilt" claim that was never rebuilt:
+   the health endpoint answered while the running code was pre-fix
+   (**responding ≠ fixed**; tsup doesn't minify, so markers survive).
+
+5. **Token law: `.env` only, never tracked.** GitHub's secret scanner
+   REJECTS pushes containing the PAT (even in history), and the GitLab PAT
+   lives only in `.git/config` + chat. The addon reads
+   `ANNOTAKIT_GH_TOKEN` from `.env` next to the project root (its own
+   ~30-line dotenv — no dependency); without it the addon degrades to
+   "partial: git repo without a github remote" (commits, no push — check
+   the health JSON's `gh.hasToken`).
+
+6. **Annotakit durability requires the SERVING directory to be a git repo —
+   with the OPPOSITE .gitignore of the main repo.** The addon auto-commits
+   `.storybook/annotakit/threads.db` and pushes the branch to GitHub via
+   http extraHeader (token never in argv/URL/errors). In the MAIN repo
+   that path is gitignored (runtime state); in the RUNTIME repo it must be
+   TRACKED or every sandbox death loses the review threads. Hence the
+   runtime repo: `git init -b annotakit-store`, custom `.gitignore`
+   (threads.db in, `.env`/node_modules out), branch pushed to origin. The
+   auto-sync fires on every mutation AND on graceful daemon shutdown
+   (observed: a "sync feedback store (shutdown)" commit appeared after a
+   kill). Store branch ≠ main: never merge it into the spec repo.
+
+7. **Port hygiene: kill the RIGHT tenant, and defuse competing dev
+   scripts.** Before binding :3000: (a) identify the running process's cwd
+   (`ls -l /proc/<pid>/cwd`) — `node vite.js` could be either parallel
+   stream's app; (b) kill half-dead tenants (bound, not answering);
+   (c) make sure NOTHING else will grab the port at the next harness boot
+   — the platform's own `package.json` dev script must not also bind :3000
+   (point it at :3001 or make it a no-op; a racing `next dev` and the SB
+   daemon will fight over the port across boots).
+
+8. **Liveness proof = the asset chain, not the HTML 200.** A manager HTML
+   200 proves nothing (the XTransformPort trap: title loads, JS never
+   boots). The full probe set, in order: health endpoint
+   (`/annotakit/api/health` — proves addon server + store + token config),
+   forged-Host through Caddy (`curl -H 'Host: …fcapp.run' :81/`), then the
+   REAL public URL fetching: `/` (manager HTML), `/sb-manager/runtime.js`
+   (1.2MB manager bundle), `/sb-addons/vendor-storybook-annotakit-1/manager-bundle.js`
+   (the ADDON actually loads through the edge), `/iframe.html?id=<story-id>&viewMode=story`
+   (a story actually renders), `/index.json` (story COUNT — 83 entries / 8
+   groups at R17; a count regression catches half-loaded story globs), and
+   `/@vite/client` (the dev server's virtual modules — root-absolute, so
+   it only works when the app owns the WHOLE origin, which is exactly why
+   this pattern requires the dedicated port).
+
+9. **Host acceptance: SB 10.6 allows all hosts by default** — startup
+   banner `Other allowed hosts: all (insecure)`; verified 200 with a
+   forged edge Host. The committed `core.allowedHosts: true` in
+   `.storybook/main.ts` (builder-vite forwards it into vite
+   `server.allowedHosts`) is belt-and-braces that survives a future SB
+   default flip. PROBE, don't assume — Vite itself default-403s the edge
+   Host (the shell-mini session's whole go-live bug).
+
+10. **Timing + noise you will hit:** `npm ci` ~4 min; Storybook dev ~25-40s
+    to ready (telemetry + vite optimizer bundling — poll, don't assume);
+    the esbuild "install scripts not yet covered by allowScripts" warning
+    is benign (binary works; `node -e "require('esbuild')"` proves it);
+    GitLab mirror pushes 403 (WAF) ~1 in 3 — just retry once; `git push`
+    rejected non-fast-forward means the PARALLEL stream pushed again —
+    fetch + rebase, never force (it happened twice this session; the
+    shell-variants subtree was untouched both times — verify with
+    `git diff --name-only A B -- ui-mock/shell-variants` before assuming
+    conflict).
+
+11. **The only real proof of the restorer is a live kill→restore→public-200
+    cycle.** Idempotence check (run the hook while up → "nothing to do") +
+    kill the daemon → run the hook → health green → public URL 200. If you
+    haven't watched it come back from the dead, you don't have a restorer,
+    you have a script.
+
+### When to use WHICH serving pattern (the two-session decision table)
+
+| | shell-mini pattern (above) | shell-variants pattern (this section) |
+|---|---|---|
+| What owns :3000 | the APP's Vite dev server | the Storybook DEV server itself |
+| Storybook at public URL | static build mounted at `/stories/` | :3000 IS Storybook (root) |
+| Why | the app is the product; SB is a sub-surface | SB+annotakit IS the review product (HMR + live review API) |
+| Cost | rebuild+recopy+commit `public/stories` on story changes | no static sync; port exclusively SB's |
+| Both verified | end-to-end (manager + VLM) | end-to-end (health + bundles + iframe + index.json) |
+
+Rule of thumb: **if reviewers interact through the Storybook UI (pin
+comments), serve the DEV Storybook as the port owner** — annotakit's review
+API lives on the dev server, a static build shows a "dev only" note. If the
+APP is the review surface, mount SB's static build under the app.
