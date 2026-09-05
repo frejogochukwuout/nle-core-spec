@@ -1,0 +1,553 @@
+/* ============================================================
+   quick-cut timeline anatomy — CSS port of the RH reference
+   (ui-mock/RH-timeline-editor.html `.quick-cut-*` rules).
+   Class-for-class port with `qc-` prefix; values verbatim from
+   docs/RH-skin-extraction.md §3 unless commented.
+   Structural deviation (DESIGN D7 / audit M3): ONE shared
+   horizontal scroll wrapper contains ruler + lanes + playhead
+   overlay (the RH original scrolls only the tracks and keeps
+   ruler/playhead as unscrolled siblings — verbatim copying would
+   desync them under scroll).
+   ============================================================ */
+
+/* ---- panel ------------------------------------------------ */
+
+.qc-timeline {
+  position: relative;
+  border-radius: var(--canvas-editor-radius-panel);
+  background: var(--canvas-quick-cut-surface);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.12),
+    rgba(255, 255, 255, 0.024) 0 1px inset;
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* tools row — 42px, right-aligned controls (RH-verbatim) */
+.qc-timeline__tools {
+  position: relative;
+  z-index: 3;
+  height: 42px;
+  padding: 4px 10px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--canvas-editor-space-md);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.14);
+}
+
+.qc-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-xs);
+  min-width: 0;
+  height: var(--canvas-editor-action-size);
+  cursor: default;
+}
+
+.qc-toolbar__group--right {
+  margin-left: auto;
+}
+
+/* icon buttons — 34px round, transparent, hover wash (RH-verbatim) */
+.qc-toolbar__icon,
+.qc-toolbar__mini-icon {
+  width: var(--canvas-editor-action-size);
+  height: var(--canvas-editor-action-size);
+  border: none;
+  border-radius: var(--canvas-editor-radius-pill);
+  background: transparent;
+  color: var(--canvas-editor-text-default);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  padding: 0;
+}
+
+.qc-toolbar__icon svg,
+.qc-toolbar__mini-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.qc-toolbar__icon:not(:disabled):hover,
+.qc-toolbar__mini-icon:not(:disabled):hover {
+  background: var(--canvas-editor-control-hover);
+  color: var(--canvas-editor-text-primary);
+}
+
+.qc-toolbar__icon.is-active {
+  background: var(--canvas-editor-control-surface);
+  color: var(--canvas-quick-cut-control-active);
+}
+
+.qc-toolbar__icon:disabled,
+.qc-toolbar__mini-icon:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.qc-toolbar__icon:focus-visible,
+.qc-toolbar__mini-icon:focus-visible,
+.qc-ruler__playhead:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 2px;
+}
+
+/* zoom slider — 64px range, 4px track, white fill (RH-verbatim) */
+.qc-toolbar__slider {
+  width: 64px;
+  height: 12px;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.qc-toolbar__slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--canvas-quick-cut-slider-active) 0%,
+    var(--canvas-quick-cut-slider-active) var(--qc-slider-pct, 50%),
+    rgba(255, 255, 255, 0.18) var(--qc-slider-pct, 50%),
+    rgba(255, 255, 255, 0.18) 100%
+  );
+}
+
+.qc-toolbar__slider::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--canvas-quick-cut-slider-active);
+  box-shadow: none;
+}
+
+.qc-toolbar__slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: rgba(255, 255, 255, 0.22) 0 0 0 2px;
+}
+
+/* ---- shared horizontal scroll wrapper (mini deviation, D7) --- */
+
+.qc-scroll {
+  overflow: auto hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.qc-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.qc-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* ---- ruler (RH-verbatim) ----------------------------------- */
+
+.qc-ruler {
+  position: relative;
+  z-index: 2;
+  padding: 0 10px;
+}
+
+.qc-ruler__inner {
+  position: relative;
+}
+
+.qc-ruler__content {
+  position: relative;
+  min-width: 100%;
+  height: 34px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+/* minor tick band (RH-verbatim repeating-linear-gradient) */
+.qc-ruler__content::before {
+  position: absolute;
+  top: 21px;
+  right: 0;
+  left: 0;
+  height: 4px;
+  content: "";
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.16) 0 1px,
+    transparent 1px var(--qc-minor-tick-step, 4%)
+  );
+  pointer-events: none;
+}
+
+.qc-ruler__mark {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  transform: translate(-50%);
+}
+
+.qc-ruler__mark.is-first .qc-ruler__label {
+  transform: none;
+}
+
+.qc-ruler__mark.is-last .qc-ruler__label {
+  transform: translate(-100%);
+}
+
+.qc-ruler__label {
+  position: absolute;
+  top: 7px;
+  left: 0;
+  transform: translate(-50%);
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.qc-ruler__tick {
+  position: absolute;
+  top: 19px;
+  left: 0;
+  width: 1px;
+  height: 7px;
+  background: rgba(255, 255, 255, 0.34);
+  pointer-events: none;
+}
+
+/* ---- playhead (RH-verbatim: white line + dot + time pill) --- */
+
+.qc-playhead-overlay {
+  position: absolute;
+  z-index: 4;
+  /* inside the positioned scroll content: spans ruler (34px) + lanes.
+     Content height = ruler 34 + layout pad 8 + lanes 80 + pad 8 + stage
+     margin 12 = 142; lanes end at 122 → bottom inset 20px lands the line
+     exactly at the last lane's end. Horizontal 10px aligns with the
+     ruler's padding + stage margin+padding (2+8 = 10px). */
+  top: 0;
+  left: 10px;
+  right: 10px;
+  bottom: 20px;
+  pointer-events: none;
+}
+
+.qc-ruler__playhead {
+  position: absolute;
+  z-index: 3;
+  top: 19px;
+  bottom: 0;
+  width: 12px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  transform: translate(-50%);
+  cursor: col-resize;
+  pointer-events: auto;
+}
+
+.qc-ruler__playhead-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--canvas-quick-cut-accent);
+  pointer-events: none;
+}
+
+.qc-ruler__playhead-handle {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--canvas-quick-cut-accent);
+  box-shadow: rgba(255, 255, 255, 0.14) 0 0 0 2px;
+  transform: translate(-50%);
+  cursor: col-resize;
+  pointer-events: auto;
+}
+
+/* time label pill + triangle (RH-verbatim, hover/drag reveal) */
+.qc-ruler__playhead::after {
+  position: absolute;
+  top: -31px;
+  left: 50%;
+  min-width: 38px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  box-sizing: border-box;
+  content: attr(data-time-label);
+  color: var(--canvas-quick-cut-accent-ink);
+  background: var(--canvas-quick-cut-accent);
+  font-size: 10px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.qc-ruler__playhead::before {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-top: 4px solid var(--canvas-quick-cut-accent);
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+  content: "";
+  opacity: 0;
+  transform: translate(-50%);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.qc-ruler__playhead:hover::after,
+.qc-ruler__playhead:hover::before,
+.qc-ruler__playhead:focus-visible::after,
+.qc-ruler__playhead:focus-visible::before,
+.qc-ruler__playhead.is-dragging::after,
+.qc-ruler__playhead.is-dragging::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+.qc-ruler__playhead.is-at-start::after {
+  transform: translate(-4px);
+}
+
+.qc-ruler__playhead.is-at-end::after {
+  transform: translate(calc(-100% + 4px));
+}
+
+/* ---- stage / tracks (RH-verbatim) --------------------------- */
+
+.qc-stage {
+  position: relative;
+  z-index: 1;
+  margin: 0 2px 12px;
+  overflow: hidden;
+}
+
+.qc-track-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.qc-tracks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--canvas-editor-space-sm);
+  border-radius: var(--canvas-editor-radius-track);
+  position: relative;
+  min-width: 100%;
+  background: var(--canvas-quick-cut-track-surface);
+}
+
+.qc-track-row__content {
+  position: relative;
+  height: var(--canvas-editor-track-height);
+  border-radius: var(--canvas-editor-radius-control);
+  background: var(--canvas-quick-cut-lane-surface);
+  box-shadow: inset 0 0 0 1px var(--canvas-quick-cut-lane-border);
+  overflow: hidden;
+}
+
+/* lane badge (mini addition, D3.2: V1/A1 at lane left edge) */
+.qc-track-row__badge {
+  position: absolute;
+  z-index: 5;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--canvas-quick-cut-audio-label-surface);
+  color: var(--canvas-editor-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+/* ---- clips (RH-verbatim anatomy + gradient bodies) ---------- */
+
+.qc-track-item {
+  position: absolute;
+  top: var(--canvas-editor-clip-inset);
+  bottom: var(--canvas-editor-clip-inset);
+  min-width: 1px;
+  border-radius: var(--canvas-editor-radius-control);
+  box-shadow: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+/* selection = inset ring via ::after (RH-verbatim) */
+.qc-track-item.is-selected::after {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--canvas-quick-cut-selection);
+  content: "";
+  pointer-events: none;
+}
+
+.qc-track-item__filmstrip {
+  position: absolute;
+  inset: 0;
+  background-position: left center;
+  background-repeat: repeat-x;
+  background-size: auto 100%;
+}
+
+/* RH-verbatim edge fade over the filmstrip */
+.qc-track-item__filmstrip::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.2),
+    transparent 14%,
+    transparent 86%,
+    rgba(0, 0, 0, 0.24)
+  );
+}
+
+/* audio waveform body (mini: mock bar pattern, token-faithful) */
+.qc-track-item__waveform {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0 3px,
+    var(--canvas-quick-cut-audio-waveform) 3px 5px
+  );
+  background-position: center;
+  background-size: 100% 52%;
+  background-repeat: repeat-x;
+  opacity: 0.9;
+}
+
+/* clip label (mini addition: media name chip, RH text-label token) */
+.qc-track-item__label {
+  position: absolute;
+  z-index: 2;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--canvas-quick-cut-text-label);
+  background: var(--canvas-quick-cut-audio-label-surface);
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 0 6px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* trim handles — 14px zones, 2×10px bars (RH-verbatim) */
+.qc-track-item__trim {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  padding: 0;
+  border: none;
+  box-sizing: border-box;
+  appearance: none;
+  background: transparent;
+  cursor: ew-resize;
+}
+
+.qc-track-item__trim::before {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--canvas-quick-cut-selection);
+  content: "";
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.qc-track-item__trim--start {
+  left: 0;
+}
+
+.qc-track-item__trim--start::before {
+  left: 4px;
+}
+
+.qc-track-item__trim--end {
+  right: 0;
+}
+
+.qc-track-item__trim--end::before {
+  right: 4px;
+}
+
+/* ---- snap guide (mini: magnet indicator while dragging) ----- */
+
+.qc-snap-guide {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--canvas-quick-cut-snap-guide);
+  pointer-events: none;
+  display: none;
+}
+
+.qc-snap-guide.is-visible {
+  display: block;
+}
+
+/* ---- drag ghost shading (preview state) --------------------- */
+
+.qc-track-item.is-dragging {
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qc-toolbar__icon,
+  .qc-toolbar__mini-icon {
+    transition: none;
+  }
+}

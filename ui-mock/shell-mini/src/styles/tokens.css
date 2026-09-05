@@ -1,0 +1,92 @@
+/* ============================================================
+   RH SKIN TOKENS — verbatim port from ui-mock/RH-timeline-editor.html
+   (RunningHub "RHTV" quick-cut). Source of truth:
+   ui-mock/shell-mini/docs/RH-skin-extraction.md §2.
+   Carried verbatim, used selectively (per DESIGN-mvp.md D10.2):
+   mention/agent accents intentionally unused; drop-outline deferred
+   with the v0.2 DnD feature.
+   Prefix: kept as-is (--canvas-*) for provenance.
+   ============================================================ */
+
+:root {
+  /* page / surfaces */
+  --canvas-bg-primary: #0d0d0d;
+  --canvas-bg-secondary: #1d1f22;
+  --canvas-bg-tertiary: #1d1d1d;
+  --canvas-node-bg: #171717;
+  --canvas-border-subtle: #383b40;
+  --canvas-border-active: #4a4a4a;
+  --canvas-grid-dot: #383838;
+
+  /* text */
+  --canvas-text-primary: #ffffff;
+  --canvas-text-secondary: #a0a0a0;
+  --canvas-text-tertiary: #858991;
+  --canvas-editor-text-primary: #fff;
+  --canvas-editor-text-strong: rgba(255, 255, 255, 0.92);
+  --canvas-editor-text-default: rgba(255, 255, 255, 0.84);
+  --canvas-editor-text-muted: rgba(255, 255, 255, 0.52);
+
+  /* brand / functional accents */
+  --rh-green: #02dba3;
+  --rh-green-hover: #03c593;
+  --canvas-mention-accent: #ccff00; /* carried, intentionally unused */
+  --agent-accent-action: #c0ff00; /* carried, intentionally unused */
+  --agent-accent-action-hover: #d0ff43; /* carried, intentionally unused */
+  --agent-accent-created: #39d7a5; /* carried, intentionally unused */
+
+  /* chrome + controls */
+  --canvas-chrome-control-surface: rgba(20, 20, 20, 0.95);
+  --canvas-chrome-control-hover: rgba(35, 35, 35, 0.95);
+  --canvas-editor-control-surface: rgba(255, 255, 255, 0.065);
+  --canvas-editor-control-hover: rgba(255, 255, 255, 0.1);
+  --canvas-editor-border-subtle: rgba(255, 255, 255, 0.1);
+  --canvas-editor-border-clip: rgba(255, 255, 255, 0.18);
+  --canvas-editor-border-empty: rgba(255, 255, 255, 0.2);
+
+  /* quick-cut (timeline) family */
+  --canvas-quick-cut-editor-surface: var(--canvas-node-bg);
+  --canvas-quick-cut-surface: rgba(11, 12, 13, 0.88);
+  --canvas-quick-cut-toolbar-surface: rgba(255, 255, 255, 0.052);
+  --canvas-quick-cut-track-surface: rgba(0, 0, 0, 0.18);
+  --canvas-quick-cut-lane-surface: rgba(255, 255, 255, 0.055);
+  --canvas-quick-cut-lane-border: rgba(255, 255, 255, 0.035);
+  --canvas-quick-cut-border: transparent;
+  --canvas-quick-cut-accent: #f2f2f2;
+  --canvas-quick-cut-accent-ink: #191919;
+  --canvas-quick-cut-control-active: #e6e6e6;
+  --canvas-quick-cut-selection: #d0d0d0;
+  --canvas-quick-cut-slider-active: rgba(255, 255, 255, 0.72);
+  --canvas-quick-cut-snap-guide: #8f8f8f;
+  --canvas-quick-cut-drop-outline: #38bdf8; /* carried; deferred to v0.2 DnD */
+  --canvas-quick-cut-text-label: rgba(229, 229, 229, 1);
+  --canvas-quick-cut-item-surface: rgba(255, 255, 255, 0.025);
+  --canvas-quick-cut-audio-label-surface: rgba(20, 20, 20, 0.72);
+  --canvas-quick-cut-audio-waveform: rgba(255, 255, 255, 0.52);
+
+  /* geometry */
+  --canvas-editor-radius-pill: 999px;
+  --canvas-editor-radius-frame: 28px;
+  --canvas-editor-radius-panel: 20px;
+  --canvas-editor-radius-track: 10px;
+  --canvas-editor-radius-control: 8px;
+  --canvas-radius-md: 10px;
+  --canvas-radius-lg: 16px;
+
+  /* spacing / metrics */
+  --canvas-editor-space-xs: 4px;
+  --canvas-editor-space-sm: 8px;
+  --canvas-editor-space-md: 10px;
+  --canvas-editor-space-lg: 16px;
+  --canvas-editor-space-node: 18px;
+  --canvas-editor-space-timeline: 28px;
+  --canvas-editor-action-size: 34px;
+  --canvas-editor-track-height: 36px;
+  --canvas-editor-clip-inset: 1px;
+
+  /* mini-shell aliases (layout metrics from DESIGN D4) */
+  --mini-gutter: 12px;
+  --mini-topbar-h: 56px;
+  --mini-pool-w: 260px;
+  --mini-inspector-w: 240px;
+}

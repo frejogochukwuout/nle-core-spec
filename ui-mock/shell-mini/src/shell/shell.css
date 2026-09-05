@@ -1,0 +1,325 @@
+/* Shell region chrome — same token language as timeline.css; these rules
+   carry the mini-specific layout (D4) and region styling. Layout via
+   flex on .mini-root (app.css) + these fixed sizes. */
+
+/* ---- topbar -------------------------------------------------- */
+
+.mini-topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-lg);
+  height: var(--mini-topbar-h);
+  padding: 0 var(--canvas-editor-space-lg);
+  flex-shrink: 0;
+}
+
+.mini-topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  min-width: 0;
+}
+
+.mini-topbar__logo {
+  color: var(--canvas-text-tertiary);
+}
+
+.mini-topbar__title {
+  color: var(--canvas-editor-text-strong);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-topbar__transport {
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  margin-left: auto;
+}
+
+/* ---- main row (pool | viewer | inspector) --------------------- */
+
+.mini-main {
+  display: flex;
+  gap: var(--mini-gutter);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ---- media pool ----------------------------------------------- */
+
+.mini-pool {
+  width: var(--mini-pool-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mini-pool__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--canvas-editor-space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--canvas-editor-space-sm);
+}
+
+.mini-media-card {
+  display: flex;
+  flex-direction: column;
+  border: none;
+  border-radius: var(--canvas-editor-radius-control);
+  background: var(--canvas-quick-cut-item-surface);
+  cursor: pointer;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.mini-media-card:hover {
+  background: var(--canvas-editor-control-hover);
+  box-shadow: inset 0 0 0 1px var(--canvas-editor-border-subtle);
+}
+
+.mini-media-card:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 2px;
+}
+
+.mini-media-card__thumb {
+  position: relative;
+  height: 84px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+.mini-media-card__kind {
+  position: absolute;
+  top: var(--canvas-editor-space-sm);
+  left: var(--canvas-editor-space-sm);
+  padding: 1px 6px;
+  border-radius: var(--canvas-editor-radius-pill);
+  background: var(--canvas-quick-cut-audio-label-surface);
+  color: var(--canvas-editor-text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mini-media-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--canvas-editor-space-sm);
+  padding: var(--canvas-editor-space-sm) var(--canvas-editor-space-md);
+}
+
+.mini-media-card__name {
+  color: var(--canvas-editor-text-default);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-media-card__dur {
+  color: var(--canvas-editor-text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* ---- viewer ---------------------------------------------------- */
+
+.mini-viewer {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mini-viewer__stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: var(--canvas-editor-space-md);
+  border-radius: var(--canvas-radius-lg);
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.mini-viewer__frame {
+  position: absolute;
+  inset: 0;
+  opacity: 0.92;
+}
+
+.mini-viewer__info {
+  position: absolute;
+  z-index: 2;
+  left: var(--canvas-editor-space-lg);
+  bottom: var(--canvas-editor-space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--canvas-editor-space-xs);
+}
+
+.mini-viewer__name {
+  color: var(--canvas-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.mini-viewer__tc {
+  color: var(--canvas-editor-text-strong);
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+
+.mini-viewer__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--canvas-editor-space-xs);
+  color: var(--canvas-editor-text-muted);
+}
+
+.mini-viewer__empty-title {
+  font-size: 12px;
+}
+
+.mini-viewer__empty-hint {
+  font-size: 11px;
+  color: var(--canvas-text-tertiary);
+  max-width: 260px;
+  text-align: center;
+}
+
+/* play overlay pill — RH dark-translucent (extraction §4, audit m6) */
+.mini-viewer__play {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--canvas-editor-border-subtle);
+  border-radius: var(--canvas-editor-radius-pill);
+  background: rgba(20, 20, 22, 0.72);
+  box-shadow: rgba(0, 0, 0, 0.22) 0 6px 20px;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: var(--canvas-editor-text-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.16s, background 0.15s, border-color 0.15s;
+}
+
+.mini-viewer__play:hover {
+  background: rgba(28, 28, 30, 0.82);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.mini-viewer__play:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 2px;
+}
+
+/* ---- inspector -------------------------------------------------- */
+
+.mini-inspector {
+  width: var(--mini-inspector-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mini-inspector__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--canvas-editor-space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--canvas-editor-space-md);
+}
+
+.mini-inspector__name {
+  color: var(--canvas-editor-text-strong);
+  font-size: 12px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.mini-inspector__facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--canvas-editor-space-xs);
+  margin: 0;
+}
+
+.mini-inspector__facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--canvas-editor-space-sm);
+}
+
+.mini-inspector__facts dt {
+  color: var(--canvas-editor-text-muted);
+  font-size: 11px;
+}
+
+.mini-inspector__facts dd {
+  margin: 0;
+  color: var(--canvas-editor-text-default);
+  font-size: 11px;
+}
+
+.mini-inspector__nudge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--canvas-editor-space-sm);
+  border-top: 1px solid rgba(0, 0, 0, 0.14);
+  padding-top: var(--canvas-editor-space-md);
+}
+
+.mini-inspector__nudge-label {
+  color: var(--canvas-editor-text-muted);
+  font-size: 11px;
+}
+
+.mini-inspector__nudge-btns {
+  display: flex;
+  gap: var(--canvas-editor-space-xs);
+}
+
+.mini-inspector__empty {
+  padding: var(--canvas-editor-space-lg);
+  color: var(--canvas-editor-text-muted);
+  font-size: 11px;
+}
+
+/* ---- timeline block in the root flex column --------------------- */
+
+.mini-root > .qc-timeline {
+  flex-shrink: 0;
+}

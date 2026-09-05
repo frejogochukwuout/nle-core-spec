@@ -1,0 +1,207 @@
+/* Tailwind 4 pipeline + mini-shell shared grammar.
+   The timeline block is hand-CSS (timeline.css, qc-*) for RH fidelity;
+   Tailwind drives the shell layout + region chrome, with a few component
+   classes defined here in the same token language. */
+@import 'tailwindcss';
+@import './tokens.css';
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--canvas-bg-primary);
+  color: var(--canvas-editor-text-default);
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- app root: RH dotted canvas ---------------------------- */
+
+.mini-root {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--canvas-bg-primary);
+  /* RH dot grid: 24px pitch, --canvas-grid-dot color */
+  background-image: radial-gradient(
+    var(--canvas-grid-dot) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mini-gutter);
+  padding: var(--mini-gutter);
+  box-sizing: border-box;
+}
+
+/* ---- floating panel grammar (RH glass) ---------------------- */
+
+.mini-panel {
+  border-radius: var(--canvas-editor-radius-panel);
+  background: var(--canvas-quick-cut-surface);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.12),
+    rgba(255, 255, 255, 0.024) 0 1px inset;
+  -webkit-backdrop-filter: blur(10px) saturate(0.82);
+  backdrop-filter: blur(10px) saturate(0.82);
+}
+
+/* slim panel header row */
+.mini-panel__head {
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  height: 34px;
+  padding: 0 var(--canvas-editor-space-md);
+  color: var(--canvas-editor-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.14);
+  flex-shrink: 0;
+}
+
+/* ---- icon button (34px round, RH grammar) ------------------- */
+
+.mini-iconbtn {
+  width: var(--canvas-editor-action-size);
+  height: var(--canvas-editor-action-size);
+  border: none;
+  border-radius: var(--canvas-editor-radius-pill);
+  background: transparent;
+  color: var(--canvas-editor-text-default);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.mini-iconbtn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.mini-iconbtn:not(:disabled):hover {
+  background: var(--canvas-editor-control-hover);
+  color: var(--canvas-editor-text-primary);
+}
+
+.mini-iconbtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.mini-iconbtn:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 2px;
+}
+
+.mini-iconbtn.is-active {
+  background: var(--canvas-editor-control-surface);
+  color: var(--canvas-quick-cut-control-active);
+}
+
+/* green brand CTA — Export only (D10.5) */
+.mini-cta {
+  height: 34px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--canvas-editor-radius-pill);
+  background: var(--rh-green);
+  color: #06251b;
+  font-size: 13px;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.mini-cta:hover {
+  background: var(--rh-green-hover);
+}
+
+.mini-cta:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 2px;
+}
+
+/* ---- mono timecode ----------------------------------------- */
+
+.mini-mono {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+.mini-tc {
+  color: var(--canvas-editor-text-strong);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* ---- toast (bottom-center pill, RH chrome surface) ---------- */
+
+.mini-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--mini-gutter) + 8px);
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  max-width: 480px;
+  padding: 8px 16px;
+  border-radius: var(--canvas-editor-radius-pill);
+  background: var(--canvas-chrome-control-surface);
+  color: var(--canvas-editor-text-default);
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  animation: mini-toast-in 0.18s ease-out;
+}
+
+.mini-toast.is-error {
+  color: #ff9d9d;
+}
+
+@keyframes mini-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* ---- scrollbars (thin white, RH) ---------------------------- */
+
+.mini-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.mini-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 6px;
+}
+
+.mini-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
