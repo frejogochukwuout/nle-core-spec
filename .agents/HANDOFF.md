@@ -1,9 +1,10 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-05 (evening), end of the R16-continuation session (port-3000
-go-live + origin reconcile; core history: R16 `96ea0db` → `be1f141` → the
-origin-merge commit). Parallel R15-UI round content is folded below — it is
-COMPLETE on origin and its standing items are preserved.
+**Written:** 2026-09-05 (late), end of the R18 session (user-corrected serving
+layout: the full Storybook dev server owns :3000; R16 workaround stack
+reverted; core history: R16 `96ea0db` → `be1f141` → the origin-merge commit →
+R17 parallel-stream merge `3fb3360`). Parallel R15-UI round content is folded
+below — it is COMPLETE on origin and its standing items are preserved.
 **Scope of this file:** IMMEDIATE next session ONLY. Long horizon lives in
 `.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`
 (R15-UI = #47-51, R16 = #53-58 — renumbered after the collision).
@@ -22,57 +23,52 @@ COMPLETE on origin and its standing items are preserved.
 
 ---
 
-## What is LIVE right now (the headline)
+## What is LIVE right now (the headline — R18 layout)
 
-- **The public preview URL serves the shell-mini app AND the Storybook review
-  surface — both verified end-to-end** (agent-browser through the real edge +
-  VLM on screenshots). URL pattern: `https://preview-chat-<chat_id>.space-z.ai/`
-  (the hostname embeds THIS chat's id from the gateway metadata).
-  - App: `/` — the RH-skinned mini NLE shell.
-  - Storybook manager: `/stories/index.html` (NOT bare `/stories/` — the
-    directory path falls to the app's SPA fallback).
-  - Single story full-screen: `/stories/iframe.html?id=<story-id>&viewMode=story`.
-- **Why Storybook is a static mount, not a port:** ?XTransformPort CANNOT
-  serve multi-asset UIs (the query doesn't propagate to sub-resource URLs —
-  they fall to :3000 and 404), and the SB dev iframe's root-absolute Vite
-  paths escape any sub-path proxy. The static build (`storybook-static/`)
-  is fully relative → copied to `public/stories/` (committed) → served by
-  the app's own Host-allowed Vite. After story changes:
-  `npm run build-storybook && cp -r storybook-static public/stories` + commit.
-  Full verified law-set: `.agents/SKILL.md` "preview-URL serving reference"
-  (Laws 1-5) — read it before any go-live/port claim.
-- **Casing trap (a real user hit it):** Caddy's query matcher is
-  case-sensitive — `?xtransformport=6007` falls through to the app. The app
-  now bounces any-cased `xtransformport=6007` to `/stories/index.html`
-  (`src/lib/previewRedirect.ts`, 8 tests). Never hand users a query URL —
-  always the `/stories/` path.
-- **The Host-header law (the bug that made it "not live" while the process
-  was up):** the FC edge rewrites the request Host to `...fcapp.run`; Caddy
-  passes Host through untouched; Vite's default `server.allowedHosts`
+- **The public preview URL IS the full Storybook dev server (R18, user
+  directive):** `https://preview-chat-<chat_id>.space-z.ai/` (the hostname
+  embeds THIS chat's id from the gateway metadata) → edge → Caddy :81 →
+  localhost:3000 → **`storybook dev -p 3000`** (`scripts/sb3000.py`,
+  double-fork daemon, PPID=1, `core.allowedHosts: true`). Same-origin means
+  everything works through the real edge: manager UI, story tree, story
+  selection, iframe canvases, `/index.json` (30 stories), HMR,
+  deep links (`/?path=/story/…`). Verified end-to-end post-switch (browser
+  pass: story DOM renders, zero page errors) + a live kill→restore→
+  public-200 cycle.
+- **The app is the localhost dev surface on :3001** (`scripts/dev3000.py`;
+  `vite.config.ts` port 3001) — for the agent dev loop only, NOT public.
+- **R18 correction (what was REVERTED):** the R16 "storybook can't serve
+  publicly, static-mount it instead" verdict was wrong; the workaround
+  infrastructure was removed — `public/stories/` (8.4MB), the
+  `previewRedirect` query-shim (+8 tests, 101→93), `scripts/sb6007.py`.
+  SKILL.md Law 3 is now the corrected law; #61 and #64 record the lesson.
+  Don't rebuild any of it.
+- **The Host-header law still applies to any Vite surface** (the R16
+  go-live bug): the FC edge rewrites the request Host to `...fcapp.run`;
+  Caddy passes Host through untouched; Vite's default `server.allowedHosts`
   (localhost/IP only) 403s it. Fix = `allowedHosts: ['.space-z.ai',
-  '.fcapp.run']` in vite.config.ts (committed). Verification rule: a
+  '.fcapp.run']` in vite.config.ts (committed, kept). Verification rule: a
   localhost curl is a FALSE PASS for public liveness — probe with
   `curl -H 'Host: preview-chat-<id>.fcapp.run' http://127.0.0.1:81/` or
-  agent-browser on the real public URL.
+  agent-browser on the real public URL. (SB 10.6 allows all hosts by
+  default — the banner says so — but `core.allowedHosts: true` is committed
+  as belt-and-braces.)
 - **Persistence layers (all needed, all verified):**
-  1. *Reaper escape:* dev server runs via `scripts/dev3000.py`
-     (fork→setsid→fork→exec; grandchild reparents to PID 1; survives
-     per-toolcall tree-kill; `nohup`/`setsid` alone die).
+  1. *Reaper escape:* both daemons double-forked (fork→setsid→fork→exec;
+      grandchild reparents to PID 1; survives per-toolcall tree-kill;
+      `nohup`/`setsid` alone die).
   2. *Recycle resurrection:* `/home/z/my-project/.zscripts/dev.sh`
      (harness boot hook, PAT-free — restores repo from the newest
      `/home/sync/nle-core-spec-*.bundle`, npm ci if needed, re-launches;
-     idempotent; also frees :3000 from half-dead tenants; canonical copy
-     committed at `ui-mock/shell-mini/scripts/boot-restore.sh`). Tested
-     live: kill → dev.sh → restored → public URL 200. NOTE: dev.sh only
-     auto-runs if the harness executes .zscripts/dev.sh at boot (it does in
-     some sandbox variants) — otherwise the next agent session runs it as
-     FIRST ACTION.
+     idempotent; frees :3000 from half-dead tenants — inspecting their cwd
+     first; MUST-SUCCEED on the storybook `/index.json` probe, best-effort
+     app on :3001; canonical copy committed at
+     `ui-mock/shell-mini/scripts/boot-restore.sh`). Tested live: kill →
+     boot-restore → storybook restored → public 200. NOTE: dev.sh only
+     auto-runs if the harness executes .zscripts/dev.sh at boot — otherwise
+     the next agent session runs it as FIRST ACTION.
   3. *Durable state:* GitHub origin + gitlab mirror + /home/sync bundle+
      tarball refreshed at every wrap-up.
-- Storybook: dev server (HMR, localhost) via `python3 scripts/sb6007.py`
-  (double-fork daemon, :6007, log sb.log); the PUBLIC review surface is the
-  static mount at `/stories/index.html` (see above) — they are different
-  artifacts with different jobs.
 
 ## FIRST ACTIONS for the next session (in order)
 
@@ -81,16 +77,19 @@ COMPLETE on origin and its standing items are preserved.
    scanner blocks token-bearing pushes, and the GitLab PAT likewise stays in
    `.git/config` + chat only), `git fetch` BOTH remotes FIRST — a parallel
    session may have pushed again. NEVER force push.
-2. **Ensure the app is LIVE on :3000** (the preview URL depends on it):
+2. **Ensure the STORYBOOK is LIVE on :3000** (the preview URL depends on it):
    run `bash /home/z/my-project/.zscripts/dev.sh` (idempotent — installs,
-   launches, frees the port if needed; PAT-free via the /home/sync bundle).
-   If the sandbox is FRESH (no /home/z/my-project/.zscripts — harness
-   didn't restore repo.tar): clone with the PAT from chat, `npm ci`, then
-   `python3 scripts/dev3000.py`. Verify PUBLIC-path liveness with the
-   forged-Host probe (see the Host-header law above), not just localhost.
-   If port 3000 is already bound by the platform's own Next.js dev server
-   (fresh sandboxes with the bootstrap template), the user's directive
-   (2026-09-05) is that the **shell-mini app owns :3000** — dev.sh frees it.
+   launches, frees the port if needed; PAT-free via the /home/sync bundle;
+   gates on the /index.json asset-chain probe). If the sandbox is FRESH (no
+   /home/z/my-project/.zscripts — harness didn't restore repo.tar): clone
+   with the PAT from chat, `npm ci`, then `python3 scripts/sb3000.py` (and
+   `python3 scripts/dev3000.py` for the localhost app on :3001). Verify
+   PUBLIC liveness with the forged-Host probe (see the Host-header law
+   above), not just localhost. If port 3000 is already bound by the
+   platform's own Next.js dev server (fresh sandboxes with the bootstrap
+   template) or a stale tenant, dev.sh inspects its cwd then frees it — the
+   user directive (R18) is that the **shell-mini Storybook dev server owns
+   :3000**.
 3. **Baseline gates before editing anything:** `npm run test` (93/93),
    `npm run typecheck` (clean), `npm run build`, `npm run build-storybook`.
 4. **gitlab remote** (WAF blocks ~1/3 of pushes — just retry a few times):
@@ -108,8 +107,8 @@ code review both folded); skin ground truth =
 `docs/RH-skin-extraction.md`. Deviations register = shell-mini README.
 
 **Standing items:**
-- **USER REACTION pass** — the mock is now tourable at the preview URL
-  (that was the point of port 3000). The v0.2 candidate list is in
+- **USER REACTION pass** — the review surface is the full Storybook at the
+  preview URL root (R18). The v0.2 candidate list is in
   PLAN.md R16 section; DnD media→timeline is the top candidate.
 - v0.2 candidates: DnD, annotakit wiring, keyboard clip-focus, snap-guide
   indicator, 18px node-space gutter, waveform w/ amplitude variation.

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Double-fork Vite dev-server launcher for port 3000.
+"""Double-fork Vite dev-server launcher for the APP on localhost :3001.
+
+R18 port ownership (user directive): the FULL Storybook dev server owns
+:3000 — that is the PUBLIC surface (edge -> Caddy :81 -> localhost:3000,
+scripts/sb3000.py). The app moved to :3001 as the localhost dev surface.
+(File name kept from the R16 era when the app owned :3000.)
 
 The Z-container kills the whole descendant tree of every bash toolcall at
 call end — plain `nohup`/`setsid`/`disown` all die with it (verified twice
@@ -9,12 +14,8 @@ escapes the reap:
     fork -> setsid -> fork -> (grandchild, PPID=1) -> chdir -> exec node vite
 
 Log: dev.log in the shell-mini root (gitignored via *.log).
-Refuses to start a second server if :3000 is already answering.
+Refuses to start a second server if :3001 is already answering.
 Dies on container recycle — relaunch with `python3 scripts/dev3000.py`.
-
-The app serves at the container root because Caddy (:81, the only
-externally exposed port) reverse-proxies localhost:3000 to the public
-preview URL — the preview URL IS this app.
 """
 import os
 import socket
@@ -22,7 +23,7 @@ import sys
 
 PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # shell-mini root
 LOG = os.path.join(PROJECT, 'dev.log')
-PORT = 3000
+PORT = 3001
 
 
 def port_answering(port: int) -> bool:

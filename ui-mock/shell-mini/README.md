@@ -16,37 +16,34 @@ remains the full spec-18 study; this app is the deliberately small sibling:
 
 ```bash
 npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-peer-deps
-npm run dev         # http://localhost:3000/ — dedicated port; on the Z-container
-                    # Caddy :81 reverse-proxies :3000, so the public preview URL IS this app
-                    # (requires server.allowedHosts — see vite.config.ts; the FC edge
-                    # rewrites Host to ...fcapp.run, which Vite 403s by default).
-                    # Run it via `python3 scripts/dev3000.py` (double-fork daemon) so it
-                    # survives the per-toolcall process reaping; plain nohup/setsid die.
+npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
+                    #   run via `python3 scripts/dev3000.py` double-fork daemon so it
+                    #   survives the per-toolcall process reaping — plain nohup/setsid die)
 npm test            # vitest — 4 files / 93 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
-npm run storybook   # dev server (HMR, localhost:6007) — run via
-                    # `python3 scripts/sb6007.py` (double-fork daemon)
+npm run storybook   # the FULL dev server on :3000 (run via `python3
+                    #   scripts/sb3000.py` double-fork daemon)
 ```
 
-**Viewing Storybook at the public preview URL** (on the Z-container): the
-dev server can't serve externally (?XTransformPort doesn't propagate to
-sub-resource URLs; dev iframe uses root-absolute Vite paths). Instead the
-**static build is mounted inside the app**: `/stories/index.html` off the
-public URL — e.g. `https://preview-chat-<chat-id>.space-z.ai/stories/index.html`
-(single story full-screen: `/stories/iframe.html?id=<story-id>&viewMode=story`).
-That mount is the committed `public/stories/` directory. After changing
-stories, refresh it:
-
-```bash
-npm run build-storybook && rm -rf public/stories && cp -r storybook-static public/stories
-# then commit public/stories (git-is-the-disk)
-```
+**Serving layout (R18, user directive — same as the sibling stream):** the
+FULL Storybook dev server owns **:3000**, which the Z-container's Caddy :81
+reverse-proxies to the public preview URL — so
+`https://preview-chat-<chat-id>.space-z.ai/` **IS the Storybook manager**
+(manager UI, story tree, HMR, deep links `/?path=/story/…`, single story
+canvases `/iframe.html?id=<story-id>&viewMode=story` — all same-origin, all
+verified through the real edge). `core.allowedHosts: true` in
+`.storybook/main.ts` is belt-and-braces (SB 10.6 allows all hosts by
+default). The app is NOT public in this layout — it's the :3001 localhost
+dev loop (its vite.config keeps `allowedHosts` so it's edge-ready if a
+future harness maps a proxy to :3001).
 
 **Cold-start resurrection (container recycle):** `scripts/boot-restore.sh`
 (iso: `/home/z/my-project/.zscripts/dev.sh`) — idempotent; restores the repo
 from the latest `/home/sync/nle-core-spec-*.bundle` (PAT-free), runs `npm ci`
-if needed, re-launches the daemon, and re-frees :3000 from half-dead tenants.
+if needed, re-launches the storybook daemon (must-succeed, gated on the
+`/index.json` asset-chain probe) and the app (best-effort, :3001), and
+re-frees :3000 from half-dead tenants (inspecting their cwd first).
 Run it at boot or any time; safe twice.
 
 ## What's in (the whole MVP surface)

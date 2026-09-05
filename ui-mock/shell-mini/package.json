@@ -9,7 +9,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "storybook": "storybook dev -p 6007",
+    "storybook": "storybook dev -p 3000",
     "build-storybook": "storybook build -o storybook-static",
     "test": "vitest run",
     "test:watch": "vitest"

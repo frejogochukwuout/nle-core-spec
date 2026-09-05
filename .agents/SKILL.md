@@ -772,16 +772,24 @@ These patterns generalize beyond browser NLEs to any complex engine + UI system 
 
 60. **Process persistence is three different problems: reaper, recycle, and nothing-starts-it.** (a) The per-toolcall reaper kills the whole descendant tree — only double-fork (grandchild reparents to PID 1) survives; `nohup`/`setsid`/`disown` all die. (b) A container recycle kills even the double-forked daemon (FC scale-to-zero) — only durable storage survives: remotes + /home/sync. (c) After recycle, NOTHING re-launches your app unless you've wired a boot hook: the harness runs `/home/z/my-project/.zscripts/dev.sh` at boot in some sandbox variants — write it idempotent + PAT-free (restore from the newest `/home/sync/*.bundle` via glob, not a PAT-embedded clone; creds in an untracked boot script get archived into repo.tar), test it live by killing the daemon and running the hook, and keep a canonical copy committed in the repo so a fresh clone can re-install the hook in one cp. Each layer needs its own verification; surviving one says nothing about the next.
 
-61. **A second UI cannot ride ?XTransformPort, and a dev server cannot ride a sub-path — but a static build can.** Verified while exposing Storybook at the public URL: the query survives the edge and routes the DOCUMENT request to :6007, but sub-resource URLs (relative or absolute) never carry the query → they fall to :3000 → 404 → the manager HTML loads and its JS never executes. The dev server's iframe is worse: root-absolute Vite paths (`/@vite/client`, `/@id/__x00__virtual:/…`) escape any sub-path prefix. The winning pattern: build static (`npm run build-storybook`), copy `storybook-static/` → `public/stories/` of the app (static output is fully relative — sub-path-safe by construction), commit it, serve it from the app's already-Host-allowed Vite. Entry must be the explicit file `/stories/index.html` (bare `/stories/` falls to the SPA fallback and serves the app). Full law-set in the reference section below.
+61. **A second UI cannot ride ?XTransformPort, and a dev server cannot ride a sub-path — but a static build can.** Verified while exposing Storybook at the public URL: the query survives the edge and routes the DOCUMENT request to :6007, but sub-resource URLs (relative or absolute) never carry the query → they fall to :3000 → 404 → the manager HTML loads and its JS never executes. The dev server's iframe is worse: root-absolute Vite paths (`/@vite/client`, `/@id/__x00__virtual:/…`) escape any sub-path prefix. The winning pattern: build static (`npm run build-storybook`), copy `storybook-static/` → `public/stories/` of the app (static output is fully relative — sub-path-safe by construction), commit it, serve it from the app's already-Host-allowed Vite. Entry must be the explicit file `/stories/index.html` (bare `/stories/` falls to the SPA fallback and serves the app). Full law-set in the reference section below. **[R18 correction: the "winning pattern" framing was wrong — it was the workaround. The default is Law 3-corrected: the dev server itself owns :3000 (see #64). The empirical observations stand; the conclusion drawn from them did not.]**
 
 ---
 
-## Z-container preview-URL serving — the verified reference (R16 continuation)
+## Z-container preview-URL serving — the verified reference (R16; verdict CORRECTED in R18)
 
 Written after the port-3000 go-live false-pass (#59) and the Storybook
 external-surface investigation. Every line was verified empirically in this
 sandbox (forged-Host probes + real public-URL browser passes + VLM on
 screenshots); claims inherited from other sessions' notes are marked.
+
+> **R18 correction (user directive):** the R16 verdict below Law 3/4 —
+> "a dev Storybook cannot serve publicly; mount the static build instead" —
+> was WRONG. The standard pattern works and is the default: **the full dev
+> server owns :3000** (verified here end-to-end after the correction; the
+> sibling R17 section below documents the same pattern for shell-variants).
+> The XTransformPort findings survive only as a historical dead-end note —
+> don't build on them.
 
 ### The chain
 
@@ -825,48 +833,50 @@ curl -H 'Host: preview-chat-<id>.fcapp.run' http://127.0.0.1:81/
 …and call the app live ONLY after a real public-URL browser pass
 (agent-browser through the edge) that includes an interaction (click/play)
 and an asset-load check — a 200 HTML fetch proves neither JS execution nor
-sub-asset loading (see the XTransformPort manager trap in Law 3: title
-loads, UI never boots).
+sub-asset loading (probe the ASSET CHAIN: manager bundle, /index.json,
+iframe story DOM — R17 gotcha 8 has the full recipe).
 
-### Law 3 — ?XTransformPort: query-scoped; documents yes, UIs no (verified)
+### Law 3 (R18-corrected) — to serve a dev UI publicly, put the server ON :3000
 
-- **The query KEY is case-sensitive in Caddy's matcher** — `?xtransformport=6007`
-  ≠ `?XTransformPort=6007`. A lowercase key silently falls through to the
-  default route → :3000 → the app renders with no visible error (the most
-  confusing outcome; a real user hit exactly this). Verified by paired
-  probes: lowercase → app title, proper-case → SB title. Mitigation shipped:
-  the app bounces any-cased `xtransformport=6007` to `/stories/index.html`
-  (`src/lib/previewRedirect.ts` + `main.tsx`, 8 tests) — but the real fix is
-  handing users the /stories/ URL, never the query URL.
-- The query **does survive the public edge** (verified: the SB manager HTML
-  was served from :6007 at the public URL WITH the query; an older
-  sibling-session note claimed it did not survive — don't inherit that
-  claim, or any unprobed claim, across sandbox variants).
-- But Caddy's query route applies ONLY to requests that carry the query. A
-  multi-asset page (manager, SPA, any dev-server UI) references scripts and
-  styles by plain paths (relative `./sb-manager/…` OR absolute `/@vite/…`);
-  browsers do not propagate the query to sub-resource URLs → those requests
-  fall to :3000 → 404 → the UI never boots. Verified: SB manager at the
-  public URL with the query = title renders, `hasManagerUI: false`, zero
-  executed scripts.
-- What DOES work through XTransformPort: single-endpoint fetches where EVERY
-  request explicitly carries the query (`fetch('/api/x?XTransformPort=3030')`)
-  and websockets at path `/` (`io('/?XTransformPort=3003')` — platform rule:
-  WS path must be `/`).
-- HMR websockets through the public edge fail regardless (Vite falls back to
-  polling and reconnects) — cosmetic for review surfaces.
+**The standard pattern (THE answer, user-confirmed):** the public proxy chain
+is port-based — edge → Caddy :81 → localhost:3000, unconditionally. Whatever
+dev server binds :3000 IS the public site, same-origin, so every asset class
+works with zero extra plumbing: manager HTML + `./sb-manager/*` bundles,
+`/iframe.html?id=…` story canvases, `/index.json`, `/@vite/client`, HMR,
+deep links (`/?path=/story/…`). Verified end-to-end in this env (R18):
+manager boots through the real edge, story tree live, story selection works,
+iframe story DOM renders (4 clips + 8 trim handles in the Timeline seed
+story), zero page errors. Plain port-forwarding of :3000 would work the same
+way — the platform's query-based port forwarding is the unnecessary detour.
 
-### Law 4 — serving a SECOND UI (e.g. Storybook) at the public URL
+Launch recipe (shell-mini, this env): `python3 scripts/sb3000.py`
+(double-fork daemon, PPID=1, port 3000) + `core.allowedHosts: true` in
+`.storybook/main.ts` (belt-and-braces; SB 10.6 already allows all hosts by
+default — the banner says so).
 
-Don't fight the one-port rule with dev-server proxy meshes — two dead ends,
-both verified:
-- XTransformPort: broken for multi-asset UIs (Law 3).
-- Sub-path proxy to a dev server: the SB dev iframe uses root-absolute Vite
-  paths (`/@vite/client`, `/@id/__x00__virtual:/@storybook/builder-vite/…`)
-  that escape any prefix and would collide with the app's own Vite paths.
+**Historical dead end (kept only so nobody rebuilds it):** R16 spent a whole
+session routing AROUND :3000 with the platform's query-based port forward
+(`?XTransformPort=NNNN`), concluded "multi-asset UIs can't work", and built
+workaround infrastructure (static build mounted at `public/stories/`, an
+app-entry redirect shim for the query's case-sensitive key, a second SB
+daemon on :6007). All of that was unnecessary — and its "verified" write-ups
+then read as truth and misled the next session (the exact failure mode of
+#64). The empirical trivia, for the record: the query survives the edge and
+routes the DOCUMENT to :NNNN, but sub-resource URLs don't carry the query →
+they fall to :3000 → multi-asset UIs never boot; the query KEY is
+case-sensitive in Caddy's matcher (lowercase silently routes to :3000).
+None of it matters once the server owns :3000.
 
-**The pattern that works end-to-end (verified + VLM-confirmed):** mount the
-STATIC build under the app's origin:
+### Law 4 — when the APP must own :3000, the second UI goes under it as a STATIC mount
+
+R18 note: this is the FALLBACK pattern, not the default (Law 3-corrected and
+the R17 section are the defaults). shell-mini used it in R16 (app owned the
+port, storybook static-mounted at `/stories/`) and DROPPED it in R18 when the
+user directed the full storybook server to :3000 instead — the static mount
+and its 8.4MB committed `public/stories/` were removed. The pattern itself
+remains valid and is documented in the R17 decision table at the bottom of
+this file:
+
 1. `npm run build-storybook`
 2. `cp -r storybook-static public/stories` — the static output is FULLY
    relative (`./sb-manager/*`, `./sb-addons/*`, `./assets/*`), hence
@@ -876,17 +886,20 @@ STATIC build under the app's origin:
    `/stories/` (trailing-slash directory requests fall to the app's SPA
    fallback and serve the APP); `…/stories/iframe.html?id=<story-id>&viewMode=story`
    for a full-screen single story.
-5. Rebuild + recopy + commit when stories change. The DEV storybook (HMR,
-   localhost-only) runs via `scripts/sb6007.py` (double-fork daemon, :6007).
+5. Rebuild + recopy + commit when stories change — the cost that makes this
+   the fallback, not the default.
 
 ### Law 5 — persistence is three different problems
 
-See #60 for the full law. Layer summary with the concrete artifacts:
-reaper → double-fork daemons (`scripts/dev3000.py` app, `scripts/sb6007.py`
-storybook dev); recycle → `scripts/boot-restore.sh` (iso
+See #60 for the full law. Layer summary with the concrete artifacts (R18
+layout): reaper → double-fork daemons (`scripts/sb3000.py` storybook on
+:3000 = the public surface, `scripts/dev3000.py` app on :3001 = localhost
+dev); recycle → `scripts/boot-restore.sh` (iso
 `/home/z/my-project/.zscripts/dev.sh`, idempotent + PAT-free, restores from
-the newest `/home/sync/nle-core-spec-*.bundle`); durability → GitHub origin +
-gitlab mirror + `/home/sync` bundle/tarball refreshed at every wrap-up.
+the newest `/home/sync/nle-core-spec-*.bundle`, gates on the SB
+`/index.json` asset-chain probe, must-succeed on :3000); durability → GitHub
+origin + gitlab mirror + `/home/sync` bundle/tarball refreshed at every
+wrap-up.
 
 ## R17 meta-learnings (shell-variants takes :3000 in its own env — parallel-stream serving split)
 
@@ -1080,3 +1093,24 @@ Rule of thumb: **if reviewers interact through the Storybook UI (pin
 comments), serve the DEV Storybook as the port owner** — annotakit's review
 API lives on the dev server, a static build shows a "dev only" note. If the
 APP is the review surface, mount SB's static build under the app.
+
+### R18 amendment (shell-mini joins the SB-owns-:3000 pattern)
+
+User directive after the R16 verdict was shipped: "everyone can serve this
+through 3000 — port forwarding should work, but at least 3000 should
+definitely work." shell-mini's env switched to the shell-variants pattern:
+the FULL Storybook dev server owns :3000 (`scripts/sb3000.py`, double-fork,
+PPID=1, `core.allowedHosts: true`), the app moved to localhost :3001
+(`scripts/dev3000.py`), the static `public/stories/` mount and the
+`previewRedirect` query-shim were REMOVED (8.4MB out of the repo, 101→93
+tests), and the restorer now gates on `/index.json` (must-succeed) with the
+app as best-effort. Verified end-to-end through the real edge post-switch
+(manager boots, story tree, story selection, iframe story DOM with 4 clips +
+8 trim handles, zero page errors) AND via a live kill→restore→public-200
+cycle. The decision table above stands, with the R17-vs-R18 twist: the
+"shell-mini pattern" column is now the documented FALLBACK (app owns the
+port), not what any env currently runs.
+
+## R18 meta-learnings (serving-verdict correction round)
+
+64. **Reach for the standard serving pattern before inventing a workaround — and never let a workaround's write-up promote itself to "the law."** The R16 session probed the platform's query-based port forwarding, correctly observed that sub-resources don't carry the query, then concluded "a dev Storybook cannot serve publicly" and built a workaround STACK (static-build recopy pipeline, 8.4MB committed mount, an app-entry redirect shim with 8 tests, a second SB daemon on :6007) — all to route AROUND the one-port rule that was never actually binding: the proxy chain is port-based, so putting the dev server ON :3000 makes everything same-origin and it just works (the sibling session did exactly that, in parallel, and wrote it up; the note was IN THIS FILE the whole time). The user's correction was one sentence. The failure mode has two halves: (1) not asking "what does everyone else do here?" before accepting a constraint as a law, and (2) writing a workaround up as "THE verified pattern" — the next session (mine) inherited it as truth and doubled down with the casing shim. Empirical honesty about a dead end is necessary but NOT sufficient; label the standard way as the default, demote everything else to fallback, and when a user corrects a verdict, revert BOTH the docs and the infrastructure built on it.

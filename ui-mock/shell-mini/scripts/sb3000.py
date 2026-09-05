@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Double-fork Storybook dev-server launcher for port 6007 (localhost dev surface).
+"""Double-fork Storybook dev-server launcher for port 3000 (THE public surface).
 
-Same daemonization law as scripts/dev3000.py: the Z-container kills the whole
-descendant tree of every bash toolcall at call end — only a double-forked
-grandchild (reparented to PID 1) survives. fork -> setsid -> fork -> exec.
+R18 serving law (user directive, mirrors the sibling R17 pattern): the FULL
+dev Storybook server owns :3000 — the public preview chain is
+edge -> Caddy :81 -> localhost:3000, so the SB manager is the public root
+and every sub-resource is same-origin (./sb-manager/*, /@vite/client,
+/iframe.html, /index.json all work through the real edge; verified).
+No query-based port forwarding, no static-build recopy, no proxy meshes.
 
-Scope:
-- 6007 is the LOCALHOST dev storybook (HMR for the agent's dev loop).
-  It is NOT the public review surface — the public one is the static build
-  mounted at /stories/ on the app's Vite (:3000), because a dev server's
-  multi-asset UI cannot work through ?XTransformPort (sub-requests lose the
-  query and fall to :3000) and the dev iframe uses root-absolute Vite paths
-  that escape any sub-path proxy. See .agents/SKILL.md preview-serving laws.
+Same daemonization law as scripts/dev3000.py: the Z-container kills the
+whole descendant tree of every bash toolcall at call end — only a
+double-forked grandchild (reparented to PID 1) survives.
+fork -> setsid -> fork -> exec.
 
 Log: sb.log in the shell-mini root (gitignored via *.log).
-Refuses to start a second instance if :6007 is already answering.
+Refuses to start a second instance if :3000 is already answering.
 """
 import os
 import socket
@@ -22,7 +22,7 @@ import sys
 
 PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # shell-mini root
 LOG = os.path.join(PROJECT, 'sb.log')
-PORT = 6007
+PORT = 3000
 ENTRY = os.path.join(PROJECT, 'node_modules/storybook/dist/bin/dispatcher.js')
 
 
@@ -58,7 +58,7 @@ def main() -> None:
 
     daemonize()
     os.chdir(PROJECT)
-    os.execvp('node', ['node', ENTRY, 'dev', '-p', str(PORT)])
+    os.execvp('node', ['node', ENTRY, 'dev', '-p', str(PORT), '--ci'])
     # execvp never returns on success
 
 
