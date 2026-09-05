@@ -353,3 +353,51 @@ the net-new ledger entries that overhaul surfaced, registered the same way
 | C30 | Strip chrome now carries h-1 role-color base bars at every strip bottom (--mk-role-* mapped to Dialogue/BGM/SFX/Music; master = accent gradient; aux = type-audio) — spec 18 §9's "type color strips" clause describes 2px TRACK-HEADER strips, which remain absent (C15 stays half-open: header-side strips + clip label strips still unimplemented) | 18 §9 | `ChannelStrip.tsx` (R15-A4) |
 | C31 | Fader dB scale column: labels +6/0/−6/−12/−24/−48/−∞ at TRUE (db+60)/66 taper positions, 8px aria-hidden right-aligned, channel strips only (not the bridge) — no spec pins ANY mixer scale grammar; invention registered so the seal can bless or replace it | 20 §4.2 (absent) | `MixerPrimitives.tsx` Fader `scale` (R15-A3) |
 | C32 | Aux "no source" honest-disabled chip, derived live from (any auxN send > 0 ∨ outputBus route to the bus) — no spec defines a no-source/return-inactive visual state; engine side already honest (bus OFF → silent return, R15-A2) | 20 §4.2 (absent) | `ChannelStrip.tsx` AuxStrip (R15-A4) |
+
+## G. R15 timeline-parity registrations (R15 main + review rounds)
+
+Canonical source: bearachprema/opencut-timeline (the timeline seam the
+nle-core-spec UI layer is normatively bridging to — see
+`.agents/research-r15/opencut-timeline-seam-contract.md` for the 43-point
+parity extraction).
+
+### G.1 Spec-16 §3.8 — zoom step factor 1.5 → 1.7 (canonical)
+
+The spec pins `+`/`=` = ×1.5, `−` = ×0.667 (and the toolbar matched). The
+canonical seam pins `TIMELINE_ZOOM_BUTTON_FACTOR = 1.7` (opencut
+`components/timeline/layout.ts:37`, test-anchored in their M30 suite). R15
+adopted 1.7 everywhere (toolbar ± buttons, keyboard +/−, bus `zoomStep`) —
+tests migrated (`TimelineToolbar.test`, `useShortcuts.test`). **Ask: amend
+spec 16 §3.8's zoom row to ×1.7 / ÷1.7 citing the canonical constant.**
+
+### G.2 Spec-18 §5A — zoom-toward-cursor → two-regime playhead anchor
+
+Spec 18 §5A pins "zoom toward cursor" as normative for ⌘-wheel; spec 05
+§5.2 pins the two-regime playhead-anchored layout (both cannot hold — the
+18↔05 conflict is pre-existing). The canonical seam implements two-regime
+for ALL zoom paths (slider percent ≥ 0.15 → keep the playhead's viewport
+offset; < 0.15 → no adjustment; crossing save/restore). R15 adopted
+two-regime (controller port + rAF-coalesced wheel). **Ask: amend spec 18
+§5A to the two-regime law and note the 05/18 conflict resolved in 05's
+favor; cursor-anchored zoom may be registered as a future preference flag.**
+
+### G.3 Delivered alignment (no registration needed, recorded for the seal)
+
+- **MIN_DUR = 1 frame** (spec 06 trim constraints) — the mock's 0.25s was
+  the deviation; R15 T4 aligned (lib/trimLaws.ts).
+- **Magnetic main zero-anchor** (spec 05 §14.5A normative, §8.3 note 4) —
+  now implemented in both the drag resolution and the batch API through ONE
+  pure law (`timelinePlacement.zeroAnchorShift`, group-wide, R15-F1 unified).
+- **Ripple interval diff** (vacated−joined) — non-contiguous multi-delete
+  now spec-05-correct (lib/ripple.ts).
+- **Half-open overlap rejection + virtual removal + mixed A/V group
+  rejection** (spec 05 §8.3) — `timelinePlacement.resolveGroupMove`.
+
+### G.4 Known deferrals (honest ledger)
+
+| Item | Status |
+|---|---|
+| Roll trim B-source-tail bound for rate ≠ 1 | Partially bounded (V1 P3 → rollDeltaBounds got A's; B's tail remains) — engine question for nle-engine |
+| Scene-switch scrollLeft reset policy | Reset implemented (R15-F1); restore-to-edit-position not modeled (canonical has no equivalent either — view-state persistence is the shell's job) |
+| Preview batch-atomicity vs commit per-move drop (non-drag callers) | Drag seam is atomic; raw `moveElements` NON-atomic path documented in-code (locked/compatibility per-move drops) — registering the divergence for the engine contract |
+| Seek-click ≤500ms finalize | Implemented as a no-snap final re-seek; the 500ms time gate itself omitted (our ruler has no long-press semantics to disambiguate) — deviation comment in Ruler.tsx |
