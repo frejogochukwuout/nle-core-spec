@@ -1217,6 +1217,25 @@ The R15 assembly ruling amends this stream's code-reference posture with four pr
 
 (Wave/phase ownership: ARCH-R15 §2.3 item 2 + §3.4's A2/A2.5 rows.)
 
+### 16.5A. Round-15 amendment — the projector clauses (ARCH-R15 §2.2; Decision 16)
+
+The R15 assembly ruling amends this stream's code-reference posture with four projector clauses (full ruling: `audits/ARCH-R15-assembly-and-path.md` §2.2; the impact-map row "§16.5 amended" resolves HERE):
+
+1. **The projector is ENGINE-home.** `nle-engine/src/lib/nle/projector/` — a fenced, ADDITIVE engine module (D9's additive-change rule; same-commit freeze-list update) importing opencut-timeline's `SceneTracks` TYPE-ONLY, exactly per the existing precedent (`nle-engine/src/lib/nle/bridge/scene-to-segments.ts:43` — `import type { SceneTracks, … }`, zero runtime dep on OT). The app's `src/projector/` is a THIN call site. Rationale: the projector owns rate/timebase reconciliation, transition-window translation, keyframe normalization, composition mapping — that IS timeline semantics; app-home would create the third timeline-semantics home Decision 12 eliminated.
+2. **Contract:** `projectScene(scene: SceneTracks, ctx) → engine ingestion`, feeding render + the audio path + export. ONE-WAY by law (D12): *editing state* never flows engine→OT (telemetry flows UP a separate seam — ARCH-R15 §2.3bis).
+3. **The engine `Timeline` class is the parity ORACLE while the projector matures; retirement = permanent internal test substrate.** Parity gates (pixel-exact on a shared fixture corpus) run in **engine CI** (its 8-min real-WebGPU milestone venue + vitest). "Retirement" means every engine consumer re-points to projector-ingested structures + the wire re-points — at that point the class becomes the engine's **permanent internal test substrate** (its 265-row browser runner keeps driving it) unless a later engine-side decision deletes it; deletion is an engine-internal call, not an app-round promise.
+4. **Op-port table (engine → opencut-timeline, waves 1–2).** The engine Timeline's op families port INTO OT's engine layer — algorithms carried, tests carried, OT's W8-f/W9 panel re-convened per wave:
+
+| Op family | Engine source (`timeline.ts`) | Wave | Destination |
+|---|---|---|---|
+| slip | `:4143` | 1 (A2) | OT ops + invariant system + carried tests |
+| slide | `:4246` | 1 (A2) | OT ops |
+| rollingTrim | `:2984` | 1 (A2) | OT ops |
+| rateStretch | `:3155` | 1 (A2) | OT ops |
+| retime / freezeFrame / rangeRemoval (closeGap, joinItems) | `:7163` / `:6158` / `:7319` | 2 (A2.5) | OT ops + model extensions if spec'd |
+
+(Wave/phase ownership: ARCH-R15 §2.3 item 2 + §3.4's A2/A2.5 rows.)
+
 ### 16.6. Inline-code classification (R9 sampled audit — 00-master §2.5.2 enforcement)
 
 This spec carries 42 inline TS blocks. The R9 sampled classification (15 blocks, stratified by section): **(a) data/protocol shapes** — `TimelineViewState` (BLOCK-1), `ToolMode` (BLOCK-8) — legitimate spec content, stays; **(b) prescriptive UI/interaction skeletons** — the component skeletons (`ClipFilmstrip`/`ClipWaveform`/`TimelineElement`/`TrimHandles`), the interaction hooks (`useVisibleElements`/`useTimelineDrag`/`useTrim`/`useMarquee`), the handlers (`handleClick`/`handleRazorClick`/`TimelinePlayhead`) — these were written BEFORE opencut-timeline's W4 landed and remain this spec's own component-hierarchy contract ("should be" form); they are not copies of repo code, so they are not class (d) violations. **Where OT now has the real component/controller, §16.5's table row is the citation of record and the skeleton is the shape summary — the two coexist by design (skeleton = contract, table = implementation pointer), not redundancy.** Full-block classification (all 42, plus 01's 67 and 06's 68) is the seal-round audit item (19 §12 item 6); the expected finding per this sample is few-to-zero class (d) blocks in this spec, with 01/06 (engine-side, written against freecut source with quoting-style scouts) the likelier carriers.
