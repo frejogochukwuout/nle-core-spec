@@ -1,8 +1,28 @@
 # PLAN — Long-Horizon Task Tracker (nle-core-spec)
 
 **Created:** 2026-09-02 (Round 8 wrap-up — user directive: push/backup every micro milestone; PLAN tracks the long horizon, HANDOFF tracks the next session only)
-**Current round:** 15 COMPLETE (`81bafc2`) — the ASSEMBLY round: D15/D16/D17 landed, the full amendment set processed, re-baselines done. **The horizon is now the A0-A7b assembly plan (spec 14 / ARCH-R15 §3.4).** R16+ = either (a) the user green-lights `nle-app` creation (week −1 pre-flight first — REVIEW-R15-EXEC §7's 12 items) or (b) further seal-polish rounds.
-**Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec
+**Current round:** 16 IN PROGRESS → shell-mini MVP BOOTSTRAPPED (`96ea0db`, R16 A1-A4: design-audited + code-reviewed + 93 tests green). **The horizon is now the A0-A7b assembly plan (spec 14 / ARCH-R15 §3.4), with the shell-mini track as the MVP-era UI surface.** R17+ = either (a) the user green-lights `nle-app` creation (week −1 pre-flight first — REVIEW-R15-EXEC §7's 12 items) or (b) further seal-polish rounds or (c) shell-mini iteration (v0.2: DnD + annotakit + keyboard-clip-focus).
+**Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec (GitHub push needs a PAT this session does not have — GitLab mirror is the live backup remote; see HANDOFF)
+
+---
+
+## Round 16 (2026-09-05) — the shell-mini bootstrap round (IN PROGRESS → core landed)
+
+**User ask:** bootstrap a minimal version of the spec-18 shell under `ui-mock/shell-mini/` — simplified from shell-variants, skinned with `ui-mock/RH-timeline-editor.html` (RunningHub quick-cut), similar setup incl. Storybook.
+
+**Landed (A1-A4):**
+- **W0 research:** `ui-mock/shell-mini/docs/RH-skin-extraction.md` — verbatim token set + quick-cut DOM anatomy extracted from the 7.2MB SingleFile DOM snapshot via headless-browser computed styles.
+- **Design contract:** `ui-mock/shell-mini/docs/DESIGN-mvp.md` v2.1 FINAL — 11 decisions; adversarial design audit (5 majors / 14 minors) + implementation code review (2 P1 / 5 P2) both folded.
+- **The app:** React 19 + Vite 8 + TS strict + Tailwind 4 + Zustand 5 + lucide (stack mirrors the sibling, minus annotakit); tokens.css = extraction §2 verbatim; timeline.css = qc- class-for-class quick-cut port; shell = floating glass panels over a #0d0d0d dot grid; geometry.ts = the pure interaction-law module; useMini.ts = doc/ui/history(50)/drag-session store with the interaction lock.
+- **Quality gates:** 93 vitest tests / 4 files green; tsc strict clean; vite build + storybook static green; VLM-verified renders (skin fidelity + ruler/clip/playhead px alignment verified in real-browser rects).
+- **Git:** GitHub push BLOCKED (no PAT in session — the R15-session PAT was not re-shared); GitLab mirror (ansgareutychisO) reconciled (stale parallel-variant merge, no force push) and carrying all milestones: 38a5fc0 → 204eedd → 3a8931f → 908dd6f → bd734ae → d695fa4 → 96ea0db.
+
+**Remaining for the round (R16 close-out):**
+- [x] design audit round, [x] implementation, [x] code review round + fixes, [x] README + DESIGN v2.1
+- [ ] final wrap: HANDOFF/SKILL/PLAN updates, /home/sync backup, worklog
+- [ ] user reaction pass on the live mock (dev server + storybook)
+
+**shell-mini v0.2 candidates (next UI iteration):** drag-DnD media→timeline (top candidate, deferred with the drop-outline token), annotakit wiring (vendored dir + 3 config lines), keyboard clip-focus traversal, snap-guide indicator, 18px node-space gutter option for pixel-compare passes, waveform with amplitude variation.
 
 ---
 

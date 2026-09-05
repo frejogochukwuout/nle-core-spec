@@ -1,15 +1,15 @@
 # DESIGN — shell-mini MVP (R16 bootstrap)
 
-**Status:** v2 FINAL — post-audit (adversarial audit folded: 5 majors M1-M5,
-14 minors m1-m14, Q1-Q4 answered; verdict was SHIP-WITH-FIXES, all fixes
-applied below)
+**Status:** v2.1 FINAL — post-audit + post-code-review (adversarial design
+audit folded 5 majors/14 minors; implementation code review folded 2 P1 /
+5 P2 / P3 findings — all fixed; record below)
 **Author:** orchestrating agent, 2026-09-05
 **Task:** bootstrap a minimal version of the spec-18 NLE shell under
 `ui-mock/shell-mini/` — simplified from `shell-variants`, skinned with the
 `RH-timeline-editor.html` (RunningHub quick-cut) design language, with a
 similar overall setup incl. Storybook.
 **Inputs:** `docs/RH-skin-extraction.md`, `shell-variants` (complex
-predecessor), user README intent, fresh-context subagent audit.
+predecessor), user README intent, fresh-context subagent audit + code review.
 
 This document is the build contract for the implementation phase.
 
@@ -268,11 +268,35 @@ useMini = {
 
 ## Audit round record
 
-- v1 → audit (fresh-context subagent, 2026-09-05): verdict SHIP-WITH-FIXES;
-  5 majors (trim/split bounds M1, drag lifecycle lock M2, scroll model M3,
-  DnD hedge M4, test-plan gaps M5), 14 minors (m1-m14), Q1-Q4 answered
-  (keep 2 tracks; cut DnD; MM:SS.d; floating card + 12px gutters).
-- v2 = this document: all majors + minors folded (M1→D7, M2→D6, M3→D7,
-  M4→D3 OUT, M5→D8/D9; m1-m14 → D3/D4/D5/D7/D9/D10/D11).
-- Build order (audit-recommended): scaffold+skin port → pure lib+tests →
-  store → timeline → shell regions → storybook → README/close.
+- v1 → design audit (fresh-context subagent, 2026-09-05): verdict
+  SHIP-WITH-FIXES; 5 majors (trim/split bounds M1, drag lifecycle lock M2,
+  scroll model M3, DnD hedge M4, test-plan gaps M5), 14 minors (m1-m14),
+  Q1-Q4 answered (keep 2 tracks; cut DnD; MM:SS.d; floating card + 12px
+  gutters).
+- v2 = all majors + minors folded (M1→D7, M2→D6, M3→D7, M4→D3 OUT,
+  M5→D8/D9; m1-m14 → D3/D4/D5/D7/D9/D10/D11).
+- v2.1 → implementation CODE REVIEW (fresh-context subagent) folded:
+  - **P1 ruler law**: marks + minor ticks re-positioned in **px** from the
+    shared render origin (% of the min-width-stretched content desynced
+    2-3× at default zoom). D7 amended: *everything positions in px*.
+  - **P1 snap self-magnet**: magnet targets = same-track neighbor edges +
+    playhead, NEVER the dragged clip's own edges. D7 amended accordingly.
+  - **P2 origin constant** (+10px render origin in all pointer inversions),
+    **single-gesture law** (startGesture bails while dragActive, tracks
+    pointerId; store guards setPlayhead/zoom/snap — the lock now covers
+    pointer UI, not just keyboard), **tick stops on empty-doc-while-playing**,
+    **split targets the SELECTED clip full-stop** (fallback ONLY when
+    unselected — D7 clarified), **a11y**: clip de-rolled, trim handles +
+    playhead gained real arrow-key operation.
+  - **P3 set**: start-trim media-duration cap (both edges now), grid
+    invariant carries the documented **magnet exception** (a magnet hit
+    commits the target exactly — playhead targets may be off-grid),
+    deterministic mintClipId, dead-code purge, honest undo/redo toasts,
+    split keeps the left half selected, storybook: toast stories patch
+    state directly (auto-dismiss was blanking them), zoom-3 tier added,
+    withStoreReset resets on unmount (Play-again runs from pristine).
+  - Seed v2 (found during test-writing): the audit's back-to-back seed made
+    every V1 move degenerate — 0.5s gaps added (0→3.5, 4.5→8, 9→12.5).
+  - Suite 77 → 93 tests; tsc/vitest/vite/storybook-static all green.
+- Build order (as executed): scaffold+skin port → pure lib+tests → store →
+  timeline → shell regions → storybook → review round → close-out.
