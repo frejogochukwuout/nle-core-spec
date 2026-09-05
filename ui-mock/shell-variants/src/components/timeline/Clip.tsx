@@ -1,6 +1,6 @@
 /* Clip — spec 05 §7.3 anatomy: position:absolute, timeToPx geometry,
-   filmstrip / waveform / label children, trim handles (12px hit), fade
-   triangles (§9), linked badge. Two render modes:
+   filmstrip / waveform / label children, trim handles (8px outside edges),
+   fade triangles (§9), linked badge. Two render modes:
    filmstrip (spec 05 canonical) | blocks (davinci mock compact).
    Selected = accent outline + tint; locked = stripes (legible, not faded);
    drag = optimistic preview + live TC bubble; commit on release (18 §5).
@@ -9,16 +9,32 @@
    threshold (either axis); release back within 5px = drag-back cancel;
    buttons-mask-0 moves and pointercancel cancel; lastGestureWasDrag
    swallows the follow-up click after a completed drag. Right-click does
-   NOT stopPropagation — the Timeline scroll surface routes the menu. */
+   NOT stopPropagation — the Timeline scroll surface routes the menu.
+   R15 T4 trim laws + tool gestures (spec-06 §10.5 OT-GAP): 1-frame min,
+   neighbor/source bounds, frame-snap-once with the store as trusting single
+   owner, and the roll/ripple/slip/slide/stretch gestures — all sharing the
+   T2 discipline and the preview→commit + ONE history entry contract. */
 
 import { useEffect, useRef, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { useVariantClipStyle } from '../../state/variantHooks';
 import { mediaById, findElement, EFFECT_DEFS, TRANSITION_PRESENTATIONS, type ElementJSON, type TrackJSON } from '../../lib/mockData';
-import { snapToFrame, tc } from '../../lib/timecode';
+import { snapToFrame, tc, clamp } from '../../lib/timecode';
 import { DRAG_THRESHOLD_PX } from '../../lib/pixel';
 import { resolveGroupMove, toCreateTrackPlans, dragRejectionToast } from '../../lib/timelinePlacement';
+import {
+  RATE_MIN,
+  RATE_MAX,
+  adjacentBefore,
+  adjacentAfter,
+  batchTrimBounds,
+  rollDeltaBounds,
+  rippleDeltaBounds,
+  slipTargetBounds,
+  slideStartBounds,
+  stretchDeltaBounds,
+} from '../../lib/trimLaws';
 import { getWaveform } from '../../lib/waveform';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { useConfirm, type ConfirmFn } from '../shell/ConfirmDialog';
@@ -42,16 +58,23 @@ interface ClipProps {
 
 /* R15 T3: the drag-geometry contract the Clip emits on every ACTIVE move
    (and once at activation). `previewStart` is the anchor's frame-snapped
-   preview time; the host resolves the drop target from pointer position. */
+   preview time; the host resolves the drop target from pointer position.
+   R15 T4/T5: `kind` splits the two host relationships — 'move' events drive
+   the T3 drop resolution + release commit; 'trim' events (every T4
+   edge/body tool gesture) only feed the snap indicator — the CLIP commits
+   those itself. `snapAt` carries the active snap target (content time) for
+   the Timeline's indicator line, null when the gesture holds none. */
 export interface ClipDragEvent {
   anchorId: string;
   phase: 'start' | 'move' | 'end';
+  kind: 'move' | 'trim';
   pointerId: number;
   clientX: number;
   clientY: number;
   startX: number;
   startY: number;
   previewStart: number;
+  snapAt: number | null;
   alt: boolean;
   cancelled: boolean; // end only — Esc / buttons-mask / pointercancel / drag-back
   commit: boolean;    // end only — release past threshold, not cancelled
@@ -66,10 +89,33 @@ export type ClipDragHost = (e: ClipDragEvent) => void;
    carries select semantics); a release back within 5px after activation is
    a drag-back CANCEL (no store write, no history); a pointermove with
    (buttons & 1) === 0 mid-gesture cancels it (left button released
-   off-window — capture still delivers the move). */
+   off-window — capture still delivers the move).
+   R15 T4 tool-gesture modes (spec-06 §10.5 OT-GAP) — ONE state machine:
+     'move'      select-tool body drag (the T3 2D host seam)
+     'slip'      slip-tool body drag: content slides under a FIXED clip
+     'slide'     slide-tool body drag: clip moves, neighbors make room
+     'l'/'r'     select-tool edge drag (plain trim)
+     'roll-*'    junction drag (roll tool, or ⌥-edge-drag in select)
+     'ripple-*'  edge drag + later clips stay glued to the new end
+     'stretch-*' edge drag + speed compensates (rate clamp [0.01, 5])
+   `cur` semantics per family: move/slide → preview start; slip → content
+   offset seconds (pointer direction); left-edge family → preview left-edge
+   time; right-edge family → preview end time. */
+type DragMode =
+  | 'move'
+  | 'slip'
+  | 'slide'
+  | 'l'
+  | 'r'
+  | 'roll-l'
+  | 'roll-r'
+  | 'ripple-l'
+  | 'ripple-r'
+  | 'stretch-l'
+  | 'stretch-r';
 type DragState = {
   phase: 'pending' | 'active';
-  mode: 'move' | 'l' | 'r';
+  mode: DragMode;
   pointerId: number;
   startX: number; // gesture origin (screen px) — threshold + drag-back math
   startY: number;
@@ -77,6 +123,9 @@ type DragState = {
   origDur: number;
   cur: number;
   alt: boolean;
+  /* R15 T5: the active snap target (content time) from the last move —
+   * surfaced through the host seam for the Timeline's indicator line. */
+  snapAt: number | null;
 } | null;
 
 /* effects-rail drag payload type (HTML5 DnD): the AppShell effects rail
@@ -190,7 +239,6 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
   const selection = useUi((s) => s.selection);
   const selectElement = useUi((s) => s.selectElement);
   const splitElement = useUi((s) => s.splitElement);
-  const trimElement = useUi((s) => s.trimElement);
   const pushToast = useUi((s) => s.pushToast);
   const snap = useUi((s) => s.snap);
   const menu = useContextMenu();   // §4.9 clip menu (right-click + Shift+F10)
@@ -245,17 +293,26 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
      callback is identity-stable) ---- */
   const hostRef = useRef(dragHost);
   hostRef.current = dragHost;
+  /* R15 T4: the drag group — canonical: the selection when the anchor is
+   * selected, else the anchor alone. Shared by the batch-trim commit, the
+   * slip commit and the snap-target self-exclusion. */
+  const groupIds = (): string[] => {
+    const s = useUi.getState();
+    return s.selection.includes(el.id) ? s.selection : [el.id];
+  };
   const notifyHostMove = (e: React.PointerEvent, d: NonNullable<DragState>, phase: 'start' | 'move') => {
-    if (!hostRef.current || d.mode !== 'move') return;
+    if (!hostRef.current) return;
     const evt: ClipDragEvent = {
       anchorId: el.id,
       phase,
+      kind: d.mode === 'move' ? 'move' : 'trim',
       pointerId: d.pointerId,
       clientX: e.clientX,
       clientY: e.clientY,
       startX: d.startX,
       startY: d.startY,
       previewStart: d.cur,
+      snapAt: d.snapAt ?? null,
       alt: d.alt,
       cancelled: false,
       commit: false,
@@ -294,30 +351,151 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
     else s.moveElements({ moves: res.moves, createTracks });
   };
 
-  // live geometry (drag preview = optimistic DOM state, spec 18 §5). While a
-  // cross-track drag is ENGAGED the host renders the ghost at the resolved
-  // target — the clip itself falls back to its ORIGINAL position, faded.
+  /* live geometry (drag preview = optimistic DOM state, spec 18 §5). While a
+     cross-track drag is ENGAGED the host renders the ghost at the resolved
+     target — the clip itself falls back to its ORIGINAL position, faded.
+     R15 T4 per-mode geometry: slip keeps the box FIXED (content translates
+     inside); ripple-l trims the head — the clip keeps its start when the head
+     is removed (the committed interval model), pulls left when extended. */
+  const origEnd = drag ? drag.origStart + drag.origDur : el.startTime + el.duration;
   const geo = drag
     ? drag.mode === 'move'
       ? previewSuppressed
         ? { left: el.startTime * pxPerSec, width: el.duration * pxPerSec }
         : { left: drag.cur * pxPerSec, width: el.duration * pxPerSec }
-      : drag.mode === 'l'
-        ? { left: drag.cur * pxPerSec, width: (drag.origStart + drag.origDur - drag.cur) * pxPerSec }
-        : { left: el.startTime * pxPerSec, width: (drag.cur - el.startTime) * pxPerSec }
+      : drag.mode === 'slide'
+        ? { left: drag.cur * pxPerSec, width: el.duration * pxPerSec }
+        : drag.mode === 'slip'
+          ? { left: el.startTime * pxPerSec, width: el.duration * pxPerSec } // position FIXED (spec-06 §5.6)
+          : drag.mode === 'l' || drag.mode === 'roll-l' || drag.mode === 'stretch-l'
+            ? { left: drag.cur * pxPerSec, width: Math.max(0, origEnd - drag.cur) * pxPerSec }
+            : drag.mode === 'ripple-l'
+              ? { left: Math.min(drag.origStart, drag.cur) * pxPerSec, width: Math.max(0, drag.origDur - (drag.cur - drag.origStart)) * pxPerSec }
+              : { left: drag.origStart * pxPerSec, width: Math.max(0, drag.cur - drag.origStart) * pxPerSec }
     : { left: el.startTime * pxPerSec, width: el.duration * pxPerSec };
 
-  const applySnap = (t: number, ignoreSelf: boolean): { t: number; snapped: boolean } => {
+  /* ---- R15 T4 per-mode preview readouts ---- */
+  const isLeftEdgeMode = drag != null && (drag.mode === 'l' || drag.mode === 'roll-l' || drag.mode === 'ripple-l' || drag.mode === 'stretch-l');
+  const slipActive = dragActive && drag?.mode === 'slip';
+  const slipOffsetPx = slipActive ? drag!.cur * pxPerSec : 0;
+  const stretchPreviewDur = dragActive && (drag?.mode === 'stretch-l' || drag?.mode === 'stretch-r')
+    ? drag!.mode === 'stretch-l'
+      ? drag!.origStart + drag!.origDur - drag!.cur
+      : drag!.cur - drag!.origStart
+    : null;
+  const bubbleTime = !drag
+    ? el.startTime
+    : drag.mode === 'move' || drag.mode === 'slide'
+      ? drag.cur
+      : drag.mode === 'slip'
+        ? (el.sourceStart ?? 0) - drag.cur // the new source-window start (position is FIXED)
+        : isLeftEdgeMode
+          ? drag.cur
+          : el.startTime;
+  const bubbleDur = !drag
+    ? el.duration
+    : drag.mode === 'move' || drag.mode === 'slide' || drag.mode === 'slip'
+      ? el.duration
+      : isLeftEdgeMode
+        ? drag.origStart + drag.origDur - drag.cur
+        : drag.cur - drag.origStart;
+
+  /* R15 T5: closest-wins snapping (strict <, earliest wins ties) over the
+     host's target list — which already excludes locked tracks — and EXCLUDING
+     the dragged group's own edges (value-identical targets drop with them;
+     a coincident foreign target is equivalent to no motion). SHIFT suppresses
+     snapping entirely (canonical §5, every gesture). Returns the snap target
+     so the host can draw the indicator line. */
+  const applySnap = (t: number, shiftKey: boolean): { t: number; snapAt: number | null } => {
     const frameSnapped = snapToFrame(t);
-    if (!snap) return { t: frameSnapped, snapped: false };
-    const tolPx = 10 / pxPerSec; // 10px screen-space (spec 05 §9)
-    let best = frameSnapped, bestD = tolPx, snapped = false;
-    for (const target of snapTargets) {
-      if (ignoreSelf && Math.abs(target - el.startTime) < 1e-6) continue;
-      const d = Math.abs(target - t);
-      if (d < bestD) { best = target; bestD = d; snapped = true; }
+    if (!snap || shiftKey) return { t: frameSnapped, snapAt: null };
+    const selfTimes = new Set<number>();
+    const s = useUi.getState();
+    const scene = s.scenes.find((x) => x.id === s.activeSceneId);
+    const group = new Set(groupIds());
+    if (scene) {
+      for (const tr of scene.tracks) for (const e2 of tr.elements) {
+        if (!group.has(e2.id)) continue;
+        selfTimes.add(e2.startTime);
+        selfTimes.add(e2.startTime + e2.duration);
+      }
     }
-    return { t: Math.max(0, best), snapped };
+    const tolPx = 10 / pxPerSec; // 10px screen-space (spec 05 §9)
+    let best = frameSnapped, bestD = tolPx, snapAt: number | null = null;
+    for (const target of snapTargets) {
+      if (selfTimes.has(target)) continue; // group/self edges are never targets
+      const d = Math.abs(target - t);
+      if (d < bestD) { best = target; bestD = d; snapAt = target; }
+    }
+    return { t: Math.max(0, best), snapAt };
+  };
+
+  /* R15 T4: the bounds law for the active mode, computed with the SAME pure
+     functions the store commits through (lib/trimLaws) — the optimistic
+     preview can never show a position the commit would clamp away. Null =
+     unclamped (move: the store's overlap rejection + honest toast own it;
+     slip: bounds apply to the source window, not to `cur`). */
+  const curBounds = (mode: DragMode): { lo: number; hi: number } | null => {
+    const s = useUi.getState();
+    const scene = s.scenes.find((x) => x.id === s.activeSceneId);
+    switch (mode) {
+      case 'move':
+      case 'slip':
+        return null;
+      case 'slide':
+        return slideStartBounds(track, el);
+      case 'l':
+      case 'r': {
+        if (!scene) return null;
+        const b = batchTrimBounds(scene, groupIds().map((id) => ({ id, edge: mode })));
+        if (!b) return null;
+        return mode === 'l'
+          ? { lo: el.startTime + b.lo, hi: el.startTime + b.hi }
+          : { lo: el.startTime + el.duration + b.lo, hi: el.startTime + el.duration + b.hi };
+      }
+      case 'roll-l': {
+        const a = adjacentBefore(track, el);
+        if (!a) return null;
+        const b = rollDeltaBounds(a, el);
+        return { lo: el.startTime + b.lo, hi: el.startTime + b.hi };
+      }
+      case 'roll-r': {
+        const b = adjacentAfter(track, el);
+        if (!b) return null;
+        const bd = rollDeltaBounds(el, b);
+        return { lo: el.startTime + el.duration + bd.lo, hi: el.startTime + el.duration + bd.hi };
+      }
+      case 'ripple-l': {
+        const b = rippleDeltaBounds(track, el, 'l');
+        return { lo: el.startTime + b.lo, hi: el.startTime + b.hi };
+      }
+      case 'ripple-r': {
+        const b = rippleDeltaBounds(track, el, 'r');
+        return { lo: el.startTime + el.duration + b.lo, hi: el.startTime + el.duration + b.hi };
+      }
+      case 'stretch-l':
+      case 'stretch-r': {
+        const edge = mode === 'stretch-l' ? 'l' : 'r';
+        const b = stretchDeltaBounds(track, el, edge);
+        return edge === 'l'
+          ? { lo: el.startTime + b.lo, hi: el.startTime + b.hi }
+          : { lo: el.startTime + el.duration + b.lo, hi: el.startTime + el.duration + b.hi };
+      }
+    }
+  };
+
+  /* R15 T4: handle routing — plain trim (select), roll (roll tool, or
+     ⌥-drag an edge in select — needs an adjacent neighbor: a gap has no
+     junction), ripple, stretch. Slip/slide/blade render no handles. */
+  const handleModeFor = (edge: 'l' | 'r', alt: boolean): DragMode | null => {
+    if (tool === 'roll' || (tool === 'select' && alt)) {
+      const neighbor = edge === 'l' ? adjacentBefore(track, el) : adjacentAfter(track, el);
+      return neighbor ? ((`roll-${edge}`) as DragMode) : null;
+    }
+    if (tool === 'select') return edge;
+    if (tool === 'ripple') return `ripple-${edge}` as DragMode;
+    if (tool === 'stretch') return `stretch-${edge}` as DragMode;
+    return null;
   };
 
   const onPointerDownBody = (e: React.PointerEvent) => {
@@ -328,8 +506,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
     dragCancelled.current = false;
     lastGestureWasDrag.current = false; // fresh gesture — canonical reset-on-pointerdown
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    // PENDING gesture: no drag mode yet — the 5px threshold gates activation
-    setDrag({ phase: 'pending', mode: 'move', pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: e.altKey });
+    /* R15 T4: body gestures route by tool — slip/slide own the body drag in
+       their tools; every other tool keeps the T3 2D move. */
+    const mode: DragMode = tool === 'slip' ? 'slip' : tool === 'slide' ? 'slide' : 'move';
+    setDrag({ phase: 'pending', mode, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: mode === 'slip' ? 0 : el.startTime, alt: e.altKey, snapAt: null });
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -353,25 +533,44 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       d = { ...d, phase: 'active' };
     }
     const dt = (e.clientX - d.startX) / pxPerSec;
-    if (d.mode === 'move') {
-      const { t } = applySnap(d.origStart + dt, false);
-      const next = { ...d, cur: t, alt: e.altKey }; // Alt held? = duplicate gesture
-      setDrag(next);
-      // R15 T3: report the 2D geometry upward — the host owns lane layout,
-      // drop-target resolution and the auto-scroll rAF. 'start' fires once
-      // (activation) so the host can mint the new-track ids; the SAME event
-      // then carries a 'move' so the preview resolves on the FIRST qualifying
-      // move (a single-move drag must already show the drop target).
-      if (wasPending) notifyHostMove(e, next, 'start');
-      notifyHostMove(e, next, 'move');
-    } else if (d.mode === 'l') {
-      const { t } = applySnap(d.origStart + dt, false);
-      const maxStart = d.origStart + d.origDur - 0.25;
-      setDrag({ ...d, cur: Math.min(t, maxStart) });
+    const shift = e.shiftKey; // R15 T5: shift suppresses snapping in EVERY gesture
+    let next: NonNullable<DragState>;
+    if (d.mode === 'move' || d.mode === 'slide') {
+      const { t, snapAt } = applySnap(d.origStart + dt, shift);
+      const b = curBounds(d.mode);
+      const cur = b ? clamp(t, b.lo, b.hi) : t;
+      // the indicator only reports a snap that SURVIVED the bounds clamp —
+      // a clamped-away target is not held (the edge never reached it)
+      next = { ...d, cur, alt: e.altKey, snapAt: cur === t ? snapAt : null }; // Alt held? = duplicate gesture (move only)
+    } else if (d.mode === 'slip') {
+      /* grab-the-content (spec-06 §5.6): the film follows the pointer — drag
+         right shows EARLIER material (sourceStart decreases). Store frames use
+         the slipNudge convention (+frames = later content), so the gesture
+         negates. FRAME-SNAP-ONCE: the rounded frames are the single source
+         of truth; the bounds clamp keeps the preview honest (clamped target). */
+      const b = slipTargetBounds(el);
+      const base = el.sourceStart ?? 0;
+      const frames = Math.round(-dt * 24);
+      const target = b ? clamp(base + frames / 24, b.lo, b.hi) : base + frames / 24;
+      next = { ...d, cur: base - target }; // cur = content offset (s), follows the pointer
     } else {
-      const { t } = applySnap(d.origStart + d.origDur + dt, true);
-      setDrag({ ...d, cur: Math.max(d.origStart + 0.25, t) });
+      /* edge family: ONE frame-snap of the edge time, then the mode's bounds
+         clamp (shared with the store) — single owner, no double snap. */
+      const isLeft = d.mode === 'l' || d.mode === 'roll-l' || d.mode === 'ripple-l' || d.mode === 'stretch-l';
+      const raw = isLeft ? d.origStart + dt : d.origStart + d.origDur + dt;
+      const { t, snapAt } = applySnap(raw, shift);
+      const b = curBounds(d.mode);
+      const cur = b ? clamp(t, b.lo, b.hi) : t;
+      next = { ...d, cur, snapAt: cur === t ? snapAt : null }; // clamp ate the snap → not held
     }
+    setDrag(next);
+    /* R15 T3/T5: report the geometry upward on EVERY qualifying move — the
+       host tracks the snap indicator for all gestures and owns drop-target
+       resolution + the auto-scroll rAF for MOVE drags only. 'start' fires
+       once (activation) so the host can mint the new-track ids; the SAME
+       event then carries a 'move' so a single-move drag already resolves. */
+    if (wasPending) notifyHostMove(e, next, 'start');
+    notifyHostMove(e, next, 'move');
   };
 
   const onPointerUp = (e?: React.PointerEvent) => {
@@ -413,9 +612,45 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
         // hostless fallback: same laws, resolved against the anchor's own lane
         commitMoveLocally(drag.cur, drag.alt);
       }
+    } else {
+      /* R15 T4: every tool/trim gesture commits HERE (the store clamps with
+         the same shared bounds the preview used); the host's 'end' event only
+         drops its snap indicator — kind 'trim' ends never resolve or commit. */
+      const left = drag.mode === 'l' || drag.mode === 'roll-l' || drag.mode === 'ripple-l' || drag.mode === 'stretch-l';
+      const edge = left ? 'l' : 'r';
+      const delta = left ? drag.cur - drag.origStart : drag.cur - (drag.origStart + drag.origDur);
+      const group = groupIds();
+      switch (drag.mode) {
+        case 'l':
+        case 'r':
+          // selection trims together: batch API, bounds intersection, ONE entry
+          useUi.getState().trimElements(group.map((id) => ({ id, edge, delta })));
+          break;
+        case 'roll-l':
+        case 'roll-r': {
+          const neighbor = left ? adjacentBefore(track, el) : adjacentAfter(track, el);
+          if (neighbor) useUi.getState().rollTrim(left ? neighbor.id : el.id, left ? el.id : neighbor.id, delta);
+          break;
+        }
+        case 'ripple-l':
+        case 'ripple-r':
+          useUi.getState().rippleTrim(el.id, edge, delta);
+          break;
+        case 'slip':
+          // cur = content offset (pointer direction); store frames are the
+          // slipNudge convention (+frames = later content) → negated here
+          useUi.getState().slipDrag(group, Math.round(-drag.cur * 24));
+          break;
+        case 'slide':
+          useUi.getState().slideMove(el.id, drag.cur);
+          break;
+        case 'stretch-l':
+        case 'stretch-r':
+          useUi.getState().stretchTrim(el.id, edge, delta);
+          break;
+      }
+      notifyHostEnd(false, true, e);
     }
-    if (drag.mode === 'l') trimElement(el.id, 'l', drag.cur, drag.origStart + drag.origDur - drag.cur);
-    if (drag.mode === 'r') trimElement(el.id, 'r', el.startTime, drag.cur - el.startTime);
     setDrag(null);
   };
 
@@ -448,7 +683,13 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
     selectElement(el.id, e.shiftKey || e.metaKey);
   };
 
-  const cursor = locked ? 'not-allowed' : tool === 'blade' ? 'crosshair' : drag?.mode === 'move' ? 'grabbing' : 'move';
+  const cursor = locked
+    ? 'not-allowed'
+    : tool === 'blade'
+      ? 'crosshair'
+      : dragActive && (drag?.mode === 'move' || drag?.mode === 'slip' || drag?.mode === 'slide')
+        ? 'grabbing'
+        : 'move';
 
   /* §4.9 clip menu items for the keyboard route (Shift+F10 / ContextMenu
      key — the clip keeps this route; the POINTER right-click route is
@@ -685,60 +926,87 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       }}
       onDrop={onEffectDrop}
     >
-      {/* inner clipping box (label + body clip; badges overflow) */}
-      <div className="clip-box absolute inset-0 overflow-hidden">{body}</div>
+      {/* inner clipping box (label + body clip; badges overflow). R15 T4 slip
+          preview: the content (filmstrip/waveform/label) TRANSLATES under the
+          fixed clip box — “content slides under the clip” (spec-06 §5.6). */}
+      <div
+        data-testid={`clip-content-${el.id}`}
+        className="clip-box absolute inset-0 overflow-hidden"
+        style={slipActive ? { transform: `translateX(${slipOffsetPx}px)` } : undefined}
+      >
+        {body}
+      </div>
 
       {/* locked overlay — stripes ON TOP of the body (legible, R2) */}
       {locked && <div className="locked-stripes pointer-events-none absolute inset-0 z-[2]" aria-hidden="true" />}
 
       {/* live trim/move TC bubble (spec 06 §8 overlay pattern) — active
-          gestures only (the 5px threshold gates the optimistic preview) */}
+          gestures only (the 5px threshold gates the optimistic preview).
+          R15 T4: per-mode readout — the moving edge for edge gestures, the
+          source-window start for slip (position is fixed), duration reflects
+          the gesture family's own law. */}
       {dragActive && (
         <span
           className="mono pointer-events-none absolute -top-[22px] left-0 whitespace-nowrap rounded-[var(--radius-sm)] border border-strong bg-inset px-1.5 py-px text-[11px] text-tprimary shadow-lg"
           data-testid="clip-drag-tc"
         >
-          {tc(drag.mode === 'move' ? drag.cur : drag.mode === 'l' ? drag.cur : el.startTime)}
+          {tc(bubbleTime)}
           {' · '}
-          {tc(
-            drag.mode === 'move'
-              ? el.duration
-              : drag.mode === 'l'
-                ? drag.origStart + drag.origDur - drag.cur
-                : drag.cur - el.startTime,
-          )}
+          {tc(bubbleDur)}
         </span>
       )}
 
-      {/* trim handles — 12px hit strips, ew-resize (spec 05 §14.2). Gestures
+      {/* R15 T4 stretch preview: the live speed badge (the committed clip
+          shows the same % through clipLabel) — rate clamp included so the
+          preview never lies about the [0.01, 5] law. */}
+      {dragActive && stretchPreviewDur != null && stretchPreviewDur > 0 && (
+        <span
+          data-testid="clip-stretch-badge"
+          className="mono pointer-events-none absolute left-1 top-1 rounded-sm bg-black/60 px-1 text-[11px] font-bold text-white"
+        >
+          {Math.round(clamp((el.duration * (el.speed ?? 1)) / stretchPreviewDur, RATE_MIN, RATE_MAX) * 100)}%
+        </span>
+      )}
+
+      {/* trim handles — R15 T4 canonical §17: SELECTED clips only, 8px wide,
+          offset ±4px OUTSIDE the clip edges (replaces the 12px inside
+          strips), w-resize/e-resize cursors; active in the select / roll /
+          ripple / stretch tools (slip/slide/blade render none). Gestures
           start PENDING (R15 T2): the 5px threshold gates the trim preview —
-          a press-release without crossing it is a plain click (no trim). */}
-      {!locked && (
+          a press-release without crossing it is a plain click (no trim).
+          Roll also engages via ⌥-drag in the select tool (spec-06 §5.5). */}
+      {!locked && selected && (tool === 'select' || tool === 'roll' || tool === 'ripple' || tool === 'stretch') && (
         <>
           <div
-            className="absolute inset-y-0 left-0 w-3 rounded-l-[2px]"
-            style={{ cursor: 'ew-resize' }}
+            data-testid={`clip-trim-l-${el.id}`}
+            className="absolute inset-y-0"
+            style={{ left: -4, width: 8, cursor: 'w-resize' }}
             onPointerDown={(e) => {
               e.stopPropagation();
-              if (tool !== 'select') return;
+              if (e.button !== 0) return;
+              const mode = handleModeFor('l', e.altKey);
+              if (!mode) return; // e.g. roll with no adjacent neighbor — inert
               dragCancelled.current = false;
               lastGestureWasDrag.current = false; // fresh gesture
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-              setDrag({ phase: 'pending', mode: 'l', pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: false });
+              setDrag({ phase: 'pending', mode, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: false, snapAt: null });
             }}
             onPointerMove={(e) => { e.stopPropagation(); onPointerMove(e); }}
             onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e); }}
           />
           <div
-            className="absolute inset-y-0 right-0 w-3 rounded-r-[2px]"
-            style={{ cursor: 'ew-resize' }}
+            data-testid={`clip-trim-r-${el.id}`}
+            className="absolute inset-y-0"
+            style={{ right: -4, width: 8, cursor: 'e-resize' }}
             onPointerDown={(e) => {
               e.stopPropagation();
-              if (tool !== 'select') return;
+              if (e.button !== 0) return;
+              const mode = handleModeFor('r', e.altKey);
+              if (!mode) return;
               dragCancelled.current = false;
               lastGestureWasDrag.current = false; // fresh gesture
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-              setDrag({ phase: 'pending', mode: 'r', pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime + el.duration, alt: false });
+              setDrag({ phase: 'pending', mode, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime + el.duration, alt: false, snapAt: null });
             }}
             onPointerMove={(e) => { e.stopPropagation(); onPointerMove(e); }}
             onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e); }}

@@ -11,6 +11,7 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { Clip, EFFECT_DRAG_TYPE } from './Clip';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
+import { snapToFrame } from '../../lib/timecode';
 import { POOL_DRAG_TYPE } from '../shell/MediaPool';
 
 /* snap targets mirroring the real Timeline set (clip edges + playhead) */
@@ -302,15 +303,232 @@ describe('Clip', () => {
     expect(store().selection).toEqual(['el-2', 'el-7']);
   });
 
-  it('the left trim handle commits trimElement(l) with the new start/duration (spec 05 §14.2)', () => {
-    boot({});
+  it('the left trim handle commits the trimmed start/duration (spec 05 §14.2 + R15 T4 handles)', () => {
+    boot({}); // selection ['el-2'] — canonical: selection gets handles
     const clip = screen.getByTestId('clip-el-2');
-    const leftHandle = clip.querySelector('div.w-3') as HTMLElement; // first w-3 strip = left edge
+    const leftHandle = screen.getByTestId('clip-trim-l-el-2');
+    // trim IN (+46 px = +1 s): newStart 9.5, duration 7.5, sourceStart advances
     fireEvent.pointerDown(leftHandle, { pointerId: 1, button: 0, clientX: 391 });
-    fireEvent.pointerMove(leftHandle, { pointerId: 1, buttons: 1, clientX: 300 }); // −91 px → 157/24 s
+    fireEvent.pointerMove(leftHandle, { pointerId: 1, buttons: 1, clientX: 437 });
     fireEvent.pointerUp(leftHandle, { pointerId: 1 });
-    expect(el('el-2').startTime).toBeCloseTo(157 / 24, 4);
-    expect(el('el-2').duration).toBeCloseTo(17 - 157 / 24, 4);
+    expect(el('el-2').startTime).toBe(9.5);
+    expect(el('el-2').duration).toBe(7.5);
+    expect(el('el-2').sourceStart).toBeCloseTo(4.0, 5); // 3.0 + 1.0
+  });
+
+  /* ---- R15 T4: trim laws at the gesture level ---- */
+
+  it("R15 T4 NEIGHBOR BOUND: the left edge cannot extend past the previous clip's end — clamped, no write", () => {
+    boot({});
+    const leftHandle = screen.getByTestId('clip-trim-l-el-2');
+    // drag LEFT by 91 px (8.5 → 6.54): el-1 ends at 8.5 → the edge clamps to 8.5,
+    // delta 0 → NOOP (canonical §9 neighbor law; the R14 mock let it overlap)
+    fireEvent.pointerDown(leftHandle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(leftHandle, { pointerId: 1, buttons: 1, clientX: 300 });
+    fireEvent.pointerUp(leftHandle, { pointerId: 1 });
+    expect(el('el-2').startTime).toBe(8.5); // never crossed the neighbor
+    expect(el('el-2').duration).toBe(8.5);
+    expect(store().past).toHaveLength(0); // clamped to a no-op — no history
+  });
+
+  it('R15 T4 FRAME-SNAP-ONCE: an odd-px right-edge drag keeps start+duration on the frame grid (single owner)', () => {
+    boot({ selection: ['el-6'] }); // el-6 [0,30) — the only clip on A1, source 120 s
+    const rightHandle = screen.getByTestId('clip-trim-r-el-6');
+    // +47 px = 1.0217 s → ONE snap of the edge: 745/24 frames (31.0417 s)
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 438 });
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    const e = el('el-6');
+    expect(e.startTime).toBe(0);
+    expect(e.duration).toBeCloseTo(745 / 24, 6); // frame-clean
+    expect((e.duration * 24) % 1).toBeCloseTo(0, 6); // the invariant: on-grid
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('R15 T4 SOURCE-EXTENT: the right edge cannot extend past the media tail (12.8 s source for el-4)', () => {
+    boot({ selection: ['el-4'] });
+    const rightHandle = screen.getByTestId('clip-trim-r-el-4');
+    // request +20 s (far past m-05's 12.8 s tail) → clamped to the extent;
+    // source-extent beats frame alignment (12.8 is OFF-grid, canonical §9)
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 1311 }); // +20 s
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    expect(el('el-4').duration).toBeCloseTo(12.8, 5); // the media tail wins
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('R15 T4 handles: selected-only + select/roll/ripple/stretch tools; slip/slide/blade render none (canonical §17)', () => {
+    boot({ selection: [] });
+    expect(screen.queryByTestId('clip-trim-l-el-2')).not.toBeInTheDocument(); // unselected → no handles
+    fireEvent.click(screen.getByTestId('clip-el-2'));
+    expect(store().selection).toEqual(['el-2', 'el-7']);
+    expect(screen.getByTestId('clip-trim-l-el-2')).toBeInTheDocument(); // selected → handles
+    expect(screen.getByTestId('clip-trim-r-el-2').style.cursor).toBe('e-resize');
+    expect(screen.getByTestId('clip-trim-l-el-2').style.cursor).toBe('w-resize');
+    for (const tool of ['slip', 'slide', 'blade'] as const) {
+      act(() => { useUi.setState({ tool }); });
+      expect(screen.queryByTestId('clip-trim-l-el-2')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('clip-trim-r-el-2')).not.toBeInTheDocument();
+    }
+  });
+
+  /* ---- R15 T4 tool gestures (spec-06 §10.5 OT-GAP) ---- */
+
+  it('R15 T4 ROLL gesture (⌥-drag an edge in select): the junction moves — A grows, B shrinks, total preserved, ONE entry', () => {
+    boot({});
+    const leftHandle = screen.getByTestId('clip-trim-l-el-2');
+    fireEvent.pointerDown(leftHandle, { pointerId: 1, button: 0, clientX: 391, altKey: true });
+    fireEvent.pointerMove(leftHandle, { pointerId: 1, buttons: 1, clientX: 437, altKey: true }); // +1 s
+    fireEvent.pointerUp(leftHandle, { pointerId: 1 });
+    expect(el('el-1').duration).toBe(9.5); // A extended
+    expect(el('el-1').startTime).toBe(0);
+    expect(el('el-2').startTime).toBe(9.5); // B retracted at the head
+    expect(el('el-2').duration).toBe(7.5);
+    expect(el('el-2').sourceStart).toBeCloseTo(4.0, 5); // B shows later content
+    expect(el('el-1').startTime + el('el-1').duration).toBe(el('el-2').startTime); // glued junction
+    expect(store().past).toHaveLength(1); // ONE entry for the whole roll
+  });
+
+  it("R15 T4 ROLL bounded: B keeps a 1-frame minimum (the junction cannot pass B's tail) — roll tool route", () => {
+    boot({ tool: 'roll' });
+    const rightHandle = screen.getByTestId('clip-trim-r-el-2');
+    // drag the el-2/el-3 junction RIGHT by 100 s → clamped to el-3's 1-frame min
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 782 });
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 5382 });
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    expect(el('el-2').duration).toBeCloseTo(8.5 + 7 - 1 / 24, 5); // grew to leave el-3 one frame
+    expect(el('el-3').duration).toBeCloseTo(1 / 24, 6);
+    expect(el('el-3').startTime).toBeCloseTo(el('el-2').startTime + el('el-2').duration, 5);
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('R15 T4 ROLL inert without an adjacent neighbor (el-4 has no right neighbor): no gesture, no write', () => {
+    boot({ tool: 'roll', selection: ['el-4'] });
+    const rightHandle = screen.getByTestId('clip-trim-r-el-4');
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 489 });
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    expect(el('el-4').duration).toBe(6); // a gap has no junction to roll
+    expect(store().past).toHaveLength(0);
+  });
+
+  it('R15 T4 RIPPLE gesture (right edge): later same-track clips shift with the trimmed end; ONE entry', () => {
+    boot({ tool: 'ripple' });
+    const rightHandle = screen.getByTestId('clip-trim-r-el-2');
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 782 }); // 17 s
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 690 }); // −2 s → 15
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    expect(el('el-2').duration).toBe(6.5);
+    expect(el('el-3').startTime).toBe(15); // glued to the new end
+    expect(el('el-4').startTime).toBe(22); // shifted by the same delta
+    expect(el('el-6').startTime).toBe(0); // A1 bed is a different track — never follows
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('R15 T4 RIPPLE left edge: the head region is removed — clip KEEPS its start, downstream closes the gap', () => {
+    boot({ tool: 'ripple' });
+    const leftHandle = screen.getByTestId('clip-trim-l-el-2');
+    fireEvent.pointerDown(leftHandle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(leftHandle, { pointerId: 1, buttons: 1, clientX: 483 }); // +2 s head removed
+    fireEvent.pointerUp(leftHandle, { pointerId: 1 });
+    expect(el('el-2').startTime).toBe(8.5); // kept (trimToPlayhead ripple-l model)
+    expect(el('el-2').duration).toBe(6.5);
+    expect(el('el-2').sourceStart).toBeCloseTo(5.0, 5); // content advanced
+    expect(el('el-3').startTime).toBe(15); // downstream closed the gap
+    expect(el('el-4').startTime).toBe(22);
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('R15 T4 SLIP gesture: position FIXED, the content translates under the clip, sourceStart moves (bounded)', () => {
+    boot({ tool: 'slip' });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 437 }); // +1 s: content follows the pointer
+    const content = screen.getByTestId('clip-content-el-2');
+    expect(content.style.transform).toBe('translateX(46px)'); // the film slides under the FIXED box
+    expect(screen.getByTestId('clip-el-2').style.left).toBe(`${8.5 * 46}px`); // position never moves
+    fireEvent.pointerUp(clip, { pointerId: 1 });
+    expect(el('el-2').startTime).toBe(8.5); // FIXED
+    expect(el('el-2').duration).toBe(8.5); // FIXED
+    expect(el('el-2').sourceStart).toBeCloseTo(2.0, 5); // earlier content (grab-the-film metaphor)
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('R15 T4 SLIP bounded: dragging far past the source head clamps to 0 (m-02 headroom = 3 s)', () => {
+    boot({ tool: 'slip' });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 2671 }); // +49.6 s requested
+    fireEvent.pointerUp(clip, { pointerId: 1 });
+    expect(el('el-2').sourceStart).toBe(0); // clamped to the source head
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('R15 T4 SLIDE gesture: the clip moves, neighbors make room — no overlap, ONE entry', () => {
+    boot({ tool: 'slide' });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 437 }); // → 9.5 s
+    expect(clip.style.left).toBe('437px'); // the clip itself follows the pointer
+    fireEvent.pointerUp(clip, { pointerId: 1 });
+    expect(el('el-2').startTime).toBe(9.5);
+    expect(el('el-1').duration).toBe(9.5); // left neighbor's right edge followed (made room)
+    expect(el('el-3').startTime).toBe(18); // right neighbor's left edge trimmed to abut
+    expect(el('el-3').duration).toBe(6);
+    expect(el('el-3').sourceStart).toBeCloseTo(1.0, 5); // lost a second of head
+    // no overlap anywhere on the lane
+    const main = store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-main')!.elements;
+    for (let i = 1; i < main.length; i++) {
+      expect(main[i - 1]!.startTime + main[i - 1]!.duration).toBeLessThanOrEqual(main[i]!.startTime + 1e-9);
+    }
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('R15 T4 STRETCH gesture: duration changes, speed compensates (span preserved), badge previews the rate', () => {
+    boot({ tool: 'stretch', selection: ['el-6'] }); // el-6 [0,30), span 30, no neighbor
+    const rightHandle = screen.getByTestId('clip-trim-r-el-6');
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 621 }); // +5 s → dur 35
+    expect(screen.getByTestId('clip-stretch-badge')).toHaveTextContent('86%'); // 30/35 ≈ 0.857
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    expect(el('el-6').duration).toBe(35);
+    expect(el('el-6').speed).toBeCloseTo(30 / 35, 5); // speed = sourceSpan / duration
+    expect(el('el-6').duration * (el('el-6').speed ?? 1)).toBeCloseTo(30, 5); // the span invariant
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('R15 T4 STRETCH rate clamp: the compensated speed never leaves [0.01, 5] (spec-06 §5.8)', () => {
+    // el-5 (text clip, no neighbor, no source bound): span 3.25 → the 0.01
+    // floor caps the duration at 325 s — a right-edge drag past it clamps.
+    // (el-6's 3000 s clamp is pinned at the store level; a clip that wide
+    // renders a 138 000 px waveform and is jsdom-slow by construction.)
+    boot({ tool: 'stretch', selection: ['el-5'] });
+    const rightHandle = screen.getByTestId('clip-trim-r-el-5');
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 15326 }); // +325.1 s requested
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    expect(el('el-5').duration).toBeCloseTo(325, 3); // span / 0.01
+    expect(el('el-5').speed).toBeCloseTo(0.01, 5); // the floor
+  });
+
+  it('R15 T5 SHIFT suppresses snapping: the same trim drag snaps without shift, stays on the raw grid with it', () => {
+    // el-6's right edge → 23.85 s: the SNAP list carries 24 (el-4's start) within
+    // the 10 px tolerance. Without shift the edge snaps to 24; WITH shift the
+    // snap pass is skipped entirely and the edge lands on the pure frame grid.
+    boot({ selection: ['el-6'] });
+    const rightHandle = screen.getByTestId('clip-trim-r-el-6');
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 108 }); // −6.152 s → 23.848
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    expect(el('el-6').duration).toBe(24); // snapped to the el-4 edge target
+    // the SAME drag with shift held: no target consulted → raw frame grid
+    fireEvent.pointerDown(rightHandle, { pointerId: 2, button: 0, clientX: 391 });
+    fireEvent.pointerMove(rightHandle, { pointerId: 2, buttons: 1, clientX: 108, shiftKey: true });
+    fireEvent.pointerUp(rightHandle, { pointerId: 2 });
+    // (the gesture restarts from the POST-FIRST-TRIM duration 24 → −6.152 s
+    // lands on the raw frame grid, NOT on the 24 target it just came from)
+    expect(el('el-6').duration).toBeCloseTo(snapToFrame(24 - 6.152173913043478), 5); // 428/24, NOT 24
+    expect(store().past).toHaveLength(2); // two committed trims
   });
 
   it('clips on a locked track are inert: no pointer events, stripes overlay, click does nothing (18 §4.5)', () => {

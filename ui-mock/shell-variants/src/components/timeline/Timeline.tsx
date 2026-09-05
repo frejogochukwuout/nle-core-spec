@@ -267,9 +267,18 @@ export function Timeline() {
     return sized;
   };
 
-  // snap targets: all clip edges + playhead + sequence ends (spec 05 §9)
-  const snapTargets = scene.tracks.flatMap((t) => t.elements.flatMap((e) => [e.startTime, e.startTime + e.duration]));
+  // R15 T5 snap targets: element edges on UNLOCKED tracks only (locked
+  // lanes are inert — their edges are not snap sources), + playhead, 0,
+  // sequence end, MARKERS, and the in/out points (loop.start/end). The
+  // dragged group/self is excluded per-gesture inside the Clip (it knows the
+  // group); marquee never snaps.
+  const loop = useUi((s) => s.loop);
+  const snapTargets = scene.tracks
+    .filter((t) => !t.locked)
+    .flatMap((t) => t.elements.flatMap((e) => [e.startTime, e.startTime + e.duration]));
   snapTargets.push(playhead, 0, duration);
+  for (const m of scene.markers) snapTargets.push(m.time);
+  snapTargets.push(loop.start, loop.end);
 
   /* lane geometry (content space): the band-top walk + the lane index under
      a content Y. Contiguous lanes (1px borders) — no gap resolution needed
@@ -293,8 +302,15 @@ export function Timeline() {
   /* ---- R15 T3: the Clip → Timeline drag seam. The Clip owns the gesture
      laws; THIS component owns the lane layout + drop-target resolution and
      performs the release commit (resolved group moves / alt duplicates) —
-     the resolution itself is the pure resolveGroupMove in lib/. */
+     the resolution itself is the pure resolveGroupMove in lib/.
+     R15 T5: the seam also carries the SNAP INDICATOR — every active clip
+     gesture (move AND the T4 trim/tool family) reports its snap target
+     (snapAt); kind 'trim' events never resolve drop targets or commit (the
+     Clip commits those itself — the host only mirrors the indicator). */
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  /* R15 T5: the active gesture's snap point (content time) while it holds
+   * one AND snapping is on — drives the 2px accent indicator line (z 40). */
+  const [snapIndicator, setSnapIndicator] = useState<number | null>(null);
   interface DragSession {
     anchorId: string;
     anchorType: ElementJSON['type'];
@@ -426,6 +442,12 @@ export function Timeline() {
 
   const onClipDragEvent: ClipDragHost = (e: ClipDragEvent) => {
     if (e.phase === 'start') {
+      // R15 T5: trim-family gestures (kind 'trim') never mint sessions, never
+      // auto-scroll — the CLIP commits them; the host mirrors the indicator
+      // only. (Trim deltas are screen-relative: auto-scroll would not move
+      // the edge anyway.)
+      setSnapIndicator(e.snapAt);
+      if (e.kind !== 'move') return;
       // canonical reservedNewTrackIds: one per moving clip (max) — the target
       // identity is stable across pointermove recomputes
       const s = useUi.getState();
@@ -437,6 +459,10 @@ export function Timeline() {
       return;
     }
     if (e.phase === 'move') {
+      // R15 T5: the indicator tracks EVERY gesture's snap point, before any
+      // drop resolution (a not-engaged horizontal move still holds a snap).
+      setSnapIndicator(e.snapAt);
+      if (e.kind !== 'move') return;
       const session = dragSessionRef.current;
       if (!session) return;
       session.pointerX = e.clientX;
@@ -499,8 +525,11 @@ export function Timeline() {
       });
       return;
     }
-    // 'end' — release / cancel
+    // 'end' — release / cancel: drop the indicator FIRST (every gesture),
+    // then the move-commit path
+    setSnapIndicator(null);
     stopAutoScroll();
+    if (e.kind !== 'move') return; // trim-family: the Clip already committed
     const session = dragSessionRef.current;
     dragSessionRef.current = null;
     setDragPreview(null);
@@ -925,6 +954,29 @@ export function Timeline() {
             />
           )}
 
+          {/* ---- R15 T5 SNAP INDICATOR: 2px accent line at 40% opacity
+               (z 40 — above drag ghosts 10 / marquee 35, below the playhead
+               100), spanning the timeline body (ruler + lanes — the content
+               div covers both), positioned at the snapped CONTENT px.
+               Rendered ONLY while an active clip gesture (move or trim —
+               marquee excluded) holds a snap point AND snapping is on; the
+               Clip's applySnap reports the target through the drag seam. ---- */}
+          {snapIndicator != null && snap && (
+            <div
+              data-testid="snap-indicator"
+              aria-hidden="true"
+              className="pointer-events-none absolute top-0"
+              style={{
+                left: snapPxToDeviceGrid(snapIndicator * pxPerSec) - PLAYHEAD_LINE_PX / 2,
+                bottom: 0,
+                width: PLAYHEAD_LINE_PX,
+                zIndex: 40,
+                background: 'var(--accent)',
+                opacity: 0.4,
+              }}
+            />
+          )}
+
           {/* ---- marquee rubber-band rect (dashed accent border + 10% alpha
                fill via .timeline-marquee; geometry in content coords).
                Renders only once the gesture is ACTIVE — the 5px threshold
@@ -972,11 +1024,20 @@ export function Timeline() {
                 if (!box) return;
                 const x = e.clientX - box.left + (scrollRef.current?.scrollLeft ?? 0);
                 let t = Math.max(0, x / pxPerSec);
-                if (snap) {
+                /* R15 T5: CLOSEST-WINS (strict <, earliest wins ties) — the
+                   old first-match-in-order loop could snap to a far target in
+                   front of a nearer one. SHIFT suppresses snapping (canonical
+                   §5, every gesture incl. scrub). Head-drag targets include
+                   markers + in/out via the shared list above. */
+                if (snap && !e.shiftKey) {
                   const tol = 10 / pxPerSec;
+                  let best = t;
+                  let bestD = tol;
                   for (const target of snapTargets) {
-                    if (Math.abs(target - t) < tol) { t = target; break; }
+                    const d = Math.abs(target - t);
+                    if (d < bestD) { best = target; bestD = d; }
                   }
+                  t = best;
                 }
                 setPlayhead(t);
               }}

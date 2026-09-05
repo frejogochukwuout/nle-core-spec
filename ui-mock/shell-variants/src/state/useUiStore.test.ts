@@ -553,9 +553,18 @@ describe('trimElement', () => {
     expect(e.sourceStart).toBe(12.0);
   });
 
-  it('enforces the 0.25 s minimum duration', () => {
+  it('enforces the 1-frame minimum duration (spec-06 §5.2 — R15 T4 replaced the 0.25 s mock floor)', () => {
     act(() => { S().trimElement('el-3', 'r', 17, 0.01); });
-    expect(el('el-3').duration).toBe(0.25);
+    expect(el('el-3').duration).toBeCloseTo(1 / 24, 6);
+  });
+
+  it('R15 T4: trimElement does NOT re-snap — the gesture owns frame alignment (single owner)', () => {
+    // 7.6 is off the 24 fps grid; the R14 law snapped it to 7.5833. The T4
+    // law trusts the caller's delta (the gesture already frame-snapped once);
+    // only bounds may pull a value off-grid (source-extent beats alignment).
+    // el-6 (A1, no right neighbor, 120 s source) has extension room to spare.
+    act(() => { S().trimElement('el-6', 'r', 0, 7.6); });
+    expect(el('el-6').duration).toBeCloseTo(7.6, 6);
   });
 });
 
@@ -575,12 +584,12 @@ describe('splitElement', () => {
     expect(left.transitionOut).toBeUndefined(); // left clip loses the transitionOut
   });
 
-  it('rejects cuts within 0.1 s of either edge — no history entry', () => {
+  it('rejects cuts within 1 frame of either edge — no history entry (spec-06 §5.2, R15 T4)', () => {
     const pastBefore = S().past.length;
     act(() => { S().splitElement('el-2', 8.5); }); // exactly at start
     expect(S().past.length).toBe(pastBefore);
     expect(mainEls()).toHaveLength(4);
-    act(() => { S().splitElement('el-2', 16.95); }); // 0.05 before end
+    act(() => { S().splitElement('el-2', 16.99); }); // 0.01 s before end — sub-frame
     expect(S().past.length).toBe(pastBefore);
   });
 
@@ -713,10 +722,12 @@ describe('trimToPlayhead', () => {
     expect(el('el-7').duration).toBe(8.5); // untouched
   });
 
-  it('guards a 0.1 s minimum REMAINING duration on both edges', () => {
-    act(() => { S().setPlayhead(16.95); S().trimToPlayhead('l', false); }); // end − 0.05 → reject
+  it('guards a 1-frame minimum REMAINING duration on both edges (spec-06 §5.2, R15 T4)', () => {
+    // 16.97 snaps to end − MIN exactly (16.9583) — the boundary is exclusive → refuse
+    act(() => { S().setPlayhead(16.97); S().trimToPlayhead('l', false); });
     expect(el('el-2').startTime).toBe(8.5); // unchanged
-    act(() => { S().setPlayhead(8.6); S().trimToPlayhead('r', false); }); // start + 0.083 → reject
+    // 8.53 snaps to start + MIN exactly (8.5417) — likewise refused
+    act(() => { S().setPlayhead(8.53); S().trimToPlayhead('r', false); });
     expect(el('el-2').duration).toBe(8.5); // unchanged
   });
 });
@@ -1075,21 +1086,21 @@ describe('R14: link toggle gates pair propagation (was inert)', () => {
   });
 });
 
-describe('R14: MIN_DUR is one law across the trim family', () => {
-  it('trimToPlayhead refuses to leave a sub-0.25s remainder (no history entry)', () => {
+describe('R14: MIN_DUR is one law across the trim family (R15 T4: 1 frame, spec-06 §5.2)', () => {
+  it('trimToPlayhead refuses to leave a sub-1-frame remainder (no history entry)', () => {
     const pastBefore = S().past.length;
-    // l-edge at 0.1s before the end would leave a 0.1s clip — refused
-    act(() => { S().setPlayhead(16.9); S().trimToPlayhead('l', false); }); // el-2: [8.5, 17)
+    // l-edge 0.02 s before the end (snaps to the exact end−MIN boundary) — refused
+    act(() => { S().setPlayhead(16.97); S().trimToPlayhead('l', false); }); // el-2: [8.5, 17)
     expect(el('el-2').duration).toBe(8.5); // untouched
     expect(S().past.length).toBe(pastBefore);
-    // r-edge at 0.2s past the start would leave a 0.2s clip — refused
-    act(() => { S().setPlayhead(8.7); S().trimToPlayhead('r', false); });
+    // r-edge 0.03 s past the start (snaps to start+MIN exactly) — refused
+    act(() => { S().setPlayhead(8.53); S().trimToPlayhead('r', false); });
     expect(el('el-2').duration).toBe(8.5);
     expect(S().past.length).toBe(pastBefore);
   });
-  it('splitElement refuses sub-0.25s halves', () => {
+  it('splitElement refuses sub-1-frame halves', () => {
     const pastBefore = S().past.length;
-    act(() => { S().splitElement('el-2', 8.7); }); // 0.2s left half
+    act(() => { S().splitElement('el-2', 8.53); }); // 0.0417 s left half — exactly MIN → refused
     expect(mainEls()).toHaveLength(4);
     expect(S().past.length).toBe(pastBefore);
   });
@@ -1403,5 +1414,246 @@ describe('R15 T3: duplicateAndMove — Alt+drag duplicate to the resolved target
     });
     expect(S().past.length).toBe(pastBefore);
     expect(mainEls()).toEqual(['el-1', 'el-2', 'el-3', 'el-4']); // no copies
+  });
+});
+
+/* ---------- R15 T4: trim laws + tool-gesture store actions ---------- */
+
+describe('R15 T4: trimElements — neighbor, source, 1-frame, batch intersection', () => {
+  it('right-edge extension cannot cross the NEXT clip start (canonical §9 neighbor law)', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().trimElements([{ id: 'el-2', edge: 'r', delta: 2 }]); }); // el-3 starts at 17 = el-2's end
+    expect(el('el-2').duration).toBe(8.5); // clamped to delta 0 — NOOP
+    expect(S().past.length).toBe(pastBefore); // no history for a no-op batch
+    // trimming IN still works on the same edge
+    act(() => { S().trimElements([{ id: 'el-2', edge: 'r', delta: -2 }]); });
+    expect(el('el-2').duration).toBe(6.5);
+  });
+
+  it('left-edge extension cannot cross the PREVIOUS clip end', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().trimElements([{ id: 'el-2', edge: 'l', delta: -2 }]); }); // el-1 ends at 8.5 = el-2's start
+    expect(el('el-2').startTime).toBe(8.5); // never crossed el-1
+    expect(S().past.length).toBe(pastBefore);
+  });
+
+  it('source-extent bound: the window cannot run past the media tail (el-4/m-05 12.8 s, el-6/m-06 120 s)', () => {
+    act(() => { S().trimElements([{ id: 'el-4', edge: 'r', delta: 20 }]); });
+    expect(el('el-4').duration).toBeCloseTo(12.8, 5); // extent beats the request AND frame alignment
+    act(() => { S().trimElements([{ id: 'el-6', edge: 'r', delta: 200 }]); });
+    expect(el('el-6').duration).toBe(120); // m-06's full tail
+  });
+
+  it('text clips (no media) fall back to ∞ — unbounded trim', () => {
+    act(() => { S().trimElements([{ id: 'el-5', edge: 'r', delta: 5 }]); });
+    expect(el('el-5').duration).toBe(8.25); // 3.25 + 5, no source bound
+  });
+
+  it('batch trim: the whole selection moves by ONE delta — bounds are the INTERSECTION (tightest wins)', () => {
+    const pastBefore = S().past.length;
+    // el-1 + el-3 + el-5 right edges, −2 s each: every member has room → all land
+    act(() => {
+      S().trimElements([
+        { id: 'el-1', edge: 'r', delta: -2 },
+        { id: 'el-3', edge: 'r', delta: -2 },
+        { id: 'el-5', edge: 'r', delta: -2 },
+      ]);
+    });
+    expect(el('el-1').duration).toBe(6.5);
+    expect(el('el-3').duration).toBe(5);
+    expect(el('el-5').duration).toBe(1.25);
+    expect(S().past.length).toBe(pastBefore + 1); // ONE entry for the whole batch
+    act(() => { S().undo(); });
+    expect(el('el-1').duration).toBe(8.5); // a single ⌘Z restores every member
+    expect(el('el-3').duration).toBe(7);
+    // the intersection is TIGHTEST: el-1 has room to extend but el-2's right
+    // neighbor bound (nextStart 17 = end) zeroes the WHOLE batch
+    const past2 = S().past.length;
+    act(() => {
+      S().trimElements([
+        { id: 'el-1', edge: 'r', delta: 1 }, // free (would extend into the el-2 gap only if el-2 also moved)
+        { id: 'el-2', edge: 'r', delta: 1 }, // blocked: el-3 starts at el-2's end
+      ]);
+    });
+    expect(el('el-1').duration).toBe(8.5); // the tightest bound clamps BOTH members
+    expect(el('el-2').duration).toBe(8.5);
+    expect(S().past.length).toBe(past2); // clamped to a no-op — no history
+  });
+
+  it('trimElement delegates to the batch engine (same bounds, one entry)', () => {
+    act(() => { S().trimElement('el-2', 'l', 10.5, 6.5); });
+    expect(el('el-2').startTime).toBe(10.5);
+    expect(el('el-2').duration).toBe(6.5);
+    expect(S().past).toHaveLength(1);
+  });
+});
+
+describe('R15 T4: rollTrim (spec-06 §5.5 — the junction slides, total preserved)', () => {
+  it('A grows, B shrinks, sourceStart follows, ONE entry', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().rollTrim('el-1', 'el-2', 1); });
+    expect(el('el-1').duration).toBe(9.5);
+    expect(el('el-2').startTime).toBe(9.5);
+    expect(el('el-2').duration).toBe(7.5);
+    expect(el('el-2').sourceStart).toBeCloseTo(4.0, 5);
+    expect(el('el-1').startTime + el('el-1').duration + el('el-2').duration).toBe(17); // total preserved
+    expect(S().past.length).toBe(pastBefore + 1);
+  });
+
+  it("bounded: B keeps its 1-frame minimum; rolling back is bounded by B's regained source head", () => {
+    act(() => { S().rollTrim('el-2', 'el-3', 100); });
+    expect(el('el-3').duration).toBeCloseTo(1 / 24, 6); // B pinned at 1 frame
+    expect(el('el-2').duration).toBeCloseTo(8.5 + 7 - 1 / 24, 5); // grew by B's (dur − MIN)
+    expect(el('el-3').sourceStart).toBeCloseTo(7 - 1 / 24, 5); // B gave up its head
+    // rolling back by MORE than B's head clamps exactly to it — both clips
+    // land restored at the original cut (B's window can never start < 0)
+    act(() => { S().rollTrim('el-2', 'el-3', -10); });
+    expect(el('el-2').duration).toBeCloseTo(8.5, 5);
+    expect(el('el-3').startTime).toBeCloseTo(17, 5);
+    expect(el('el-3').duration).toBeCloseTo(7, 5);
+    expect(el('el-3').sourceStart).toBeCloseTo(0, 5);
+    expect(S().past).toHaveLength(2); // one entry per gesture
+  });
+
+  it('non-adjacent pairs have no junction — no-op', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().rollTrim('el-1', 'el-3', 1); }); // el-1 ends 8.5 ≠ el-3 start 17
+    expect(el('el-1').duration).toBe(8.5);
+    expect(S().past.length).toBe(pastBefore);
+  });
+});
+
+describe('R15 T4: rippleTrim (later clips stay glued to the new end)', () => {
+  it('right edge IN: downstream shifts left by the trimmed amount; right edge OUT: shifts right', () => {
+    act(() => { S().rippleTrim('el-2', 'r', -2); });
+    expect(el('el-2').duration).toBe(6.5);
+    expect(el('el-3').startTime).toBe(15); // glued to the new end
+    expect(el('el-4').startTime).toBe(22);
+    act(() => { S().rippleTrim('el-2', 'r', 2); });
+    expect(el('el-2').duration).toBe(8.5); // restored
+    expect(el('el-3').startTime).toBe(17);
+    expect(el('el-4').startTime).toBe(24);
+    expect(S().past).toHaveLength(2); // one entry per gesture
+  });
+
+  it('right edge OUT: downstream shifts right with the extension (no overlap, junction stays glued)', () => {
+    act(() => { S().rippleTrim('el-2', 'r', 2); });
+    expect(el('el-2').duration).toBe(10.5);
+    expect(el('el-3').startTime).toBe(19); // moved WITH the end — never overlapped
+    expect(el('el-4').startTime).toBe(26);
+  });
+
+  it('left-edge extension is bounded by the PREVIOUS clip (it never shifts in a ripple)', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().rippleTrim('el-2', 'l', -2); }); // el-1 ends at 8.5 = el-2's start
+    expect(el('el-2').startTime).toBe(8.5); // clamped — the previous clip is immovable
+    expect(S().past.length).toBe(pastBefore); // no-op, no history
+  });
+
+  it('the right edge is NOT bounded by the next clip (it shifts) but IS bounded by the source tail', () => {
+    // el-2 extends right THROUGH el-3's old start — downstream moves with it
+    act(() => { S().rippleTrim('el-2', 'r', 2); });
+    expect(el('el-2').duration).toBe(10.5); // NOT clamped by el-3's start (17)
+    expect(el('el-3').startTime).toBe(19);
+    // el-4 is the LAST clip (no downstream): the source tail is the only bound
+    act(() => { S().rippleTrim('el-4', 'r', 100); });
+    expect(el('el-4').duration).toBeCloseTo(12.8, 5); // m-05's tail caps it
+  });
+});
+
+describe('R15 T4: slipDrag (gesture seam) vs slipNudge (keyboard) bounds', () => {
+  it('slipDrag CLAMPS to [0, extent − duration·rate] — the preview lands where it pointed', () => {
+    act(() => { S().slipDrag(['el-2'], 24); }); // +1 s (same convention as slipNudge)
+    expect(el('el-2').sourceStart).toBeCloseTo(4.0, 5);
+    act(() => { S().slipDrag(['el-2'], 100 * 24); }); // way past m-02's tail
+    expect(el('el-2').sourceStart).toBeCloseTo(95.2 - 8.5, 5); // 86.7 — the window's last legal home
+    act(() => { S().slipDrag(['el-2'], -400 * 24); }); // way before the head
+    expect(el('el-2').sourceStart).toBe(0); // clamped, not refused
+  });
+
+  it('slipNudge REFUSES out-of-bounds nudges (keyboard law, unchanged shape) — upper bound is new', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().slipNudge(['el-2'], 90 * 24); }); // 3 + 90 = 93 > 86.7
+    expect(el('el-2').sourceStart).toBe(3); // refused
+    expect(S().past.length).toBe(pastBefore);
+    act(() => { S().slipNudge(['el-2'], -4 * 24); }); // 3 − 4 < 0
+    expect(el('el-2').sourceStart).toBe(3); // refused
+    // in-bounds nudges still apply
+    act(() => { S().slipNudge(['el-2'], 24); });
+    expect(el('el-2').sourceStart).toBeCloseTo(4, 5);
+  });
+});
+
+describe('R15 T4: slideMove (spec-06 §5.7 — clip moves, neighbors make room)', () => {
+  it('slide right: the left neighbor extends, the right neighbor trims its head — glued, no overlap', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().slideMove('el-2', 10); });
+    expect(el('el-2').startTime).toBe(10);
+    expect(el('el-1').duration).toBe(10); // right edge followed the clip
+    expect(el('el-1').sourceStart).toBe(12); // window start unchanged (grew at the tail)
+    expect(el('el-3').startTime).toBe(18.5); // left edge trimmed to abut
+    expect(el('el-3').duration).toBeCloseTo(5.5, 5);
+    expect(el('el-3').sourceStart).toBeCloseTo(1.5, 5);
+    expect(S().past.length).toBe(pastBefore + 1); // ONE entry
+  });
+
+  it('slide bounded: the right neighbor keeps its 1-frame minimum', () => {
+    act(() => { S().slideMove('el-2', 100); });
+    const hi = 17 + 7 - 1 / 24 - 8.5; // next.end − MIN − el.dur
+    expect(el('el-2').startTime).toBeCloseTo(hi, 5);
+    expect(el('el-3').duration).toBeCloseTo(1 / 24, 6);
+  });
+
+  it('slide left: the left neighbor trims (making room); the right neighbor cannot extend past its source HEAD → a gap opens, never an overlap', () => {
+    act(() => { S().slideMove('el-2', 2); });
+    expect(el('el-2').startTime).toBe(2);
+    expect(el('el-1').duration).toBeCloseTo(2, 5); // trimmed to make room
+    expect(el('el-3').startTime).toBe(17); // sourceStart 0 → no head to extend → stays
+    expect(el('el-3').duration).toBe(7);
+    // gap [10.5, 17) — the capped edge opens a gap instead of overlapping
+    expect(el('el-2').startTime + el('el-2').duration).toBeLessThan(el('el-3').startTime);
+  });
+
+  it('a neighbor capped by its SOURCE TAIL opens a gap instead of extending', () => {
+    // slide el-4 far right: its left neighbor el-3 (m-03 18.6 s, sourceStart 0)
+    // can only extend its right edge to 17 + 18.6 = 35.6 — past that a GAP opens
+    act(() => { S().slideMove('el-4', 40); });
+    expect(el('el-4').startTime).toBe(40);
+    expect(el('el-3').duration).toBeCloseTo(18.6, 5); // extended to its full source
+    expect(el('el-3').startTime + el('el-3').duration).toBeLessThan(40 - 1e-9); // gap [35.6, 40)
+  });
+});
+
+describe('R15 T4: stretchTrim (spec-06 §5.8 — speed compensates, rate clamp)', () => {
+  it('duration changes; speed = sourceSpan/duration compensates; ONE entry', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().stretchTrim('el-6', 'r', 10); }); // el-6 [0,30), span 30, no neighbor
+    expect(el('el-6').duration).toBe(40);
+    expect(el('el-6').speed).toBeCloseTo(30 / 40, 5); // 0.75
+    expect(el('el-6').duration * (el('el-6').speed ?? 1)).toBeCloseTo(30, 5); // span invariant
+    expect(S().past.length).toBe(pastBefore + 1);
+  });
+
+  it('left edge: the end stays fixed, the start moves with the edge', () => {
+    act(() => { S().stretchTrim('el-2', 'l', 2); }); // start 8.5 → 10.5, dur 6.5
+    expect(el('el-2').startTime).toBe(10.5);
+    expect(el('el-2').duration).toBeCloseTo(6.5, 5);
+    expect(el('el-2').speed).toBeCloseTo(8.5 / 6.5, 5);
+  });
+
+  it('rate clamp [0.01, 5]: extreme stretches pin at the floor/ceiling', () => {
+    act(() => { S().stretchTrim('el-6', 'r', 2970); });
+    expect(el('el-6').duration).toBe(3000); // span / 0.01
+    expect(el('el-6').speed).toBeCloseTo(0.01, 5);
+    act(() => { S().stretchTrim('el-6', 'r', -2994); });
+    expect(el('el-6').duration).toBeCloseTo(6, 5); // span / 5
+    expect(el('el-6').speed).toBeCloseTo(5, 5);
+  });
+
+  it('the edge still respects the neighbor bound (no overlap) — bounded, no write', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().stretchTrim('el-2', 'r', 2); }); // el-3 starts at el-2's end
+    expect(el('el-2').duration).toBe(8.5); // clamped to a no-op
+    expect(S().past.length).toBe(pastBefore);
   });
 });

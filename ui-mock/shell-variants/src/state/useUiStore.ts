@@ -13,6 +13,24 @@ import { clamp, snapToFrame } from '../lib/timecode';
 import { PPS_MIN as MIN_PPS, PPS_MAX as MAX_PPS } from '../lib/pixel';
 import { trackAcceptsElement, spansOverlap } from '../lib/timelinePlacement';
 import { computeTrackRippleAdjustments, applyRippleAdjustmentsToElements } from '../lib/ripple';
+/* R15 T4 trim laws (lib/trimLaws.ts — ONE home shared with the Clip gesture
+   so preview and commit always agree): MIN_DUR = 1 frame, neighbor bounds,
+   source-extent bounds, batch intersection, rate clamp. */
+import {
+  MIN_DUR,
+  RATE_MIN,
+  RATE_MAX,
+  rateOf,
+  sourceExtentOf,
+  batchTrimBounds,
+  neighborBefore,
+  neighborAfter,
+  rollDeltaBounds,
+  rippleDeltaBounds,
+  slipTargetBounds,
+  slideStartBounds,
+  stretchDeltaBounds,
+} from '../lib/trimLaws';
 import { createMixerScene, type MockMixerScene, type MixerTrackSettings, type DuckingSettings, type AuxBusSettings } from './mockMixer';
 
 export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch';
@@ -359,7 +377,36 @@ interface UiState {
    *  copies at the planned positions — ONE composite history entry. */
   duplicateAndMove: (args: { ids: string[]; moves: MoveElementPlan[]; createTracks?: CreateTrackPlan[] }) => void;
   moveElement: (id: string, startTime: number) => void;
+  /* R15 T4 trim family. FRAME-SNAP-ONCE / SINGLE OWNER: the GESTURE computes
+     the final edge from ONE frame-snapped delta; the store applies the delta
+     with NO independent re-snap of startTime/duration (the R14 re-snap could
+     round the two fields in OPPOSITE directions, drifting the end off the
+     frame grid). Bounds (neighbor, source extent, 1-frame min) may still pull
+     a value off the grid — source-extent beats frame alignment (canonical). */
+  /** batch trim: the selection trims together — per-member bounds
+   *  INTERSECTED into one common delta; ONE history entry. */
+  trimElements: (members: { id: string; edge: 'l' | 'r'; delta: number }[]) => void;
+  /** legacy single-clip seam (tests / keyboard callers) — derives the delta
+   *  and delegates to trimElements. */
   trimElement: (id: string, edge: 'l' | 'r', newStart: number, newDur: number) => void;
+  /** roll (spec-06 §5.5): A's right edge + B's left edge move by the same
+   *  delta — the junction slides, total duration preserved; ONE entry. */
+  rollTrim: (aId: string, bId: string, delta: number) => void;
+  /** ripple trim (R15 T4): trim the edge, then keep every LATER same-track
+   *  clip glued to the trimmed clip's new end (freed intervals close, joined
+   *  intervals open — the deleteElements interval math's unified form). */
+  rippleTrim: (id: string, edge: 'l' | 'r', delta: number) => void;
+  /** slip gesture (spec-06 §5.6): fixed position/duration, the source window
+   *  slides within [0, extent − duration·rate] — CLAMPED (the preview is
+   *  live-bounded); slipNudge keeps its no-op-out-of-bounds keyboard law. */
+  slipDrag: (ids: string[], deltaFrames: number) => void;
+  /** slide (spec-06 §5.7): the clip moves between its neighbors; the
+   *  neighbors' facing edges follow (each clamped by its own min/source).
+   *  No overlap ever — an edge capped by a source bound opens a gap instead. */
+  slideMove: (id: string, newStart: number) => void;
+  /** stretch / retime (spec-06 §5.8): duration changes, speed = span/duration
+   *  compensates, rate clamp [0.01, 5]; ONE entry. */
+  stretchTrim: (id: string, edge: 'l' | 'r', delta: number) => void;
   splitElement: (id: string, time: number) => void;
   toggleEffect: (elementId: string, fxId: string) => void;
   addTrack: (kind: TrackJSON['kind'], position?: 'above' | 'below', refTrackId?: string) => void;
@@ -375,11 +422,10 @@ interface UiState {
   loadSampleProject: () => void;
 }
 
-/* one minimum-duration law for every trim-family mutation (R14 review):
-   trim handles enforced 0.25s while ⌥[/⌥[ and the blade could leave 0.1s
-   slivers — both behaviors were individually test-pinned, freezing the
-   inconsistency. One constant, one rule: no clip can shrink below MIN_DUR. */
-const MIN_DUR = 0.25;
+/* one minimum-duration law for every trim-family mutation — R15 T4 (spec-06
+   §5.2 alignment, no registration): MIN_DUR = ONE FRAME (1/24 s), imported
+   from lib/trimLaws.ts. The R14 0.25 s constant unified the trim family at a
+   coarser floor than the engine spec's; 1 frame is the canonical law. */
 
 /* history wrapper: snapshot before each doc mutation, 50-deep.
    Returning undefined from `mutate` = no-op: NOTHING is set (no history
@@ -793,16 +839,216 @@ export const useUi = create<UiState>((set, get) => ({
     set({ selection: [...idMap.values()] });
     return scenes;
   }),
+  /* ---- R15 T4 trim family ---- */
+  /* trimElements engine: bounds = the INTERSECTION of every member's
+     neighbor/source/min bounds (tightest wins — the selection moves its
+     edges by ONE common delta), NO re-snap (single owner: the gesture's
+     frame-snapped delta is trusted), −0 → 0, NOOP batches never create
+     history (canonical). */
+  trimElements: (members) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    const bounds = batchTrimBounds(sc, members);
+    if (!bounds || bounds.lo > bounds.hi) return; // nothing resolvable / empty intersection
+    let changed = false;
+    for (const m of members) {
+      const hit = findInScene(sc, m.id);
+      if (!hit || hit.track.locked) continue;
+      const d = clamp(m.delta, bounds.lo, bounds.hi);
+      if (d === 0) continue; // −0 → 0 (canonical)
+      const el = hit.el;
+      if (m.edge === 'l') {
+        const start = el.startTime + d;
+        const dur = el.duration - d;
+        if (start === el.startTime && dur === el.duration) continue;
+        if (el.sourceStart !== undefined) el.sourceStart = el.sourceStart + d;
+        el.startTime = start;
+        el.duration = dur;
+        changed = true;
+      } else {
+        const dur = el.duration + d;
+        if (dur === el.duration) continue;
+        el.duration = dur;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    return scenes;
+  }),
   trimElement: (id, edge, newStart, newDur) => withHistory(set, get, (scenes) => {
-    const hit = findEl(scenes, id);
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    const hit = findInScene(sc, id);
+    if (!hit) return;
+    // derive the delta from the (gesture-trusted) absolute fields and route
+    // through the batch engine — same bounds, same no-pollution contract
+    const delta = edge === 'l' ? newStart - hit.el.startTime : newDur - hit.el.duration;
+    const ok = (() => {
+      const bounds = batchTrimBounds(sc, [{ id, edge }]);
+      if (!bounds || bounds.lo > bounds.hi) return false;
+      let changed = false;
+      const d = clamp(delta, bounds.lo, bounds.hi);
+      if (d !== 0) {
+        if (edge === 'l') {
+          const start = hit.el.startTime + d;
+          const dur = hit.el.duration - d;
+          if (start !== hit.el.startTime || dur !== hit.el.duration) {
+            if (hit.el.sourceStart !== undefined) hit.el.sourceStart = hit.el.sourceStart + d;
+            hit.el.startTime = start;
+            hit.el.duration = dur;
+            changed = true;
+          }
+        } else {
+          const dur = hit.el.duration + d;
+          if (dur !== hit.el.duration) { hit.el.duration = dur; changed = true; }
+        }
+      }
+      return changed;
+    })();
+    if (!ok) return;
+    return scenes;
+  }),
+  rollTrim: (aId, bId, delta) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    const a = findInScene(sc, aId);
+    const b = findInScene(sc, bId);
+    if (!a || !b || a.track.locked || b.track.locked || a.track.id !== b.track.id) return;
+    // a real junction: A's end must BE B's start (a gap has no shared cut point)
+    if (Math.abs(a.el.startTime + a.el.duration - b.el.startTime) > 1e-6) return;
+    const bounds = rollDeltaBounds(a.el, b.el);
+    const d = clamp(delta, bounds.lo, bounds.hi);
+    if (d === 0) return;
+    /* spec-06 §5.5 FreeCut order (shrink the loser, then extend) is expressed
+       here as ONE atomic mutation on a pre-clamped delta — the mock has no
+       per-trim adjacency guards to race. */
+    a.el.duration += d; // A: [aStart, aEnd + d)
+    b.el.startTime += d; // B: [bStart + d, bEnd)
+    b.el.duration -= d;
+    if (b.el.sourceStart !== undefined) b.el.sourceStart += d; // B shows earlier/later content
+    return scenes;
+  }),
+  rippleTrim: (id, edge, delta) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    const hit = findInScene(sc, id);
     if (!hit || hit.track.locked) return;
-    const start = snapToFrame(Math.max(0, newStart));
-    const dur = snapToFrame(Math.max(MIN_DUR, newDur));
-    if (start === hit.el.startTime && dur === hit.el.duration) return; // press-release without movement — no history
-    const prevStart = hit.el.startTime;
-    hit.el.startTime = start;
-    hit.el.duration = dur;
-    if (hit.el.sourceStart !== undefined && edge === 'l') hit.el.sourceStart = Math.max(0, hit.el.sourceStart + (start - prevStart));
+    const { el, track } = hit;
+    const origEnd = el.startTime + el.duration;
+    const bounds = rippleDeltaBounds(track, el, edge);
+    const d = clamp(delta, bounds.lo, bounds.hi);
+    if (d === 0) return;
+    if (edge === 'r') {
+      el.duration += d;
+    } else {
+      /* ripple-l (trimToPlayhead's pinned model, “the same interval math as
+         ripple delete”): trimming the head IN (d > 0) REMOVES the head region
+         — the clip KEEPS its start, shrinks, shows later content (sourceStart
+         advances); extending OUT (d < 0) pulls the edge left. The clip's END
+         moves by −d in the trim-in direction and stays fixed on extension. */
+      if (d < 0) el.startTime += d;
+      el.duration -= d;
+      if (el.sourceStart !== undefined) el.sourceStart += d;
+    }
+    /* unified interval law: every LATER same-track clip stays GLUED to the
+       trimmed clip's new end — freed intervals close (trim in: shift left),
+       joined intervals open (extend: shift right). Never overlaps: the shift
+       equals the end's own move. */
+    const shift = el.startTime + el.duration - origEnd;
+    if (shift !== 0) {
+      for (const e2 of track.elements) {
+        if (e2 === el) continue;
+        if (e2.startTime >= origEnd - 1e-6) e2.startTime = Math.max(0, e2.startTime + shift);
+      }
+      track.elements.sort((a, b) => a.startTime - b.startTime); // lanes stay ordered after shifts
+    }
+    return scenes;
+  }),
+  slipDrag: (ids, deltaFrames) => withHistory(set, get, (scenes) => {
+    /* the GESTURE seam: CLAMPED to [0, extent − duration·rate] — the live
+       preview shows exactly the clamped window, so the commit lands where the
+       preview pointed. (slipNudge keeps the keyboard's no-op-out-of-bounds
+       law below.) */
+    let changed = false;
+    for (const sc of scenes) for (const t of sc.tracks) {
+      if (t.locked) continue; // locked tracks are inert
+      for (const e of t.elements) {
+        if (!ids.includes(e.id)) continue;
+        const b = slipTargetBounds(e);
+        if (!b) continue; // no source window — slip is inert
+        const next = clamp(e.sourceStart! + deltaFrames / 24, b.lo, b.hi);
+        if (next !== e.sourceStart) { e.sourceStart = next; changed = true; }
+      }
+    }
+    if (!changed) return;
+    return scenes;
+  }),
+  slideMove: (id, newStart) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    const hit = findInScene(sc, id);
+    if (!hit || hit.track.locked) return;
+    const { el, track } = hit;
+    const bounds = slideStartBounds(track, el);
+    const start = clamp(newStart, bounds.lo, bounds.hi);
+    let changed = el.startTime !== start;
+    el.startTime = start;
+    const newEnd = start + el.duration;
+    /* the neighbors' FACING edges follow the clip (spec-06 §5.7 slide): the
+       left neighbor's right edge and the right neighbor's left edge trim/extend
+       to stay glued, each clamped by its OWN 1-frame minimum and source extent
+       — a capped edge opens a GAP instead of ever overlapping. */
+    const prev = neighborBefore(track, el);
+    if (prev) {
+      let prevEnd = start;
+      const ext = sourceExtentOf(prev);
+      if (isFinite(ext)) {
+        const maxEnd = prev.startTime + (ext - (prev.sourceStart ?? 0)) / rateOf(prev);
+        if (prevEnd > maxEnd) prevEnd = maxEnd; // source caps the extension → gap
+      }
+      const prevDur = prevEnd - prev.startTime;
+      if (prevDur >= MIN_DUR && prevDur !== prev.duration) { prev.duration = prevDur; changed = true; }
+    }
+    const next = neighborAfter(track, el);
+    if (next) {
+      let nextStart = newEnd;
+      if (next.sourceStart !== undefined) {
+        const minStart = next.startTime - next.sourceStart; // head-extension floor
+        if (nextStart < minStart) nextStart = minStart; // source head caps → gap
+      }
+      const nextDur = next.startTime + next.duration - nextStart;
+      if (nextDur >= MIN_DUR && (nextStart !== next.startTime || nextDur !== next.duration)) {
+        if (next.sourceStart !== undefined) next.sourceStart += nextStart - next.startTime;
+        next.startTime = nextStart;
+        next.duration = nextDur;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    track.elements.sort((a, b) => a.startTime - b.startTime);
+    return scenes;
+  }),
+  stretchTrim: (id, edge, delta) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    const hit = findInScene(sc, id);
+    if (!hit || hit.track.locked) return;
+    const { el, track } = hit;
+    const bounds = stretchDeltaBounds(track, el, edge);
+    const d = clamp(delta, bounds.lo, bounds.hi);
+    if (d === 0) return;
+    const newDur = edge === 'r' ? el.duration + d : el.duration - d;
+    if (newDur === el.duration) return;
+    const span = el.duration * rateOf(el); // consumed source — speed compensates to preserve it
+    if (edge === 'l') el.startTime += d;
+    el.duration = newDur;
+    el.speed = clamp(span / newDur, RATE_MIN, RATE_MAX);
     return scenes;
   }),
   splitElement: (id, time) => withHistory(set, get, (scenes) => {
@@ -928,12 +1174,18 @@ export const useUi = create<UiState>((set, get) => ({
       for (const e of t.elements) {
         if (!ids.includes(e.id)) continue;
         if (e.sourceStart === undefined) continue;
-        // slip: shift source window, keep placement
+        // slip: shift source window, keep placement. R15 T4: bounded BOTH
+        // ways now — the window must stay inside [0, extent − duration·rate]
+        // (the old law only refused negatives, letting the keyboard slip run
+        // past the media tail). Out-of-bounds = the WHOLE nudge refuses
+        // (keyboard semantics; the gesture seam slipDrag clamps instead).
+        const b = slipTargetBounds(e);
+        if (!b) continue;
         const next = e.sourceStart + frames / 24;
-        if (next >= 0 && next !== e.sourceStart) { e.sourceStart = next; changed = true; }
+        if (next >= b.lo && next <= b.hi && next !== e.sourceStart) { e.sourceStart = next; changed = true; }
       }
     }
-    if (!changed) return; // nothing slipped (all locked / no sourceStart / unchanged) — no history
+    if (!changed) return; // nothing slipped (all locked / no sourceStart / out of bounds) — no history
     return scenes;
   }),
   trimToPlayhead: (edge, ripple) => withHistory(set, get, (scenes) => {

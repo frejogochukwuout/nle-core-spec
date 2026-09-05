@@ -12,6 +12,7 @@ import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import { sceneDuration } from '../../lib/mockData';
+import { snapToFrame } from '../../lib/timecode';
 import { POOL_DRAG_TYPE } from '../shell/MediaPool';
 
 const boot = (patch: UiPatch = {}) => renderShell(<Timeline />, { patch });
@@ -632,5 +633,135 @@ describe('R15 T3: edge auto-scroll during active clip drags (rAF, 100px threshol
     const after = sc.scrollLeft;
     await act(async () => { await new Promise((r) => requestAnimationFrame(r)); });
     expect(sc.scrollLeft).toBe(after); // the rAF loop STOPPED with the drag
+  });
+});
+
+/* ---------- R15 T5: snap upgrade (sources, closest-wins, indicator, shift) ---------- */
+
+describe('R15 T5: snap sources + closest-wins', () => {
+  it('head-drag CLOSEST-WINS: between two in-tolerance targets the NEARER one wins (old loop took first-in-order)', () => {
+    boot({});
+    const head = document.querySelector('.cursor-col-resize') as HTMLElement;
+    // t = 8.5435: el-5's start 8.75 is FIRST in the target list (overlay lane
+    // leads) and 0.207 away — in tol; el-1's end 8.5 is LATER but only 0.043
+    // away. The old first-match loop snapped 8.75; the T5 closest-wins law
+    // takes 8.5.
+    fireEvent.pointerDown(head, { pointerId: 1, button: 0 });
+    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 393 });
+    expect(store().playhead).toBe(8.5);
+    fireEvent.pointerUp(head, { pointerId: 1 });
+  });
+
+  it('LOCKED tracks are not snap sources: el-7 (tr-audio-2) reshaped to a unique edge never attracts the scrub', () => {
+    boot({});
+    // give the LOCKED lane's clip a unique edge no unlocked element carries
+    act(() => useUi.setState({
+      scenes: store().scenes.map((s) =>
+        s.id === 'sc-1'
+          ? { ...s, tracks: s.tracks.map((t) =>
+              t.id === 'tr-audio-2' ? { ...t, elements: t.elements.map((e) =>
+                e.id === 'el-7' ? { ...e, startTime: 19.5, duration: 5 } : e) } : t) }
+          : s,
+      ),
+    }));
+    const head = document.querySelector('.cursor-col-resize') as HTMLElement;
+    fireEvent.pointerDown(head, { pointerId: 1, button: 0 });
+    // 902 px → 19.6087 s: |19.6087 − 19.5| = 0.109 — inside the 10 px tol, but
+    // the locked track's edge is NOT a source → the playhead stays raw
+    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 902 });
+    expect(store().playhead).toBeCloseTo(19.6087, 3);
+    expect(store().playhead).not.toBe(19.5);
+    fireEvent.pointerUp(head, { pointerId: 1 });
+  });
+
+  it('markers and in/out points are snap sources (shared list — head-drag gets them too)', () => {
+    boot({});
+    const head = document.querySelector('.cursor-col-resize') as HTMLElement;
+    // t = 15.55: the mk-3 marker at 15.5 is 0.05 away — the only near target
+    fireEvent.pointerDown(head, { pointerId: 1, button: 0 });
+    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 715.3 });
+    expect(store().playhead).toBe(15.5); // marker snap
+    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 1312 }); // 28.52 → loop.end 28 (0.52 — no)
+    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 1293 }); // 28.109: in/out at 28 → 0.109 in tol
+    expect(store().playhead).toBe(28);
+    fireEvent.pointerUp(head, { pointerId: 1 });
+  });
+
+  it('SHIFT suppresses snapping during the scrub: the raw time lands un-snapped (canonical §5)', () => {
+    boot({});
+    const head = document.querySelector('.cursor-col-resize') as HTMLElement;
+    fireEvent.pointerDown(head, { pointerId: 1, button: 0 });
+    // 790 px → 17.174 s: 17 is 0.174 in tol — snapped without shift, raw with
+    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 790 });
+    expect(store().playhead).toBe(17);
+    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 790, shiftKey: true });
+    expect(store().playhead).toBeCloseTo(17.173913043478262, 4);
+    fireEvent.pointerUp(head, { pointerId: 1 });
+  });
+
+  it('the dragged clip is not snapped to ITS OWN edges (group/self exclusion — an unselected mover stays free)', () => {
+    boot({});
+    // el-5 [8.75,12) on the overlay: nudge its start by +6 px (0.13 s) — its
+    // own 8.75 edge is 0.13 away (in tol) but excluded → the move COMMITS to
+    // the frame grid instead of snapping back onto its own edge (no-op).
+    const clip = screen.getByTestId('clip-el-5');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 402, clientY: 70 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 408, clientY: 70 });
+    fireEvent.pointerUp(clip, { pointerId: 1, clientY: 70 });
+    const el5 = store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-overlay-1')!.elements.find((e) => e.id === 'el-5')!;
+    expect(el5.startTime).toBeCloseTo(8.875, 5); // moved (self-edge snap would have pinned 8.75)
+    expect(store().past).toHaveLength(1);
+  });
+});
+
+describe('R15 T5: the snap indicator line (2px accent/40%, z 40, gesture-held only)', () => {
+  it('renders at the snapped content px while a clip drag holds the snap, clears on release', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-5');
+    // el-5 → ~15.51 s: the mk-3 marker at 15.5 captures (closest, in tol);
+    // clientY 70 keeps the drag in el-5's own overlay band (no cross-track)
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 402, clientY: 70 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 713, clientY: 70 });
+    const line = screen.getByTestId('snap-indicator');
+    expect(line.style.zIndex).toBe('40'); // below the playhead 100 (canonical §17)
+    expect(line.style.width).toBe('2px');
+    expect(line.style.opacity).toBe('0.4');
+    expect(line.style.background).toContain('var(--accent)');
+    expect(line.style.left).toBe('712px'); // 15.5 s × 46 − 1 (2px line, centered)
+    fireEvent.pointerUp(clip, { pointerId: 1, clientY: 70 });
+    expect(screen.queryByTestId('snap-indicator')).not.toBeInTheDocument(); // cleared
+    const el5 = store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-overlay-1')!.elements.find((e) => e.id === 'el-5')!;
+    expect(el5.startTime).toBe(15.5); // the drag committed ON the snap point
+  });
+
+  it('a trim gesture drives the indicator too (kind "trim" host events — and the marquee never does)', () => {
+    boot({ selection: ['el-6'] });
+    const handle = screen.getByTestId('clip-trim-r-el-6');
+    // el-6's right edge → 23.85: el-4's start 24 is 0.15 away (in tol) and
+    // INSIDE the trim bounds (no neighbor on A1, source 120 s) → held snap
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(handle, { pointerId: 1, buttons: 1, clientX: 108 }); // −6.152 s → 23.848
+    expect(screen.getByTestId('snap-indicator').style.left).toBe('1103px'); // 24 × 46 − 1
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(screen.queryByTestId('snap-indicator')).not.toBeInTheDocument();
+    expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-audio-1')!.elements.find((e) => e.id === 'el-6')!.duration).toBe(24); // committed ON the snap
+    // marquee gestures never produce the indicator (they never snap)
+    fireEvent.pointerDown(laneOf('el-1'), { pointerId: 2, button: 0, clientX: 0, clientY: 120 });
+    fireEvent.pointerMove(scrollEl(), { pointerId: 2, buttons: 1, clientX: 380, clientY: 160 });
+    expect(screen.queryByTestId('snap-indicator')).not.toBeInTheDocument();
+    fireEvent.pointerUp(scrollEl(), { pointerId: 2 });
+  });
+
+  it('snap OFF (N key) suppresses the indicator even when a gesture holds a would-be target', () => {
+    boot({});
+    act(() => { store().toggleSnap(); });
+    const clip = screen.getByTestId('clip-el-5');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 402, clientY: 70 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 713, clientY: 70 });
+    expect(screen.queryByTestId('snap-indicator')).not.toBeInTheDocument();
+    fireEvent.pointerUp(clip, { pointerId: 1, clientY: 70 });
+    // frame grid only (15.5109 → 15.5) — the marker target was never consulted
+    const el5 = store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-overlay-1')!.elements.find((e) => e.id === 'el-5')!;
+    expect(el5.startTime).toBeCloseTo(snapToFrame(8.75 + 311 / 46), 5);
   });
 });
