@@ -219,11 +219,13 @@ export function createAutoSync(opts: {
       if (!h.ok || !SHA_RE.test(h.out.trim())) return false;
       readmeSha = h.out.trim();
     }
-    const tree = await gitAsync(root, ['rev-parse', `${ref}^{tree}`], 6000);
-    if (!tree.ok) return false;
-    const entry = await gitAsync(root, ['ls-tree', tree.out.trim(), '--', 'README'], 6000);
-    // entry format: "100644 blob <sha>\tREADME"
-    return entry.ok && entry.out.includes(`blob ${readmeSha}`);
+    // Ported from the sibling stream's R18b fix (upstream kit bug, subdir
+    // projects): 'ls-tree <tree> -- README' is pathspec-relative to the
+    // gitAsync -C <root> cwd, so from a project nested in a subdirectory it
+    // never matches → every remote branch looks foreign → non-FF push
+    // rejection loop. 'rev-parse <ref>:README' is cwd-independent.
+    const blob = await gitAsync(root, ['rev-parse', `${ref}:README`], 6000);
+    return blob.ok && SHA_RE.test(blob.out.trim()) && blob.out.trim() === readmeSha;
   };
 
   /** A14: pick the branch name — primary unless an EXISTING local or remote
