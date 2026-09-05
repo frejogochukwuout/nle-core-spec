@@ -8,10 +8,10 @@
    keyboard-completeness fields. */
 
 import { create } from 'zustand';
-import { project, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation } from '../lib/mockData';
+import { project, sceneDuration, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation } from '../lib/mockData';
 import { clamp, snapToFrame } from '../lib/timecode';
 import { PPS_MIN as MIN_PPS, PPS_MAX as MAX_PPS } from '../lib/pixel';
-import { trackAcceptsElement, spansOverlap } from '../lib/timelinePlacement';
+import { trackAcceptsElement, spansOverlap, zeroAnchorShift, dragRejectionToast, type GroupMoveFail } from '../lib/timelinePlacement';
 import { computeTrackRippleAdjustments, applyRippleAdjustmentsToElements } from '../lib/ripple';
 /* R15 T4 trim laws (lib/trimLaws.ts — ONE home shared with the Clip gesture
    so preview and commit always agree): MIN_DUR = 1 frame, neighbor bounds,
@@ -124,30 +124,65 @@ function newTrackFor(sc: SceneJSON, kind: TrackJSON['kind'], type?: ElementJSON[
   };
 }
 
+/* R15-F1 FIX 1/FIX 2: the engine verdict. `applied` = committed (one entry);
+   `applied: false` alone = honest no-op (nothing changed — NO toast, the
+   plain moveElements contract); `applied: false` + `reason` = the ATOMIC
+   duplicate path's whole-batch rejection (the caller toasts honestly). */
+export interface MoveEngineVerdict {
+  applied: boolean;
+  reason?: GroupMoveFail;
+}
+
+interface MoveEngineOpts {
+  hasNewElements?: boolean;
+  /** R15-F1 FIX 1 (duplicate path): per-move rejections (locked target /
+   *  incompatible / overlap vs stationary) fail the WHOLE batch instead of
+   *  dropping moves — the preview's whole-batch law. The old per-move drop
+   * stranded an un-lifted clone parked exactly ON TOP of its original
+   * (overlap invariant broken, one history entry) while the other copies
+   * landed — the R15-V1 review's P1. */
+  atomic?: boolean;
+  /** R15-F1 FIX 1: cloneId → in-memory copy (NOT yet in the doc). The
+   *  duplicate path validates + places VIRTUAL clones: they are never
+   *  pre-parked on the source lanes, so a dropped move can never leave a
+   *  stranded overlapping copy behind. Source lift is a no-op for them. */
+  virtualElements?: Map<string, ElementJSON>;
+}
+
 function applyMovesToScene(
   sc: SceneJSON,
   moves: MoveElementPlan[],
   createTracks: CreateTrackPlan[],
-  opts: { hasNewElements?: boolean } = {},
-): boolean {
-  if (moves.length === 0 && createTracks.length === 0) return false;
+  opts: MoveEngineOpts = {},
+): MoveEngineVerdict {
+  if (moves.length === 0 && createTracks.length === 0) return { applied: false };
   // duplicate ids would append the element once per move — corrupting the
   // doc with same-id duplicates (canonical guard, whole batch rejected)
-  if (new Set(moves.map((m) => m.id)).size !== moves.length) return false;
+  if (new Set(moves.map((m) => m.id)).size !== moves.length) return { applied: false };
 
-  // resolve elements (locked sources + unknown ids dropped per-move)
-  const resolved: { id: string; el: ElementJSON; source: TrackJSON; targetId: string; startTime: number }[] = [];
+  // resolve elements (locked sources + unknown ids dropped per-move; virtual
+  // clones resolve from the map — minted copies not yet in the doc)
+  const resolved: { id: string; el: ElementJSON; source: TrackJSON | null; targetId: string; startTime: number }[] = [];
   for (const mv of moves) {
     const hit = findInScene(sc, mv.id);
-    if (!hit) continue;
-    if (hit.track.locked) continue; // locked source — inert (18 §4.5)
-    resolved.push({ id: mv.id, el: hit.el, source: hit.track, targetId: mv.trackId, startTime: snapToFrame(mv.startTime) });
+    if (hit) {
+      if (hit.track.locked) continue; // locked source — inert (18 §4.5)
+      resolved.push({ id: mv.id, el: hit.el, source: hit.track, targetId: mv.trackId, startTime: snapToFrame(mv.startTime) });
+    } else {
+      const virtual = opts.virtualElements?.get(mv.id);
+      if (virtual) {
+        // a virtual clone is minted but NOT in the doc — nothing is ever
+        // lifted from a source lane (source: null); it only lands.
+        resolved.push({ id: mv.id, el: virtual, source: null, targetId: mv.trackId, startTime: snapToFrame(mv.startTime) });
+      }
+    }
   }
 
   // create planned tracks (in array order; block entries share one
   // insertAboveTrackId so sequential "above X" inserts stack in order).
   // Audio clamps below main (spec-05 §12.1) — the defensive engine twin of
-  // the resolution's insert-index clamp.
+  // the resolution's insert-index clamp. (Rejection rolls the whole cloned
+  // scene back — withHistory discards it — so create-then-validate is safe.)
   const createdIds = new Set<string>();
   for (const ct of createTracks) {
     let idx = ct.insertAboveTrackId !== undefined
@@ -166,78 +201,109 @@ function applyMovesToScene(
     sc.tracks.splice(idx, 0, track);
   }
 
-  // target validation (locked target / compatibility — per-move rejection)
+  // target validation (locked target / compatibility). NON-atomic: the
+  // per-move drop law (others proceed — pinned by the moveElements tests);
+  // atomic (duplicate path): any rejection fails the whole batch.
+  const reject = (reason: GroupMoveFail): MoveEngineVerdict =>
+    opts.atomic ? { applied: false, reason } : { applied: false };
+  const invalids = resolved.filter((r) => {
+    const target = sc.tracks.find((t) => t.id === r.targetId);
+    if (!target || target.locked || !trackAcceptsElement(target.kind, r.el.type)) return true;
+    return false;
+  });
+  if (invalids.length > 0 && opts.atomic) {
+    const target = sc.tracks.find((t) => t.id === invalids[0]!.targetId);
+    return reject(target ? (target.locked ? 'locked' : 'incompatible') : 'no-track');
+  }
   const valid = resolved.filter((r) => {
     const target = sc.tracks.find((t) => t.id === r.targetId);
     if (!target) return false;
     if (target.locked) return false;
     return trackAcceptsElement(target.kind, r.el.type);
   });
-  if (valid.length === 0) return false; // all moves rejected → no-op
+  if (valid.length === 0) return { applied: false }; // all moves rejected → no-op
 
   // anchor clamp: min startTime ≥ 0 (shift the whole batch up)
   const minStart = Math.min(...valid.map((r) => r.startTime));
   if (minStart < 0) for (const r of valid) r.startTime = snapToFrame(r.startTime - minStart);
 
-  // zero-anchor (magnetic main, spec-05 §14.5A)
+  // zero-anchor (magnetic main, spec-05 §14.5A) — R15-F1 FIX 2: the SHARED
+  // pure law (zeroAnchorShift, the same code resolveGroupMove runs), i.e.
+  // the magnet shifts the WHOLE batch so its left edge pins at 0. The old
+  // store-side re-implementation shifted only the main-targeting subset —
+  // the R15-V1 review verified the divergence (a raw A/V batch committed a
+  // 5s split the pure law answers as a clamped no-op). For the duplicate
+  // path the stationary set keeps the ORIGINALS (they stay — the copies
+  // must clear them like any other stationary clip).
   const main = sc.tracks.find((t) => t.kind === 'main');
   if (main) {
-    const mainMoves = valid.filter((r) => sc.tracks.find((t) => t.id === r.targetId)?.kind === 'main');
-    if (mainMoves.length > 0) {
-      const moverIds = new Set(valid.map((r) => r.id));
-      const stationary = main.elements.filter((e) => !moverIds.has(e.id));
-      const earliest = stationary.length > 0 ? Math.min(...stationary.map((e) => e.startTime)) : null;
-      const minReq = Math.min(...mainMoves.map((r) => r.startTime));
-      if (earliest === null || minReq <= earliest) {
-        // the earliest main move pins at 0; the others keep their offsets
-        for (const r of mainMoves) r.startTime = snapToFrame(r.startTime - minReq);
-      }
-    }
+    const shift = zeroAnchorShift(
+      main.elements,
+      valid.map((r) => ({
+        id: r.id,
+        targetOnMain: sc.tracks.find((t) => t.id === r.targetId)?.kind === 'main',
+        startTime: r.startTime,
+      })),
+    );
+    if (shift !== 0) for (const r of valid) r.startTime = snapToFrame(r.startTime + shift);
   }
+
+  // durations for the overlap laws (virtual clones included)
+  const elementsById = new Map<string, ElementJSON>();
+  for (const track of sc.tracks) for (const e of track.elements) elementsById.set(e.id, e);
+  if (opts.virtualElements) for (const [id, el] of opts.virtualElements) elementsById.set(id, el);
 
   // intra-batch overlap (per target track) → whole batch rejected
   const byTarget = new Map<string, { startTime: number; duration: number }[]>();
   for (const r of valid) {
     const list = byTarget.get(r.targetId) ?? [];
-    list.push({ startTime: r.startTime, duration: r.el.duration });
+    list.push({ startTime: r.startTime, duration: elementsById.get(r.id)?.duration ?? 0 });
     byTarget.set(r.targetId, list);
   }
   for (const spans of byTarget.values()) {
     const sorted = [...spans].sort((a, b) => a.startTime - b.startTime);
     for (let i = 1; i < sorted.length; i++) {
-      if (sorted[i - 1]!.startTime + sorted[i - 1]!.duration > sorted[i]!.startTime) return false;
+      if (sorted[i - 1]!.startTime + sorted[i - 1]!.duration > sorted[i]!.startTime) return { applied: false, reason: 'overlap' };
     }
   }
 
-  // overlap vs stationary (movers virtually removed) → that move dropped
+  // overlap vs stationary (movers virtually removed): NON-atomic drops that
+  // move (others proceed); atomic (duplicate path) fails the whole batch.
+  // Virtual clones are NOT in the doc, so stationary = the full lane — a
+  // copy must clear its own ORIGINAL exactly like any foreign clip (the
+  // half-open law holds in the FINAL scene, the invariant the P1 broke).
   const moverIds = new Set(valid.map((r) => r.id));
-  const survivors = valid.filter((r) => {
+  const overlapped = valid.filter((r) => {
     const target = sc.tracks.find((t) => t.id === r.targetId)!;
     const stationary = target.elements.filter((e) => !moverIds.has(e.id));
-    return !stationary.some((e) => spansOverlap({ startTime: r.startTime, duration: r.el.duration }, e));
+    return stationary.some((e) => spansOverlap({ startTime: r.startTime, duration: elementsById.get(r.id)?.duration ?? 0 }, e));
   });
-  if (survivors.length === 0) return false; // every move overlapped — no-op
+  if (overlapped.length > 0 && opts.atomic) return { applied: false, reason: 'overlap' };
+  const survivors = overlapped.length > 0 ? valid.filter((r) => !overlapped.includes(r)) : valid;
+  if (survivors.length === 0) return { applied: false }; // every move overlapped — no-op
 
   // change detection: NOOP batches never create history (canonical)
   const changed = (opts.hasNewElements ?? false) || createdIds.size > 0 || survivors.some((r) => {
     const target = sc.tracks.find((t) => t.id === r.targetId)!;
-    return r.source.id !== target.id || r.startTime !== r.el.startTime;
+    return (r.source ? r.source.id !== target.id : true) || r.startTime !== r.el.startTime;
   });
-  if (!changed) return false;
+  if (!changed) return { applied: false };
 
   // apply: lift from the source lane, land on the target lane
   const affected = new Set<TrackJSON>();
   for (const r of survivors) {
     const target = sc.tracks.find((t) => t.id === r.targetId)!;
-    r.source.elements = r.source.elements.filter((e) => e.id !== r.id);
+    if (r.source) {
+      r.source.elements = r.source.elements.filter((e) => e.id !== r.id);
+      affected.add(r.source);
+    }
     r.el.startTime = r.startTime;
     r.el.trackId = target.id; // denormalized field stays coherent
     target.elements.push(r.el);
-    affected.add(r.source);
     affected.add(target);
   }
   for (const t of affected) t.elements.sort((a, b) => a.startTime - b.startTime); // lanes stay time-ordered
-  return true;
+  return { applied: true };
 }
 
 /* pre-minted new-track identities for the drag gesture: one per moving clip
@@ -427,6 +493,14 @@ interface UiState {
    from lib/trimLaws.ts. The R14 0.25 s constant unified the trim family at a
    coarser floor than the engine spec's; 1 frame is the canonical law. */
 
+/* R15 T8 (R15-F1 FIX 4a): the seek domain = the ACTIVE scene's duration
+   (design T8 "replaces 600"). An empty scene clamps to [0, 0] — the
+   playhead cannot leave a duration-less timeline. */
+const activeSceneDuration = (s: UiState): number => {
+  const sc = s.scenes.find((x) => x.id === s.activeSceneId) ?? s.scenes[0];
+  return sc ? sceneDuration(sc) : 0;
+};
+
 /* history wrapper: snapshot before each doc mutation, 50-deep.
    Returning undefined from `mutate` = no-op: NOTHING is set (no history
    entry) — this is the contract the no-pollution comments in splitElement /
@@ -520,9 +594,15 @@ export const useUi = create<UiState>((set, get) => ({
     // the flag stuck from the previous scene and the next click did the
     // OPPOSITE of its label on the fresh scene)
     const sc = s.scenes.find((x) => x.id === id);
+    // R15-V2 P3: reconcile a stale playhead beyond the NEW scene's duration
+    // (display-only staleness otherwise — every write path clamps, but the
+    // ruler/TC read shows the old position until the first tick)
+    const newDur = sc ? sceneDuration(sc) : 0;
+    const playhead = Math.min(s.playhead, newDur);
     return {
       activeSceneId: id,
       selection: [],
+      playhead,
       ...(sc ? { lockAll: sc.tracks.every((t) => t.locked) } : {}),
     };
   }),
@@ -577,8 +657,8 @@ export const useUi = create<UiState>((set, get) => ({
       return scenes;
     });
   },
-  setPlayhead: (t) => set({ playhead: clamp(t, 0, 600) }),
-  nudgePlayhead: (frames) => set((s) => ({ playhead: clamp(s.playhead + frames / 24, 0, 600) })),
+  setPlayhead: (t) => set((s) => ({ playhead: clamp(t, 0, activeSceneDuration(s)) })), // R15 T8: clamp [0, scene duration]
+  nudgePlayhead: (frames) => set((s) => ({ playhead: clamp(s.playhead + frames / 24, 0, activeSceneDuration(s)) })),
   togglePlay: () => set((s) => ({ playing: !s.playing, playRate: 1 })),
   setPlaying: (p) => set({ playing: p, ...(p ? {} : { playRate: 1 }) }),
   setShuttle: (rate) => set({ playRate: rate, playing: rate !== 0 }),
@@ -657,6 +737,13 @@ export const useUi = create<UiState>((set, get) => ({
     if (s.pxPerSec < min) patch.pxPerSec = min;
     return patch as UiState;
   }),
+  /* R15-F1 P3 (documented skip): zoomStep/zoomFit stay STORE-level seams —
+     routing them through zoomBus would import zoomController, which imports
+     THIS module: a module-evaluation cycle (the controller instantiates at
+     import time and reads useUi.getState() in its class fields — TDZ crash
+     when this module is evaluated first). Every COMPONENT zoom path already
+     routes through the bus (toolbar / shortcuts / wheel); these two remain
+     the raw store API the zoom unit tests pin. */
   zoomStep: (factor) => set((s) => ({ pxPerSec: clamp(s.pxPerSec * factor, Math.max(MIN_PPS, s.zoomMinPps), MAX_PPS) })),
   zoomFit: (containerW, duration) => set((s) => ({ pxPerSec: clamp((containerW - 24) / (Math.max(duration, 0.001) + 2), Math.max(MIN_PPS, s.zoomMinPps), MAX_PPS) })),
   togglePanel: (p) => set((s) => ({ panels: { ...s.panels, [p]: !s.panels[p] } })),
@@ -805,38 +892,50 @@ export const useUi = create<UiState>((set, get) => ({
     if (!sc) return;
     const hit = findInScene(sc, id);
     if (!hit || hit.track.locked) return;
-    if (!applyMovesToScene(sc, [{ id, trackId: hit.track.id, startTime }], [])) return;
+    if (!applyMovesToScene(sc, [{ id, trackId: hit.track.id, startTime }], []).applied) return;
     return scenes;
   }),
   moveElements: ({ moves, createTracks = [] }) => withHistory(set, get, (scenes) => {
     const s = get();
     const sc = scenes.find((x) => x.id === s.activeSceneId);
     if (!sc) return;
-    if (!applyMovesToScene(sc, moves, createTracks)) return; // no-op / rejected → no history
+    if (!applyMovesToScene(sc, moves, createTracks).applied) return; // no-op / rejected → no history
     return scenes;
   }),
   duplicateAndMove: ({ ids, moves, createTracks = [] }) => withHistory(set, get, (scenes) => {
     const s = get();
     const sc = scenes.find((x) => x.id === s.activeSceneId);
     if (!sc) return;
-    /* Alt+drag duplicate to the RESOLVED target: clone the sources in place,
-       then move the COPIES (id-remapped) — one composite entry, the selection
-       lands on the copies (R14 duplicateElements(ids, at) semantics, upgraded
-       to cross-track). A rejected resolution is a no-op (no copies persist —
-       the clone is discarded with the history entry). */
-    const idMap = new Map<string, string>();
+    /* R15-F1 FIX 1: ATOMIC Alt-drag duplicate. The clones are MINTED but
+       never pre-parked on the source lanes — the remapped moves are validated
+       as VIRTUAL clones against the current scene, where the ORIGINALS stay
+       (a duplicate leaves them in place, so a copy must clear its own
+       original like any other stationary clip; the preview over the
+       originals-as-movers is the only place those spans ever vacate). The
+       batch is all-or-nothing — the preview's whole-batch law — so a partial
+       rejection can never strand an un-lifted copy on top of its original.
+       A rejected batch is an honest toast (the review's silent single-clip
+       no-op), no mutation, no history entry. */
+    const virtual = new Map<string, ElementJSON>();
     for (const id of [...new Set(ids)]) {
       const hit = findInScene(sc, id);
       if (!hit || hit.track.locked) continue;
       const copy = cloneEl(hit.el);
       copy.id = nextId(`${id}-d`);
-      idMap.set(id, copy.id);
-      hit.track.elements.push(copy);
+      virtual.set(id, copy);
     }
-    if (idMap.size === 0) return;
-    const remapped = moves.filter((m) => idMap.has(m.id)).map((m) => ({ ...m, id: idMap.get(m.id)! }));
-    if (!applyMovesToScene(sc, remapped, createTracks, { hasNewElements: true })) return;
-    set({ selection: [...idMap.values()] });
+    if (virtual.size === 0) return;
+    const remapped = moves.filter((m) => virtual.has(m.id)).map((m) => ({ ...m, id: virtual.get(m.id)!.id }));
+    const verdict = applyMovesToScene(sc, remapped, createTracks, {
+      hasNewElements: true,
+      atomic: true,
+      virtualElements: new Map([...virtual.entries()].map(([el0, el]) => [el.id, el] as const)),
+    });
+    if (!verdict.applied) {
+      s.pushToast(dragRejectionToast(verdict.reason ?? 'overlap'));
+      return; // no mutation, no history — withHistory discards the cloned scene
+    }
+    set({ selection: [...virtual.values()].map((el) => el.id) });
     return scenes;
   }),
   /* ---- R15 T4 trim family ---- */

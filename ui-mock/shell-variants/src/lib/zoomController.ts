@@ -21,8 +21,9 @@
 
    Module bus: toolbar buttons/slider and keyboard shortcuts route through
    `zoomBus.request*` so EVERY zoom path gets the capture (canonical routes
-   all zoom through the controller). No active Timeline mount (stories,
-   isolated toolbars) falls back to direct store writes. */
+   all zoom through the controller). The controller is a module singleton —
+   no live Timeline mount just means getScroller() returns null (pre-capture
+   0); there is no direct-store fallback path. */
 
 import { useUi } from '../state/useUiStore';
 import {
@@ -58,6 +59,16 @@ class TimelineZoomController {
 
   attach(config: ZoomControllerConfig) {
     this.configRef.current = config;
+  }
+
+  /** R15-F1 P3: honest attach probe — TRUE while a Timeline is mounted and
+   *  has handed us a live scroller (detach() swaps in the null-scroller
+   *  config, so this reads the CURRENT wiring, not the singleton's
+   *  existence). The old bus-level isAttached() lied: it returned true even
+   *  detached ("controller is a module singleton" — the attach state is
+   *  exactly what the caller is asking about). */
+  isAttached(): boolean {
+    return this.configRef.current.getScroller() != null;
   }
 
   detach() {
@@ -196,19 +207,16 @@ interface BusEntry {
   isAttached: () => boolean;
 }
 
-const direct = (nextPps: number) => useUi.getState().setZoom(nextPps);
-
+/* R15-F1 P3: the dead `direct` fallback is DELETED — the bus body's
+   `zoomController['configRef']` guard was always truthy and setZoomLevel
+   never throws, so the try/catch + direct store write were unreachable
+   code claiming a fallback path that could not exist. No-Timeline contexts
+   (stories, isolated toolbars) go through setZoomLevel with a null
+   scroller: preZoomScrollLeft 0, pending captured, store written — the
+   anchoring simply no-ops without a scroller. */
 export const zoomBus: BusEntry = Object.assign(
   (nextPps: number, opts?: { duration?: number }) => {
-    if (zoomController['configRef']) {
-      try {
-        zoomController.setZoomLevel(nextPps, opts);
-        return;
-      } catch {
-        /* fall through to direct */
-      }
-    }
-    direct(nextPps);
+    zoomController.setZoomLevel(nextPps, opts);
   },
   {
     zoomIn: () => zoomBus(useUi.getState().pxPerSec * ZOOM_BUTTON_FACTOR),
@@ -216,7 +224,7 @@ export const zoomBus: BusEntry = Object.assign(
     zoomStep: (factor: number) => zoomBus(useUi.getState().pxPerSec * factor),
     zoomFit: (containerW: number, durationSec: number) =>
       zoomBus((containerW - 24) / (Math.max(durationSec, 0.001) + 2), { duration: durationSec }),
-    isAttached: () => true, // controller is a module singleton; attach state internal
+    isAttached: () => zoomController.isAttached(),
   },
 );
 

@@ -1,8 +1,8 @@
 # PLAN — Long-Horizon Task Tracker (nle-core-spec)
 
 **Created:** 2026-09-02 (Round 8 wrap-up — user directive: push/backup every micro milestone; PLAN tracks the long horizon, HANDOFF tracks the next session only)
-**Current round:** 16 IN PROGRESS → shell-mini MVP BOOTSTRAPPED (`96ea0db`, R16 A1-A4: design-audited + code-reviewed + 93 tests green). **The horizon is now the A0-A7b assembly plan (spec 14 / ARCH-R15 §3.4), with the shell-mini track as the MVP-era UI surface.** R17+ = either (a) the user green-lights `nle-app` creation (week −1 pre-flight first — REVIEW-R15-EXEC §7's 12 items) or (b) further seal-polish rounds or (c) shell-mini iteration (v0.2: DnD + annotakit + keyboard-clip-focus).
-**Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec (GitHub push needs a PAT this session does not have — GitLab mirror is the live backup remote; see HANDOFF)
+**Current round:** 16 IN PROGRESS → shell-mini MVP BOOTSTRAPPED (`96ea0db`, R16 A1-A4: design-audited + code-reviewed + 93 tests green) **and SERVING LIVE on port 3000** (R16 continuation session: origin PAT push DONE — GitHub reconciled via merge with the parallel R15-UI push, no force; Vite dev server daemonized via double-fork on :3000 behind Caddy :81 → the public preview URL IS the shell-mini app). **The horizon is now the A0-A7b assembly plan (spec 14 / ARCH-R15 §3.4), with the shell-mini track as the MVP-era UI surface.** R17+ = either (a) the user green-lights `nle-app` creation (week −1 pre-flight first — REVIEW-R15-EXEC §7's 12 items) or (b) further seal-polish rounds or (c) shell-mini iteration (v0.2: DnD + annotakit + keyboard-clip-focus).
+**Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec (PAT shared in-session, kept in local `.git/config` + chat only — NEVER commit it; GitHub's secret scanner blocks token-bearing pushes). GitLab mirror remains the second remote (WAF 403s are probabilistic — retry).
 
 ---
 
@@ -15,12 +15,15 @@
 - **Design contract:** `ui-mock/shell-mini/docs/DESIGN-mvp.md` v2.1 FINAL — 11 decisions; adversarial design audit (5 majors / 14 minors) + implementation code review (2 P1 / 5 P2) both folded.
 - **The app:** React 19 + Vite 8 + TS strict + Tailwind 4 + Zustand 5 + lucide (stack mirrors the sibling, minus annotakit); tokens.css = extraction §2 verbatim; timeline.css = qc- class-for-class quick-cut port; shell = floating glass panels over a #0d0d0d dot grid; geometry.ts = the pure interaction-law module; useMini.ts = doc/ui/history(50)/drag-session store with the interaction lock.
 - **Quality gates:** 93 vitest tests / 4 files green; tsc strict clean; vite build + storybook static green; VLM-verified renders (skin fidelity + ruler/clip/playhead px alignment verified in real-browser rects).
-- **Git:** GitHub push BLOCKED (no PAT in session — the R15-session PAT was not re-shared); GitLab mirror (ansgareutychisO) reconciled (stale parallel-variant merge, no force push) and carrying all milestones: 38a5fc0 → 204eedd → 3a8931f → 908dd6f → bd734ae → d695fa4 → 96ea0db.
+- **Git:** origin PAT push DONE in the R16-continuation session (GitHub had the parallel R15-UI wrap on top of the old base — MERGED, no force); GitLab mirror (ansgareutychisO) kept current through every milestone: 38a5fc0 → 204eedd → 3a8931f → 908dd6f → bd734ae → d695fa4 → 96ea0db → be1f141(port-3000) → merge.
+- **Runtime (new, this session):** shell-mini serves on **:3000** (vite base '/', strictPort) — the Z-container's Caddy :81 reverse-proxies localhost:3000, so the preview URL = the app. Dev server survives toolcall reaping via the committed double-fork launcher (`ui-mock/shell-mini/scripts/dev3000.py`); relaunch recipe in HANDOFF.
 
 **Remaining for the round (R16 close-out):**
 - [x] design audit round, [x] implementation, [x] code review round + fixes, [x] README + DESIGN v2.1
-- [ ] final wrap: HANDOFF/SKILL/PLAN updates, /home/sync backup, worklog
-- [ ] user reaction pass on the live mock (dev server + storybook)
+- [x] final wrap: HANDOFF/SKILL/PLAN updates, /home/sync backup, worklog
+- [x] origin PAT push + parallel-thread merge (R16-continuation session)
+- [x] LIVE on port 3000 via the preview URL (R16-continuation session) — browser self-verified
+- [ ] user reaction pass on the live mock (NOW TOURABLE at the preview URL + storybook :6007)
 
 **shell-mini v0.2 candidates (next UI iteration):** drag-DnD media→timeline (top candidate, deferred with the drop-outline token), annotakit wiring (vendored dir + 3 config lines), keyboard clip-focus traversal, snap-guide indicator, 18px node-space gutter option for pixel-compare passes, waveform with amplitude variation.
 
@@ -117,3 +120,34 @@ Priority order (R9-re-scoped):
 - Mechanical battery after every fix round (`scripts/battery_r9.py` — 48 checks; recalibrate stale checks; exempt-window logic must look BEFORE AND AFTER each hit)
 - A facet with no coverage-matrix row is a spec bug (spec 17 §14.4 step 0)
 - Domain cores converge toward the spec's CONTRACTS, never the reverse (Decisions 10-12); the spec never duplicates what the code can be cited for (00 §2.5.2)
+
+## R15-UI round (parallel to the R15 assembly round) — timeline parity + audio overhaul — COMPLETE
+
+**User ask:** bridge the mockup's UI layer to the canonical timeline seam
+(bearachprema/opencut-timeline — match exactly, not invent) + heavy audio/DAW
+pass borrowing zmmac1/web-daw-ui (fix the broken knob/meter) + keep Storybook
+in sync + iterative sub-agent design/code review.
+
+**Landed (14 commits, 596→788 tests, tsc clean, 83-story build green):**
+- Research: 3-agent extraction — opencut seam contract (43 points), DAW
+  pattern reference, mockup defect audit (18) → `.agents/research-r15/`
+- Design: `.agents/design/R15-{timeline-parity,audio-overhaul}.md` v2 FINAL
+  after adversarial C1/C2 critique rounds (C1's zero-anchor inversion + C2's
+  antiphase knob both caught pre-implementation)
+- Timeline T1–T9: pixel/zoomController/rulerTiers/timelinePlacement/trimLaws/
+  ripple libs; two-regime anchored zoom; CapCut ruler + virtualization; full
+  gesture discipline; 2D cross-track drag (preferIndex, overlap rejection,
+  zero-anchor, mixed-group reject); ripple interval-diff; all 5 tool
+  gestures; snap upgrade + indicator; clip virtualization
+- Audio A0–A5: token sheet, SVG knob (antiphase fixed), stereo meterEngine,
+  dB-linear meters, fader scale, strip chrome, header micro-meters (v2.2
+  §3.2 closed), Storybook deterministic levels
+- Reviews: V1 (4 verified bugs) → F1 fixes → V2 SHIP → P3 closers
+- Runtime: supervisor crash fixed (numeric-fd write), instrumentation.ts
+  auto-boot chain (next-server → supervisor → :3000), static + runtime synced
+- Registrations: SPEC-REVISION-CANDIDATES §G (spec-16 §3.8 ×1.7, spec-18 §5A
+  two-regime + 18↔05 conflict, alignment record, deferral ledger)
+
+**Standing for the next round:** CodeRabbit re-review of the 14-commit range
+on PR #1; V2's 2 deferred P3s (duplicateAndMove raw-API edges, snap-ON
+head-drag fallthrough); G.4 deferral ledger items are engine-team questions.

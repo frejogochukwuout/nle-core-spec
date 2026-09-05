@@ -8,6 +8,7 @@ import { afterEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { useUi } from '../state/useUiStore';
 import { __reset as resetMeterEngine } from '../lib/meterEngine';
+import { __resetGestureFlag } from '../lib/timelinePlacement';
 
 /* React 19 act() contract — RTL calls act() internally. */
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -89,6 +90,9 @@ afterEach(() => {
   // meterEngine is a module-level singleton too (keys, ballistics, rAF loop) —
   // same containment contract: every test starts from a silent, stopped engine
   resetMeterEngine();
+  // R15-F1: the gesture-active flag (lib/timelinePlacement) is module state —
+  // a test that leaves a gesture "active" would swallow ⌫/⌘Z in the next one
+  __resetGestureFlag();
   for (const key of LS_KEYS) {
     try { window.localStorage.removeItem(key); } catch { /* storage unavailable */ }
   }

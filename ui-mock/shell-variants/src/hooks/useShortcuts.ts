@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
 import { useUi } from '../state/useUiStore';
 import { snapToFrame } from '../lib/timecode';
 import { zoomBus } from '../lib/zoomController';
+import { isGestureActive } from '../lib/timelinePlacement';
 import { DEFAULT_PPS } from '../lib/pixel';
 import type { Marker } from '../lib/mockData';
 import type { ConfirmFn } from '../components/shell/ConfirmDialog';
@@ -43,6 +44,17 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
       const alt = e.altKey;
       const key = e.key;
       const lower = key.length === 1 ? key.toLowerCase() : key;
+
+      /* R15-F1 FIX 3 (c): destructive keys are GESTURE-GATED. Firing ⌫/⌘Z/
+         ⌘⇧Z mid-drag unmounts the dragged Clip before its 'end' can flush,
+         leaking the Timeline's host session (auto-scroll rAF + snap
+         indicator + ghost previews — the R15-V1 review's mid-drag-unmount
+         leak). The Clip owns the module flag (lib/timelinePlacement — set on
+         5px activation, cleared on every end + unmount); while it holds we
+         swallow the key entirely (no store write, no preventDefault — the
+         default for these keys is inert here). */
+      const destructive = key === 'Delete' || key === 'Backspace' || (cmd && !alt && lower === 'z');
+      if (destructive && isGestureActive()) return;
       const now = performance.now();
 
       /* ---- JKL shuttle: tap-accel 1× → 2× → 4×, reset on K / Space.

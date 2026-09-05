@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { useUi } from '../state/useUiStore';
-import { zoomController, createWheelZoomAccumulator } from './zoomController';
+import { zoomController, zoomBus, createWheelZoomAccumulator } from './zoomController';
 import { ZOOM_ANCHOR_PLAYHEAD_THRESHOLD, zoomToSlider } from './pixel';
 
 const mkScroller = (scrollWidth = 3000, clientWidth = 800, initialLeft = 0) =>
@@ -118,6 +118,25 @@ describe('TimelineZoomController two-regime anchoring', () => {
     zoomController.setZoomLevel(8);
     zoomController.applyZoomLayout(30);
     expect(sc.scrollLeft).toBeGreaterThan(0); // anchored value kept, no restore-to-300
+  });
+});
+
+describe('R15-F1 P3: the bus is the one honest route (dead direct fallback deleted, isAttached truthful)', () => {
+  it('zoomBus.isAttached() reports the CURRENT wiring — false detached, true with a live scroller', () => {
+    expect(zoomBus.isAttached()).toBe(false); // detached by the suite's beforeEach
+    const sc = mkScroller();
+    zoomController.attach({ getScroller: () => sc });
+    expect(zoomBus.isAttached()).toBe(true);
+    zoomController.detach();
+    expect(zoomBus.isAttached()).toBe(false);
+  });
+
+  it('the bus body routes through setZoomLevel even with NO Timeline attached (stories / isolated toolbars)', () => {
+    setZoomState(46, 7.8125, 0);
+    zoomBus(80); // no attach — must not fall back to a raw store write path
+    expect(useUi.getState().pxPerSec).toBe(80);
+    expect(zoomController.getPendingLayout()).not.toBeNull(); // the controller ran (capture taken, scroller null)
+    zoomController.clearPending();
   });
 });
 
