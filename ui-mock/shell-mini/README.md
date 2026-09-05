@@ -1,0 +1,1 @@
+A minimal shell ui mockup for simplicity and initial MVP stage targeting. Only the most basic / essential NLE features.
