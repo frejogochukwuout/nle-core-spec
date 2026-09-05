@@ -8,6 +8,7 @@ import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import { useShortcuts } from './useShortcuts';
 import { useUi } from '../state/useUiStore';
+import { setGestureActive } from '../lib/timelinePlacement';
 
 const S = () => useUi.getState();
 
@@ -529,5 +530,29 @@ describe('R14: [ / ] non-ripple trim + ⇧,/⇧. 10-frame slip + ⇧J/⇧L fixed
     press({ key: 'l', shiftKey: true });
     expect(S().playRate).toBe(2);
     expect(S().playing).toBe(true);
+  });
+});
+
+/* ---- R15-F1 FIX 3 (c): destructive keys are gesture-gated ---- */
+
+describe('R15-F1: destructive keys are swallowed while a gesture is active', () => {
+  it('⌫ / ⌘Z / ⌘⇧Z do nothing mid-gesture; the same keys work once it ends', () => {
+    S().setSelection(['el-2']);
+    act(() => { S().moveElement('el-2', 30); }); // a real, undoable mutation
+    const pastLen = S().past.length;
+    expect(pastLen).toBeGreaterThan(0);
+    setGestureActive(true); // the Clip set this at its 5px activation
+    press({ key: 'Delete' });
+    expect(S().selection).toEqual(['el-2']); // swallowed — nothing deleted
+    expect(() => el('el-2')).not.toThrow();
+    press({ key: 'z', metaKey: true });
+    expect(el('el-2').startTime).toBe(30); // swallowed — nothing undone
+    press({ key: 'z', metaKey: true, shiftKey: true });
+    expect(S().future).toHaveLength(0); // swallowed — no redo side effects
+    expect(S().toasts).toHaveLength(0); // and no "Nothing to undo" toast either
+    // gesture over (the Clip cleared the flag at its 'end') — the keys live again
+    setGestureActive(false);
+    press({ key: 'Delete' });
+    expect(() => el('el-2')).toThrow(); // deleted
   });
 });

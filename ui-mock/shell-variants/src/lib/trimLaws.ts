@@ -207,6 +207,18 @@ export function rollDeltaBounds(a: ElementJSON, b: ElementJSON): DeltaBounds {
   if (b.sourceStart !== undefined) {
     // B's window head can't go before the source start: (ss + d) ≥ 0
     lo = Math.max(lo, -b.sourceStart);
+    // R15-F1 P3: B's window TAIL when rate ≠ 1 — the roll moves B's head by
+    // d while its duration moves by −d, so the consumed tail
+    // (ss + d) + (dur − d)·rate is only invariant at rate 1. The classic
+    // rate-1 case keeps no tail bound; otherwise (ss + d) + (dur − d)·rate ≤
+    // ext bounds d, with the sign of (1 − rate) picking the side.
+    const bExt = sourceExtentOf(b);
+    const bRate = rateOf(b);
+    if (isFinite(bExt) && Math.abs(1 - bRate) > EPS) {
+      const dTail = (bExt - b.sourceStart - b.duration * bRate) / (1 - bRate);
+      if (bRate < 1) hi = Math.min(hi, dTail); // divisor > 0 → upper bound
+      else lo = Math.max(lo, dTail); // divisor < 0 → lower bound
+    }
   }
   return { lo, hi };
 }

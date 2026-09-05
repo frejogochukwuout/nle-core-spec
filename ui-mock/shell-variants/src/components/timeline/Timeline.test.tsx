@@ -13,6 +13,7 @@ import { useUi } from '../../state/useUiStore';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import { sceneDuration } from '../../lib/mockData';
 import { snapToFrame } from '../../lib/timecode';
+import { isGestureActive } from '../../lib/timelinePlacement';
 import { POOL_DRAG_TYPE } from '../shell/MediaPool';
 
 const boot = (patch: UiPatch = {}) => renderShell(<Timeline />, { patch });
@@ -763,5 +764,152 @@ describe('R15 T5: the snap indicator line (2px accent/40%, z 40, gesture-held on
     // frame grid only (15.5109 → 15.5) — the marker target was never consulted
     const el5 = store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-overlay-1')!.elements.find((e) => e.id === 'el-5')!;
     expect(el5.startTime).toBeCloseTo(snapToFrame(8.75 + 311 / 46), 5);
+  });
+});
+
+/* ---------- R15-F1: mid-gesture discipline (FIX 3) + T8 scrub laws (FIX 4) ---------- */
+
+describe('R15-F1 FIX 3: mid-drag unmount + destructive-key gesture gate', () => {
+  it('⌫ mid-drag is GESTURE-SWALLOWED — the dragged clip never unmounts; ⌫ after the release works again', () => {
+    renderShell(
+      <>
+        <Timeline />
+        <ShortcutsHarness />
+      </>,
+    );
+    const clip = screen.getByTestId('clip-el-2');
+    // activate + engage a cross-track drag (overlay band @ 15 s)
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: laneY.main });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 690, clientY: laneY.overlay });
+    expect(screen.getByTestId('drag-ghost-el-2')).toBeInTheDocument();
+    // the OLD leak: ⌫ deleted the clip mid-drag → Clip unmounts → 'end'
+    // never fires → session + rAF + indicator + ghosts leak. Now: swallowed.
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+    });
+    expect(screen.getByTestId('clip-el-2')).toBeInTheDocument(); // alive
+    expect(countEls()).toBe(7); // nothing deleted
+    expect(store().past).toHaveLength(0);
+    expect(screen.getByTestId('drag-ghost-el-2')).toBeInTheDocument(); // the gesture itself is untouched
+    // end the drag (release commits), then the same key fires normally
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 690, clientY: laneY.overlay });
+    expect(store().past).toHaveLength(1); // the drag committed
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+    });
+    expect(screen.queryByTestId('clip-el-2')).not.toBeInTheDocument(); // deleted — key restored
+    expect(countEls()).toBe(6);
+  });
+
+  it('⌘Z mid-drag is likewise swallowed (the undo could unmount the dragged clip too)', () => {
+    renderShell(
+      <>
+        <Timeline />
+        <ShortcutsHarness />
+      </>,
+    );
+    // a real mutation to undo, then a fresh drag on top of it
+    act(() => { store().moveElement('el-5', 20); });
+    const pastLen = store().past.length;
+    const clip = screen.getByTestId('clip-el-5');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 920, clientY: laneY.overlay });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 960, clientY: laneY.overlay });
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+    });
+    expect(store().past).toHaveLength(pastLen); // not undone — swallowed
+    expect(screen.getByTestId('clip-el-5')).toBeInTheDocument(); // still mounted mid-drag
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 960, clientY: laneY.overlay });
+  });
+
+  it('unmounting the dragged clip mid-gesture (a menu/store delete) FLUSHES the host session: previews drop and the auto-scroll rAF stops', async () => {
+    boot({});
+    const sc = scrollEl();
+    sc.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 400, right: 800, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    Object.defineProperty(sc, 'scrollWidth', { value: 5000, configurable: true });
+    Object.defineProperty(sc, 'clientWidth', { value: 800, configurable: true });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: laneY.main });
+    // engage + park the pointer 5px from the right edge → auto-scroll runs
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 795, clientY: laneY.overlay });
+    expect(screen.getByTestId('drag-ghost-el-2')).toBeInTheDocument();
+    await act(async () => { await new Promise((r) => requestAnimationFrame(r)); });
+    expect(sc.scrollLeft).toBeGreaterThan(0); // the rAF loop is scrolling
+    // delete the dragged clip through a NON-keyboard surface (the menu route
+    // fires the same store call): the Clip unmounts mid-gesture — 'end' can
+    // never fire through the pointer path
+    act(() => { store().deleteElements(['el-2'], false); });
+    // the unmount flush cancelled the session: previews cleared…
+    expect(screen.queryByTestId('drag-ghost-el-2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('snap-indicator')).not.toBeInTheDocument();
+    expect(isGestureActive()).toBe(false);
+    // …and the auto-scroll rAF STOPPED (scrollLeft frozen — the leak was an
+    // immortal loop)
+    const frozen = sc.scrollLeft;
+    await act(async () => { await new Promise((r) => requestAnimationFrame(r)); });
+    expect(sc.scrollLeft).toBe(frozen);
+  });
+
+  it('a scene switch mid-drag drops the drag session + a live marquee + resets scrollLeft (stale by construction)', () => {
+    boot({});
+    const sc = scrollEl();
+    act(() => { sc.scrollLeft = 600; fireEvent.scroll(sc); });
+    expect(sc.scrollLeft).toBe(600);
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: laneY.main });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 690, clientY: laneY.overlay });
+    expect(screen.getByTestId('drag-ghost-el-2')).toBeInTheDocument();
+    // mid-gesture scene switch: every Clip unmounts — the session must drop
+    act(() => { store().setActiveScene('sc-2'); });
+    expect(screen.queryByTestId('drag-ghost-el-2')).not.toBeInTheDocument();
+    expect(sc.scrollLeft).toBe(0); // stale scroll position reset
+    expect(isGestureActive()).toBe(false);
+    // a live marquee band also clears (P3 sweep — mid-marquee switch)
+    fireEvent.pointerDown(laneOf('s2-1'), { pointerId: 3, button: 0, clientX: 0, clientY: 60 });
+    fireEvent.pointerMove(scrollEl(), { pointerId: 3, buttons: 1, clientX: 300, clientY: 80 });
+    expect(screen.getByTestId('timeline-marquee')).toBeInTheDocument();
+    act(() => { store().setActiveScene('sc-1'); });
+    expect(screen.queryByTestId('timeline-marquee')).not.toBeInTheDocument();
+  });
+});
+
+describe('R15 T8 (R15-F1 FIX 4b): head-drag scrub domain', () => {
+  it('head-drag is CLAMPED to the scene duration and FRAME-SNAPS with element snap off', () => {
+    boot({});
+    act(() => { store().toggleSnap(); }); // N — element snap off
+    const head = document.querySelector('.cursor-col-resize') as HTMLElement;
+    expect(head).not.toBeNull();
+    fireEvent.pointerDown(head, { pointerId: 1, button: 0 });
+    // 2000 px → 43.5 s — clamped to the 30 s scene duration (was unclamped)
+    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 2000 });
+    expect(store().playhead).toBe(30);
+    // 393.5 px → 8.5543 s — frame-snaps to 205/24 = 8.5417 (raw before)
+    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 393.5 });
+    expect(store().playhead).toBeCloseTo(205 / 24, 5);
+    fireEvent.pointerUp(head, { pointerId: 1 });
+  });
+});
+
+describe('R15-F1 FIX 1 (end-to-end): the Alt+drag repro gesture through the REAL drag seam', () => {
+  it('el-1 moved to the overlay, {el-1, el-5} selected, Alt+drag +4s → release rejects ATOMICALLY: no stranded copy, no history, honest toast', () => {
+    boot({});
+    // repro setup: move el-1 onto tr-overlay-1 (same lane as el-5) first
+    act(() => { store().moveElements({ moves: [{ id: 'el-1', trackId: 'tr-overlay-1', startTime: 0 }] }); });
+    act(() => { store().setSelection(['el-1', 'el-5']); });
+    const clip = screen.getByTestId('clip-el-1');
+    // grab el-1 (lane-left 0 → grab at 100) and Alt+drag +4 s (184 px) in its
+    // own lane — the move-resolution (originals as movers) is VALID, but the
+    // copies must clear the ORIGINALS: el-1-d [4,12.5) hits stationary el-1
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 100, clientY: laneY.overlay, altKey: true });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 284, clientY: laneY.overlay, altKey: true });
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 284, clientY: laneY.overlay, altKey: true });
+    const overlay = store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-overlay-1')!;
+    expect(overlay.elements.map((e) => e.id).sort()).toEqual(['el-1', 'el-5']); // NO copies — nothing stranded
+    expect(store().past).toHaveLength(1); // only the setup move — the rejected duplicate added nothing
+    expect(store().toasts.at(-1)!.title).toBe('Drop rejected');
+    expect(store().toasts.at(-1)!.detail).toBe('clips would overlap (spec-05 §8.3)');
+    // the originals are exactly where they were
+    expect(overlay.elements.find((e) => e.id === 'el-1')!.startTime).toBe(0);
+    expect(overlay.elements.find((e) => e.id === 'el-5')!.startTime).toBe(8.75);
   });
 });

@@ -57,7 +57,6 @@ export function TimelineToolbar() {
   const toggleLockAll = useUi((s) => s.toggleLockAll);
   const pxPerSec = useUi((s) => s.pxPerSec);
   const zoomMinPps = useUi((s) => s.zoomMinPps);
-  const setZoom = useUi((s) => s.setZoom);
   const playhead = useUi((s) => s.playhead);
   const addMarker = useUi((s) => s.addMarker);
   const masterMuted = useUi((s) => s.masterMuted);
@@ -81,8 +80,10 @@ export function TimelineToolbar() {
 
   /* zoom-to-selection (R14 no-op sweep): span = min start → max end of the
      selection across the ACTIVE scene; empty selection or span ≤ 0 → honest
-     info toast; else setZoom so the span fills ~80% of the lane viewport
-     (setZoom clamps 8..240 px/s — the spec 16 §3.8 zoom window). */
+     info toast; else route through the ZOOM BUS (R15-F1 P3 — was a raw
+     setZoom write bypassing the controller's pre-zoom scroll capture /
+     two-regime anchoring) so the span fills ~80% of the lane viewport
+     (the bus + store clamp to the 5..5000 domain + dynamic min). */
   const zoomToSelection = () => {
     const s = useUi.getState();
     const sc = s.scenes.find((x) => x.id === s.activeSceneId)!;
@@ -98,7 +99,7 @@ export function TimelineToolbar() {
       pushToast({ kind: 'info', title: 'Zoom to selection', detail: 'No selection — select clips to zoom to their span' });
       return;
     }
-    setZoom((measureLanes() * 0.8) / span);
+    zoomBus((measureLanes() * 0.8) / span, { duration: sceneDuration(sc) });
     // center the span after the zoom re-render (R15: routed via rAF so the
     // new content width is laid out first)
     requestAnimationFrame(() => {

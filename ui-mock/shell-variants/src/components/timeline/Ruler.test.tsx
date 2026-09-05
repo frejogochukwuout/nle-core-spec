@@ -2,8 +2,8 @@
    adaptive tick/label density, marker pins (spec 16 §3.7), and the §4.9 ruler
    menu incl. the 8-color marker palette. */
 
-import { describe, expect, it } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Ruler } from './Ruler';
 import { getRulerWindow } from '../../lib/rulerTiers';
@@ -185,5 +185,82 @@ describe('Ruler in/out brackets (R14 draggable edges)', () => {
     expect(store().loop.end).toBe(1);
     expect(store().loop.start).toBe(1); // pulled along — same markOut formula
     fireEvent.pointerUp(outB(), { pointerId: 3 });
+  });
+});
+
+/* ---------- R15 T8 (R15-F1 FIX 4c/4d/4e): ruler-scrub laws ---------- */
+
+describe('R15 T8 (R15-F1): ruler scrub — element snap after the first move, click gate, edge auto-scroll', () => {
+  it('FIX 4c: the FIRST move frame-snaps only (no jarring jump); the SECOND move element-snaps to the nearest edge (snap ON)', () => {
+    boot({});
+    const r = ruler();
+    // pointerdown seeks immediately (frame-snapped): 300 px → 6.5217 → 6.5
+    fireEvent.pointerDown(r, { pointerId: 1, button: 0, clientX: 300 });
+    expect(store().playhead).toBeCloseTo(157 / 24, 5); // 300/46 = 6.5217 → frame 157
+    // FIRST move at 393 px → 8.5435 s: el-1's end 8.5 is only 0.043 away
+    // (inside the 10 px tol) but element snap is DISABLED on move #1 →
+    // frame grid 205/24 = 8.5417
+    fireEvent.pointerMove(r, { pointerId: 1, buttons: 1, clientX: 393 });
+    expect(store().playhead).toBeCloseTo(205 / 24, 5);
+    // SECOND move (same neighborhood): element snap is ON → 8.5 wins
+    fireEvent.pointerMove(r, { pointerId: 1, buttons: 1, clientX: 394 });
+    expect(store().playhead).toBe(8.5);
+    fireEvent.pointerUp(r, { pointerId: 1 });
+  });
+
+  it('FIX 4c: element snap OFF (N) — every move frame-snaps only, even past the first', () => {
+    boot({});
+    act(() => { store().toggleSnap(); });
+    const r = ruler();
+    fireEvent.pointerDown(r, { pointerId: 1, button: 0, clientX: 300 });
+    fireEvent.pointerMove(r, { pointerId: 1, buttons: 1, clientX: 393 });
+    fireEvent.pointerMove(r, { pointerId: 1, buttons: 1, clientX: 394 });
+    expect(store().playhead).toBeCloseTo(206 / 24, 5); // 394/46 → frame 206 — never the 8.5 edge
+    fireEvent.pointerUp(r, { pointerId: 1 });
+  });
+
+  it('FIX 4d: a release within 5px + 500ms of the down FINALIZES with a seek at the RELEASE point; a slow release does not', () => {
+    boot({});
+    const r = ruler();
+    fireEvent.pointerDown(r, { pointerId: 1, button: 0, clientX: 300 });
+    // move 3px (under the 5px gate) → frame-snap only: 303 px → 6.5833
+    fireEvent.pointerMove(r, { pointerId: 1, buttons: 1, clientX: 303 });
+    expect(store().playhead).toBeCloseTo(158 / 24, 5);
+    // release 4px from the down, well inside 500 ms → the release point wins
+    fireEvent.pointerUp(r, { pointerId: 1, clientX: 304 });
+    expect(store().playhead).toBeCloseTo(159 / 24, 5); // 304 px → 6.625 — finalized at the RELEASE
+    // slow release (>= 500 ms after the down) → NO finalize (last move stands)
+    const nowSpy = vi.spyOn(performance, 'now');
+    let t = 10_000;
+    nowSpy.mockImplementation(() => t);
+    fireEvent.pointerDown(r, { pointerId: 2, button: 0, clientX: 300 });
+    fireEvent.pointerMove(r, { pointerId: 2, buttons: 1, clientX: 303 });
+    t += 600; // past the 500 ms click window
+    fireEvent.pointerUp(r, { pointerId: 2, clientX: 304 });
+    expect(store().playhead).toBeCloseTo(158 / 24, 5); // the move's frame-snap, not the release
+    nowSpy.mockRestore();
+  });
+
+  it('FIX 4e: scrubbing past the ruler\'s right edge AUTO-SCROLLS the timeline scroller (shared 100px/15px·ramp law), and stops on release', async () => {
+    // the real layout: the ruler lives inside #timeline-scroll's scroll content
+    renderShell(
+      <div id="timeline-scroll">
+        <RulerHarness />
+      </div>,
+    );
+    const sc = document.getElementById('timeline-scroll')!;
+    sc.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 400, right: 800, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    Object.defineProperty(sc, 'scrollWidth', { value: 5000, configurable: true });
+    Object.defineProperty(sc, 'clientWidth', { value: 800, configurable: true });
+    const r = screen.getByRole('slider', { name: 'Timeline ruler' });
+    fireEvent.pointerDown(r, { pointerId: 1, button: 0, clientX: 300 });
+    // park the pointer 5px from the right edge → ramp 1 − 5/100 of 15px
+    fireEvent.pointerMove(r, { pointerId: 1, buttons: 1, clientX: 795 });
+    await act(async () => { await new Promise((res) => requestAnimationFrame(res)); });
+    expect(sc.scrollLeft).toBeCloseTo(15 * (1 - 5 / 100), 3); // 14.25 — one frame
+    fireEvent.pointerUp(r, { pointerId: 1, clientX: 795 });
+    const after = sc.scrollLeft;
+    await act(async () => { await new Promise((res) => requestAnimationFrame(res)); });
+    expect(sc.scrollLeft).toBe(after); // the loop stopped with the scrub
   });
 });

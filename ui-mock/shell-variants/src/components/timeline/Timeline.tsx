@@ -16,7 +16,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useUi, trackHeights, mintTrackIds } from '../../state/useUiStore';
 import { useVariant } from '../debug/VariantProvider';
 import { sceneDuration, mediaById, findElement, type ElementJSON, type TrackJSON } from '../../lib/mockData';
-import { tc } from '../../lib/timecode';
+import { tc, snapToFrame } from '../../lib/timecode';
 import { dynamicContentWidth, snapPxToDeviceGrid, zoomMinPps, PLAYHEAD_LINE_PX, HORIZONTAL_WHEEL_STEP_PX, DRAG_THRESHOLD_PX } from '../../lib/pixel';
 import {
   resolveHoverTarget,
@@ -27,6 +27,7 @@ import {
   type PlannedMove,
   type PlannedTrack,
 } from '../../lib/timelinePlacement';
+import { createEdgeAutoScroll } from '../../lib/edgeScroll';
 import { zoomController, createWheelZoomAccumulator } from '../../lib/zoomController';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
@@ -63,10 +64,9 @@ interface DragPreview {
   frozen: boolean;
 }
 
-/* rAF auto-scroll constants (canonical use-edge-auto-scroll): 100px edge
-   threshold, 15px/frame max, intensity ramps 1 − dist/threshold. */
-const EDGE_SCROLL_THRESHOLD_PX = 100;
-const EDGE_SCROLL_MAX_SPEED = 15;
+/* rAF auto-scroll constants + the loop itself live in lib/edgeScroll.ts
+   (R15-F1 FIX 4e: the RULER SCRUB reuses the exact same law — threshold
+   100px, 15px/frame max, intensity ramp 1 − dist/threshold). */
 
 export function Timeline() {
   const { variant } = useVariant();
@@ -323,46 +323,25 @@ export function Timeline() {
   const dragSessionRef = useRef<DragSession | null>(null);
 
   /* edge auto-scroll while a clip drag is active (canonical
-     use-edge-auto-scroll; deferred from T2): threshold 100px, max 15px/frame,
-     ramp 1 − dist/100; horizontal only — our vertical content is short. */
-  const autoScrollRaf = useRef<number | null>(null);
+     use-edge-auto-scroll): threshold 100px, max 15px/frame, ramp
+     1 − dist/100; horizontal only — our vertical content is short.
+     R15-F1 FIX 3/4e: shared lib/edgeScroll loop — the session gate parks it
+     when the drag ends, is cancelled, OR is dropped wholesale by the
+     scene-switch cleanup below. */
+  const autoScroll = useRef<ReturnType<typeof createEdgeAutoScroll> | null>(null);
   const stopAutoScroll = () => {
-    if (autoScrollRaf.current !== null) {
-      cancelAnimationFrame(autoScrollRaf.current);
-      autoScrollRaf.current = null;
-    }
+    autoScroll.current?.stop();
   };
   const startAutoScroll = () => {
-    if (autoScrollRaf.current !== null) return;
-    const tick = () => {
-      const session = dragSessionRef.current;
-      const sc = scrollRef.current;
-      if (!session || !sc) {
-        autoScrollRaf.current = null;
-        return;
-      }
-      const box = sc.getBoundingClientRect();
-      const relativeX = session.pointerX - box.left;
-      const viewW = sc.clientWidth || box.width;
-      const scrollMax = Math.max(0, sc.scrollWidth - viewW);
-      let speed = 0;
-      if (relativeX < EDGE_SCROLL_THRESHOLD_PX && sc.scrollLeft > 0) {
-        const dist = Math.max(0, relativeX);
-        speed = -EDGE_SCROLL_MAX_SPEED * (1 - dist / EDGE_SCROLL_THRESHOLD_PX);
-      } else if (relativeX > viewW - EDGE_SCROLL_THRESHOLD_PX && sc.scrollLeft < scrollMax) {
-        const dist = Math.max(0, viewW - relativeX);
-        speed = EDGE_SCROLL_MAX_SPEED * (1 - dist / EDGE_SCROLL_THRESHOLD_PX);
-      }
-      if (speed !== 0) {
-        const next = Math.max(0, Math.min(scrollMax, sc.scrollLeft + speed));
-        if (next !== sc.scrollLeft) {
-          sc.scrollLeft = next;
-          setScrollLeft(next); // keep ruler ticks + clip virtualization live
-        }
-      }
-      autoScrollRaf.current = requestAnimationFrame(tick);
-    };
-    autoScrollRaf.current = requestAnimationFrame(tick);
+    if (!autoScroll.current) {
+      autoScroll.current = createEdgeAutoScroll({
+        getScroller: () => scrollRef.current,
+        getPointerX: () => dragSessionRef.current?.pointerX ?? NaN,
+        isActive: () => dragSessionRef.current !== null,
+        onScroll: (next) => setScrollLeft(next), // keep ruler ticks + clip virtualization live
+      });
+    }
+    autoScroll.current.start();
   };
   useEffect(() => stopAutoScroll, []); // unmount safety — never leak the rAF
 
@@ -621,6 +600,23 @@ export function Timeline() {
   }, [ppsForLayout, duration]);
   useEffect(() => {
     zoomController.reset(); // scene switch: anchor state stale by construction
+    /* R15-F1 FIX 3 (b) + P3 sweep: a scene switch mid-gesture unmounts every
+       Clip — the drag session, snap indicator, ghost previews and the
+       auto-scroll rAF must drop with them (an 'end' may never fire; the
+       Clips' own unmount flush also fires, this is the belt-and-braces +
+       host-session clear). Stale-by-construction view state goes too: the
+       scrollLeft position (the new scene's content differs) and a live
+       marquee band. */
+    stopAutoScroll();
+    dragSessionRef.current = null;
+    setSnapIndicator(null);
+    setDragPreview(null);
+    setMarquee(null);
+    const sc = scrollRef.current;
+    if (sc && sc.scrollLeft !== 0) {
+      sc.scrollLeft = 0;
+      setScrollLeft(0);
+    }
   }, [scene.id]);
 
   /* viewport measurement + dynamic min reconcile (spec-05 §5.2): ResizeObserver
@@ -1023,13 +1019,23 @@ export function Timeline() {
                 const box = scrollRef.current?.getBoundingClientRect();
                 if (!box) return;
                 const x = e.clientX - box.left + (scrollRef.current?.scrollLeft ?? 0);
-                let t = Math.max(0, x / pxPerSec);
-                /* R15 T5: CLOSEST-WINS (strict <, earliest wins ties) — the
-                   old first-match-in-order loop could snap to a far target in
-                   front of a nearer one. SHIFT suppresses snapping (canonical
-                   §5, every gesture incl. scrub). Head-drag targets include
-                   markers + in/out via the shared list above. */
+                /* R15 T8 (R15-F1 FIX 4b): head-drag scrub is CLAMPED to
+                   [0, scene duration] (was unclamped above 30 s) and
+                   frame-snaps when element snap is OFF (N) — the design's
+                   "frame-snap always" for the snap-off leg. With snap ON the
+                   pinned closest-wins edge-snap behavior is kept as-is: its
+                   raw fallthrough (no target in tolerance) and its
+                   shift-suppression both land raw by pinned test contract;
+                   the edge targets themselves are frame-clean in practice
+                   (the playhead-as-target is the one off-grid possibility —
+                   accepted, registered in the worklog). */
+                let t = Math.max(0, Math.min(x / pxPerSec, duration));
                 if (snap && !e.shiftKey) {
+                  /* R15 T5: CLOSEST-WINS (strict <, earliest wins ties) — the
+                     old first-match-in-order loop could snap to a far target in
+                     front of a nearer one. SHIFT suppresses snapping (canonical
+                     §5, every gesture incl. scrub). Head-drag targets include
+                     markers + in/out via the shared list above. */
                   const tol = 10 / pxPerSec;
                   let best = t;
                   let bestD = tol;
@@ -1038,6 +1044,8 @@ export function Timeline() {
                     if (d < bestD) { best = target; bestD = d; }
                   }
                   t = best;
+                } else if (!snap) {
+                  t = snapToFrame(t);
                 }
                 setPlayhead(t);
               }}

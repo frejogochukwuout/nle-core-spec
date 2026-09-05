@@ -163,6 +163,59 @@ export function resolveGroupMove(
   return resolveExistingTrackMove(scene, members, anchorId, anchorStart, target.trackId);
 }
 
+/* ---------- R15-F1 FIX 3: the gesture-active flag ---------- */
+
+/* Lightweight module-level signal: TRUE while ANY Clip gesture (move or
+   trim-family) is past its 5px activation threshold. The Clip owns the
+   writes (activation / end / unmount — see Clip.tsx); useShortcuts reads it
+   to swallow destructive keys (⌫ / ⌘Z / ⌘⇧Z) mid-gesture: firing one unmounts
+   the dragged Clip before its 'end' can flush, leaking the Timeline's drag
+   session (auto-scroll rAF + snap indicator + ghost previews — the R15-V1
+   review's mid-drag-unmount leak). Deliberately NOT store state: it is
+   transient component-gesture state, not view/doc state (same containment
+   contract as meterEngine — reset from setup.ts afterEach). */
+let gestureActive = false;
+export function setGestureActive(v: boolean): void {
+  gestureActive = v;
+}
+export function isGestureActive(): boolean {
+  return gestureActive;
+}
+/** test containment — setup.ts afterEach mirrors meterEngine.__reset */
+export function __resetGestureFlag(): void {
+  gestureActive = false;
+}
+
+/* ---------- zero-anchor (spec-05 §14.5A, magnetic main) — ONE law ---------- */
+
+/** R15-F1 FIX 2: the GROUP-WIDE magnetic-main law, extracted so the pure
+ *  resolution (resolveGroupMove — drag preview + release) and the store's
+ *  batch engine (applyMovesToScene — the public moveElements / moveElement /
+ *  duplicateAndMove API) run the SAME code. The store previously carried a
+ *  divergent re-implementation (main-subset-only shift) — the R15-V1 review
+ *  verified it splitting a raw A/V batch the pure law answers as a clamped
+ *  no-op.
+ *
+ *  Law: when a main-targeting request would land at/before the earliest
+ *  STATIONARY main start (or main is virtually empty of stationaries), the
+ *  WHOLE batch shifts up so its LEFT EDGE pins at 0 — offsets preserved, the
+ *  anchor clamp never violated (the shift only ever moves left; starts are
+ *  ≥ 0 on entry by the anchor clamp). Returns the shift (≤ 0) to add to
+ *  EVERY move's startTime; 0 when the magnet does not fire. */
+export function zeroAnchorShift(
+  mainElements: ElementJSON[],
+  moves: { id: string; targetOnMain: boolean; startTime: number }[],
+): number {
+  const mainMoves = moves.filter((m) => m.targetOnMain);
+  if (mainMoves.length === 0) return 0;
+  const moverIds = new Set(moves.map((m) => m.id));
+  const stationary = mainElements.filter((e) => !moverIds.has(e.id));
+  const earliest = stationary.length > 0 ? Math.min(...stationary.map((e) => e.startTime)) : null;
+  const minReq = Math.min(...mainMoves.map((m) => m.startTime));
+  if (earliest !== null && minReq > earliest) return 0; // magnet does not fire
+  return -Math.min(...moves.map((m) => m.startTime)); // left edge → 0
+}
+
 /* ---- existing-track path ---- */
 
 function resolveExistingTrackMove(
@@ -206,19 +259,19 @@ function resolveExistingTrackMove(
     used.add(tracks[idx]!.id);
   }
 
-  // zero-anchor (spec-05 §14.5A): any member landing on main
+  // zero-anchor (spec-05 §14.5A): any member landing on main — the shared
+  // GROUP-WIDE law (zeroAnchorShift; R15-F1 FIX 2 unified preview + commit)
   const mainTrack = tracks.find((t) => t.kind === 'main');
   if (mainTrack) {
-    const memberIds = new Set(members.map((m) => m.el.id));
-    const memberOnMain = members.find((m) => targetTrackIds.get(m.el.id) === mainTrack.id);
-    if (memberOnMain) {
-      const stationary = mainTrack.elements.filter((e) => !memberIds.has(e.id));
-      const earliest = stationary.length > 0 ? Math.min(...stationary.map((e) => e.startTime)) : null;
-      const requested = anchorStart + memberOnMain.timeOffset;
-      if (earliest === null || requested <= earliest) {
-        anchorStart = Math.max(minAnchorStartOf(members), -memberOnMain.timeOffset);
-      }
-    }
+    const shift = zeroAnchorShift(
+      mainTrack.elements,
+      members.map((m) => ({
+        id: m.el.id,
+        targetOnMain: targetTrackIds.get(m.el.id) === mainTrack.id,
+        startTime: anchorStart + m.timeOffset,
+      })),
+    );
+    anchorStart += shift;
   }
 
   const moves: PlannedMove[] = members.map((m) => ({
@@ -237,6 +290,9 @@ function resolveExistingTrackMove(
 function minAnchorStartOf(members: GroupMember[]): number {
   return Math.max(0, ...members.map((m) => -m.timeOffset));
 }
+// (kept: resolveGroupMove's anchor clamp uses it above; the zero-anchor
+// max() interplay collapsed into zeroAnchorShift's left-edge→0 shift —
+// equivalent because the anchor's own offset 0 keeps the member minimum ≤ 0)
 
 /* ---- new-track path ---- */
 

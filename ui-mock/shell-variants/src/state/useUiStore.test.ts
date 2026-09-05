@@ -111,11 +111,17 @@ describe('page + view toggles', () => {
 /* ---------- transport ---------- */
 
 describe('transport + playhead', () => {
-  it('setPlayhead clamps to 0..600', () => {
+  it('setPlayhead clamps to [0, ACTIVE SCENE duration] (R15 T8 — R15-F1 FIX 4a replaces the 600 law)', () => {
     act(() => { S().setPlayhead(-1); });
     expect(S().playhead).toBe(0);
     act(() => { S().setPlayhead(9999); });
-    expect(S().playhead).toBe(600);
+    expect(S().playhead).toBe(30); // sc-1 duration (fixture: el-4 / el-6 end at 30)
+    // the domain follows the ACTIVE scene (sc-2 = 19.5 s) and an empty
+    // scene clamps to [0, 0]
+    act(() => { S().setActiveScene('sc-2'); S().setPlayhead(50); });
+    expect(S().playhead).toBe(19.5);
+    act(() => { S().createScene(); S().setPlayhead(5); });
+    expect(S().playhead).toBe(0);
   });
 
   it('nudgePlayhead moves by frames (1 frame = 1/24 s)', () => {
@@ -1415,9 +1421,123 @@ describe('R15 T3: duplicateAndMove — Alt+drag duplicate to the resolved target
     expect(S().past.length).toBe(pastBefore);
     expect(mainEls()).toEqual(['el-1', 'el-2', 'el-3', 'el-4']); // no copies
   });
+
+  /* ---------- R15-F1 FIX 1 regression tests (the review's P1 repro) ---------- */
+
+  it('R15-F1: PARTIAL rejection is ATOMIC — the repro batch (el-1+el-5 Alt+drag +4s after moving el-1 to the overlay) rejects whole: no stranded clone, no history, honest toast', () => {
+    // repro setup: move el-1 onto tr-overlay-1 (same lane as el-5) first
+    act(() => { S().moveElements({ moves: [{ id: 'el-1', trackId: 'tr-overlay-1', startTime: 0 }] }); });
+    const pastBefore = S().past.length;
+    // the preview-equivalent resolution (originals as movers): el-1 → 4,
+    // el-5 → 12.75 — valid for a MOVE (the group vacates), but the COPIES
+    // must clear the ORIGINALS too: el-1-d [4,12.5) overlaps stationary
+    // el-1 [0,8.5). Old behavior: el-1's move dropped (clone STRANDED on top
+    // of el-1, overlap invariant broken, 1 history entry) while el-5's copy
+    // landed at 12.75. New: all-or-nothing.
+    act(() => {
+      S().duplicateAndMove({
+        ids: ['el-1', 'el-5'],
+        moves: [
+          { id: 'el-1', trackId: 'tr-overlay-1', startTime: 4 },
+          { id: 'el-5', trackId: 'tr-overlay-1', startTime: 12.75 },
+        ],
+      });
+    });
+    const overlay = track('sc-1', 'tr-overlay-1').elements.map((e) => e.id).sort();
+    expect(overlay).toEqual(['el-1', 'el-5']); // NO copies — nothing stranded, nothing landed
+    expect(S().past.length).toBe(pastBefore); // no history entry
+    expect(S().toasts.at(-1)!.kind).toBe('error');
+    expect(S().toasts.at(-1)!.title).toBe('Drop rejected');
+    expect(S().toasts.at(-1)!.detail).toBe('clips would overlap (spec-05 §8.3)'); // dragRejectionToast reuse
+  });
+
+  it('R15-F1: single-clip variant — a copy that would overlap its own original (same lane, delta < own duration) rejects with an HONEST toast (was a SILENT no-op: preview said ok, release did nothing)', () => {
+    const pastBefore = S().past.length;
+    // el-5 [8.75,12) → +1.125 s on its OWN lane: the preview (originals as
+    // movers) resolves it fine — the copy [10,13.25) must clear the ORIGINAL
+    act(() => {
+      S().duplicateAndMove({ ids: ['el-5'], moves: [{ id: 'el-5', trackId: 'tr-overlay-1', startTime: 10 }] });
+    });
+    expect(track('sc-1', 'tr-overlay-1').elements.map((e) => e.id)).toEqual(['el-5']); // no copy
+    expect(S().past.length).toBe(pastBefore);
+    expect(S().toasts.at(-1)!.title).toBe('Drop rejected'); // honest, not silent
+  });
+
+  it('R15-F1: a happy-path duplicate still lands ALL copies + selection in ONE entry (the atomic path must not over-reject)', () => {
+    const pastBefore = S().past.length;
+    act(() => {
+      S().duplicateAndMove({
+        ids: ['el-5'],
+        moves: [{ id: 'el-5', trackId: 'tr-overlay-1', startTime: 20 }], // [20,23.25) clear of el-5 [8.75,12)
+      });
+    });
+    const copies = track('sc-1', 'tr-overlay-1').elements.filter((e) => e.id.startsWith('el-5-d'));
+    expect(copies).toHaveLength(1);
+    expect(copies[0]!.startTime).toBe(20);
+    expect(S().selection).toEqual([copies[0]!.id]);
+    expect(S().past.length).toBe(pastBefore + 1);
+    expect(S().toasts).toHaveLength(0); // committed — no rejection toast
+  });
 });
 
 /* ---------- R15 T4: trim laws + tool-gesture store actions ---------- */
+
+describe('R15-F1 FIX 2: zero-anchor — ONE law (the pure resolveGroupMove group-wide shift)', () => {
+  const scene = () => S().scenes.find((sc) => sc.id === 'sc-1')!;
+
+  it('the raw batch API matches the pure resolution: moveElements fed resolveGroupMove\'s moves lands EXACTLY there (the old main-subset shift re-pinned el-2 at 0, splitting the A/V group)', () => {
+    // review repro setup: main virtually empty (delete the other main clips)
+    act(() => { S().deleteElements(['el-1', 'el-3', 'el-4'], false); });
+    // the pure resolution of the gesture "drag el-2 to main@5 with el-6 in
+    // the group" — the anchor clamp keeps el-6 ≥ 0 at its −8.5 offset, so
+    // el-2 lands at 8.5 (the magnet then fires but the anchor clamp wins:
+    // anchorStart = minAnchorStart = 8.5)
+    const res = resolveGroupMove(scene(), 'el-2', { trackId: 'tr-main' }, 5, ['el-2', 'el-6']);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.moves.find((m) => m.id === 'el-2')!.startTime).toBe(8.5);
+    expect(res.moves.find((m) => m.id === 'el-6')!.startTime).toBe(0);
+    // commit through the PUBLIC batch API — same answer, group un-split
+    act(() => { S().moveElements({ moves: res.moves }); });
+    expect(el('el-2').startTime).toBe(8.5); // NOT 0 — the pure law wins
+    expect(el('el-6').startTime).toBe(0);
+  });
+
+  it('the magnet shifts the WHOLE batch — the review repro batch (el-2→main@5, el-6→audio@5, main virtually empty) clamps the GROUP left edge to 0 (was a main-subset-only 5s A/V split)', () => {
+    act(() => { S().deleteElements(['el-1', 'el-3', 'el-4'], false); });
+    const pastBefore = S().past.length;
+    act(() => {
+      S().moveElements({
+        moves: [
+          { id: 'el-2', trackId: 'tr-main', startTime: 5 },
+          { id: 'el-6', trackId: 'tr-audio-1', startTime: 5 },
+        ],
+      });
+    });
+    // group-wide clamp: BOTH starts shift up by 5 — offsets preserved
+    expect(el('el-2').startTime).toBe(0);
+    expect(el('el-6').startTime).toBe(0); // was stranded at 5 by the old main-subset shift
+    expect(S().past).toHaveLength(pastBefore + 1); // one entry for the whole batch
+  });
+});
+
+describe('R15-F1 P3: rollDeltaBounds — B\'s source TAIL at rate ≠ 1', () => {
+  it('a rate-0.5 B keeps its window inside the source tail (unbounded rolls previously ran past the media end)', () => {
+    // junction el-3 [17,24) | el-4 [24,30); retime el-4 to 0.5× and pin its
+    // window near the m-05 tail (12.8 s): [9, 9 + 6·0.5) = [9, 12)
+    act(() => { S().setElementField('el-4', { speed: 0.5, sourceStart: 9 }); });
+    // roll +3: without the B-tail bound, d clamps only at B's 1-frame min →
+    // el-4's window would run to 12 + 1.5 = 13.5 > 12.8 (past the media
+    // tail). With it: d ≤ (12.8 − 9 − 6·0.5)/(1 − 0.5) = 1.6
+    act(() => { S().rollTrim('el-3', 'el-4', 3); });
+    expect(el('el-3').duration).toBeCloseTo(7 + 1.6, 5); // A grew by the CLAMPED delta
+    expect(el('el-4').startTime).toBeCloseTo(24 + 1.6, 5);
+    expect(el('el-4').duration).toBeCloseTo(6 - 1.6, 5);
+    expect(el('el-4').sourceStart).toBeCloseTo(9 + 1.6, 5);
+    // the window tail lands exactly at the media tail, never past it
+    expect(el('el-4').sourceStart! + el('el-4').duration * 0.5).toBeCloseTo(12.8, 5);
+  });
+});
 
 describe('R15 T4: trimElements — neighbor, source, 1-frame, batch intersection', () => {
   it('right-edge extension cannot cross the NEXT clip start (canonical §9 neighbor law)', () => {

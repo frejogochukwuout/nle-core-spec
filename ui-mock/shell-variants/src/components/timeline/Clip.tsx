@@ -22,7 +22,7 @@ import { useVariantClipStyle } from '../../state/variantHooks';
 import { mediaById, findElement, EFFECT_DEFS, TRANSITION_PRESENTATIONS, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc, clamp } from '../../lib/timecode';
 import { DRAG_THRESHOLD_PX } from '../../lib/pixel';
-import { resolveGroupMove, toCreateTrackPlans, dragRejectionToast } from '../../lib/timelinePlacement';
+import { resolveGroupMove, toCreateTrackPlans, dragRejectionToast, setGestureActive } from '../../lib/timelinePlacement';
 import {
   RATE_MIN,
   RATE_MAX,
@@ -332,6 +332,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
   const notifyHostEnd = (cancelled: boolean, commit: boolean, e?: { clientX: number; clientY: number }) => {
     const geo = dragGeoRef.current;
     dragGeoRef.current = null;
+    setGestureActive(false); // R15-F1 FIX 3: every 'end' path drops the module gesture flag (hosted or hostless)
     if (!hostRef.current || !geo) return;
     hostRef.current({
       ...geo,
@@ -342,6 +343,19 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       clientY: e?.clientY ?? geo.clientY,
     });
   };
+  /* R15-F1 FIX 3 (a): unmount mid-gesture — the Clip is GONE (⌫/⌘Z via an
+     ungated surface, a menu delete, a scene switch), so 'end' can never fire
+     through the pointer path. Flush the host session as a CANCEL (an
+     unmount mid-gesture can never commit) so the Timeline drops its drag
+     session + snap indicator + ghost previews and stops the auto-scroll
+     rAF; also clear the gesture flag for the hostless case. The effect
+     closes over first-render notifyHostEnd — safe: it reads the stable
+     host/dragGeo refs. */
+  useEffect(() => () => {
+    if (dragGeoRef.current) notifyHostEnd(true, false);
+    setGestureActive(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   /* HOSTLESS fallback (isolated Clip mounts): the Clip commits the gesture
      itself through the SAME pure resolveGroupMove — group = selection when
      the anchor is selected, else the anchor alone (canonical drag group). */
@@ -540,6 +554,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       // strict > 5px on EITHER axis from the gesture origin → activate
       if (Math.abs(e.clientX - d.startX) <= DRAG_THRESHOLD_PX && Math.abs(e.clientY - d.startY) <= DRAG_THRESHOLD_PX) return;
       d = { ...d, phase: 'active' };
+      setGestureActive(true); // R15-F1 FIX 3: destructive keys (⌫/⌘Z) are swallowed while a gesture holds
     }
     const dt = (e.clientX - d.startX) / pxPerSec;
     const shift = e.shiftKey; // R15 T5: shift suppresses snapping in EVERY gesture
@@ -620,6 +635,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       } else {
         // hostless fallback: same laws, resolved against the anchor's own lane
         commitMoveLocally(drag.cur, drag.alt);
+        setGestureActive(false); // R15-F1 FIX 3: no notifyHostEnd on this path — clear explicitly
       }
     } else {
       /* R15 T4: every tool/trim gesture commits HERE (the store clamps with
@@ -647,7 +663,15 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
           break;
         case 'slip':
           // cur = content offset (pointer direction); store frames are the
-          // slipNudge convention (+frames = later content) → negated here
+          // slipNudge convention (+frames = later content) → negated here.
+          // R15-F1 P3 (review flagged a "half-frame preview drift" — analyzed,
+          // NO change needed): round(−cur·24) reproduces the preview's frame
+          // count exactly when the bounds didn't bite, and when they did the
+          // store's own clamp (slipTargetBounds, same law) lands the window
+          // on the same clamped edge the preview showed — commit ≡ preview.
+          // The only off-grid landings come from a non-frame-clean source
+          // extent, where source-extent-beats-frame-alignment is the pinned
+          // T4 law (registered in the worklog as skipped-with-analysis).
           useUi.getState().slipDrag(group, Math.round(-drag.cur * 24));
           break;
         case 'slide':

@@ -6,11 +6,12 @@
    shading with BRACKETS, markers (spec 16 §3.7 palette). 44px zone in
    readout mode (labels + tick strip), 22px slim. */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUi } from '../../state/useUiStore';
 import { useHeaderStyle } from '../../state/variantHooks';
 import { snapToFrame, tc } from '../../lib/timecode';
 import { snapPxToDeviceGrid } from '../../lib/pixel';
+import { createEdgeAutoScroll } from '../../lib/edgeScroll';
 import { getRulerConfig, shouldShowLabel, formatRulerLabel, getRulerWindow, tickTimes } from '../../lib/rulerTiers';
 import type { Marker, SceneJSON } from '../../lib/mockData';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
@@ -80,7 +81,44 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
      it crosses the ruler (R13 review: `buttons === 1` alone made any
      left-drag an accidental seek with no undo trail). */
   const seeking = useRef(false);
+  /* R15 T8 (R15-F1 FIX 4c): element-snap is OFF on the first scrub move (no
+     jarring jump off the pointerdown seek) and ON from the second move —
+     nearest element edge on UNLOCKED tracks within the 10px tolerance when
+     snapping is on. Frame-snap always. */
+  const scrubMoves = useRef(0);
+  /* R15 T8 (R15-F1 FIX 4d): seek click gate — a release within 5px AND
+     500ms of the down re-seeks at the RELEASE point (canonical final
+     no-snap scrub at the click position). Pointerdown keeps its immediate
+     seek (mock behavior, unchanged). */
+  const downX = useRef(0);
+  const downT = useRef(0);
   const [hoverT, setHoverT] = useState<number | null>(null);
+  const snap = useUi((s) => s.snap);
+
+  /* R15 T8 (R15-F1 FIX 4e): scrub EDGE AUTO-SCROLL — the same shared
+     lib/edgeScroll law the clip drags run (100px threshold, 15px/frame max,
+     ramp 1 − dist/threshold). The scroller is the Timeline's #timeline-scroll
+     (the ruler lives inside its scroll content; standalone mounts find none
+     and the loop parks). Writing scrollLeft programmatically fires no scroll
+     EVENT — dispatch one so the Timeline's reactive scrollLeft (ruler tick
+     virtualization + clip culling) follows the frame. */
+  const scrubPointerX = useRef(0);
+  const edgeScrollRef = useRef<ReturnType<typeof createEdgeAutoScroll> | null>(null);
+  const getEdgeScroll = () => {
+    if (!edgeScrollRef.current) {
+      edgeScrollRef.current = createEdgeAutoScroll({
+        getScroller: () => (ref.current?.closest('#timeline-scroll') as HTMLElement | null) ?? null,
+        getPointerX: () => scrubPointerX.current,
+        isActive: () => seeking.current,
+        onScroll: () => {
+          const sc = ref.current?.closest('#timeline-scroll') as HTMLElement | null;
+          sc?.dispatchEvent(new Event('scroll'));
+        },
+      });
+    }
+    return edgeScrollRef.current;
+  };
+  useEffect(() => () => { edgeScrollRef.current?.stop(); }, []); // unmount safety — never leak the rAF
 
   /* ---------- in/out brackets: draggable loop edges (R14 no-op sweep —
      the bracket art LOOKED draggable but was pointer-events-none). Drag =
@@ -152,11 +190,31 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
   const win = getRulerWindow(view.scrollLeft, view.viewportW, pxPerSec, tickInterval, duration, contentW);
   const ticks = tickTimes(win, tickInterval);
 
-  const seek = (clientX: number) => {
+  const seek = (clientX: number, allowElementSnap: boolean) => {
     const box = ref.current?.getBoundingClientRect();
     if (!box) return;
-    // frame-grid discipline (R13 review: raw pixel times landed off-grid)
-    setPlayhead(Math.max(0, snapToFrame((clientX - box.left) / pxPerSec)));
+    // frame-grid discipline (R13 review: raw pixel times landed off-grid);
+    // R15 T8: the seek domain is [0, scene duration] (setPlayhead clamps too)
+    let t = Math.max(0, (clientX - box.left) / pxPerSec);
+    if (allowElementSnap && snap) {
+      // nearest edge within the 10px screen-space tolerance, closest-wins
+      const tol = 10 / pxPerSec;
+      let best = snapToFrame(t);
+      let bestD = tol;
+      for (const tr of scene.tracks) {
+        if (tr.locked) continue; // locked lanes are not snap sources (T5 law)
+        for (const e of tr.elements) {
+          for (const edge of [e.startTime, e.startTime + e.duration]) {
+            const d = Math.abs(edge - t);
+            if (d < bestD) { best = edge; bestD = d; }
+          }
+        }
+      }
+      t = best;
+    } else {
+      t = snapToFrame(t);
+    }
+    setPlayhead(Math.min(t, duration));
   };
 
   const tickH = headerStyle === 'readout' ? 12 : 7;
@@ -207,16 +265,36 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
         (e.currentTarget as HTMLElement).focus(); // roving focus for Shift+F10
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         seeking.current = true;
-        seek(e.clientX);
+        scrubMoves.current = 0;
+        downX.current = e.clientX;
+        downT.current = performance.now();
+        scrubPointerX.current = e.clientX;
+        seek(e.clientX, false);
+        getEdgeScroll().start(); // R15 T8 scrub edge auto-scroll (parks without a scroller)
       }}
       onPointerMove={(e) => {
         const box = ref.current?.getBoundingClientRect();
         if (box) setHoverT(Math.max(0, (e.clientX - box.left) / pxPerSec));
-        if (seeking.current && e.buttons === 1) seek(e.clientX);
+        if (seeking.current && e.buttons === 1) {
+          scrubMoves.current += 1;
+          scrubPointerX.current = e.clientX;
+          seek(e.clientX, scrubMoves.current > 1); // first move: frame-snap only (T8 — no jarring jump)
+        }
       }}
-      onPointerUp={() => { seeking.current = false; }}
-      onPointerCancel={() => { seeking.current = false; }}
-      onLostPointerCapture={() => { seeking.current = false; }}
+      onPointerUp={(e) => {
+        if (seeking.current) {
+          // R15 T8 (R15-F1 FIX 4d): click finalize — release within 5px +
+          // 500ms of the down → final no-snap scrub at the RELEASE point
+          if (Math.abs(e.clientX - downX.current) <= 5 && performance.now() - downT.current <= 500) {
+            seek(e.clientX, false);
+          }
+        }
+        seeking.current = false;
+        scrubMoves.current = 0;
+        edgeScrollRef.current?.stop();
+      }}
+      onPointerCancel={() => { seeking.current = false; scrubMoves.current = 0; edgeScrollRef.current?.stop(); }}
+      onLostPointerCapture={() => { seeking.current = false; scrubMoves.current = 0; edgeScrollRef.current?.stop(); }}
       onPointerLeave={() => setHoverT(null)}
     >
       {/* ticks — virtualized CapCut-tier window (major = on the label grid) */}
