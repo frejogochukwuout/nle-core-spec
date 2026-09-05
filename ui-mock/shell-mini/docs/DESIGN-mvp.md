@@ -1,18 +1,17 @@
 # DESIGN — shell-mini MVP (R16 bootstrap)
 
-**Status:** v1 — pre-audit (subagent peer-review round pending)
+**Status:** v2 FINAL — post-audit (adversarial audit folded: 5 majors M1-M5,
+14 minors m1-m14, Q1-Q4 answered; verdict was SHIP-WITH-FIXES, all fixes
+applied below)
 **Author:** orchestrating agent, 2026-09-05
 **Task:** bootstrap a minimal version of the spec-18 NLE shell under
 `ui-mock/shell-mini/` — simplified from `shell-variants`, skinned with the
 `RH-timeline-editor.html` (RunningHub quick-cut) design language, with a
 similar overall setup incl. Storybook.
-**Inputs:** `docs/RH-skin-extraction.md` (this folder), `shell-variants`
-(the complex predecessor), user README intent ("only the most basic /
-essential NLE features").
+**Inputs:** `docs/RH-skin-extraction.md`, `shell-variants` (complex
+predecessor), user README intent, fresh-context subagent audit.
 
-This document records each design decision with its rationale, per the
-project's decision discipline. After audit + refinement it becomes the build
-contract for the implementation phase.
+This document is the build contract for the implementation phase.
 
 ---
 
@@ -27,18 +26,18 @@ from-scratch small app that borrows shell-variants' *stack and conventions*.
 1. `npm run dev` boots a shell that renders at 1280×800+ without layout breakage.
 2. A user can: scrub/play, select a clip, drag-move it (clamped to neighbors),
    trim its edges, split at playhead, delete, undo/redo, zoom 5 steps.
-3. The timeline block is visually recognizable as the RH quick-cut (side-by-side
-   comparison with the extraction doc's token list passes).
-4. `npm run storybook` boots; every shell region has ≥1 story; stories reset state.
+3. The timeline block is visually recognizable as the RH quick-cut.
+4. `npm run storybook` boots; every shell region (topbar, media pool, viewer,
+   inspector, timeline, toast) has ≥1 story; stories reset state.
 5. `npm test` + `npm run typecheck` green; suite covers geometry laws, store
-   actions incl. undo/redo, and a component smoke pass.
-6. Total scope stays small: ~10 source files + ~6 story files + ~6 test files
-   (vs shell-variants' 100+ files). If a feature is not in D3's cut-list, it is
-   out.
+   actions incl. undo/redo + interaction-lock + selection validation, and a
+   component smoke pass.
+6. Scope: ~14 source files, ~4 story files, ~4 test files. If a feature is not
+   in D3's cut-list, it is out.
 
-**Rationale.** The user's words: the current one is "quite complex and too hard
-to aim at for initial mvp". The mini must be *aimable-at*: one screenful of
-behavior, one design language, no variant machinery.
+**Rationale.** The user's words: the current one is "quite complex and too
+hard to aim at for initial mvp". The mini must be *aimable-at*: one screenful
+of behavior, one design language, no variant machinery.
 
 ## D2 — Stack (mirror shell-variants, minus review-tooling)
 
@@ -49,205 +48,231 @@ behavior, one design language, no variant machinery.
 | Zustand 5 (single store) | ✅ | small state; store-reset contract transfers |
 | lucide-react | ✅ | icon parity with sibling |
 | clsx | ✅ | cheap, used heavily in sibling |
-| Storybook 10.6 (react-vite) + a11y + docs addons | ✅ (minus annotakit) | "overall setup should be similar (incl storybook)"; a11y cheap, docs addon is one line |
-| `storybook-annotakit` | ❌ skipped | vendored TS-source addon + prebuild + .env + GH-mirror; pure review-workflow weight, not MVP. Register as deliberate deviation; can be wired in a later round (the vendored copy is portable). |
+| Storybook 10.6 (react-vite) + a11y + docs addons | ✅ (minus annotakit) | "overall setup should be similar (incl storybook)" |
+| `storybook-annotakit` | ❌ skipped | vendored TS-source addon + prebuild + .env + GH-mirror; pure review-workflow weight. Deliberate deviation; wiring later = vendored dir + 3 config lines. |
 | Vitest 5 + RTL + jsdom, co-located tests | ✅ (small suite) | same conventions, fewer cases |
 | `.npmrc legacy-peer-deps=true` | ✅ | proven resolution on this exact dep set |
-| `base: '/mockup/'` | ❌ `/mini/` | its own preview namespace if synced later |
-
-**Annotakit deviation note:** the sibling's Storybook carries pin-comment
-review tooling vendored in-repo. shell-mini v0.1 reviews via stories +
-screenshots; wiring annotakit later = add the vendored dir + 3 config lines.
+| `base: '/mini/'` | ❌ (sibling: /mockup/) | own preview namespace |
 
 ## D3 — Feature cut-list (the whole MVP surface)
 
 **IN (mock-real: working local state, no engine):**
-1. **Timeline panel** (the RH quick-cut look): tools row (undo/redo · split ·
-   delete · snap toggle · zoom-out/-in + 5-step slider), 34px ruler with
-   minute:second labels + minor tick band, playhead (white 2px line + 8×8 dot
-   + hover/drag time pill), 2 tracks (V1 video, A1 audio).
-2. **Clips:** filmstrip video clips (repeat-x SVG gradient data-URI per media
-   asset), audio clips (waveform-ish bar pattern), selection ring, move-drag
-   (same-track, clamped between neighbors + track bounds), edge trim handles
-   (min 0.5s, neighbor-clamped), split-at-playhead (button + S key), delete
-   (button + Del key), add via media pool click (append to track end) and
-   drag-to-track (pointer DnD, drop at position, snapped to 0.5s grid).
-3. **Playback:** Space toggles play/pause (rAF loop advancing playhead;
-   stops+wraps at content end). J/K/L: shuttle per sibling conventions
-   (L = play, K = pause, J = reverse visual only? **NO — cut J/K/L, only
-   Space**, keep the keyboard surface honest and tiny).
-4. **Undo/redo:** ⌘Z / ⌘⇧Z + toolbar buttons; snapshot-stack over the doc
-   slice (clip list), max 50, coalesced per committed gesture.
-5. **Media pool (left):** 4 mock assets (2 video + 1 image + 1 audio) as
-   rounded cards with gradient thumbs, duration, click = append, drag = place.
-6. **Viewer (center):** dark stage that shows the media card of the clip under
-   the playhead (title + gradient + big timecode), play/pause pill overlay in
-   RH style; no video decode.
-7. **Inspector (right, 240px):** read-only facts for selection (name, track,
-   start/duration/end, media) + a couple of live controls? **NO — read-only
-   v0.1** (fields would be no-ops; the zero-no-op discipline from R14 applies:
-   don't ship dead controls). One control that IS real: Nudge (±0.5s buttons).
-8. **Keyboard:** Space, S (split), Del, ⌘Z/⌘⇧Z, +/- zoom, 0 = zoom-to-fit,
-   Esc = deselect. That's all. No tool modes (V/B cut — split is modeless).
-9. **Toasts:** single minimal toast surface (bottom center, RH pill style) for
-   honest feedback ("Clip added", "Nothing to undo"). Replaces dialogs.
+1. **Timeline panel** (RH quick-cut anatomy, D10): tools row (undo/redo ·
+   split · delete · snap toggle · zoom-out/-in + 5-step slider), 34px ruler,
+   white playhead + time pill, 2 lanes (V1 video, A1 audio, 36px each).
+2. **Clips:** filmstrip video clips (repeat-x SVG gradient data-URI per
+   media asset), audio clips (waveform bar pattern), selection ring, move-drag
+   (same-track, clamped between neighbors + track bounds), edge trim handles,
+   split-at-playhead (button + S), delete (button + Del), **click-to-append**
+   from media pool (audio→A1, video/image→V1). V1/A1 10px lane badges.
+3. **Playback:** Space toggles play/pause (rAF loop; **wraps to 0 and
+   continues** at `contentEnd = max(clip ends, 0)`; empty doc → immediate
+   pause, never a zero-length loop). No JKL.
+4. **Undo/redo:** ⌘Z / ⌘⇧Z + toolbar buttons; whole-doc snapshot stack (max
+   50), one entry per committed gesture; nudge = one entry per click.
+5. **Media pool (left, 260px):** 4 mock assets (2 video + 1 image + 1 audio),
+   rounded gradient cards, click = append to the correct lane.
+6. **Viewer (center):** dark stage showing the media card of the clip under
+   the playhead (title + gradient + big timecode); play overlay pill in RH's
+   dark-translucent style (`rgba(20,20,22,.72)` + blur) — NOT green.
+7. **Inspector (right, 240px):** read-only facts for the selection + one real
+   control: Nudge ±0.5s (neighbor-clamped, one history entry per click).
+8. **Keyboard:** Space, S (split), Del, ⌘Z/⌘⇧Z, +/- zoom, 0 = zoom step 1,
+   Esc (cancel active drag FIRST, else deselect). No tool modes.
+9. **Toasts:** minimal single toast (bottom center, RH pill style) — honest
+   feedback surface ("Clip added", "Nothing to undo", "Export isn't wired in
+   the mini").
 
-**OUT (deliberately, all registered in README deviations):** variants/themes,
-scenes, mixer/meters, color/deliver pages, effects, transitions, markers,
-context menus, confirm dialogs, cheat sheet, splitters (fixed layout),
-multi-select/marquee, cross-track moves, ripple/slide/slip/roll, JKL, in/out
-points, loop, magnet-snap-tolerance tuning (fixed 12px?), track headers,
-track add/remove, status strip, media search, offline assets, localStorage
-persistence, share links, window-too-small overlay (a CSS floor is enough),
-ErrorBoundary (mock-level OK), annotakit.
-
-**Rationale.** The sibling's 596-test surface exists because it models the
-full spec-18 shell. The mini models the *editing loop* only. Every OUT item
-above maps to a named sibling subsystem — the point is the cut, not the list.
+**OUT (registered in README deviations):** drag-DnD media→timeline (v0.2
+candidate #1 — cut per audit Q2: second drag machine not worth it when
+click-append + move + snap complete the loop), drop-outline token (deferred
+with it), variants/themes, scenes, mixer/meters, color/deliver pages,
+effects, transitions, markers, context menus, confirm dialogs, cheat sheet,
+splitters, multi-select/marquee, cross-track moves, ripple/slide/slip/roll,
+JKL, in/out points, track headers, track add/remove, status strip, media
+search, offline assets, localStorage persistence, annotakit.
 
 ## D4 — Layout & geometry (1920×1080 target, 1280×800 floor)
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ topbar 56px: project name · undo/redo · | · transport    │  floating panel style
-│           (play pill + timecode) · ……… · Export (green)  │  (radius 20, blur)
+│ topbar 56px: project · undo/redo · transport + TC · Export │
 ├──────────┬──────────────────────────────┬──────────────────┤
-│ media    │ viewer (stage, #000, radius  │ inspector 240px  │
-│ pool     │ 16, letterboxed media card,  │ read-only facts  │
-│ 260px    │  timecode + play overlay)    │ + nudge          │
+│ media    │ viewer (stage, #000, radius   │ inspector 240px  │
+│ pool     │ 16, letterboxed media card)   │ read-only+nudge  │
+│ 260px    │                               │                  │
 ├──────────┴──────────────────────────────┴──────────────────┤
-│ timeline panel (the RH quick-cut component, full width):  │
-│   tools row 42px · ruler 34px · 2 lanes @ 36px + pad 8    │
+│ timeline panel (RH quick-cut): tools 42 · ruler 34 ·       │
+│ 2×36px lanes + 8px gaps/padding ≈ 190px total              │
 └────────────────────────────────────────────────────────────┘
 ```
 
-- App root: `#0d0d0d` + dot grid (radial-gradient dots @ 24px pitch, `#383838`).
-- Panels float with 12px gutters: topbar/media/viewer/inspector/timeline are
-  separate radius-20 `rgba(11,12,13,.88)` + `blur(10px) saturate(.82)` cards.
-- Fixed proportions, no splitters; flex column with fixed heights (topbar 56,
-  timeline block ~200: 42+34+36*2+8*3+16 ≈ 176 + padding, media/inspector
-  fixed widths). At 1280×800 it still works (viewer flexes).
-- **Why fixed:** splitters were a whole subsystem in the sibling (keyboard
-  ladders, persistence, reset). MVP needs none of that cost.
+- App root: `#0d0d0d` + dot grid (radial-gradient dots @ 24px pitch `#383838`).
+- Panels float: **uniform 12px gutters** (one gutter constant — the extraction
+  doc's 18px node-space registered as the alternative if a pixel-comparison
+  pass is wanted), radius 20, `rgba(11,12,13,.88)` + `blur(10px) saturate(.82)`.
+- Fixed proportions, no splitters. Vertical math @1280×800 with 12px outer
+  gutters: 12+56+12+mainRow+12+~190+12 → **mainRow = 506px**; horizontal:
+  viewer = 732px. @1920×1080: viewer 1372 × mainRow 786. Floor verified:
+  even a real-world ~1280×660 effective viewport keeps mainRow ≥ 366px.
+- Timeline block height budget: 42 tools + 34 ruler + (8 pad + 36 + 8 gap +
+  36 + 8 pad = 88... using extraction metrics 42+34+96+16 = 188) ≈ 190px.
 
 ## D5 — Data model (spec-09-shaped, subset)
 
 ```ts
 type TrackKind = 'video' | 'audio';
-interface Track  { id: string; kind: TrackKind; label: string; }        // V1, A1
+interface Track  { id: string; kind: TrackKind; label: string; }   // V1, A1
 interface Media  { id: string; name: string; kind: 'video'|'audio'|'image';
-                   duration: number; hue: number; }                     // hue → gradient thumb
+                   duration: number; hue: number; }                // hue → gradient thumb
 interface Clip   { id: string; trackId: string; mediaId: string;
-                   start: number; duration: number; }                   // seconds, 0.5s grid
+                   start: number; duration: number; }
 interface Doc    { tracks: Track[]; media: Media[]; clips: Clip[]; }
 ```
 
-- Times are **float seconds** on a 0.5s grid (RH labels are whole seconds;
-  the mock's durations are 2.5-6s). No fps/frame quantization in v0.1 —
-  register as deviation from spec-05 (spec uses frames); keep the seam
-  (`timecode.ts` formats MM:SS.d).
-- 2 tracks only, fixed. Clip = the whole media (no sourceStart trimming in
-  v0.1; trimming only changes timeline placement duration ≥ 0.5s).
+- **Grid invariant (binary-exact):** all doc times (starts, durations,
+  media durations) are exact multiples of 0.5s — tests may use strict
+  equality, no epsilon. `ui.playhead` is UNQUANTIZED (free scrub); only
+  committed doc mutations live on the grid (split quantizes, D7).
+- No fps in v0.1 — registered deviation from spec-05 (frames); `timecode.ts`
+  formats `MM:SS.d` (single seam).
+- 2 fixed tracks. Clip = whole media placement; trimming changes the placed
+  duration only, clamped by media duration (D7).
+
+**Seed document (deterministic, on-grid):** V1 = 3 video/image clips
+back-to-back spanning 12.5s (`0→4.5`, `4.5→9`, `9→12.5`); A1 = 1 audio clip
+`1.5→8.5`; 4 media assets with hues. contentEnd = 12.5s.
 
 ## D6 — Store shape (Zustand, one file)
 
 ```
 useMini = {
   doc: { tracks, media, clips },
-  ui:  { playhead, playing, zoomStep (0-4), snapOn, selectedId,
-         toast, history: { past: Doc[], future: Doc[] } },
-  actions: commit(mutator) // wraps doc changes: snapshot→past, clear future
+  ui:  { playhead, playing, zoomStep (0-4), snapOn (default true),
+         selectedId, toast, dragActive,
+         history: { past: Doc[], future: Doc[] } },
+  actions: commit(mutator)  // snapshot→past (max 50), clear future
           moveClip / trimClip / splitClip / deleteClip / addClipFromMedia
           undo / redo / setPlayhead / togglePlay / setZoom / nudge / toast
 }
 ```
 
-- Playback is a `usePlayhead` rAF hook (not in store, writes playhead via
-  action; loop wraps to 0 at content end).
-- History = whole-doc snapshots (docs are ~5 clips; snapshot cost is trivial
-  vs the sibling's structured patches — and correct by construction).
+- **Selection validation:** after every history op (undo/redo/commit),
+  `selectedId ∉ doc.clips` → clear (no dangling ids, undoing a delete is safe).
+- **Interaction lock (audit M2):** while `dragActive` (drag/trim preview),
+  the ONLY honored input is Esc (cancel); keyboard commands + selection
+  changes are suppressed until pointerup/cancel.
+- Playback: `usePlayhead` rAF hook writes playhead via action (wrap law in
+  D3.3); history = whole-doc snapshots (docs are ~5 clips — trivial cost,
+  correct by construction).
 
-## D7 — Geometry & interaction laws (the "real" in mock-real)
+## D7 — Geometry & interaction laws
 
-- `pps` (px per second) = `[24, 48, 96, 192, 384]` × zoomStep (5 steps like
-  RH's slider 1-5). `x = start*pps`, `w = duration*pps`.
-- Ruler labels every `labelStep` seconds where `labelStep` chosen from pps so
-  labels are ≥ 64px apart; minor tick band via repeating-linear-gradient
-  (CSS var step, RH-verbatim).
-- **Drag:** 5px threshold (activation) then move with neighbor clamping:
-  `[prevEnd, nextStart - duration]`; drop lands on 0.5s grid when snap on
-  (default on); 12px magnetic pull toward neighbor edges + playhead.
-- **Trim:** min duration 0.5s; start-trim bounded by prev neighbor; end-trim
-  by next. Commit on pointerup (preview live during drag, one history entry).
-- **Split:** at playhead when inside a selected (or topmost) clip ≥ 1s.
-- **Esc cancels** a live drag (restores pre-drag doc slice).
-- All pointer work via Pointer Events + setPointerCapture (jsdom-stubbable,
-  same as sibling).
+- `pps = [24, 48, 96, 192, 384]` × zoomStep (5 steps, RH slider parity).
+  **Default zoomStep = 1 (48pps)** — at 24pps a min-duration clip is 12px,
+  smaller than its own 14px trim handles (registered constraint). `0` key =
+  step 1.
+- `x = start*pps`, `w = duration*pps`. **One shared horizontal scroll
+  wrapper** contains ruler + lanes + playhead-overlay (tools row fixed above)
+  — deviation from RH's single-scroll anatomy (their ruler/playhead don't
+  scroll; copying that verbatim desyncs under scroll). Registered deviation.
+- Ruler: `labelStep = max(1s, ceil(64/pps))` — labels never sub-second;
+  labels `MM:SS` 10px tabular-nums `rgba(255,255,255,.52)`; minor-tick band
+  repeating-linear-gradient (CSS var step, RH-verbatim).
+- **Scrub:** click/drag on ruler or playhead sets playhead, clamped to
+  `[0, contentEnd]`, unquantized.
+- **Drag (move):** 5px activation threshold; live preview; clamp to
+  `[prevEnd, nextStart − duration]` (track bounds when no neighbor); snap
+  toggle governs BOTH grid quantization (0.5s) AND the 12px magnet (neighbor
+  edges + playhead) — one switch, honest off; commit on pointerup = one
+  history entry; **Esc cancels** (restores pre-drag doc); mid-drag the
+  interaction lock (D6) suppresses everything else.
+- **Trim:** handles 14px; min duration 0.5s; start-trim bounded by prev
+  neighbor AND ≥ start − ... (start decreases) — full law:
+  `start' ∈ [prevEnd, end − 0.5]` and `duration' = end − start'`; end-trim:
+  `end' ∈ [start + 0.5, min(nextStart, start + media.duration)]`. One
+  history entry per completed trim.
+- **Split:** `p = clamp(round(playhead/0.5)*0.5, start+0.5, end−0.5)`; no-op
+  when clip duration < 1s or playhead ∉ [start, end) (half-open). Applies to
+  the selected clip (or topmost clip under playhead when none selected).
+- **Nudge:** ±0.5s, same neighbor clamp as move, one history entry per click.
+- All pointer work via Pointer Events + setPointerCapture (jsdom-stubbable).
 
 ## D8 — Storybook surface (v0.1)
 
-- `.storybook/main.ts` ≈ sibling's minus annotakit; `preview.tsx` with
-  fullscreen layout, 3 viewports (1920/1440/1280), `withStoreReset`
-  decorator (store-snapshot reset, no LS to wipe).
-- Stories (~4 files, ~14 stories):
+- `.storybook/main.ts` ≈ sibling minus annotakit; `preview.tsx`: fullscreen
+  layout, 3 viewports (1920/1440/1280), `withStoreReset` decorator
+  (store-snapshot reset per story; no LS keys to wipe in mini).
+- Stories (4 files, ~16 stories):
   - `Shell.stories.tsx` — full shell (default / empty timeline / after-split
-    store patch / zoomed-in).
-  - `Timeline.stories.tsx` — solo timeline panel (default, zoom steps, clip
-    selected, audio clip, empty), ruler (pps tiers), playhead (at start /
-    mid / dragging).
-  - `Regions.stories.tsx` — media pool, viewer (playing / stopped / empty),
-    inspector (selected / empty / audio clip).
+    patch / zoomed-in).
+  - `Timeline.stories.tsx` — solo panel (default, each zoom tier, clip
+    selected, audio clip, empty, **scrolled** — reviews the scroll model).
+  - `Regions.stories.tsx` — topbar (default / playing / undo-redo-disabled),
+    media pool, viewer (playing/stopped/empty), inspector (video/audio/empty).
   - `Overlays.stories.tsx` — toast states.
 
-## D9 — Test plan (small but law-focused)
+## D9 — Test plan (law-focused)
 
-- `geometry.test.ts` — time↔px, labelStep tiers, clamp/overlap laws, snap.
-- `store.test.ts` — every action's doc effect + history (undo/redo cycles,
-  no-op guard: empty history never pushes), play wrap, split edge cases.
-- `Timeline.test.tsx` — renders clips/lane testids, click-select, drag-move
-  (pointer-event sim) clamps, trim end-handle, split button.
-- `Shell.test.tsx` — smoke: all regions present; media click appends clip;
-  keyboard (Space, Del, ⌘Z) on the real shell.
-- jsdom setup: pointer capture stub + store reset (borrowed pattern).
+- `geometry.test.ts` — time↔px, labelStep tiers (incl. ≥1s cap), move/trim
+  clamp laws (neighbor + min duration + **media duration clamp**), **split
+  quantization + invalid window**, snap (magnet + grid), contentEnd.
+- `store.test.ts` — every action's doc effect; history (undo/redo cycles,
+  no-op guard, max-50); split edge cases; nudge clamp; append routing by
+  media kind (audio→A1, video/image→V1); play wrap + empty-doc pause;
+  **selection-survives-undo**; interaction-lock suppression.
+- `Timeline.test.tsx` — renders clips/lanes (testids), click-select,
+  drag-move clamps (pointer-event sim), trim clamps via end-handle, split
+  button, **Esc-cancel-drag**, **shortcut suppression mid-drag**.
+- `Shell.test.tsx` — smoke: all regions present; media click appends to the
+  correct lane; keyboard (Space/Del/⌘Z) on the real shell.
+- jsdom setup: pointer-capture stub + per-test store reset.
 
 ## D10 — RH-skin fidelity checklist (the "apply this skin" contract)
 
-1. Timeline panel = quick-cut anatomy 1:1 (class-for-class: `qc-timeline`,
-   `qc-ruler`, `qc-playhead`, … prefixed `qc-` to avoid collisions) with the
-   extracted CSS adapted to CSS modules? **No — single `timeline.css` with
-   `qc-` BEM names**, plain CSS file (tokens in `tokens.css`). Tailwind stays
-   for shell layout, the timeline block is hand-CSS for fidelity.
-2. Token set = extraction doc §2 verbatim (renamed `--qc-*` / `--rh-*` only
-   where needed).
-3. Playhead: white + time pill with triangle (hover/drag reveal) — RH-verbatim.
-4. Clip gradient bodies + repeat-x filmstrip + edge fade — RH-verbatim.
+1. Timeline panel = quick-cut anatomy (class-for-class, prefixed `qc-`:
+   `qc-timeline`, `qc-ruler`, `qc-playhead`, …), hand-CSS in a single
+   `timeline.css`; Tailwind for shell layout. Structure deviates only at the
+   shared scroll wrapper (D7).
+2. Token set = extraction §2 **carried verbatim, used selectively** (mention/
+   agent accents intentionally unused; drop-outline deferred with the DnD cut).
+3. Playhead: white `#f2f2f2` 2px line + 8×8 dot handle + hover/drag time
+   pill with triangle pointer — RH-verbatim.
+4. Clip bodies: per-clip grey gradient + repeat-x filmstrip + edge fade +
+   selection = `::after` inset ring 1px `#d0d0d0` (ring, not border);
+   audio clip bars use `--canvas-quick-cut-audio-waveform`.
 5. Chrome: 34px round icon buttons, hover `rgba(255,255,255,.1)`, active
-   `rgba(255,255,255,.065)`+`#e6e6e6`; green `#02dba3` ONLY for the Export
-   CTA and play-while-playing affordance (brand accents used sparingly, as RH
-   does); focus ring `rgba(255,255,255,.62) 2px`.
-6. Drop outline `#38bdf8` + snap guide `#8f8f8f` when dragging media in.
-7. Type: 10px tabular-nums timeline text; 11px panel labels; 12px body; 13px
-   buttons. System UI stack.
+   `rgba(255,255,255,.065)` + `#e6e6e6`; green `#02dba3` ONLY for the Export
+   CTA (+ `--rh-green-hover #03c593` hover); Export is honest (toast, m6);
+   focus ring `rgba(255,255,255,.62) 2px`.
+6. Media-pool cards: `--canvas-quick-cut-item-surface` + control radius;
+   viewer stage `#000` radius 16 (RH preview radius 22 → 16 at mini scale,
+   registered nuance); play overlay = RH's dark translucent pill.
+7. Type: 10px tabular-nums timeline text; 11px panel labels; 12px body;
+   13px buttons. System UI stack.
 
 ## D11 — Repo/infra decisions
 
-- Lives at `ui-mock/shell-mini/` (own package.json; independent install —
-  sibling's lockfile is not shared; document Node floor `^20.19 || >=22.12`).
-- `.gitignore`: node_modules, dist, storybook-static, *.log (NO .env needed —
-  no annotakit; if wired later, track .env per the user's GIT-ISM-DISK law).
-- README: what it is, run/test/storybook commands, IN/OUT feature ledger,
-  deviations register (incl. annotakit skip, white playhead, no-frames, fixed
-  layout, read-only inspector).
-- Commits on `main` (small step commits, push each milestone; gitlab mirror
-  second remote; fetch-before-push per standing rules).
+- Lives at `ui-mock/shell-mini/` (own package.json, independent install;
+  Node floor `^20.19 || >=22.12`).
+- `.gitignore`: node_modules, dist, storybook-static, *.log (no .env needed —
+  no annotakit; if wired later, TRACK .env per the user's GIT-ISM-DISK law).
+- README: run/test/storybook commands, IN/OUT feature ledger, deviations
+  register (annotakit skip, white playhead, no-frames, fixed layout,
+  read-only inspector, DnD cut + deferred drop-outline, loop playback,
+  shared scroll wrapper, uniform 12px gutters, 24pps handle constraint).
+- `data-testid` grammar: `mini-*` (e.g. `mini-timeline`, `mini-clip-*`,
+  `mini-lane-V1`...).
+- Commits on `main`, milestone pushes (gitlab mirror configured; GitHub
+  blocked on missing PAT this session — flagged in HANDOFF).
 
-## Open questions for the audit round
+## Audit round record
 
-- Q1: Is 2 tracks (V1+A1) the right minimal count, or 1 video track only?
-- Q2: Pointer-DnD media→timeline in v0.1 — or is click-to-append enough for
-  the loop? (DnD adds ~80 lines of edge-case handling.)
-- Q3: Timecode display format: `MM:SS.d` (mono, 10px, pill) vs `MM:SS:FF`
-  (needs an fps fiction). Leaning MM:SS.d.
-- Q4: Should the timeline panel be full-width docked or a floating card with
-  18px side margins (RH `--canvas-editor-space-node`)? Leaning floating card
-  (skin-faithful, matches "panels over canvas" feel).
+- v1 → audit (fresh-context subagent, 2026-09-05): verdict SHIP-WITH-FIXES;
+  5 majors (trim/split bounds M1, drag lifecycle lock M2, scroll model M3,
+  DnD hedge M4, test-plan gaps M5), 14 minors (m1-m14), Q1-Q4 answered
+  (keep 2 tracks; cut DnD; MM:SS.d; floating card + 12px gutters).
+- v2 = this document: all majors + minors folded (M1→D7, M2→D6, M3→D7,
+  M4→D3 OUT, M5→D8/D9; m1-m14 → D3/D4/D5/D7/D9/D10/D11).
+- Build order (audit-recommended): scaffold+skin port → pure lib+tests →
+  store → timeline → shell regions → storybook → README/close.
