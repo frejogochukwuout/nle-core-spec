@@ -8,6 +8,18 @@ COMPLETE on origin and its standing items are preserved.
 `.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`
 (R15-UI = #47-51, R16 = #53-58 — renumbered after the collision).
 
+> **Per-env :3000 ownership (user directive, R17):** there are TWO parallel
+> streams with SEPARATE sandboxes. The shell-mini stream's env serves
+> shell-mini (as described below — that's THEIR env). The shell-variants
+> stream's env (chat `4deec8a5`) serves **shell-variants' own Storybook 10.6
+> dev on :3000** via `ui-mock/shell-variants/scripts/sb3000.py` (double-fork
+> daemon, PPID=1) from the persistent runtime copy at
+> `/home/z/my-project/shell-variants` — same Host law
+> (`core.allowedHosts: true`), same restorer pattern
+> (`scripts/boot-restore.sh`, iso `/home/z/my-project/.zscripts/dev.sh`),
+> plus an `annotakit-store` git branch on origin for threads.db git-push
+> durability. "Serve YOURS in this env" — do not cross-stream-serve.
+
 ---
 
 ## What is LIVE right now (the headline)

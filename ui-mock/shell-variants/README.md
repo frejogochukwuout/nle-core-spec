@@ -72,12 +72,23 @@ npm install      # if node_modules is absent
 npm run build    # tsup → dist/server.cjs + manager.mjs + preview.mjs
 ```
 
-**Review serving (R12):** the public review URL is served by
-`storybook dev --port 3000` under a supervisor (`scripts/sb-supervisor.mjs`
-in the platform workspace) that replaces the old `next dev` on :3000 —
-Caddy proxies the platform edge straight to it. `core.allowedHosts: true`
-in `.storybook/main.ts` (the edge rewrites the Host header; storybook 10's
-host validation would 403 otherwise).
+**Review serving (R17):** the public review URL is served by
+`storybook dev --port 3000` via the double-fork daemon
+`scripts/sb3000.py` (fork→setsid→fork→exec; the grandchild reparents to
+PID 1 and survives the sandbox's per-toolcall descendant-tree reap —
+plain `nohup`/`setsid` die). Caddy proxies the platform edge straight to
+:3000; `core.allowedHosts: true` in `.storybook/main.ts` handles the
+edge-rewritten Host header (storybook 10's host validation would 403
+otherwise). The serving host is a runtime copy on the persistent volume
+(`/home/z/my-project/shell-variants`: own node_modules, rebuilt vendor
+dist, `.env` with `ANNOTAKIT_GH_TOKEN`, and an `annotakit-store` git
+branch — threads.db git-push durability). Cold-start resurrection after
+a container recycle: `scripts/boot-restore.sh` (iso at
+`/home/z/my-project/.zscripts/dev.sh`, the harness boot hook) —
+idempotent, restores repo from the `/home/sync` bundle, rebuilds the
+runtime copy if missing, relaunches; kill→restore→public-200 verified
+live. A localhost curl is a FALSE PASS for public liveness — probe
+`/annotakit/api/health` and the real public URL.
 
 83 stories across 10 groups — every shell region, chrome strip, timeline
 leaf, mixer surface, page, overlay, and primitive is surfaced (the R15 wave
