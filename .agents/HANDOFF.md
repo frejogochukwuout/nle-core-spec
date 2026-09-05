@@ -1,49 +1,34 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-05, end of the R15 ASSEMBLY round (pushed through `81bafc2`; gitlab backup = same)
-**Scope of this file:** IMMEDIATE next session ONLY. Long horizon lives in `.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`.
+**Written:** 2026-09-05 ~03:00, end of the R15-UI round (mockup timeline parity + audio overhaul; pushed through `1ae0f58`; the PARALLEL spec-side R15 assembly round is also complete — see its own prior HANDOFF content in git history `b0583a6` if needed)
+**Scope of this file:** IMMEDIATE next session ONLY. Long horizon: `.agents/PLAN.md`. Process meta-lessons: `.agents/SKILL.md` (#47-51 are this round's).
 
 ---
 
-## What this session produced
+## What this session produced (R15-UI)
 
-R15 was the assembly + implementation-path round (user ask: honest evolve-vs-greenfield assessment, the assembly architecture, the execution plan, and a deep pass to push the spec toward final):
+The mockup's UI layer is now on par with the canonical timeline seam + has a professional audio/mixer surface:
 
-- **Decisions 15/16/17 landed in 00-master v6.0** (evolve-in-place; the `nle-app` assembly architecture — fifth repo + pinned-submodule lockset + ENGINE-home projector + two-staircase commands-down/events-up + app-level multi-scene; four-walls-one-roof verification). Each ruling went through: ARCH-R15 v1 → two parallel fresh-context peer reviews (adversarial architecture + practical execution) → v2 folding ALL 7+8 findings → BOTH re-reviews SIGNED OFF → v2.1. Full record: `audits/ARCH-R15-assembly-and-path.md` + `audits/REVIEW-R15-ARCH.md` + `audits/REVIEW-R15-EXEC.md`.
-- **spec 14 REWRITTEN as the assembly plan** (week −1 pre-flight + A0-A7b phases with exit gates + per-domain gap registers citing module pins + P→A traceability; the honest calendar: A7 ≈22-27wk solo / 13-16 two-dev, DEMO (A3) ≈11-13/7-8; P0-P6 bodies retired to git history).
-- **spec 15 gained the routing-disposition table (§4.1A, 78/78 members — every union member's home or typed NOT_IMPLEMENTED), §4.1B NOT_IMPLEMENTED code (registered in §6.3), §9.5 event-name mapping register, §10.1 versioning-at-bus; §13.15 refreshed to the 24-command reality** (+ N5 loop invariant, the C7 rename list complete).
-- **The full candidate amendment set processed:** A1-A6 + B1-B4 + N1-N15 landed across 09/05/16/18/20 (with cross-spec fixes: 15's marker-note → per-scene, 181 bindings, R→ripple); **19/17 re-baselined to R15 SHAs** (engine 274+265+318 @f526e67, OT 423/423 @0412e41, WDC 721/721 pure @374711c, mock 596/596 @d42693e) + 17's new roof-suite section; README R15.
-- **INTEGRATION-REVIEW-R15:** 0 BLOCKING/6 MAJOR/7 MINOR → ALL fixed (`6315cd6`); verdict CLEARED. **`scripts/battery_r15.py` — 47/47 green** (replaces battery_r9; the R9 checks retired with the canon they checked).
-- **Four scouts, gates re-run in-sandbox:** SCOUT-R15-A/B/C/D in `audits/` (the current verified facts on all four repos — also the best onboarding pack for anyone joining).
+- **Research artifacts** (`.agents/research-r15/`): opencut-timeline seam contract (43-point parity extraction), web-daw-ui pattern reference (knob breakage diagnosis), mockup current-state audit (18 defects)
+- **Design docs** (`.agents/design/`): R15-timeline-parity + R15-audio-overhaul, v2 FINAL after adversarial C1/C2 critique (the zero-anchor inversion + antiphase indicator were caught pre-implementation)
+- **Timeline parity (T1-T9):** canonical zoom (50×zoom [5,5000], ×1.7, dynamic fit-min spec-05 §5.2, two-regime playhead-anchored zoom via lib/zoomController + rAF-coalesced wheel), CapCut ruler tiers + virtualization (lib/rulerTiers), full gesture discipline (5px threshold, drag-back-cancel, buttons-mask, right-click routing), 2D cross-track drag with preferIndex resolution + half-open overlap rejection + magnetic zero-anchor + mixed-group rejection (lib/timelinePlacement), ripple interval-diff (lib/ripple), trim laws 1-frame + neighbor/source bounds (lib/trimLaws) + all 5 tool gestures live (roll/ripple/slip/slide/stretch), snap upgrade + indicator, clip virtualization, follow-scroll
+- **Audio overhaul (A0-A5):** tokens in all 3 skins, SVG Knob (270° arc, above-center indicator — the broken pendulum is dead), stereo meterEngine (shared rAF ticker, duckAmount + effectiveMuted, ballistics in dB), dB-linear StripMeter (green/amber@−18/red@−6 + segments + peak + clip), fader scale column, strip chrome + role base bars, TrackHeader micro-meters (v2.2 §3.2 closed), Storybook 83 stories with deterministic levels
+- **Verification:** 596→**788 tests** (+192), tsc clean, storybook build green; review rounds V1 (4 verified bugs) → F1 fixes → V2 **SHIP**; PR #1 summary comment posted; spec registrations §G (spec-16 §3.8 ×1.7; spec-18 §5A two-regime, 18↔05 conflict resolved)
+- **Preview runtime:** static build re-synced (`/home/z/my-project/public/mockup`), runtime copy synced, **supervisor crash fixed** (numeric-fd write), **NEW `src/instrumentation.ts` auto-boot chain** (platform next-server start → supervisor → storybook :3000 → verified 200) — opening the preview URL now reliably brings Storybook up
 
-## Next session's task: USER REACTION + ASSEMBLY KICKOFF DECISION
+## Next session's task
 
-1. **The user's gate decision:** green-light `nle-app` creation (then **week −1 pre-flight** is the first work item — the 12-item list in REVIEW-R15-EXEC §7, with the TS one-compiler spike + Vite HMR spike as GATES; the dev-loop config to adopt verbatim is REVIEW-R15-EXEC §2.2) — or further seal-polish rounds. The parallel session's `.agents/design/` docs (R15 W0, `ac784f7`: timeline-parity + audio-overhaul design v2 FINALs) are the MOCK-side iteration track and remain live.
-2. **Watch PR #1 + issue #2** (the mock's review surfaces; only 2 P3 inline comments remain; the C-ledger keeps registering).
-3. **Known forward obligations recorded in-canon:** the per-row pin-SHA battery clauses land at A2; the union's Bookmark block retires at the next union-version bump; 10 §1665's FCPXML marker wording gets its A6-consistent pass; engine cosmetic folds (layout.tsx metadata, ~280→265) ride the next engine commit; OT submodule pin bump (3420b5f→0412e41, low-risk, carries W9 fixes — recommended by SCOUT-B §9).
+1. **CodeRabbit re-review harvest:** the 14-commit range on PR #1 will have fresh findings (it re-reviews on push) — triage to P3-only as usual, fix real ones, post the audit table
+2. **Deferred P3s (V2):** duplicateAndMove raw-API misuse edges (unreachable from the gesture seam); snap-ON head-drag raw fallthrough
+3. **G.4 deferral ledger** (engine-team questions): roll B-source-tail bound rate≠1, preview batch-atomicity vs raw per-move drops, seek-click 500ms gate deviation
+4. **Cross-round integration:** the spec-side R15 landed the assembly plan (spec 14) + 17 re-baselined all four repos — the mock's new libs (timelinePlacement/trimLaws/ripple/pixel) are the UI-side projection of OT's engine; when the assembly A-phases start wiring the REAL engine, these libs become the adapter seam to verify against OT's 24-command headless API
+5. **Runtime check on session start:** verify :3000 storybook via the preview URL (instrumentation chain), and `git fetch` FIRST — the spec-side session works in parallel
 
-## Repo state at handoff
+## Restoration recipe (fresh sandbox)
 
-| Repo | Commit | State |
-|---|---|---|
-| nle-core-spec (canon) | `81bafc2` | 21 specs (00 v6.0 with 17 decisions; 14 = assembly plan; 15 w/ routing table); battery_r15 47/47; ui-mock @`d42693e` (596/596) untouched this round |
-| nle-engine | `f526e67` | sealed (274+265+318, ledger closed) — NOT touched this round |
-| opencut-timeline | `0412e41` | sealed (423/423, W9 terminal) — NOT touched |
-| web-daw-core | `374711c` | sealed (721/721, pure) — NOT touched |
-
-**Parallel sessions are ACTIVE on this repo** (the user works in parallel: `ac784f7`, `0403225` landed mid-round, both rebased cleanly). ALWAYS `git fetch` before push; `git pull --rebase` on rejection; NEVER force push.
-
-## Mechanics to reuse
-
-- The battery: `python3 scripts/battery_r15.py` after every fix round (47 checks; recalibrate stale checks; the live-hit discipline exempts annotated supersessions — check BOTH directions' context).
-- Peer-review pattern that worked: write the decision doc → 2 parallel fresh reviewers (different lenses) → fold ALL findings → resume both for re-check → sign-off gate → land. ~2 rounds, ~30-40 min, caught 1 CRITICAL + 10 MAJORs this round.
-- Sub-agent fleet discipline: disjoint file ownership per agent (AM1: 16+18 / AM2: 09+05+20 / AM3: 19+17) — zero clobbering; the integration review AFTER is non-negotiable (it found 6 propagation Majors the agents' own QA missed).
-- GitLab backup remote is configured: `git push gitlab main` (namespace `ansgareutychisO`; WAF retries probabilistically).
-- The PAT for module-repo access: lives in the runtime .env / remote URLs only (NEVER in committed files — GitHub's secret scanner blocks pushes; recover from the session chat if lost).
-
-## Standing cautions
-
-- The spec set is CONTRACT + GAP + ACCEPTANCE (D14) — now with the assembly plan (D15-17). The mock does NOT amend specs — deviations live in SPEC-REVISION-CANDIDATES.md (C-series = the live ledger).
-- Never edit web-daw-core's `copy`-class files (file-class law).
-- Push at every micro milestone; `git fetch` before push; never force push.
-- The PAT lives in runtime .env files / remote URLs — NEVER commit it.
+1. `git clone https://<PAT>@github.com/frejogochukwuout/nle-core-spec` → `cd nle-core-spec && npm ci` in `ui-mock/shell-variants` (node_modules is NOT in git)
+2. Baseline: `npx vitest run` (expect **788/788**) + `npx tsc --noEmit` (clean)
+3. Add the gitlab backup remote: `git remote add gitlab https://ansgareutychisO:<GLPAT>@gitlab.com/ansgareutychisO/nle-core-spec.git` (WAF blocks ~1/3 of pushes — retry loop)
+4. Reference repos (PAT-accessible, private): `git clone https://<PAT>@github.com/bearachprema/opencut-timeline` + `zmmac1/web-daw-ui` + `bearachprema/web-daw-core`
+5. Runtime: rsync repo `ui-mock/shell-variants/{src,.storybook,package.json,...}` → `/home/z/my-project/shell-variants/` (node_modules already there), `npx vite build` → copy `dist/*` + `public/*` → `/home/z/my-project/public/mockup/`; the supervisor (`scripts/sb-supervisor.mjs`) + `src/instrumentation.ts` in my-project boot storybook on :3000 when the platform server starts
+6. Read `.agents/PLAN.md` (R15-UI entry) + this file + `SKILL.md` #47-51 + `/home/z/my-project/worklog.md` tail

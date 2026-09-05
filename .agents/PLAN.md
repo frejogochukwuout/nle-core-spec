@@ -97,3 +97,34 @@ Priority order (R9-re-scoped):
 - Mechanical battery after every fix round (`scripts/battery_r9.py` — 48 checks; recalibrate stale checks; exempt-window logic must look BEFORE AND AFTER each hit)
 - A facet with no coverage-matrix row is a spec bug (spec 17 §14.4 step 0)
 - Domain cores converge toward the spec's CONTRACTS, never the reverse (Decisions 10-12); the spec never duplicates what the code can be cited for (00 §2.5.2)
+
+## R15-UI round (parallel to the R15 assembly round) — timeline parity + audio overhaul — COMPLETE
+
+**User ask:** bridge the mockup's UI layer to the canonical timeline seam
+(bearachprema/opencut-timeline — match exactly, not invent) + heavy audio/DAW
+pass borrowing zmmac1/web-daw-ui (fix the broken knob/meter) + keep Storybook
+in sync + iterative sub-agent design/code review.
+
+**Landed (14 commits, 596→788 tests, tsc clean, 83-story build green):**
+- Research: 3-agent extraction — opencut seam contract (43 points), DAW
+  pattern reference, mockup defect audit (18) → `.agents/research-r15/`
+- Design: `.agents/design/R15-{timeline-parity,audio-overhaul}.md` v2 FINAL
+  after adversarial C1/C2 critique rounds (C1's zero-anchor inversion + C2's
+  antiphase knob both caught pre-implementation)
+- Timeline T1–T9: pixel/zoomController/rulerTiers/timelinePlacement/trimLaws/
+  ripple libs; two-regime anchored zoom; CapCut ruler + virtualization; full
+  gesture discipline; 2D cross-track drag (preferIndex, overlap rejection,
+  zero-anchor, mixed-group reject); ripple interval-diff; all 5 tool
+  gestures; snap upgrade + indicator; clip virtualization
+- Audio A0–A5: token sheet, SVG knob (antiphase fixed), stereo meterEngine,
+  dB-linear meters, fader scale, strip chrome, header micro-meters (v2.2
+  §3.2 closed), Storybook deterministic levels
+- Reviews: V1 (4 verified bugs) → F1 fixes → V2 SHIP → P3 closers
+- Runtime: supervisor crash fixed (numeric-fd write), instrumentation.ts
+  auto-boot chain (next-server → supervisor → :3000), static + runtime synced
+- Registrations: SPEC-REVISION-CANDIDATES §G (spec-16 §3.8 ×1.7, spec-18 §5A
+  two-regime + 18↔05 conflict, alignment record, deferral ledger)
+
+**Standing for the next round:** CodeRabbit re-review of the 14-commit range
+on PR #1; V2's 2 deferred P3s (duplicateAndMove raw-API edges, snap-ON
+head-drag fallthrough); G.4 deferral ledger items are engine-team questions.
