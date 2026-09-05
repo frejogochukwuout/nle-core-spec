@@ -21,8 +21,9 @@
 
    Module bus: toolbar buttons/slider and keyboard shortcuts route through
    `zoomBus.request*` so EVERY zoom path gets the capture (canonical routes
-   all zoom through the controller). No active Timeline mount (stories,
-   isolated toolbars) falls back to direct store writes. */
+   all zoom through the controller). The controller is a module singleton —
+   no live Timeline mount just means getScroller() returns null (pre-capture
+   0); there is no direct-store fallback path. */
 
 import { useUi } from '../state/useUiStore';
 import {
