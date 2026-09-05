@@ -39,6 +39,15 @@ import { getWaveform } from '../../lib/waveform';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { useConfirm, type ConfirmFn } from '../shell/ConfirmDialog';
 
+/* R15-A5: pointer capture is BEST-EFFORT — synthetic / inactive pointer ids
+   (Storybook play functions, browser automation) throw NotFoundError on
+   setPointerCapture; the drag grammar works without capture (moves route to
+   the element under the pointer, and the preview follows it — the same guard
+   the R15-A1 knob carries). jsdom's setup stub is a no-op either way. */
+const capturePointer = (el: HTMLElement, pointerId: number) => {
+  try { el.setPointerCapture(pointerId); } catch { /* inactive pointer id */ }
+};
+
 interface ClipProps {
   el: ElementJSON;
   track: TrackJSON;
@@ -505,7 +514,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
     (e.currentTarget as HTMLElement).focus(); // roving focus — Shift+F10 host (§4.9)
     dragCancelled.current = false;
     lastGestureWasDrag.current = false; // fresh gesture — canonical reset-on-pointerdown
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    capturePointer(e.currentTarget as HTMLElement, e.pointerId);
     /* R15 T4: body gestures route by tool — slip/slide own the body drag in
        their tools; every other tool keeps the T3 2D move. */
     const mode: DragMode = tool === 'slip' ? 'slip' : tool === 'slide' ? 'slide' : 'move';
@@ -988,7 +997,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
               if (!mode) return; // e.g. roll with no adjacent neighbor — inert
               dragCancelled.current = false;
               lastGestureWasDrag.current = false; // fresh gesture
-              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+              capturePointer(e.currentTarget as HTMLElement, e.pointerId);
               setDrag({ phase: 'pending', mode, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: false, snapAt: null });
             }}
             onPointerMove={(e) => { e.stopPropagation(); onPointerMove(e); }}
@@ -1005,7 +1014,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
               if (!mode) return;
               dragCancelled.current = false;
               lastGestureWasDrag.current = false; // fresh gesture
-              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+              capturePointer(e.currentTarget as HTMLElement, e.pointerId);
               setDrag({ phase: 'pending', mode, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime + el.duration, alt: false, snapAt: null });
             }}
             onPointerMove={(e) => { e.stopPropagation(); onPointerMove(e); }}

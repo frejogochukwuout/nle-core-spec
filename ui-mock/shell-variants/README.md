@@ -79,28 +79,30 @@ Caddy proxies the platform edge straight to it. `core.allowedHosts: true`
 in `.storybook/main.ts` (the edge rewrites the Host header; storybook 10's
 host validation would 403 otherwise).
 
-71 stories across 10 groups — every shell region, chrome strip, timeline
-leaf, mixer surface, page, overlay, and primitive is surfaced:
+83 stories across 10 groups — every shell region, chrome strip, timeline
+leaf, mixer surface, page, overlay, and primitive is surfaced (the R15 wave
+added the deterministic meter/knob/tier/zoom/snap-indicator review frames):
 
 | Story file | What it covers |
 |---|---|
 | `AppShell.stories.tsx` | Full shell on each page: Edit / Audio Focus / Color / Deliver |
 | `Variants.stories.tsx` | Presets A / B / C as complete shells — the fixed, screenshot-friendly A/B/C comparison (per-dimension exploration stays in the app's ctrl+\` overlay) |
-| `Chrome.stories.tsx` | Toolbar2 ×3, AppDock ×4, TimelineToolbar ×4, SceneTabs ×2, TrackHeader columns ×2 (incl. audio-focus minifaders), Effects-panel-on full shell |
-| `Mixer.stories.tsx` | Mixer dock (full side-by-side + bridge rail + collapsed), ChannelStrip solo + compact, Channel editor, Sound library |
-| `Timeline.stories.tsx` | Timeline default + blocks clip-style, clip anatomy states (selected / offline / fades / locked / badges), ruler + markers |
+| `Chrome.stories.tsx` | Toolbar2 ×3, AppDock ×4, TimelineToolbar ×7 (incl. R15 zoom-cluster dynamic-min/max + live master micro-meter), SceneTabs ×2, TrackHeader columns ×3 (audio-focus minifaders + R15-A4 audio micro-meters), Effects-panel-on full shell |
+| `Mixer.stories.tsx` | Mixer dock (full side-by-side + bridge rail + collapsed), the R15 deterministic-levels variants (full dock / bridge / solo strip — A2 clip, master peak-held via `__setLevel`), ChannelStrip solo + compact, Channel editor, Sound library |
+| `Timeline.stories.tsx` | Timeline default + blocks clip-style, clip anatomy states (selected / offline / fades / locked / badges), ruler + markers, R15-T1 CapCut ruler tiers (46/120/240 px/s), R15-T5 snap indicator (mid-drag play step) |
 | `Shell.stories.tsx` (title "Shell/Components") | Media pool grid/list, Viewer, Inspector ×4 tabs, status-strip autosave states, toast region, open context menu, cheat sheet |
 | `Overlays.stories.tsx` | Confirm dialogs (scene delete / multi-delete), ErrorBoundary crash fallback, Variant explorer open, toast error/persist + max-3 stack |
 | `Pages.stories.tsx` | Color page, Deliver page (+ preset pick), Channel editor empty state |
 | `Regions.stories.tsx` | Viewer ×4 (program / overlays-hidden / safe-guides / zoom), Media pool offline + no-results, Inspector empty + multi-select mixed |
-| `Primitives.stories.tsx` | Fader (fixed + fill-height), PanKnob, StripMeter (static / playing / duck-under) |
+| `Primitives.stories.tsx` | Fader (fixed / fill-height / R15 scale column + unity notch + master cap), the R15-A1 generic Knob dial states (min / detent zone / center / max), PanKnob, StripMeter (static / playing / R15 deterministic levels via the engine's `__setLevel`) |
 
 Review-workflow mapping: open the sidebar tree side-by-side, screenshot at the
 default 1920×1080 viewport (1440×900 and the 1280×800 floor are in the viewport
 toolbar), and attach story links (`?path=/story/…`) to review notes. Every story
 renders in a fresh state — a global decorator snapshots the Zustand store at
 module load and re-hydrates it per story (plus wipes the app's
-localStorage/hash persistence), so interactions never leak between stories.
+localStorage/hash persistence and resets the shared metering engine, R15),
+so interactions never leak between stories.
 Install note: the builder peers can lag this app's Vite pin — `.npmrc` keeps
 `legacy-peer-deps=true` (verified on SB 10.6 + Vite 8: boots clean, all
 stories render, `tsc --noEmit` passes).

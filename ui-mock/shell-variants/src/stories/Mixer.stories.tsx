@@ -2,7 +2,12 @@
    the 3-state side dock beside the multi-track lanes, a solo ChannelStrip,
    the Audio-focus inspector swap (ChannelEditor), and the SoundLibrary pool
    swap. All store-driven; the default mock mixer covers scene 1's audio
-   tracks (A1 dialogue / A2 bgm with duck-under). */
+   tracks (A1 dialogue / A2 bgm with duck-under).
+   R15-A5: the *Levels stories pin the A2/A3/A4 surfaces deterministically —
+   meter levels injected through the shared engine's __setLevel debug hook
+   (fixed values, holds re-armed; see decorators.MeterLevels), so the base
+   bars / readout rows / peak lines / clip state are screenshottable without
+   the seeded program walk. */
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MixerDock } from '../components/mixer/MixerDock';
@@ -11,7 +16,7 @@ import { ChannelEditor } from '../components/mixer/ChannelEditor';
 import { SoundLibrary } from '../components/mixer/SoundLibrary';
 import { useUi } from '../state/useUiStore';
 import type { TrackJSON } from '../lib/mockData';
-import { StoreBoot, PanelBox, type UiPatch } from './decorators';
+import { StoreBoot, PanelBox, MeterLevels, type UiPatch } from './decorators';
 
 const meta: Meta = {
   title: 'Mixer',
@@ -51,6 +56,68 @@ export const BridgeRail: StoryObj = {
   render: () => <MixerDockStory patch={{ mixerState: 'bridge' }} />,
 };
 
+/* ---- R15 A3/A4 chrome + deterministic engine levels ----------------------- */
+
+/* Fixed levels injected through the shared engine's __setLevel debug hook
+   (see decorators.MeterLevels): A1 dialogue at −12 (green/amber zone), A2 bgm
+   CLIPPING at 0 dBFS (red + data-state=clip on its strip meter), master
+   peak-held (fill −6 / peak line −1). The peak pair = two entries on one key
+   (the first sets the held peak, the second the fill). Aux returns stay
+   honest: nothing feeds the buses — no-source chip, engine silent. */
+const DOCK_LEVELS: { key: string; db: number; channel?: 'l' | 'r' }[] = [
+  { key: 'tr-audio-1', db: -12 },
+  { key: 'tr-audio-2', db: 0 },
+  { key: 'master', db: -1 },
+  { key: 'master', db: -6 },
+];
+
+/** Full dock with the R15 A3/A4 strip chrome — role-color h-1 base bars
+ *  (dialogue/bgm from --mk-role-*), section hairlines, alternating bg
+ *  parity, A3 fader scale columns + unity notch, readout rows (fader dB +
+ *  live engine peak, mono tabular), 20×18 M/S/L — plus deterministic meter
+ *  levels so the review frame pins every state without randomness: A1
+ *  normal, A2 clip, master peak-held. Aux strips show the honest no-source
+ *  chip. */
+export const FullDockLevels: StoryObj = {
+  name: 'Mixer — Full dock, deterministic levels (R15 chrome)',
+  parameters: { layout: 'fullscreen' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ mixerState: 'full' }} />
+      <MeterLevels levels={DOCK_LEVELS} />
+      <div className="flex h-screen bg-app">
+        <div className="mono flex min-w-0 flex-1 items-center justify-center px-8 text-center text-[11px] text-tmuted">
+          ( multi-track lanes sit here in the real shell — mixer dock preview only ·
+          A1 −12 normal / A2 0 dBFS clip / master −6 peak −1 / aux no-source )
+        </div>
+        <MixerDock />
+      </div>
+    </>
+  ),
+};
+
+/** The 44px bridge rail with the same deterministic levels — the glance
+ *  surface: per-track stereo meters (A1 normal, A2 clip) + the master
+ *  cluster meter peak-held. One engine key per surface: bridge, strips and
+ *  the toolbar micro-meter can never disagree (R15-A2 unification). */
+export const BridgeRailLevels: StoryObj = {
+  name: 'Mixer — Bridge rail, deterministic levels',
+  parameters: { layout: 'fullscreen' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ mixerState: 'bridge' }} />
+      <MeterLevels levels={DOCK_LEVELS} />
+      <div className="flex h-screen bg-app">
+        <div className="mono flex min-w-0 flex-1 items-center justify-center px-8 text-center text-[11px] text-tmuted">
+          ( multi-track lanes sit here in the real shell — bridge rail preview only ·
+          A1 −12 normal / A2 0 dBFS clip / master −6 peak −1 )
+        </div>
+        <MixerDock />
+      </div>
+    </>
+  ),
+};
+
 /** Collapse path: state = collapsed renders nothing (bounds-check story). */
 export const Collapsed: StoryObj = {
   name: 'Mixer — Collapsed (renders nothing)',
@@ -84,6 +151,27 @@ export const ChannelStripSolo: StoryObj = {
   render: () => (
     <>
       <StoreBoot patch={{ stripFocus: 'tr-audio-2' }} />
+      <StripSolo />
+    </>
+  ),
+};
+
+/* The solo strip with live levels: A2 bgm at −18 with the duck-under row
+   visible — the readout row's live peak (engine view) + the strip meter run
+   at the injected level while the ducking row shows the v2.2 §5 sidechain
+   mock (amount 0.6 under A1). */
+const SOLO_LEVELS: { key: string; db: number }[] = [{ key: 'tr-audio-2', db: -18 }];
+
+/** ChannelStrip solo + deterministic level (−18) + the A4 chrome: bgm role
+ *  base bar, readout row (fader dB −12.0 + live peak −18.0), duck-under row,
+ *  scale column + unity notch on the fader, 24px dial. */
+export const ChannelStripSoloLevel: StoryObj = {
+  name: 'Mixer — ChannelStrip solo, deterministic level',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ stripFocus: 'tr-audio-2' }} />
+      <MeterLevels levels={SOLO_LEVELS} />
       <StripSolo />
     </>
   ),

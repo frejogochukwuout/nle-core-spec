@@ -23,7 +23,9 @@
    clone through withHistory() before mutating, so the captured scenes array
    stays pristine; the only deep-shared refs are nested arrays (element.effects,
    transitionOut) — stories here never mutate those programmatically, and
-   interactions that do (effect toggles) are display-only for review. */
+   interactions that do (effect toggles) are display-only for review.
+   R15-A5: the story switch ALSO resets the shared metering engine (module
+   singleton, see meterEngine.ts) — same containment contract as setup.ts. */
 
 import { useLayoutEffect, type ReactNode } from 'react';
 import type { Decorator } from '@storybook/react-vite';
@@ -31,6 +33,7 @@ import { VariantProvider, useVariant } from '../components/debug/VariantProvider
 import { ConfirmProvider } from '../components/shell/ConfirmDialog';
 import { DEFAULT_VARIANT, type Variant } from '../lib/variants';
 import { useUi } from '../state/useUiStore';
+import { __reset as resetMeterEngine, __setLevel } from '../lib/meterEngine';
 import { ErrorBoundary } from '../components/shell/ErrorBoundary';
 import { DebugOverlay } from '../components/debug/DebugOverlay';
 import { CheatSheet } from '../components/shell/CheatSheet';
@@ -53,6 +56,11 @@ export const withStoreReset: Decorator = (Story, context) => {
   if (lastStoryId !== context.id) {
     lastStoryId = context.id;
     useUi.setState(pristine, true); // replace semantics — full re-hydration
+    // R15-A2 engine containment (mirrors setup.ts afterEach): meterEngine is
+    // module-level too, and __setLevel overrides on store-backed keys
+    // (track ids / master) would otherwise leak into every later story —
+    // reset to a silent, stopped, key-less engine before the tree mounts.
+    resetMeterEngine();
     for (const key of LS_KEYS) {
       try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
     }
@@ -100,6 +108,30 @@ export function VariantBoot({ variant }: { variant: Variant }) {
   useLayoutEffect(() => {
     setVariant(variant);
   }, [setVariant, variant]);
+  return null;
+}
+
+/** R15-A5 deterministic meter levels for a story: applies the engine's
+ *  `__setLevel` debug hook (bypasses the seeded program sim + the playing
+ *  gate, respects effectiveMuted, applies synchronously) on mount and
+ *  re-arms every 900 ms so the transient hold states stay reviewable — the
+ *  peak line holds 1 s and the clip latch 2 s, then decays; fixed values,
+ *  no randomness. The `levels` array is applied IN ORDER each arm: two
+ *  entries on one key are the peak idiom (set the high value, then the lower
+ *  display value — the first sets the held peak, the second the fill).
+ *  Layout-effect sibling ordering: render <StoreBoot /> BEFORE this so the
+ *  engine's world read (muted/solo) sees the patched store. Pass a
+ *  module-level constant so the effect never re-fires. */
+export function MeterLevels({ levels }: { levels: { key: string; db: number; channel?: 'l' | 'r' }[] }) {
+  useLayoutEffect(() => {
+    const apply = () => {
+      for (const l of levels) __setLevel(l.key, l.db, l.channel);
+    };
+    apply();
+    const t = window.setInterval(apply, 900);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design (constant levels)
+  }, [levels]);
   return null;
 }
 

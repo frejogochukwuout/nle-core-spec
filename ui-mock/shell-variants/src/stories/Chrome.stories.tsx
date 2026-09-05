@@ -15,7 +15,7 @@ import { SceneTabs } from '../components/timeline/SceneTabs';
 import { TrackHeader } from '../components/timeline/TrackHeader';
 import { trackHeights } from '../state/useUiStore';
 import { project, type TrackJSON } from '../lib/mockData';
-import { FullShell, StoreBoot, type UiPatch } from './decorators';
+import { FullShell, StoreBoot, MeterLevels, type UiPatch } from './decorators';
 
 const meta: Meta = {
   title: 'Chrome',
@@ -161,6 +161,54 @@ export const TimelineToolbarMasterMuted: StoryObj = {
   render: () => <TlToolbarStory patch={{ masterMuted: true }} />,
 };
 
+/* ---- R15 T1: the zoom cluster against the DYNAMIC minimum (spec-05 §5.2) ---
+   The toolbar story pins the two ends of the slider's range — the zoom math
+   lives in lib/pixel.ts: slider = log(zoom/min)/log(100/min) against the
+   dynamic fit-min (content = 25% of the viewport at slider 0), ± steps ×1.7,
+   domain 5–5000 px/s. The dynamic min the REAL shell computes at a 1760px
+   lane viewport / 30 s scene is 1760·0.25/30 ≈ 14.67 px/s — pinned here via
+   StoreBoot (the toolbar has no lanes to measure). The two-regime anchor
+   (slider ≥ 0.15 = playhead-anchored, below = no adjustment) is behavior,
+   not visuals — the Timeline/snap-indicator stories exercise it live. */
+
+/** Slider pegged at 0 ⇔ the dynamic fit-min: the readout shows ~15 px/s, the
+ *  whole 30 s timeline occupies 25% of the lane viewport with headroom. Fit
+ *  (⌘\) lands here; ± / wheel / slider all clamp at this floor. */
+export const TimelineToolbarZoomFitMin: StoryObj = {
+  name: 'Timeline toolbar — zoom cluster at dynamic min (fit)',
+  render: () => <TlToolbarStory patch={{ pxPerSec: 14.67, zoomMinPps: 14.67 }} />,
+};
+
+/** Slider at 100 ⇔ 5000 px/s (100× zoom): frame-level zoom — the readout caps
+ *  at 5000 px/s; at this scale the ruler shows 15-frame labels (see the
+ *  Timeline/Ruler tiers story for the label grammar). */
+export const TimelineToolbarZoomMax: StoryObj = {
+  name: 'Timeline toolbar — zoom cluster at max (5000 px/s)',
+  render: () => <TlToolbarStory patch={{ pxPerSec: 5000, zoomMinPps: 14.67 }} />,
+};
+
+/* The micro-meter's deterministic level for the toolbar stories (R15-A5):
+   the shared engine's ONE 'master' key — the same snapshot the MixerDock's
+   master strip and the bridge rail read. */
+const TOOLBAR_MASTER_LEVEL: { key: string; db: number }[] = [{ key: 'master', db: -8 }];
+
+/** The zoom cluster mid-range (46 px/s store default ≈ slider 53%) with the
+ *  master micro-meter LIVE at a deterministic level (−8 dB via the engine's
+ *  __setLevel hook): 4 coarse chunks, no 3px LED segments, same palette —
+ *  what the toolbar looks like while the transport plays. */
+export const TimelineToolbarMeterLive: StoryObj = {
+  name: 'Timeline toolbar — live master micro-meter',
+  render: () => (
+    <>
+      <StoreBoot />
+      <MeterLevels levels={TOOLBAR_MASTER_LEVEL} />
+      <Bar label="timeline toolbar — zoom cluster mid-range · master micro-meter live at −8 dB (engine __setLevel)">
+        <TimelineToolbar />
+      </Bar>
+    </>
+  ),
+};
+
 /* ---- scene tabs (spec 18 §4.6) ----------------------------------------------- */
 
 /** Default tab strip: two scenes, sc-1 active with its seeded dirty dot, the
@@ -270,6 +318,44 @@ export const TrackHeadersAudioFocus: StoryObj = {
         laneHeight={boostedH}
         label="track headers — audio-focus lane boost (main 40 / audio 96 / overlay 28)"
       />
+    </>
+  ),
+};
+
+/* ---- R15 A4: the audio track-header micro-meter (v2.2 §3.2 closure) -------
+   4px view-only vertical level display on the right edge of every TALL audio
+   header (≥48px), fed by the shared engine's track key (the same snapshot the
+   channel strips + bridge rail read). This story uses the REAL sc-1 tracks —
+   A1 dialogue / A2 bgm — with deterministic __setLevel levels: A1 at −12
+   (green/amber), A2 clipped at 0 dBFS (latched red). V1/T1 headers render no
+   meter (kind-gated); the compact-lane hiding + effectiveMute dim are covered
+   by component tests. */
+const HEADER_MICRO_LEVELS: { key: string; db: number }[] = [
+  { key: 'tr-audio-1', db: -12 },
+  { key: 'tr-audio-2', db: 0 },
+];
+
+/** Real sc-1 header column (filmstrip heights: T1 40 / V1 80 / A1, A2 60) with
+ *  live micro-meters: A1's 4px column at −12 dB (fill ~80%), A2 latched red at
+ *  0 dBFS, both fed by the same engine keys as their mixer strips. The A2
+ *  header doubles as the locked-track state (stripes + L pressed). */
+export const TrackHeadersMicroMeters: StoryObj = {
+  name: 'Track headers — audio micro-meters (deterministic levels)',
+  render: () => (
+    <>
+      <StoreBoot />
+      <MeterLevels levels={HEADER_MICRO_LEVELS} />
+      <div className="flex flex-col gap-1.5">
+        <div className="mono text-[11px] text-tmuted">
+          track headers — R15-A4 audio micro-meters · A1 −12 dB · A2 0 dBFS clip (engine __setLevel)
+        </div>
+        <div className="flex h-[400px] w-[160px] flex-col overflow-hidden border border-hairline bg-raised">
+          {project.scenes[0]!.tracks.map((t) => (
+            <TrackHeader key={t.id} track={t} sceneId="sc-1" height={filmstripH(t.kind)} />
+          ))}
+          <div className="min-h-0 flex-1 bg-raised" aria-hidden="true" />
+        </div>
+      </div>
     </>
   ),
 };

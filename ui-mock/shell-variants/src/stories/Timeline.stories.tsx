@@ -1,7 +1,9 @@
 /* Timeline stories — spec 05/18 surfaces: the full timeline block, the
-   blocks clip-style dimension, clip anatomy states rendered solo, and the
-   ruler with markers. Timeline itself is fully store-driven (needs
-   VariantProvider only — supplied by the global decorator). */
+   blocks clip-style dimension, clip anatomy states rendered solo, the
+   ruler with markers, the R15-T1 CapCut ruler tiers, and the R15-T5 snap
+   indicator driven by a real (programmatic) clip drag. Timeline itself is
+   fully store-driven (needs VariantProvider only — supplied by the global
+   decorator). */
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Timeline } from '../components/timeline/Timeline';
@@ -149,6 +151,102 @@ export const RulerMarkers: StoryObj = {
     <>
       <StoreBoot />
       <RulerStory />
+    </>
+  ),
+};
+
+/* ---- R15 T1: the CapCut ruler tiers (lib/rulerTiers) ---------------------- */
+
+function TierRuler({ pps, caption }: { pps: number; caption: string }) {
+  const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
+  const playhead = useUi((s) => s.playhead);
+  const dur = sceneDuration(scene);
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="mono text-[11px] text-tmuted">{caption}</div>
+      {/* overflow-hidden: the ruler's own width is the full content width —
+          ticks are VIRTUALIZED to [scrollLeft − buffer, scrollLeft + viewport
+          + buffer], so only this window of DOM exists (view prop, 1000 px) */}
+      <div className="w-full overflow-hidden border-b border-hairline">
+        <Ruler
+          scene={scene}
+          duration={dur}
+          pxPerSec={pps}
+          playhead={playhead}
+          contentW={(dur + 4) * pps}
+          view={{ scrollLeft: 0, viewportW: 1000 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** The adaptive tier tables at three zooms (label spacing ≥ 120 px, tick ≥ 18
+ *  px, tick divides label evenly; ε 0.0001): at 46 px/s labels land on the
+ *  3-second grid (MM:SS at second boundaries); at 120 px/s the label grid
+ *  tightens to 1 s with tick = label (no frame interval divides 1 s evenly
+ *  AND clears the 18 px floor); at 240 px/s labels sit on the 15-FRAME grid —
+ *  between second boundaries they render in frames (15f, 6f, 21f, …) with
+ *  MM:SS only where the grid crosses a whole second (00:05). Same ruler,
+ *  same markers, only the tier math changes. */
+export const RulerTiers: StoryObj = {
+  name: 'Ruler — CapCut tiers (46 / 120 / 240 px/s)',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot />
+      <div className="flex flex-col gap-4">
+        <TierRuler pps={46} caption="46 px/s — labels 3 s (MM:SS) · ticks 1 s" />
+        <TierRuler pps={120} caption="120 px/s — labels 1 s · tick = label (no even divider ≥ 18 px)" />
+        <TierRuler pps={240} caption="240 px/s — labels 15 frames (Xf between MM:SS seconds) · ticks 5 frames" />
+      </div>
+    </>
+  ),
+};
+
+/* ---- R15 T5: the snap indicator, driven by a REAL clip drag ---------------- */
+
+/** The play step performs the actual gesture on the real Timeline: presses
+ *  el-5 (the T1 text clip), drags it 6.8 s right, and STOPS mid-gesture (no
+ *  pointerup) with the preview sitting inside the 10 px snap tolerance of the
+ *  mk-3 marker (15.5 s) — the drag seam reports snapAt, and the Timeline
+ *  holds the 2 px accent/40 indicator line at 15.5 s (z 40: above the drag
+ *  ghosts 10, below the playhead 100). Synthetic PointerEvents can't take
+ *  pointer capture (inactive pointer id — the Clip's capture is guarded,
+ *  R15-A5), so the gesture ends on the next real interaction: moving the
+ *  mouse over the clip with no button cancels it (buttons-bitmask), any
+ *  click/release commits. */
+export const SnapIndicator: StoryObj = {
+  name: 'Timeline — snap indicator (mid-drag)',
+  parameters: { layout: 'fullscreen' },
+  play: async ({ canvasElement }) => {
+    const clip = canvasElement?.querySelector<HTMLElement>('[data-testid="clip-el-5"]');
+    if (!clip) return;
+    const box = clip.getBoundingClientRect();
+    const sx = box.left + 20;
+    const sy = box.top + box.height / 2;
+    const ex = sx + 6.75 * 46 + 6; // 8.75 s + 6.75 s + 6 px → inside the 10 px tol of mk-3 @ 15.5 s
+    const tick = () => new Promise<void>((r) => { setTimeout(r, 0); });
+    clip.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, button: 0, bubbles: true, clientX: sx, clientY: sy }));
+    await tick(); // discrete-event flush lands the pending gesture state
+    // ONE qualifying move: activates the gesture past the 5 px threshold AND
+    // captures the snap in the same event (start+move fire together — R15-T3b)
+    clip.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, buttons: 1, bubbles: true, clientX: ex, clientY: sy }));
+    await tick();
+  },
+  render: () => (
+    <>
+      <StoreBoot patch={{ selection: ['el-5'] }} />
+      <div className="flex h-screen flex-col bg-app">
+        <div className="mono flex h-[40px] shrink-0 items-center px-3 text-[11px] text-tmuted">
+          ( timeline toolbar + scene tabs sit here in the real shell — el-5 is held MID-DRAG at the
+          mk-3 marker: snap indicator 2 px accent/40 @ 15.5 s, ghost + TC bubble live · move the
+          mouse over the clip with no button to cancel, or click to commit )
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Timeline />
+        </div>
+      </div>
     </>
   ),
 };
