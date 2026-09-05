@@ -12,16 +12,38 @@ COMPLETE on origin and its standing items are preserved.
 
 ## What is LIVE right now (the headline)
 
-- **The shell-mini app serves on port 3000** and the Z-container's Caddy
-  (:81, the ONLY externally exposed port) reverse-proxies localhost:3000 →
-  **the public preview URL IS the shell-mini app.** Open the preview panel /
-  "Open in New Tab" and you get the RH-skinned mini NLE shell.
-- The dev server is daemonized via **double-fork** (`ui-mock/shell-mini/
-  scripts/dev3000.py`) — it survives per-toolcall descendant-tree reaping
-  (plain `nohup`/`setsid` do NOT; the wrapper kills the whole tree at every
-  toolcall end). It still dies on container recycle — relaunch recipe below.
-- Storybook runs separately on :6007 (`npm run storybook` in shell-mini);
-  externally it is reachable as `/?XTransformPort=6007` while it runs.
+- **The public preview URL serves the shell-mini app — verified end-to-end**
+  (agent-browser through the real edge: DNS → FC edge → Caddy :81 → Vite,
+  title + a11y tree + playback TC advance all confirmed). The URL pattern is
+  `https://preview-chat-<chat_id>.space-z.ai/` (the hostname embeds THIS
+  chat's id from the gateway metadata) — also reachable via the Preview
+  Panel / "Open in New Tab" button.
+- **The Host-header law (the bug that made it "not live" while the process
+  was up):** the FC edge rewrites the request Host to `...fcapp.run`; Caddy
+  passes Host through untouched; Vite's default `server.allowedHosts`
+  (localhost/IP only) 403s it. Fix = `allowedHosts: ['.space-z.ai',
+  '.fcapp.run']` in vite.config.ts (committed). Verification rule: a
+  localhost curl is a FALSE PASS for public liveness — probe with
+  `curl -H 'Host: preview-chat-<id>.fcapp.run' http://127.0.0.1:81/` or
+  agent-browser on the real public URL.
+- **Persistence layers (all needed, all verified):**
+  1. *Reaper escape:* dev server runs via `scripts/dev3000.py`
+     (fork→setsid→fork→exec; grandchild reparents to PID 1; survives
+     per-toolcall tree-kill; `nohup`/`setsid` alone die).
+  2. *Recycle resurrection:* `/home/z/my-project/.zscripts/dev.sh`
+     (harness boot hook, PAT-free — restores repo from the newest
+     `/home/sync/nle-core-spec-*.bundle`, npm ci if needed, re-launches;
+     idempotent; also frees :3000 from half-dead tenants; canonical copy
+     committed at `ui-mock/shell-mini/scripts/boot-restore.sh`). Tested
+     live: kill → dev.sh → restored → public URL 200. NOTE: dev.sh only
+     auto-runs if the harness executes .zscripts/dev.sh at boot (it does in
+     some sandbox variants) — otherwise the next agent session runs it as
+     FIRST ACTION.
+  3. *Durable state:* GitHub origin + gitlab mirror + /home/sync bundle+
+     tarball refreshed at every wrap-up.
+- Storybook: `npm run storybook` → :6007 (externally
+  `/?XTransformPort=6007`); a leftover session-started instance may still
+  be running — it dies on recycle; restart with the same command.
 
 ## FIRST ACTIONS for the next session (in order)
 
@@ -30,15 +52,16 @@ COMPLETE on origin and its standing items are preserved.
    scanner blocks token-bearing pushes, and the GitLab PAT likewise stays in
    `.git/config` + chat only), `git fetch` BOTH remotes FIRST — a parallel
    session may have pushed again. NEVER force push.
-2. **Relaunch the app on :3000** (the preview URL depends on it):
-   `cd ui-mock/shell-mini && npm ci` (node_modules is not in git), then
-   `python3 scripts/dev3000.py` (double-fork launcher; verify with
-   `curl -s localhost:3000` → the index HTML, and check `dev.log`).
+2. **Ensure the app is LIVE on :3000** (the preview URL depends on it):
+   run `bash /home/z/my-project/.zscripts/dev.sh` (idempotent — installs,
+   launches, frees the port if needed; PAT-free via the /home/sync bundle).
+   If the sandbox is FRESH (no /home/z/my-project/.zscripts — harness
+   didn't restore repo.tar): clone with the PAT from chat, `npm ci`, then
+   `python3 scripts/dev3000.py`. Verify PUBLIC-path liveness with the
+   forged-Host probe (see the Host-header law above), not just localhost.
    If port 3000 is already bound by the platform's own Next.js dev server
-   (fresh sandboxes with the bootstrap template), the platform server owns
-   3000 — in past sessions the R15-UI thread's instrumentation chain put
-   Storybook there instead; coordinate rather than fight: the user's current
-   directive (2026-09-05) is that the **shell-mini app owns :3000**.
+   (fresh sandboxes with the bootstrap template), the user's directive
+   (2026-09-05) is that the **shell-mini app owns :3000** — dev.sh frees it.
 3. **Baseline gates before editing anything:** `npm run test` (93/93),
    `npm run typecheck` (clean), `npm run build`, `npm run build-storybook`.
 4. **gitlab remote** (WAF blocks ~1/3 of pushes — just retry a few times):
