@@ -53,6 +53,17 @@ below — it is COMPLETE on origin and its standing items are preserved.
   POST/DELETE threads, POST `/sync`. Token: `.env` in shell-mini
   (gitignored — **recreate after a recycle**: PAT from chat +
   `ANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec`).
+- **Upstream contribution filed (R18c):** the vendored `refHasOurReadme`
+  patch is reported upstream — melodietexoss/storybook-annotakit **issue
+  #16** (full cwd-relative-ls-tree diagnosis + repro + improvement
+  candidates: machine-readable git-sync health, POST /sync forcing a git
+  cycle, absent-vs-foreign A14 log split, README adoption marker) and
+  **PR #17** (`fix/subdir-ref-has-readme-cwd` — same colon-path fix,
+  rebuilt tracked dist, new `subdir` regression case in their
+  store-robustness suite: unpatched 4/8 FAIL / patched 8/8, full suite
+  9/9). NOT pushed to upstream main (user directive: PR-only so the
+  author can verify + generalize). When PR #17 merges, drop the local
+  vendor patch in favor of upstream v0.5.x.
 - **R18 correction (what was REVERTED):** the R16 "storybook can't serve
   publicly, static-mount it instead" verdict was wrong; the workaround
   infrastructure was removed — `public/stories/` (8.4MB), the

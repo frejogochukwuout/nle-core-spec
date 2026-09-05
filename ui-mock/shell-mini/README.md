@@ -62,8 +62,8 @@ building; `npm run vendor:build` rebuilds from src).
 > "foreign", sync never parents on it, and every push after the first is
 > rejected non-fast-forward forever. Patched to `git rev-parse
 > <ref>:README` (cwd-independent; verified: kill→mutation→fetch→merge→push
-> cycle live, remote branch converged, tombstones propagated). Upstream
-> fix worth contributing back to melodietexoss/storybook-annotakit.
+> cycle live, remote branch converged, tombstones propagated).
+> **Reported upstream: [melodietexoss/storybook-annotakit#16](https://github.com/melodietexoss/storybook-annotakit/issues/16)** (full diagnosis + improvement candidates) — fix delivered as **[PR #17](https://github.com/melodietexoss/storybook-annotakit/pull/17)** (`fix/subdir-ref-has-readme-cwd`: the same colon-path patch, rebuilt dist, and a new `subdir` regression case in their store-robustness suite; proven both ways — unpatched dist fails 4/8 checks, patched 8/8; full suite 9/9). Until it merges, the vendored patch stays authoritative here; after it merges, the vendor dir can track upstream v0.5.x again.
 
 **Cold-start resurrection (container recycle):** `scripts/boot-restore.sh`
 (iso: `/home/z/my-project/.zscripts/dev.sh`) — idempotent; restores the repo
