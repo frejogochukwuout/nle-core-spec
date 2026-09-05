@@ -16,11 +16,15 @@ remains the full spec-18 study; this app is the deliberately small sibling:
 
 ```bash
 npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-peer-deps
-npm run dev         # http://localhost:5174/mini/
+npm run dev         # http://localhost:3000/ — dedicated port; on the Z-container
+                    # Caddy :81 reverse-proxies :3000, so the public preview URL IS this app.
+                    # Run it via `python3 scripts/dev3000.py` (double-fork daemon) so it
+                    # survives the per-toolcall process reaping; plain nohup/setsid die.
 npm test            # vitest — 4 files / 93 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
-npm run build       # static bundle → dist/ (base: /mini/)
+npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # http://localhost:6007 — 30 stories, 4 groups
+                    # (externally: /?XTransformPort=6007 while running)
 ```
 
 ## What's in (the whole MVP surface)
