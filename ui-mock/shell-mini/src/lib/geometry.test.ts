@@ -9,12 +9,14 @@ import {
   clampTrimEnd,
   clampTrimStart,
   contentEnd,
+  insertionAt,
   labelStepFor,
   magnetTarget,
   neighborBounds,
   ppsFor,
   quantize,
   resolveSnap,
+  rippleShiftAfter,
   splitPoint,
   timeToPx,
   pxToTime,
@@ -184,5 +186,77 @@ describe('playhead scrub clamp', () => {
     expect(clampPlayhead(3.7, 10)).toBe(3.7);
     expect(clampPlayhead(-1, 10)).toBe(0);
     expect(clampPlayhead(11, 10)).toBe(10);
+  });
+});
+
+/* ---- R18e: pool→timeline insertion placement ---- */
+
+describe('insertionAt (DnD placement)', () => {
+  const clips = [
+    { id: 'a', trackId: 'V1', mediaId: 'm', start: 0, duration: 3.5 },
+    { id: 'b', trackId: 'V1', mediaId: 'm', start: 4.5, duration: 3.5 },
+  ];
+
+  it('exact free spot: quantized request, nothing in the way', () => {
+    const r = insertionAt(clips, 2, 8.7);
+    expect(r).toEqual({ start: 8.5, exact: true });
+  });
+
+  it('overlapping request: bumps to the next clip END that fits', () => {
+    // 1.0 + 2 > clip a end 3.5 and < b start 4.5? no room → after b (8.0)
+    const r = insertionAt(clips, 2, 1.0);
+    expect(r).toEqual({ start: 8.0, exact: false });
+  });
+
+  it('fits in the 1s gap between a and b when short enough', () => {
+    const r = insertionAt(clips, 1, 1.0); // [1,2] fits inside gap [3.5,4.5)? no — [1,2] hits a. want the 3.5..4.5 gap
+    expect(r).toEqual({ start: 3.5, exact: false });
+  });
+
+  it('a duration that fits no gap bumps to the lane TAIL (append), never null', () => {
+    const packed = Array.from({ length: 40 }, (_, i) => ({
+      id: `p${i}`, trackId: 'V1', mediaId: 'm', start: i * 10, duration: 9.5,
+    }));
+    // 100s fits no inter-clip gap → tail (last clip ends 399.5)
+    expect(insertionAt(packed, 100, 5)).toEqual({ start: 399.5, exact: false });
+    // degenerate duration only → null
+    expect(insertionAt(packed, 0, 5)).toBeNull();
+  });
+
+  it('quantizes the requested time and clamps below 0', () => {
+    expect(insertionAt([], 2, -3.2)).toEqual({ start: 0, exact: true });
+  });
+});
+
+/* ---- R18e: ripple shift ---- */
+
+describe('rippleShiftAfter (ripple edit law)', () => {
+  const clips = [
+    { id: 'a', trackId: 'V1', mediaId: 'm', start: 0, duration: 3 },
+    { id: 'b', trackId: 'V1', mediaId: 'm', start: 4, duration: 2 },
+    { id: 'c', trackId: 'A1', mediaId: 'm', start: 4, duration: 2 },
+  ];
+
+  it('shifts same-track followers left by the removed duration', () => {
+    const out = rippleShiftAfter(clips, 'V1', 3, -3);
+    expect(out.find((c) => c.id === 'a')!.start).toBe(0); // before the edit point: untouched
+    expect(out.find((c) => c.id === 'b')!.start).toBe(1);
+    expect(out.find((c) => c.id === 'c')!.start).toBe(4); // other track: untouched
+  });
+
+  it('excludes a clip id (the edited clip itself)', () => {
+    const out = rippleShiftAfter(clips, 'V1', 0, 5, 'a');
+    expect(out.find((c) => c.id === 'a')!.start).toBe(0);
+    expect(out.find((c) => c.id === 'b')!.start).toBe(9);
+  });
+
+  it('zero delta is identity (same array)', () => {
+    expect(rippleShiftAfter(clips, 'V1', 3, 0)).toBe(clips);
+  });
+
+  it('never shifts below 0 (quantized floor)', () => {
+    const near = [{ id: 'n', trackId: 'V1', mediaId: 'm', start: 1, duration: 1 }];
+    const out = rippleShiftAfter(near, 'V1', 0, -2);
+    expect(out[0].start).toBe(0);
   });
 });

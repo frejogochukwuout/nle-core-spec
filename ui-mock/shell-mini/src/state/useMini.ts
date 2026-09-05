@@ -27,6 +27,7 @@ import {
 } from '../lib/mockData';
 import {
   MAX_HISTORY,
+  MIN_DUR,
   DEFAULT_ZOOM_STEP,
   neighborBounds,
   clampMove,
@@ -36,6 +37,8 @@ import {
   contentEnd,
   clampPlayhead,
   quantize,
+  insertionAt,
+  rippleShiftAfter,
 } from '../lib/geometry';
 
 export interface ToastMsg {
@@ -49,7 +52,16 @@ export interface MiniState {
   playhead: number; // unquantized seconds (D5)
   playing: boolean;
   zoomStep: number; // 0-4 (D7)
-  snapOn: boolean; // governs grid quantization AND magnet (D7)
+  /** snap OFF by default (R18e, feedback #10 — the magnet surprised the
+   *  reviewer on first drag; turning it on is now a deliberate act) */
+  snapOn: boolean;
+  /** ripple edit mode (R18e, feedback #16): destructive edits close the
+   *  gap — delete/end-trim/start-trim shift downstream followers */
+  rippleOn: boolean;
+  /** filmstrip vs color-block clip bodies (R18e, feedback #15) */
+  filmstripOn: boolean;
+  /** A1 lane visibility (R18e, feedback #8) — view state only */
+  audioLaneVisible: boolean;
   selectedId: string | null;
   dragActive: boolean; // interaction lock (audit M2)
   toast: ToastMsg | null;
@@ -75,6 +87,9 @@ export interface MiniState {
   zoomIn: () => void;
   zoomOut: () => void;
   toggleSnap: () => void;
+  toggleRipple: () => void;
+  toggleFilmstrip: () => void;
+  toggleAudioLane: () => void;
   pushToast: (kind: ToastMsg['kind'], text: string) => void;
   dismissToast: () => void;
 
@@ -91,7 +106,14 @@ export interface MiniState {
   trimClip: (id: string, edge: 'start' | 'end', newTime: number) => void;
   splitAtPlayhead: () => void;
   deleteSelected: () => void;
+  /** RH cut styles (R18e, feedback #7): discard the selected clip's head
+   *  / tail at the playhead (裁剪开始 / 裁剪结束). Ripple-aware. */
+  cutHeadAtPlayhead: () => void;
+  cutTailAtPlayhead: () => void;
   addClipFromMedia: (mediaId: string) => void;
+  /** pool→timeline DnD commit (R18e): media → track at requested time;
+   *  exact spot when free, next fitting gap otherwise. */
+  insertMediaAt: (mediaId: string, trackId: string, t: number) => void;
   nudge: (id: string, delta: number) => void;
   reset: () => void;
 }
@@ -140,7 +162,10 @@ export const useMini = create<MiniState>((set, get) => {
     playhead: 0,
     playing: false,
     zoomStep: DEFAULT_ZOOM_STEP,
-    snapOn: true,
+    snapOn: false, // default OFF (R18e, feedback #10)
+    rippleOn: false,
+    filmstripOn: true,
+    audioLaneVisible: true,
     selectedId: null,
     dragActive: false,
     toast: null,
@@ -226,6 +251,18 @@ export const useMini = create<MiniState>((set, get) => {
       if (get().dragActive) return; // interaction lock
       set({ snapOn: !get().snapOn });
     },
+    toggleRipple: () => {
+      if (get().dragActive) return; // interaction lock
+      set({ rippleOn: !get().rippleOn });
+    },
+    toggleFilmstrip: () => {
+      if (get().dragActive) return; // interaction lock
+      set({ filmstripOn: !get().filmstripOn });
+    },
+    toggleAudioLane: () => {
+      if (get().dragActive) return; // interaction lock
+      set({ audioLaneVisible: !get().audioLaneVisible });
+    },
 
     pushToast: (kind, text) => {
       const seq = (get().toast?.seq ?? 0) + 1;
@@ -282,6 +319,67 @@ export const useMini = create<MiniState>((set, get) => {
       if (!state.dragActive) return;
       const clip = findClip(state.doc, id);
       if (!clip) return;
+
+      /* RIPPLE preview (R18e): each event renders the state FROM THE
+       * PRE-DRAG SNAPSHOT (idempotent — followers land at snapshotStart +
+       * delta every time, never accumulating drift):
+       *   end-trim   — dur = clamp(t) − snapStart (media-bounded, followers
+       *                pushed, the neighbor bound does NOT apply);
+       *   start-trim — LEFT EDGE FROZEN at snapStart (documented law: the
+       *                remaining content closes onto the edit point). */
+      if (state.rippleOn && state.dragSnapshot) {
+        const snap = findClip(state.dragSnapshot, id);
+        if (snap) {
+          const snapEnd = snap.start + snap.duration;
+          const media = findMedia(state.doc, clip.mediaId);
+          const { prevEnd } = neighborBounds(state.dragSnapshot, snap);
+          let newDur: number;
+          if (edge === 'start') {
+            const t = Math.min(
+              Math.max(newTime, Math.max(prevEnd, media ? snapEnd - media.duration : -Infinity)),
+              snapEnd - MIN_DUR,
+            );
+            newDur = snapEnd - t;
+          } else {
+            const t = Math.min(
+              Math.max(newTime, snap.start + MIN_DUR),
+              snap.start + (media?.duration ?? Infinity),
+            );
+            newDur = t - snap.start;
+          }
+          const delta = newDur - snap.duration;
+          // R18f (review P1-2): quantize the DELTA (not each result) and floor
+          // followers at the edited clip's new end — an off-grid follower
+          // must never round into an overlap with the edited clip
+          const shift = quantize(delta);
+          const floor = snap.start + newDur;
+          const snapshot = state.dragSnapshot;
+          set({
+            doc: {
+              ...state.doc,
+              clips: state.doc.clips.map((c) => {
+                if (c.id === id) {
+                  return {
+                    ...c,
+                    // start-trim keeps the frozen left edge; end-trim keeps start
+                    start: edge === 'start' ? snap.start : c.start,
+                    duration: newDur,
+                  };
+                }
+                // follower: same-track clips whose SNAPSHOT start was at/after
+                // the snapshot end → live start = snapshot start + shift
+                const twin = snapshot.clips.find((x) => x.id === c.id) ?? c;
+                if (twin.trackId === snap.trackId && twin.start >= snapEnd - 1e-9) {
+                  return { ...c, start: Math.max(floor, twin.start + shift) };
+                }
+                return c;
+              }),
+            },
+          });
+          return;
+        }
+      }
+
       const { prevEnd, nextStart } = neighborBounds(state.doc, clip);
       set({
         doc: {
@@ -317,6 +415,38 @@ export const useMini = create<MiniState>((set, get) => {
       const state = get();
       const clip = findClip(state.doc, id);
       if (!clip) return;
+
+      /* RIPPLE commit (R18e) — same laws as the preview path, computed from
+       * the resting doc: end-trim bounded by the MEDIA duration (followers
+       * are pushed, not blocked); start-trim freezes the left edge and
+       * closes the head gap. */
+      if (state.rippleOn) {
+        const snapEnd = clip.start + clip.duration;
+        const media = findMedia(state.doc, clip.mediaId);
+        const { prevEnd } = neighborBounds(state.doc, clip);
+        let newDur: number;
+        if (edge === 'start') {
+          const lo = Math.max(prevEnd, media ? snapEnd - media.duration : -Infinity);
+          const t = Math.min(Math.max(newTime, lo), snapEnd - MIN_DUR);
+          newDur = snapEnd - t;
+        } else {
+          const lo = clip.start + MIN_DUR;
+          const hi = clip.start + (media?.duration ?? Infinity);
+          newDur = Math.min(Math.max(newTime, lo), hi) - clip.start;
+        }
+        if (newDur === clip.duration) return; // no-op guard
+        const delta = newDur - clip.duration;
+        const floor = clip.start + newDur; // the edited clip's new end
+        commit((doc) => {
+          const c = doc.clips.find((x) => x.id === id);
+          if (!c) return;
+          doc.clips = rippleShiftAfter(doc.clips, c.trackId, snapEnd, delta, id, floor).map((x) =>
+            x.id === id ? { ...x, duration: newDur } : x,
+          );
+        });
+        return;
+      }
+
       const { prevEnd, nextStart } = neighborBounds(state.doc, clip);
       commit((doc) => {
         const c = doc.clips.find((x) => x.id === id);
@@ -381,16 +511,76 @@ export const useMini = create<MiniState>((set, get) => {
     },
 
     deleteSelected: () => {
-      const { selectedId, dragActive } = get();
+      const { selectedId, dragActive, rippleOn } = get();
       if (dragActive) return; // interaction lock
       if (!selectedId) {
         get().pushToast('info', 'Nothing selected.');
         return;
       }
       const id = selectedId;
+      // RIPPLE (R18e): followers at/after the deleted end shift LEFT to
+      // close the gap — the recommended mini-mode edit style (feedback #16)
+      const clip = findClip(get().doc, id);
+      const gap = rippleOn && clip ? clip.duration : 0;
+      const removedEnd = clip ? clip.start + clip.duration : 0;
       commit((doc) => {
-        doc.clips = doc.clips.filter((c) => c.id !== id);
+        const c = doc.clips.find((x) => x.id === id);
+        const end = c ? c.start + c.duration : removedEnd;
+        doc.clips = doc.clips.filter((x) => x.id !== id);
+        if (gap > 0 && c) {
+          // followers close onto the removed clip's START (R18f floor law)
+          doc.clips = rippleShiftAfter(doc.clips, c.trackId, end, -gap, undefined, c.start);
+        }
       });
+    },
+
+    cutHeadAtPlayhead: () => {
+      const state = get();
+      if (state.dragActive) return; // interaction lock
+      const target = cutTarget(state);
+      if (!target) {
+        // R18f (review P3): honest phrasing for both no-selection and
+        // selection-elsewhere — the old text blamed "the selected clip"
+        // even when nothing was selected
+        get().pushToast(
+          'info',
+          state.selectedId
+            ? 'Playhead is not inside the selected clip.'
+            : 'Nothing under the playhead to cut.',
+        );
+        return;
+      }
+      const clip = findClip(state.doc, target)!;
+      const t = Math.min(Math.max(quantize(state.playhead), clip.start), clip.start + clip.duration - MIN_DUR);
+      if (t <= clip.start) {
+        get().pushToast('info', 'Nothing to cut before the playhead.');
+        return;
+      }
+      get().trimClip(target, 'start', t); // ripple-aware when rippleOn
+      set({ selectedId: target });
+    },
+
+    cutTailAtPlayhead: () => {
+      const state = get();
+      if (state.dragActive) return; // interaction lock
+      const target = cutTarget(state);
+      if (!target) {
+        get().pushToast(
+          'info',
+          state.selectedId
+            ? 'Playhead is not inside the selected clip.'
+            : 'Nothing under the playhead to cut.',
+        );
+        return;
+      }
+      const clip = findClip(state.doc, target)!;
+      const t = Math.max(Math.min(quantize(state.playhead), clip.start + clip.duration), clip.start + MIN_DUR);
+      if (t >= clip.start + clip.duration) {
+        get().pushToast('info', 'Nothing to cut after the playhead.');
+        return;
+      }
+      get().trimClip(target, 'end', t); // ripple-aware when rippleOn
+      set({ selectedId: target });
     },
 
     addClipFromMedia: (mediaId) => {
@@ -413,6 +603,43 @@ export const useMini = create<MiniState>((set, get) => {
       if (ok) state.pushToast('info', `Added ${media.name} to ${trackId}.`);
     },
 
+    insertMediaAt: (mediaId, trackId, t) => {
+      const state = get();
+      if (state.dragActive) return; // interaction lock
+      const media = findMedia(state.doc, mediaId);
+      if (!media) return;
+      // kind routing (D3.2): audio→A1, video/image→V1 — the drop zone is
+      // the source of truth for WHICH track, but the store re-validates.
+      const needTrack = laneForMedia(media.kind) === 'audio' ? TRACK_AUDIO : TRACK_VIDEO;
+      if (trackId !== needTrack) {
+        state.pushToast('info', `${media.kind} media belongs on ${needTrack}.`);
+        return;
+      }
+      const trackClips = state.doc.clips.filter((c) => c.trackId === trackId);
+      const place = insertionAt(trackClips, media.duration, t);
+      if (!place) {
+        state.pushToast('error', `No room for ${media.name} at that spot — the lane is full to the end.`);
+        return;
+      }
+      const ok = commit((doc) => {
+        doc.clips.push({
+          id: mintClipId(),
+          trackId,
+          mediaId,
+          start: place.start,
+          duration: media.duration,
+        });
+      });
+      if (ok) {
+        state.pushToast(
+          'info',
+          place.exact
+            ? `Placed ${media.name} at ${place.start}s on ${trackId}.`
+            : `Placed ${media.name} at the next open spot (${place.start}s on ${trackId}).`,
+        );
+      }
+    },
+
     nudge: (id, delta) => {
       const state = get();
       const clip = findClip(state.doc, id);
@@ -431,7 +658,10 @@ export const useMini = create<MiniState>((set, get) => {
         playhead: 0,
         playing: false,
         zoomStep: DEFAULT_ZOOM_STEP,
-        snapOn: true,
+        snapOn: false,
+        rippleOn: false,
+        filmstripOn: true,
+        audioLaneVisible: true,
         selectedId: null,
         dragActive: false,
         toast: null,
@@ -442,3 +672,20 @@ export const useMini = create<MiniState>((set, get) => {
     },
   };
 });
+
+/** Shared target resolution for the cut styles (R18e): the SELECTED clip
+ *  when the playhead is inside it, else the topmost clip under the
+ *  playhead (split law parity — review fix #6). */
+function cutTarget(state: { selectedId: string | null; doc: Doc; playhead: number }): string | null {
+  if (state.selectedId) {
+    const clip = findClip(state.doc, state.selectedId);
+    if (clip && state.playhead >= clip.start && state.playhead < clip.start + clip.duration) {
+      return state.selectedId;
+    }
+    return null; // a selection exists but the playhead is elsewhere — honest
+  }
+  const under = state.doc.clips
+    .filter((c) => state.playhead >= c.start && state.playhead < c.start + c.duration)
+    .sort((a, b) => b.start - a.start);
+  return under[0]?.id ?? null;
+}

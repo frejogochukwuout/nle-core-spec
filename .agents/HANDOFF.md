@@ -64,6 +64,24 @@ below — it is COMPLETE on origin and its standing items are preserved.
   9/9). NOT pushed to upstream main (user directive: PR-only so the
   author can verify + generalize). When PR #17 merges, drop the local
   vendor patch in favor of upstream v0.5.x.
+- **R18e/R18f — the feedback wave (annotakit issues #7-#16, ALL fixed +
+  thread-resolved):** ripple edit (toggle, delete/end-trim/start-trim
+  follower-shift laws, snapshot-idempotent previews, delta-quantize +
+  floor overlap guard); RH cut styles `[`/`]` (裁剪开始/裁剪结束, ripple-aware);
+  pool→timeline DnD (drop outline #38bdf8 + insertionAt placement: exact
+  spot → next gap → tail); filmstrip↔color-block toggle; audio-lane eye
+  (hidden = collapsed restore bar, itself a drop target); REAL waveform
+  envelopes (deterministic FNV hash, discrete bars, inline+CSS sized —
+  the invisible-SVG replaced-element trap is documented + regression-
+  tested); snap OFF by default; playhead Enter no-op; splitters (pool/
+  inspector width + timeline height with flex-tall lanes); visual polish
+  (panel elevation + borders, vignette bg — dots removed, viewer screen-
+  well, lane contrast, group dividers, uppercase heads, desaturated
+  filmstrips, 8 pool assets). useKeys moved INTO Timeline (solo stories
+  get the shortcuts). 158/158 tests, tsc clean. Two sub-agent review
+  waves + VLM passes; wave-2 verdict: only P3s remain (ripple start-trim
+  frozen-left drag feel — documented law + tooltip hints; split/cut grid
+  quantize; 8px main-row gutter; timeline→shell DnD import coupling).
 - **R18 correction (what was REVERTED):** the R16 "storybook can't serve
   publicly, static-mount it instead" verdict was wrong; the workaround
   infrastructure was removed — `public/stories/` (8.4MB), the

@@ -25,10 +25,13 @@ function StoreBoot({ patch }: { patch?: Patch }) {
 
 function FullShell({ patch }: { patch?: Patch }) {
   return (
-    <>
+    <div style={{ height: '100vh', overflow: 'hidden' }}>
+      {/* R18f (UX P1-1): #storybook-root has no height → .mini-root
+          content-sized to ~1334px and pushed the timeline below the fold.
+          The explicit 100vh frame matches the Timeline stories. */}
       <StoreBoot patch={patch} />
       <App />
-    </>
+    </div>
   );
 }
 

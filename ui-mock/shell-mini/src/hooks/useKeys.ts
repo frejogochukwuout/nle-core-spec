@@ -1,8 +1,9 @@
-/* Keyboard surface (D3.8, audit m4): Space, S, Del, ⌘Z/⌘⇧Z, ±, 0, Esc.
+/* Keyboard surface (D3.8, audit m4): Space, S, [ ], Del, ⌘Z/⌘⇧Z, ±, 0, Esc.
    Esc priority: cancel active drag FIRST, else deselect.
    While dragActive, ONLY Esc is honored (audit M2 interaction lock) —
    every other key returns early. Input targets (typing in a field) are
-   skipped so the surface stays honest. */
+   skipped so the surface stays honest.
+   R18e: [ / ] = cut head / cut tail at playhead (RH 裁剪开始/裁剪结束). */
 
 import { useEffect } from 'react';
 import { useMini } from '../state/useMini';
@@ -30,6 +31,20 @@ export function useKeys() {
         e.preventDefault();
         if (e.shiftKey) s.redo();
         else s.undo();
+        return;
+      }
+
+      // R18f (review P3): bracket keys are layout-dependent (e.key differs on
+      // non-US layouts) — accept the physical e.code as a fallback; the
+      // shifted forms ({ }) ride along on US layouts
+      if (e.key === '[' || e.key === '{' || e.code === 'BracketLeft') {
+        e.preventDefault();
+        s.cutHeadAtPlayhead();
+        return;
+      }
+      if (e.key === ']' || e.key === '}' || e.code === 'BracketRight') {
+        e.preventDefault();
+        s.cutTailAtPlayhead();
         return;
       }
 

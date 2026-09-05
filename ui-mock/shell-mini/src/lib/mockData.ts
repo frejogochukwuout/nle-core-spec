@@ -42,6 +42,12 @@ export const SEED_MEDIA: Media[] = [
   { id: 'm-beach', name: 'beach_wide.mp4', kind: 'video', duration: 4.5, hue: 32 },
   { id: 'm-title', name: 'title_card.png', kind: 'image', duration: 3.5, hue: 268 },
   { id: 'm-interview', name: 'interview_audio.wav', kind: 'audio', duration: 7, hue: 145 },
+  // R18e (feedback #13): the pool needs enough assets to genuinely overflow
+  // and prove its scrollbar — four more mock assets, still grid-clean.
+  { id: 'm-gopro', name: 'gopro_shore.mp4', kind: 'video', duration: 5.5, hue: 195 },
+  { id: 'm-sunset', name: 'sunset_lapse.mp4', kind: 'video', duration: 4, hue: 18 },
+  { id: 'm-lower', name: 'lower_third.png', kind: 'image', duration: 2.5, hue: 240 },
+  { id: 'm-ambience', name: 'shore_ambience.wav', kind: 'audio', duration: 6, hue: 120 },
 ];
 
 export const SEED_TRACKS: Track[] = [

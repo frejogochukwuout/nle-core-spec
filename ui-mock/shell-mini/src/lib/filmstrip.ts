@@ -9,10 +9,12 @@ const FRAME_W = 54; // px per "frame" in the strip tile (reads well at 36px lane
 const FRAME_H = 36;
 
 function svgForHue(hue: number): string {
-  const light = `hsl(${hue} 42% 56%)`;
-  const mid = `hsl(${hue} 38% 44%)`;
-  const dark = `hsl(${hue} 40% 34%)`;
-  const divider = `hsl(${hue} 30% 18%)`;
+  // R18f (VLM): desaturated editorial palette — primary-ish hues strained
+  // the eye at 36px lanes; ~30% saturation reads as graded footage chips
+  const light = `hsl(${hue} 32% 54%)`;
+  const mid = `hsl(${hue} 28% 42%)`;
+  const dark = `hsl(${hue} 30% 33%)`;
+  const divider = `hsl(${hue} 24% 16%)`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${FRAME_W}" height="${FRAME_H}" viewBox="0 0 ${FRAME_W} ${FRAME_H}">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">

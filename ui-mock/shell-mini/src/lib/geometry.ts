@@ -132,3 +132,65 @@ export function resolveSnap(t: number, snapOn: boolean, pps: number, targets: nu
 export function clampPlayhead(t: number, end: number): number {
   return Math.min(Math.max(t, 0), end);
 }
+
+/* ---- insertion placement (R18e: pool→timeline DnD) ------------ */
+
+/** Where a NEW clip of `duration` lands when dropped at requested time t:
+ *  the exact quantized spot when free, else the next INTER-CLIP gap that
+ *  fits, else the lane tail (append). Null only for degenerate duration —
+ *  a valid drop always lands somewhere (the toast reports where). Pure:
+ *  takes the target track's clips (sorted internally). */
+export function insertionAt(
+  clips: Clip[],
+  duration: number,
+  t: number,
+): { start: number; exact: boolean } | null {
+  if (!(duration > 0)) return null;
+  const sorted = [...clips].sort((a, b) => a.start - b.start);
+  const want = Math.max(0, quantize(t));
+  const tail = sorted.length
+    ? sorted[sorted.length - 1].start + sorted[sorted.length - 1].duration
+    : want;
+  // candidate starts, in preference order: the requested spot, every
+  // inter-clip gap start after it, then the lane tail
+  const gapStarts: number[] = [];
+  for (let i = 0; i + 1 < sorted.length; i += 1) {
+    gapStarts.push(sorted[i].start + sorted[i].duration);
+  }
+  const candidates = [want, ...gapStarts.filter((s) => s > want), Math.max(want, tail)];
+  for (const start of candidates) {
+    const end = start + duration;
+    const free = sorted.every((c) => c.start + c.duration <= start + 1e-9 || c.start >= end - 1e-9);
+    if (free) return { start, exact: Math.abs(start - want) < 1e-9 };
+  }
+  return null; // unreachable for finite clips (the tail is always free)
+}
+
+/* ---- ripple edit laws (R18e — feedback #16; R18f quantize fix) --- */
+
+/** Ripple-shift the siblings that follow a clip: everything starting at or
+ *  after `fromTime` on the SAME track moves by `delta` (negative closes
+ *  gaps). R18f (review P1-2): the DELTA is quantized (quantizing each
+ *  result let an off-grid follower round BELOW the edited clip's new end
+ *  and commit an overlap); `floor` clamps followers to the edited clip's
+ *  new end (or the removed clip's start for deletes). The moved block
+ *  keeps its internal spacing (uniform shift). Returns NEW clip objects
+ *  for the shifted ids only — caller maps the rest. */
+export function rippleShiftAfter(
+  clips: Clip[],
+  trackId: string,
+  fromTime: number,
+  delta: number,
+  excludeId?: string,
+  floor = 0,
+): Clip[] {
+  if (delta === 0) return clips;
+  const shift = quantize(delta);
+  if (shift === 0) return clips; // sub-grid delta rounds to zero — identity
+  return clips.map((c) => {
+    if (c.trackId !== trackId || c.id === excludeId) return c;
+    if (c.start < fromTime - 1e-9) return c;
+    const next = Math.max(floor, c.start + shift);
+    return next === c.start ? c : { ...c, start: next };
+  });
+}

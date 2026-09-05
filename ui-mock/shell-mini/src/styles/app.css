@@ -20,7 +20,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ---- app root: RH dotted canvas ---------------------------- */
+/* ---- app root ------------------------------------------------
+   R18d polish (feedback #13): the RH dot grid is REPLACED by a soft
+   top-light vignette — on an NLE shell (vs RH's node canvas) the dots
+   read as noise behind every panel. Single quiet gradient, no texture. */
 
 .mini-root {
   position: relative;
@@ -28,12 +31,12 @@ body {
   width: 100%;
   overflow: hidden;
   background-color: var(--canvas-bg-primary);
-  /* RH dot grid: 24px pitch, --canvas-grid-dot color */
   background-image: radial-gradient(
-    var(--canvas-grid-dot) 1px,
-    transparent 1px
+    120% 90% at 50% 0%,
+    #17181a 0%,
+    #111214 46%,
+    var(--canvas-bg-primary) 100%
   );
-  background-size: 24px 24px;
   display: flex;
   flex-direction: column;
   gap: var(--mini-gutter);
@@ -41,13 +44,14 @@ body {
   box-sizing: border-box;
 }
 
-/* ---- floating panel grammar (RH glass) ---------------------- */
+/* ---- floating panel grammar (RH glass, R18d contrast lift) ---- */
 
 .mini-panel {
+  border: 1px solid var(--mini-panel-border);
   border-radius: var(--canvas-editor-radius-panel);
-  background: var(--canvas-quick-cut-surface);
+  background: var(--mini-panel-surface);
   box-shadow:
-    0 10px 26px rgba(0, 0, 0, 0.12),
+    0 14px 32px rgba(0, 0, 0, 0.24),
     rgba(255, 255, 255, 0.024) 0 1px inset;
   -webkit-backdrop-filter: blur(10px) saturate(0.82);
   backdrop-filter: blur(10px) saturate(0.82);
@@ -61,10 +65,11 @@ body {
   height: 34px;
   padding: 0 var(--canvas-editor-space-md);
   color: var(--canvas-editor-text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.14);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  border-bottom: 1px solid var(--mini-panel-head-rule);
   flex-shrink: 0;
 }
 
@@ -184,11 +189,11 @@ body {
   }
 }
 
-/* ---- scrollbars (thin white, RH) ---------------------------- */
+/* ---- scrollbars (thin white, RH — applied on every scroll region) */
 
 .mini-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
 }
 
 .mini-scroll::-webkit-scrollbar {
@@ -198,5 +203,71 @@ body {
 
 .mini-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.mini-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.mini-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- splitters (R18d: panels can resize — feedback #13) ----- */
+
+.mini-splitter {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: stretch;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  /* R18f (review P2-4): pointer drags on touch must not pan the page, and
+     dragging must never text-select the UI */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mini-splitter--row {
+  cursor: row-resize;
+}
+
+/* 6px hit area, 2px visible bar that lights on hover/drag */
+.mini-splitter::before {
+  content: "";
+  width: 2px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.15s, height 0.15s;
+}
+
+.mini-splitter--row::before {
+  width: 36px;
+  height: 2px;
+}
+
+.mini-splitter:hover::before,
+.mini-splitter.is-active::before {
+  background: var(--mini-splitter-hover);
+  height: 56px;
+}
+
+.mini-splitter--row:hover::before,
+.mini-splitter--row.is-active::before {
+  width: 56px;
+  height: 2px;
+}
+
+.mini-splitter:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: -2px;
+  border-radius: 6px;
 }

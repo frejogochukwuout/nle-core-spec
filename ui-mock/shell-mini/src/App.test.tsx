@@ -186,3 +186,59 @@ describe('toast region', () => {
     vi.useRealTimers();
   });
 });
+
+/* ---- R18e: splitters (feedback #13 — panels can resize) ---- */
+
+describe('splitters', () => {
+  it('three separators render with aria + testids', () => {
+    renderApp();
+    const pool = screen.getByTestId('mini-splitter-media-pool-width');
+    const insp = screen.getByTestId('mini-splitter-inspector-width');
+    const tl = screen.getByTestId('mini-splitter-timeline');
+    expect(pool).toHaveAttribute('role', 'separator');
+    expect(insp).toHaveAttribute('role', 'separator');
+    expect(tl).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(screen.getByRole('separator', { name: 'Media pool width' })).toHaveAttribute(
+      'aria-valuenow',
+      '260',
+    );
+  });
+
+  it('keyboard: ArrowLeft shrinks the pool, ArrowRight grows it, shift is bigger', () => {
+    renderApp();
+    const pool = screen.getByTestId('mini-splitter-media-pool-width');
+    fireEvent.keyDown(pool, { key: 'ArrowLeft' });
+    expect(screen.getByRole('separator', { name: 'Media pool width' })).toHaveAttribute('aria-valuenow', '252');
+    fireEvent.keyDown(pool, { key: 'ArrowRight', shiftKey: true });
+    expect(screen.getByRole('separator', { name: 'Media pool width' })).toHaveAttribute('aria-valuenow', '284');
+  });
+
+  it('keyboard + drag on the timeline splitter change its height value', () => {
+    renderApp();
+    const tl = screen.getByTestId('mini-splitter-timeline');
+    fireEvent.keyDown(tl, { key: 'ArrowUp' });
+    expect(tl).toHaveAttribute('aria-valuenow', '198');
+    fireEvent.pointerDown(tl, { button: 0, pointerId: 3, clientY: 500 });
+    fireEvent.pointerMove(tl, { pointerId: 3, clientY: 460 }); // drag up 40px → +40
+    expect(tl).toHaveAttribute('aria-valuenow', '238');
+    fireEvent.pointerUp(tl, { pointerId: 3, clientY: 460 });
+  });
+
+  it('double-click resets to the default width', () => {
+    renderApp();
+    const pool = screen.getByTestId('mini-splitter-media-pool-width');
+    fireEvent.keyDown(pool, { key: 'ArrowLeft' });
+    fireEvent.keyDown(pool, { key: 'ArrowLeft' });
+    fireEvent.dblClick(pool);
+    expect(screen.getByRole('separator', { name: 'Media pool width' })).toHaveAttribute('aria-valuenow', '260');
+  });
+
+  it('clamps at the rails (min 180 / max 420 for the pool)', () => {
+    renderApp();
+    const pool = screen.getByTestId('mini-splitter-media-pool-width');
+    for (let i = 0; i < 20; i += 1) fireEvent.keyDown(pool, { key: 'ArrowLeft', shiftKey: true });
+    expect(screen.getByRole('separator', { name: 'Media pool width' })).toHaveAttribute('aria-valuenow', '180');
+    for (let i = 0; i < 40; i += 1) fireEvent.keyDown(pool, { key: 'ArrowRight', shiftKey: true });
+    expect(screen.getByRole('separator', { name: 'Media pool width' })).toHaveAttribute('aria-valuenow', '420');
+  });
+});

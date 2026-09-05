@@ -6,6 +6,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useLayoutEffect } from 'react';
 import { Timeline } from '../timeline/Timeline';
 import { useMini } from '../state/useMini';
+import { seedDoc } from '../lib/mockData';
 
 const meta: Meta = {
   title: 'Timeline',
@@ -24,12 +25,10 @@ function Frame({ children, patch }: { children: React.ReactNode; patch?: Partial
   return (
     <div
       style={{
-        background: '#0d0d0d',
+        background: 'radial-gradient(120% 90% at 50% 0%, #17181a 0%, #111214 46%, #0d0d0d 100%)',
         height: '100vh',
         padding: 24,
         boxSizing: 'border-box',
-        backgroundImage: 'radial-gradient(#383838 1px, transparent 1px)',
-        backgroundSize: '24px 24px',
       }}
     >
       <Boot patch={patch} />
@@ -147,6 +146,53 @@ export const SnapOffState: StoryObj = {
   name: 'Timeline — snap toggle off (magnet icon inactive)',
   render: () => (
     <Frame patch={{ snapOn: false }}>
+      <Timeline />
+    </Frame>
+  ),
+};
+
+/* ---- R18e: the new edit/view states ---- */
+
+export const RippleOn: StoryObj = {
+  name: 'Timeline — ripple edit ON',
+  render: () => (
+    <Frame patch={{ rippleOn: true }}>
+      <Timeline />
+    </Frame>
+  ),
+};
+
+export const FilmstripOff: StoryObj = {
+  name: 'Timeline — filmstrip OFF (color-block clips)',
+  render: () => (
+    <Frame patch={{ filmstripOn: false }}>
+      <Timeline />
+    </Frame>
+  ),
+};
+
+export const AudioLaneHidden: StoryObj = {
+  name: 'Timeline — audio lane hidden (A1 off)',
+  render: () => (
+    <Frame patch={{ audioLaneVisible: false }}>
+      <Timeline />
+    </Frame>
+  ),
+};
+
+export const AfterCutHead: StoryObj = {
+  name: 'Timeline — after cut head at 6s (c2)',
+  render: () => (
+    <Frame
+      patch={{
+        selectedId: 'c2',
+        playhead: 6,
+        doc: {
+          ...seedDoc(),
+          clips: seedDoc().clips.map((c) => (c.id === 'c2' ? { ...c, start: 6, duration: 2 } : c)),
+        },
+      }}
+    >
       <Timeline />
     </Frame>
   ),

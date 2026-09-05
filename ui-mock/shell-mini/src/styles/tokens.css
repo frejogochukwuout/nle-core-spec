@@ -3,8 +3,8 @@
    (RunningHub "RHTV" quick-cut). Source of truth:
    ui-mock/shell-mini/docs/RH-skin-extraction.md §2.
    Carried verbatim, used selectively (per DESIGN-mvp.md D10.2):
-   mention/agent accents intentionally unused; drop-outline deferred
-   with the v0.2 DnD feature.
+   mention/agent accents intentionally unused; drop-outline is live
+   since the R18e pool→timeline DnD.
    Prefix: kept as-is (--canvas-*) for provenance.
    ============================================================ */
 
@@ -84,9 +84,17 @@
   --canvas-editor-track-height: 36px;
   --canvas-editor-clip-inset: 1px;
 
-  /* mini-shell aliases (layout metrics from DESIGN D4) */
+  /* mini-shell aliases (layout metrics from DESIGN D4; pool/inspector
+     widths now live in App.tsx splitter state — R18d) */
   --mini-gutter: 12px;
   --mini-topbar-h: 56px;
-  --mini-pool-w: 260px;
-  --mini-inspector-w: 240px;
+
+  /* mini-shell surfaces (R18d polish wave — feedback #13: the original
+     rgba(11,12,13,.88) panels over the #0d0d0d root left ~4% luminance
+     separation, which read as "barely any contrast on the regions".
+     Elevated toward the RH node bg #171717 with hairline top-light.) */
+  --mini-panel-surface: rgba(24, 25, 27, 0.92);
+  --mini-panel-border: rgba(255, 255, 255, 0.065);
+  --mini-panel-head-rule: rgba(255, 255, 255, 0.055);
+  --mini-splitter-hover: rgba(255, 255, 255, 0.14);
 }

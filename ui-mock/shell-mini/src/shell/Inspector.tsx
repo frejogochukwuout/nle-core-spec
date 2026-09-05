@@ -2,7 +2,7 @@
    Nudge ±0.5s (neighbor-clamped, one history entry per click, D3.7/m10).
    No dead fields (zero-no-op discipline, R14). */
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MousePointerClick } from 'lucide-react';
 import { useMini } from '../state/useMini';
 import { fmtTimecode } from '../lib/timecode';
 import { neighborBounds } from '../lib/geometry';
@@ -86,7 +86,9 @@ export function Inspector() {
         </div>
       ) : (
         <div className="mini-inspector__empty" data-testid="mini-inspector-empty">
-          Select a clip to see its facts.
+          <MousePointerClick className="mini-inspector__empty-icon" size={22} strokeWidth={1.5} aria-hidden="true" />
+          <span>Select a clip to see its facts.</span>
+          <span className="mini-inspector__empty-hint">Click any clip on the timeline.</span>
         </div>
       )}
     </aside>

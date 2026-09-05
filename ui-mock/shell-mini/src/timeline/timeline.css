@@ -10,14 +10,15 @@
    desync them under scroll).
    ============================================================ */
 
-/* ---- panel ------------------------------------------------ */
+/* ---- panel (R18d contrast lift — matches .mini-panel) ------- */
 
 .qc-timeline {
   position: relative;
+  border: 1px solid var(--mini-panel-border);
   border-radius: var(--canvas-editor-radius-panel);
-  background: var(--canvas-quick-cut-surface);
+  background: var(--mini-panel-surface);
   box-shadow:
-    0 10px 26px rgba(0, 0, 0, 0.12),
+    0 14px 32px rgba(0, 0, 0, 0.24),
     rgba(255, 255, 255, 0.024) 0 1px inset;
   overflow: hidden;
   z-index: 1;
@@ -34,7 +35,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--canvas-editor-space-md);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.14);
+  border-bottom: 1px solid var(--mini-panel-head-rule);
 }
 
 .qc-toolbar__group {
@@ -44,6 +45,13 @@
   min-width: 0;
   height: var(--canvas-editor-action-size);
   cursor: default;
+}
+
+/* R18f (VLM): hairline dividers between tool groups — the "command center"
+   reads as grouped, not a flat strip of equal icons */
+.qc-toolbar__group + .qc-toolbar__group {
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  padding-left: var(--canvas-editor-space-sm);
 }
 
 .qc-toolbar__group--right {
@@ -58,7 +66,7 @@
   border: none;
   border-radius: var(--canvas-editor-radius-pill);
   background: transparent;
-  color: var(--canvas-editor-text-default);
+  color: var(--canvas-editor-text-strong);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -91,10 +99,21 @@
 }
 
 .qc-toolbar__icon:focus-visible,
-.qc-toolbar__mini-icon:focus-visible,
-.qc-ruler__playhead:focus-visible {
+.qc-toolbar__mini-icon:focus-visible {
   outline: rgba(255, 255, 255, 0.62) solid 2px;
   outline-offset: 2px;
+}
+
+/* playhead focus: R18e fix (feedback #11) — Enter on a focused playhead
+   painted the generic 2px box around a 12px-wide column and looked like a
+   selection bounding box. The handle dot now carries a subtle ring instead;
+   the pill still reveals on focus for orientation. */
+.qc-ruler__playhead:focus-visible {
+  outline: none;
+}
+
+.qc-ruler__playhead:focus-visible .qc-ruler__playhead-handle {
+  box-shadow: rgba(255, 255, 255, 0.34) 0 0 0 2px;
 }
 
 /* zoom slider — 64px range, 4px track, white fill (RH-verbatim) */
@@ -140,11 +159,21 @@
 
 /* ---- shared horizontal scroll wrapper (mini deviation, D7) --- */
 
+/* R18f (review P1-1): the height chain — qc-timeline (flex column, height
+   from the row splitter) → scroll-wrap (flex:1, min-height:0) → THIS
+   (flex:1, min-height:0) → content div (flex column, height:100%, set
+   inline in Timeline.tsx) → qc-stage (flex:1) → lanes (flex:1 1 36px).
+   Before these two rules, qc-scroll sized to content and the lanes never
+   stretched (254px dead space at tlH=440). */
 .qc-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto hidden;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  display: flex;
+  flex-direction: column;
 }
 
 .qc-scroll::-webkit-scrollbar {
@@ -346,7 +375,7 @@
   transform: translate(calc(-100% + 4px));
 }
 
-/* ---- stage / tracks (RH-verbatim) --------------------------- */
+/* ---- stage / tracks (RH anatomy, R18d contrast lift) -------- */
 
 .qc-stage {
   position: relative;
@@ -369,16 +398,44 @@
   border-radius: var(--canvas-editor-radius-track);
   position: relative;
   min-width: 100%;
-  background: var(--canvas-quick-cut-track-surface);
+  background: rgba(0, 0, 0, 0.42); /* R18f: deeper well — timeline reads as its own room */
 }
 
 .qc-track-row__content {
   position: relative;
-  height: var(--canvas-editor-track-height);
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   border-radius: var(--canvas-editor-radius-control);
-  background: var(--canvas-quick-cut-lane-surface);
-  box-shadow: inset 0 0 0 1px var(--canvas-quick-cut-lane-border);
   overflow: hidden;
+}
+
+/* pool→timeline drop target (R18e): lane accepts a media drop */
+.qc-track-row__content.is-drop-target {
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.55);
+}
+
+/* R18f (review P2-3): collapsed audio lane — the lane never vanishes; a
+   slim restore bar keeps the state + clip count visible */
+.qc-track-row--collapsed {
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  height: 22px;
+  padding: 0 var(--canvas-editor-space-md);
+  border: none;
+  border-radius: var(--canvas-editor-radius-control);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+  color: var(--canvas-editor-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.qc-track-row--collapsed:hover {
+  background: var(--canvas-editor-control-hover);
+  color: var(--canvas-editor-text-default);
 }
 
 /* lane badge (mini addition, D3.2: V1/A1 at lane left edge) */
@@ -444,19 +501,42 @@
   );
 }
 
-/* audio waveform body (mini: mock bar pattern, token-faithful) */
+/* audio waveform body (R18e: real envelope bars, feedback #12 — the
+   uniform repeating-gradient read as a placeholder; per-media
+   deterministic envelope keeps the discrete-bar look but shapes like
+   audio. Color stays on the RH token. */
 .qc-track-item__waveform {
   position: absolute;
   inset: 0;
-  background-image: repeating-linear-gradient(
-    to right,
-    transparent 0 3px,
-    var(--canvas-quick-cut-audio-waveform) 3px 5px
+  /* R18f wave-2 P1: absolute-positioning a REPLACED element (SVG) with
+     inset:0 stretches the WIDTH but lets height:auto resolve from the
+     viewBox ratio (336x100 → 501px tall in a 36px clip — all bars
+     clipped away). Explicit 100%/100% restores the envelope. */
+  width: 100%;
+  height: 100%;
+  color: var(--canvas-quick-cut-audio-waveform);
+}
+
+/* color-block body (R18e: filmstrip toggle OFF — feedback #15): clips
+   fall back to media-kind color coding; the gradient hue comes from the
+   media asset (inline style sets --qc-block-hue). */
+.qc-track-item__block {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--qc-block-hue) 26% 34%) 0%,
+    hsl(var(--qc-block-hue) 22% 22%) 100%
   );
-  background-position: center;
-  background-size: 100% 52%;
-  background-repeat: repeat-x;
-  opacity: 0.9;
+  box-shadow: inset 0 0 0 1px hsl(var(--qc-block-hue) 30% 46% / 0.45);
+}
+
+.qc-track-item__block--audio {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--qc-block-hue) 30% 30%) 0%,
+    hsl(var(--qc-block-hue) 24% 18%) 100%
+  );
 }
 
 /* clip label (mini addition: media name chip, RH text-label token) */
@@ -527,6 +607,36 @@
 .qc-track-item.is-dragging {
   opacity: 0.85;
 }
+
+/* ---- snap guide (R18e: ported sibling T5 pattern, feedback deferral
+   closed): 2px guide at the engaged magnet target, tracks-wide. */
+.qc-snap-guide {
+  position: absolute;
+  top: 34px; /* below the ruler */
+  bottom: 20px; /* R18f wave-2: lane-end parity (stage margin 12 + padding 8) */
+  width: 2px;
+  margin-left: -1px;
+  background: var(--canvas-quick-cut-snap-guide);
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* ---- drop outline (R18e: pool→timeline DnD ghost) — the deferred
+   drop-outline token, now live: candidate placement ring in the RH
+   blue, 12% wash fill. */
+.qc-drop-outline {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border-radius: var(--canvas-editor-radius-control);
+  box-shadow:
+    inset 0 0 0 1.5px var(--canvas-quick-cut-drop-outline),
+    inset 0 0 0 999px rgba(56, 189, 248, 0.12);
+  z-index: 4;
+  pointer-events: none;
+}
+
+
 
 @media (prefers-reduced-motion: reduce) {
   .qc-toolbar__icon,

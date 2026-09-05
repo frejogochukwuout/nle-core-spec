@@ -75,40 +75,68 @@ Run it at boot or any time; safe twice.
 
 ## What's in (the whole MVP surface)
 
-- **Timeline** (the RH quick-cut port): tools row (undo/redo · split ·
-  delete · snap · 5-step zoom), 34px ruler with whole-second labels + minor
-  tick band, white playhead with hover/drag time pill, 2 lanes (V1+A1,
-  36px, badges).
-- **Clips:** filmstrip video clips + waveform audio clips, selection ring,
-  move-drag (neighbor-clamped, 5px threshold, grab-offset anchoring),
-  edge trim (media-duration + neighbor clamped, ± arrows when focused),
-  split at playhead (quantized + clamped), delete, click-to-append from
-  the media pool (audio→A1, video/image→V1).
+- **Timeline** (the RH quick-cut port): tools row (undo/redo · split S ·
+  cut-head [ · cut-tail ] · delete · snap · ripple · filmstrip · audio-eye
+  · 5-step zoom, hairline group dividers), 34px ruler with whole-second
+  labels + minor tick band, white playhead with hover/drag time pill,
+  2 lanes (V1+A1, 36px base, badges) that FLEX-TALL when the timeline is
+  resized.
+- **Ripple edit** (R18e, feedback #16): toggle in the toolbar; delete and
+  trim close the gap — same-track followers shift left/right with the
+  edit. Committed + preview paths are snapshot-relative (idempotent, no
+  wobble drift); the ripple quantize law (delta quantized, followers
+  floored at the edited clip's new end) keeps off-grid docs overlap-free.
+- **Cut styles** (R18e, feedback #7 — the RH 裁剪开始 / 裁剪结束
+  operations): `[` discards the selected clip's head at the playhead, `]`
+  discards the tail; both ripple-aware; keyboard + toolbar buttons.
+- **Clips:** filmstrip video clips (toggleable to media-kind color
+  blocks — feedback #15), waveform audio clips with REAL deterministic
+  envelope bars (feedback #12, discrete-bar RH grammar kept), selection
+  ring, move-drag (neighbor-clamped, 5px threshold, grab-offset
+  anchoring, snap guide at the engaged magnet), edge trim (media-duration
+  + neighbor clamped, ± arrows when focused, ripple hints when ripple is
+  on), split at playhead (quantized + clamped), delete, click-to-append
+  from the media pool (audio→A1, video/image→V1), and DRAG-TO-PLACE:
+  pool cards drag onto lanes with a drop-outline ghost (RH's deferred
+  #38bdf8 token, now live) + placement at the cursor (exact spot when
+  free, next gap otherwise — honest toasts either way).
 - **Playback:** Space plays (rAF, wraps at content end; stops honestly on
-  empty); ruler scrub + playhead drag + arrow keys.
+  empty); ruler scrub + playhead drag + arrow keys; Enter on the playhead
+  is a no-op (no focus bounding box — feedback #11).
 - **Undo/redo:** whole-doc snapshots (max 50), one entry per gesture,
-  Esc cancels a live drag, interaction lock mid-gesture.
+  Esc cancels a live drag, interaction lock mid-gesture. Ripple ops and
+  inserts round-trip exactly.
 - **Shell:** topbar (transport + TC + honest Export toast), media pool
-  (4 assets, gradient cards), viewer (clip-under-playhead + TC), inspector
-  (read-only facts + nudge ±0.5s), toasts.
+  (8 assets — enough to genuinely scroll), viewer (clip-under-playhead +
+  TC, inset screen-well depth), inspector (read-only facts + nudge ±0.5s
+  + a structured empty state), toasts, and RESIZABLE PANELS (R18d,
+  feedback #13): pool/inspector width splitters + a timeline-height
+  splitter (drag up → lanes grow taller, real NLE behavior; double-click
+  resets; keyboard ±8px / shift ±32px). Snap is OFF by default (feedback
+  #10 — the magnet is a deliberate opt-in now).
 
 ## What's OUT (deliberate — the deviations register)
 
-1. **annotakit skipped** (the sibling's vendored pin-comment review addon);
-   wire later = vendored dir + 3 config lines.
-2. **Drag-DnD media→timeline cut to v0.2** (top candidate: the loop is
-   complete via click-append + move + snap); drop-outline token deferred
-   with it.
+1. ~~annotakit skipped~~ — **DONE (R18b):** the vendored pin-comment
+   review addon is wired (see the kit section above).
+2. ~~Drag-DnD media→timeline cut to v0.2~~ — **DONE (R18e):** pool cards
+   drag onto lanes with a drop outline + placement at the drop time; the
+   drop-outline token is live.
 3. **White playhead** (`#f2f2f2`, RH-faithful) — NOT the spec-18/davinci
    red. This app follows the user-designated RH skin.
 4. **No fps** — float seconds on a 0.5s grid, `MM:SS.d` timecode
-   (registered deviation from spec-05 frames). Magnet commits may be
-   off-grid (documented exception).
-5. Fixed layout (no splitters), read-only inspector (except nudge),
+   (registered deviation from spec-05 frames). Magnet commits and
+   snap-off drags may be off-grid (documented exceptions; snap is OFF by
+   default since R18e). Split/cut quantize to the grid (≤0.25s offset
+   from the playhead — documented).
+5. ~~Fixed layout (no splitters)~~ — **DONE (R18d):** pool/inspector
+   width + timeline height splitters. Read-only inspector (except nudge),
    no scenes/variants/mixer/pages/effects/markers/context menus/
-   multi-select/ripple/track-editing/localStorage.
-6. Snap-guide indicator deferred with DnD; uniform 12px gutters (the RH
-   18px node-space is the registered alternative for pixel-compare passes).
+   multi-select/track-editing/localStorage. Ripple EXISTS now (R18e) —
+   single-track follower shift only, no multi-select ripple.
+6. ~~Snap-guide indicator deferred~~ — **DONE (R18e):** the 2px guide
+   paints at the engaged magnet target. The main-row gutter is 8px
+   (splitters live in it) vs the root's 12px — registered.
 
 ## Layout
 
