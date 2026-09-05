@@ -528,6 +528,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
     (e.currentTarget as HTMLElement).focus(); // roving focus — Shift+F10 host (§4.9)
     dragCancelled.current = false;
     lastGestureWasDrag.current = false; // fresh gesture — canonical reset-on-pointerdown
+    setGestureActive(false); // R15-V2 P3: exception-killed gestures can't wedge the flag
     capturePointer(e.currentTarget as HTMLElement, e.pointerId);
     /* R15 T4: body gestures route by tool — slip/slide own the body drag in
        their tools; every other tool keeps the T3 2D move. */

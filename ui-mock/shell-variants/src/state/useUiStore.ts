@@ -594,9 +594,15 @@ export const useUi = create<UiState>((set, get) => ({
     // the flag stuck from the previous scene and the next click did the
     // OPPOSITE of its label on the fresh scene)
     const sc = s.scenes.find((x) => x.id === id);
+    // R15-V2 P3: reconcile a stale playhead beyond the NEW scene's duration
+    // (display-only staleness otherwise — every write path clamps, but the
+    // ruler/TC read shows the old position until the first tick)
+    const newDur = sc ? sceneDuration(sc) : 0;
+    const playhead = Math.min(s.playhead, newDur);
     return {
       activeSceneId: id,
       selection: [],
+      playhead,
       ...(sc ? { lockAll: sc.tracks.every((t) => t.locked) } : {}),
     };
   }),

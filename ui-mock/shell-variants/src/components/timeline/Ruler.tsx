@@ -142,7 +142,7 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
       if (e.button !== 0) return;
       e.stopPropagation(); // the ruler's own press must NOT seek the playhead
       (e.currentTarget as HTMLElement).focus();
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* inactive pointer id (R15-V2 P3 guard) */ }
       bracketDrag.current = side;
     },
     onPointerMove: (e: React.PointerEvent) => {
@@ -263,7 +263,7 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
       onPointerDown={(e) => {
         if (e.button !== 0) return; // right-button down must not seek — the menu follows
         (e.currentTarget as HTMLElement).focus(); // roving focus for Shift+F10
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* inactive pointer id (R15-V2 P3 guard) */ }
         seeking.current = true;
         scrubMoves.current = 0;
         downX.current = e.clientX;
