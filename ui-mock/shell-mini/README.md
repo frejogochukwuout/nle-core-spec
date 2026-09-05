@@ -38,6 +38,33 @@ default). The app is NOT public in this layout — it's the :3001 localhost
 dev loop (its vite.config keeps `allowedHosts` so it's edge-ready if a
 future harness maps a proxy to :3001).
 
+**Pin-comment review surface (storybook-annotakit v0.5, vendored):**
+`vendor/storybook-annotakit/` — the addon is FIRST in
+`.storybook/main.ts` addons, so `npm run storybook` mounts the review API on
+the dev server itself: `/annotakit/api/*` (health, threads, export digests,
+sync), the toolbar pin/region/threads buttons (⌥C / ⌥R / ⌥D), and the
+bottom-dock threads panel. Reviewer pins at the public URL are same-origin
+fetches — they work directly through the edge. The store lives INSIDE the
+repo's git dir (`/home/z/nle-core-spec/.git/annotakit/threads.db`) —
+branch-switch-proof — and syncs to an **orphan `annotakit`** branch on
+GitHub (shared with the sibling stream's shell-variants env; the kit's
+logical merge reconciles both), plus a 1:1 GitHub-issue mirror per thread.
+Token comes from `.env` (`ANNOTAKIT_GH_TOKEN` / `ANNOTAKIT_GH_REPO` —
+gitignored, never committed; recreate after a recycle, PAT from chat).
+dist/ IS tracked in the vendor dir (kit v0.5 "dogfood #6" — boots without
+building; `npm run vendor:build` rebuilds from src).
+
+> **Local patch on the vendored kit (v0.5.0):** `refHasOurReadme` in
+> `src/server/sync.ts` originally used `git ls-tree <tree> -- README`,
+> which is pathspec-relative to the PROJECT dir — when the Storybook
+> project is a SUBDIRECTORY of the repo (our `ui-mock/shell-mini`), the
+> pathspec never matches, so every remote orphan branch reads as
+> "foreign", sync never parents on it, and every push after the first is
+> rejected non-fast-forward forever. Patched to `git rev-parse
+> <ref>:README` (cwd-independent; verified: kill→mutation→fetch→merge→push
+> cycle live, remote branch converged, tombstones propagated). Upstream
+> fix worth contributing back to melodietexoss/storybook-annotakit.
+
 **Cold-start resurrection (container recycle):** `scripts/boot-restore.sh`
 (iso: `/home/z/my-project/.zscripts/dev.sh`) — idempotent; restores the repo
 from the latest `/home/sync/nle-core-spec-*.bundle` (PAT-free), runs `npm ci`

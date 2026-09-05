@@ -37,6 +37,22 @@ below — it is COMPLETE on origin and its standing items are preserved.
   public-200 cycle.
 - **The app is the localhost dev surface on :3001** (`scripts/dev3000.py`;
   `vite.config.ts` port 3001) — for the agent dev loop only, NOT public.
+- **Pin-comment review surface LIVE (R18b):** storybook-annotakit v0.5 is
+  vendored at `vendor/storybook-annotakit/` (dist tracked — boots without
+  building), FIRST in `.storybook/main.ts` addons. At the public URL the
+  toolbar carries Pin (⌥C) / Region (⌥R) / Threads (⌥D) / Hide (⌥L), and
+  reviewer pins are same-origin REST through the edge — verified live
+  (thread created via the public URL's own API, visible in the manager UI,
+  drawer badge, delete → tombstone → orphan-branch push → GH issue closed).
+  Store: `.git/annotakit/threads.db` (branch-switch-proof) → orphan
+  `annotakit` branch on GitHub — **SHARED with the sibling stream's env**
+  (their `db=annotakit@shell-variants` commits appear in the branch log;
+  the kit's logical merge reconciles both) — plus a 1:1 GitHub-issue mirror.
+  Agent surface: `GET /annotakit/api/health` → agentSurfaces (rest +
+  digests + github); `GET /annotakit/api/threads`, `/export?format=md`,
+  POST/DELETE threads, POST `/sync`. Token: `.env` in shell-mini
+  (gitignored — **recreate after a recycle**: PAT from chat +
+  `ANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec`).
 - **R18 correction (what was REVERTED):** the R16 "storybook can't serve
   publicly, static-mount it instead" verdict was wrong; the workaround
   infrastructure was removed — `public/stories/` (8.4MB), the
@@ -83,13 +99,16 @@ below — it is COMPLETE on origin and its standing items are preserved.
    gates on the /index.json asset-chain probe). If the sandbox is FRESH (no
    /home/z/my-project/.zscripts — harness didn't restore repo.tar): clone
    with the PAT from chat, `npm ci`, then `python3 scripts/sb3000.py` (and
-   `python3 scripts/dev3000.py` for the localhost app on :3001). Verify
-   PUBLIC liveness with the forged-Host probe (see the Host-header law
-   above), not just localhost. If port 3000 is already bound by the
-   platform's own Next.js dev server (fresh sandboxes with the bootstrap
-   template) or a stale tenant, dev.sh inspects its cwd then frees it — the
-   user directive (R18) is that the **shell-mini Storybook dev server owns
-   :3000**.
+   `python3 scripts/dev3000.py` for the localhost app on :3001). ALSO
+   recreate `ui-mock/shell-mini/.env` (gitignored — dies with the clone):
+   `ANNOTAKIT_GH_TOKEN=<PAT>` + `ANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec`
+   — without it the review surface degrades to local mode (REST works, no
+   GitHub mirror / orphan-branch durability). Verify PUBLIC liveness with
+   the forged-Host probe (see the Host-header law above), not just
+   localhost. If port 3000 is already bound by the platform's own Next.js
+   dev server (fresh sandboxes with the bootstrap template) or a stale
+   tenant, dev.sh inspects its cwd then frees it — the user directive (R18)
+   is that the **shell-mini Storybook dev server owns :3000**.
 3. **Baseline gates before editing anything:** `npm run test` (93/93),
    `npm run typecheck` (clean), `npm run build`, `npm run build-storybook`.
 4. **gitlab remote** (WAF blocks ~1/3 of pushes — just retry a few times):

@@ -1,7 +1,16 @@
 node_modules/
-dist/
+/dist/
 *.log
 .DS_Store
 
 # Storybook
 storybook-static/
+
+# annotakit runtime (token law: .env NEVER tracked — secret scanner blocks pushes;
+# the kit reads ANNOTAKIT_GH_TOKEN / ANNOTAKIT_GH_REPO from here)
+.env
+
+# sqlite sidecars of the annotakit store (the db itself lives in
+# <git-common-dir>/annotakit/threads.db — inside .git/, never in the work tree)
+*.db-wal
+*.db-shm
