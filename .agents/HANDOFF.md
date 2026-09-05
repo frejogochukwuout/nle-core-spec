@@ -29,6 +29,11 @@ COMPLETE on origin and its standing items are preserved.
   `npm run build-storybook && cp -r storybook-static public/stories` + commit.
   Full verified law-set: `.agents/SKILL.md` "preview-URL serving reference"
   (Laws 1-5) — read it before any go-live/port claim.
+- **Casing trap (a real user hit it):** Caddy's query matcher is
+  case-sensitive — `?xtransformport=6007` falls through to the app. The app
+  now bounces any-cased `xtransformport=6007` to `/stories/index.html`
+  (`src/lib/previewRedirect.ts`, 8 tests). Never hand users a query URL —
+  always the `/stories/` path.
 - **The Host-header law (the bug that made it "not live" while the process
   was up):** the FC edge rewrites the request Host to `...fcapp.run`; Caddy
   passes Host through untouched; Vite's default `server.allowedHosts`

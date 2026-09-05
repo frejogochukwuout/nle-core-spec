@@ -830,6 +830,14 @@ loads, UI never boots).
 
 ### Law 3 — ?XTransformPort: query-scoped; documents yes, UIs no (verified)
 
+- **The query KEY is case-sensitive in Caddy's matcher** — `?xtransformport=6007`
+  ≠ `?XTransformPort=6007`. A lowercase key silently falls through to the
+  default route → :3000 → the app renders with no visible error (the most
+  confusing outcome; a real user hit exactly this). Verified by paired
+  probes: lowercase → app title, proper-case → SB title. Mitigation shipped:
+  the app bounces any-cased `xtransformport=6007` to `/stories/index.html`
+  (`src/lib/previewRedirect.ts` + `main.tsx`, 8 tests) — but the real fix is
+  handing users the /stories/ URL, never the query URL.
 - The query **does survive the public edge** (verified: the SB manager HTML
   was served from :6007 at the public URL WITH the query; an older
   sibling-session note claimed it did not survive — don't inherit that
