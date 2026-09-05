@@ -67,14 +67,19 @@ describe('AppShell region structure (spec 18 §3)', () => {
     expect(screen.getByTestId('shell-dock')).toBeInTheDocument();
   });
 
-  it('timeline block: 4 track-header lanes, all 7 fixture clips, TC readout, crossfade marker', () => {
+  it('timeline block: 4 track-header lanes, the in-window fixture clips, TC readout, crossfade marker', () => {
     renderAppShell();
     for (const trackId of ['tr-overlay-1', 'tr-main', 'tr-audio-1', 'tr-audio-2']) {
       expect(screen.getByTestId(`shell-track-header-${trackId}`)).toBeInTheDocument();
     }
-    for (const elId of ['el-1', 'el-2', 'el-3', 'el-4', 'el-5', 'el-6', 'el-7']) {
+    /* R15 T9 clip virtualization: jsdom's viewport fallback is 900 px → the
+       window [−200, 1100] at pps 46 culls el-4 (24 s → 1104 px) — the ONLY
+       fixture clip outside it; a real ≥1500 px shell keeps all 7. Mirrors the
+       Timeline-test law (canonical virtualization contract). */
+    for (const elId of ['el-1', 'el-2', 'el-3', 'el-5', 'el-6', 'el-7']) {
       expect(screen.getByTestId(`clip-${elId}`)).toBeInTheDocument();
     }
+    expect(screen.queryByTestId('clip-el-4')).not.toBeInTheDocument(); // culled at 900 px viewport
     // playhead boots at 16s (§6.2 default) → TC readout + the el-2 crossfade
     expect(screen.getByTestId('shell-timeline-tc')).toHaveTextContent('00:00:16:00');
     expect(screen.getByTestId('transition-el-2')).toBeInTheDocument();

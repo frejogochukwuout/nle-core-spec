@@ -146,26 +146,43 @@ describe('Clip', () => {
   it('a move drag commits moveElement and pushes one undo entry (spec 18 §5 optimistic → commit)', () => {
     boot({});
     const clip = screen.getByTestId('clip-el-2');
+    /* R15 T3: moves now REJECT half-open overlaps (spec-05 §8.3) — main has
+       no free spot between the clips, so the drag lands past the tail
+       (30 s content end): 8.5 s + 30 s = 38.5 s. */
     fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 }); // 8.5 s × 46
-    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 489 }); // +98 px → 10.625 s
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 1771 }); // +1380 px → 38.5 s
     expect(screen.getByTestId('clip-drag-tc')).toBeInTheDocument(); // live TC bubble
-    fireEvent.pointerUp(clip, { pointerId: 1 });
-    expect(el('el-2').startTime).toBeCloseTo(10.625, 4);
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 1771 });
+    expect(el('el-2').startTime).toBeCloseTo(38.5, 4);
     expect(store().past).toHaveLength(1);
+  });
+
+  it('an overlapping drop is REJECTED: no move, no history, honest toast (R15 T3 / spec-05 §8.3)', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 489 }); // 8.5 → 10.625: overlaps el-3 [17,24)
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 489 });
+    expect(el('el-2').startTime).toBe(8.5); // never moved
+    expect(store().past).toHaveLength(0);
+    expect(store().toasts.at(-1)!.title).toBe('Drop rejected');
+    expect(store().toasts.at(-1)!.detail).toBe('clips would overlap (spec-05 §8.3)');
   });
 
   it('Alt+drag duplicates: ghost at the original, copy lands at the drop, original stays (spec 18 §5)', () => {
     boot({});
     const clip = screen.getByTestId('clip-el-2');
+    // free-spot drop (38.5 s — see the overlap-rejection note above)
     fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, altKey: true });
-    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 489, altKey: true });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 1771, altKey: true });
     expect(screen.getByTestId('clip-ghost-el-2')).toBeInTheDocument(); // faded ghost pinned at 8.5 s
-    fireEvent.pointerUp(clip, { pointerId: 1 });
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 1771 });
     const newId = store().selection[0]!;
     expect(newId).toMatch(/^el-2-d/);
-    expect(el(newId).startTime).toBeCloseTo(10.625, 4);
+    expect(el(newId).startTime).toBeCloseTo(38.5, 4);
     expect(el('el-2').startTime).toBe(8.5); // original never moves
     expect(mainIds()).toHaveLength(5);
+    expect(store().past).toHaveLength(1); // ONE composite entry (duplicate + resolved move)
   });
 
   it('Escape mid-drag cancels: nothing commits, no history entry (spec 16 §3.3 escape)', () => {
@@ -263,9 +280,9 @@ describe('Clip', () => {
     boot({ selection: [] });
     const clip = screen.getByTestId('clip-el-2');
     fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
-    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 489 });
-    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 489 });
-    expect(el('el-2').startTime).toBeCloseTo(10.625, 4);
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 1771 }); // 38.5 s free spot (R15 T3 overlap law)
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 1771 });
+    expect(el('el-2').startTime).toBeCloseTo(38.5, 4);
     fireEvent.click(clip); // the browser-synthesized follow-up click — NOT a re-select
     expect(store().selection).toEqual([]);
     fireEvent.click(clip); // flag consumed — a genuine click selects again

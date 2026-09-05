@@ -485,7 +485,10 @@ describe('R14: ⌘S / ⌘E (spec 16 §3.9)', () => {
     useUi.setState({ past: [] });
     press({ key: 's', ctrlKey: true });
     expect(S().toasts.at(-1)?.title).toBe('Nothing to save');
-    act(() => { S().moveElement('el-2', 9); });
+    // R15 T3 contract: moveElement now REJECTS overlapping drops (main is
+    // fully packed — el-2 → 9 would overlap el-3 [17,24) → no-op, no history).
+    // A free-spot mutation: el-5 (overlay) → 20, clear of everything.
+    act(() => { S().moveElement('el-5', 20); });
     press({ key: 's', ctrlKey: true });
     expect(S().saveAttempt).toBe(1);
   });

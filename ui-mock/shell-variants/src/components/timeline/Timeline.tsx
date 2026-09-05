@@ -13,18 +13,60 @@
    shift/ctrl/meta = live-merge ratchet, buttons-mask cancel). */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useUi, trackHeights } from '../../state/useUiStore';
+import { useUi, trackHeights, mintTrackIds } from '../../state/useUiStore';
 import { useVariant } from '../debug/VariantProvider';
-import { sceneDuration, mediaById, findElement, type TrackJSON } from '../../lib/mockData';
+import { sceneDuration, mediaById, findElement, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
 import { dynamicContentWidth, snapPxToDeviceGrid, zoomMinPps, PLAYHEAD_LINE_PX, HORIZONTAL_WHEEL_STEP_PX, DRAG_THRESHOLD_PX } from '../../lib/pixel';
+import {
+  resolveHoverTarget,
+  resolveGroupMove,
+  toCreateTrackPlans,
+  dragRejectionToast,
+  type GroupMoveFail,
+  type PlannedMove,
+  type PlannedTrack,
+} from '../../lib/timelinePlacement';
 import { zoomController, createWheelZoomAccumulator } from '../../lib/zoomController';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
-import { Clip, buildClipMenuItems } from './Clip';
+import { Clip, buildClipMenuItems, type ClipDragEvent, type ClipDragHost } from './Clip';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { POOL_DRAG_TYPE, isDroppable } from '../shell/MediaPool';
 import { useConfirm } from '../shell/ConfirmDialog';
+
+/* R15 T3 — the drop-target PREVIEW the Timeline renders while a cross-track
+   drag is engaged. `ghosts` are content-space boxes at the RESOLVED target
+   (members included); a `conflict` preview keeps the ghosts (task: the ghost
+   still shows at the snapped time / freezes at the last-valid target) but
+   suppresses the lane highlight and drives the not-allowed cursor. */
+interface DragGhostBox {
+  id: string;
+  trackId: string;
+  startTime: number;
+  duration: number;
+  type: ElementJSON['type'];
+  top: number;   // content space (zoneH included)
+  height: number;
+  anchor: boolean;
+}
+interface DragPreview {
+  anchorId: string;
+  memberIds: string[];
+  /** lane index to band-highlight (valid existing-track targets only). */
+  hoverIndex: number | null;
+  /** content-space Y of the 2px insert line (new-track targets only). */
+  insertLineY: number | null;
+  ghosts: DragGhostBox[];
+  conflict: GroupMoveFail | null;
+  /** ghosts frozen at the LAST-VALID target (incompatible / mixed hover). */
+  frozen: boolean;
+}
+
+/* rAF auto-scroll constants (canonical use-edge-auto-scroll): 100px edge
+   threshold, 15px/frame max, intensity ramps 1 − dist/threshold. */
+const EDGE_SCROLL_THRESHOLD_PX = 100;
+const EDGE_SCROLL_MAX_SPEED = 15;
 
 export function Timeline() {
   const { variant } = useVariant();
@@ -39,6 +81,7 @@ export function Timeline() {
   const loadSampleProject = useUi((s) => s.loadSampleProject);
   const pushToast = useUi((s) => s.pushToast);
   const mediaDrag = useUi((s) => s.mediaDrag); // pool drag-to-lane state (18 §4.2)
+  const selection = useUi((s) => s.selection); // R15 T9: selected clips are never virtualized away
   const menu = useContextMenu(); // §4.9 timeline-empty + clip menus (R15 T2 router)
   const confirm = useConfirm(); // §6.4 multi-delete confirmation (clip menu route)
 
@@ -228,6 +271,254 @@ export function Timeline() {
   const snapTargets = scene.tracks.flatMap((t) => t.elements.flatMap((e) => [e.startTime, e.startTime + e.duration]));
   snapTargets.push(playhead, 0, duration);
 
+  /* lane geometry (content space): the band-top walk + the lane index under
+     a content Y. Contiguous lanes (1px borders) — no gap resolution needed
+     (canonical gap law N/A, design T3). */
+  const laneTopAt = (index: number): number => {
+    let top = zoneH;
+    for (let i = 0; i < index && i < scene.tracks.length; i++) top += laneHeight(scene.tracks[i]!.kind);
+    return top;
+  };
+  const laneAtContentY = (contentY: number): number | 'above' | 'below' => {
+    if (contentY < zoneH) return 'above';
+    let top = zoneH;
+    for (let i = 0; i < scene.tracks.length; i++) {
+      const h = laneHeight(scene.tracks[i]!.kind);
+      if (contentY < top + h) return i;
+      top += h;
+    }
+    return 'below';
+  };
+
+  /* ---- R15 T3: the Clip → Timeline drag seam. The Clip owns the gesture
+     laws; THIS component owns the lane layout + drop-target resolution and
+     performs the release commit (resolved group moves / alt duplicates) —
+     the resolution itself is the pure resolveGroupMove in lib/. */
+  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  interface DragSession {
+    anchorId: string;
+    anchorType: ElementJSON['type'];
+    anchorTrackIdx: number;
+    groupIds: string[];        // canonical drag group: selection incl. anchor, else [anchor]
+    mintedIds: string[];       // pre-minted new-track ids, one per member (max)
+    pointerX: number;          // live pointer (screen) — feeds the auto-scroll rAF
+    lastValid: DragPreview | null; // frozen-ghost source for invalid hovers
+  }
+  const dragSessionRef = useRef<DragSession | null>(null);
+
+  /* edge auto-scroll while a clip drag is active (canonical
+     use-edge-auto-scroll; deferred from T2): threshold 100px, max 15px/frame,
+     ramp 1 − dist/100; horizontal only — our vertical content is short. */
+  const autoScrollRaf = useRef<number | null>(null);
+  const stopAutoScroll = () => {
+    if (autoScrollRaf.current !== null) {
+      cancelAnimationFrame(autoScrollRaf.current);
+      autoScrollRaf.current = null;
+    }
+  };
+  const startAutoScroll = () => {
+    if (autoScrollRaf.current !== null) return;
+    const tick = () => {
+      const session = dragSessionRef.current;
+      const sc = scrollRef.current;
+      if (!session || !sc) {
+        autoScrollRaf.current = null;
+        return;
+      }
+      const box = sc.getBoundingClientRect();
+      const relativeX = session.pointerX - box.left;
+      const viewW = sc.clientWidth || box.width;
+      const scrollMax = Math.max(0, sc.scrollWidth - viewW);
+      let speed = 0;
+      if (relativeX < EDGE_SCROLL_THRESHOLD_PX && sc.scrollLeft > 0) {
+        const dist = Math.max(0, relativeX);
+        speed = -EDGE_SCROLL_MAX_SPEED * (1 - dist / EDGE_SCROLL_THRESHOLD_PX);
+      } else if (relativeX > viewW - EDGE_SCROLL_THRESHOLD_PX && sc.scrollLeft < scrollMax) {
+        const dist = Math.max(0, viewW - relativeX);
+        speed = EDGE_SCROLL_MAX_SPEED * (1 - dist / EDGE_SCROLL_THRESHOLD_PX);
+      }
+      if (speed !== 0) {
+        const next = Math.max(0, Math.min(scrollMax, sc.scrollLeft + speed));
+        if (next !== sc.scrollLeft) {
+          sc.scrollLeft = next;
+          setScrollLeft(next); // keep ruler ticks + clip virtualization live
+        }
+      }
+      autoScrollRaf.current = requestAnimationFrame(tick);
+    };
+    autoScrollRaf.current = requestAnimationFrame(tick);
+  };
+  useEffect(() => stopAutoScroll, []); // unmount safety — never leak the rAF
+
+  /* the drop-target resolution shared by the PREVIEW (each move) and the
+     COMMIT (release): engagement = pointer ≥5px outside the anchor's own
+     lane band; then the lane under the pointer (above/below all → new
+     track), the pure resolveGroupMove over the CURRENT doc. */
+  const resolveDrag = (
+    currentScene: typeof scene,
+    session: DragSession,
+    clientX: number,
+    clientY: number,
+    previewStart: number,
+  ): { engaged: boolean; hover: number | 'above' | 'below'; resolution: ReturnType<typeof resolveGroupMove> } => {
+    const sc = scrollRef.current;
+    const box = sc?.getBoundingClientRect();
+    const contentY = box ? clientY - box.top + (sc?.scrollTop ?? 0) : 0;
+    const ownTop = laneTopAt(session.anchorTrackIdx);
+    const ownH = laneHeight(scene.tracks[session.anchorTrackIdx]?.kind ?? 'main');
+    const engaged = box ? contentY <= ownTop - DRAG_THRESHOLD_PX || contentY >= ownTop + ownH + DRAG_THRESHOLD_PX : false;
+    if (!engaged) {
+      // horizontal-only: target = the anchor's own lane (the clip's own
+      // optimistic preview is the ghost)
+      const ownTrackId = scene.tracks[session.anchorTrackIdx]?.id;
+      return {
+        engaged: false,
+        hover: session.anchorTrackIdx,
+        resolution: ownTrackId
+          ? resolveGroupMove(currentScene, session.anchorId, { trackId: ownTrackId }, previewStart, session.groupIds)
+          : { ok: false as const, reason: 'no-track' },
+      };
+    }
+    const hover = laneAtContentY(contentY);
+    const hoverTarget = resolveHoverTarget(currentScene, session.anchorType, hover);
+    if (hoverTarget.kind === 'invalid') {
+      return { engaged: true, hover, resolution: { ok: false as const, reason: hoverTarget.reason } };
+    }
+    const target = hoverTarget.kind === 'new'
+      ? { newTrackIds: session.mintedIds, insertIndex: hoverTarget.insertIndex }
+      : { trackId: currentScene.tracks[hoverTarget.trackIndex]!.id };
+    return { engaged: true, hover, resolution: resolveGroupMove(currentScene, session.anchorId, target, previewStart, session.groupIds) };
+  };
+
+  /* ghost geometry: the virtual layout = current tracks + planned new tracks
+     at their insert indices (sequential splices stack the block in member
+     order, exactly like the commit's "insert above X" runs). */
+  const buildGhosts = (res: { ok: true; moves: PlannedMove[]; createTracks: PlannedTrack[] }, anchorId: string): { ghosts: DragGhostBox[]; insertLineY: number | null } => {
+    const layout: { kind: TrackJSON['kind']; id: string }[] = scene.tracks.map((t) => ({ kind: t.kind, id: t.id }));
+    const sortedPlanned = [...res.createTracks].sort((a, b) => a.insertIndex - b.insertIndex);
+    for (const ct of sortedPlanned) layout.splice(Math.min(ct.insertIndex, layout.length), 0, { kind: ct.kind, id: ct.id });
+    const tops: number[] = [];
+    let acc = zoneH;
+    for (const l of layout) {
+      tops.push(acc);
+      acc += laneHeight(l.kind);
+    }
+    const elsById = new Map<string, ElementJSON>();
+    for (const t of scene.tracks) for (const e of t.elements) elsById.set(e.id, e);
+    const ghosts: DragGhostBox[] = res.moves.map((move) => {
+      const layoutIdx = layout.findIndex((l) => l.id === move.trackId);
+      const el = elsById.get(move.id);
+      return {
+        id: move.id,
+        trackId: move.trackId,
+        startTime: move.startTime,
+        duration: el?.duration ?? 0,
+        type: el?.type ?? 'video',
+        top: tops[Math.max(0, layoutIdx)] ?? zoneH,
+        height: laneHeight(layout[Math.max(0, layoutIdx)]?.kind ?? 'main') - 4,
+        anchor: move.id === anchorId,
+      };
+    });
+    const firstPlanned = sortedPlanned[0];
+    const insertLineY = firstPlanned ? (tops[layout.findIndex((l) => l.id === firstPlanned.id)] ?? zoneH) - 1 : null;
+    return { ghosts, insertLineY };
+  };
+
+  const onClipDragEvent: ClipDragHost = (e: ClipDragEvent) => {
+    if (e.phase === 'start') {
+      // canonical reservedNewTrackIds: one per moving clip (max) — the target
+      // identity is stable across pointermove recomputes
+      const s = useUi.getState();
+      const groupIds = s.selection.includes(e.anchorId) ? s.selection : [e.anchorId];
+      const anchorIdx = scene.tracks.findIndex((t) => t.elements.some((el) => el.id === e.anchorId));
+      const anchorType = findElement(s.scenes, e.anchorId)?.element.type ?? 'video';
+      dragSessionRef.current = { anchorId: e.anchorId, anchorType, anchorTrackIdx: anchorIdx, groupIds, mintedIds: mintTrackIds(Math.max(1, groupIds.length)), pointerX: e.clientX, lastValid: null };
+      startAutoScroll();
+      return;
+    }
+    if (e.phase === 'move') {
+      const session = dragSessionRef.current;
+      if (!session) return;
+      session.pointerX = e.clientX;
+      const { engaged, hover, resolution } = resolveDrag(scene, session, e.clientX, e.clientY, e.previewStart);
+      if (!engaged) {
+        setDragPreview(null); // the dragged clip's own preview is the ghost
+        return;
+      }
+      if (resolution.ok) {
+        const { ghosts, insertLineY } = buildGhosts(resolution, session.anchorId);
+        const preview: DragPreview = {
+          anchorId: session.anchorId,
+          memberIds: resolution.moves.map((m) => m.id),
+          // existing-track target → band-highlight the hovered lane; new-track
+          // targets render the insert line instead
+          hoverIndex: resolution.createTracks.length > 0 ? null : typeof hover === 'number' ? hover : null,
+          insertLineY,
+          ghosts,
+          conflict: null,
+          frozen: false,
+        };
+        session.lastValid = preview;
+        setDragPreview(preview);
+        return;
+      }
+      const reason = resolution.reason;
+      if (reason === 'incompatible' || reason === 'locked' || reason === 'mixed-group') {
+        // ghost FREEZES at the last-valid target; lane NOT highlighted
+        setDragPreview(session.lastValid
+          ? { ...session.lastValid, frozen: true, conflict: reason, hoverIndex: null }
+          : { anchorId: session.anchorId, memberIds: [session.anchorId], hoverIndex: null, insertLineY: null, ghosts: [], conflict: reason, frozen: true });
+        return;
+      }
+      // overlap / no-track: the ghost still shows AT the snapped time in the
+      // hovered lane (anchor-only), conflict-edged — release is a no-op
+      const elsById = new Map<string, ElementJSON>();
+      for (const t of scene.tracks) for (const el of t.elements) elsById.set(el.id, el);
+      const anchorEl = elsById.get(session.anchorId);
+      const hoveredIdx = typeof hover === 'number' ? hover : null;
+      const ghost: DragGhostBox | null = anchorEl && hoveredIdx !== null
+        ? {
+            id: session.anchorId,
+            trackId: scene.tracks[hoveredIdx]!.id,
+            startTime: e.previewStart,
+            duration: anchorEl.duration,
+            type: anchorEl.type,
+            top: laneTopAt(hoveredIdx),
+            height: laneHeight(scene.tracks[hoveredIdx]!.kind) - 4,
+            anchor: true,
+          }
+        : null;
+      setDragPreview({
+        anchorId: session.anchorId,
+        memberIds: [session.anchorId],
+        hoverIndex: null,
+        insertLineY: null,
+        ghosts: ghost ? [ghost] : [],
+        conflict: reason,
+        frozen: false,
+      });
+      return;
+    }
+    // 'end' — release / cancel
+    stopAutoScroll();
+    const session = dragSessionRef.current;
+    dragSessionRef.current = null;
+    setDragPreview(null);
+    if (!session || e.cancelled || !e.commit) return;
+    // resolve fresh from the RELEASE geometry (pure over the CURRENT doc)
+    const s = useUi.getState();
+    const liveScene = s.scenes.find((x) => x.id === s.activeSceneId);
+    if (!liveScene) return;
+    const { resolution } = resolveDrag(liveScene, session, e.clientX, e.clientY, e.previewStart);
+    if (!resolution.ok) {
+      s.pushToast(dragRejectionToast(resolution.reason));
+      return;
+    }
+    const createTracks = toCreateTrackPlans(liveScene, resolution.createTracks);
+    if (e.alt) s.duplicateAndMove({ ids: session.groupIds, moves: resolution.moves, createTracks });
+    else s.moveElements({ moves: resolution.moves, createTracks });
+  };
+
   /* two-way scroll sync (W0-21): lanes ⇄ headers — a wheel over EITHER
      column keeps the pair aligned (the real shell has ONE scroll region;
      two synced panes is the mock's stand-in). Loop guard: writes happen
@@ -348,6 +639,27 @@ export function Timeline() {
   const laneBg = (kind: TrackJSON['kind']) =>
     kind === 'main' ? 'var(--lane-video)' : kind === 'audio' ? 'var(--lane-audio)' : 'var(--lane-overlay)';
 
+  /* R15 T3 ghost chrome: the drag-preview ghost body per element type (the
+     alt-ghost twin) + the conflict edge. */
+  const ghostBg = (type: ElementJSON['type']) =>
+    type === 'audio' ? 'linear-gradient(to bottom, var(--clip-audio-a), var(--clip-audio-b))'
+      : type === 'text' ? 'var(--clip-text)'
+        : 'var(--clip-video)';
+
+  /* R15 T9 clip virtualization: skip rendering clips entirely outside
+     [scrollLeft − 200, scrollLeft + viewportW + 200]; selected or dragging
+     clips are NEVER skipped (with the fixture at default zoom nothing is
+     culled — the cull only bites at high zoom + far scroll). */
+  const dragGroupIds = dragSessionRef.current
+    ? new Set([dragSessionRef.current.anchorId, ...dragSessionRef.current.groupIds])
+    : null;
+  const clipVisible = (el: ElementJSON): boolean => {
+    if (selection.includes(el.id)) return true;
+    if (dragGroupIds?.has(el.id)) return true;
+    const left = el.startTime * pxPerSec;
+    return left + el.duration * pxPerSec >= scrollLeft - 200 && left <= scrollLeft + (viewportW || 900) + 200;
+  };
+
   return (
     <div data-testid="shell-timeline" className="flex min-h-0 flex-1 overflow-hidden">
       {/* ---- track headers column ---- */}
@@ -390,6 +702,7 @@ export function Timeline() {
         id="timeline-scroll"
         ref={scrollRef}
         className="relative min-h-0 flex-1 overflow-auto bg-timeline"
+        style={{ cursor: dragPreview?.conflict ? 'not-allowed' : undefined }} /* R15 T3: conflict drop = not-allowed cursor */
         tabIndex={-1} /* focusable surface for the §4.9 Shift+F10 keyboard route */
         /* R15 T2 context-menu ROUTER — ONE handler on the scroll surface.
            Clips no longer stopPropagation their right-clicks (canonical §5:
@@ -449,8 +762,11 @@ export function Timeline() {
         <div id="timeline-content" className="relative" style={{ width: contentW, minHeight: '100%' }}>
           <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} playhead={playhead} contentW={contentW} view={{ scrollLeft, viewportW: viewportW || 900 }} />
 
-          {scene.tracks.map((track) => {
+          {scene.tracks.map((track, trackIdx) => {
             const h = laneHeight(track.kind);
+            /* R15 T3: band-highlight the hovered lane while a VALID cross-track
+               drop target holds (conflict/frozen previews never highlight). */
+            const dragHighlight = !!dragPreview && !dragPreview.conflict && !dragPreview.frozen && dragPreview.hoverIndex === trackIdx;
             /* media-pool drag-to-lane (18 §4.2): lane = drop target while a
                pool card drag is in flight; highlight + copy/not-allowed cursor
                come from mediaDrag, drop commits an honest-mock toast (the
@@ -518,8 +834,26 @@ export function Timeline() {
                   startMarquee(e);
                 }}
               >
-                {track.elements.map((el) => (
-                  <Clip key={el.id} el={el} track={track} pxPerSec={pxPerSec} laneHeight={h} snapTargets={snapTargets} />
+                {dragHighlight && (
+                  <div
+                    data-testid="drag-lane-highlight"
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0"
+                    style={{ background: 'color-mix(in srgb, var(--accent-selection) 12%, transparent)' }}
+                  />
+                )}
+
+                {track.elements.filter(clipVisible).map((el) => (
+                  <Clip
+                    key={el.id}
+                    el={el}
+                    track={track}
+                    pxPerSec={pxPerSec}
+                    laneHeight={h}
+                    snapTargets={snapTargets}
+                    dragHost={onClipDragEvent}
+                    previewSuppressed={dragPreview?.anchorId === el.id}
+                  />
                 ))}
 
                 {/* transition markers — Resolve-style box straddling the cut */}
@@ -552,6 +886,45 @@ export function Timeline() {
             );
           })}
 
+          {/* ---- R15 T3 drag-preview ghosts: one box per resolved member at
+               the target lane band (anchor full, members translucent);
+               conflict previews keep the ghost (red edge) but never
+               highlight the lane. z = 10 (canonical dragLine layer — below
+               the snap indicator 40 / dropIndicator 50 / playhead 100). ---- */}
+          {dragPreview?.ghosts.map((g) => (
+            <div
+              key={`drag-ghost-${g.id}`}
+              data-testid={`drag-ghost-${g.id}`}
+              data-track-id={g.trackId}
+              data-conflict={dragPreview.conflict ?? undefined}
+              data-frozen={dragPreview.frozen || undefined}
+              aria-hidden="true"
+              className="clip-drag-ghost absolute rounded-[2px]"
+              style={{
+                left: g.startTime * pxPerSec,
+                top: g.top + 2,
+                width: Math.max(6, g.duration * pxPerSec),
+                height: Math.max(4, g.height),
+                zIndex: 10,
+                background: ghostBg(g.type),
+                opacity: dragPreview.conflict ? 0.75 : g.anchor ? 0.9 : 0.55,
+                border: dragPreview.conflict ? '1.5px solid var(--danger)' : '1px solid var(--border-strong)',
+                cursor: dragPreview.conflict ? 'not-allowed' : 'grabbing',
+              }}
+            />
+          ))}
+
+          {/* ---- R15 T3 insert line: 2px accent line at the new-track
+               position (new-track targets only) ---- */}
+          {dragPreview?.insertLineY != null && (
+            <div
+              data-testid="drag-insert-line"
+              aria-hidden="true"
+              className="pointer-events-none absolute left-0 right-0"
+              style={{ top: dragPreview.insertLineY, height: 2, background: 'var(--accent)', zIndex: 10, boxShadow: '0 0 2px rgba(0,0,0,0.6)' }}
+            />
+          )}
+
           {/* ---- marquee rubber-band rect (dashed accent border + 10% alpha
                fill via .timeline-marquee; geometry in content coords).
                Renders only once the gesture is ACTIVE — the 5px threshold
@@ -579,14 +952,15 @@ export function Timeline() {
 
           {/* ---- playhead (2px line + head, spec-05 §14.3 canonical) — spans
                full viewport; line center-aligned (left = px − 1), device-grid
-               snapped ---- */}
-          <div className="pointer-events-none absolute bottom-0 top-0 z-40" style={{ left: snapPxToDeviceGrid(playhead * pxPerSec) - PLAYHEAD_LINE_PX / 2, height: '100%' }} aria-hidden="true">
+               snapped. R15 T9 z-order: playhead 100 (canonical §17) — above
+               the marquee 35, drag ghosts/insert line 10, clips 1/5. ---- */}
+          <div className="pointer-events-none absolute bottom-0 top-0 z-[100]" style={{ left: snapPxToDeviceGrid(playhead * pxPerSec) - PLAYHEAD_LINE_PX / 2, height: '100%', zIndex: 100 }} aria-hidden="true">
             <div
               className="absolute bottom-0 top-0"
               style={{ width: PLAYHEAD_LINE_PX, background: 'var(--playhead)', boxShadow: '0 0 1px rgba(0,0,0,0.8)' }}
             />
             <div
-              className="pointer-events-auto sticky top-0 z-40 cursor-col-resize"
+              className="pointer-events-auto sticky top-0 z-[100] cursor-col-resize"
               style={{ top: 0, width: 18, height: zoneH + 6, marginLeft: -(18 / 2) + PLAYHEAD_LINE_PX / 2 }}
               onPointerDown={(e) => {
                 (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);

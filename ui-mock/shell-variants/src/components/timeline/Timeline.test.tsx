@@ -29,7 +29,7 @@ function ShortcutsHarness() {
 }
 
 describe('Timeline', () => {
-  it('renders one lane per track, all 7 clips, and the header column (spec 05 §12 lanes / 18 §4.7)', () => {
+  it('renders one lane per track, the in-window clips, and the header column (spec 05 §12 lanes / 18 §4.7)', () => {
     boot({});
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     // readout-style header zone carries the big TC readout
@@ -38,9 +38,15 @@ describe('Timeline', () => {
     for (const id of ['tr-overlay-1', 'tr-main', 'tr-audio-1', 'tr-audio-2']) {
       expect(within(headers).getByTestId(`shell-track-header-${id}`)).toBeInTheDocument();
     }
-    for (const id of ['el-1', 'el-2', 'el-3', 'el-4', 'el-5', 'el-6', 'el-7']) {
+    /* R15 T9 clip virtualization: clips entirely outside [scrollLeft − 200,
+       scrollLeft + viewportW + 200] are skipped. jsdom's viewport fallback is
+       900 px → window [−200, 1100] at pps 46 — el-4 (24 s → starts at 1104 px)
+       is the ONLY fixture clip culled at boot; a real ≥1500 px shell viewport
+       keeps it (deliberate contract change, canonical virtualization law). */
+    for (const id of ['el-1', 'el-2', 'el-3', 'el-5', 'el-6', 'el-7']) {
       expect(screen.getByTestId(`clip-${id}`)).toBeInTheDocument();
     }
+    expect(screen.queryByTestId('clip-el-4')).not.toBeInTheDocument();
   });
 
   it('dragging the playhead head scrubs the time and snaps to clip edges (spec 05 §14.3 + §9 snap)', () => {
@@ -385,5 +391,246 @@ describe('Timeline R14 wiring', () => {
     act(() => { lanes.scrollTop = 80; });
     fireEvent.scroll(lanes);
     expect(headers.scrollTop).toBe(80); // lanes → headers (the original direction, intact)
+  });
+});
+
+/* ---------- R15 T3: cross-track drag + placement ---------- */
+
+/* Lane geometry (readout header, filmstrip): zoneH 44; overlay [44,104),
+   main [104,184), A1 [184,244), A2 [244,304). jsdom's scroller rect is
+   all-zero, so clientY maps straight to content Y. */
+const laneY = { overlay: 70, main: 130, a1: 200, a2: 260, aboveAll: 20, belowAll: 400 };
+const el2 = () => store().scenes.find((s) => s.id === 'sc-1')!.tracks.flatMap((t) => t.elements).find((e) => e.id === 'el-2')!;
+const trackIds = () => scene1().tracks.map((t) => t.id);
+
+describe('R15 T3: 2D cross-track drag (drop-target plumbing + resolution)', () => {
+  it('video main→overlay: ghost + lane highlight preview, release commits the cross-track move', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-2');
+    // grab at the left edge (391 = 8.5 s × 46); Δ(299, 60) → active + vertical
+    // engagement into the overlay band — 299 px = exactly 6.5 s → 15.0 s
+    // preview (frame-exact: 15 × 24)
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: laneY.main });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 690, clientY: laneY.overlay });
+    const ghost = screen.getByTestId('drag-ghost-el-2');
+    expect(ghost.getAttribute('data-track-id')).toBe('tr-overlay-1'); // video → overlay is compatible (06 §5.9)
+    expect(ghost.style.left).toBe('690px'); // 15 s × 46 — the resolved (snapped) preview time
+    expect(screen.getByTestId('drag-lane-highlight')).toBeInTheDocument(); // the hovered lane band tints
+    expect(clip.style.opacity).toBe('0.45'); // the source clip fades at its original position
+    expect(ghost.style.zIndex).toBe('10'); // canonical dragLine layer
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 690, clientY: laneY.overlay });
+    expect(el2().trackId).toBe('tr-overlay-1');
+    expect(el2().startTime).toBeCloseTo(15, 5);
+    expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.map((e) => e.id)).not.toContain('el-2');
+    expect(screen.queryByTestId('drag-ghost-el-2')).not.toBeInTheDocument(); // preview cleared
+    expect(store().past).toHaveLength(1); // ONE history entry
+  });
+
+  it('audio→audio: dragging the bed down onto (unlocked) A2 commits at the free spot', () => {
+    boot({});
+    act(() => { store().toggleTrackCmd('sc-1', 'tr-audio-2', 'locked'); }); // unlock the fixture lane
+    const pastBase = store().past.length; // the unlock is undoable — drag history counts FROM here
+    const clip = screen.getByTestId('clip-el-6');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 200, clientY: laneY.a1 });
+    // down into A2's band at 0 s — [0,30) overlaps el-7 [8.5,17) → the
+    // conflict-edged ghost shows (kept, red border), lane NOT highlighted
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 200, clientY: laneY.a2 });
+    const conflict = screen.getByTestId('drag-ghost-el-6');
+    expect(conflict.getAttribute('data-conflict')).toBe('overlap');
+    expect(screen.queryByTestId('drag-lane-highlight')).not.toBeInTheDocument();
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 982, clientY: laneY.a2 }); // 17 s
+    expect(screen.getByTestId('drag-ghost-el-6').getAttribute('data-track-id')).toBe('tr-audio-2');
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 982, clientY: laneY.a2 });
+    expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-audio-2')!.elements.map((e) => e.id)).toContain('el-6');
+    expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-audio-1')!.elements).toHaveLength(0);
+    expect(store().past).toHaveLength(pastBase + 1); // ONE entry for the whole drag
+  });
+
+  it('incompatible hover (audio over main): ghost FREEZES at the last-valid target, lane not highlighted, release is a no-op + toast', () => {
+    boot({});
+    act(() => { store().toggleTrackCmd('sc-1', 'tr-audio-2', 'locked'); });
+    const pastBase = store().past.length; // the unlock is undoable — baseline
+    const clip = screen.getByTestId('clip-el-6');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 200, clientY: laneY.a1 });
+    // first a VALID engaged target (A2 @ 17 s) — then hover main (audio can't live there)
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 982, clientY: laneY.a2 });
+    expect(screen.getByTestId('drag-ghost-el-6')).toBeInTheDocument();
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 982, clientY: laneY.main });
+    const frozen = screen.getByTestId('drag-ghost-el-6');
+    expect(frozen.getAttribute('data-frozen')).toBe('true'); // snapped back to the last-valid target
+    expect(frozen.getAttribute('data-track-id')).toBe('tr-audio-2');
+    expect(screen.queryByTestId('drag-lane-highlight')).not.toBeInTheDocument(); // incompatible lane never highlights
+    expect(scrollEl().style.cursor).toBe('not-allowed');
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 982, clientY: laneY.main });
+    expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-audio-1')!.elements.map((e) => e.id)).toEqual(['el-6']); // never left
+    expect(store().past).toHaveLength(pastBase); // the rejected release adds NOTHING beyond the baseline
+    expect(store().toasts.at(-1)!.title).toBe('Drop rejected');
+    expect(store().toasts.at(-1)!.detail).toContain('spec 06 §5.9');
+  });
+
+  it('overlap preview: the ghost shows at the snapped time with the conflict edge; release = no-op + honest toast', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: laneY.main });
+    // up into the overlay band at 9 s — [9, 17.5) overlaps el-5 [8.75, 12)
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 437, clientY: laneY.overlay });
+    const ghost = screen.getByTestId('drag-ghost-el-2');
+    expect(ghost.getAttribute('data-conflict')).toBe('overlap'); // red-edged ghost at the snapped time
+    expect(ghost.style.border).toContain('var(--danger)');
+    expect(screen.queryByTestId('drag-lane-highlight')).not.toBeInTheDocument();
+    expect(scrollEl().style.cursor).toBe('not-allowed');
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 437, clientY: laneY.overlay });
+    expect(el2().trackId).toBe('tr-main'); // never moved
+    expect(el2().startTime).toBe(8.5);
+    expect(store().past).toHaveLength(0);
+    expect(store().toasts.at(-1)!.title).toBe('Drop rejected');
+    expect(store().toasts.at(-1)!.detail).toBe('clips would overlap (spec-05 §8.3)');
+  });
+
+  it('new track ABOVE (pre-minted identity): insert line at index 0, release creates the track + moves the clip', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-1');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 100, clientY: laneY.main });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 100, clientY: laneY.aboveAll });
+    const ghost = screen.getByTestId('drag-ghost-el-1');
+    const mintedId = ghost.getAttribute('data-track-id')!;
+    expect(mintedId).toMatch(/^t-new-/); // pre-minted at drag start — stable identity
+    expect(screen.getByTestId('drag-insert-line')).toBeInTheDocument(); // 2px line at the new-track position
+    expect(screen.queryByTestId('drag-lane-highlight')).not.toBeInTheDocument(); // new-track targets never band-highlight
+    expect(ghost.style.top).toBe('46px'); // zoneH 44 + 2 — the would-be first lane
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 100, clientY: laneY.aboveAll });
+    expect(trackIds()[0]).toBe(mintedId); // the created track carries the pre-minted id
+    expect(scene1().tracks[0]!.kind).toBe('overlay'); // video → overlay-section track (main stays singleton)
+    expect(scene1().tracks[0]!.elements.map((e) => e.id)).toEqual(['el-1']);
+    expect(scene1().tracks).toHaveLength(5);
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('new track BELOW (audio): clamped/append below main, release appends the lane at the tail', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-6');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 200, clientY: laneY.a1 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 200, clientY: laneY.belowAll });
+    const ghost = screen.getByTestId('drag-ghost-el-6');
+    const mintedId = ghost.getAttribute('data-track-id')!;
+    expect(mintedId).toMatch(/^t-new-/);
+    expect(screen.getByTestId('drag-insert-line')).toBeInTheDocument();
+    expect(ghost.style.top).toBe('306px'); // below the last lane (A2 ends at 304)
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 200, clientY: laneY.belowAll });
+    expect(trackIds().at(-1)).toBe(mintedId); // appended at the bottom
+    expect(scene1().tracks.at(-1)!.kind).toBe('audio');
+    expect(scene1().tracks.at(-1)!.elements.map((e) => e.id)).toEqual(['el-6']);
+  });
+
+  it('group drag with the linked A/V pair: members map outward (video→main, audio→A1), ONE history entry', () => {
+    boot({ selection: ['el-2', 'el-7'] });
+    act(() => { store().toggleTrackCmd('sc-1', 'tr-audio-2', 'locked'); }); // el-7's lane ships locked
+    const pastBase = store().past.length; // the unlock is undoable — baseline
+    const clip = screen.getByTestId('clip-el-2');
+    // horizontal drag on the main band: existing-track path, members keep offsets
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: laneY.main });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 1771, clientY: laneY.main }); // 38.5 s
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 1771, clientY: laneY.main });
+    expect(el2().startTime).toBeCloseTo(38.5, 5);
+    const el7 = store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-audio-1')!.elements.find((e) => e.id === 'el-7')!;
+    expect(el7).toBeDefined(); // walked DOWN from the anchor target to A1 (skipping main — incompatible)
+    expect(el7.startTime).toBeCloseTo(38.5, 5); // kept its time offset from the anchor
+    expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-audio-2')!.elements).toHaveLength(0);
+    expect(store().past).toHaveLength(pastBase + 1); // the whole group = ONE entry
+  });
+
+  it('mixed audio+video group on the new-track path → REJECTED: ghost snaps back to last-valid, no commit (spec-05 §8.3 n3)', () => {
+    boot({ selection: ['el-2', 'el-7'] });
+    act(() => { store().toggleTrackCmd('sc-1', 'tr-audio-2', 'locked'); });
+    const pastBase = store().past.length; // the unlock is undoable — baseline
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: laneY.main });
+    // a valid engaged target first — overlay @ 38.5: el-2 lands clear of el-5
+    // [8.75,12) and el-7's outward walk to A1 clears el-6 [0,30). (A hover at
+    // 15 s would fail: el-7 [15,23.5) overlaps el-6 on A1 — whole group.)
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 1771, clientY: laneY.overlay });
+    expect(screen.getByTestId('drag-ghost-el-2')).toBeInTheDocument();
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 1771, clientY: laneY.aboveAll });
+    const frozen = screen.getByTestId('drag-ghost-el-2');
+    expect(frozen.getAttribute('data-frozen')).toBe('true'); // snapped back to the last-valid target
+    expect(frozen.getAttribute('data-track-id')).toBe('tr-overlay-1');
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 1771, clientY: laneY.aboveAll });
+    expect(el2().trackId).toBe('tr-main'); // no commit
+    expect(store().past).toHaveLength(pastBase); // nothing beyond the baseline
+    expect(scene1().tracks).toHaveLength(4); // no track created
+    expect(store().toasts.at(-1)!.detail).toContain('spec-05 §8.3 note 3');
+  });
+
+  it('Alt+drag cross-track duplicate: copies land at the resolved target in ONE entry', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: laneY.main, altKey: true });
+    // 690 (not 691): Δ 299 px = exactly 6.5 s → the copy lands at 15.0 s, frame-exact
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 690, clientY: laneY.overlay, altKey: true });
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 690, clientY: laneY.overlay, altKey: true });
+    const copyId = store().selection[0]!;
+    expect(copyId).toMatch(/^el-2-d/);
+    expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-overlay-1')!.elements.map((e) => e.id)).toContain(copyId);
+    expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.flatMap((t) => t.elements).find((e) => e.id === copyId)!.startTime).toBeCloseTo(15, 5);
+    expect(el2().startTime).toBe(8.5); // original never moves
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('z-order: playhead 100 sits above the drag ghost 10 and the marquee 35 (R15 T9 canonical §17)', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: laneY.main });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 690, clientY: laneY.overlay });
+    expect(screen.getByTestId('drag-ghost-el-2').style.zIndex).toBe('10');
+    const playhead = document.querySelector('#timeline-content > div.pointer-events-none.absolute') as HTMLElement;
+    expect(playhead.style.zIndex).toBe('100');
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 690, clientY: laneY.overlay });
+  });
+});
+
+describe('R15 T3/T9: clip virtualization (200px window, selected/dragging never skipped)', () => {
+  const scrollTo = (x: number) => {
+    const sc = scrollEl();
+    act(() => { sc.scrollLeft = x; });
+    fireEvent.scroll(sc);
+  };
+
+  it('far scroll culls off-screen clips; the in-window clip stays rendered', () => {
+    boot({});
+    act(() => { store().setZoom(2000); }); // pps 2000 — el-1 [0, 8.5) = [0, 17000] px
+    scrollTo(20000); // window [19800, 20900] = [9.9, 10.45] s
+    expect(screen.queryByTestId('clip-el-1')).not.toBeInTheDocument(); // off-screen left — culled
+    expect(screen.queryByTestId('clip-el-3')).not.toBeInTheDocument(); // off-screen right — culled
+    expect(screen.queryByTestId('clip-el-4')).not.toBeInTheDocument();
+    expect(screen.getByTestId('clip-el-2')).toBeInTheDocument(); // [8.5, 17) intersects the window
+  });
+
+  it('SELECTED clips are never virtualized away (el-1 at origin stays)', () => {
+    boot({ selection: ['el-1'] });
+    act(() => { store().setZoom(2000); });
+    scrollTo(50000); // way past the 60 000 px content end — nothing in the window
+    expect(screen.getByTestId('clip-el-1')).toBeInTheDocument(); // selected → never skipped
+    expect(screen.queryByTestId('clip-el-2')).not.toBeInTheDocument();
+  });
+});
+
+describe('R15 T3: edge auto-scroll during active clip drags (rAF, 100px threshold, 15px/frame max)', () => {
+  it('a pointer 5px from the right edge scrolls ~14.25px per frame (ramp 1 − dist/100)', async () => {
+    boot({});
+    const sc = scrollEl();
+    sc.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 400, right: 800, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    Object.defineProperty(sc, 'scrollWidth', { value: 5000, configurable: true });
+    Object.defineProperty(sc, 'clientWidth', { value: 800, configurable: true });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391, clientY: laneY.main });
+    // activate + park the pointer 5px from the right edge (x 795)
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 795, clientY: laneY.main });
+    expect(sc.scrollLeft).toBe(0); // nothing before the first rAF tick
+    await act(async () => { await new Promise((r) => requestAnimationFrame(r)); });
+    expect(sc.scrollLeft).toBeCloseTo(15 * (1 - 5 / 100), 3); // 14.25 — one frame's step
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 795, clientY: laneY.main });
+    const after = sc.scrollLeft;
+    await act(async () => { await new Promise((r) => requestAnimationFrame(r)); });
+    expect(sc.scrollLeft).toBe(after); // the rAF loop STOPPED with the drag
   });
 });

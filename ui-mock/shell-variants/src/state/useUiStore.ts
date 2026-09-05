@@ -11,6 +11,8 @@ import { create } from 'zustand';
 import { project, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation } from '../lib/mockData';
 import { clamp, snapToFrame } from '../lib/timecode';
 import { PPS_MIN as MIN_PPS, PPS_MAX as MAX_PPS } from '../lib/pixel';
+import { trackAcceptsElement, spansOverlap } from '../lib/timelinePlacement';
+import { computeTrackRippleAdjustments, applyRippleAdjustmentsToElements } from '../lib/ripple';
 import { createMixerScene, type MockMixerScene, type MixerTrackSettings, type DuckingSettings, type AuxBusSettings } from './mockMixer';
 
 export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch';
@@ -45,6 +47,187 @@ const findEl = (scenes: SceneJSON[], id: string): { el: ElementJSON; track: Trac
   }
   return null;
 };
+
+const findInScene = (sc: SceneJSON, id: string): { el: ElementJSON; track: TrackJSON } | null => {
+  for (const t of sc.tracks) {
+    const el = t.elements.find((e) => e.id === id);
+    if (el) return { el, track: t };
+  }
+  return null;
+};
+
+/* ---------- R15 T3: cross-track move machinery (canonical laws) ----------
+
+   One shared engine for moveElements / moveElement / duplicateAndMove —
+   the pure resolution half lives in lib/timelinePlacement.ts (drag PREVIEW
+   + commit share it); this half commits onto the cloned scene:
+     1. frame-snap each startTime (snapToFrame)
+     2. anchor clamp: min startTime across the batch ≥ 0 (shift the whole
+        batch up if needed)
+     3. zero-anchor (spec-05 §14.5A): the main-targeting subset pins its
+        earliest move at 0 when main is (virtually) empty or the request is
+        ≤ the earliest stationary main start
+     4. half-open overlap [start, end) revalidated after VIRTUALLY REMOVING
+        the movers (a group may shuffle within itself): intra-batch overlap
+        → WHOLE batch rejected; overlap vs stationary → THAT move rejected
+        (others proceed; all rejected → no-op)
+     5. locked tracks: moves from a locked source or onto a locked target
+        are rejected per-move (others proceed; all rejected → no-op)
+   Returns false for no-ops — withHistory then records NO history entry. */
+export interface MoveElementPlan {
+  id: string;
+  trackId: string;
+  startTime: number;
+}
+export interface CreateTrackPlan {
+  /** pre-minted identity from the drag gesture (stable across recomputes);
+   *  omitted → generated (untargetable by moves, still a real doc change). */
+  id?: string;
+  kind: TrackJSON['kind'];
+  /** insert ABOVE this track; undefined → append at the bottom. */
+  insertAboveTrackId?: string;
+}
+
+function newTrackFor(sc: SceneJSON, kind: TrackJSON['kind'], type?: ElementJSON['type']): TrackJSON {
+  const n = sc.tracks.filter((t) => t.kind === kind).length + 1;
+  /* lane naming follows the incoming element when known (a video clip gets
+     a "Video n"/Vn lane even though its kind is the overlay section — main
+     stays a singleton, canonical); kind-based otherwise (addTrack twin). */
+  const isVideo = type === 'video' || (type === undefined && kind === 'main');
+  const isAudio = type === 'audio' || (type === undefined && kind === 'audio');
+  const name = isAudio ? `Audio ${n}` : isVideo ? `Video ${n}` : `Text ${n}`;
+  const badge = `${isAudio ? 'A' : isVideo ? 'V' : 'T'}${n}`;
+  return {
+    id: nextId(`t-${kind}-`),
+    kind, name, badge,
+    muted: false, solo: false, locked: false, visible: true,
+    waveform: kind === 'audio' ? true : undefined,
+    elements: [],
+  };
+}
+
+function applyMovesToScene(
+  sc: SceneJSON,
+  moves: MoveElementPlan[],
+  createTracks: CreateTrackPlan[],
+  opts: { hasNewElements?: boolean } = {},
+): boolean {
+  if (moves.length === 0 && createTracks.length === 0) return false;
+  // duplicate ids would append the element once per move — corrupting the
+  // doc with same-id duplicates (canonical guard, whole batch rejected)
+  if (new Set(moves.map((m) => m.id)).size !== moves.length) return false;
+
+  // resolve elements (locked sources + unknown ids dropped per-move)
+  const resolved: { id: string; el: ElementJSON; source: TrackJSON; targetId: string; startTime: number }[] = [];
+  for (const mv of moves) {
+    const hit = findInScene(sc, mv.id);
+    if (!hit) continue;
+    if (hit.track.locked) continue; // locked source — inert (18 §4.5)
+    resolved.push({ id: mv.id, el: hit.el, source: hit.track, targetId: mv.trackId, startTime: snapToFrame(mv.startTime) });
+  }
+
+  // create planned tracks (in array order; block entries share one
+  // insertAboveTrackId so sequential "above X" inserts stack in order).
+  // Audio clamps below main (spec-05 §12.1) — the defensive engine twin of
+  // the resolution's insert-index clamp.
+  const createdIds = new Set<string>();
+  for (const ct of createTracks) {
+    let idx = ct.insertAboveTrackId !== undefined
+      ? sc.tracks.findIndex((t) => t.id === ct.insertAboveTrackId)
+      : sc.tracks.length;
+    if (idx === -1) idx = sc.tracks.length;
+    if (ct.kind === 'audio') {
+      const mainIdx = sc.tracks.findIndex((t) => t.kind === 'main');
+      if (idx < mainIdx + 1) idx = mainIdx + 1;
+    }
+    const id = ct.id ?? nextId(`t-${ct.kind}-`);
+    createdIds.add(id);
+    const incoming = resolved.find((r) => r.targetId === id);
+    const track = newTrackFor(sc, ct.kind, incoming?.el.type);
+    track.id = id; // pre-minted identity wins
+    sc.tracks.splice(idx, 0, track);
+  }
+
+  // target validation (locked target / compatibility — per-move rejection)
+  const valid = resolved.filter((r) => {
+    const target = sc.tracks.find((t) => t.id === r.targetId);
+    if (!target) return false;
+    if (target.locked) return false;
+    return trackAcceptsElement(target.kind, r.el.type);
+  });
+  if (valid.length === 0) return false; // all moves rejected → no-op
+
+  // anchor clamp: min startTime ≥ 0 (shift the whole batch up)
+  const minStart = Math.min(...valid.map((r) => r.startTime));
+  if (minStart < 0) for (const r of valid) r.startTime = snapToFrame(r.startTime - minStart);
+
+  // zero-anchor (magnetic main, spec-05 §14.5A)
+  const main = sc.tracks.find((t) => t.kind === 'main');
+  if (main) {
+    const mainMoves = valid.filter((r) => sc.tracks.find((t) => t.id === r.targetId)?.kind === 'main');
+    if (mainMoves.length > 0) {
+      const moverIds = new Set(valid.map((r) => r.id));
+      const stationary = main.elements.filter((e) => !moverIds.has(e.id));
+      const earliest = stationary.length > 0 ? Math.min(...stationary.map((e) => e.startTime)) : null;
+      const minReq = Math.min(...mainMoves.map((r) => r.startTime));
+      if (earliest === null || minReq <= earliest) {
+        // the earliest main move pins at 0; the others keep their offsets
+        for (const r of mainMoves) r.startTime = snapToFrame(r.startTime - minReq);
+      }
+    }
+  }
+
+  // intra-batch overlap (per target track) → whole batch rejected
+  const byTarget = new Map<string, { startTime: number; duration: number }[]>();
+  for (const r of valid) {
+    const list = byTarget.get(r.targetId) ?? [];
+    list.push({ startTime: r.startTime, duration: r.el.duration });
+    byTarget.set(r.targetId, list);
+  }
+  for (const spans of byTarget.values()) {
+    const sorted = [...spans].sort((a, b) => a.startTime - b.startTime);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i - 1]!.startTime + sorted[i - 1]!.duration > sorted[i]!.startTime) return false;
+    }
+  }
+
+  // overlap vs stationary (movers virtually removed) → that move dropped
+  const moverIds = new Set(valid.map((r) => r.id));
+  const survivors = valid.filter((r) => {
+    const target = sc.tracks.find((t) => t.id === r.targetId)!;
+    const stationary = target.elements.filter((e) => !moverIds.has(e.id));
+    return !stationary.some((e) => spansOverlap({ startTime: r.startTime, duration: r.el.duration }, e));
+  });
+  if (survivors.length === 0) return false; // every move overlapped — no-op
+
+  // change detection: NOOP batches never create history (canonical)
+  const changed = (opts.hasNewElements ?? false) || createdIds.size > 0 || survivors.some((r) => {
+    const target = sc.tracks.find((t) => t.id === r.targetId)!;
+    return r.source.id !== target.id || r.startTime !== r.el.startTime;
+  });
+  if (!changed) return false;
+
+  // apply: lift from the source lane, land on the target lane
+  const affected = new Set<TrackJSON>();
+  for (const r of survivors) {
+    const target = sc.tracks.find((t) => t.id === r.targetId)!;
+    r.source.elements = r.source.elements.filter((e) => e.id !== r.id);
+    r.el.startTime = r.startTime;
+    r.el.trackId = target.id; // denormalized field stays coherent
+    target.elements.push(r.el);
+    affected.add(r.source);
+    affected.add(target);
+  }
+  for (const t of affected) t.elements.sort((a, b) => a.startTime - b.startTime); // lanes stay time-ordered
+  return true;
+}
+
+/* pre-minted new-track identities for the drag gesture: one per moving clip
+   (max), minted at drag ACTIVATION so the target identity is stable across
+   pointermove recomputes (canonical reservedNewTrackIds). */
+export function mintTrackIds(count: number): string[] {
+  return Array.from({ length: count }, () => nextId('t-new-'));
+}
 
 interface UiState {
   page: Page;
@@ -167,6 +350,14 @@ interface UiState {
   setDucking: (trackId: string, patch: Partial<DuckingSettings>) => void;
   undo: () => void;
   redo: () => void;
+  /* R15 T3 batch move: ONE history entry, doc mutation only. Laws (frame-snap,
+     anchor clamp, zero-anchor, half-open overlap rejection w/ virtual
+     removal, locked tracks, pre-minted new-track identity) live in
+     applyMovesToScene + lib/timelinePlacement.resolveGroupMove. */
+  moveElements: (args: { moves: MoveElementPlan[]; createTracks?: CreateTrackPlan[] }) => void;
+  /** Alt+drag duplicate to the RESOLVED target: clones the ids, lands the
+   *  copies at the planned positions — ONE composite history entry. */
+  duplicateAndMove: (args: { ids: string[]; moves: MoveElementPlan[]; createTracks?: CreateTrackPlan[] }) => void;
   moveElement: (id: string, startTime: number) => void;
   trimElement: (id: string, edge: 'l' | 'r', newStart: number, newDur: number) => void;
   splitElement: (id: string, time: number) => void;
@@ -557,12 +748,49 @@ export const useUi = create<UiState>((set, get) => ({
      (spec 18 §4.5 lock; gestures already gate at the component level — these
      store guards close the keyboard/command surface: ⌘B, Delete, ⌘D, slip,
      inspector fan-out writes). Track-level flags (M/S/L) stay togglable. */
+  /* R15 T3: moveElement DELEGATES to the batch engine (applyMovesToScene) —
+     same frame-snap / anchor-clamp / zero-anchor / half-open-overlap laws as
+     moveElements. CONTRACT CHANGE (canonical, spec-05 §8.3): the old mock
+     silently stacked overlapping moves; now an overlapping move is REJECTED
+     (element stays, no history entry). */
   moveElement: (id, startTime) => withHistory(set, get, (scenes) => {
-    const hit = findEl(scenes, id);
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    const hit = findInScene(sc, id);
     if (!hit || hit.track.locked) return;
-    const next = snapToFrame(Math.max(0, startTime));
-    if (next === hit.el.startTime) return; // unchanged gesture — no history entry
-    hit.el.startTime = next;
+    if (!applyMovesToScene(sc, [{ id, trackId: hit.track.id, startTime }], [])) return;
+    return scenes;
+  }),
+  moveElements: ({ moves, createTracks = [] }) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    if (!applyMovesToScene(sc, moves, createTracks)) return; // no-op / rejected → no history
+    return scenes;
+  }),
+  duplicateAndMove: ({ ids, moves, createTracks = [] }) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    /* Alt+drag duplicate to the RESOLVED target: clone the sources in place,
+       then move the COPIES (id-remapped) — one composite entry, the selection
+       lands on the copies (R14 duplicateElements(ids, at) semantics, upgraded
+       to cross-track). A rejected resolution is a no-op (no copies persist —
+       the clone is discarded with the history entry). */
+    const idMap = new Map<string, string>();
+    for (const id of [...new Set(ids)]) {
+      const hit = findInScene(sc, id);
+      if (!hit || hit.track.locked) continue;
+      const copy = cloneEl(hit.el);
+      copy.id = nextId(`${id}-d`);
+      idMap.set(id, copy.id);
+      hit.track.elements.push(copy);
+    }
+    if (idMap.size === 0) return;
+    const remapped = moves.filter((m) => idMap.has(m.id)).map((m) => ({ ...m, id: idMap.get(m.id)! }));
+    if (!applyMovesToScene(sc, remapped, createTracks, { hasNewElements: true })) return;
+    set({ selection: [...idMap.values()] });
     return scenes;
   }),
   trimElement: (id, edge, newStart, newDur) => withHistory(set, get, (scenes) => {
@@ -637,19 +865,37 @@ export const useUi = create<UiState>((set, get) => ({
   }),
   deleteElements: (ids, ripple) => withHistory(set, get, (scenes) => {
     const removedIds: string[] = [];
+    /* R15 T3 ripple upgrade: the canonical vacated−joined interval diff
+       (lib/ripple.ts, opencut diff.ts port) replaces the single-span shift —
+       non-contiguous multi-delete now shifts each survivor by the SUM of the
+       freed spans before it (delete el-1+el-3 → el-4 lands at 8.5, not 0).
+       Per track: before/after span sets → vacated (removed spans + tail
+       shrinkage) − joined (newly appeared) = freed; each freed [s,e) shifts
+       startTime ≥ e LEFT by (e−s), adjustments applied descending. */
+    const rippled: { track: TrackJSON; before: ElementJSON[]; after: ElementJSON[] }[] = [];
     for (const sc of scenes) for (const t of sc.tracks) {
       if (t.locked) continue; // locked tracks are inert — same guard as trimToPlayhead / drag / marquee
       const removed = t.elements.filter((e) => ids.includes(e.id));
       if (removed.length === 0) continue;
       removedIds.push(...removed.map((e) => e.id));
+      const before = t.elements;
       t.elements = t.elements.filter((e) => !ids.includes(e.id));
-      if (ripple) {
-        const earliest = Math.min(...removed.map((e) => e.startTime));
-        const dur = removed.reduce((a, e) => Math.max(a, e.startTime + e.duration), earliest) - earliest;
-        t.elements.forEach((e) => { if (e.startTime > earliest) e.startTime = Math.max(earliest, e.startTime - dur); });
-      }
+      if (ripple) rippled.push({ track: t, before, after: t.elements });
     }
     if (removedIds.length === 0) return; // nothing deletable (all locked / unknown ids) — no-op, no history
+    if (ripple) {
+      // ids remaining anywhere AFTER the delete — an element that merely
+      // changed tracks is never "vacated" on its old lane
+      const allAfterIds = new Set<string>();
+      for (const sc of scenes) for (const t of sc.tracks) for (const e of t.elements) allAfterIds.add(e.id);
+      for (const { track, before, after } of rippled) {
+        const adjustments = computeTrackRippleAdjustments(track.id, before, after, allAfterIds);
+        if (adjustments.length > 0) {
+          track.elements = applyRippleAdjustmentsToElements(track.elements, adjustments);
+          track.elements.sort((a, b) => a.startTime - b.startTime); // lanes stay time-ordered after shifts
+        }
+      }
+    }
     set((st) => ({ selection: st.selection.filter((id) => !removedIds.includes(id)) }));
     return scenes;
   }),

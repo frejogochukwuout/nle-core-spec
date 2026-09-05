@@ -18,6 +18,7 @@ import { useVariantClipStyle } from '../../state/variantHooks';
 import { mediaById, findElement, EFFECT_DEFS, TRANSITION_PRESENTATIONS, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc } from '../../lib/timecode';
 import { DRAG_THRESHOLD_PX } from '../../lib/pixel';
+import { resolveGroupMove, toCreateTrackPlans, dragRejectionToast } from '../../lib/timelinePlacement';
 import { getWaveform } from '../../lib/waveform';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { useConfirm, type ConfirmFn } from '../shell/ConfirmDialog';
@@ -28,7 +29,34 @@ interface ClipProps {
   pxPerSec: number;
   laneHeight: number;
   snapTargets: number[];
+  /* R15 T3 cross-track drag seam: while a MOVE drag is active the Clip
+     reports pointer geometry upward (the Timeline owns lane layout + the
+     drop-target resolution) and defers the release commit to the host.
+     Without a host (isolated mounts — the Clip test harness) the Clip
+     commits through the same pure resolveGroupMove against its own lane. */
+  dragHost?: ClipDragHost;
+  /** the host suppresses the clip's own optimistic preview while the drag is
+   *  cross-track engaged — the ghost at the resolved target replaces it. */
+  previewSuppressed?: boolean;
 }
+
+/* R15 T3: the drag-geometry contract the Clip emits on every ACTIVE move
+   (and once at activation). `previewStart` is the anchor's frame-snapped
+   preview time; the host resolves the drop target from pointer position. */
+export interface ClipDragEvent {
+  anchorId: string;
+  phase: 'start' | 'move' | 'end';
+  pointerId: number;
+  clientX: number;
+  clientY: number;
+  startX: number;
+  startY: number;
+  previewStart: number;
+  alt: boolean;
+  cancelled: boolean; // end only — Esc / buttons-mask / pointercancel / drag-back
+  commit: boolean;    // end only — release past threshold, not cancelled
+}
+export type ClipDragHost = (e: ClipDragEvent) => void;
 
 /* R15 T2 canonical gesture discipline: every move/trim gesture starts
    `pending` — pointerdown does NOT enter drag mode. The optimistic-preview
@@ -42,6 +70,7 @@ interface ClipProps {
 type DragState = {
   phase: 'pending' | 'active';
   mode: 'move' | 'l' | 'r';
+  pointerId: number;
   startX: number; // gesture origin (screen px) — threshold + drag-back math
   startY: number;
   origStart: number;
@@ -155,15 +184,13 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
   ];
 }
 
-export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps) {
+export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, previewSuppressed }: ClipProps) {
   const clipStyle = useVariantClipStyle();
   const tool = useUi((s) => s.tool);
   const selection = useUi((s) => s.selection);
   const selectElement = useUi((s) => s.selectElement);
   const splitElement = useUi((s) => s.splitElement);
-  const moveElement = useUi((s) => s.moveElement);
   const trimElement = useUi((s) => s.trimElement);
-  const duplicateElements = useUi((s) => s.duplicateElements);
   const pushToast = useUi((s) => s.pushToast);
   const snap = useUi((s) => s.snap);
   const menu = useContextMenu();   // §4.9 clip menu (right-click + Shift+F10)
@@ -174,6 +201,11 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   const [fxHover, setFxHover] = useState(false); // effects-rail drag over THIS clip (R14)
   const ref = useRef<HTMLDivElement>(null);
   const dragCancelled = useRef(false); // Esc during a gesture → drop dispatches nothing
+  /* R15 T3: the last ClipDragEvent sent to the host (start/move). Every
+     termination path (release, drag-back, Esc, buttons-mask, pointercancel)
+     flushes an 'end' from it — the host drops its preview, stops the
+     auto-scroll rAF and (on commit) performs the resolved store writes. */
+  const dragGeoRef = useRef<ClipDragEvent | null>(null);
   /* canonical §5: set when a gesture crossed the 5px threshold and ENDED as a
      drag; survives pointerup so the browser's synthesized follow-up click
      never re-toggles/re-selects. Drag-back-cancel and Esc-cancel clear it
@@ -196,6 +228,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       e.stopPropagation();
       dragCancelled.current = true;
       lastGestureWasDrag.current = false; // canonical cancel() semantics
+      notifyHostEnd(true, false);
       setDrag(null);
     };
     window.addEventListener('keydown', onKey, true);
@@ -208,10 +241,67 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   const isAudio = el.type === 'audio';
   const isText = el.type === 'text';
 
-  // live geometry (drag preview = optimistic DOM state, spec 18 §5)
+  /* ---- R15 T3 drag-host seam helpers (stable via refs; the Timeline's host
+     callback is identity-stable) ---- */
+  const hostRef = useRef(dragHost);
+  hostRef.current = dragHost;
+  const notifyHostMove = (e: React.PointerEvent, d: NonNullable<DragState>, phase: 'start' | 'move') => {
+    if (!hostRef.current || d.mode !== 'move') return;
+    const evt: ClipDragEvent = {
+      anchorId: el.id,
+      phase,
+      pointerId: d.pointerId,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      startX: d.startX,
+      startY: d.startY,
+      previewStart: d.cur,
+      alt: d.alt,
+      cancelled: false,
+      commit: false,
+    };
+    dragGeoRef.current = evt;
+    hostRef.current(evt);
+  };
+  const notifyHostEnd = (cancelled: boolean, commit: boolean, e?: { clientX: number; clientY: number }) => {
+    const geo = dragGeoRef.current;
+    dragGeoRef.current = null;
+    if (!hostRef.current || !geo) return;
+    hostRef.current({
+      ...geo,
+      phase: 'end',
+      cancelled,
+      commit,
+      clientX: e?.clientX ?? geo.clientX,
+      clientY: e?.clientY ?? geo.clientY,
+    });
+  };
+  /* HOSTLESS fallback (isolated Clip mounts): the Clip commits the gesture
+     itself through the SAME pure resolveGroupMove — group = selection when
+     the anchor is selected, else the anchor alone (canonical drag group). */
+  const commitMoveLocally = (previewStart: number, alt: boolean) => {
+    const s = useUi.getState();
+    const scene = s.scenes.find((x) => x.id === s.activeSceneId);
+    if (!scene) return;
+    const groupIds = s.selection.includes(el.id) ? s.selection : [el.id];
+    const res = resolveGroupMove(scene, el.id, { trackId: track.id }, previewStart, groupIds);
+    if (!res.ok) {
+      s.pushToast(dragRejectionToast(res.reason));
+      return;
+    }
+    const createTracks = toCreateTrackPlans(scene, res.createTracks);
+    if (alt) s.duplicateAndMove({ ids: groupIds, moves: res.moves, createTracks });
+    else s.moveElements({ moves: res.moves, createTracks });
+  };
+
+  // live geometry (drag preview = optimistic DOM state, spec 18 §5). While a
+  // cross-track drag is ENGAGED the host renders the ghost at the resolved
+  // target — the clip itself falls back to its ORIGINAL position, faded.
   const geo = drag
     ? drag.mode === 'move'
-      ? { left: drag.cur * pxPerSec, width: el.duration * pxPerSec }
+      ? previewSuppressed
+        ? { left: el.startTime * pxPerSec, width: el.duration * pxPerSec }
+        : { left: drag.cur * pxPerSec, width: el.duration * pxPerSec }
       : drag.mode === 'l'
         ? { left: drag.cur * pxPerSec, width: (drag.origStart + drag.origDur - drag.cur) * pxPerSec }
         : { left: el.startTime * pxPerSec, width: (drag.cur - el.startTime) * pxPerSec }
@@ -239,7 +329,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     lastGestureWasDrag.current = false; // fresh gesture — canonical reset-on-pointerdown
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     // PENDING gesture: no drag mode yet — the 5px threshold gates activation
-    setDrag({ phase: 'pending', mode: 'move', startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: e.altKey });
+    setDrag({ phase: 'pending', mode: 'move', pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: e.altKey });
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -251,11 +341,13 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     if ((e.buttons & 1) === 0) {
       dragCancelled.current = true; // the pointerup that follows must be a no-op
       lastGestureWasDrag.current = dragActive; // a real drag happened: swallow the stray click
+      notifyHostEnd(true, false);
       setDrag(null);
       return;
     }
+    const wasPending = drag.phase === 'pending';
     let d = drag;
-    if (d.phase === 'pending') {
+    if (wasPending) {
       // strict > 5px on EITHER axis from the gesture origin → activate
       if (Math.abs(e.clientX - d.startX) <= DRAG_THRESHOLD_PX && Math.abs(e.clientY - d.startY) <= DRAG_THRESHOLD_PX) return;
       d = { ...d, phase: 'active' };
@@ -263,7 +355,15 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
     const dt = (e.clientX - d.startX) / pxPerSec;
     if (d.mode === 'move') {
       const { t } = applySnap(d.origStart + dt, false);
-      setDrag({ ...d, cur: t, alt: e.altKey }); // Alt held? = duplicate gesture
+      const next = { ...d, cur: t, alt: e.altKey }; // Alt held? = duplicate gesture
+      setDrag(next);
+      // R15 T3: report the 2D geometry upward — the host owns lane layout,
+      // drop-target resolution and the auto-scroll rAF. 'start' fires once
+      // (activation) so the host can mint the new-track ids; the SAME event
+      // then carries a 'move' so the preview resolves on the FIRST qualifying
+      // move (a single-move drag must already show the drop target).
+      if (wasPending) notifyHostMove(e, next, 'start');
+      notifyHostMove(e, next, 'move');
     } else if (d.mode === 'l') {
       const { t } = applySnap(d.origStart + dt, false);
       const maxStart = d.origStart + d.origDur - 0.25;
@@ -283,6 +383,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       // Esc / buttons-mask / pointercancel killed the gesture mid-flight:
       // restore the element, dispatch nothing
       dragCancelled.current = false;
+      notifyHostEnd(true, false, e);
       setDrag(null);
       return;
     }
@@ -297,21 +398,20 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
        history entry, and lastGestureWasDrag stays false (the release is
        treated as a click). */
     if (e && Math.abs(e.clientX - drag.startX) <= DRAG_THRESHOLD_PX && Math.abs(e.clientY - drag.startY) <= DRAG_THRESHOLD_PX) {
+      notifyHostEnd(true, false, e);
       setDrag(null);
       return;
     }
     // A real drag is completing — the follow-up click must not re-select
     lastGestureWasDrag.current = true;
     if (drag.mode === 'move') {
-      if (drag.alt && Math.abs(drag.cur - drag.origStart) > 1e-6) {
-        // Alt+drag = duplicate: spawn a copy AT the drop position, original
-        // stays put — ONE history entry (R14: was duplicate + move, two undo
-        // steps with a flashing intermediate). duplicateElements() selects
-        // the new ids. The trailing click is suppressed so the copy stays
-        // selected.
-        duplicateElements([el.id], drag.cur);
-      } else if (!drag.alt && Math.abs(drag.cur - drag.origStart) > 1e-6) {
-        moveElement(el.id, drag.cur);
+      if (dragHost) {
+        // R15 T3: the HOST owns the commit — it resolves the drop target from
+        // the release geometry and writes the (group) moves / alt duplicates.
+        notifyHostEnd(false, true, e);
+      } else {
+        // hostless fallback: same laws, resolved against the anchor's own lane
+        commitMoveLocally(drag.cur, drag.alt);
       }
     }
     if (drag.mode === 'l') trimElement(el.id, 'l', drag.cur, drag.origStart + drag.origDur - drag.cur);
@@ -325,6 +425,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
   const onPointerCancelGesture = () => {
     dragCancelled.current = true;
     lastGestureWasDrag.current = dragActive;
+    notifyHostEnd(true, false);
     setDrag(null);
   };
 
@@ -485,8 +586,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
      position (visual only — the dragged preview is the copy-in-flight; on
      drop the store duplicates and the original never moves). Gated on the
      ACTIVE phase — the ghost respects the 5px threshold like the drag
-     itself (R15 T2). */
-  const showGhost = dragActive && drag.mode === 'move' && drag.alt;
+     itself (R15 T2). While cross-track engaged the host's resolved ghost
+     replaces the preview entirely, so the pinned copy hides (the clip itself
+     is already sitting faded at the original position). */
+  const showGhost = dragActive && drag.mode === 'move' && drag.alt && !previewSuppressed;
   const ghost = showGhost ? (
     <div
       data-testid={`clip-ghost-${el.id}`}
@@ -516,7 +619,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
         data-testid={`clip-${el.id}`}
         data-clip-id={el.id} /* R15 T2 context-menu routing hook — the Timeline scroll surface's single onContextMenu resolves the clip under the cursor via closest('[data-clip-id]') */
         tabIndex={-1} /* programmatic focus only — roving host for Shift+F10 (§4.9) */
-        className={`clip-box absolute top-[2px] bottom-[2px] ${dragActive ? 'z-10' : ''} ${selected ? 'z-[5]' : ''} ${fxHover ? 'ring-1 ring-accent' : ''}`}
+        className={`clip-box absolute top-[2px] bottom-[2px] ${fxHover ? 'ring-1 ring-accent' : ''}`}
         onDoubleClick={(e) => {
           // M3 escalation preview (design doc §3.1): dbl-click audio clip → Audio focus + strip focus
           if (track.kind === 'audio') {
@@ -547,6 +650,11 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
       style={{
         left: geo.left,
         width: Math.max(6, geo.width),
+        /* R15 T9 z-order (canonical §17): clips sit at z 1, selected 5; an
+           active drag lifts to the ghost layer (10, below snap 40 / playhead
+           100). Inline so the utilities never fight over precedence. */
+        zIndex: dragActive ? 10 : selected ? 5 : 1,
+        opacity: previewSuppressed ? 0.45 : undefined,
         cursor,
         pointerEvents: locked ? 'none' : 'auto',
         outline: selected ? '1.5px solid var(--accent-selection)' : hover ? '1px solid var(--border-strong)' : 'none',
@@ -616,7 +724,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
               dragCancelled.current = false;
               lastGestureWasDrag.current = false; // fresh gesture
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-              setDrag({ phase: 'pending', mode: 'l', startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: false });
+              setDrag({ phase: 'pending', mode: 'l', pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime, alt: false });
             }}
             onPointerMove={(e) => { e.stopPropagation(); onPointerMove(e); }}
             onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e); }}
@@ -630,7 +738,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets }: ClipProps
               dragCancelled.current = false;
               lastGestureWasDrag.current = false; // fresh gesture
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-              setDrag({ phase: 'pending', mode: 'r', startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime + el.duration, alt: false });
+              setDrag({ phase: 'pending', mode: 'r', pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origStart: el.startTime, origDur: el.duration, cur: el.startTime + el.duration, alt: false });
             }}
             onPointerMove={(e) => { e.stopPropagation(); onPointerMove(e); }}
             onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e); }}

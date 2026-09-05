@@ -6,7 +6,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useActiveScene, trackHeights, useUi } from './useUiStore';
+import { useActiveScene, trackHeights, useUi, mintTrackIds } from './useUiStore';
+import { resolveGroupMove } from '../lib/timelinePlacement';
 import { project } from '../lib/mockData';
 
 /* ---------- helpers ---------- */
@@ -55,9 +56,12 @@ describe('initial state (sample project boot)', () => {
   });
 
   it('scenes are a detached clone of the fixture (mutating the store never leaks into project)', () => {
-    act(() => { S().moveElement('el-1', 3); });
-    expect(project.scenes[0].tracks[1].elements[0].startTime).toBe(0);
-    expect(el('el-1').startTime).toBe(3);
+    // el-5 lives on the sparsely-populated overlay lane — a free-spot move
+    // (R15 T3: main-track moves now zero-anchor + reject overlaps, so el-1
+    // to t=3 would magnetically land at 0 instead of stacking onto el-2)
+    act(() => { S().moveElement('el-5', 3); });
+    expect(project.scenes[0].tracks[0].elements[0].startTime).toBe(8.75);
+    expect(el('el-5').startTime).toBe(3);
   });
 });
 
@@ -490,10 +494,44 @@ describe('undo history mechanics', () => {
 
 describe('moveElement', () => {
   it('moves with frame snapping and a 0 floor', () => {
-    act(() => { S().moveElement('el-3', 17.02); });
-    expect(el('el-3').startTime).toBe(17);
-    act(() => { S().moveElement('el-3', -5); });
-    expect(el('el-3').startTime).toBe(0);
+    // el-5 (overlay, sole occupant) — free-spot moves so the snap + floor
+    // laws are observable without tripping the overlap rejection
+    act(() => { S().moveElement('el-5', 12.51); });
+    expect(el('el-5').startTime).toBe(12.5);
+    act(() => { S().moveElement('el-5', -5); });
+    expect(el('el-5').startTime).toBe(0);
+  });
+
+  /* R15 T3 CONTRACT CHANGE (canonical, spec-05 §8.3 / seam §12): moves
+     REJECT half-open overlaps instead of silently stacking — the old mock
+     let moveElement park clips on top of each other. */
+  it('R15 T3: overlapping moves are REJECTED (half-open [start,end)) — no write, no history', () => {
+    const pastBefore = S().past.length;
+    // el-3 [17,24) → 18 would overlap el-4 [24,30) by 1 s
+    act(() => { S().moveElement('el-3', 18); });
+    expect(el('el-3').startTime).toBe(17); // stays
+    expect(S().past.length).toBe(pastBefore);
+    // boundary case (sc-2): abutting end-to-start is NOT an overlap (half-open)
+    act(() => { S().setActiveScene('sc-2'); S().moveElement('s2-6', 14.25); });
+    expect(el('s2-6').startTime).toBe(14.25); // [14.25,19.25) abuts s2-5's end 14.25
+    // 1 frame earlier WOULD overlap s2-5 → rejected
+    act(() => { S().moveElement('s2-6', 14); });
+    expect(el('s2-6').startTime).toBe(14.25);
+  });
+
+  it('R15 T3: zero-anchor (spec-05 §14.5A) — a main move at/before the earliest stationary main start pins at 0', () => {
+    // clear el-1 so the earliest STATIONARY main clip is el-3 at 17
+    act(() => { S().deleteElements(['el-1'], false); });
+    // el-2 [8.5,17) → 5: 5 ≤ 17 → magnetic main pins the request at 0
+    act(() => { S().moveElement('el-2', 5); });
+    expect(el('el-2').startTime).toBe(0); // landed at 0, not 5
+    // a request PAST the earliest stationary start keeps the requested time
+    act(() => { S().moveElement('el-2', 30); });
+    expect(el('el-2').startTime).toBe(30);
+    // sole main element: main is (virtually) empty → always 0, it can never leave
+    act(() => { S().deleteElements(['el-3', 'el-4'], false); });
+    act(() => { S().moveElement('el-2', 12); });
+    expect(el('el-2').startTime).toBe(0);
   });
 });
 
@@ -1092,5 +1130,278 @@ describe('R14: addTrack position routes (spec 18 §4.9 above/below)', () => {
     act(() => { S().addTrack('overlay'); });
     expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.map((t) => t.kind))
       .toEqual(['overlay', 'overlay', 'main', 'audio', 'audio']);
+  });
+});
+
+/* ---------- R15 T3: cross-track drag & placement (batch move engine) ---------- */
+
+describe('R15 T3: moveElements — batch laws (one entry, overlap, zero-anchor, locks)', () => {
+  const scene1 = () => S().scenes.find((sc) => sc.id === 'sc-1')!;
+
+  it('one batch = ONE history entry; doc mutation only; undo restores positions', () => {
+    const pastBefore = S().past.length;
+    // el-2 → overlay @ 15 (free) + el-5 → overlay @ 24 (free): two moves, one entry
+    act(() => {
+      S().moveElements({
+        moves: [
+          { id: 'el-2', trackId: 'tr-overlay-1', startTime: 15 },
+          { id: 'el-5', trackId: 'tr-overlay-1', startTime: 24 },
+        ],
+      });
+    });
+    expect(el('el-2').startTime).toBe(15);
+    expect(track('sc-1', 'tr-overlay-1').elements.map((e) => e.id)).toContain('el-2');
+    expect(el('el-5').startTime).toBe(24);
+    expect(S().past.length).toBe(pastBefore + 1); // ONE entry for the whole batch
+    act(() => { S().undo(); });
+    expect(el('el-2').startTime).toBe(8.5); // both restored by a single ⌘Z
+    expect(el('el-2').trackId).toBe('tr-main');
+    expect(track('sc-1', 'tr-overlay-1').elements.map((e) => e.id)).toEqual(['el-5']);
+  });
+
+  it('virtual-removal shuffle: a group may re-place onto its OWN vacated spans (intra-batch ok, stationary overlap rejected per-move)', () => {
+    // el-1 [0,8.5) → 8.5 vacates its span; el-2 [8.5,17) → 0 takes el-1's old
+    // span — both movers are virtually removed first, so the swap is legal
+    act(() => {
+      S().moveElements({
+        moves: [
+          { id: 'el-1', trackId: 'tr-main', startTime: 8.5 },
+          { id: 'el-2', trackId: 'tr-main', startTime: 0 },
+        ],
+      });
+    });
+    expect(el('el-1').startTime).toBe(8.5);
+    expect(el('el-2').startTime).toBe(0);
+    expect(S().past).toHaveLength(1);
+    // zero-anchor does NOT fire: el-2's request (0) is ≤ earliest stationary
+    // main start (17) → it pins at 0 anyway; el-1's request 8.5 > 17? No — 8.5
+    // ≤ 17 → magnet → the EARLIEST main move pins at 0 and offsets survive:
+    // the batch landed [el-2@0, el-1@8.5] — exactly the requested shuffle.
+    // Now a stationary overlap: el-1 onto el-3's span → that move alone drops
+    act(() => {
+      S().moveElements({
+        moves: [
+          { id: 'el-1', trackId: 'tr-main', startTime: 20 }, // overlaps el-3 [17,24)
+          { id: 'el-5', trackId: 'tr-overlay-1', startTime: 20 }, // free
+        ],
+      });
+    });
+    expect(el('el-1').startTime).toBe(8.5); // rejected — stayed
+    expect(el('el-5').startTime).toBe(20); // the valid move proceeded
+    expect(S().past).toHaveLength(2); // the partial batch still committed one entry
+  });
+
+  it('intra-batch overlap → WHOLE batch rejected (no-op, no history)', () => {
+    const pastBefore = S().past.length;
+    act(() => {
+      S().moveElements({
+        moves: [
+          { id: 'el-1', trackId: 'tr-overlay-1', startTime: 20 },
+          { id: 'el-2', trackId: 'tr-overlay-1', startTime: 22 }, // [22,30.5) overlaps [20,28.5)
+        ],
+      });
+    });
+    expect(el('el-1').trackId).toBe('tr-main'); // nothing moved
+    expect(el('el-5').startTime).toBe(8.75);
+    expect(S().past.length).toBe(pastBefore);
+  });
+
+  it('anchor clamp: the whole batch shifts up so the min start ≥ 0 (offsets preserved)', () => {
+    // el-6 [0,30) + el-7 [8.5,17): anchor el-6 to −10 → anchorStart snaps to
+    // −10; the clamp shifts +10 → el-6 @ 0, el-7 @ 8.5−10+10... offsets: el-7
+    // offset = +8.5 → lands at 0 + 8.5 = 8.5 — but el-7's source is LOCKED
+    // (dropped), so the group is el-6 alone: request −10 → shift → 0
+    act(() => { S().toggleTrackCmd('sc-1', 'tr-audio-2', 'locked'); }); // unlock
+    act(() => {
+      S().moveElements({
+        moves: [
+          { id: 'el-6', trackId: 'tr-audio-1', startTime: -10 },
+          { id: 'el-7', trackId: 'tr-audio-1', startTime: 8.5 - 10 }, // offset kept
+        ],
+      });
+    });
+    expect(el('el-6').startTime).toBe(0); // shifted up by 10
+    expect(el('el-7').startTime).toBe(8.5); // offset preserved (−10 + shift 10)
+  });
+
+  it('locked target: that move is rejected, others proceed; ALL rejected → no-op', () => {
+    // tr-audio-2 ships locked — targeting it is inert
+    act(() => {
+      S().moveElements({
+        moves: [
+          { id: 'el-6', trackId: 'tr-audio-2', startTime: 40 }, // locked target
+          { id: 'el-5', trackId: 'tr-overlay-1', startTime: 20 }, // proceeds
+        ],
+      });
+    });
+    expect(track('sc-1', 'tr-audio-2').elements.map((e) => e.id)).toEqual(['el-7']); // untouched
+    expect(el('el-5').startTime).toBe(20);
+    // all moves rejected → whole call is a no-op (no history)
+    const pastBefore = S().past.length;
+    act(() => { S().moveElements({ moves: [{ id: 'el-6', trackId: 'tr-audio-2', startTime: 40 }] }); });
+    expect(el('el-6').trackId).toBe('tr-audio-1');
+    expect(S().past.length).toBe(pastBefore);
+  });
+
+  it('locked SOURCE is likewise inert (per-move drop)', () => {
+    // el-7 lives on the locked tr-audio-2 — moving it off is rejected
+    act(() => { S().moveElements({ moves: [{ id: 'el-7', trackId: 'tr-audio-1', startTime: 40 }] }); });
+    expect(track('sc-1', 'tr-audio-2').elements.map((e) => e.id)).toEqual(['el-7']); // never left
+    expect(S().past).toHaveLength(0);
+  });
+
+  it('no-op batch (same track + same time) records NO history entry', () => {
+    const pastBefore = S().past.length;
+    act(() => {
+      S().moveElements({
+        moves: [
+          { id: 'el-1', trackId: 'tr-main', startTime: 0 },
+          { id: 'el-3', trackId: 'tr-main', startTime: 17 },
+        ],
+      });
+    });
+    expect(S().past.length).toBe(pastBefore);
+  });
+
+  it('createTracks: pre-minted identity lands the track at the insert position (audio clamped below main)', () => {
+    const [minted] = mintTrackIds(1);
+    act(() => {
+      S().moveElements({
+        moves: [{ id: 'el-6', trackId: minted, startTime: 10 }],
+        createTracks: [{ id: minted, kind: 'audio', insertAboveTrackId: 'tr-overlay-1' }], // above main — clamped
+      });
+    });
+    const tracks = scene1().tracks;
+    const idx = tracks.findIndex((t) => t.id === minted);
+    expect(idx).toBe(2); // inserted just below main (audio never above main)
+    expect(tracks[idx]!.kind).toBe('audio');
+    expect(tracks[idx]!.elements.map((e) => e.id)).toEqual(['el-6']); // the move targeted the pre-minted id
+    expect(el('el-6').startTime).toBe(10);
+    expect(S().past).toHaveLength(1);
+    // undo removes the track AND restores el-6
+    act(() => { S().undo(); });
+    expect(scene1().tracks.some((t) => t.id === minted)).toBe(false);
+    expect(el('el-6').trackId).toBe('tr-audio-1');
+  });
+});
+
+describe('R15 T3: resolveGroupMove — pure resolution (outward mapping + mixed reject)', () => {
+  const scene = () => S().scenes.find((sc) => sc.id === 'sc-1')!;
+
+  it('existing-track path: anchor to the target, same-lane members follow, outward members walk compatible lanes', () => {
+    // unlock A2 so the linked pair el-2 (main) + el-7 (audio) is fully movable
+    act(() => { S().toggleTrackCmd('sc-1', 'tr-audio-2', 'locked'); });
+    const res = resolveGroupMove(
+      scene(), 'el-2',
+      { trackId: 'tr-main' },
+      30,
+      ['el-2', 'el-7'],
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.moves).toEqual([
+      { id: 'el-2', trackId: 'tr-main', startTime: 30 },
+      { id: 'el-7', trackId: 'tr-audio-1', startTime: 30 }, // outward: audio → A1 (skipping main — incompatible)
+    ]);
+    // video → overlay is compatible; the audio member walks down to A1
+    const resUp = resolveGroupMove(scene(), 'el-2', { trackId: 'tr-overlay-1' }, 30, ['el-2', 'el-7']);
+    expect(resUp.ok && resUp.moves.find((m) => m.id === 'el-7')!.trackId).toBe('tr-audio-1');
+  });
+
+  it('new-track path: mixed audio+non-audio group → REJECTED (spec-05 §8.3 note 3)', () => {
+    act(() => { S().toggleTrackCmd('sc-1', 'tr-audio-2', 'locked'); });
+    const res = resolveGroupMove(
+      scene(), 'el-2',
+      { newTrackIds: ['n-1', 'n-2'], insertIndex: 0 },
+      10,
+      ['el-2', 'el-7'], // video + audio — mixed
+    );
+    expect(res).toEqual({ ok: false, reason: 'mixed-group' });
+    // homogeneous groups resolve: one new track per member at the hover position
+    const resOne = resolveGroupMove(scene(), 'el-2', { newTrackIds: ['n-1'], insertIndex: 0 }, 10, ['el-2']);
+    expect(resOne.ok && resOne.createTracks).toEqual([{ id: 'n-1', kind: 'overlay', insertIndex: 0 }]);
+  });
+
+  it('new-track path clamps by kind section: audio never above main, visual never below main', () => {
+    const resAudio = resolveGroupMove(scene(), 'el-6', { newTrackIds: ['n-1'], insertIndex: 0 }, 5);
+    expect(resAudio.ok && resAudio.createTracks[0]!.insertIndex).toBe(2); // main idx 1 + 1 (0-based)
+    const resVisual = resolveGroupMove(scene(), 'el-1', { newTrackIds: ['n-1'], insertIndex: 4 }, 5); // below all
+    expect(resVisual.ok && resVisual.createTracks[0]!.insertIndex).toBe(1); // clamped to main's index (above main)
+  });
+
+  it('overlap: the resolution fails when the anchor span hits a stationary clip (half-open)', () => {
+    const res = resolveGroupMove(scene(), 'el-2', { trackId: 'tr-overlay-1' }, 8.5); // [8.5,17) vs el-5 [8.75,12)
+    expect(res).toEqual({ ok: false, reason: 'overlap' });
+    const resFree = resolveGroupMove(scene(), 'el-2', { trackId: 'tr-overlay-1' }, 15);
+    expect(resFree.ok).toBe(true);
+  });
+
+  it('incompatible anchor target + locked lanes are rejected with the matching reason', () => {
+    // audio cannot go on main/overlay (spec-06 §5.9)
+    expect(resolveGroupMove(scene(), 'el-6', { trackId: 'tr-main' }, 40)).toEqual({ ok: false, reason: 'incompatible' });
+    // tr-audio-2 ships locked
+    expect(resolveGroupMove(scene(), 'el-6', { trackId: 'tr-audio-2' }, 40)).toEqual({ ok: false, reason: 'locked' });
+    // locked members are dropped from the group (locked = inert, others move)
+    const res = resolveGroupMove(scene(), 'el-2', { trackId: 'tr-main' }, 30, ['el-2', 'el-7']);
+    expect(res.ok && res.moves.map((m) => m.id)).toEqual(['el-2']);
+  });
+});
+
+describe('R15 T3: ripple delete — vacated−joined interval diff (non-contiguous multi-delete)', () => {
+  it(`deleting el-1+el-3 shifts el-4 by el-1's span + el-3's span (NOT to 0)`, () => {
+    act(() => { S().deleteElements(['el-1', 'el-3'], true); });
+    expect(mainEls()).toEqual(['el-2', 'el-4']);
+    expect(el('el-2').startTime).toBe(0); // 8.5 − 8.5 (el-1's span)
+    expect(el('el-4').startTime).toBeCloseTo(8.5, 5); // 24 − 8.5 − 7 (both freed spans)
+  });
+
+  it('single-delete ripple is unchanged (contiguous case)', () => {
+    act(() => { S().deleteElements(['el-2'], true); });
+    expect(el('el-3').startTime).toBeCloseTo(8.5, 5);
+    expect(el('el-4').startTime).toBeCloseTo(15.5, 5);
+  });
+
+  it('plain delete never shifts (gap left behind)', () => {
+    act(() => { S().deleteElements(['el-1', 'el-3'], false); });
+    expect(el('el-2').startTime).toBe(8.5);
+    expect(el('el-4').startTime).toBe(24);
+  });
+
+  it('ripple shifts are per-track (audio lanes do not follow main-track deletions)', () => {
+    act(() => { S().deleteElements(['el-1'], true); });
+    expect(el('el-6').startTime).toBe(0); // A1 bed unmoved
+    expect(el('el-7').startTime).toBe(8.5); // locked A2 unmoved
+  });
+});
+
+describe('R15 T3: duplicateAndMove — Alt+drag duplicate to the resolved target', () => {
+  it('copies land at the planned (track, time) in ONE history entry; selection = copies', () => {
+    const pastBefore = S().past.length;
+    act(() => {
+      S().duplicateAndMove({
+        ids: ['el-2'],
+        moves: [{ id: 'el-2', trackId: 'tr-overlay-1', startTime: 15 }],
+      });
+    });
+    const copyId = S().selection[0]!;
+    expect(copyId).toMatch(/^el-2-d/);
+    expect(el(copyId).trackId).toBe('tr-overlay-1');
+    expect(el(copyId).startTime).toBe(15);
+    expect(el('el-2').startTime).toBe(8.5); // original never moves
+    expect(S().past.length).toBe(pastBefore + 1);
+    act(() => { S().undo(); });
+    expect(track('sc-1', 'tr-overlay-1').elements.map((e) => e.id)).toEqual(['el-5']); // fully unwound
+  });
+
+  it('an overlapping duplicate target is a no-op (copies never persist)', () => {
+    const pastBefore = S().past.length;
+    act(() => {
+      S().duplicateAndMove({
+        ids: ['el-2'],
+        moves: [{ id: 'el-2', trackId: 'tr-main', startTime: 10 }], // overlaps el-3 + the stationary original
+      });
+    });
+    expect(S().past.length).toBe(pastBefore);
+    expect(mainEls()).toEqual(['el-1', 'el-2', 'el-3', 'el-4']); // no copies
   });
 });
