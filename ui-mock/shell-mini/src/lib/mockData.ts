@@ -49,14 +49,17 @@ export const SEED_TRACKS: Track[] = [
   { id: TRACK_AUDIO, kind: 'audio', label: 'A1' },
 ];
 
-/** Deterministic seed doc (D5): V1 back-to-back 0→4.5→9→12.5; A1 1.5→8.5. */
+/** Deterministic seed doc (D5, v2 amendment): V1 three clips with 0.5s
+ *  gaps (0→3.5, 4.5→8, 9→12.5) so move-drag has real slack — the audit's
+ *  back-to-back variant made every V1 move degenerate (caught while
+ *  writing the drag tests). A1: 1.5→8.5. contentEnd = 12.5s. */
 export function seedDoc(): Doc {
   return {
     tracks: SEED_TRACKS.map((t) => ({ ...t })),
     media: SEED_MEDIA.map((m) => ({ ...m })),
     clips: [
-      { id: 'c1', trackId: TRACK_VIDEO, mediaId: 'm-drone', start: 0, duration: 4.5 },
-      { id: 'c2', trackId: TRACK_VIDEO, mediaId: 'm-beach', start: 4.5, duration: 4.5 },
+      { id: 'c1', trackId: TRACK_VIDEO, mediaId: 'm-drone', start: 0, duration: 3.5 },
+      { id: 'c2', trackId: TRACK_VIDEO, mediaId: 'm-beach', start: 4.5, duration: 3.5 },
       { id: 'c3', trackId: TRACK_VIDEO, mediaId: 'm-title', start: 9, duration: 3.5 },
       { id: 'c4', trackId: TRACK_AUDIO, mediaId: 'm-interview', start: 1.5, duration: 7 },
     ],
