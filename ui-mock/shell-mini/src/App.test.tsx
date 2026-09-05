@@ -94,6 +94,23 @@ describe('keyboard on the real shell', () => {
     expect(S().doc.clips).toHaveLength(5);
   });
 
+  it('0 resets zoom to the default step (48pps)', () => {
+    renderApp();
+    setStore(() => S().setZoomStep(4));
+    fireEvent.keyDown(window, { key: '0' });
+    expect(S().zoomStep).toBe(1);
+  });
+
+  it('⌘⇧Z redoes on the real shell', () => {
+    renderApp();
+    setStore(() => S().select('c2'));
+    setStore(() => S().moveClip('c2', 5));
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+    fireEvent.keyDown(window, { key: 'Z', metaKey: true, shiftKey: true });
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5);
+  });
+
   it('typing in an input is not captured (slider unaffected by S)', () => {
     renderApp();
     const slider = screen.getByTestId('mini-zoom-slider');

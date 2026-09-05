@@ -522,23 +522,6 @@
   right: 4px;
 }
 
-/* ---- snap guide (mini: magnet indicator while dragging) ----- */
-
-.qc-snap-guide {
-  position: absolute;
-  z-index: 6;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--canvas-quick-cut-snap-guide);
-  pointer-events: none;
-  display: none;
-}
-
-.qc-snap-guide.is-visible {
-  display: block;
-}
-
 /* ---- drag ghost shading (preview state) --------------------- */
 
 .qc-track-item.is-dragging {

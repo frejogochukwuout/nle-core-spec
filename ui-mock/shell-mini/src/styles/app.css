@@ -106,11 +106,6 @@ body {
   outline-offset: 2px;
 }
 
-.mini-iconbtn.is-active {
-  background: var(--canvas-editor-control-surface);
-  color: var(--canvas-quick-cut-control-active);
-}
-
 /* green brand CTA — Export only (D10.5) */
 .mini-cta {
   height: 34px;

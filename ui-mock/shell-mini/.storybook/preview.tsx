@@ -20,10 +20,21 @@ const pristine = useMini.getState();
 
 let lastStoryId: string | undefined;
 
+/** Reset per story-id change (render phase) AND on decorator unmount —
+ *  effects fire child-first, so a mount-phase reset would wipe the story's
+ *  own StoreBoot patch; the unmount cleanup instead guarantees a remount
+ *  ("Play again", StrictMode double-mount) starts from pristine before
+ *  the story's patch re-applies (review finding #12). */
 export const withStoreReset = (Story: React.ComponentType, context: { id: string }) => {
+  useLayoutEffect(() => {
+    return () => {
+      useMini.setState(pristine, true); // replace semantics — full re-hydration
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset once per unmount
+  }, []);
   if (lastStoryId !== context.id) {
     lastStoryId = context.id;
-    useMini.setState(pristine, true); // replace semantics — full re-hydration
+    useMini.setState(pristine, true);
   }
   return <Story />;
 };

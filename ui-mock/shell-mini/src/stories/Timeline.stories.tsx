@@ -65,6 +65,15 @@ export const Zoom2: StoryObj = {
   ),
 };
 
+export const Zoom3: StoryObj = {
+  name: 'Timeline — zoom 3 (192pps)',
+  render: () => (
+    <Frame patch={{ zoomStep: 3 }}>
+      <Timeline />
+    </Frame>
+  ),
+};
+
 export const Zoom4: StoryObj = {
   name: 'Timeline — zoom 4 (384pps, scrollable)',
   render: () => (

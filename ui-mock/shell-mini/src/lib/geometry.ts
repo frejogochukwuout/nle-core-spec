@@ -1,6 +1,8 @@
 /* Timeline geometry + interaction laws (DESIGN D7 — the audit-fixed set).
    Pure functions, no DOM: every clamp here is directly unit-tested.
-   Grid invariant: committed doc times are multiples of 0.5 (GRID). */
+   Grid invariant: committed doc times are multiples of 0.5 (GRID), with
+   the documented magnet exception (a magnet hit commits the target
+   EXACTLY — playhead targets may be off-grid by design). */
 
 import type { Clip, Doc, Media } from './mockData';
 
@@ -24,8 +26,8 @@ export function labelStepFor(pps: number): number {
   return Math.max(1, Math.ceil(64 / pps));
 }
 
-/** Quantize to the doc grid (round-half-up on exact halves, grid-clean input
- *  stays untouched; playhead is quantized ONLY by split, never by scrub). */
+/** Quantize to the doc grid (grid-clean input stays untouched; the
+ *  playhead is quantized ONLY by split, never by scrub). */
 export function quantize(seconds: number): number {
   return Math.round(seconds / GRID) * GRID;
 }
@@ -65,16 +67,17 @@ export function clampMove(newStart: number, duration: number, prevEnd: number, n
   return Math.min(Math.max(newStart, lo), hi);
 }
 
-/** TRIM laws (audit M1): full bound set incl. media duration.
- *  start-trim: start' ∈ [prevEnd, end - MIN_DUR]
+/** TRIM laws (audit M1 + review fix: media bound on BOTH edges):
+ *  start-trim: start' ∈ [max(prevEnd, end − media.duration), end − MIN_DUR]
  *  end-trim:   end'   ∈ [start + MIN_DUR, min(nextStart, start + media.duration)] */
 export function clampTrimStart(
   newStart: number,
   clip: Clip,
   prevEnd: number,
+  media: Media | undefined,
 ): { start: number; duration: number } {
   const end = clip.start + clip.duration;
-  const lo = prevEnd;
+  const lo = Math.max(prevEnd, media ? end - media.duration : -Infinity);
   const hi = end - MIN_DUR;
   const start = Math.min(Math.max(newStart, lo), hi);
   return { start, duration: end - start };
@@ -103,30 +106,25 @@ export function splitPoint(playhead: number, clip: Clip): number | null {
 }
 
 /** SNAP (D7): snap toggle governs grid quantization AND the 12px magnet.
- *  Targets: neighbor clip edges + playhead. Returns the snapped time plus
- *  the magnet target for the snap-guide indicator (null = no snap applied). */
+ *  Magnet targets are the CALLER's responsibility (same-track neighbor
+ *  edges + playhead — NEVER the dragged clip's own edges, review fix #2). */
 export const SNAP_PX = 12;
 
-export function snapTime(
-  t: number,
-  pps: number,
-  targets: number[],
-): { time: number; guide: number | null } {
+/** The nearest magnet target within 12px, or null. */
+export function magnetTarget(t: number, pps: number, targets: number[]): number | null {
   for (const target of targets) {
-    if (Math.abs(target - t) * pps <= SNAP_PX) {
-      return { time: target, guide: target };
-    }
+    if (Math.abs(target - t) * pps <= SNAP_PX) return target;
   }
-  return { time: t, guide: null };
+  return null;
 }
 
 /** The ONE snap law (component-facing): magnet FIRST (exact target — a
- *  playhead magnet hit must NOT be re-quantized off the playhead), else
- *  grid quantize when snap is on, else raw. One place, fully tested. */
+ *  playhead magnet hit commits the playhead's exact time, the documented
+ *  grid exception), else grid quantize when snap is on, else raw. */
 export function resolveSnap(t: number, snapOn: boolean, pps: number, targets: number[]): number {
   if (!snapOn) return t;
-  const magnet = snapTime(t, pps, targets);
-  if (magnet.guide !== null) return magnet.time;
+  const magnet = magnetTarget(t, pps, targets);
+  if (magnet !== null) return magnet;
   return quantize(t);
 }
 

@@ -129,17 +129,18 @@ describe('splitAtPlayhead (audit M1)', () => {
     expect(S().doc.clips).toHaveLength(5);
   });
 
-  it('toasts (no doc change) when nothing is under the playhead', () => {
-    S().setPlayhead(12.4); // inside c3 (9→12.5)
+  it('toasts (no doc change) when the selected clip is not under the playhead (review fix #6)', () => {
     S().select('c1');
-    // c1 not under playhead and selected → fallback scans, finds c3 → splits.
+    S().setPlayhead(12.4); // inside c3 (9→12.5), NOT inside the selected c1
     S().splitAtPlayhead();
-    expect(S().doc.clips).toHaveLength(5);
-    // now truly outside: playhead at end
+    expect(S().doc.clips).toHaveLength(4); // unchanged — no silent retarget
+    expect(S().toast?.text).toContain('not inside the selected');
+  });
+
+  it('toasts when nothing is under the playhead and nothing is selected', () => {
     S().setPlayhead(12.5);
-    S().select(null);
     S().splitAtPlayhead();
-    expect(S().doc.clips).toHaveLength(5);
+    expect(S().doc.clips).toHaveLength(4);
     expect(S().toast?.text).toContain('Nothing under the playhead');
   });
 
@@ -185,6 +186,16 @@ describe('playback (audit m1)', () => {
     expect(S().playing).toBe(false);
     expect(S().toast?.text).toContain('Nothing to play');
   });
+  it('doc emptied WHILE playing: tick stops playback (review #5 — no zero-length loop)', () => {
+    S().togglePlay();
+    expect(S().playing).toBe(true);
+    S()._commit((doc) => {
+      doc.clips = [];
+    });
+    S().tick(0.1);
+    expect(S().playing).toBe(false);
+    expect(S().playhead).toBe(0);
+  });
   it('scrub clamps to [0, contentEnd] unquantized', () => {
     S().setPlayhead(3.33);
     expect(S().playhead).toBe(3.33);
@@ -192,6 +203,31 @@ describe('playback (audit m1)', () => {
     expect(S().playhead).toBe(12.5);
     S().setPlayhead(-1);
     expect(S().playhead).toBe(0);
+  });
+});
+
+describe('history cap + undo/redo honesty (review gaps)', () => {
+  it('MAX_HISTORY caps the past stack at 50 and drops the oldest', () => {
+    for (let i = 0; i < 55; i++) {
+      S().nudge('c2', i % 2 === 0 ? 0.5 : -0.5); // every click commits
+    }
+    expect(S().past).toHaveLength(50);
+    for (let i = 0; i < 50; i++) S().undo();
+    S().undo(); // stack exhausted
+    expect(S().toast?.text).toContain('Nothing to undo');
+  });
+
+  it('selection SURVIVES undo of a move (only deletes clear it)', () => {
+    S().select('c2');
+    S().moveClip('c2', 5);
+    S().undo();
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+    expect(S().selectedId).toBe('c2');
+  });
+
+  it('redo on an empty stack toasts honestly', () => {
+    S().redo();
+    expect(S().toast?.text).toContain('Nothing to redo');
   });
 });
 

@@ -71,11 +71,12 @@ export function laneForMedia(kind: MediaKind): TrackKind {
   return kind === 'audio' ? 'audio' : 'video';
 }
 
-/** Deterministic clip-id minting (no Math.random — story/test friendly). */
+/** Deterministic clip-id minting (no Date.now — deterministic testids;
+ *  the per-module counter alone is collision-safe). */
 let clipSeq = 0;
 export function mintClipId(): string {
   clipSeq += 1;
-  return `clip_${Date.now().toString(36)}_${clipSeq}`;
+  return `clip_${clipSeq}`;
 }
 
 /** Test hook: reset the id sequence so suites stay deterministic. */

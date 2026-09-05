@@ -10,6 +10,7 @@ import {
   clampTrimStart,
   contentEnd,
   labelStepFor,
+  magnetTarget,
   neighborBounds,
   ppsFor,
   quantize,
@@ -115,12 +116,18 @@ describe('move clamp', () => {
   });
 });
 
-describe('trim clamps (audit M1)', () => {
-  it('start-trim: bounded by prevEnd and end - MIN_DUR', () => {
+describe('trim clamps (audit M1 + review: media bound on BOTH edges)', () => {
+  it('start-trim: bounded by prevEnd and end - MIN_DUR (no media)', () => {
     const c = clip({ start: 4, duration: 2 });
-    expect(clampTrimStart(1, c, 2)).toEqual({ start: 2, duration: 4 });
-    expect(clampTrimStart(7, c, 2)).toEqual({ start: 5.5, duration: 0.5 });
-    expect(clampTrimStart(4.5, c, 2)).toEqual({ start: 4.5, duration: 1.5 });
+    expect(clampTrimStart(1, c, 2, undefined)).toEqual({ start: 2, duration: 4 });
+    expect(clampTrimStart(7, c, 2, undefined)).toEqual({ start: 5.5, duration: 0.5 });
+    expect(clampTrimStart(4.5, c, 2, undefined)).toEqual({ start: 4.5, duration: 1.5 });
+  });
+  it('start-trim: duration can never exceed the media duration', () => {
+    const c = clip({ start: 4, duration: 2 }); // end = 6
+    const media = { id: 'm', name: 'm', kind: 'video', duration: 1.5, hue: 0 } as const;
+    // lo = max(prevEnd 0, end − media 4.5) = 4.5 → duration caps at 1.5
+    expect(clampTrimStart(1, c, 0, media)).toEqual({ start: 4.5, duration: 1.5 });
   });
   it('end-trim: bounded by start + MIN_DUR and min(nextStart, media end)', () => {
     const c = clip({ start: 4, duration: 2 });
@@ -161,8 +168,14 @@ describe('resolveSnap (magnet first, then grid)', () => {
   it('falls back to the grid when no magnet hit', () => {
     expect(resolveSnap(2.3, true, 96, [10])).toBe(2.5);
   });
-  it('no magnet beyond 12px', () => {
-    expect(resolveSnap(2.2, true, 96, [2])).toBe(2); // 0.2s*96 = 19px > 12px → grid: 2.2→2
+  it('no magnet beyond 12px (grid result must differ from the target)', () => {
+    // 2.4 vs target 2: |Δ|*96 = 38px > 12 → grid 2.5 (≠ target 2 — a broken
+    // radius check would return 2 and fail this)
+    expect(resolveSnap(2.4, true, 96, [2])).toBe(2.5);
+  });
+  it('magnet radius is 12px inclusive', () => {
+    expect(magnetTarget(2.125, 96, [2])).toBe(2); // exactly 12px
+    expect(magnetTarget(2.13, 96, [2])).toBeNull(); // just past
   });
 });
 

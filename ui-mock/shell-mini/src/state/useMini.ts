@@ -1,22 +1,26 @@
-/* The mini store (DESIGN D6, audit M2) — one Zustand slice:
-   doc (data) + ui (view) + history (whole-doc snapshots, max 50).
+/* The mini store (DESIGN D6, audit M2 + review round fixes) — one Zustand
+   slice: doc (data) + ui (view) + history (whole-doc snapshots, max 50).
    Laws baked in:
    - commit(mutator) wraps every doc change: snapshot → past, clear future,
      ONE entry per committed gesture (nudge = one entry per click).
    - drag session: beginDrag snapshots the doc (no history), preview* mutates
      the live doc freely, endDrag pushes exactly ONE history entry
-     (pre-drag doc), cancelDrag restores it (Esc). While dragActive, commit()
-     and every command action are suppressed — the ONLY honored input is Esc
-     (audit M2 interaction lock).
-   - selection validation after every history op / commit: a selectedId no
-     longer present in doc.clips is cleared (undoing a delete is safe).
-   - no-op guard: an action that changes nothing pushes NO history entry. */
+     (pre-drag doc), cancelDrag restores it (Esc).
+   - interaction lock: while dragActive, ONLY Esc is honored — commit(),
+     every command action, selection changes, zoom/snap/playhead writes are
+     all gated (review fix #4: the keyboard layer is only half the surface).
+   - selection validation after every history op / commit.
+   - no-op guard: an action that changes nothing pushes NO history entry.
+   - split law (review fix #6): the SELECTED clip is the split target; the
+     topmost-under-playhead fallback runs ONLY when nothing is selected. */
 
 import { create } from 'zustand';
 import {
   seedDoc,
   mintClipId,
   laneForMedia,
+  TRACK_VIDEO,
+  TRACK_AUDIO,
   type Clip,
   type Doc,
   type Media,
@@ -54,10 +58,9 @@ export interface MiniState {
   /** pre-drag doc snapshot — only meaningful while dragActive */
   dragSnapshot: Doc | null;
 
-  /* internal */
+  /* internal (test surface) */
   _validateSelection: () => void;
   _commit: (mutate: (doc: Doc) => Doc | void) => boolean;
-  _setDoc: (doc: Doc) => void;
 
   /* history */
   undo: () => void;
@@ -82,7 +85,8 @@ export interface MiniState {
   previewMove: (id: string, newStart: number) => void;
   previewTrim: (id: string, edge: 'start' | 'end', newTime: number) => void;
 
-  /* doc actions (each = one history entry) */
+  /* doc actions (each = one history entry; snapping is resolved by the
+     caller via resolveSnap — these clamp, they do not snap) */
   moveClip: (id: string, newStart: number) => void;
   trimClip: (id: string, edge: 'start' | 'end', newTime: number) => void;
   splitAtPlayhead: () => void;
@@ -110,15 +114,7 @@ export const useMini = create<MiniState>((set, get) => {
       clips: state.doc.clips.map((c) => ({ ...c })),
     };
     const result = mutate(draft) ?? draft;
-    const changed =
-      result.clips.length !== state.doc.clips.length ||
-      result.clips.some(
-        (c, i) =>
-          c.start !== state.doc.clips[i]?.start ||
-          c.duration !== state.doc.clips[i]?.duration ||
-          c.id !== state.doc.clips[i]?.id ||
-          c.trackId !== state.doc.clips[i]?.trackId,
-      );
+    const changed = docChanged(state.doc, result);
     if (!changed) return false;
     const past = [...state.past, state.doc].slice(-MAX_HISTORY);
     set({ doc: result, past, future: [] });
@@ -126,8 +122,18 @@ export const useMini = create<MiniState>((set, get) => {
     return true;
   };
 
-  /** live doc mutation with NO history (drag preview path). */
-  const setDoc = (doc: Doc) => set({ doc });
+  /** structural "did anything change" (identity would false-positive on
+      preview map() re-copies) — shared by commit and endDrag (review #10). */
+  const docChanged = (a: Doc, b: Doc): boolean =>
+    a.clips.length !== b.clips.length ||
+    a.clips.some(
+      (c, i) =>
+        c.start !== b.clips[i]?.start ||
+        c.duration !== b.clips[i]?.duration ||
+        c.id !== b.clips[i]?.id ||
+        c.trackId !== b.clips[i]?.trackId ||
+        c.mediaId !== b.clips[i]?.mediaId,
+    );
 
   return {
     doc: seedDoc(),
@@ -148,11 +154,14 @@ export const useMini = create<MiniState>((set, get) => {
     },
 
     _commit: commit,
-    _setDoc: setDoc,
 
     undo: () => {
       const { past, doc, future, dragActive } = get();
-      if (dragActive || past.length === 0) return;
+      if (dragActive) return; // interaction lock
+      if (past.length === 0) {
+        get().pushToast('info', 'Nothing to undo.');
+        return;
+      }
       const prev = past[past.length - 1];
       set({ doc: prev, past: past.slice(0, -1), future: [doc, ...future].slice(0, MAX_HISTORY) });
       get()._validateSelection();
@@ -160,7 +169,11 @@ export const useMini = create<MiniState>((set, get) => {
 
     redo: () => {
       const { future, doc, past, dragActive } = get();
-      if (dragActive || future.length === 0) return;
+      if (dragActive) return;
+      if (future.length === 0) {
+        get().pushToast('info', 'Nothing to redo.');
+        return;
+      }
       const next = future[0];
       set({ doc: next, future: future.slice(1), past: [...past, doc].slice(-MAX_HISTORY) });
       get()._validateSelection();
@@ -172,7 +185,10 @@ export const useMini = create<MiniState>((set, get) => {
       set({ selectedId: id });
     },
 
-    setPlayhead: (t) => set({ playhead: clampPlayhead(t, contentEnd(get().doc.clips)) }),
+    setPlayhead: (t) => {
+      if (get().dragActive) return; // interaction lock (review #4)
+      set({ playhead: clampPlayhead(t, contentEnd(get().doc.clips)) });
+    },
 
     togglePlay: () => {
       const state = get();
@@ -190,15 +206,26 @@ export const useMini = create<MiniState>((set, get) => {
       const { playing, playhead, doc } = get();
       if (!playing) return;
       const end = contentEnd(doc.clips);
+      if (end === 0) {
+        // doc emptied WHILE playing (review #5): stop, never a zero-length loop
+        set({ playing: false, playhead: 0 });
+        return;
+      }
       let next = playhead + dt;
       if (next >= end) next = 0; // wrap to 0 and continue (D3.3, audit m1)
       set({ playhead: next });
     },
 
-    setZoomStep: (step) => set({ zoomStep: clampZoom(step) }),
-    zoomIn: () => set({ zoomStep: clampZoom(get().zoomStep + 1) }),
-    zoomOut: () => set({ zoomStep: clampZoom(get().zoomStep - 1) }),
-    toggleSnap: () => set({ snapOn: !get().snapOn }),
+    setZoomStep: (step) => {
+      if (get().dragActive) return; // interaction lock
+      set({ zoomStep: clampZoom(step) });
+    },
+    zoomIn: () => get().setZoomStep(get().zoomStep + 1),
+    zoomOut: () => get().setZoomStep(get().zoomStep - 1),
+    toggleSnap: () => {
+      if (get().dragActive) return; // interaction lock
+      set({ snapOn: !get().snapOn });
+    },
 
     pushToast: (kind, text) => {
       const seq = (get().toast?.seq ?? 0) + 1;
@@ -218,16 +245,7 @@ export const useMini = create<MiniState>((set, get) => {
       const state = get();
       if (!state.dragActive || !state.dragSnapshot) return;
       const pristine = state.dragSnapshot;
-      /* structural compare (identity would false-positive: preview map()
-         re-copies the clips array even when values are unchanged) */
-      const changed =
-        pristine.clips.length !== state.doc.clips.length ||
-        pristine.clips.some(
-          (c, i) =>
-            c.start !== state.doc.clips[i]?.start ||
-            c.duration !== state.doc.clips[i]?.duration ||
-            c.id !== state.doc.clips[i]?.id,
-        );
+      const changed = docChanged(pristine, state.doc);
       const past = changed ? [...state.past, pristine].slice(-MAX_HISTORY) : state.past;
       set({ dragActive: false, dragSnapshot: null, past, future: changed ? [] : state.future });
       get()._validateSelection();
@@ -247,13 +265,15 @@ export const useMini = create<MiniState>((set, get) => {
       if (!clip) return;
       const { prevEnd, nextStart } = neighborBounds(state.doc, clip);
       // the component already applied resolveSnap (magnet+grid); clamps only
-      setDoc({
-        ...state.doc,
-        clips: state.doc.clips.map((c) =>
-          c.id === id
-            ? { ...c, start: clampMove(newStart, c.duration, prevEnd, nextStart) }
-            : c,
-        ),
+      set({
+        doc: {
+          ...state.doc,
+          clips: state.doc.clips.map((c) =>
+            c.id === id
+              ? { ...c, start: clampMove(newStart, c.duration, prevEnd, nextStart) }
+              : c,
+          ),
+        },
       });
     },
 
@@ -263,17 +283,19 @@ export const useMini = create<MiniState>((set, get) => {
       const clip = findClip(state.doc, id);
       if (!clip) return;
       const { prevEnd, nextStart } = neighborBounds(state.doc, clip);
-      setDoc({
-        ...state.doc,
-        clips: state.doc.clips.map((c) => {
-          if (c.id !== id) return c;
-          if (edge === 'start') {
-            const r = clampTrimStart(newTime, c, prevEnd);
+      set({
+        doc: {
+          ...state.doc,
+          clips: state.doc.clips.map((c) => {
+            if (c.id !== id) return c;
+            if (edge === 'start') {
+              const r = clampTrimStart(newTime, c, prevEnd, findMedia(state.doc, c.mediaId));
+              return { ...c, start: r.start, duration: r.duration };
+            }
+            const r = clampTrimEnd(newTime, c, nextStart, findMedia(state.doc, c.mediaId));
             return { ...c, start: r.start, duration: r.duration };
-          }
-          const r = clampTrimEnd(newTime, c, nextStart, findMedia(state.doc, c.mediaId));
-          return { ...c, start: r.start, duration: r.duration };
-        }),
+          }),
+        },
       });
     },
 
@@ -284,11 +306,10 @@ export const useMini = create<MiniState>((set, get) => {
       const clip = findClip(state.doc, id);
       if (!clip) return;
       const { prevEnd, nextStart } = neighborBounds(state.doc, clip);
-      const target = state.snapOn ? quantize(newStart) : newStart;
       commit((doc) => {
         const c = doc.clips.find((x) => x.id === id);
         if (!c) return;
-        c.start = clampMove(target, c.duration, prevEnd, nextStart);
+        c.start = clampMove(newStart, c.duration, prevEnd, nextStart);
       });
     },
 
@@ -297,16 +318,15 @@ export const useMini = create<MiniState>((set, get) => {
       const clip = findClip(state.doc, id);
       if (!clip) return;
       const { prevEnd, nextStart } = neighborBounds(state.doc, clip);
-      const target = state.snapOn ? quantize(newTime) : newTime;
       commit((doc) => {
         const c = doc.clips.find((x) => x.id === id);
         if (!c) return;
         if (edge === 'start') {
-          const { start, duration } = clampTrimStart(target, c, prevEnd);
+          const { start, duration } = clampTrimStart(newTime, c, prevEnd, findMedia(doc, c.mediaId));
           c.start = start;
           c.duration = duration;
         } else {
-          const { start, duration } = clampTrimEnd(target, c, nextStart, findMedia(doc, c.mediaId));
+          const { start, duration } = clampTrimEnd(newTime, c, nextStart, findMedia(doc, c.mediaId));
           c.start = start;
           c.duration = duration;
         }
@@ -316,12 +336,14 @@ export const useMini = create<MiniState>((set, get) => {
     splitAtPlayhead: () => {
       const state = get();
       if (state.dragActive) return; // interaction lock
-      let target: string | null = state.selectedId;
-      if (target) {
-        const clip = findClip(state.doc, target);
-        if (!clip || splitPoint(state.playhead, clip) === null) target = null;
-      }
-      if (!target) {
+
+      // review fix #6: the selected clip is the target, full stop. The
+      // topmost-under-playhead fallback runs ONLY with NO selection.
+      let target: string | null = null;
+      if (state.selectedId) {
+        const clip = findClip(state.doc, state.selectedId);
+        if (clip && splitPoint(state.playhead, clip) !== null) target = state.selectedId;
+      } else {
         // topmost (last-starting) clip under the playhead, any track
         const under = state.doc.clips
           .filter((c) => splitPoint(state.playhead, c) !== null)
@@ -329,25 +351,33 @@ export const useMini = create<MiniState>((set, get) => {
         target = under[0]?.id ?? null;
       }
       if (!target) {
-        get().pushToast('info', 'Nothing under the playhead to split.');
+        get().pushToast(
+          'info',
+          state.selectedId
+            ? 'Playhead is not inside the selected (≥1s) clip.'
+            : 'Nothing under the playhead to split.',
+        );
         return;
       }
       const id = target;
+      const p = splitPoint(state.playhead, findClip(state.doc, id)!)!;
       commit((doc) => {
         const c = doc.clips.find((x) => x.id === id);
         if (!c) return;
-        const p = splitPoint(get().playhead, c);
-        if (p === null) return;
+        const q = splitPoint(get().playhead, c);
+        if (q === null) return;
         const right: Clip = {
           id: mintClipId(),
           trackId: c.trackId,
           mediaId: c.mediaId,
-          start: p,
-          duration: c.start + c.duration - p,
+          start: q,
+          duration: c.start + c.duration - q,
         };
-        c.duration = p - c.start;
+        c.duration = q - c.start;
         doc.clips.push(right);
       });
+      // keep the left half selected (the split product the user is editing)
+      if (p !== null) set({ selectedId: id });
     },
 
     deleteSelected: () => {
@@ -368,7 +398,7 @@ export const useMini = create<MiniState>((set, get) => {
       if (state.dragActive) return; // interaction lock
       const media = findMedia(state.doc, mediaId);
       if (!media) return;
-      const trackId = laneForMedia(media.kind) === 'audio' ? 'A1' : 'V1';
+      const trackId = laneForMedia(media.kind) === 'audio' ? TRACK_AUDIO : TRACK_VIDEO;
       const ok = commit((doc) => {
         const trackClips = doc.clips.filter((c) => c.trackId === trackId);
         const end = contentEnd(trackClips);

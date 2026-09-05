@@ -7,7 +7,7 @@
    default zoom 48pps). */
 
 import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { Timeline } from './Timeline';
 import App from '../App';
@@ -173,6 +173,97 @@ describe('ruler scrub', () => {
     expect(S().playhead).toBeCloseTo(244 / 48, 5); // 5.083…
     fireEvent.pointerMove(ruler, { buttons: 1, pointerId: 3, clientX: 100, clientY: 20 });
     expect(S().playhead).toBeCloseTo(100 / 48, 5);
+  });
+});
+
+describe('playhead handle drag (review gap #5)', () => {
+  it('dragging the playhead follows the pointer through the shared origin', () => {
+    render(<Timeline />);
+    const ph = screen.getByTestId('mini-playhead');
+    fireEvent.pointerDown(ph, { button: 0, pointerId: 5, clientX: 10, clientY: 20 });
+    fireEvent.pointerMove(ph, { pointerId: 5, clientX: 246, clientY: 20 });
+    // origin = content.left(0) + 10 → t = (246-10)/48 = 4.916…
+    expect(S().playhead).toBeCloseTo((246 - 10) / 48, 5);
+    fireEvent.pointerUp(ph, { pointerId: 5, clientX: 246, clientY: 20 });
+  });
+
+  it('keyboard scrub: arrow keys step the playhead by 0.5s', () => {
+    render(<Timeline />);
+    const ph = screen.getByTestId('mini-playhead');
+    fireEvent.keyDown(ph, { key: 'ArrowRight' });
+    expect(S().playhead).toBe(0.5);
+    fireEvent.keyDown(ph, { key: 'ArrowLeft' });
+    expect(S().playhead).toBe(0);
+  });
+});
+
+describe('coordinate law (review fix #1: everything positions in px)', () => {
+  it('ruler mark, clip left, and playhead share the px law for the same t', () => {
+    render(<Timeline />);
+    act(() => {
+      S().setPlayhead(4); // 4s → 192px @ 48pps
+    });
+    const mark4 = document.querySelector('[data-mark-time="4"]') as HTMLElement;
+    expect(mark4.style.left).toBe('192px');
+    expect(screen.getByTestId('mini-playhead').style.left).toBe('192px');
+    // c2 starts 4.5s → 216px
+    expect(screen.getByTestId('mini-clip-c2').style.left).toBe('216px');
+    // ruler tick at 4.5s? marks land on 2s steps at 48pps — use the 4s mark + 8s mark
+    expect((document.querySelector('[data-mark-time="8"]') as HTMLElement).style.left).toBe('384px');
+  });
+});
+
+describe('pointercancel (review gap #3)', () => {
+  it('pointercancel mid-drag restores the doc + clears the lock', () => {
+    render(<Timeline />);
+    const c2 = screen.getByTestId('mini-clip-c2');
+    fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 256, clientY: 10 });
+    fireEvent.pointerMove(c2, { pointerId: 7, clientX: 300, clientY: 10 });
+    expect(S().dragActive).toBe(true);
+    fireEvent.pointerCancel(c2, { pointerId: 7, clientX: 300, clientY: 10 });
+    expect(S().dragActive).toBe(false);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+    expect(S().past).toHaveLength(0);
+  });
+});
+
+describe('snap-off commits raw positions (review gap #4)', () => {
+  it('with snap ON the same drag quantizes to the grid', () => {
+    render(<Timeline />);
+    const c2 = screen.getByTestId('mini-clip-c2');
+    drag(c2, 256, 286); // raw start 5.125
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5); // quantized
+  });
+
+  it('with snap OFF the drag commits the raw (unquantized) start', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-snap')); // snap off
+    const c2 = screen.getByTestId('mini-clip-c2');
+    drag(c2, 256, 286);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.125);
+  });
+});
+
+describe('single-gesture law (review fix #4: second pointer is inert mid-drag)', () => {
+  it('a second pointerdown on another clip is ignored while a drag is active', () => {
+    // App mount: the Esc leg needs the keyboard wiring (useKeys lives in App)
+    render(<App />);
+    const c2 = screen.getByTestId('mini-clip-c2');
+    const c1 = screen.getByTestId('mini-clip-c1');
+    // activate a real drag on c2 with pointer 7
+    fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 256, clientY: 10 });
+    fireEvent.pointerMove(c2, { pointerId: 7, clientX: 300, clientY: 10 });
+    expect(S().dragActive).toBe(true);
+    // second pointer (id 9) lands on c1 and tries to move it
+    fireEvent.pointerDown(c1, { button: 0, pointerId: 9, clientX: 100, clientY: 10 });
+    fireEvent.pointerMove(c1, { pointerId: 9, clientX: 400, clientY: 10 });
+    fireEvent.pointerUp(c1, { pointerId: 9, clientX: 400, clientY: 10 });
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0); // untouched
+    // the ORIGINAL gesture still owns the session and can cancel cleanly
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(S().dragActive).toBe(false);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+    fireEvent.pointerUp(c2, { pointerId: 7, clientX: 300, clientY: 10 });
   });
 });
 

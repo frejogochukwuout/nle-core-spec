@@ -1,4 +1,7 @@
-/* Overlay stories (D8) — the toast surface at each state. */
+/* Overlay stories (D8) — the toast surface at each state. The toast is
+   patched directly into state (NOT via pushToast): the real action would
+   arm ToastRegion's 2.6s auto-dismiss and blank the story mid-review
+   (review finding #12). */
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useLayoutEffect } from 'react';
@@ -13,7 +16,7 @@ export default meta;
 function BootToast(kind: 'info' | 'error', text: string) {
   return function Boot() {
     useLayoutEffect(() => {
-      useMini.getState().pushToast(kind, text);
+      useMini.setState({ toast: { kind, text, seq: 1 } }); // persistent review state
       // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
     }, []);
     return null;
