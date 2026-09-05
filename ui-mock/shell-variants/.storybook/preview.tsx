@@ -35,12 +35,16 @@ const preview: Preview = {
     a11y: {
       context: '#storybook-root',
     },
-    /* annotakit hotkeys REMAPPED off the shell's own plain keys (R13 review:
-       the defaults r/l/d/? collided with the ripple tool, JKL shuttle L, and
-       the cheat sheet '?' — one keypress fired BOTH layers). pin stays 'c'
-       (no shell collision); region/layer/drawer/help move to g/h/f/q. */
+    /* annotakit hotkeys (v0.5.0 upstream moved ALL defaults to ⌥-prefixed
+       e.code matching: pin ⌥C, region ⌥R, layer ⌥L, drawer ⌥D). The old R13
+       plain-key remap (c/g/h/f/q) is retired: under 0.5.0 legacy plain-key
+       configs only respond with ⌥ held, and the ⌥-prefix already removes
+       the R13 collisions (the shell's alt block binds only ⌥[ ⌥] ⌥X ⌥⇧M —
+       no ⌥C/R/L/D overlap). ONE remap survives: help ⌥H, because the
+       upstream default '?' would double-fire with the shell's cheat-sheet
+       '?' (useShortcuts key === '?'). */
     annotakit: {
-      hotkeys: { pin: 'c', region: 'g', layer: 'h', drawer: 'f', help: 'q' },
+      hotkeys: { help: 'alt+h' },
     },
   },
   decorators: [withStoreReset, withVariantProvider],

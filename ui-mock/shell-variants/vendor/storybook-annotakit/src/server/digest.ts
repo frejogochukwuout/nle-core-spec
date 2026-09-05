@@ -10,6 +10,7 @@
  */
 
 import type { ExportedStory, Thread } from '../shared/types';
+import { elementSummary } from '../shared/describe';
 import { repoRelPath } from './env';
 
 function fmtDate(iso: string): string {
@@ -22,7 +23,7 @@ function oneLine(body: string): string {
   return body.replace(/\s+/g, ' ').trim();
 }
 
-function threadBlock(t: Thread): string[] {
+function threadBlock(t: Thread, snapshotUrl?: string): string[] {
   const first = t.comments[0];
   const headline = first ? oneLine(first.body) : '(no text)';
   const status = t.status === 'open' ? 'OPEN' : 'resolved';
@@ -37,7 +38,7 @@ function threadBlock(t: Thread): string[] {
   out.push(`- thread id: ${t.id}`);
   const comp = t.component;
   if (comp) {
-    if (comp.name) out.push(`- component: ${comp.name}`);
+    if (comp.name) out.push(`- component: ${comp.name}${comp.key ? ` (key="${comp.key}")` : ''}`);
     if (comp.source) {
       const f = repoRelPath(comp.source.file) ?? comp.source.file;
       out.push(`- jsx: ${f}:${comp.source.line ?? '?'}`);
@@ -51,12 +52,16 @@ function threadBlock(t: Thread): string[] {
     }
   }
   const ctx = t.target.context;
-  const el =
-    (ctx.text ? `"${oneLine(ctx.text).slice(0, 60)}"` : '') ||
-    (ctx.ariaLabel ? `aria-label="${ctx.ariaLabel}"` : '');
-  out.push(`- element: <${ctx.tag}>${el ? ` ${el}` : ''}`);
+  // v0.5.0: the shared one-line identity — SAME string the reviewer saw in
+  // the composer when pinning (id/classes/testid/nth/form metadata/own text).
+  out.push(`- element: ${elementSummary(ctx)}`);
   if (t.target.selector.cssSelector) {
     out.push(`- selector: ${t.target.selector.cssSelector}`);
+  }
+  // plan-b evidence pointer (local digests only — GH issue bodies would carry
+  // a localhost URL foreign to the repo; agents on the repo have the server)
+  if (snapshotUrl) {
+    out.push(`- dom-snapshot: ${snapshotUrl} (story DOM at pin time; append ?format=html to render)`);
   }
 
   const replies = t.comments.slice(1);
@@ -70,7 +75,10 @@ function threadBlock(t: Thread): string[] {
   return out;
 }
 
-export function renderDigest(stories: ExportedStory[], opts?: { origin?: string; mirror?: boolean }): string {
+export function renderDigest(
+  stories: ExportedStory[],
+  opts?: { origin?: string; mirror?: boolean; snapshotIds?: Set<string> },
+): string {
   const out: string[] = [];
   const open = stories.reduce((n, s) => n + s.counts.open, 0);
   const resolved = stories.reduce((n, s) => n + s.counts.resolved, 0);
@@ -101,11 +109,16 @@ export function renderDigest(stories: ExportedStory[], opts?: { origin?: string;
     }
     const openThreads = s.threads.filter((t) => t.status === 'open');
     const done = s.threads.filter((t) => t.status !== 'open');
-    for (const t of openThreads) out.push(...threadBlock(t));
+    // local mode: point agents at the plan-b evidence when it exists
+    const snapUrl = (t: Thread): string | undefined =>
+      !opts?.mirror && opts?.snapshotIds?.has(t.id)
+        ? `${opts?.origin ?? ''}/annotakit/api/threads/${encodeURIComponent(t.id)}/snapshot`
+        : undefined;
+    for (const t of openThreads) out.push(...threadBlock(t, snapUrl(t)));
     if (done.length) {
       out.push(`<details><summary>${done.length} resolved</summary>`);
       out.push('');
-      for (const t of done) out.push(...threadBlock(t));
+      for (const t of done) out.push(...threadBlock(t, snapUrl(t)));
       out.push(`</details>`);
       out.push('');
     }

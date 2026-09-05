@@ -26,6 +26,7 @@ import type { ComponentRef, ComponentSource } from '../shared/types';
 interface FiberLike {
   tag?: number;
   type?: any;
+  key?: string | null;
   return?: FiberLike | null;
   memoizedProps?: any;
   _debugStack?: { stack?: string };
@@ -151,18 +152,140 @@ function parseDebugSource(fiber: FiberLike): ComponentSource | undefined {
   return { file: toRelativePath(chosen.file), line: chosen.line, column: chosen.column };
 }
 
-/** http://localhost:6006/.storybook/../src/X.tsx → src/X.tsx (strip dev origin + config noise). */
+/** http://localhost:6006/.storybook/../src/X.tsx → src/X.tsx (strip dev origin + config noise + ?t= cache-bust queries). */
 function toRelativePath(file: string): string {
   try {
     if (typeof location !== 'undefined') {
       if (file.startsWith(location.origin)) {
-        return decodeURIComponent(file.slice(location.origin.length + 1));
+        const u = new URL(file);
+        return decodeURIComponent(u.pathname.replace(/^\//, ''));
       }
     }
     const url = new URL(file);
     return decodeURIComponent(url.pathname.replace(/^\//, ''));
   } catch {
-    return file;
+    return file.split('?')[0] ?? file;
+  }
+}
+
+/* ------------------- sourcemap line correction (F2 fix) ---------------------
+ * Vite dev serves the esbuild-TRANSFORMED module: JSX becomes nested jsxDEV()
+ * calls, so the module is often 2× the source length and every _debugStack
+ * line/column refers to the TRANSFORMED module — pinning a 143-line component
+ * can report "line 206". Vite attaches an INLINE base64 sourcemap to every
+ * module; we decode it (VLQ) and map the stack position back to the ORIGINAL
+ * TSX position. Cached per module; async; failures fall back to the raw value.
+ * --------------------------------------------------------------------------- */
+
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+function decodeVLQ(str: string): number[] {
+  const out: number[] = [];
+  let shift = 0;
+  let value = 0;
+  for (const ch of str) {
+    const d = B64.indexOf(ch);
+    if (d < 0) throw new Error(`bad vlq char: ${ch}`);
+    const cont = d & 32;
+    value += (d & 31) << shift;
+    shift += 5;
+    if (!cont) {
+      const neg = value & 1;
+      value >>>= 1;
+      out.push(neg ? -value : value);
+      value = 0;
+      shift = 0;
+    }
+  }
+  return out;
+}
+
+interface SourceMapSeg { genCol: number; srcIdx: number; srcLine: number; srcCol: number }
+type SourceMapLines = Map<number, SourceMapSeg[]>; // key: 0-based generated line
+
+function decodeMappings(mappings: string): SourceMapLines {
+  const lines: SourceMapLines = new Map();
+  let srcIdx = 0;
+  let srcLine = 0;
+  let srcCol = 0;
+  const rows = mappings.split(';');
+  for (let genLine = 0; genLine < rows.length; genLine++) {
+    let genCol = 0;
+    const segs: SourceMapSeg[] = [];
+    const row = rows[genLine] ?? '';
+    if (row) {
+      for (const seg of row.split(',')) {
+        if (!seg) continue;
+        const v = decodeVLQ(seg);
+        genCol += v[0] ?? 0;
+        if (v.length >= 4) {
+          srcIdx += v[1] ?? 0;
+          srcLine += v[2] ?? 0;
+          srcCol += v[3] ?? 0;
+          segs.push({ genCol, srcIdx, srcLine, srcCol });
+        }
+      }
+    }
+    if (segs.length) lines.set(genLine, segs);
+  }
+  return lines;
+}
+
+function mapPosition(lines: SourceMapLines, genLine: number, genCol: number): { line: number; column: number } | null {
+  const segs = lines.get(genLine);
+  if (!segs) return null;
+  let best: SourceMapSeg | null = null;
+  for (const s of segs) {
+    if (s.genCol <= genCol) best = s;
+    else break;
+  }
+  return best ? { line: best.srcLine + 1, column: best.srcCol + 1 } : null;
+}
+
+/** module path → Promise<decoded mappings|null> (deduped, failure-tolerant). */
+const smCache = new Map<string, Promise<SourceMapLines | null>>();
+
+function loadSourceMap(modulePath: string): Promise<SourceMapLines | null> {
+  let p = smCache.get(modulePath);
+  if (!p) {
+    p = (async () => {
+      try {
+        const url = typeof location !== 'undefined' ? `${location.origin}/${modulePath}` : modulePath;
+        const text = await (await fetch(url)).text();
+        const m = /\/\/# sourceMappingURL=data:application\/json;base64,([A-Za-z0-9+/=]+)/.exec(text);
+        if (!m?.[1]) return null;
+        const map = JSON.parse(atob(m[1])) as { mappings?: string };
+        return map.mappings ? decodeMappings(map.mappings) : null;
+      } catch {
+        return null;
+      }
+    })();
+    smCache.set(modulePath, p);
+  }
+  return p;
+}
+
+/** True for files the sourcemap correction should attempt (app sources only). */
+function isLikelyAppSource(file: string): boolean {
+  return !file.startsWith('node_modules/') && !file.includes('/sb-vite/') && /\.(tsx?|jsx|mjs)$/.test(file);
+}
+
+/**
+ * Correct a ComponentSource captured from a transformed-module stack:
+ * maps (line, column) through the module's inline sourcemap to the ORIGINAL
+ * TSX position. Always resolves — on any failure it returns the input
+ * unchanged (the raw transformed position, still better than nothing).
+ */
+export async function correctSource(source: ComponentSource): Promise<ComponentSource> {
+  if (!isLikelyAppSource(source.file)) return source;
+  if (source.line == null || source.column == null) return source;
+  try {
+    const lines = await loadSourceMap(source.file);
+    if (!lines) return source;
+    const orig = mapPosition(lines, source.line - 1, source.column);
+    return orig ? { ...source, line: orig.line, column: orig.column } : source;
+  } catch {
+    return source;
   }
 }
 
@@ -224,7 +347,17 @@ export function inspectComponent(el: HTMLElement): ComponentRef | null {
   }
   if (!nearest) return null;
 
-  const name = componentName(nearest);
+  let name = componentName(nearest);
+  // F3: when the closest component is a Storybook render wrapper (the reviewer
+  // clicked DOM authored by the story itself, e.g. story layout padding), report
+  // a self-explaining name instead of raw internals like "unboundStoryFn" —
+  // agents reading the digest immediately know this is story-level DOM, not app
+  // code, and story-level props (componentId/kind/viewMode…) are noise: drop them.
+  let storyOwned = false;
+  if (name && !isAppComponentName(name)) {
+    name = 'story render (Storybook wrapper)';
+    storyOwned = true;
+  }
   // React 19: host-fiber stack points at the component's own file (definition
   // site); component-fiber stack points at the instantiation site (story file).
   // React ≤18: _debugSource object. Try all three.
@@ -235,7 +368,9 @@ export function inspectComponent(el: HTMLElement): ComponentRef | null {
     name: name ?? undefined,
     chain: chain.slice().reverse(), // root-first, target last
     source,
-    props: summarizeProps(nearest.memoizedProps),
+    props: storyOwned ? undefined : summarizeProps(nearest.memoizedProps),
+    // React list key of the nearest component — the exact .map() item identity
+    key: typeof nearest.key === 'string' && nearest.key ? nearest.key : undefined,
   };
   if (!ref.name && !ref.chain.length && !ref.source) return null;
   return ref;

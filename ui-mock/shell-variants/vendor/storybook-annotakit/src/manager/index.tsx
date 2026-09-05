@@ -16,8 +16,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { addons, types, useStorybookApi, useStorybookState } from 'storybook/manager-api';
 import { useTheme } from 'storybook/theming';
-import { CheckIcon, CommentIcon, EyeIcon, EyeCloseIcon, LinkIcon, SyncIcon } from '@storybook/icons';
-import { API_BASE, FOCUS_THREAD, THREADS_CHANGED, THREAD_FOCUSED, TOGGLE_LAYER, type ThreadsChangedPayload } from '../shared/events';
+import { BoxIcon, CameraIcon, CheckIcon, CommentIcon, CommentsIcon, EyeIcon, EyeCloseIcon, LinkIcon, PinIcon, SyncIcon } from '@storybook/icons';
+import { API_BASE, FOCUS_THREAD, THREADS_CHANGED, UI_COMMAND, UI_STATE, type ThreadsChangedPayload, type UiCommand, type UiState } from '../shared/events';
+import { probeMode } from '../shared/mode';
+import { getStaticStore, renderStaticDigest } from '../shared/staticStore';
 import type { GhSyncStatus, GhSyncSummary, Thread } from '../shared/types';
 
 const ADDON_ID = 'annotakit';
@@ -55,10 +57,13 @@ async function jfetch(url: string, init?: RequestInit): Promise<unknown> {
   return body;
 }
 
-const getThreads = (storyId?: string): Promise<Thread[]> =>
-  jfetch(`${API_BASE}/threads${storyId ? `?storyId=${encodeURIComponent(storyId)}` : ''}`).then(
-    (b) => (b as { threads: Thread[] }).threads ?? [],
-  );
+/** Threads + which of them carry plan-b DOM snapshots (sibling field, not
+ *  inside Thread payloads). The panel links to viewable evidence. */
+const getThreadsAndSnapshots = (storyId?: string): Promise<{ threads: Thread[]; snapshots: Set<string> }> =>
+  jfetch(`${API_BASE}/threads${storyId ? `?storyId=${encodeURIComponent(storyId)}` : ''}`).then((b) => {
+    const o = b as { threads?: Thread[]; snapshots?: string[] };
+    return { threads: o.threads ?? [], snapshots: new Set(o.snapshots ?? []) };
+  });
 
 const getHealth = (): Promise<HealthInfo | null> =>
   fetch(`${API_BASE}/health`, { cache: 'no-store' })
@@ -121,6 +126,11 @@ function ReviewPanel(): React.ReactElement {
   const [sync, setSync] = useState<GhSyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [health, setHealth] = useState<HealthInfo | null>(null);
+  /** thread ids that carry a DOM snapshot (plan-b evidence, v0.5.0) */
+  const [snapshotIds, setSnapshotIds] = useState<Set<string>>(new Set());
+  /** v0.5.x static build (no dev server): the panel reads/writes the
+   *  localStorage store; GitHub sync + server digests are off. */
+  const [staticMode, setStaticMode] = useState(false);
 
   useEffect(() => {
     try {
@@ -131,9 +141,14 @@ function ReviewPanel(): React.ReactElement {
     }
   }, []);
 
-  /* one-shot: server health + sync status */
+  /* one-shot: server health + sync status (dev mode) + runtime mode probe
+   *  (static builds get NO health JSON — the probe decides the world). */
   useEffect(() => {
     let alive = true;
+    void probeMode().then((m) => {
+      if (!alive || m !== 'static') return;
+      setStaticMode(true);
+    });
     void getHealth().then((h) => {
       if (!alive || !h) return;
       setHealth(h);
@@ -148,12 +163,21 @@ function ReviewPanel(): React.ReactElement {
 
   const refresh = useCallback(async () => {
     try {
-      const list = await getThreads(scope === 'story' ? storyId : undefined);
-      setThreads(list);
-      setError(null);
+      if (staticMode) {
+        const store = await getStaticStore();
+        setThreads(store.list(scope === 'story' ? storyId : undefined));
+        setSnapshotIds(new Set());
+        setError(null);
+      } else {
+        const { threads: list, snapshots } = await getThreadsAndSnapshots(scope === 'story' ? storyId : undefined);
+        setThreads(list);
+        setSnapshotIds(snapshots);
+        setError(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+    if (staticMode) return; // no server to piggyback
     // piggyback: mirror status + health ride along so the sync line stays fresh
     void getSyncStatus().then((s) => {
       if (s) setSync(s);
@@ -161,13 +185,13 @@ function ReviewPanel(): React.ReactElement {
     void getHealth().then((h) => {
       if (h) setHealth(h);
     });
-  }, [scope, storyId]);
+  }, [scope, storyId, staticMode]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  /* live updates — explicit subscription with FRESH deps (stale-closure fix) */
+  /* live updates — dev mode: server WS broadcast (THREADS_CHANGED). */
   useEffect(() => {
     const ch = addons.getChannel();
     const onChange = (payload: ThreadsChangedPayload) => {
@@ -178,6 +202,22 @@ function ReviewPanel(): React.ReactElement {
       ch.removeListener(THREADS_CHANGED, onChange);
     };
   }, [scope, storyId, refresh]);
+
+  /* live updates — static builds have no server broadcast: storage events
+   *  (writes from the preview iframe or OTHER tabs) drive refresh instead. */
+  useEffect(() => {
+    if (!staticMode) return;
+    let unsub: (() => void) | undefined;
+    let alive = true;
+    void getStaticStore().then((store) => {
+      if (!alive) return;
+      unsub = store.subscribe(() => void refresh());
+    });
+    return () => {
+      alive = false;
+      unsub?.();
+    };
+  }, [staticMode, refresh]);
 
   const saveAuthor = (value: string): void => {
     setAuthor(value);
@@ -191,22 +231,8 @@ function ReviewPanel(): React.ReactElement {
   const focusThread = (t: Thread): void => {
     if (t.storyId !== storyId) {
       storybookApi.selectStory(t.storyId);
-      // Cross-story focus is a RACE: the preview's anchors map still belongs
-      // to the previous story until the new story's fetch + resolve passes
-      // (350/1200 ms) land. Retry-until-ack: the preview emits THREAD_FOCUSED
-      // only when the pin actually resolved + flashed — until then, re-emit
-      // (R14 fix; was a fixed 400 ms one-shot that silently dead-clicked).
-      const ch = addons.getChannel();
-      let attempts = 0;
-      const ack = () => { attempts = 99; ch.removeListener(THREAD_FOCUSED, ack); };
-      ch.on(THREAD_FOCUSED, ack);
-      const emitOnce = () => {
-        if (attempts >= 5) { ch.removeListener(THREAD_FOCUSED, ack); return; }
-        attempts += 1;
-        ch.emit(FOCUS_THREAD, t.id);
-        window.setTimeout(emitOnce, 400); // re-armed until ack / 5 attempts
-      };
-      window.setTimeout(emitOnce, 400);
+      // the preview needs a beat to switch stories before it can focus a pin
+      window.setTimeout(() => addons.getChannel().emit(FOCUS_THREAD, t.id), 400);
     } else {
       addons.getChannel().emit(FOCUS_THREAD, t.id);
     }
@@ -217,6 +243,12 @@ function ReviewPanel(): React.ReactElement {
     if (!body.trim()) return false;
     setBusy(true);
     try {
+      if (staticMode) {
+        const store = await getStaticStore();
+        await store.addComment(t.id, body, author);
+        await refresh();
+        return true;
+      }
       await jfetch(`${API_BASE}/threads/${encodeURIComponent(t.id)}/comments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -240,6 +272,12 @@ function ReviewPanel(): React.ReactElement {
         status: t.status === 'open' ? 'resolved' : 'open',
         resolvedAt: t.status === 'open' ? new Date().toISOString() : undefined,
       };
+      if (staticMode) {
+        const store = await getStaticStore();
+        await store.patch(next);
+        await refresh();
+        return;
+      }
       await jfetch(`${API_BASE}/threads/${encodeURIComponent(t.id)}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -261,6 +299,26 @@ function ReviewPanel(): React.ReactElement {
     } catch {
       setError('clipboard blocked — use Download instead');
     }
+  };
+
+  /* exports — dev: server digest route; static: built client-side from the
+   *  local store (hand-carry mechanism back to a dev-server store). */
+  const exportAny = async (format: 'md' | 'json'): Promise<string> => {
+    const list = staticMode
+      ? (await getStaticStore()).list(scope === 'story' ? storyId : undefined)
+      : null;
+    if (list !== null) {
+      return format === 'md'
+        ? renderStaticDigest(list)
+        : JSON.stringify({ generatedAt: new Date().toISOString(), mode: 'static', threads: list }, null, 2);
+    }
+    return getExport(format, scope === 'story' ? storyId : undefined);
+  };
+
+  const doExport = (format: 'md' | 'json', sink: 'copy' | 'download'): void => {
+    void exportAny(format)
+      .then((text) => (sink === 'copy' ? copy(text, format === 'md' ? 'markdown digest' : 'JSON bundle') : download(text, 'annotakit-review.md')))
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   };
 
   const download = (text: string, filename: string): void => {
@@ -350,10 +408,9 @@ function ReviewPanel(): React.ReactElement {
           value={author}
           onChange={(e) => saveAuthor(e.target.value)}
           placeholder="your name"
-          aria-label="Author name"
           title="Author name (shared with the preview composer)"
         />
-        <button style={{ padding: '3px 9px', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderRadius: 6, border: `1px solid ${theme.appBorderColor}`, background: 'transparent', color: theme.textColor }} onClick={() => setGhOpen((v) => !v)} title="GitHub lifecycle sync">
+        <button style={{ padding: '3px 9px', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderRadius: 6, border: `1px solid ${theme.appBorderColor}`, background: 'transparent', color: theme.textColor }} onClick={() => setGhOpen((v) => !v)} title="GitHub lifecycle sync" hidden={staticMode}>
           <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
             <SyncIcon width={12} height={12} /> GitHub
             {/* honest indicator: green ONLY when auto AND healthy; red on lastError; amber otherwise */}
@@ -362,10 +419,15 @@ function ReviewPanel(): React.ReactElement {
             {sync && sync.mode !== 'auto' && !sync.lastError && <span style={{ width: 6, height: 6, borderRadius: 999, background: '#f59e0b', display: 'inline-block' }} title={sync.mode === 'unconfigured' ? 'local mode — GitHub mirror not configured' : 'mirror disabled'} />}
           </span>
         </button>
+        {staticMode && (
+          <span style={{ ...chip('#f59e0b22', '#b45309'), fontSize: 10 }} title="Static `storybook build` — no dev server, no sync. Threads live in this browser's localStorage for this deployment; use export to hand-carry them back to a dev-server store.">
+            static · local-only
+          </span>
+        )}
       </div>
 
-      {/* gh lifecycle sync */}
-      {ghOpen && (
+      {/* gh lifecycle sync (dev mode only — static builds have no server) */}
+      {ghOpen && !staticMode && (
         <div style={{ padding: '8px 0', borderBottom: `1px solid ${theme.appBorderColor}`, fontSize: 11, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             {sync ? (
@@ -438,9 +500,6 @@ function ReviewPanel(): React.ReactElement {
         return (
           <div
             key={t.id}
-            role="button"
-            tabIndex={0}
-            aria-label={`Thread #${t.number} by ${t.author ?? 'anonymous'} — ${t.status === 'open' ? 'open' : 'resolved'} — ${t.comments[0]?.body?.slice(0, 60) ?? '(no text)'}`}
             style={{
               padding: '6px 6px 6px 8px',
               margin: '5px 0',
@@ -451,15 +510,6 @@ function ReviewPanel(): React.ReactElement {
               opacity: t.status === 'open' ? 1 : 0.75,
             }}
             onClick={() => focusThread(t)}
-            onKeyDown={(e) => {
-              /* keyboard parity (R13 review): the card is the gate for reply +
-                 resolve — pointer-only divs made the panel's core actions
-                 unreachable by keyboard */
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                focusThread(t);
-              }
-            }}
           >
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <span style={chip(t.status === 'open' ? '#f59e0b22' : '#16a34a22', t.status === 'open' ? '#b45309' : '#15803d')}>
@@ -478,6 +528,18 @@ function ReviewPanel(): React.ReactElement {
                 </a>
               )}
               {t.component?.name && <span style={chip(`${theme.colorSecondary}18`, theme.colorSecondary)}>{t.component.name}</span>}
+              {snapshotIds.has(t.id) && (
+                <a
+                  href={`${API_BASE}/threads/${encodeURIComponent(t.id)}/snapshot?format=html`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Plan-b evidence: story DOM captured at pin time (pinned element highlighted) — opens as a viewable page"
+                  style={{ ...chip('#d9770618', '#b45309'), textDecoration: 'none', display: 'inline-flex', gap: 3, alignItems: 'center', cursor: 'pointer' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <CameraIcon width={10} height={10} /> dom
+                </a>
+              )}
               {scope === 'all' && t.story.name && <span style={chip('#64748b18', theme.textMutedColor)}>{t.story.name}</span>}
               <span style={{ flex: 1 }} />
               <span style={{ fontSize: 10, color: theme.textMutedColor }}>{t.createdAt.slice(0, 10)}</span>
@@ -505,12 +567,12 @@ function ReviewPanel(): React.ReactElement {
         <span style={{ fontSize: 10.5, color: theme.textMutedColor, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
           <CommentIcon width={11} height={11} /> agent digest:
         </span>
-        <MiniButton theme={theme} onClick={() => void getExport('md', scope === 'story' ? storyId : undefined).then((md) => copy(md, 'markdown digest')).catch((e) => setError(e instanceof Error ? e.message : String(e)))}>copy md</MiniButton>
-        <MiniButton theme={theme} onClick={() => void getExport('json', scope === 'story' ? storyId : undefined).then((json) => copy(json, 'JSON bundle')).catch((e) => setError(e instanceof Error ? e.message : String(e)))}>copy json</MiniButton>
-        <MiniButton theme={theme} onClick={() => void getExport('md', scope === 'story' ? storyId : undefined).then((md) => download(md, 'annotakit-review.md')).catch((e) => setError(e instanceof Error ? e.message : String(e)))}>download md</MiniButton>
+        <MiniButton theme={theme} onClick={() => doExport('md', 'copy')}>copy md</MiniButton>
+        <MiniButton theme={theme} onClick={() => doExport('json', 'copy')}>copy json</MiniButton>
+        <MiniButton theme={theme} onClick={() => doExport('md', 'download')}>download md</MiniButton>
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 10, color: theme.textMutedColor, fontFamily: theme.fontMonospace }}>
-          curl {API_BASE}/export?format=md
+          {staticMode ? 'static build · digest generated locally from this browser\'s store' : `curl ${API_BASE}/export?format=md`}
         </span>
       </div>
     </div>
@@ -531,7 +593,6 @@ function ThreadActions(props: {
     <div style={{ display: 'flex', gap: 6, marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
       <input
         style={{ flex: 1, padding: '3px 8px', fontSize: 12, borderRadius: 6, border: `1px solid ${theme.appBorderColor}`, background: 'transparent', color: theme.textColor }}
-        aria-label={`Reply to thread #${props.thread.number}`}
         placeholder="reply…"
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -569,24 +630,110 @@ function MiniButton(props: { theme: ReturnType<typeof useTheme>; onClick: () => 
 
 /* ------------------------------------ tool ------------------------------------ */
 
-function LayerToggleTool(): React.ReactElement {
-  const [visible, setVisible] = useState(true);
+/** Native SB-toolbar button group — v0.5.0 THE entry point for pinning (the
+ *  in-canvas launcher is GONE: nothing in the canvas DOM is altered). Commands
+ *  travel over the addon channel to the preview layer; the layer reports back
+ *  via UI_STATE so the buttons always reflect reality (armed mode, drawer open,
+ *  visibility, thread counts, API up/down) instead of manager-local guesses. */
+function AnnotaKitTool(): React.ReactElement {
   const theme = useTheme();
-  const label = visible ? 'Hide Annotakit pins' : 'Show Annotakit pins';
-  return (
+  const [ui, setUi] = useState<UiState | null>(null);
+
+  useEffect(() => {
+    const ch = addons.getChannel();
+    const onState = (s: UiState | undefined) => {
+      if (s && typeof s === 'object') setUi(s);
+    };
+    ch.on(UI_STATE, onState);
+    return () => {
+      ch.removeListener(UI_STATE, onState);
+    };
+  }, []);
+
+  const emit = useCallback((command: UiCommand['command']): void => {
+    addons.getChannel().emit(UI_COMMAND, { command });
+  }, []);
+
+  const apiDown = ui?.apiOk === false;
+  const armed = (on: boolean): React.CSSProperties => ({
+    color: on ? theme.barSelectedColor : theme.barTextColor,
+    opacity: on ? 1 : 0.75,
+  });
+
+  const btn = (label: string, icon: React.ReactNode, on: boolean, onClick: () => void): React.ReactElement => (
     <button
-      key="annotakit-layer-toggle"
-      title={label}
+      key={label}
+      title={apiDown ? 'Annotakit: dev server API down — run `storybook dev`' : label}
       aria-label={label}
-      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: theme.barTextColor, display: 'inline-flex', alignItems: 'center', opacity: visible ? 1 : 0.5 }}
-      onClick={() => {
-        const next = !visible;
-        setVisible(next);
-        addons.getChannel().emit(TOGGLE_LAYER, next);
+      disabled={apiDown}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        padding: 4,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        cursor: apiDown ? 'default' : 'pointer',
+        ...armed(on),
       }}
+      onClick={onClick}
     >
-      {visible ? <EyeIcon width={14} height={14} /> : <EyeCloseIcon width={14} height={14} />}
+      {icon}
     </button>
+  );
+
+  const open = ui?.open ?? 0;
+  const total = ui?.total ?? 0;
+  const drawerOn = ui?.drawerOpen === true;
+  return (
+    <div key="annotakit-tool" style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+      {btn('Pin a comment to an element (⌥C)', <PinIcon width={14} height={14} />, ui?.mode === 'pin', () => emit('pin'))}
+      {btn('Mark a region (⌥R)', <BoxIcon width={14} height={14} />, ui?.mode === 'region', () => emit('region'))}
+      <button
+        key="annotakit-drawer"
+        title={apiDown ? 'Annotakit: dev server API down — run `storybook dev`' : 'Threads drawer (⌥D)'}
+        aria-label="Annotakit threads drawer"
+        disabled={apiDown}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          padding: 4,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          cursor: apiDown ? 'default' : 'pointer',
+          ...armed(drawerOn),
+        }}
+        onClick={() => emit('drawer')}
+      >
+        <CommentsIcon width={14} height={14} />
+        {total > 0 && (
+          <span
+            style={{
+              background: open > 0 ? '#d97706' : '#94a3b8',
+              color: '#fff',
+              borderRadius: 999,
+              minWidth: 16,
+              height: 16,
+              lineHeight: '16px',
+              textAlign: 'center',
+              fontSize: 10,
+              padding: '0 4px',
+              fontWeight: 700,
+            }}
+          >
+            {open > 0 ? open : total}
+          </span>
+        )}
+      </button>
+      <span key="annotakit-sep" style={{ width: 1, height: 16, background: theme.appBorderColor, margin: '0 4px' }} />
+      {btn(
+        ui?.visible === false ? 'Show Annotakit pins (⌥L)' : 'Hide Annotakit pins (⌥L)',
+        ui?.visible === false ? <EyeCloseIcon width={14} height={14} /> : <EyeIcon width={14} height={14} />,
+        ui?.visible !== false,
+        () => emit('layer'),
+      )}
+    </div>
   );
 }
 
@@ -602,7 +749,8 @@ addons.register(ADDON_ID, () => {
 
   addons.add(TOOL_ID, {
     type: types.TOOL,
-    title: 'Annotakit: toggle pins',
-    render: () => <LayerToggleTool />,
+    title: 'Annotakit',
+    match: ({ viewMode }: { viewMode?: string }) => viewMode === 'story',
+    render: () => <AnnotaKitTool />,
   });
 });

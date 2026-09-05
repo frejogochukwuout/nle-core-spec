@@ -52,13 +52,17 @@ yet — the suite is the per-round local gate.
 ## Storybook 10 (THE design-review surface)
 
 **`npm run storybook`** (port 6006) boots **Storybook 10.6** (react-vite
-builder) over this app with the **storybook-annotakit** review addon
+builder) over this app with the **storybook-annotakit v0.5.0** review addon
 (vendored at `vendor/storybook-annotakit`): pin comments on live stories,
 threads in the bottom dock, digest/export REST on the dev server
 (`/annotakit/api/*`), optional GitHub-issue mirror via `ANNOTAKIT_GH_TOKEN`
 in `.env`). The addon needs the DEV server — a static `storybook build`
-shows a “dev only” note. Reviewer flow: press **C** → click an element →
-comment → **⌘/Ctrl+Enter**; **R** = region pin; **L** = hide/show pins.
+shows a “dev only” note. Reviewer flow (v0.5.0): the SB **toolbar** carries
+the review tool — Pin / Region / Drawer / Hide buttons; hotkeys are
+**⌥-prefixed**: **⌥C** pin → click an element → comment → **⌘/Ctrl+Enter**;
+**⌥R** = region pin; **⌥L** = hide/show pins; **⌥H** = help card (remapped
+from the upstream '?' default, which collides with the shell's cheat-sheet
+'?' — see `.storybook/preview.tsx`).
 
 **Fresh clone / first run:** the vendored addon ships as TypeScript source;
 its `dist/` build output is gitignored, so a clean checkout has none and
@@ -81,8 +85,11 @@ plain `nohup`/`setsid` die). Caddy proxies the platform edge straight to
 edge-rewritten Host header (storybook 10's host validation would 403
 otherwise). The serving host is a runtime copy on the persistent volume
 (`/home/z/my-project/shell-variants`: own node_modules, rebuilt vendor
-dist, `.env` with `ANNOTAKIT_GH_TOKEN`, and an `annotakit-store` git
-branch — threads.db git-push durability). Cold-start resurrection after
+dist, `.env` with `ANNOTAKIT_GH_TOKEN`; any-branch git repo — the v0.5.0
+store lives under `.git/annotakit/threads.db` and syncs to the orphan
+`annotakit` branch on origin: threads.db git-push durability, merged
+cross-stream with the parallel session's review threads). Cold-start
+resurrection after
 a container recycle: `scripts/boot-restore.sh` (iso at
 `/home/z/my-project/.zscripts/dev.sh`, the harness boot hook) —
 idempotent, restores repo from the `/home/sync` bundle, rebuilds the

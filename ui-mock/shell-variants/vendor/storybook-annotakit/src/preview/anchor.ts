@@ -134,11 +134,7 @@ function extractTextQuote(el: HTMLElement, textNodes: Text[]): TextQuote | undef
     n = walker.nextNode();
   }
   if (!own) return undefined;
-  // The stored exact must be a CLEAN substring of the canvas text: an embedded
-  // ellipsis never occurs in the live DOM, so the includes()-based resolution
-  // (and the occurrenceIndex count below) would never match. Truncate hard and
-  // trim — the DISPLAY layer may add its own ellipsis.
-  const exact = normalizeText(own.data).slice(0, 80).trim();
+  const exact = clip(normalizeText(own.data), 80);
   if (!exact) return undefined;
 
   const idx = textNodes.indexOf(own);
@@ -189,15 +185,77 @@ export interface CapturedAnchor {
   captureViewportWidth: number;
 }
 
-/** Capture the full anchor package (lean context: outerHTML clipped SHORT). */
+/** 1-based position of el among same-tag element siblings (list-item
+ *  disambiguator when id/classes are absent). Only meaningful when the parent
+ *  actually holds several same-tag children. */
+function nthOfTag(el: HTMLElement): number | undefined {
+  const parent = el.parentElement;
+  if (!parent) return undefined;
+  let n = 0;
+  let total = 0;
+  for (const child of parent.children) {
+    if (child.tagName === el.tagName) {
+      total++;
+      if (child === el) n = total;
+    }
+  }
+  return total > 1 ? n : undefined;
+}
+
+/** Form control value, password-masked, clipped. */
+function formValue(el: HTMLElement): string | undefined {
+  const input = el as HTMLInputElement;
+  if (typeof input.value !== 'string' || !input.value) return undefined;
+  const v = clip(input.value, 60);
+  return input.type === 'password' ? '•'.repeat(Math.min(8, input.value.length)) : v;
+}
+
+/** Human label for form-ish controls: label[for=id] → wrapping label →
+ *  aria-labelledby target. */
+function formLabel(el: HTMLElement): string | undefined {
+  const isFormControl =
+    el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || el instanceof HTMLButtonElement;
+  if (!isFormControl) return undefined;
+  try {
+    if (el.id) {
+      const lab = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+      const t = lab?.textContent?.trim();
+      if (t) return clip(t, 60);
+    }
+    const wrap = el.closest('label');
+    const wt = wrap?.textContent?.trim();
+    if (wt && !wt.includes(el.textContent?.trim() ?? '\u0000')) return clip(wt, 60);
+    const lb = el.getAttribute('aria-labelledby');
+    if (lb) {
+      const t = document.getElementById(lb)?.textContent?.trim();
+      if (t) return clip(t, 60);
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
+
+/** Capture the full anchor package (context carries the EXACT identity fields:
+ *  id/classes/testid/nth/form metadata — v0.5.0 precision feedback). */
 export function captureAnchor(el: HTMLElement, root: HTMLElement): CapturedAnchor {
   const textNodes = collectTextNodes(root);
   const bbox = bboxOf(el, root);
+  const classes = el.getAttribute('class');
   const context: TargetContext = {
     tag: el.tagName.toLowerCase(),
     role: el.getAttribute('role') ?? undefined,
     ariaLabel: el.getAttribute('aria-label') ?? undefined,
     text: clip(el.innerText ?? '', 120) || undefined,
+    id: el.id || undefined,
+    classes: classes ? clip(classes.replace(/\s+/g, ' '), 120) || undefined : undefined,
+    testid: el.getAttribute('data-testid') ?? el.getAttribute('data-test') ?? el.getAttribute('data-test-id') ?? undefined,
+    nth: nthOfTag(el),
+    name: el.getAttribute('name') ?? undefined,
+    value: formValue(el),
+    placeholder: el.getAttribute('placeholder') ?? undefined,
+    alt: el.getAttribute('alt') ?? undefined,
+    label: formLabel(el),
     outerHTML: clip(el.outerHTML.replace(/\s+/g, ' ').trim(), 200),
   };
 
@@ -298,10 +356,7 @@ function findByTextQuote(ann: AnchorLike, root: HTMLElement): HTMLElement | null
     el = el.parentElement;
     hops++;
   }
-  // post-loop re-verify (R13 review): a 3-hop budget exhaustion leaves `el`
-  // on an ancestor that never matched — anchoring there would flash a wrong
-  // bbox and lie about component.source. Miss = null, not approx.
-  if (!el || el === root || withinOverlay(el) || el.tagName.toLowerCase() !== wantTag) return null;
+  if (!el || el === root || withinOverlay(el)) return null;
   return el;
 }
 
@@ -332,8 +387,7 @@ function findByFingerprint(ann: AnchorLike, root: HTMLElement): HTMLElement | nu
           el = el.parentElement;
           hops++;
         }
-        // post-loop re-verify — same law as the text-quote branch above
-        if (el && el !== root && !withinOverlay(el) && el.tagName.toLowerCase() === fp.tag) return el;
+        if (el && el !== root && !withinOverlay(el)) return el;
       }
     }
   }

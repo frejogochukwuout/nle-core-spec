@@ -1,6 +1,6 @@
 # storybook-annotakit
 
-**Pin comments on live Storybook stories — with React component awareness, zero setup, two agent surfaces (GitHub mirror + local REST), and a production-grade sync engine.**
+**Pin comments on live Storybook stories — with React component awareness, zero setup, two agent surfaces (GitHub mirror + local REST), a production-grade sync engine, and a branch-switch-proof durable store.**
 
 `npm run storybook` is the entire review stack. This addon mounts a comment API **on the Storybook dev server itself** (via the official `experimental_devServer` preset hook), persists threads in an **embedded SQLite store** (`node:sqlite`, JSON-file fallback), and enriches every pin with **React component metadata** — component name, props, and the exact `file:line` where the DOM element was created — parsed from live React 19 fibers.
 
@@ -10,22 +10,24 @@
 ┌─────────────────────────── storybook dev :6006 ────────────────────────────┐
 │  manager (React app)          preview iframe (your stories)                │
 │  ┌────────────────────┐      ┌───────────────────────────────────┐         │
-│  │ Annotakit panel    │      │  global decorator on every story:  │         │
-│  │ threads · reply ·  │◄────►│  C → click element → composer      │         │
-│  │ resolve · export · │ post │  R → drag region                   │         │
+│  │ NATIVE TOOLBAR:    │      │  global decorator on every story:  │         │
+│  │ 📌pin ▢region 💬   │◄────►│  ⌥C → click element → composer      │         │
+│  │ + Annotakit panel: │ post │  ⌥R → drag region                   │         │
 │  │ GitHub mirror +    │ msg  │  pins re-anchor on HMR/DOM change  │         │
-│  │ sync status        │ + WS │  fiber walk → component + jsx site │         │
-│  └────────────────────┘      │  per-thread “⤴ #N” issue chips    │         │
+│  │ export · mirror +  │ + WS │  fiber walk → component + jsx site  │         │
+│  │ sync status        │      │  DOM snapshot (plan-b evidence)     │         │
+│  └────────────────────┘      │  per-thread “⤴ #N” issue chips     │         │
 │           │                    └───────────────────────────────────┘         │
 │           ▼ same-origin fetch                                               │
 │  /annotakit/api/*  (experimental_devServer middleware)                      │
-│  └── SQLite: <configDir>/annotakit/threads.db  (node:sqlite)                │
+│  └── SQLite: <git-common-dir>/annotakit/threads.db  (node:sqlite)          │
 └─────────────────────────────────────────────────────────────────────────────┘
-           │
+           │ orphan branch (refs/heads/annotakit: README + threads.db,
+           │ zero commits on code branches, pushed to the remote)
            ▼ agent consumption (GET /health → agentSurfaces)
   Path A — GitHub mirror: each thread = ONE issue labeled `annotakit`
   → agent comments fix evidence + closes it → thread resolves in Storybook
-  Path B — local REST (always available): /threads + /export?format=md|json
+  Path B — local REST (always available): /threads + /schema + /export?format=md|json
   → reply + PATCH resolve on the dev server itself
   POST /annotakit/api/sync   (idempotent reconcile, both directions)
 ```
@@ -49,13 +51,14 @@ That's the entire setup — **local mode works with zero configuration**: pinnin
 ## Reviewer flow
 
 1. `npm run storybook` → any story
-2. Press **`C`** → click an element (or **`R`** → drag a region)
-3. Type → **Pin it** (⌘/Ctrl+Enter). Saved. Automatically. That's the fix for "Failed to save annotation: do I need to set up a DB?"
-4. Threads live in the **Annotakit** panel (bottom dock): reply, resolve, export, sync status
-5. Pins follow their element through re-renders, HMR, and DOM changes (multi-selector anchoring with text/attr fallbacks — ported unchanged from AnnotaKit's proven engine)
-6. With a GitHub token configured, **every thread mirrors to exactly one GitHub issue, automatically** — create → issue, reply → comment, resolve → close, reopen → reopen, delete → close+note. No publish button, no duplicate issues, ever.
+2. **Annotakit toolbar buttons** (native Storybook toolbar): pin · region · threads (+count) · show/hide pins — or press **`⌥C`** and click an element (**`⌥R`** → drag a region)
+3. The composer shows the exact element identity — `<button#save.primary.btn:nth(2) [testid=save-btn] "Save">` — the SAME string the agent later reads in the digest
+4. Type → **Pin it** (⌘/Ctrl+Enter). Saved. Automatically. That's the fix for "Failed to save annotation: do I need to set up a DB?"
+5. Threads live in the **Annotakit** panel (bottom dock): reply, resolve, export, sync status, and a 📷 *dom* chip per thread opening the captured DOM evidence
+6. Pins follow their element through re-renders, HMR, and DOM changes (multi-selector anchoring with text/attr fallbacks — ported unchanged from AnnotaKit's proven engine)
+7. With a GitHub token configured, **every thread mirrors to exactly one GitHub issue, automatically** — create → issue, reply → comment, resolve → close, reopen → reopen, delete → close+note. No publish button, no duplicate issues, ever.
 
-Shortcuts: `C` pin · `R` region · `L` show/hide pins · `D` drawer · `Esc` cancel · `?` help. Canvas toolbar eye-icon toggles the layer.
+Shortcuts (SB-convention Alt/⌥-prefixed, physical-key matched so macOS Option-compose can't break them): `⌥C` pin · `⌥R` region · `⌥L` show/hide pins · `⌥D` drawer · `Esc` cancel · `?` help. Customize via `parameters.annotakit.hotkeys`. The v0.4 floating launcher is GONE — the canvas DOM stays untouched.
 
 ## What a thread knows (the differentiator)
 
@@ -66,11 +69,13 @@ Every pin captures, at click time:
 | story id / title / name | CSF render context + `/index.json` | `nimbus-components--status-badge` |
 | story file | story index `importPath` | `./src/stories/leaf.stories.tsx` |
 | component name | React fiber walk (nearest component) | `StatusBadge` |
-| **jsx site** | host-fiber `_debugStack` parse (React 19) | `src/components/nimbus/StatusBadge.tsx:12` |
+| **jsx site** | host-fiber `_debugStack` parse (React 19) + **inline-sourcemap correction (v0.4.1)** | `src/components/nimbus/StatusBadge.tsx:12` (TRUE source line) |
 | component chain | `fiber.return` walk (SB internals filtered) | `Dashboard > KpiCard > StatusBadge` |
 | props | `fiber.memoizedProps` (small values) | `status="pending"` |
 | DOM anchor | `@medv/finder` cssSelector + W3C-style textQuote + fragment bbox | `.bg-amber-50`, `"pending"` |
-| element context | tag, text, aria-label | `<span> "Pending"` |
+| **exact element identity** (v0.5.0) | id, class list, data-testid, nth-of-tag, form name/label/placeholder/value (password-masked), img alt | `button#save.primary.btn:nth(2) [testid=save-btn label="Save"] "Save"` |
+| **React key** (v0.5.0) | nearest fiber `key` — the exact `.map()` item identity | `key="row-42"` |
+| **DOM snapshot** (v0.5.0, plan-b) | story-root outerHTML at pin time, pinned element marked `data-annota-snap="1"`; TEXT so any model can read it (no multimodal); `?format=html` renders it for humans | `GET /threads/<id>/snapshot` |
 
 So the digest an agent receives says *"StatusBadge, src/components/nimbus/StatusBadge.tsx:12, props status=pending, selector .bg-amber-50, comment: should pulse when overdue"* — instead of a raw HTML blob.
 
@@ -122,7 +127,7 @@ The previous kit's JSON was "extremely verbose" and the markdown "too cluttered"
 | GHE / custom API | env `ANNOTAKIT_GH_API=<base url>` |
 | author name | Annotakit panel input (localStorage `annotakit:author`) |
 | disable per story | `parameters: { annotakit: { disabled: true } }` |
-| store location | `<configDir>/annotakit/threads.db` — git-track it (that's the durability model) |
+| store location (v0.5.0) | `<git-common-dir>/annotakit/threads.db` — immune to branch switches and `git clean -fdx`, structurally un-gitignorable; durability = the `annotakit` orphan branch (see below) |
 
 All env vars are read once at boot — restart `storybook dev` after changing `.env`. `.env` holds a secret: `echo ".env" >> .gitignore` BEFORE writing the token into it (the engine never commits it, but `git add -A` would).
 
@@ -133,8 +138,8 @@ All env vars are read once at boot — restart `storybook dev` after changing `.
 ```bash
 cd examples/nimbus && bun install && bun run storybook
 # → http://localhost:6006 → press C → click an element
-node scripts/api-test.mjs          # 40/40 contract tests (run from repo root)
-node scripts/ghsync-fake.mjs       # 59/59 lifecycle + stress engine tests
+node scripts/api-test.mjs          # 42/42 contract tests (run from repo root)
+node scripts/ghsync-fake.mjs       # 60/60 lifecycle + stress engine tests
 ```
 
 ## Repo layout
@@ -158,6 +163,37 @@ The original direction was "fork storybookjs/storybook and make surgical changes
 
 Landscape at time of writing: Chromatic does cloud screenshot-pin comments (not live DOM, no local mode); Greenroom (`@igility/greenroom-addon`, Aug 2026, pre-release) does pins + MCP but needs its unpublished sidecar, anchors by a single CSS selector, and has no React component metadata. Neither is local-first + dev-server-embedded + component-aware.
 
+## Store durability across branches and machines (v0.5.0)
+
+Feedback threads are per-PROJECT, not per-branch — you review `feature-x`'s Storybook on Monday and `main`'s on Tuesday, and nothing may vanish in between:
+
+- **the store lives in the repo's common git dir** (`.git/annotakit/`) — checkouts and `git clean -fdx` physically cannot touch it, and "is the db gitignored" is structurally impossible; all worktrees of one repo share it
+- **durability is a dedicated ORPHAN branch** (`refs/heads/annotakit`, tree = `README` + `threads.db`): pure git plumbing (hash-object/mktree/commit-tree/update-ref — no index, no work tree), pushed with the same debounced mutation flow. Zero commits on your code branches (no CI noise, no review pollution); a foreign branch with the same name is detected and avoided (falls back to `annotakit-store`)
+- **divergence is a logical merge, not a conflict**: two machines pushing the same branch reconcile by union (threads by id, delete-wins tombstones, resolved-wins, comment union) — committed on top of the remote head, never force-pushed
+- **fresh clones / agent sandboxes boot-restore** from the remote branch (offline-capable right after clone via the tracking ref); a legacy v0.4 tracked db is migrated row-by-row, the old file left untouched
+- no repo / `autoSync:false` → classic `<configDir>/annotakit/threads.db`, disk-only (your choice, no git flow)
+
+Caveats, documented: `--mirror`/`--all` pushes will carry the orphan branch too (harmless); monorepos share ONE store; `git checkout annotakit` out of curiosity shows a README, not code; branch protection that forbids new refs degrades durability to local-commit with a clear log.
+
+## Static builds — review without a dev server (v0.5.x)
+
+`storybook build` output served as plain files? The addon notices by itself: no `/annotakit/api/health` **but** a baked `annotakit-threads.json` next to `index.html` → static mode, and the browser becomes the store:
+
+```bash
+cd your-project
+node node_modules/storybook-annotakit/scripts/bake-static-threads.mjs <sb-output-dir>   # seed + marker, ALWAYS written
+npx http-server <sb-output-dir> -p 3000   # any static file server — no host-allowlist dance needed
+```
+
+- **reads**: pins render from the baked seed (same anchoring engine, same element identity lines)
+- **writes**: pin, reply, resolve, delete → localStorage, scoped per deployment — `annotakit:static:<origin><deploy-dir>` — so multiple static deployments on one host never collide, and different hosts are isolated by the browser itself
+- **re-bakes merge, they don't clobber**: seed ∪ localStorage uses the same logical union as the git durability layer (newest thread wins, comments union, delete-wins tombstones — idempotent)
+- **honest degradation**: a "static · local-only" chip + panel badge (never a silent fake sync); DOM snapshots and the GitHub mirror are OFF in static mode; cross-document updates ride `storage` events instead of WS
+- **hand-carry back**: the panel's copy/download md + json exports are built client-side from the local store — paste them into an agent, or reconcile into a dev-server store later
+- **what it's NOT** (stage 3, deliberately not shipped): no issue sync from the browser — a PAT in client localStorage is readable by any story code; if static sync is ever needed, the PAT goes behind a tiny sidecar, not into the bundle
+
 ## Status
 
-Experiment (v0.4.0), private (not yet on the npm registry — install via `file:`). E2E-verified in-session: pin→save→reply→resolve→re-anchor-after-DOM-change→export→GitHub 1:1 lifecycle mirror (auto create/close/reopen/tombstone + 60s pull-back), including a full remote-agent round trip ([issue #9](https://github.com/melodietexoss/storybook-annotakit/issues/9): fix commit → evidence comment → close → auto-resolve in Storybook). 40/40 API contract tests + 59/59 lifecycle engine tests (incl. concurrency, orphan-guard, 404-heal, rate-limit backoff, API-budget gating). Known gaps: static builds are view-only, no screenshot evidence per pin, no MCP server (REST + GitHub issues + digests are the agent surface), fiber metadata is dev-mode-only by React's own design.
+Experiment (v0.5.0), private (not yet on the npm registry — install via `file:`). E2E-verified in-session: pin→save→reply→resolve→re-anchor-after-DOM-change→export→GitHub 1:1 lifecycle mirror (auto create/close/reopen/tombstone + 60s pull-back), including a full remote-agent round trip ([issue #9](https://github.com/melodietexoss/storybook-annotakit/issues/9): fix commit → evidence comment → close → auto-resolve in Storybook). 67/67 API contract tests + 60/60 lifecycle engine tests + 20/20 live-process stress + 8/8 store-robustness cases (branch switch, clean -fdx, fresh-clone restore, two-machine divergence merge, delete-wins tombstones, foreign-branch adoption, empty-store guard, legacy migration) + 26/26 static-store checks — all against real git repos and a local bare remote. Static mode E2E-verified in-session (seeded pins render, create/reply/resolve persist across reloads, scope isolation, re-bake merge, public preview through the sandbox gateway).
+
+**v0.4.1 — hardened by dogfooding the full review loop on a real project** (Deskline, 51 stories, 3 competing design variants, 14 pin threads, fix→verify→reopen→re-resolve round trips): RESTful `DELETE /threads/<id>` (path form, both shapes now work); `jsx:` file:line now **sourcemap-corrected** — raw React `_debugStack` lines reference Vite's esbuild-transformed module (often ~2× source length, causing impossible line numbers); pins on story-owned wrapper DOM report `story render (Storybook wrapper)` + the story file instead of `unboundStoryFn`/preview.tsx internals; `/health` exposes `bootedAt` so agents can verify restarts actually happened (stale-process trap). Known gaps as of v0.4.1: no screenshot evidence per pin, no MCP server (REST + GitHub issues + digests are the agent surface), fiber metadata is dev-mode-only by React's own design.

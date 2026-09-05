@@ -46,6 +46,9 @@ export interface ComponentRef {
   source?: ComponentSource;
   /** Small stringified prop values of the nearest component (bounded count/size). */
   props?: Record<string, string>;
+  /** React `key` of the nearest component instance — the exact list-item
+   *  identity when the pinned node sits inside a .map() (v0.5.0). */
+  key?: string;
 }
 
 export interface TextQuote {
@@ -86,14 +89,51 @@ export interface ElementFingerprint {
   neighborText?: string;
 }
 
-/** Just enough DOM context for a human/agent to recognize the element. */
+/** DOM context of the pinned element — the fields an agent needs to identify
+ *  the EXACT node (v0.5.0: id/classes/testid/nth/form metadata, dogfood + user
+ *  feedback "not precise enough"). All optional, all clipped server-agnostic. */
 export interface TargetContext {
   tag: string;
   role?: string;
   ariaLabel?: string;
   text?: string;
+  /** Element id attribute. */
+  id?: string;
+  /** Space-separated class list (clipped) — e.g. "value tabular-nums". */
+  classes?: string;
+  /** data-testid (and data-test / data-test-id) attribute. */
+  testid?: string;
+  /** 1-based index of this element among same-tag siblings — disambiguates
+   *  list items when id/classes are absent. */
+  nth?: number;
+  /** form control name / button name attribute. */
+  name?: string;
+  /** form control value (password inputs are masked). */
+  value?: string;
+  placeholder?: string;
+  /** img alt text. */
+  alt?: string;
+  /** Human form label (label[for], wrapping label, or aria-labelledby). */
+  label?: string;
   /** Clipped outerHTML — SHORT (verbose JSON was feedback #1). */
   outerHTML?: string;
+}
+
+/** Plan-b visual evidence (v0.5.0): the story canvas DOM serialized AT PIN
+ *  TIME with the pinned element marked (data-annota-snap="1"). Text, not
+ *  pixels — any model can read it; ?format=svg wraps it into a human-viewable
+ *  "screenshot" via foreignObject. Stored per thread, OUTSIDE the thread
+ *  payload (listings stay lean); fetched on demand only. */
+export interface DomSnapshot {
+  format: 'dom';
+  /** Serialized story-root outerHTML; the pinned element carries data-annota-snap="1". */
+  html: string;
+  /** True when the serializer had to hard-truncate (huge DOM). */
+  clipped: boolean;
+  capturedAt: string;
+  /** Story-root box at capture time — sizing for the SVG wrapper view. */
+  width: number;
+  height: number;
 }
 
 /** The pinned element anchor package (ported multi-selector engine). */
@@ -154,11 +194,24 @@ export interface Thread {
 export interface HealthInfo {
   ok: true;
   version: string;
+  /** Server boot time — verify restarts actually happened (stale-process trap). */
+  bootedAt?: string;
   store: 'sqlite' | 'json';
   storePath: string;
+  /** v0.5.0: 'git' = store lives in the repo's common git dir (checkout/clean
+   *  immune, survives branch switches); 'classic' = <configDir>/annotakit
+   *  (no repo or autoSync off — disk only). */
+  storeMode?: 'git' | 'classic';
+  /** v0.5.0: the orphan durability branch (refs/heads/annotakit or the
+   *  -store fallback when the name is taken by a foreign branch, A14). */
+  storeBranch?: string;
   threads: number;
   /** Machine-readable agent onboarding: which consumption paths exist. */
   agentSurfaces: AgentSurfaces;
+  /** Boot-time hygiene findings (dogfood #3/#9): cross-repo mirror target,
+   *  unignored .env holding a token, ghToken in a tracked config file.
+   *  Absent when clean — check before trusting a mirror target. */
+  warnings?: string[];
   /** GitHub publish readiness (pre-flight for agents). */
   gh?: {
     repo: string | null;
@@ -207,6 +260,9 @@ export interface GhSyncStatus {
   lastError: string | null;
   /** While set (rate-limit/transient backoff), pushes+polls pause. */
   backoffUntil: string | null;
+  /** When the periodic stalled sweep retries (dogfood #4: recovery must be
+   *  observable). null in local/off modes (nothing can be stalled). */
+  nextStalledSweepAt?: string | null;
   /** Human note for the panel/agents. */
   note: string;
 }

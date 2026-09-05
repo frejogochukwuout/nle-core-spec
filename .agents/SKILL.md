@@ -907,6 +907,12 @@ wrap-up.
 
 63. **A recycle doesn't just kill processes — it leaves the boot hook pointing at ghosts, and NOTHING tells you.** After the container recycle: the overlay clone (`/home/z/nle-core-spec`) was gone, the runtime copy was gone, AND the harness boot hook `.zscripts/dev.sh` (tracked in the my-project repo, force-checked-out) ran a `package.json` dev script pointing at `sb-supervisor.mjs` — a file that died with the recycle → `MODULE_NOT_FOUND` → wait_for_service fails → no server, no restart, no retry, ever. The boot log (`sb-boot.log`) held the answer the whole time. Law: after any recycle, read the boot logs BEFORE inventing a new serving stack, and make the boot hook's failure mode loud (a dev.sh that exits 0 with a warning is worse than one that fails hard — the harness won't tell you either way).
 
+## R17-v0.5 meta-learnings (vendored-addon version swap)
+
+64. **A vendored-dependency version swap is a three-way merge, not a replace: upstream, ours, and the integration surface.** Swapping vendored storybook-annotakit 0.4.0→0.5.0 lost THREE local fixes silently (preset fresh-clone guard, JSON-store queue-wedge fix, tsup clean:false) — upstream had never seen them, so "take the new version" regressed them. The discipline that caught all three: (1) diff the new zip's src against the VENDORED src (not just file lists — patterns like `queue = queue.then`, `clean: true`, the guard's error string); (2) re-apply local fixes WITH a comment naming them as local re-applies (future swappers need to know they exist); (3) grep the REBUILT dist for every marker (tsup keeps identifiers — `p.catch(() => undefined)`, `annotakit/ui-command`, the `staticStore.mjs` entry); (4) re-check the INTEGRATION surface (our app's `.storybook/preview.tsx` hotkey remap was written against 0.4.0 semantics — under 0.5.0 legacy plain-key configs only fire with ⌥ held, silently changing what the config MEANS; one remap survived because the shell's cheat-sheet '?' still collides with the addon's '?' default). Gates after a vendor swap: vendor tsc (needs the APP's node_modules for peer types — run it after app `npm ci`, not before), app tsc, full app suite, dist markers, daemon restart + health version + live browser pass.
+
+65. **The best E2E proof of a durability engine is one you didn't fabricate.** After the 0.5.0 swap, health reported threads:1 and `autoSync: "pushed (mutation)"` — a thread created through the public URL 5 minutes EARLIER (by the parallel stream's verification agent, on a story id from THEIR storybook) had been auto-migrated from the legacy store, merged cross-stream, and pushed to the shared orphan branch before I touched anything. Zero synthetic test data; the real pipeline proved migration + merge + push in one boot. Lesson: check `git log <orphan-branch>` + the health JSON's sync state FIRST after any store-engine change — reality may already have run your E2E.
+
 ## Serving the shell-variants review surface on :3000 — the verified reference (R17)
 
 This is the SIBLING pattern to the "Z-container preview-URL serving" section
@@ -924,8 +930,15 @@ browser → https://preview-chat-<chat_id>.space-z.ai/
         → Caddy :81 (platform, always up) → localhost:3000
         → Storybook 10.6 DEV (storybook dev -p 3000)
             ├── manager + 83 stories (React 19 + Vite 8, HMR live)
-            ├── /annotakit/api/*  → vendored addon server (SQLite threads.db)
-            └── git auto-sync: threads.db → annotakit-store branch → GitHub
+            ├── /annotakit/api/*  → vendored addon v0.5.0 server
+            │     store = .git/annotakit/threads.db (SQLite, INSIDE .git —
+            │     zero working-tree footprint; storeMode:"git")
+            └── git auto-sync: snapshot → ORPHAN branch `annotakit`
+                (tree = README + threads.db, plumbing-built, never checks
+                out) → pushed to GitHub via http extraheader; on boot the
+                engine RESTORES + MERGES the remote snapshot (cross-stream:
+                the parallel stream's threads ride the same branch, namespaced
+                db=annotakit@<session> — verified live in the R17-v0.5 swap)
 
 serving host = /home/z/my-project/shell-variants   (persistent-volume RUNTIME copy)
 source of truth = /home/z/nle-core-spec            (repo checkout; dies on recycle)
@@ -935,9 +948,10 @@ launcher = scripts/sb3000.py                       (double-fork daemon, PPID=1)
 
 The runtime copy is NOT the repo checkout — it is a second working tree on
 the persistent volume with its OWN `node_modules` (263MB, survives recycles
-when the volume does), its own `.env` (token), and its own git repo whose
-branch `annotakit-store` tracks `threads.db` (the main repo gitignores it;
-the runtime repo's .gitignore is deliberately INVERTED — see gotcha 6).
+when the volume does), its own `.env` (token), and its own git repo (any
+branch; v0.5.0's store lives under `.git/annotakit/`, so the runtime repo
+just needs to BE a git repo with an `origin` remote pointing at the spec
+repo — see gotcha 6).
 
 ### The launch recipe (from nothing to public-200)
 
@@ -957,10 +971,11 @@ npm run vendor:build                 # tsup → dist/{server.cjs,manager.mjs,pre
 # 4. token (gitignored; never in tracked files — secret scanner blocks pushes)
 printf 'ANNOTAKIT_GH_TOKEN=<PAT>\nANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec\n' > .env
 
-# 5. runtime git store (annotakit git-push durability) — see gotcha 6
-git init -b annotakit-store && git add -A && git commit -m "runtime store base"
+# 5. runtime git repo (annotakit git-push host) — see gotcha 6
+#    v0.5.0: ANY branch works — the store lives under .git/annotakit/ and
+#    syncs to the ORPHAN branch `annotakit` on origin (auto-created).
+git init -b runtime && git add -A && git commit -m "runtime base"
 git remote add origin https://<PAT>@github.com/frejogochukwuout/nle-core-spec.git
-git push -u origin annotakit-store
 
 # 6. launch (double-fork; PPID=1) + verify
 python3 scripts/sb3000.py
@@ -1006,10 +1021,17 @@ curl -H 'Host: preview-chat-<id>.fcapp.run' http://127.0.0.1:81/   # 200
    is gitignored (build artifact) — a fresh clone cannot boot Storybook
    (explicit `[storybook-annotakit]` error; SB dev refuses to start). Run
    `npm run vendor:build` (tsup, ~3s). AND verify the dist content by
-   grepping for the fix markers in `dist/server.cjs` / `dist/preview.mjs`
-   — the R13 audit caught a "dist rebuilt" claim that was never rebuilt:
-   the health endpoint answered while the running code was pre-fix
-   (**responding ≠ fixed**; tsup doesn't minify, so markers survive).
+   grepping for the fix markers in `dist/server.cjs` — the R13 audit caught
+   a "dist rebuilt" claim that was never rebuilt: the health endpoint
+   answered while the running code was pre-fix (**responding ≠ fixed**;
+   tsup doesn't minify, so markers survive). v0.5.0 marker set:
+   `p.catch(() => undefined)` (JSON-store queue wedge fix),
+   `annotakit/ui-command` (new toolbar channel), `staticStore.mjs` present
+   in dist/ (new tsup entry — a stale dist lacks it). ALSO: a v0.5.0
+   upstream swap LOSES local fixes — diff the zip's src against the
+   vendored src before swapping and re-apply: the R17 swap had to
+   re-apply the preset fresh-clone guard, the queue-wedge fix, and the
+   tsup clean:false CR10 fix (upstream regressed all three).
 
 5. **Token law: `.env` only, never tracked.** GitHub's secret scanner
    REJECTS pushes containing the PAT (even in history), and the GitLab PAT
@@ -1019,17 +1041,21 @@ curl -H 'Host: preview-chat-<id>.fcapp.run' http://127.0.0.1:81/   # 200
    "partial: git repo without a github remote" (commits, no push — check
    the health JSON's `gh.hasToken`).
 
-6. **Annotakit durability requires the SERVING directory to be a git repo —
-   with the OPPOSITE .gitignore of the main repo.** The addon auto-commits
-   `.storybook/annotakit/threads.db` and pushes the branch to GitHub via
-   http extraHeader (token never in argv/URL/errors). In the MAIN repo
-   that path is gitignored (runtime state); in the RUNTIME repo it must be
-   TRACKED or every sandbox death loses the review threads. Hence the
-   runtime repo: `git init -b annotakit-store`, custom `.gitignore`
-   (threads.db in, `.env`/node_modules out), branch pushed to origin. The
-   auto-sync fires on every mutation AND on graceful daemon shutdown
-   (observed: a "sync feedback store (shutdown)" commit appeared after a
-   kill). Store branch ≠ main: never merge it into the spec repo.
+6. **Annotakit v0.5.0 durability: the serving directory just needs to BE
+   a git repo with an `origin` — the store lives INSIDE `.git/`.** The
+   0.4.0 design (threads.db in the working tree, runtime repo with an
+   INVERTED .gitignore, tracked `annotakit-store` branch) is obsolete.
+   v0.5.0 keeps the SQLite store at `.git/annotakit/threads.db`
+   (`storeMode:"git"` — zero working-tree footprint, no checkout
+   conflicts), builds snapshot trees with pure plumbing (hash-object +
+   mktree + commit-tree — README + threads.db at the ORPHAN branch
+   `annotakit`, which is never checked out), and pushes via http
+   extraHeader (token never in argv/URL/errors). On boot it RESTORES the
+   remote snapshot and MERGES (cross-stream: parallel sessions share the
+   branch, commits namespaced `db=annotakit@<session>`). Migration:
+   a legacy `.storybook/annotakit/threads.db` is migrated automatically
+   on first boot (verified live — a thread created minutes before the
+   swap survived into the new store and reached the remote branch).
 
 7. **Port hygiene: kill the RIGHT tenant, and defuse competing dev
    scripts.** Before binding :3000: (a) identify the running process's cwd

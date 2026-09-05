@@ -18,19 +18,27 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { addons } from 'storybook/preview-api';
 import { captureAnchor, resolveAnchor, type AnchorResolution } from './anchor';
-import { inspectComponent } from './fiber';
+import { inspectComponent, correctSource } from './fiber';
 import { buildStoryRef } from './story-meta';
-import { addComment, createThread, getThreads, patchThread, probeHealth } from './api';
+import { addComment, createThread, getThreads, patchThread, postSnapshot } from './api';
+import { captureSnapshot } from './snapshot';
 import { injectOverlayCss } from './styles';
 import {
   FOCUS_THREAD,
   LAYER_STATE,
   THREADS_CHANGED,
-  THREAD_FOCUSED,
   TOGGLE_LAYER,
+  UI_COMMAND,
+  UI_STATE,
   type ThreadsChangedPayload,
+  type UiCommand,
+  type UiState,
 } from '../shared/events';
-import type { Comment, Thread, ThreadTarget } from '../shared/types';
+import { elementSummary } from '../shared/describe';
+import { probeMode } from '../shared/mode';
+import { getStaticStore } from '../shared/staticStore';
+import type { DomSnapshot, ThreadInput } from '../shared/types';
+import type { Comment, ComponentRef, TargetContext, Thread, ThreadTarget } from '../shared/types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -39,6 +47,13 @@ interface ChannelLike {
   on(event: string, cb: (...args: any[]) => void): void;
   removeListener(event: string, cb: (...args: any[]) => void): void;
   emit(event: string, payload?: unknown): void;
+}
+
+/** Apply sourcemap correction to a captured ComponentRef (F2). */
+async function correctComponent(raw: ComponentRef): Promise<ComponentRef> {
+  if (!raw.source) return raw;
+  const source = await correctSource(raw.source);
+  return source === raw.source ? raw : { ...raw, source };
 }
 
 function sbChannel(): ChannelLike {
@@ -81,7 +96,7 @@ function clamp(v: number, min: number, max: number): number {
 
 /* --------------------------------- hotkeys ----------------------------------- */
 
-/** Key spec: 'c', 'k', or 'alt+c'. Single letter (or '?' / 'escape'). */
+/** Key spec: 'alt+c' (v0.5.0 default), 'k', or '?' / 'escape'. */
 export interface HotkeySpec {
   key: string;
   alt: boolean;
@@ -95,19 +110,28 @@ export interface Hotkeys {
   help: string;
 }
 
-export const DEFAULT_HOTKEYS: Hotkeys = { pin: 'c', region: 'r', layer: 'l', drawer: 'd', help: '?' };
+/** v0.5.0: Alt/⌥-prefixed by DEFAULT (user feedback: be consistent with SB
+ *  conventions, plain single keys collide with story interactions). */
+export const DEFAULT_HOTKEYS: Hotkeys = { pin: 'alt+c', region: 'alt+r', layer: 'alt+l', drawer: 'alt+d', help: '?' };
 
 function parseHotkey(spec: string | undefined, fallback: string): HotkeySpec {
   const raw = (spec || fallback).trim().toLowerCase();
-  const altPrefix = /^(?:alt|option|⌥|option\+|alt\+)\s*/;
+  // NOTE: the '+' MUST be part of the prefix match (optionally consumed) —
+  // alternation like `alt|alt\+` lets bare `alt` win and leaves key='+c'
+  // (live-browser-verified bug: default 'alt+c' never matched KeyC).
+  const altPrefix = /^(?:alt|option|opt|⌥)\+?\s*/;
   const withAlt = altPrefix.test(raw);
   const key = raw.replace(altPrefix, '');
   return { key: key || fallback, alt: withAlt };
 }
-
 function hotkeyMatches(e: KeyboardEvent, spec: HotkeySpec): boolean {
-  const key = e.key.toLowerCase();
-  if (key !== spec.key) return false;
+  // PHYSICAL-key matching (e.code): on macOS, Option+letter COMPOSES a
+  // character (alt+c → "ç"), so e.key never equals the letter — e.code stays
+  // "KeyC". Non-letters ('?') still match by e.key.
+  const codeKey = e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : null;
+  const isLetterSpec = spec.key.length === 1 && spec.key >= 'a' && spec.key <= 'z';
+  const keyOk = isLetterSpec ? codeKey === spec.key : e.key.toLowerCase() === spec.key;
+  if (!keyOk) return false;
   if (e.ctrlKey || e.metaKey) return false; // never hijack ⌘/Ctrl browser shortcuts
   return e.altKey === spec.alt;
 }
@@ -137,11 +161,37 @@ interface ComposerState {
 
 export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps): React.ReactElement | null {
   const [apiOk, setApiOk] = useState<boolean | null>(null);
+  /** v0.5.x static build (no dev server): threads live in localStorage,
+   *  seeded from the baked annotakit-threads.json (see shared/staticStore). */
+  const [staticMode, setStaticMode] = useState(false);
+  /** no thread fetches before the world is known (dev REST vs static store). */
+  const [modeResolved, setModeResolved] = useState(false);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [anchors, setAnchors] = useState<Map<string, ResolvedPin>>(new Map());
   const [visible, setVisible] = useState(true);
   const [mode, setMode] = useState<'idle' | 'pin' | 'region'>('idle');
   const [composer, setComposer] = useState<ComposerState | null>(null);
+  // F2: corrected component meta for the composer display — raw first (sync),
+  // sourcemap-corrected source line as soon as it resolves (usually ms).
+  const [composerMeta, setComposerMeta] = useState<ComponentRef | null>(null);
+  useEffect(() => {
+    const el = composer && composer.target.kind === 'pin' ? composer.element : null;
+    if (!el) {
+      setComposerMeta(null);
+      return;
+    }
+    const raw = inspectComponent(el);
+    setComposerMeta(raw);
+    let alive = true;
+    if (raw?.source) {
+      void correctComponent(raw).then((c) => {
+        if (alive) setComposerMeta(c);
+      });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [composer]);
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -180,10 +230,27 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
     };
   }, []);
 
+  /* ---- mode-aware data ops: dev REST client, or the static localStorage
+   *  store when the build is served without a dev server. dataRef (not state)
+   *  so callbacks read the CURRENT ops without stale closures. ---- */
+  const dataRef = useRef<{
+    list: (storyId?: string) => Promise<Thread[]>;
+    create: (input: ThreadInput) => Promise<Thread>;
+    comment: (threadId: string, body: string, author: string) => Promise<Thread>;
+    patch: (thread: Thread) => Promise<Thread>;
+    snapshot: (threadId: string, snapshot: DomSnapshot) => Promise<void>;
+  }>({
+    list: getThreads,
+    create: createThread,
+    comment: addComment,
+    patch: patchThread,
+    snapshot: postSnapshot,
+  });
+
   /* ---- fetch threads (mount, story change, broadcast) — never apiOk-gated ---- */
   const refresh = useCallback(async (): Promise<void> => {
     try {
-      const list = await getThreads(storyIdRef.current);
+      const list = await dataRef.current.list(storyIdRef.current);
       if (!mountedRef.current) return;
       retryCount.current = 0;
       setThreads(list);
@@ -203,9 +270,10 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
   }, []);
 
   useEffect(() => {
+    if (!modeResolved) return; // mode probe first: static builds must not race a 404-ing REST client
     retryCount.current = 0;
     void refresh();
-  }, [storyId, refresh]);
+  }, [storyId, modeResolved, refresh]);
 
   useEffect(() => {
     const ch = sbChannel();
@@ -218,28 +286,43 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
     };
   }, [refresh]);
 
-  /* ---- health probe: informational only (drives the "dev only" banner).
+  /* ---- mode probe: dev (REST) / static (baked seed + localStorage) / down.
    *  Retried with backoff — a transient boot failure must not permanently
-   *  hide pins while the threads fetch (which retries 5×) would succeed. ---- */
+   *  hide pins while the threads fetch (which retries 5×) would succeed.
+   *  Static builds resolve on the FIRST probe: health 404s in ms, seed 200s
+   *  in ms (the seed file is the static marker — see shared/mode.ts). ---- */
   useEffect(() => {
     let alive = true;
     let attempt = 0;
     const tryProbe = (): void => {
-      probeHealth().then(
-        (h) => {
+      probeMode().then(
+        (m) => {
           if (!alive) return;
-          if (h.ok) setApiOk(true);
-          else if (attempt < 4) {
+          if (m === 'dev') {
+            setStaticMode(false);
+            setApiOk(true);
+            setModeResolved(true);
+          } else if (m === 'static') {
+            setStaticMode(true);
+            setApiOk(true); // the store works — pins render, mutations persist
+            setModeResolved(true);
+          } else if (attempt < 4) {
             attempt++;
             window.setTimeout(tryProbe, 400 * attempt);
-          } else setApiOk(false); // honestly offline after 5 tries (~4s)
+          } else {
+            setApiOk(false); // honestly offline after 5 tries (~4s)
+            setModeResolved(true);
+          }
         },
         () => {
           if (!alive) return;
           if (attempt < 4) {
             attempt++;
             window.setTimeout(tryProbe, 400 * attempt);
-          } else setApiOk(false);
+          } else {
+            setApiOk(false);
+            setModeResolved(true);
+          }
         },
       );
     };
@@ -248,6 +331,33 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
       alive = false;
     };
   }, []);
+
+  /* ---- static mode: swap data ops to the localStorage store + subscribe to
+   *  cross-document changes (storage events — manager panel writes arrive as
+   *  refreshes, replacing the server's THREADS_CHANGED broadcast). ---- */
+  useEffect(() => {
+    if (!staticMode) return;
+    let alive = true;
+    let unsub: (() => void) | undefined;
+    void getStaticStore().then((store) => {
+      if (!alive) return;
+      dataRef.current = {
+        list: (s) => Promise.resolve(store.list(s)),
+        create: (input) => store.create(input),
+        comment: (id, body, author) => store.addComment(id, body, author),
+        patch: (t) => store.patch(t),
+        // static builds keep snapshots OFF: 5MB localStorage quota, and the
+        // evidence URL (dev-server route) doesn't exist without the server.
+        snapshot: async () => undefined,
+      };
+      unsub = store.subscribe(() => void refresh());
+      void refresh();
+    });
+    return () => {
+      alive = false;
+      unsub?.();
+    };
+  }, [staticMode, refresh]);
 
   /* ---- re-resolve anchors (multi-pass so async-rendering stories settle) ---- */
   const resolveAll = useCallback(() => {
@@ -306,6 +416,42 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
     };
   }, [apiOk, resolveAll]);
 
+  /* ---- channel: manager commands (toolbar buttons — v0.5.0 the ONLY entry
+   *  point besides hotkeys; the in-canvas launcher is GONE) ---- */
+  useEffect(() => {
+    const ch = sbChannel();
+    const onFocus = (threadId: string) => {
+      focusThread(threadId);
+    };
+    const onToggle = (state: unknown) => {
+      const next = typeof state === 'boolean' ? state : !visible;
+      setVisible(next);
+    };
+    const onCommand = (cmd: UiCommand | undefined) => {
+      if (!cmd?.command) return;
+      if (cmd.command === 'pin' || cmd.command === 'region') {
+        if (!composer && !activeThread) {
+          const m = cmd.command;
+          enterMode(mode === m ? 'idle' : m);
+        }
+      } else if (cmd.command === 'drawer') {
+        setDrawerOpen((d) => !d);
+      } else if (cmd.command === 'layer') {
+        setVisible((v) => !v);
+      } else if (cmd.command === 'help') {
+        setHelpOpen((h) => !h);
+      }
+    };
+    ch.on(FOCUS_THREAD, onFocus);
+    ch.on(TOGGLE_LAYER, onToggle);
+    ch.on(UI_COMMAND, onCommand);
+    return () => {
+      ch.removeListener(FOCUS_THREAD, onFocus);
+      ch.removeListener(TOGGLE_LAYER, onToggle);
+      ch.removeListener(UI_COMMAND, onCommand);
+    };
+  });
+
   const emitLayerState = useCallback((v: boolean) => {
     try {
       sbChannel().emit(LAYER_STATE, v);
@@ -318,6 +464,24 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
     emitLayerState(visible);
   }, [visible, emitLayerState]);
 
+  /* ---- UI_STATE → manager toolbar (active-state reflection + counts) ---- */
+  const openCountMemo = threads.filter((t) => t.status === 'open').length;
+  useEffect(() => {
+    const state: UiState = {
+      apiOk,
+      visible,
+      mode,
+      drawerOpen,
+      open: openCountMemo,
+      total: threads.length,
+    };
+    try {
+      sbChannel().emit(UI_STATE, state);
+    } catch {
+      /* ignore */
+    }
+  }, [apiOk, visible, mode, drawerOpen, openCountMemo, threads.length]);
+
   /* ---- focus / flash ---- */
   const focusThread = useCallback(
     (threadId: string) => {
@@ -328,35 +492,10 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
         el.scrollIntoView({ block: 'center', behavior: 'smooth' });
         el.setAttribute('data-annota-flash', '1');
         window.setTimeout(() => el.removeAttribute('data-annota-flash'), 3400);
-        // ack ONLY on a resolved pin — an anchors map still owned by the
-        // previous story stays silent so the manager re-emits (retry race fix)
-        sbChannel().emit(THREAD_FOCUSED, threadId);
       }
     },
     [anchors],
   );
-
-  /* ---- channel: manager commands ----
-   * Explicit deps (was: NO array → re-subscribed on every render). The effect
-   * must live AFTER focusThread's declaration: the deps array is evaluated
-   * during render, so referencing focusThread before its `const` initializer
-   * would be a TDZ ReferenceError. */
-  useEffect(() => {
-    const ch = sbChannel();
-    const onFocus = (threadId: string) => {
-      focusThread(threadId);
-    };
-    const onToggle = (state: unknown) => {
-      const next = typeof state === 'boolean' ? state : !visible;
-      setVisible(next);
-    };
-    ch.on(FOCUS_THREAD, onFocus);
-    ch.on(TOGGLE_LAYER, onToggle);
-    return () => {
-      ch.removeListener(FOCUS_THREAD, onFocus);
-      ch.removeListener(TOGGLE_LAYER, onToggle);
-    };
-  }, [focusThread, visible]);
 
   /* ---- capture modes ---- */
   const enterMode = useCallback((m: 'pin' | 'region' | 'idle') => {
@@ -469,7 +608,14 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
         }
         return;
       }
-      const altOf = (spec: HotkeySpec): boolean => hotkeyMatches(e, spec) || (e.altKey && e.key.toLowerCase() === spec.key && !spec.alt);
+      const altOf = (spec: HotkeySpec): boolean =>
+        hotkeyMatches(e, spec) ||
+        // legacy plain-key configs still respond to alt+same-key (e.code match —
+        // macOS Option composes characters, e.key would be "ç")
+        (() => {
+          const codeKey = e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : null;
+          return !!e.altKey && !spec.alt && codeKey === spec.key;
+        })();
       if (hotkeyMatches(e, hkHelp)) {
         setHelpOpen((h) => !h);
         return;
@@ -497,17 +643,27 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
   }, [mode, composer, activeThread, drawerOpen, helpOpen, enterMode, exitMode, hkPin, hkRegion, hkLayer, hkDrawer, hkHelp, hotkeys]);
 
   /* ---- mutations ---- */
+  /** F2 fix: component source lines come from the esbuild-transformed module;
+   *  correctSource maps them through the module's inline sourcemap to the ORIGINAL
+   *  TSX position (cached, failure-tolerant — falls back to the raw value). */
   const submitThread = useCallback(
     async (body: string) => {
       if (!composer) return;
       setBusy(true);
       try {
-        const component = composer.target.kind === 'pin' && composer.element
+        // plan-b evidence: capture the canvas DOM at submit time, BEFORE the
+        // composer closes (the element may re-render right after)
+        const snap = staticMode ? null : captureSnapshot(
+          storyRoot(),
+          composer.target.kind === 'pin' ? (composer.element ?? null) : null,
+        );
+        const raw = composer.target.kind === 'pin' && composer.element
           ? inspectComponent(composer.element)
           : null;
+        const component = raw?.source ? await correctComponent(raw) : raw;
         const story = await buildStoryRef(storyId, { title, name });
         const comment: Comment = { id: uid('c'), author: getAuthor(), body, createdAt: new Date().toISOString() };
-        const created = await createThread({
+        const created = await dataRef.current.create({
           storyId,
           story,
           component,
@@ -518,6 +674,8 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
         // optimistic echo: the pin renders immediately from the server response;
         // refresh() below is just reconciliation (broadcast may also trigger it).
         setThreads((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
+        // snapshot upload is best-effort and NEVER blocks/fails the pin
+        if (snap) void dataRef.current.snapshot(created.id, snap).catch(() => undefined);
         void refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -533,7 +691,7 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
       if (!body.trim()) return false;
       setBusy(true);
       try {
-        const updated = await addComment(thread.id, body, getAuthor());
+        const updated = await dataRef.current.comment(thread.id, body, getAuthor());
         setThreads((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
         void refresh();
         return true;
@@ -556,7 +714,7 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
           status: thread.status === 'open' ? 'resolved' : 'open',
           resolvedAt: thread.status === 'open' ? new Date().toISOString() : undefined,
         };
-        const updated = await patchThread(next);
+        const updated = await dataRef.current.patch(next);
         setThreads((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
         void refresh();
       } catch (e) {
@@ -607,16 +765,18 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
 
   /* ---- render ---- */
   if (apiOk === false) {
+    // v0.5.0: the ONLY thing left floating in the canvas when the API is down —
+    // a non-interactive badge (the interactive launcher moved to the native
+    // SB toolbar; no canvas DOM is altered beyond this passive notice).
     return (
       <div data-annota-overlay="1" className="annota-root">
-        <div className="annota-launcher" title="Annotakit requires `storybook dev` (the review API lives on the dev server)">
+        <div className="annota-badge" title="Annotakit requires `storybook dev` (the review API lives on the dev server) — pin buttons live in the Storybook toolbar">
           📌 Annotakit — dev only
         </div>
       </div>
     );
   }
 
-  const openCount = threads.filter((t) => t.status === 'open').length;
   const activeT = threads.find((t) => t.id === activeThread) ?? null;
 
   return (
@@ -657,6 +817,14 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
           ),
         )}
 
+      {/* static build: honest provenance chip — pins work, everything is
+          local to this browser+deployment, nothing syncs (no server). */}
+      {staticMode && (
+        <div className="annota-static-chip" title="Static `storybook build` — no dev server. Threads live in this browser's localStorage for this deployment; export to hand-carry them back. Nothing syncs.">
+          📌 static · local-only
+        </div>
+      )}
+
       {/* capture affordances */}
       {mode !== 'idle' && (
         <div className="annota-capture-hint">
@@ -683,9 +851,7 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
           y={composer.y}
           busy={busy}
           error={error}
-          component={
-            composer.target.kind === 'pin' && composer.element ? inspectComponent(composer.element) : null
-          }
+          component={composerMeta}
           context={composer.target.context}
           onSubmit={submitThread}
           onCancel={() => setComposer(null)}
@@ -722,13 +888,8 @@ export function AnnotaLayer({ storyId, title, name, hotkeys }: AnnotaLayerProps)
       {/* help */}
       {helpOpen && <HelpCard hotkeys={hk} onClose={() => setHelpOpen(false)} />}
 
-      {/* launcher */}
-      <div className="annota-launcher" onClick={() => setDrawerOpen((d) => !d)} title="Annotakit — review layer">
-        📌 Annotakit
-        <span className={`annota-count${openCount ? ' is-open' : threads.length ? ' is-zero' : ''}`}>
-          {threads.length ? `${openCount}/${threads.length}` : '0'}
-        </span>
-      </div>
+      {/* v0.5.0: NO launcher. Entry points = native SB toolbar buttons
+          (manager TOOL) + Alt/⌥ hotkeys. The canvas DOM stays untouched. */}
     </div>
   );
 }
@@ -777,12 +938,15 @@ function ComposerCard(props: {
   busy: boolean;
   error: string | null;
   component: ReturnType<typeof inspectComponent>;
-  context: { tag: string; text?: string; ariaLabel?: string };
+  context: TargetContext;
   onSubmit: (body: string) => void;
   onCancel: () => void;
 }): React.ReactElement {
   const [body, setBody] = React.useState('');
   const { ref, style } = useClampedPosition(props.x, props.y);
+  // v0.5.0: the EXACT same one-line identity the digest will render later —
+  // what the reviewer pins is byte-for-byte what the agent reads back.
+  const summary = elementSummary(props.context);
   return (
     <div ref={ref} className="annota-card annota-composer" style={style}>
       <div className="annota-card-header">
@@ -790,12 +954,13 @@ function ComposerCard(props: {
         <span className="annota-chip is-meta">&lt;{props.context.tag}&gt;</span>
       </div>
       <div className="annota-meta-rows">
-        <div>
-          <b>element:</b> {props.context.text?.slice(0, 60) ?? props.context.ariaLabel ?? '(no text)'}
+        <div className="annota-element-summary" title={props.context.outerHTML}>
+          <b>element:</b> {summary}
         </div>
         {props.component?.name && (
           <div>
             <b>component:</b> {props.component.name}
+            {props.component.key != null && <span className="annota-chip is-meta">key=&quot;{props.component.key}&quot;</span>}
           </div>
         )}
         {props.component?.source && (
@@ -977,17 +1142,7 @@ function DrawerCard(props: {
           <div
             key={t.id}
             className={`annota-thread-row${t.id === props.activeThread ? ' is-active' : ''}${t.status === 'resolved' ? ' is-resolved' : ''}`}
-            role="button"
-            tabIndex={0}
-            aria-label={`Thread #${t.number} — ${t.status === 'open' ? 'open' : 'resolved'} — ${t.comments[0]?.body?.split('\n')[0]?.slice(0, 60) ?? '(no text)'}`}
             onClick={() => props.onSelect(t.id)}
-            onKeyDown={(e) => {
-              /* keyboard parity (R13 review) — mirror of the manager card fix */
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                props.onSelect(t.id);
-              }
-            }}
           >
             <div className="annota-thread-title">
               <span className={`annota-dot${t.status === 'resolved' ? ' is-resolved' : status === 'orphan' ? ' is-orphan' : ''}`} />
@@ -1020,7 +1175,8 @@ function DrawerCard(props: {
 function HelpCard(props: { hotkeys: Hotkeys; onClose: () => void }): React.ReactElement {
   const k = (spec: string): string => {
     const s = parseHotkey(spec, spec);
-    return s.key === '?' ? '?' : s.key.toUpperCase();
+    const key = s.key === '?' ? '?' : s.key.toUpperCase();
+    return s.alt ? `⌥${key}` : key;
   };
   return (
     <div className="annota-card annota-help">
@@ -1041,9 +1197,10 @@ function HelpCard(props: { hotkeys: Hotkeys; onClose: () => void }): React.React
         </tbody>
       </table>
       <div style={{ padding: '0 12px 10px', fontSize: 11, color: '#64748b' }}>
-        Every shortcut also works with <b>Alt/⌥ held</b> (useful when a story listens for the plain key). Customize via{' '}
-        <code>parameters.annotakit.hotkeys</code> in the story file. Threads persist in the Storybook dev
-        server's embedded store — export from the Annotakit panel (bottom dock).
+        Shortcuts are <b>Alt/⌥-prefixed</b> (SB convention — plain single letters belong to story key handlers).
+        Legacy plain-key configs still respond with ⌥ held. Customize via <code>parameters.annotakit.hotkeys</code> in
+        the story file. Toolbar buttons (native SB toolbar) trigger the same actions. Threads persist in the Storybook
+        dev server's embedded store — export from the Annotakit panel (bottom dock).
       </div>
     </div>
   );

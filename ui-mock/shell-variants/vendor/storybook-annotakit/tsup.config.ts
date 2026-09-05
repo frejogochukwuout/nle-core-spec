@@ -18,6 +18,10 @@ export default [
     entry: {
       manager: 'src/manager/index.tsx',
       preview: 'src/preview/index.ts',
+      // standalone export so node tests can exercise the static-mode store
+      // (the manager/preview bundles embed their own copy — state is
+      // per-document by design; cross-doc sync rides storage events).
+      staticStore: 'src/shared/staticStore.ts',
     },
     format: ['esm'],
     platform: 'browser',
@@ -33,14 +37,15 @@ export default [
     },
   }),
   // Node bundle: dev-server middleware + sqlite store + digest + gh publisher.
-  // clean: false (CR10): both entries share dist/ and tsup runs them in
-  // parallel — a `clean: true` on either can wipe the other's output. The
-  // package build script rm -rf's dist BEFORE tsup instead.
   defineConfig({
     entry: { server: 'src/server/routes.ts' },
     format: ['cjs'],
     platform: 'node',
     target: 'node20',
+    // Local re-apply of the CR10 fix (lost in the 0.5.0 upstream swap): both
+    // configs share dist/ — a `clean: true` here can wipe the ESM bundle's
+    // output depending on config execution order. The package build script
+    // rm -rf's dist BEFORE tsup instead (see package.json "build").
     clean: false,
     outExtension: () => ({ js: '.cjs' }),
     dts: false,

@@ -209,45 +209,63 @@ body.annota-cursor * { cursor: crosshair !important; }
 .annota-status-banner.is-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 .annota-status-banner.is-info { background: #f0f9ff; color: #075985; border: 1px solid #bae6fd; }
 
-/* ---------- launcher ---------- */
-.annota-launcher {
+/* ---------- dev-only badge (passive notice, no interaction — the launcher
+   is GONE; entry points are the native SB toolbar buttons + ⌥ hotkeys) ---------- */
+.annota-badge {
   position: fixed;
   right: 18px;
   bottom: 18px;
-  pointer-events: auto;
+  pointer-events: none;
   display: flex;
   align-items: center;
   gap: 7px;
-  background: #fff;
+  background: rgba(255, 255, 255, .92);
   border: 1px solid #e5e7eb;
   border-radius: 999px;
   padding: 7px 12px;
   font-weight: 700;
   font-size: 12px;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(15, 23, 42, .18);
+  color: #64748b;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, .12);
   user-select: none;
 }
-.annota-launcher:hover { border-color: #c7d2fe; }
-.annota-launcher .annota-count {
-  background: var(--annota-accent);
-  color: #fff;
+
+/* static-build provenance chip: same visual family, top-right so it never
+   fights the pins/drawer at the bottom of the canvas. */
+.annota-static-chip {
+  position: fixed;
+  right: 18px;
+  top: 12px;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 251, 235, .95);
+  border: 1px solid #fcd34d;
   border-radius: 999px;
-  min-width: 18px;
-  height: 18px;
-  line-height: 18px;
-  text-align: center;
-  font-size: 10.5px;
-  padding: 0 5px;
+  padding: 4px 10px;
+  font-weight: 700;
+  font-size: 11px;
+  color: #92400e;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, .10);
+  user-select: none;
 }
-.annota-launcher .annota-count.is-zero { background: #94a3b8; }
-.annota-launcher .annota-count.is-open { background: var(--annota-warn); }
+
+/* rich one-line element identity (composer) — same string as the digest */
+.annota-element-summary {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #334155;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
 
 /* ---------- drawer ---------- */
 .annota-drawer {
   position: fixed;
   right: 18px;
-  bottom: 62px;
+  /* v0.5.0: no more in-canvas launcher below it — dock to the corner */
+  bottom: 18px;
   width: 340px;
   max-height: 65vh;
   overflow: auto;

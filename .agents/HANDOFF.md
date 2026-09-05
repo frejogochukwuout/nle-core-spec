@@ -18,7 +18,7 @@ below — it is COMPLETE on origin and its standing items are preserved.
 > `/home/z/my-project/shell-variants` — same Host law
 > (`core.allowedHosts: true`), same restorer pattern
 > (`scripts/boot-restore.sh`, iso `/home/z/my-project/.zscripts/dev.sh`),
-> plus an `annotakit-store` git branch on origin for threads.db git-push
+> plus the orphan `annotakit` branch on origin for threads.db git-push
 > durability. "Serve YOURS in this env" — do not cross-stream-serve.
 
 ---

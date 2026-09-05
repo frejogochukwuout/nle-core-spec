@@ -5,7 +5,7 @@
  */
 
 import { API_BASE } from '../shared/events';
-import type { Thread, ThreadInput } from '../shared/types';
+import type { DomSnapshot, Thread, ThreadInput } from '../shared/types';
 
 async function json(res: Response): Promise<unknown> {
   const text = await res.text();
@@ -71,4 +71,16 @@ export async function addComment(threadId: string, body: string, author: string)
       body: JSON.stringify({ body, author }),
     }),
   )) as Thread;
+}
+
+/** Plan-b evidence upload (fire-and-forget from the composer — a snapshot
+ *  failure must NEVER fail or delay the pin itself). Idempotent per thread. */
+export async function postSnapshot(threadId: string, snapshot: DomSnapshot): Promise<void> {
+  await json(
+    await fetch(`${API_BASE}/threads/${encodeURIComponent(threadId)}/snapshot`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(snapshot),
+    }),
+  );
 }

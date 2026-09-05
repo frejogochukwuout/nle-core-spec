@@ -12,15 +12,30 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { getStore, nowIso, readConfig, type Store } from './store';
+import { createHash } from 'node:crypto';
+import { getStore, migrateLegacyStore, nowIso, readConfig, type Store } from './store';
 import { renderDigest } from './digest';
 import { createGhSync, type GhSync } from './ghsync';
 import { createAutoSync, type AutoSync } from './sync';
-import { detectGithubRepo, ghRepoEnv, ghToken, loadDotEnv, projectRoot } from './env';
+import {
+  detectGithubRepo,
+  ghRepoEnv,
+  ghToken,
+  isGitRepo,
+  isPathTracked,
+  kitRepo,
+  loadDotEnv,
+  pathIsIgnored,
+  projectRoot,
+  storeLocation,
+} from './env';
 import { API_BASE, THREADS_CHANGED, type ThreadsChangedPayload } from '../shared/events';
-import type { AgentSurfaces, Comment, ExportBundle, ExportedStory, GhSyncStatus, GhSyncSummary, HealthInfo, Thread, ThreadInput } from '../shared/types';
+import type { AgentSurfaces, Comment, DomSnapshot, ExportBundle, ExportedStory, GhSyncStatus, GhSyncSummary, HealthInfo, Thread, ThreadInput } from '../shared/types';
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
+/** Boot timestamp — lets scripts/agents VERIFY a restart actually happened
+ *  (a health-check loop can pass instantly against a stale process). */
+const BOOTED_AT = new Date().toISOString();
 const CONFIG_FILE = 'annotakit.config.json';
 const GH_LABEL = 'annotakit';
 
@@ -58,6 +73,9 @@ interface Runtime {
   /** Last seen dev-server origin (for issue-body story links). */
   origin: string;
   started: boolean;
+  /** Boot-time hygiene findings (dogfood #3/#9) — surfaced in /health so
+   *  agents see them too, not just whoever reads the server console. */
+  bootWarnings: string[];
 }
 
 let runtime: Runtime | null = null;
@@ -70,23 +88,65 @@ function nonNegNum(v: unknown): number | undefined {
 
 function bootstrap(configDir: string, port?: number): Runtime {
   if (runtime) return runtime;
-  loadDotEnv(configDir); // .env ANNOTAKIT_* — before anything reads them
-  const store = getStore(configDir);
-  const config = readConfig(configDir);
+  const env = loadDotEnv(configDir); // .env ANNOTAKIT_* — before anything reads them
+  const preConfig = readConfig(configDir);
+  // v0.5.0 store location: INSIDE the common git dir when the git flow is on
+  // (checkout/clean-immune, "gitignored" becomes structurally impossible —
+  // design §1); classic <configDir>/annotakit otherwise (no repo / autoSync
+  // off — the user opted out of the git flow, disk-only by choice).
+  const gitFlowOn = preConfig.autoSync !== false;
+  const loc = storeLocation(configDir, { forceClassic: !gitFlowOn });
+  const store = getStore(configDir, { dataDir: loc.dir });
+  const config = preConfig;
   const root = projectRoot(configDir);
   const detected = detectGithubRepo(root);
   const configRepo = typeof config.ghRepo === 'string' ? config.ghRepo : null;
   const envRepo = ghRepoEnv();
+  const repo = configRepo ?? envRepo ?? detected.repo;
   const sync = createAutoSync({
     configDir,
+    dataDir: loc.dir,
     storePath: store.storePath,
+    store,
     checkpoint: () => store.checkpoint(),
     countThreads: () => store.countThreads(),
     autoSyncEnabled: config.autoSync !== false,
+    repo,
+    // A7: restored/merged rows must reach every live surface immediately
+    onRestored: (reason) => broadcast({ reason }),
   });
-  const repo = configRepo ?? envRepo ?? detected.repo;
   const repoSource = configRepo ? `${CONFIG_FILE} ghRepo` : envRepo ? 'ANNOTAKIT_GH_REPO env' : detected.source;
   const configToken = typeof config.ghToken === 'string' ? config.ghToken : undefined;
+
+  /* boot hygiene (dogfood #3/#9) — collected, logged once, surfaced in /health */
+  const bootWarnings: string[] = [];
+  // #3 cross-repo leak: mirroring into the kit's OWN repo is the demo/dogfood
+  // case — for a consumer it means their review is about to land in a repo
+  // they don't own. Loud, early, explicit.
+  const kit = kitRepo();
+  if (repo && kit && repo === kit) {
+    bootWarnings.push(
+      `GitHub mirror target ${repo} is the storybook-annotakit repo ITSELF (${repoSource}) — feedback will mirror into the ADDON's repo. Intended for demo/dogfood runs only; otherwise set "ghRepo" to YOUR repo in ${CONFIG_FILE} (or ANNOTAKIT_GH_REPO in .env).`,
+    );
+  }
+  // #9a: a token sitting in an UNignored .env is one `git add -A` away from
+  // history. (Deliberately-tracked sandbox setups set ANNOTAKIT_ENV_TRACKED_OK=1.)
+  if (env.file && process.env.ANNOTAKIT_GH_TOKEN && process.env.ANNOTAKIT_ENV_TRACKED_OK !== '1' && isGitRepo(root) && !pathIsIgnored(root, env.file)) {
+    bootWarnings.push(
+      `.env at ${env.file} holds ANNOTAKIT_GH_TOKEN but is NOT gitignored — the next \`git add -A\` commits your PAT into history. Add ".env" to .gitignore, or set ANNOTAKIT_ENV_TRACKED_OK=1 if you track it deliberately (sandbox "git is the disk" setups).`,
+    );
+  }
+  // #9b: ghToken inside annotakit.config.json — that file is documented as
+  // git-tracked-by-design; a PAT there is a commit away from leaking.
+  if (configToken) {
+    bootWarnings.push(
+      isPathTracked(root, `${configDir}/${CONFIG_FILE}`)
+        ? `ghToken in ${CONFIG_FILE} is git-TRACKED — the PAT is already in history on the next commit. Move it to a gitignored .env (ANNOTAKIT_GH_TOKEN).`
+        : `ghToken in ${CONFIG_FILE} is deprecated (config files travel with the repo) — prefer .env ANNOTAKIT_GH_TOKEN.`,
+    );
+  }
+  for (const w of bootWarnings) console.warn(`[storybook-annotakit] ⚠ ${w}`);
+
   const ghAuto = config.ghAuto !== false && !['0', 'false', 'off', 'no'].includes(String(process.env.ANNOTAKIT_GH_AUTO ?? '').toLowerCase());
   const pollSec = nonNegNum(process.env.ANNOTAKIT_GH_POLL) ?? nonNegNum(config.ghPoll) ?? 60;
   const intervalMs = nonNegNum(process.env.ANNOTAKIT_GH_INTERVAL) ?? 700;
@@ -106,7 +166,7 @@ function bootstrap(configDir: string, port?: number): Runtime {
       sync.notify();
     },
   });
-  runtime = { store, sync, ghsync, config, root, configPath: `${configDir}/${CONFIG_FILE}`, repo, repoSource, origin: port ? `http://localhost:${port}` : 'http://localhost:6006', started: true };
+  runtime = { store, sync, ghsync, config, root, configPath: `${configDir}/${CONFIG_FILE}`, repo, repoSource, origin: port ? `http://localhost:${port}` : 'http://localhost:6006', started: true, bootWarnings };
   if (repo) {
     console.warn(`[storybook-annotakit] GitHub mirror target: ${repo} (${repoSource})`);
   } else {
@@ -114,7 +174,23 @@ function bootstrap(configDir: string, port?: number): Runtime {
       `[storybook-annotakit] no GitHub repo configured — local mode: REST + digests work fully; POST /sync explains how to add the mirror (${CONFIG_FILE}, .env, or git remote)`,
     );
   }
-  ghsync.start(); // initial backfill + first pull (async, non-blocking; noop in local mode)
+  // A6: boot sequence is MIGRATE (legacy tracked db → new location) →
+  // RESTORE (remote orphan branch → local, offline-first) → ghsync.start().
+  // The mirror engine must see the FULL store or its backfill mints
+  // duplicate issues for restored mappings. All async — never blocks boot.
+  void (async () => {
+    try {
+      await migrateLegacyStore(configDir, store, loc.dir);
+    } catch {
+      /* migration is best-effort; legacy file is never touched */
+    }
+    try {
+      await sync.restore();
+    } catch {
+      /* restore logs its own failures; local data is safe */
+    }
+    ghsync.start(); // initial backfill + first pull (noop in local mode)
+  })();
   return runtime;
 }
 
@@ -123,6 +199,66 @@ function afterMutation(rt: Runtime, payload: ThreadsChangedPayload): void {
   broadcast(payload);
   rt.sync.notify();
   if (payload.threadId) rt.ghsync.enqueue(payload.threadId);
+}
+
+/** dogfood #4: mirror trouble must be visible AT THE MUTATION RESPONSE, not
+ *  only in /health. Non-breaking: an HTTP header, the JSON body stays the
+ *  thread (envelope changes would break clients). */
+async function sendMutationJson(rt: Runtime, res: ServerResponse, status: number, body: unknown): Promise<void> {
+  try {
+    const s = await rt.ghsync.status();
+    if (s.mode === 'auto' && (s.stalled > 0 || s.lastError)) {
+      res.setHeader(
+        'X-Annotakit-Mirror',
+        `unhealthy (stalled=${s.stalled}${s.lastError ? `; lastError=${String(s.lastError).slice(0, 140)}` : ''}) — see /annotakit/api/health ghSync`,
+      );
+    }
+  } catch {
+    /* header is best-effort */
+  }
+  sendJson(res, status, body);
+}
+
+/* ---------------------------- access control (#7) ----------------------------- */
+
+/** Is the TCP peer local? (The SB dev server commonly binds 0.0.0.0 — the API
+ *  must not be network-mutable by default; CORS does nothing vs non-browser
+ *  clients. Loopback = 127.x / ::1 / ::ffff:127.x.) */
+function isLoopbackPeer(req: IncomingMessage): boolean {
+  const ra = (req.socket as { remoteAddress?: string } | undefined)?.remoteAddress;
+  if (!ra) return true; // unix sockets / tests without socket info
+  if (ra === '::1' || ra === '127.0.0.1') return true;
+  if (ra.startsWith('::ffff:127.')) return true;
+  return false;
+}
+
+let warnedNonLoopback = false;
+
+/** Gate: loopback peers always pass (no config); non-loopback peers need
+ *  ANNOTAKIT_API_KEY set AND a matching x-annotakit-key header. Returns an
+ *  error RESPONSE already sent, or null when the request may proceed. */
+function enforceApiAccess(req: IncomingMessage, res: ServerResponse): boolean {
+  const key = process.env.ANNOTAKIT_API_KEY;
+  if (key) {
+    const provided = req.headers['x-annotakit-key'];
+    const ok = provided === key || (Array.isArray(provided) && provided.includes(key));
+    if (!ok) {
+      sendJson(res, 401, { error: 'x-annotakit-key header required (ANNOTAKIT_API_KEY is set on this server)' });
+      return false;
+    }
+    return true;
+  }
+  if (isLoopbackPeer(req)) return true;
+  if (!warnedNonLoopback) {
+    warnedNonLoopback = true;
+    console.warn(
+      `[storybook-annotakit] BLOCKED non-loopback API request from ${String((req.socket as { remoteAddress?: string })?.remoteAddress)} — the Storybook dev server binds a network interface. To allow network clients, set ANNOTAKIT_API_KEY in .env and send it as the x-annotakit-key header.`,
+    );
+  }
+  sendJson(res, 403, {
+    error: 'annotakit API is loopback-only by default (the dev server binds a network interface). Set ANNOTAKIT_API_KEY in the project .env to enable keyed network access.',
+  });
+  return false;
 }
 
 /* --------------------------------- helpers ----------------------------------- */
@@ -196,34 +332,117 @@ function fail(res: ServerResponse, err: unknown): void {
   sendJson(res, status, { error: message });
 }
 
-/** Validate a ThreadInput enough to store it (trust-but-shape-check). */
+/* ------------------------- input shape documentation -------------------------- */
+
+/** A COMPLETE, valid ThreadInput — served by GET /schema and embedded in 400s
+ *  (dogfood #2/#10: agents should never need to open types.ts to POST). */
+const THREAD_INPUT_EXAMPLE: Record<string, unknown> = {
+  storyId: 'nimbus-components--kpi-card-story',
+  story: { title: 'Nimbus Components', name: 'KPI Card', importPath: 'src/components/nimbus/KpiCard.stories.tsx' },
+  component: {
+    name: 'KpiCard',
+    chain: ['Dashboard', 'KpiCard'],
+    source: { file: 'src/components/nimbus/KpiCard.tsx', line: 12, column: 8 },
+    props: { label: '"Revenue"', trend: '"up"' },
+  },
+  target: {
+    kind: 'pin',
+    selector: { cssSelector: '.kpi-card > span.value', textQuote: { exact: 'revenue', prefix: 'kpi', suffix: 'month' }, fragment: { x: 24, y: 12, w: 96, h: 20 } },
+    fingerprint: { tag: 'span', attrs: [{ name: 'data-testid', value: 'kpi-value' }], neighborText: 'revenue' },
+    context: { tag: 'span', text: 'Revenue', ariaLabel: 'revenue value', classes: 'value tabular-nums', id: 'kpi-value', nth: 2 },
+    bbox: { x: 24, y: 12, w: 96, h: 20 },
+    captureViewportWidth: 1200,
+  },
+  comments: [{ id: 'c_example_1', author: 'reviewer', body: 'numbers should be tabular', createdAt: '2026-09-05T00:00:00.000Z' }],
+};
+
+const TARGET_SHAPE_HINT =
+  'target must be {kind: "pin"|"region", selector: {cssSelector?, textQuote?, fragment?}, fingerprint?: {tag, attrs[]}, context: {tag: string, text?, ...}, bbox: {x,y,w,h}, captureViewportWidth: number} — see GET /annotakit/api/schema for a full example payload';
+
+/** Trustworthy comment ids (A8 + dogfood #8): comment ids are the UNION key
+ *  for PATCH merges and cross-machine store merges — client-supplied ids like
+ *  "c1" would collide across machines and silently merge distinct comments.
+ *  DETERMINISTIC hash of (author, body, createdAt):
+ *  - replaying the identical POST → same id → idempotent (no duplicates)
+ *  - two machines, same trivial id, different content → different ids → kept
+ *  - two machines, identical content → same id → unioned once (correct) */
+function stableCommentId(author: string, body: string, createdAt: string): string {
+  return 'c_' + createHash('sha256').update(`${author}|${body}|${createdAt}`).digest('base64url').slice(0, 12);
+}
+
+function normalizeComment(c: Comment): Comment {
+  if (!c.author?.trim()) c.author = 'anonymous';
+  if (!c.createdAt) c.createdAt = nowIso();
+  c.id = stableCommentId(c.author, c.body, c.createdAt);
+  return c;
+}
+
+/** Validate a ThreadInput enough to store it — DEEP target validation
+ *  (dogfood #2: a flat/legacy target passed 201, then the GH mirror crashed
+ *  5 retries later three layers away; 400 at the door instead). */
 function validateThreadInput(body: Record<string, unknown>): ThreadInput {
   const storyId = typeof body.storyId === 'string' ? body.storyId : '';
   const target = body.target as ThreadInput['target'] | undefined;
   const comments = Array.isArray(body.comments) ? (body.comments as Comment[]) : [];
   if (!storyId) throw Object.assign(new Error('storyId is required'), { status: 400 });
-  if (!target || typeof target !== 'object') {
-    throw Object.assign(new Error('target is required'), { status: 400 });
+  if (!target || typeof target !== 'object' || Array.isArray(target)) {
+    throw Object.assign(new Error(`target is required — ${TARGET_SHAPE_HINT}`), { status: 400 });
+  }
+  if (target.kind !== 'pin' && target.kind !== 'region') {
+    throw Object.assign(new Error(`target.kind must be "pin" or "region" (got ${JSON.stringify(target.kind)}) — ${TARGET_SHAPE_HINT}`), { status: 400 });
+  }
+  const selector = target.selector;
+  if (!selector || typeof selector !== 'object' || Array.isArray(selector)) {
+    throw Object.assign(new Error(`target.selector must be an object {cssSelector?, textQuote?, fragment?} (got ${typeof selector}) — ${TARGET_SHAPE_HINT}`), { status: 400 });
+  }
+  const bbox = target.bbox;
+  const isBBox = (b: unknown): b is { x: number; y: number; w: number; h: number } =>
+    !!b && typeof b === 'object' &&
+    ['x', 'y', 'w', 'h'].every((k) => typeof (b as Record<string, unknown>)[k] === 'number');
+  if (!isBBox(bbox)) {
+    throw Object.assign(new Error(`target.bbox must be {x,y,w,h} numbers (got ${JSON.stringify(bbox)?.slice(0, 80)}) — ${TARGET_SHAPE_HINT}`), { status: 400 });
+  }
+  const context = target.context;
+  if (!context || typeof context !== 'object' || Array.isArray(context) || typeof (context as unknown as Record<string, unknown>).tag !== 'string') {
+    throw Object.assign(new Error(`target.context must be an object with a string "tag" (got ${typeof context}) — ${TARGET_SHAPE_HINT}`), { status: 400 });
+  }
+  if (target.captureViewportWidth != null && typeof target.captureViewportWidth !== 'number') {
+    throw Object.assign(new Error('target.captureViewportWidth must be a number when provided'), { status: 400 });
   }
   if (comments.length === 0) {
     throw Object.assign(new Error('at least one comment is required'), { status: 400 });
   }
   for (const c of comments) {
     if (!c.body?.trim()) throw Object.assign(new Error('comment body is required'), { status: 400 });
+    normalizeComment(c); // A8: never trust client comment ids under union-merge
   }
   return body as unknown as ThreadInput;
 }
 
-/** PATCH requires the full document (mirrors AnnotaKit C2 discipline). */
-function validateThreadFull(body: Record<string, unknown>): Thread {
-  const t = body as unknown as Thread;
-  if (!t.id || !t.storyId || !Array.isArray(t.comments) || !t.target) {
-    throw Object.assign(
-      new Error('PATCH expects the FULL thread document (GET /threads, mutate, PATCH back)'),
-      { status: 400 },
-    );
+/** PATCH accepts BOTH forms (dogfood #8):
+ *  - partial: {status: "resolved"} — JSON-merge semantics onto the server copy
+ *    (missing fields never revert; stale snapshots cannot clobber anchors)
+ *  - full document: the classic GET → mutate → PATCH back flow (still fine)
+ *  Comments are always union-merged by id (server's ids win) either way. */
+const PATCH_MERGEABLE_FIELDS = ['status', 'resolvedAt', 'story', 'component', 'target', 'author', 'comments'] as const;
+
+function buildPatchCandidate(prev: Thread, body: Record<string, unknown>): Thread {
+  const looksFull = 'storyId' in body && 'comments' in body && 'target' in body;
+  if (looksFull) {
+    const full = body as unknown as Thread;
+    if (!full.id || !Array.isArray(full.comments) || !full.target) {
+      throw Object.assign(
+        new Error('PATCH with a full document expects id, comments, target (GET /annotakit/api/threads/<id>, mutate, PATCH back) — or send a PARTIAL body like {"status":"resolved"}'),
+        { status: 400 },
+      );
+    }
+    return full;
   }
-  return t;
+  const next: Record<string, unknown> = { ...prev };
+  for (const key of PATCH_MERGEABLE_FIELDS) {
+    if (key in body) next[key] = body[key];
+  }
+  return next as unknown as Thread;
 }
 
 /* ---------------------------------- routes ----------------------------------- */
@@ -261,6 +480,38 @@ async function handleApi(
   const p = url.pathname;
   const method = req.method ?? 'GET';
 
+  /* schema ----------------------------------------------------------------- */
+  /* dogfood #10: agents had to read types.ts to learn the target sub-shape;
+   * the malformed-target incident (#2) came from exactly this gap. */
+  if (p === `${API_BASE}/schema` && (method === 'GET' || method === 'HEAD')) {
+    if (method === 'HEAD') {
+      res.writeHead(200);
+      res.end();
+      return true;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      version: VERSION,
+      POST: {
+        url: `${API_BASE}/threads`,
+        body: THREAD_INPUT_EXAMPLE,
+      },
+      PATCH: {
+        url: `${API_BASE}/threads/<id>`,
+        partialBody: { status: 'resolved' },
+        note: 'partial (JSON-merge) or full-document both accepted; comments always union-merge by id',
+      },
+      COMMENT: { url: `${API_BASE}/threads/<id>/comments`, body: { author: 'agent', body: 'fixed in abc123' } },
+      DELETE: { url: `${API_BASE}/threads/<id>` },
+      SNAPSHOT: {
+        url: `${API_BASE}/threads/<id>/snapshot`,
+        methods: ['GET', 'PUT'],
+        note: 'GET → JSON { html, clipped, capturedAt, width, height } (plan-b evidence: story DOM at pin time, pinned element carries data-annota-snap="1"); GET ?format=svg → human-viewable foreignObject wrapper; PUT replaces (idempotent)',
+      },
+    });
+    return true;
+  }
+
   /* health ---------------------------------------------------------------- */
   if (p === `${API_BASE}/health` && (method === 'GET' || method === 'HEAD')) {
     const ghSync = await rt.ghsync.status();
@@ -278,8 +529,11 @@ async function handleApi(
     const info: HealthInfo = {
       ok: true,
       version: VERSION,
+      bootedAt: BOOTED_AT,
       store: store.kind,
       storePath: store.storePath,
+      storeMode: rt.sync.storeMode(),
+      storeBranch: rt.sync.storeMode() === 'git' ? rt.sync.storeBranch() : undefined,
       threads: await store.countThreads(),
       agentSurfaces: surfaces,
       gh: {
@@ -288,6 +542,7 @@ async function handleApi(
         autoSync: rt.sync.describe(),
         ghSync,
       },
+      ...(rt.bootWarnings.length ? { warnings: rt.bootWarnings } : {}),
     };
     if (method === 'HEAD') {
       res.writeHead(200);
@@ -305,7 +560,10 @@ async function handleApi(
         storyId: url.searchParams.get('storyId') ?? undefined,
         status: url.searchParams.get('status') ?? undefined,
       });
-      sendJson(res, 200, { threads });
+      // sibling (not inside Thread payloads): which threads carry plan-b
+      // snapshots — panels link to the viewable evidence without bloating lists
+      const snapshots = [...(await store.listSnapshotIds())];
+      sendJson(res, 200, { threads, snapshots });
       return true;
     }
     if (method === 'POST') {
@@ -315,7 +573,7 @@ async function handleApi(
       const preexisting = input.id ? await store.getThread(input.id) : null;
       const thread = await store.createThread(input);
       afterMutation(rt, { storyId: thread.storyId, threadId: thread.id, reason: 'created' });
-      sendJson(res, preexisting ? 200 : 201, thread);
+      await sendMutationJson(rt, res, preexisting ? 200 : 201, thread);
       return true;
     }
     if (method === 'DELETE') {
@@ -337,6 +595,18 @@ async function handleApi(
     const id = decodeURIComponent(threadMatch[1] ?? '');
     const isComments = Boolean(threadMatch[2]);
 
+    if (method === 'DELETE' && !isComments) {
+      // path-form alias of DELETE /threads?id=<id> (F1: agents expect RESTful
+      // resource addressing; both shapes are equivalent and idempotent)
+      const prev = await store.getThread(id);
+      const ok = await store.deleteThread(id);
+      if (!ok) return notFound(res), true;
+      if (prev?.gh?.issue) rt.ghsync.enqueueDelete(prev.gh.issue);
+      afterMutation(rt, { storyId: prev?.storyId, threadId: undefined, reason: 'updated' });
+      sendJson(res, 200, { ok: true });
+      return true;
+    }
+
     if (method === 'GET' && !isComments) {
       const thread = await store.getThread(id);
       if (!thread) return notFound(res), true;
@@ -344,10 +614,13 @@ async function handleApi(
       return true;
     }
     if (method === 'PATCH' && !isComments) {
-      const full = validateThreadFull(await readBody(req));
-      if (full.id !== id) throw Object.assign(new Error('id mismatch between URL and body'), { status: 400 });
+      const body = await readBody(req);
+      if (typeof (body as Record<string, unknown>).id === 'string' && (body as Record<string, unknown>).id !== id) {
+        throw Object.assign(new Error('id mismatch between URL and body'), { status: 400 });
+      }
       const prev = await store.getThread(id);
       if (!prev) return notFound(res), true;
+      const full = buildPatchCandidate(prev, body);
       // server-side resolve bookkeeping: agents forget resolvedAt — the server
       // stamps/clears it on transitions so digests stay consistent
       if (prev.status === 'open' && full.status === 'resolved' && !full.resolvedAt) {
@@ -386,25 +659,80 @@ async function handleApi(
               ? 'reopened'
               : 'updated',
       });
-      sendJson(res, 200, updated);
+      await sendMutationJson(rt, res, 200, updated);
       return true;
     }
     if (method === 'POST' && isComments) {
       const body = await readBody(req);
       const thread = await store.getThread(id);
       if (!thread) return notFound(res), true;
-      const comment: Comment = {
-        id: `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-        author: typeof body.author === 'string' && body.author.trim() ? body.author.trim() : 'anonymous',
-        body: typeof body.body === 'string' ? body.body : '',
-        createdAt: new Date().toISOString(),
-      };
-      if (!comment.body.trim()) throw Object.assign(new Error('comment body is required'), { status: 400 });
+      // client-supplied createdAt keeps retries idempotent (same body → same
+      // deterministic id); absent → server stamp (first write wins)
+      const author = typeof body.author === 'string' && body.author.trim() ? body.author.trim() : 'anonymous';
+      const commentBody = typeof body.body === 'string' ? body.body : '';
+      if (!commentBody.trim()) throw Object.assign(new Error('comment body is required'), { status: 400 });
+      const comment = normalizeComment({
+        id: '',
+        author,
+        body: commentBody,
+        createdAt: typeof body.createdAt === 'string' ? body.createdAt : nowIso(),
+      } as Comment);
       thread.comments.push(comment);
       const updated = await store.updateThread(thread);
       if (!updated) return notFound(res), true; // deleted concurrently
       afterMutation(rt, { storyId: updated.storyId, threadId: updated.id, reason: 'commented' });
-      sendJson(res, 201, updated);
+      await sendMutationJson(rt, res, 201, updated);
+      return true;
+    }
+  }
+
+  /* snapshot (plan-b evidence — user feedback: "screenshot as fallback if the
+   * metadata wasn't precise enough"; a DOM snapshot is TEXT (any model reads
+   * it, zero deps) + optionally a human-viewable render via ?format=html) ---- */
+  const snapMatch = p.match(new RegExp(`^${API_BASE}/threads/([^/]+)/snapshot$`));
+  if (snapMatch) {
+    const id = decodeURIComponent(snapMatch[1] ?? '');
+
+    if (method === 'PUT' || method === 'POST') {
+      const thread = await store.getThread(id);
+      if (!thread) return notFound(res), true;
+      const body = (await readBody(req)) as Record<string, unknown>;
+      const html = typeof body.html === 'string' ? body.html : '';
+      if (!html.trim()) throw Object.assign(new Error('snapshot html is required'), { status: 400 });
+      if (html.length > 96 * 1024) throw Object.assign(new Error('snapshot too large (max 96KB)'), { status: 413 });
+      const snap: DomSnapshot = {
+        format: 'dom',
+        html,
+        clipped: body.clipped === true,
+        capturedAt: typeof body.capturedAt === 'string' ? body.capturedAt : nowIso(),
+        width: Math.round(Number(body.width) || 800),
+        height: Math.round(Number(body.height) || 600),
+      };
+      await store.putSnapshot(id, snap);
+      // NOT afterMutation: snapshots are read-only evidence — no issue-body
+      // change, no re-broadcast (the thread itself already did that)
+      sendJson(res, 200, { ok: true, threadId: id, bytes: html.length, clipped: snap.clipped });
+      return true;
+    }
+
+    if (method === 'GET' || method === 'HEAD') {
+      const snap = await store.getSnapshot(id);
+      if (!snap) return notFound(res), true;
+      if (url.searchParams.get('format') === 'html') {
+        // human-viewable "screenshot": native HTML parser (foreignObject would
+        // demand XHTML-valid serialization — browser outerHTML is not). CSP
+        // kills scripts: the snapshot is inert evidence, never live code.
+        const page = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; style-src 'unsafe-inline'"><title>annotakit snapshot ${id}</title><style>html,body{margin:0}body{position:relative;width:${snap.width}px;min-height:${snap.height}px;background:#fff;overflow:hidden}[data-annota-snap]{outline:3px solid #d97706 !important;outline-offset:2px !important}</style></head><body>${snap.html}${snap.clipped ? '<div style="position:fixed;bottom:0;left:0;right:0;background:#451a03;color:#fdba74;font:600 12px sans-serif;padding:6px 10px">annotakit: snapshot clipped at 32KB</div>' : ''}</body></html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(method === 'HEAD' ? undefined : page);
+        return true;
+      }
+      if (method === 'HEAD') {
+        res.writeHead(200);
+        res.end();
+        return true;
+      }
+      sendJson(res, 200, { threadId: id, ...snap });
       return true;
     }
   }
@@ -415,6 +743,7 @@ async function handleApi(
     const status = url.searchParams.get('status') ?? undefined;
     const threads = await store.listThreads({ storyId, status });
     const stories = groupByStory(threads, origin);
+    const snapshotIds = await store.listSnapshotIds();
     const format = (url.searchParams.get('format') ?? 'md').toLowerCase();
 
     if (format === 'json' || format === 'jsonl') {
@@ -424,7 +753,7 @@ async function handleApi(
     }
     // local export → local footer (PATCH guidance for Path-B agents); GitHub
     // issue bodies (ghsync.issueBody) pass mirror:true for the GH-native footer
-    const md = renderDigest(stories, { origin });
+    const md = renderDigest(stories, { origin, snapshotIds });
     res.writeHead(200, {
       'Content-Type': 'text/markdown; charset=utf-8',
       'Cache-Control': 'no-store',
@@ -440,6 +769,10 @@ async function handleApi(
       return true;
     }
     if (method === 'POST') {
+      // A6: settle the boot restore BEFORE any mirror semantics run — an
+      // agent POSTing /sync during boot otherwise backfills a half-restored
+      // store (duplicate issues for restored mappings).
+      await rt.sync.restore().catch(() => undefined);
       // Force reconcile BOTH directions. Idempotent: unmapped threads get an
       // issue (once, ever); mapped ones only receive actual deltas; remote
       // changes land locally. Unconfigured → 200 {ok, noop, reason} (local mode
@@ -467,8 +800,9 @@ async function handleApi(
 
 const KNOWN_API_ROUTES: [RegExp, string][] = [
   [new RegExp(`^${API_BASE}/health$`), 'GET, HEAD, OPTIONS'],
+  [new RegExp(`^${API_BASE}/schema$`), 'GET, HEAD, OPTIONS'],
   [new RegExp(`^${API_BASE}/threads$`), 'GET, POST, DELETE, OPTIONS'],
-  [new RegExp(`^${API_BASE}/threads/[^/]+$`), 'GET, PATCH, OPTIONS'],
+  [new RegExp(`^${API_BASE}/threads/[^/]+$`), 'GET, PATCH, DELETE, OPTIONS'],
   [new RegExp(`^${API_BASE}/threads/[^/]+/comments$`), 'POST, OPTIONS'],
   [new RegExp(`^${API_BASE}/export$`), 'GET, OPTIONS'],
   [new RegExp(`^${API_BASE}/sync$`), 'GET, POST, OPTIONS'],
@@ -528,6 +862,8 @@ export function createMiddleware(configDir: string): (req: IncomingMessage, res:
         res.end();
         return;
       }
+      // access gate (dogfood #7): loopback free; network peers need a key
+      if (!enforceApiAccess(req, res)) return;
       handleApi(req, res, url, configDir, origin).then(
         (handled) => {
           if (!handled) resolveNotHandled(res, url.pathname);

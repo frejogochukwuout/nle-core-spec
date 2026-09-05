@@ -87,12 +87,7 @@ function retryAfterMs(res: Response): number | undefined {
   const reset = res.headers.get('x-ratelimit-reset');
   if (reset) {
     const n = Number.parseInt(reset, 10);
-    // clamp at 0: a reset timestamp in the past (clock skew, stale header)
-    // must not produce a NEGATIVE delay — it would schedule backoffs in the
-    // past and print "retrying in ~-42s".
-    if (Number.isFinite(n) && n > 0) {
-      return Math.min(Math.max((n - Math.floor(Date.now() / 1000)) * 1000, 0), 900_000);
-    }
+    if (Number.isFinite(n) && n > 0) return Math.min((n - Math.floor(Date.now() / 1000)) * 1000, 900_000);
   }
   return undefined;
 }
@@ -184,18 +179,7 @@ async function ghJsonPaged<T>(
     out.push(...data);
     const link: string = res.headers.get('link') ?? '';
     const next: RegExpMatchArray | null = link.match(/<([^>]+)>;\s*rel="next"/);
-    // origin guard (R13 CodeRabbit): the Link header is server-controlled —
-    // a cross-origin "next" URL must never receive the bearer token. Compare
-    // against the configured API origin (GHE-aware), stop paging on mismatch.
-    if (!next) {
-      url = null;
-    } else {
-      try {
-        url = new URL(next[1]).origin === new URL(ghApiBase()).origin ? (next[1] as string) : null;
-      } catch {
-        url = null; // unparseable next-link — treat as end of pagination
-      }
-    }
+    url = next ? (next[1] as string) : null;
   }
   return out;
 }
