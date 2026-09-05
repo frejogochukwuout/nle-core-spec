@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Node Graph</title>
+    <style>
+        :root {
+            --bg-color: #24252a;
+            --grid-color: #2f3036;
+            --toolbar-bg: #1c1d21;
+            --toolbar-border: #111;
+            --node-bg: #292a2f;
+            --node-header-text: #e0e0e0;
+            --node-num-text: #ffffff;
+            --node-border: #151619;
+            --node-selected-border: #ff3b30;
+            --port-green: #4cd964;
+            --port-blue: #34aadc;
+            --line-color: #8e8e8e;
+            --thumbnail-blue-bar: #34aadc;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            font-family: var(--font-family);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Toolbar Styling */
+        .toolbar {
+            height: 38px;
+            background-color: var(--toolbar-bg);
+            border-bottom: 1px solid var(--toolbar-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            color: #b0b0b0;
+            font-size: 12px;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .tools-left, .tools-center, .tools-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .toolbar-icon {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+            cursor: pointer;
+        }
+        
+        .toolbar-icon.active {
+            fill: #fff;
+        }
+
+        .page-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #444;
+        }
+        .dot.active {
+            background-color: #fff;
+        }
+
+        .clip-dropdown {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            width: 60px;
+        }
+
+        .slider-track {
+            width: 100%;
+            height: 2px;
+            background-color: #444;
+            position: relative;
+            border-radius: 1px;
+        }
+
+        .slider-thumb {
+            width: 8px;
+            height: 8px;
+            background-color: #888;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .three-dots {
+            letter-spacing: 2px;
+            font-size: 14px;
+            line-height: 1;
+            cursor: pointer;
+            padding-bottom: 4px;
+        }
+
+        /* Workspace Grid */
+        .workspace {
+            flex-grow: 1;
+            position: relative;
+            background-color: var(--bg-color);
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 64px 64px;
+            background-position: -32px -32px; /* Offset to center nodes better */
+            overflow: hidden;
+        }
+
+        /* SVG Connections */
+        #connections-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Node Styling */
+        .node-container {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2;
+        }
+
+        .node-title {
+            color: var(--node-header-text);
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .node {
+            background-color: var(--node-bg);
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--node-border);
+        }
+
+        .node.selected {
+            border: 1px solid var(--node-selected-border);
+            box-shadow: 0 0 0 1px var(--node-selected-border), 0 4px 12px rgba(0,0,0,0.4);
+        }
+        
+        .node.highlight-border {
+            border: 1px solid #777;
+        }
+
+        .node-thumbnail-area {
+            width: 106px;
+            height: 60px;
+            border-radius: 5px 5px 0 0;
+            overflow: hidden;
+            position: relative;
+            background-color: #111;
+        }
+
+        .thumbnail-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .thumbnail-water {
+            width: 100%;
+            height: 100%;
+            background-color: #8c8c8c;
+            position: relative;
+        }
+        
+        .water-mask-path {
+            position: absolute;
+            bottom: 5px;
+            right: 0;
+            width: 60px;
+            height: 20px;
+        }
+
+        .progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 2px;
+            background-color: var(--thumbnail-blue-bar);
+            width: 100%;
+        }
+        
+        .progress-bar.partial {
+            width: 40%;
+        }
+        .progress-bar.none {
+            display: none;
+        }
+
+        .node-footer {
+            height: 24px;
+            background-color: #2a2b30;
+            border-radius: 0 0 5px 5px;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            gap: 6px;
+            border-top: 1px solid #1a1a1f;
+        }
+
+        .node-num {
+            color: var(--node-num-text);
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .node-icons {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: #999;
+            flex-grow: 1;
+        }
+
+        .node-icon-svg {
+            height: 12px;
+            fill: currentColor;
+        }
+        
+        .fx-text {
+            font-style: italic;
+            font-size: 11px;
+            font-family: serif;
+            font-weight: bold;
+            color: #aaa;
+        }
+
+        /* Ports */
+        .port {
+            position: absolute;
+            width: 7px;
+            height: 7px;
+            background-color: var(--port-green);
+            border: 1px solid #111;
+            z-index: 3;
+        }
+
+        .port-blue {
+            background-color: var(--port-blue);
+        }
+
+        /* Positioning Ports on Nodes */
+        .port-in { left: -4px; }
+        .port-out { right: -4px; }
+        
+        /* Node standard port positions relative to .node */
+        .port-top-in { top: 18px; }
+        .port-bot-in { top: 48px; }
+        .port-top-out { top: 18px; }
+        .port-bot-out { top: 48px; }
+
+        /* Blue input is a triangle pointing right */
+        .port-triangle-in {
+            width: 0; 
+            height: 0; 
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+            border-left: 6px solid var(--port-blue);
+            background-color: transparent;
+            border-right: none;
+            left: -5px;
+            filter: drop-shadow(-1px 0px 1px #111);
+        }
+
+        /* Master Input/Output Nodes */
+        .master-node {
+            width: 16px;
+            height: 32px;
+            background-color: #3b3c42;
+            border: 1px solid #1a1a1f;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: absolute;
+        }
+        
+        .master-node .inner-dot {
+            width: 4px;
+            height: 4px;
+            background-color: #5c5d63;
+            border-radius: 50%;
+        }
+
+        .master-node .port-out { top: 12px; }
+        .master-node .port-in { top: 12px; }
+
+        /* Mixer Node */
+        .mixer-node {
+            width: 32px;
+            height: 54px;
+            background-color: #2f3036;
+            border: 1px solid #1a1a1f;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: absolute;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        
+        .mixer-icon {
+            width: 16px;
+            height: 16px;
+            fill: #999;
+        }
+
+        .mixer-node .port-in-1 { left: -4px; top: 14px; }
+        .mixer-node .port-in-2 { left: -4px; top: 34px; }
+        .mixer-node .port-out { right: -4px; top: 24px; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="tools-left">
+            <!-- Arrow Cursor -->
+            <svg class="toolbar-icon active" viewBox="0 0 24 24">
+                <path d="M7 2l12 11.2-5.8.5 3.3 7.3-2.2 1-3.2-7.4-4.4 4.5z"/>
+            </svg>
+            <!-- Hand Tool -->
+            <svg class="toolbar-icon" viewBox="0 0 24 24">
+                <path d="M21 11.5v3.6c0 4.3-3.6 7.9-7.9 7.9s-7.9-3.6-7.9-7.9v-7.6c0-1.4 1.1-2.5 2.5-2.5s2.5 1.1 2.5 2.5v3.4h.2c0-1.2 1-2.2 2.2-2.2s2.2 1 2.2 2.2v.2h.2c0-1.1 1-2 2-2s2 1 2 2v.2h.2c0-1.1 1-2 2-2 1.2 0 2.2 1.1 2.2 2.4z"/>
+            </svg>
+        </div>
+        
+        <div class="tools-center">
+            <div class="page-dots">
+                <div class="dot active"></div>
+                <div class="dot"></div>
+            </div>
+        </div>
+
+        <div class="tools-right">
+            <div class="clip-dropdown">
+                Clip
+                <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
+                    <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div class="slider-container">
+                <div class="slider-track">
+                    <div class="slider-thumb"></div>
+                </div>
+            </div>
+            <div class="three-dots">...</div>
+        </div>
+    </div>
+
+    <!-- Node Workspace -->
+    <div class="workspace" id="workspace">
+        <!-- Lines Layer -->
+        <svg id="connections-layer"></svg>
+
+        <!-- Node: Master Input -->
+        <div class="master-node" style="left: 32px; top: 220px;">
+            <div class="inner-dot"></div>
+            <div class="port port-out port-green" id="master-in-out"></div>
+        </div>
+
+        <!-- Node: Primary -->
+        <div class="node-container" style="left: 140px; top: 195px;">
+            <div class="node-title">Primary</div>
+            <div class="node highlight-border">
+                <div class="port port-in port-green port-top-in" id="primary-in-g"></div>
+                <div class="port port-triangle-in port-bot-in" id="primary-in-b"></div>
+                
+                <div class="node-thumbnail-area">
+                    <!-- Using a representative image -->
+                    <img src="https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?auto=format&fit=crop&w=220&h=120&q=80" class="thumbnail-img" alt="Venice">
+                    <div class="progress-bar"></div>
+                </div>
+                
+                <div class="node-footer">
+                    <span class="node-num">01</span>
+                    <div class="node-icons">
+                        <!-- Bar chart icon -->
+                        <svg class="node-icon-svg" viewBox="0 0 24 24"><path d="M4 22h2V9H4v13zm6 0h2V5h-2v17zm6 0h2V13h-2v9zm6 0h2v-5h-2v5z"/></svg>
+                    </div>
+                </div>
+
+                <div class="port port-out port-green port-top-out" id="primary-out-g"></div>
+                <div class="port port-out port-blue port-bot-out" id="primary-out-b"></div>
+            </div>
+        </div>
+
+        <!-- Node: Secondary -->
+        <div class="node-container" style="left: 360px; top: 110px;">
+            <div class="node-title">Secondary</div>
+            <div class="node">
+                <div class="port port-in port-green port-top-in" id="secondary-in-g"></div>
+                <div class="port port-triangle-in port-bot-in"></div>
+                
+                <div class="node-thumbnail-area">
+                    <img src="https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?auto=format&fit=crop&w=220&h=120&q=80" class="thumbnail-img" alt="Venice">
+                    <div class="progress-bar partial"></div>
+                </div>
+                
+                <div class="node-footer">
+                    <span class="node-num">02</span>
+                    <div class="node-icons">
+                        <!-- Circle icon -->
+                        <svg class="node-icon-svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/><circle cx="12" cy="12" r="2"/></svg>
+                    </div>
+                </div>
+
+                <div class="port port-out port-green port-top-out" id="secondary-out-g"></div>
+                <div class="port port-out port-blue port-bot-out"></div>
+            </div>
+        </div>
+
+        <!-- Node: Water -->
+        <div class="node-container" style="left: 360px; top: 260px;">
+            <div class="node-title">Water</div>
+            <div class="node">
+                <div class="port port-in port-green port-top-in" id="water-in-g"></div>
+                <div class="port port-triangle-in port-bot-in"></div>
+                
+                <div class="node-thumbnail-area">
+                    <div class="thumbnail-water">
+                        <!-- Simulated mask squiggle -->
+                        <svg class="water-mask-path" viewBox="0 0 60 20" preserveAspectRatio="none">
+                            <path d="M0,18 Q15,10 30,16 T60,5" fill="none" stroke="#00d8ff" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div class="progress-bar partial"></div>
+                </div>
+                
+                <div class="node-footer">
+                    <span class="node-num">03</span>
+                    <div class="node-icons">
+                        <!-- Bar chart & Pipette/Wand -->
+                        <svg class="node-icon-svg" viewBox="0 0 24 24"><path d="M4 22h2V9H4v13zm6 0h2V5h-2v17zm6 0h2V13h-2v9z"/></svg>
+                        <svg class="node-icon-svg" viewBox="0 0 24 24" style="margin-left: 2px;"><path d="M7.5 17.5L2 22l2.5-5.5L16 5l3 3-11.5 11.5z"/><path d="M19 2l-2 2 3 3 2-2-3-3z"/></svg>
+                    </div>
+                </div>
+
+                <div class="port port-out port-green port-top-out" id="water-out-g"></div>
+                <div class="port port-out port-blue port-bot-out"></div>
+            </div>
+        </div>
+
+        <!-- Node: Mixer -->
+        <div class="mixer-node" style="left: 565px; top: 210px;">
+            <div class="port port-in port-green port-in-1" id="mixer-in-1"></div>
+            <div class="port port-in port-green port-in-2" id="mixer-in-2"></div>
+            <!-- Layer icon -->
+            <svg class="mixer-icon" viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 12l10 5 10-5M2 17l10 5 10-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+            <div class="port port-out port-green port-out" id="mixer-out"></div>
+        </div>
+
+        <!-- Node: Tilt Shift -->
+        <div class="node-container" style="left: 670px; top: 195px;">
+            <div class="node-title">Tilt Shift</div>
+            <div class="node">
+                <div class="port port-in port-green port-top-in" id="tilt-in-g"></div>
+                <div class="port port-triangle-in port-bot-in"></div>
+                
+                <div class="node-thumbnail-area">
+                    <img src="https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?auto=format&fit=crop&w=220&h=120&q=80&blur=2" class="thumbnail-img" alt="Venice Tilt">
+                    <div class="progress-bar"></div>
+                </div>
+                
+                <div class="node-footer">
+                    <span class="node-num">05</span>
+                    <div class="node-icons">
+                        <span class="fx-text">fx</span>
+                    </div>
+                </div>
+
+                <div class="port port-out port-green port-top-out" id="tilt-out-g"></div>
+                <div class="port port-out port-blue port-bot-out"></div>
+            </div>
+        </div>
+
+        <!-- Node: Lens Flare (Selected) -->
+        <div class="node-container" style="left: 820px; top: 195px;">
+            <div class="node-title">Lens Flare</div>
+            <div class="node selected">
+                <div class="port port-in port-green port-top-in" id="lens-in-g"></div>
+                <div class="port port-triangle-in port-bot-in"></div>
+                
+                <div class="node-thumbnail-area">
+                    <img src="https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?auto=format&fit=crop&w=220&h=120&q=80&brightness=150" class="thumbnail-img" alt="Venice Flare">
+                    <div class="progress-bar"></div>
+                </div>
+                
+                <div class="node-footer">
+                    <span class="node-num">06</span>
+                    <div class="node-icons">
+                        <span class="fx-text">fx</span>
+                    </div>
+                </div>
+
+                <div class="port port-out port-green port-top-out" id="lens-out-g"></div>
+                <div class="port port-out port-blue port-bot-out"></div>
+            </div>
+        </div>
+
+        <!-- Node: Master Output -->
+        <div class="master-node" style="left: 990px; top: 220px;">
+            <div class="inner-dot"></div>
+            <div class="port port-in port-green" id="master-out-in"></div>
+        </div>
+
+    </div>
+
+    <script>
+        // Draw SVG lines between ports
+        const svgLayer = document.getElementById('connections-layer');
+        const workspace = document.getElementById('workspace');
+
+        const connections = [
+            ['master-in-out', 'primary-in-g'],
+            ['primary-out-g', 'secondary-in-g'],
+            ['primary-out-g', 'water-in-g'],
+            ['secondary-out-g', 'mixer-in-1'],
+            ['water-out-g', 'mixer-in-2'],
+            ['mixer-out', 'tilt-in-g'],
+            ['tilt-out-g', 'lens-in-g'],
+            ['lens-out-g', 'master-out-in']
+        ];
+
+        function drawLines() {
+            svgLayer.innerHTML = ''; // Clear existing lines
+            const workspaceRect = workspace.getBoundingClientRect();
+
+            connections.forEach(conn => {
+                const outEl = document.getElementById(conn[0]);
+                const inEl = document.getElementById(conn[1]);
+
+                if (outEl && inEl) {
+                    const outRect = outEl.getBoundingClientRect();
+                    const inRect = inEl.getBoundingClientRect();
+
+                    // Calculate center points relative to the SVG container (workspace)
+                    let x1 = outRect.left + outRect.width / 2 - workspaceRect.left;
+                    let y1 = outRect.top + outRect.height / 2 - workspaceRect.top;
+                    let x2 = inRect.left + inRect.width / 2 - workspaceRect.left;
+                    let y2 = inRect.top + inRect.height / 2 - workspaceRect.top;
+
+                    // Adjust for triangle port visual center offset
+                    if(inEl.classList.contains('port-triangle-in')) {
+                        x2 += 3; 
+                    }
+
+                    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    line.setAttribute("x1", x1);
+                    line.setAttribute("y1", y1);
+                    line.setAttribute("x2", x2);
+                    line.setAttribute("y2", y2);
+                    line.setAttribute("stroke", "var(--line-color)");
+                    line.setAttribute("stroke-width", "2");
+                    
+                    svgLayer.appendChild(line);
+                }
+            });
+        }
+
+        // Draw initially
+        window.addEventListener('load', drawLines);
+        // Redraw if window resizes to keep alignment
+        window.addEventListener('resize', drawLines);
+    </script>
+</body>
+</html>

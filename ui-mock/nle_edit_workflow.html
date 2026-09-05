@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NLE Edit Interface Reproduction</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom UI Scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+
+        /* Prevent text selection for app-like feel */
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        /* NLE specific clip styles */
+        .timeline-clip {
+            background: linear-gradient(90deg, rgba(29,78,111,1) 0%, rgba(26,62,87,1) 100%);
+            box-shadow: inset 0 0 0 1px #447a9c, inset 0 2px 0 0 rgba(255,255,255,0.1);
+        }
+        .audio-clip {
+            background: linear-gradient(90deg, rgba(39,94,76,1) 0%, rgba(29,66,54,1) 100%);
+            box-shadow: inset 0 0 0 1px #4b9278, inset 0 2px 0 0 rgba(255,255,255,0.1);
+        }
+        
+        .clip-thumbnail {
+            background-size: cover;
+            background-repeat: repeat-x;
+            background-position: center;
+            opacity: 0.6;
+            mix-blend-mode: luminosity;
+        }
+
+        .audio-waveform {
+            background-image: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 2px,
+                rgba(144, 218, 190, 0.4) 2px,
+                rgba(144, 218, 190, 0.4) 3px
+            );
+            mask-image: linear-gradient(to bottom, transparent 10%, black 50%, transparent 90%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 10%, black 50%, transparent 90%);
+        }
+
+        /* Viewer specific */
+        .viewer-drop-shadow {
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body class="bg-[#111111] text-[#b3b3b3] h-screen w-full flex flex-col text-[11px] overflow-hidden">
+
+    <!-- Top Navigation Bar -->
+    <header class="h-8 min-h-[2rem] bg-[#141414] border-b border-[#2a2a2a] flex items-center justify-between px-3">
+        <div class="flex items-center space-x-6">
+            <div class="flex items-center space-x-1.5 hover:text-white cursor-pointer">
+                <i data-lucide="grid" class="w-3.5 h-3.5"></i>
+                <span>Media Pool</span>
+            </div>
+            <div class="flex items-center space-x-1.5 hover:text-white cursor-pointer">
+                <i data-lucide="wand-2" class="w-3.5 h-3.5"></i>
+                <span>Effects Library</span>
+            </div>
+            <div class="flex items-center space-x-1.5 hover:text-white cursor-pointer">
+                <i data-lucide="list" class="w-3.5 h-3.5"></i>
+                <span>Edit Index</span>
+            </div>
+            <div class="flex items-center space-x-1.5 hover:text-white cursor-pointer">
+                <i data-lucide="music" class="w-3.5 h-3.5"></i>
+                <span>Sound Library</span>
+            </div>
+        </div>
+        
+        <div class="flex-1 flex justify-center text-white font-medium">
+            Summer Break
+        </div>
+
+        <div class="flex items-center space-x-6">
+            <div class="flex items-center space-x-1.5 hover:text-white cursor-pointer">
+                <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+                <span>Mixer</span>
+            </div>
+            <div class="flex items-center space-x-1.5 hover:text-white cursor-pointer">
+                <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                <span>Metadata</span>
+            </div>
+            <div class="flex items-center space-x-1.5 hover:text-white cursor-pointer">
+                <i data-lucide="panel-right" class="w-3.5 h-3.5"></i>
+                <span>Inspector</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Viewers Area -->
+    <main class="flex-1 flex border-b border-[#1a1a1a] min-h-[300px]">
+        
+        <!-- Left Viewer (Source) -->
+        <div class="flex-1 flex flex-col border-r border-[#1a1a1a]">
+            <!-- Viewer Header -->
+            <div class="h-7 bg-[#1c1c1c] flex justify-between items-center px-3 border-b border-[#222]">
+                <div class="flex items-center space-x-3">
+                    <span class="text-white">136%</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3 text-[#777]"></i>
+                    <span class="text-white font-mono tracking-wider ml-4">01:00:00:22</span>
+                </div>
+                <div class="text-[#ccc]">Sunset.mov</div>
+                <div class="flex items-center space-x-2 text-transparent">
+                    <!-- Placeholder to balance flex-between -->
+                    <span>01:00:00:22</span> 
+                </div>
+            </div>
+            
+            <!-- Viewer Content -->
+            <div class="flex-1 bg-black relative viewer-drop-shadow flex items-center justify-center overflow-hidden">
+                <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=1200" alt="Sunset source" class="w-full h-full object-contain">
+            </div>
+            
+            <!-- Viewer Controls -->
+            <div class="h-10 bg-[#1a1a1a] flex flex-col justify-center px-4 space-y-1">
+                <!-- Scrubber -->
+                <div class="w-full h-1 bg-[#333] rounded overflow-hidden relative cursor-pointer">
+                    <div class="absolute left-0 top-0 bottom-0 bg-[#555] w-[45%]"></div>
+                    <div class="absolute top-0 bottom-0 w-2 bg-[#ccc] left-[45%] rounded-sm"></div>
+                </div>
+                <!-- Buttons -->
+                <div class="flex justify-between items-center px-8">
+                    <div class="flex space-x-3 text-[#777]">
+                        <i data-lucide="chevron-left" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                        <i data-lucide="chevron-right" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                    </div>
+                    <div class="flex space-x-4 text-[#aaa]">
+                        <i data-lucide="skip-back" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                        <i data-lucide="play" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                        <i data-lucide="skip-forward" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                    </div>
+                    <div class="flex space-x-3 text-[#777]">
+                        <i data-lucide="corner-down-left" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                        <i data-lucide="corner-down-right" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Viewer (Timeline) -->
+        <div class="flex-1 flex flex-col relative">
+            <!-- Viewer Header -->
+            <div class="h-7 bg-[#1c1c1c] flex justify-between items-center px-3 border-b border-[#222]">
+                <div class="flex items-center space-x-3">
+                    <span class="text-[#777]">145%</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3 text-[#777]"></i>
+                    <span class="text-[#777] font-mono tracking-wider ml-4">00:00:00:19</span>
+                </div>
+                <div class="text-[#ed5050] flex items-center space-x-1">
+                    <span>Timeline 1</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                </div>
+                <div class="text-white font-mono tracking-wider">
+                    01:00:01:22
+                </div>
+            </div>
+            
+            <!-- Viewer Content with Edit Overlay -->
+            <div class="flex-1 bg-black relative viewer-drop-shadow flex items-center justify-center overflow-hidden">
+                <img src="https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?auto=format&fit=crop&q=80&w=1200" alt="Timeline turtle" class="w-full h-full object-contain">
+                
+                <!-- EDIT OVERLAY MENU (The workflow UI component) -->
+                <div class="absolute right-0 top-1/2 -translate-y-1/2 bg-[#121212]/95 border-l border-y border-[#333] rounded-l-md w-44 py-2 shadow-2xl z-20 backdrop-blur-sm flex flex-col">
+                    <!-- Insert -->
+                    <div class="flex items-center px-4 py-2 hover:bg-[#2a2a2a] cursor-pointer group">
+                        <svg class="w-4 h-4 mr-3 text-[#888] group-hover:text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="6" width="18" height="12" rx="2" />
+                            <path d="M12 6v12" />
+                            <path d="M9 12h6" />
+                        </svg>
+                        <span class="text-[#999] group-hover:text-white">Insert</span>
+                    </div>
+                    <!-- Overwrite (Highlighted in screenshot context) -->
+                    <div class="flex items-center px-4 py-2 bg-[#2a2a2a] cursor-pointer">
+                        <svg class="w-4 h-4 mr-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="6" width="18" height="12" rx="2" stroke-dasharray="2 2" />
+                            <rect x="8" y="4" width="8" height="16" fill="currentColor" stroke="none" />
+                        </svg>
+                        <span class="text-white font-medium">Overwrite</span>
+                    </div>
+                    <!-- Replace -->
+                    <div class="flex items-center px-4 py-2 hover:bg-[#2a2a2a] cursor-pointer group">
+                        <svg class="w-4 h-4 mr-3 text-[#888] group-hover:text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M7 16V4M7 4L3 8M7 4L11 8" />
+                            <path d="M17 8v12M17 20l-4-4M17 20l4-4" />
+                        </svg>
+                        <span class="text-[#999] group-hover:text-white">Replace</span>
+                    </div>
+                    <!-- Fit to Fill -->
+                    <div class="flex items-center px-4 py-2 hover:bg-[#2a2a2a] cursor-pointer group">
+                        <svg class="w-4 h-4 mr-3 text-[#888] group-hover:text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 12h16M4 12l4-4M4 12l4 4M20 12l-4-4M20 12l-4 4" />
+                            <rect x="9" y="8" width="6" height="8" />
+                        </svg>
+                        <span class="text-[#999] group-hover:text-white">Fit to Fill</span>
+                    </div>
+                    <div class="my-1 border-t border-[#333]"></div>
+                    <!-- Place on Top -->
+                    <div class="flex items-center px-4 py-2 hover:bg-[#2a2a2a] cursor-pointer group">
+                        <svg class="w-4 h-4 mr-3 text-[#888] group-hover:text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="4" y="14" width="16" height="6" />
+                            <rect x="4" y="4" width="16" height="6" fill="currentColor" stroke="none" />
+                        </svg>
+                        <span class="text-[#999] group-hover:text-white">Place on Top</span>
+                    </div>
+                    <!-- Append at End -->
+                    <div class="flex items-center px-4 py-2 hover:bg-[#2a2a2a] cursor-pointer group">
+                        <svg class="w-4 h-4 mr-3 text-[#888] group-hover:text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="8" width="10" height="8" />
+                            <rect x="14" y="8" width="8" height="8" fill="currentColor" stroke="none"/>
+                            <path d="M22 6v12" />
+                        </svg>
+                        <span class="text-[#999] group-hover:text-white">Append at End</span>
+                    </div>
+                    <!-- Ripple Overwrite -->
+                    <div class="flex items-center px-4 py-2 hover:bg-[#2a2a2a] cursor-pointer group">
+                        <svg class="w-4 h-4 mr-3 text-[#888] group-hover:text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="8" width="6" height="8" />
+                            <rect x="16" y="8" width="6" height="8" />
+                            <rect x="9" y="6" width="6" height="12" fill="currentColor" stroke="none"/>
+                            <path d="M8 4l2 16" />
+                        </svg>
+                        <span class="text-[#999] group-hover:text-white">Ripple Overwrite</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Viewer Controls -->
+            <div class="h-10 bg-[#1a1a1a] flex flex-col justify-center px-4 space-y-1">
+                <div class="w-full h-1 bg-[#333] rounded overflow-hidden relative cursor-pointer">
+                    <div class="absolute left-0 top-0 bottom-0 bg-[#555] w-[65%]"></div>
+                    <div class="absolute top-0 bottom-0 w-2 bg-[#ccc] left-[65%] rounded-sm"></div>
+                </div>
+                <div class="flex justify-between items-center px-8">
+                    <div class="flex space-x-3 text-[#777]">
+                        <i data-lucide="chevron-left" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                        <i data-lucide="chevron-right" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                    </div>
+                    <div class="flex space-x-4 text-[#aaa]">
+                        <i data-lucide="skip-back" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                        <i data-lucide="pause" class="w-4 h-4 text-white cursor-pointer"></i>
+                        <i data-lucide="skip-forward" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                    </div>
+                    <div class="flex space-x-3 text-[#777]">
+                        <i data-lucide="corner-down-left" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                        <i data-lucide="corner-down-right" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Timeline Area -->
+    <section class="h-[40%] min-h-[200px] flex flex-col bg-[#141414]">
+        
+        <!-- Timeline Toolbar -->
+        <div class="h-8 bg-[#1e1e1e] border-y border-[#2a2a2a] flex items-center justify-between px-4 text-[#999]">
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="mouse-pointer-2" class="w-3.5 h-3.5 text-[#ed5050]"></i> <!-- Arrow tool active -->
+                    <i data-lucide="scissors" class="w-3.5 h-3.5 hover:text-white cursor-pointer"></i>
+                    <i data-lucide="square" class="w-3.5 h-3.5 hover:text-white cursor-pointer"></i>
+                </div>
+                <div class="h-4 w-px bg-[#333]"></div>
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="magnet" class="w-3.5 h-3.5 text-white"></i>
+                    <i data-lucide="link" class="w-3.5 h-3.5 text-white"></i>
+                </div>
+                <div class="h-4 w-px bg-[#333]"></div>
+                <i data-lucide="flag" class="w-3.5 h-3.5 hover:text-white cursor-pointer"></i>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <i data-lucide="align-left" class="w-3.5 h-3.5 hover:text-white cursor-pointer"></i>
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="minus" class="w-3 h-3"></i>
+                    <div class="w-24 h-1 bg-[#333] rounded overflow-hidden relative">
+                        <div class="absolute w-4 h-full bg-[#888] left-8 rounded-sm"></div>
+                    </div>
+                    <i data-lucide="plus" class="w-3 h-3"></i>
+                </div>
+                <div class="flex items-center space-x-2 text-white">
+                    <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+                    <div class="w-20 h-1.5 bg-[#333] rounded overflow-hidden relative">
+                        <div class="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 w-[70%]"></div>
+                        <div class="absolute left-[70%] top-0 bottom-0 w-px bg-white"></div>
+                    </div>
+                    <span class="text-[9px] font-mono">DIM</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tracks Container -->
+        <div class="flex-1 flex overflow-hidden">
+            
+            <!-- Track Headers -->
+            <div class="w-36 bg-[#1a1a1a] border-r border-[#222] flex flex-col flex-shrink-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.2)]">
+                <!-- V1 Header -->
+                <div class="h-16 border-b border-[#222] flex flex-col justify-center px-2 relative group">
+                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-[#ed5050]"></div> <!-- Active track indicator -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-1.5">
+                            <span class="px-1 border border-[#444] rounded text-[10px] text-white">V1</span>
+                            <span class="text-white font-medium">Video 1</span>
+                        </div>
+                        <div class="flex space-x-1 text-[#666]">
+                            <i data-lucide="lock" class="w-3 h-3 hover:text-white cursor-pointer"></i>
+                            <i data-lucide="eye" class="w-3 h-3 hover:text-white cursor-pointer"></i>
+                        </div>
+                    </div>
+                    <div class="text-[#666] text-[9px] mt-1">3 Clips</div>
+                </div>
+                
+                <!-- A1 Header -->
+                <div class="h-16 border-b border-[#222] flex flex-col justify-center px-2 relative group">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-1.5">
+                            <span class="px-1 border border-[#444] rounded text-[10px] text-white">A1</span>
+                            <span class="text-white font-medium">Audio 1</span>
+                        </div>
+                        <div class="flex space-x-1 text-[#666] items-center">
+                            <span class="text-[9px]">2.0</span>
+                            <i data-lucide="lock" class="w-3 h-3 hover:text-white cursor-pointer"></i>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-1.5 mt-1 text-[#666]">
+                        <span class="w-3 h-3 border border-[#444] flex items-center justify-center text-[8px] rounded-sm hover:text-white cursor-pointer">S</span>
+                        <span class="w-3 h-3 border border-[#444] flex items-center justify-center text-[8px] rounded-sm hover:text-white cursor-pointer">M</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeline Tracks Area -->
+            <div class="flex-1 bg-[#121212] relative overflow-hidden flex flex-col">
+                
+                <!-- Time Ruler -->
+                <div class="h-6 bg-[#1a1a1a] border-b border-[#2a2a2a] relative select-none">
+                    <div class="absolute inset-0 flex items-end">
+                        <!-- Tick marks approximation -->
+                        <div class="w-full flex justify-between px-1 text-[9px] text-[#777] font-mono pb-0.5">
+                            <span class="pl-4">01:00:00:00</span>
+                            <span>01:00:02:00</span>
+                            <span>01:00:04:00</span>
+                            <span>01:00:06:00</span>
+                            <span class="pr-8">01:00:08:00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tracks Grid -->
+                <div class="flex-1 relative">
+                    <!-- Playhead Line -->
+                    <div class="absolute top-[-24px] bottom-0 left-[35%] w-px bg-[#ed5050] z-20 pointer-events-none shadow-[0_0_2px_rgba(237,80,80,0.5)]">
+                        <!-- Playhead handle top -->
+                        <div class="absolute -top-[1px] -left-1.5 w-3 h-3 bg-[#ed5050]" style="clip-path: polygon(0 0, 100% 0, 50% 100%);"></div>
+                    </div>
+
+                    <!-- V1 Track Container -->
+                    <div class="h-16 border-b border-[#1c1c1c] absolute top-0 w-full flex items-center py-1">
+                        <!-- Clip Group (Desert.mp4 - visually split) -->
+                        <div class="absolute left-0 h-12 w-[35%] flex">
+                            <!-- Segment 1 -->
+                            <div class="flex-1 h-full timeline-clip rounded-sm border border-black relative overflow-hidden flex items-end">
+                                <div class="absolute inset-0 clip-thumbnail" style="background-image: url('https://images.unsplash.com/photo-1509316785289-025f5b846b35?auto=format&fit=crop&q=80&w=200');"></div>
+                                <div class="relative z-10 bg-[#1c1c1c]/80 text-white text-[9px] px-1 m-0.5 rounded-sm flex items-center">
+                                    <i data-lucide="film" class="w-2.5 h-2.5 mr-1"></i> Desert.mp4
+                                </div>
+                            </div>
+                            <!-- Segment 2 -->
+                            <div class="flex-1 h-full timeline-clip rounded-sm border-y border-r border-black relative overflow-hidden flex items-end">
+                                <div class="absolute inset-0 clip-thumbnail" style="background-image: url('https://images.unsplash.com/photo-1509316785289-025f5b846b35?auto=format&fit=crop&q=80&w=200');"></div>
+                            </div>
+                            <!-- Segment 3 -->
+                            <div class="flex-1 h-full timeline-clip rounded-sm border-y border-r border-black relative overflow-hidden flex items-end">
+                                <div class="absolute inset-0 clip-thumbnail" style="background-image: url('https://images.unsplash.com/photo-1509316785289-025f5b846b35?auto=format&fit=crop&q=80&w=200');"></div>
+                            </div>
+                        </div>
+
+                        <!-- Clip 4 (Turtle) - Playhead intersects right at the start -->
+                        <div class="absolute left-[35%] h-12 w-[5%] timeline-clip rounded-sm border border-black relative overflow-hidden flex items-end z-10 ring-1 ring-white/30">
+                            <div class="absolute inset-0 clip-thumbnail" style="background-image: url('https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?auto=format&fit=crop&q=80&w=200');"></div>
+                            <div class="relative z-10 bg-[#1c1c1c]/80 text-white text-[9px] px-1 m-0.5 rounded-sm truncate w-11/12 flex items-center">
+                                <i data-lucide="film" class="w-2.5 h-2.5 mr-1 flex-shrink-0"></i> Tur...
+                            </div>
+                        </div>
+
+                        <!-- Clip 5 (Surf) -->
+                        <div class="absolute left-[40.1%] h-12 w-[9%] timeline-clip rounded-sm border border-black relative overflow-hidden flex items-end">
+                            <div class="absolute inset-0 clip-thumbnail" style="background-image: url('https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&q=80&w=200');"></div>
+                            <div class="relative z-10 bg-[#1c1c1c]/80 text-white text-[9px] px-1 m-0.5 rounded-sm truncate w-11/12 flex items-center">
+                                <i data-lucide="film" class="w-2.5 h-2.5 mr-1 flex-shrink-0"></i> Surf.mov
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- A1 Track Container -->
+                    <div class="h-16 border-b border-[#1c1c1c] absolute top-16 w-full flex items-center py-1">
+                        <!-- Corresponding Audio for Desert -->
+                        <div class="absolute left-0 h-12 w-[35%] audio-clip rounded-sm border border-black relative overflow-hidden">
+                            <div class="absolute inset-x-0 bottom-0 h-3/4 audio-waveform opacity-50"></div>
+                            <div class="absolute top-1 left-1 text-white text-[9px] opacity-70">Desert.mp4</div>
+                        </div>
+                        
+                        <!-- Corresponding Audio for Turtle -->
+                        <div class="absolute left-[35%] h-12 w-[5%] audio-clip rounded-sm border border-black relative overflow-hidden">
+                            <div class="absolute inset-x-0 bottom-0 h-2/3 audio-waveform opacity-50"></div>
+                        </div>
+
+                        <!-- Corresponding Audio for Surf -->
+                        <div class="absolute left-[40.1%] h-12 w-[9%] audio-clip rounded-sm border border-black relative overflow-hidden">
+                            <div class="absolute inset-x-0 bottom-0 h-full audio-waveform opacity-50"></div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Bottom Application Navigation -->
+    <footer class="h-12 bg-[#121212] border-t border-[#262626] flex items-center justify-between px-4 relative z-30 shadow-[0_-5px_10px_rgba(0,0,0,0.3)]">
+        <div class="flex items-center space-x-2 text-[#777]">
+            <div class="w-4 h-4 rounded-full bg-gradient-to-br from-red-500 to-blue-600 flex items-center justify-center opacity-80">
+                <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+            </div>
+            <span class="font-medium text-[10px]">DaVinci Resolve 18</span>
+        </div>
+        
+        <div class="absolute left-1/2 -translate-x-1/2 flex h-full">
+            <div class="px-5 h-full flex flex-col items-center justify-center text-[#777] hover:text-white cursor-pointer space-y-1">
+                <i data-lucide="image" class="w-4 h-4"></i>
+                <span class="text-[9px]">Media</span>
+            </div>
+            <div class="px-5 h-full flex flex-col items-center justify-center text-[#777] hover:text-white cursor-pointer space-y-1">
+                <i data-lucide="scissors" class="w-4 h-4"></i>
+                <span class="text-[9px]">Cut</span>
+            </div>
+            <!-- Active Page: Edit -->
+            <div class="px-5 h-full flex flex-col items-center justify-center text-white cursor-pointer space-y-1 relative">
+                <div class="absolute top-0 left-0 right-0 h-0.5 bg-[#ed5050]"></div>
+                <i data-lucide="list-video" class="w-4 h-4"></i>
+                <span class="text-[9px]">Edit</span>
+            </div>
+            <div class="px-5 h-full flex flex-col items-center justify-center text-[#777] hover:text-white cursor-pointer space-y-1">
+                <i data-lucide="wand" class="w-4 h-4"></i>
+                <span class="text-[9px]">Fusion</span>
+            </div>
+            <div class="px-5 h-full flex flex-col items-center justify-center text-[#777] hover:text-white cursor-pointer space-y-1">
+                <i data-lucide="palette" class="w-4 h-4"></i>
+                <span class="text-[9px]">Color</span>
+            </div>
+            <div class="px-5 h-full flex flex-col items-center justify-center text-[#777] hover:text-white cursor-pointer space-y-1">
+                <i data-lucide="music" class="w-4 h-4"></i>
+                <span class="text-[9px]">Fairlight</span>
+            </div>
+            <div class="px-5 h-full flex flex-col items-center justify-center text-[#777] hover:text-white cursor-pointer space-y-1">
+                <i data-lucide="rocket" class="w-4 h-4"></i>
+                <span class="text-[9px]">Deliver</span>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3 text-[#777]">
+            <i data-lucide="home" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+            <i data-lucide="settings" class="w-4 h-4 hover:text-white cursor-pointer"></i>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
