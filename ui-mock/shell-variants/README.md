@@ -172,7 +172,14 @@ tests can target the same surface.
 - Playback, media decode, and all engine behavior are fake — this is a UI/UX artifact, not an engine (see specs 01-07 for the real thing).
 - **R14 (2026-09-05):** every remaining intentional simplification is inventoried
   in `../../.agents/SPEC-REVISION-CANDIDATES.md` §E (C10–C28) — the C-table
-  above stays as the historical R12/R13 set. Net-new spec-side amendments found
+  above stays as the historical R12/R13 set.
+- **R19 (2026-09-06):** the reference-integration round's inventions are
+  registered in the same file §H (**C33–C44**): marker v2 (range/notes/clip
+  markers), captions track+text (the reference's dialogs became EMBEDDED
+  panels per user directive), per-clip pan/pitch/EQ display state, node-graph
+  color composition, deliver whole-view, fullscreen-toggle removal,
+  source-preview pool-selection trigger, strip chrome beyond the G-surface,
+  meter palette, pool hover-autoplay, scopes dock, inspector track-fallback. Net-new spec-side amendments found
   by the R14 both-directions audit live in the same file (N1–N15) and are
   mirrored on GitHub issue #2. The zero-no-op sweep also landed: every visible
   control is now wired (real state, real local behavior, honest toast, or
@@ -234,3 +241,67 @@ reference; this app is the interactive successor.
 - **Audio focus mode** (docs/DESIGN-audio-mode.md v2.1, peer-reviewed): 4th dock page (⌘4), three-state mixer (collapsed / 32px meter-bridge / full strips), channel editor = S/G seam, Sound Library with roles, sidechain ducking row (spec 20 §12.2 mock answer), escalation gesture.
 - **Storybook 9** review surface: 29 stories (`npm run storybook`).
 - Review gates: R11 code review (FIX-MAJORS → all majors fixed) + gate re-check **NO MAJORS REMAIN**.
+
+## R19 — feedback wave 3 + reference integration (2026-09-06)
+
+The 26-open-thread annotakit wave (all on this tree) + the nine user-uploaded
+reference mock HTMLs, integrated with analysis → design → 5 parallel
+implementation agents → integration → adversarial review → VLM + live
+verification cycles.
+
+**Feedback wave (26/26 fixed + resolved in annotakit; GH mirror auto-closed):**
+- **Mixer/audio (8):** meter fixed 14px column + fader/scale/meter equal-height
+  law under one 24px headroom readout (piecewise dB display taper, model stays
+  linear); strips fill the dock vertically with the fader as the terminal
+  flex-1 section; FX chip rack (real 2 insert slots + add-chips + I power),
+  input rows, R(display)/S/M, EQ+dynamics sparklines, 48px pan crosshair;
+  master pinned right of the scroll region; traffic-light dots + fullscreen
+  toggle removed from toolbar2; Effects joined the bin's slot as an ARIA tab
+  pair (LeftDock).
+- **Edit/timeline (7):** bounded scroll runway (≤25% viewport — scrolling
+  STOPS instead of scrolling into nothing); Resolve-style transition block;
+  filmstrip aspect-preserving cells; selected-clip hover trim affordance;
+  symmetric per-media waveforms (root-caused the empty-svg bug: negative %
+  widths at 345 bars); fade curves UN-reversed (in rises, out falls, inaudible
+  wedge shaded); loop brackets clamp + mirror at content edges; dedicated
+  ruler MARKER BAND (pins never read as text-track chevrons) + "Go to
+  Marker ›" real navigation; empty inspector → ACTIVE-TRACK fallback
+  (research: Resolve/Premiere clear, Fairlight inspects tracks — the
+  reviewer's instinct, gap C44).
+- **Media pool (4):** type ICONS (Film/AudioLines/Image — the standard NLE
+  way), correct import glyph, ≥400ms hover-to-autoplay ken-burns preview
+  (gap C42: poster frames are the real surface), viewer dual-purposes as
+  SOURCE PREVIEW on pool selection (spec 18 §4.3 v1.1 + C39 trigger
+  widening) with caption overlay chips under the playhead.
+- **Deliver (3):** the whole mainbody is the export surface — queue left /
+  summary + In→Out range center / settings right; preset tiles breathe;
+  overflow fixed. Timeline stays live as the range selection.
+- **Timeline clips (3) + regions (1):** covered above.
+
+**Reference integrations (audio_mixer, audio_editor_ui, resolvecolorwheels,
+qualifier_ui, color_grading_node_graph, color_grading_scopes,
+timeline-marker-only, timeline-marker-transcript-withDialog,
+nle_edit_workflow, inspectorpanel.tsx):**
+- **Color page = the reference composition**: wheels + qualifier tabs in the
+  rail (2D-drag pucks, YRGB rows, matte finesse ×14), node graph in the left
+  dock (Master In → Primary → {Secondary ∥ Water} → Mixer → Tilt Shift →
+  Lens Flare → Out, selection state), 2×2 seeded scopes dock under the
+  viewer. All display-state honest (spec 08 §4).
+- **Markers v2 + captions**: range markers with end caps, notes/keyword,
+  per-clip markers, the reference's marker DIALOG → embedded MarkerInspector
+  rail panel; caption track (CC lane, parchment chips, EN+FR fixture) with
+  the captions inspector (list table + editor + computed CPS) — the dialog →
+  panel conversion per the user directive.
+- **The 7 Resolve edit functions (EditOverlay, embedded on the viewer)**:
+  insert / overwrite / append / place-on-top / ripple-overwrite / replace /
+  fit-to-fill — REAL placement through the timelinePlacement laws
+  (insertMediaAt: split-keeps-transition/severs-link, displaced-delta
+  ripple, rate-clamped fit-to-fill, honest refusals when inputs are absent).
+- Inspector audio tab: volume (dB map), pan, pitch, 4-band EQ — doc-real,
+  engine-round honesty.
+
+**Gates:** tsc clean; 944/944 tests (805 → +139); vite build green;
+Storybook 83 → 102 stories; VLM PASS ×4 rounds + DOM-verified live through
+the public edge; R19-REV adversarial review: 5 P2s fixed (placeOnTop audio
+routing, fitToFill no-op toast, split laws, add-caption guard, gap-id
+collision sweep C29-C40 → C33-C44).

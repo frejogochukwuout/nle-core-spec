@@ -9,6 +9,7 @@ import { useUi } from '../../state/useUiStore';
 import type { TrackJSON } from '../../lib/mockData';
 import { dbToSlider, sliderToDb } from '../../state/mockMixer';
 import { useMeter } from '../../lib/meterEngine';
+import { CAPTION_PARCHMENT } from './Clip';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 
 // single source of truth: the undoable store command (headers, strips, bridge)
@@ -86,8 +87,13 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
      toggleTrack helper (the M/S/L buttons use it too). "Delete track" is
      honestly disabled: the mock store has no deleteTrack command, so the
      §6.4 with-clips confirmation has no real path here (deleteScene + the
-     clip-menu multi-delete carry the confirm consumers instead). */
-  const kindLabel = track.kind === 'main' ? 'video' : track.kind === 'overlay' ? 'text' : 'audio';
+     clip-menu multi-delete carry the confirm consumers instead).
+     R19 caption tracks: add-above/below routes addTrack('caption') — the
+     store mints a "Video n"/"Vn" name/badge for non-audio/overlay kinds.
+     R19-TODO(orchestrator): addTrack needs a caption branch (name
+     "Captions n", badge "CC") — store file is off-limits this wave. */
+  const isCaption = track.kind === 'caption';
+  const kindLabel = track.kind === 'main' ? 'video' : track.kind === 'overlay' ? 'text' : track.kind === 'caption' ? 'caption' : 'audio';
   const buildMenuItems = (): MenuItem[] => [
     /* §4.9 add-track above/below: explicit insertion at THIS header's index —
        user direction wins over the spec 05 §12.1 kind-ordering law (which
@@ -116,12 +122,27 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
         : 'border-[var(--type-audio)] text-[var(--type-audio)]';
 
   const badge = (
-    <span className={`mono flex h-[20px] w-[30px] shrink-0 items-center justify-center rounded-[2px] border text-[11px] font-semibold ${badgeCls}`}>
+    <span
+      className={`mono flex h-[20px] w-[30px] shrink-0 items-center justify-center rounded-[2px] border text-[11px] font-semibold ${isCaption ? '' : badgeCls}`}
+      /* R19: caption tracks badge in the parchment chip identity (CC) —
+         inline style (Tailwind can't take the imported constant as a class) */
+      style={isCaption ? { borderColor: CAPTION_PARCHMENT, color: CAPTION_PARCHMENT } : undefined}
+    >
       {track.badge}
     </span>
   );
 
-  const meta = track.kind === 'audio' ? '48 kHz' : track.kind === 'main' ? '1920×1080' : 'text';
+  const meta = track.kind === 'audio' ? '48 kHz' : track.kind === 'main' ? '1920×1080' : isCaption ? (track.language ? track.language.toUpperCase() : 'CC') : 'text';
+
+  /* R19 clip counts (reference §2.5 “V2 · 7 clips” / task): small dim text
+     under the name for TALL headers (caption counts in “N captions”);
+     the 32px caption header is always the compact single row, so its count
+     rides the right edge instead (title attr keeps the info in compact
+     non-caption headers — no room there, documented judgment). */
+  const nClips = track.elements.length;
+  const countLabel = isCaption
+    ? `${nClips} ${nClips === 1 ? 'caption' : 'captions'}`
+    : `${nClips} ${nClips === 1 ? 'clip' : 'clips'}`;
 
   const controls = (
     <div className="flex items-center gap-1">
@@ -162,7 +183,7 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
       className={`relative flex shrink-0 flex-col justify-center gap-[3px] border-b border-hairline bg-raised px-2 ${focused ? 'shadow-[inset_2px_0_0_0_var(--accent-selection)]' : ''}`}
       style={{ height, minHeight: height, overflow: 'hidden' }}
       data-testid={`shell-track-header-${track.id}`}
-      title={`${track.name} · ${meta}`}
+      title={`${track.name} · ${meta}${isCaption ? '' : ` · ${countLabel}`}`}
       aria-current={focused ? 'true' : undefined} /* the focused track — ↑/↓ move this focus */
       tabIndex={-1} /* focusable host for the §4.9 Shift+F10 keyboard route */
       onPointerDown={() => {
@@ -193,6 +214,15 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
             {track.solo && <Headphones size={10} className="shrink-0 text-[var(--solo)]" aria-label="Solo active" />}
             <span className="mono shrink-0 text-[10px] text-tfaint">{meta}</span>
           </div>
+          {/* R19 clip count — dim 10px line under the name (reference
+              “V2 · 7 clips”, task spec “N clips / N captions, dim 10px”);
+              hidden in audio focus (the minifader row takes the room) and for
+              caption tracks (right-edge count below). */}
+          {!isCaption && !audioFocus && (
+            <div className="mono flex w-full items-center gap-1 pl-[36px] text-[10px] text-tfaint" data-testid={`track-clip-count-${track.badge}`}>
+              {countLabel}
+            </div>
+          )}
           <div className="flex w-full items-center gap-1">
             {controls}
             <div className="grow" />
@@ -227,6 +257,14 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
           {controls}
           {track.solo && <Headphones size={10} className="shrink-0 text-[var(--solo)]" aria-label="Solo active" />}
         </div>
+      )}
+      {/* R19: caption header count — the 32px Sub-lane header is always the
+          compact row; the “N captions” count rides the right edge (dim 10px,
+          view-only, clear of the badge + M/S/L/V controls). */}
+      {isCaption && (
+        <span className="mono pointer-events-none absolute bottom-[2px] right-2 text-[10px] text-tfaint" data-testid={`track-clip-count-${track.badge}`}>
+          {countLabel}
+        </span>
       )}
       {/* A4: view-only audio micro-meter on the tall header's right edge —
           see HeaderMicroMeter for the compact-safety note */}

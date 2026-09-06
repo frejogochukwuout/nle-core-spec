@@ -6,6 +6,7 @@
 import { useEffect } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MediaPool } from '../components/shell/MediaPool';
+import { LeftDock } from '../components/shell/LeftDock';
 import { Viewer } from '../components/shell/Viewer';
 import { Inspector } from '../components/shell/Inspector';
 import { StatusStrip } from '../components/shell/StatusStrip';
@@ -47,6 +48,71 @@ export const MediaPoolList: StoryObj = {
   name: 'Media pool — list',
   parameters: { layout: 'padded' },
   render: () => <PoolStory patch={{ mediaView: 'list' }} />,
+};
+
+/** R19 th_mto2s2nc — hover-dwell scrub preview: the play fn dwells on the
+ *  first card ≥ 400 ms so the ambient preview chrome (PREVIEW chip + the
+ *  ken-burns pan + progress hairline) is reviewable without a mouse. The
+ *  chips/fps-icon badges (th_mto2qzoh/th_mto2sako) and the Download import
+ *  glyph (th_mto2t03u) are visible in every pool story. */
+export const MediaPoolHoverPreview: StoryObj = {
+  name: 'Media pool — hover scrub preview (gap C42)',
+  parameters: { layout: 'padded' },
+  play: async ({ canvasElement }) => {
+    const card = canvasElement?.querySelector<HTMLElement>('[data-testid="shell-mediapool-card"]');
+    if (!card) return;
+    card.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+    await new Promise((r) => setTimeout(r, 600)); // ≥ 400 ms dwell arms the preview
+  },
+  render: () => <PoolStory patch={{}} />,
+};
+
+/* ---- left dock (R19 th_mtoyt5fv: one tabbed surface in the bin slot) ------ */
+
+function LeftDockStory({ patch, width = 280 }: { patch: UiPatch; width?: number }) {
+  return (
+    <>
+      <StoreBoot patch={patch} />
+      <PanelBox width={width} height={700}>
+        <LeftDock />
+      </PanelBox>
+    </>
+  );
+}
+
+/** Both panels on: the tab bar (Media Pool | Effects) in the SAME slot the
+ *  bin occupied — no second strip beside it. */
+export const LeftDockTabbed: StoryObj = {
+  name: 'Left dock — Pool|Effects tabs',
+  parameters: { layout: 'padded' },
+  render: () => <LeftDockStory patch={{ panels: { mediaPool: true, effects: true, inspector: true } }} />,
+};
+
+/** Effects tab active: the effects library swapped INTO the bin slot (the
+ *  play step clicks the tab like a reviewer would). */
+export const LeftDockEffectsTab: StoryObj = {
+  name: 'Left dock — effects tab active',
+  parameters: { layout: 'padded' },
+  play: async ({ canvasElement }) => {
+    canvasElement
+      ?.querySelector<HTMLButtonElement>('[data-testid="shell-leftdock-tab-effects"]')
+      ?.click();
+  },
+  render: () => <LeftDockStory patch={{ panels: { mediaPool: true, effects: true, inspector: true } }} />,
+};
+
+/** Effects-only (pool closed): the panel renders alone, no tab bar. */
+export const LeftDockEffectsOnly: StoryObj = {
+  name: 'Left dock — effects only (no tab bar)',
+  parameters: { layout: 'padded' },
+  render: () => <LeftDockStory patch={{ panels: { mediaPool: false, effects: true, inspector: true } }} width={220} />,
+};
+
+/** Audio page: the slot is the SoundLibrary (Fairlight-style left dock). */
+export const LeftDockAudio: StoryObj = {
+  name: 'Left dock — audio page (Sound Library)',
+  parameters: { layout: 'padded' },
+  render: () => <LeftDockStory patch={{ page: 'audio' }} />,
 };
 
 /* ---- viewer ------------------------------------------------------------------ */

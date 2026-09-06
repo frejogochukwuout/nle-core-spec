@@ -8,10 +8,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { act, fireEvent, screen } from '@testing-library/react';
-import { Clip, EFFECT_DRAG_TYPE } from './Clip';
+import { Clip, EFFECT_DRAG_TYPE, CLIP_WAVEFORM_RAMP } from './Clip';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 import { snapToFrame } from '../../lib/timecode';
+import { mediaById } from '../../lib/mockData';
+import { getWaveform } from '../../lib/waveform';
 import { POOL_DRAG_TYPE } from '../shell/MediaPool';
 
 /* snap targets mirroring the real Timeline set (clip edges + playhead) */
@@ -650,5 +652,291 @@ describe('Clip effects-rail drop target (R14 wiring)', () => {
     const el1 = screen.getByTestId('clip-el-1');
     fireEvent.dragOver(el1, { dataTransfer: { types: [POOL_DRAG_TYPE], dropEffect: '' } });
     expect(el1.className).not.toContain('ring-accent');
+  });
+});
+
+/* ---------- R19: waveform v2, fade geometry, filmstrip cover, trim
+   affordance, clip markers, caption chips, source preview ---------- */
+
+describe('R19 waveform v2 (th_mto2xtgc + th_mto2y86w)', () => {
+  /* the Lanes harness mounts sc-1 only */
+  const audioClips = () => {
+    const ids: { clip: HTMLElement; id: string; mediaId: string }[] = [];
+    const sc = store().scenes.find((s) => s.id === 'sc-1')!;
+    for (const t of sc.tracks) {
+      if (t.kind !== 'audio') continue;
+      for (const e of t.elements) {
+        ids.push({ clip: screen.getByTestId(`clip-${e.id}`), id: e.id, mediaId: e.mediaId ?? e.id });
+      }
+    }
+    return ids;
+  };
+
+  it('EVERY audio clip renders ≥1 bar with a POSITIVE width — the el-6 empty-svg regression (root cause: 100/bars − 0.4 < 0 past 250 bars)', () => {
+    boot({});
+    for (const { clip, id } of audioClips()) {
+      const rects = clip.querySelectorAll('svg rect');
+      expect(rects.length).toBeGreaterThanOrEqual(1); // ≥1 bar — th_mto2y86w
+      for (const r of Array.from(rects)) {
+        // the old bug: 345 bars at default zoom → width "-0.11%" → SVG renders nothing
+        expect(parseFloat(r.getAttribute('width') ?? '0')).toBeGreaterThanOrEqual(1);
+        expect(parseFloat(r.getAttribute('height') ?? '0')).toBeGreaterThanOrEqual(1); // min bar 1px
+      }
+      expect(id).toBeTruthy();
+    }
+  });
+
+  it('symmetric envelope around the VISIBLE centerline: every bar centers on mid = (laneHeight−12)/2', () => {
+    boot({});
+    for (const { clip } of audioClips()) {
+      const svg = clip.querySelector(`[data-testid^="clip-waveform-"]`) as SVGSVGElement;
+      expect(svg).not.toBeNull();
+      const center = svg.querySelector('line'); // the centerline (visible, first child)
+      expect(center).not.toBeNull();
+      const mid = parseFloat(center!.getAttribute('y1') ?? 'NaN');
+      const h = parseFloat(svg.getAttribute('height') ?? 'NaN');
+      expect(mid).toBeCloseTo(h / 2, 5);
+      for (const r of Array.from(svg.querySelectorAll('rect'))) {
+        const y = parseFloat(r.getAttribute('y') ?? 'NaN');
+        const height = parseFloat(r.getAttribute('height') ?? 'NaN');
+        expect(y + height / 2).toBeCloseTo(mid, 2); // bar center ≡ centerline — symmetric
+      }
+    }
+  });
+
+  it('deterministic per MEDIA (FNV-1a seed = mediaId): the first bar matches lib/waveform for m-06/m-07', () => {
+    boot({});
+    const el6 = screen.getByTestId('clip-el-6');
+    const svg6 = el6.querySelector('[data-testid="clip-waveform-el-6"]') as SVGSVGElement;
+    const h = parseFloat(svg6.getAttribute('height') ?? 'NaN'); // 60 − 12 = 48
+    /* per-ELEMENT barCount (the Clip derives it from the clip's own pixel
+       width — el-6 30 s → 345 bars, el-7 8.5 s → 97); the ramp shape is a
+       function of barCount, so the expectation must match each clip's own
+       count (the ramp exposed the old shared-345 shortcut for el-7). */
+    const cases: { mediaId: string; clip: string; width: number }[] = [
+      { mediaId: 'm-06', clip: 'clip-el-6', width: 30 * 46 },
+      { mediaId: 'm-07', clip: 'clip-el-7', width: 8.5 * 46 },
+    ];
+    for (const { mediaId, clip, width } of cases) {
+      const barCount = Math.max(1, Math.min(600, Math.floor(width / 4)));
+      const bars = getWaveform(mediaId, barCount, { ramp: CLIP_WAVEFORM_RAMP });
+      const b = bars[0]!;
+      const half = Math.max(0.5, ((b.max + b.min) / 2) * (h / 2));
+      const expected = { y: h / 2 - half, height: Math.max(1, half * 2) };
+      const svg = screen.getByTestId(clip).querySelector(`[data-testid^="clip-waveform-"]`) as SVGSVGElement;
+      const first = svg.querySelector('rect')!;
+      expect(parseFloat(first.getAttribute('y') ?? 'NaN')).toBeCloseTo(expected.y, 3);
+      expect(parseFloat(first.getAttribute('height') ?? 'NaN')).toBeCloseTo(expected.height, 3);
+    }
+    // heights vary across the envelope (not one flat block)
+    const ys = Array.from(svg6.querySelectorAll('rect')).map((r) => r.getAttribute('height'));
+    expect(new Set(ys).size).toBeGreaterThan(10);
+  });
+
+  it('attack/decay ramps (CLIP_WAVEFORM_RAMP): the head + tail bars are quieter than the body', () => {
+    boot({});
+    const svg = screen.getByTestId('clip-el-6').querySelector('[data-testid="clip-waveform-el-6"]') as SVGSVGElement;
+    const rects = Array.from(svg.querySelectorAll('rect'));
+    const hs = rects.map((r) => parseFloat(r.getAttribute('height') ?? '0'));
+    const n = hs.length;
+    const rampBars = Math.floor(n * CLIP_WAVEFORM_RAMP);
+    const bodyMean = hs.slice(rampBars, n - rampBars).reduce((a, b) => a + b, 0) / (n - 2 * rampBars);
+    const headMean = hs.slice(0, rampBars).reduce((a, b) => a + b, 0) / rampBars;
+    const tailMean = hs.slice(n - rampBars).reduce((a, b) => a + b, 0) / rampBars;
+    expect(headMean).toBeLessThan(bodyMean * 0.9); // quiet attack
+    expect(tailMean).toBeLessThan(bodyMean * 0.9); // quiet decay
+  });
+});
+
+describe('R19 audio fade geometry (th_mto2ph3i — curves were REVERSED)', () => {
+  it('fade-IN rises bottom-left → top-right; fade-OUT falls top-left → bottom-right (el-6: 1s in / 2s out at 46pps)', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-6');
+    const fadeSvgs = clip.querySelectorAll('svg.pointer-events-none');
+    expect(fadeSvgs.length).toBe(2);
+    const bodyH = 60 - 4; // clip box inset 2px top/bottom of the 60px lane
+    const fadeIn = fadeSvgs[0]!; // left-anchored
+    const fadeOut = fadeSvgs[1]!; // right-anchored
+    // fade-in line: (1, bodyH) → (45, 0) — zero at clip start, full at fade end
+    const inLine = fadeIn.querySelector('line')!;
+    expect(inLine.getAttribute('x1')).toBe('1');
+    expect(inLine.getAttribute('y1')).toBe(`${bodyH}`);
+    expect(inLine.getAttribute('x2')).toBe('45');
+    expect(inLine.getAttribute('y2')).toBe('0');
+    // fade-out line: (1, 0) → (90, bodyH) — FULL at the fade start (the overlay's LEFT
+    // edge — it is right-anchored, so local left = clip end − fade), ZERO at the clip end
+    const outLine = fadeOut.querySelector('line')!;
+    expect(outLine.getAttribute('x1')).toBe('1');
+    expect(outLine.getAttribute('y1')).toBe('0');
+    expect(outLine.getAttribute('x2')).toBe('90');
+    expect(outLine.getAttribute('y2')).toBe(`${bodyH}`);
+    // soft inaudible-region fills (black 25%): the wedge ABOVE each envelope line —
+    // thickest on the QUIET side (clip start for the in, clip end for the out)
+    const inFill = fadeIn.querySelector('polygon')!;
+    expect(inFill.getAttribute('points')).toBe(`1,0 1,${bodyH} 45,0`);
+    expect(inFill.getAttribute('fill')).toBe('rgba(0,0,0,0.25)');
+    const outFill = fadeOut.querySelector('polygon')!;
+    expect(outFill.getAttribute('points')).toBe(`1,0 90,0 90,${bodyH}`);
+    expect(outFill.getAttribute('fill')).toBe('rgba(0,0,0,0.25)');
+    // handle dots ride the line's full-amplitude (top) end of each ramp
+    const inDot = fadeIn.querySelector('circle')!;
+    expect(parseFloat(inDot.getAttribute('cx') ?? '0')).toBe(44); // fade END — full amplitude reached
+    const outDot = fadeOut.querySelector('circle')!;
+    expect(parseFloat(outDot.getAttribute('cx') ?? '0')).toBe(3); // fade START — still full amplitude
+    expect(parseFloat(outDot.getAttribute('cy') ?? '0')).toBe(3);
+  });
+});
+
+describe('R19 filmstrip cover (th_mto334ar)', () => {
+  it('filmstrip cells preserve the media aspect ratio (cover per cell — no 80px×100% stretch)', () => {
+    boot({});
+    const thumb = screen.getByTestId('clip-el-1').querySelector('div[style*="background-image"]') as HTMLElement;
+    expect(thumb).not.toBeNull();
+    const [w, h] = thumb.style.backgroundSize.split(' ');
+    expect(h).toBe('100%'); // strip grammar: full strip height, repeat-x
+    const m = mediaById('m-01')!;
+    const stripH = Math.min(60, 80 - 18); // main lane 80px
+    expect(parseFloat(w)).toBe(Math.round(stripH * ((m.width ?? 1920) / (m.height ?? 1080)))); // cell = stripH × aspect
+    expect(thumb.style.backgroundRepeat).toBe('repeat-x');
+    expect(thumb.style.backgroundSize).not.toBe('80px 100%'); // the old 4:3 stretch is gone
+  });
+});
+
+describe('R19 selected-clip trim affordance (th_mto32fa6)', () => {
+  it('selected + hovered renders the shaded accent edge zones; unselected or unhovered does not', () => {
+    boot({ selection: [] }); // el-2 unselected at boot-patch
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.mouseEnter(clip); // unselected hover → cursor-only, no affordance
+    expect(screen.queryByTestId('clip-trim-afford-el-2')).not.toBeInTheDocument();
+    fireEvent.click(clip); // select (A/V pair joins — affordance is per-clip)
+    expect(screen.getByTestId('clip-trim-afford-el-2')).toBeInTheDocument();
+    expect(screen.queryByTestId('clip-trim-afford-el-7')).not.toBeInTheDocument(); // the linked twin is not hovered
+    fireEvent.mouseLeave(clip);
+    expect(screen.queryByTestId('clip-trim-afford-el-2')).not.toBeInTheDocument(); // hover-gated
+    // selected-but-not-hovered → absent (re-hover to confirm the pair rule)
+    fireEvent.mouseEnter(clip);
+    expect(screen.getByTestId('clip-trim-afford-el-2')).toBeInTheDocument();
+  });
+
+  it('the affordance renders two 6px inset gradients from the selection accent at 55% → transparent', () => {
+    boot({}); // boot selection ['el-2'] — pre-selected
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.mouseEnter(clip);
+    const afford = screen.getByTestId('clip-trim-afford-el-2');
+    expect(afford).toHaveAttribute('aria-hidden', 'true'); // never a hit target
+    expect(afford.className).toContain('pointer-events-none');
+    const zones = afford.querySelectorAll('div');
+    expect(zones.length).toBe(2);
+    for (const z of Array.from(zones)) {
+      expect((z as HTMLElement).style.width).toBe('6px');
+      expect((z as HTMLElement).style.background).toContain('color-mix(in srgb, var(--accent-selection) 55%, transparent)');
+    }
+  });
+});
+
+describe('R19 clip markers (gap C33 — pins + clip-menu ops)', () => {
+  it('renders el.markers as shield pins inside the clip box (bottom-2px, left = offset·pps, colored, data-tip)', () => {
+    boot({});
+    const cm1 = screen.getByTestId('clip-marker-cm-1');
+    expect(cm1).toHaveAttribute('data-tip', 'Look up · 00:00:10:12'); // el-2 start 8.5 + offset 2
+    expect(cm1.style.left).toBe(`${2 * 46 - 4}px`); // centered on the offset
+    expect(cm1.querySelector('svg')!.getAttribute('width')).toBe('8');
+    expect(cm1.querySelector('path')!.getAttribute('fill')).toBe('var(--mk-green)');
+    expect(screen.getByTestId('clip-marker-cm-2').querySelector('path')!.getAttribute('fill')).toBe('var(--mk-purple)');
+    expect(screen.getByTestId('clip-marker-cm-3')).toBeInTheDocument(); // el-3's marker
+    expect(screen.queryByTestId('clip-marker-cm-4')).toBeNull(); // no phantom pins
+  });
+
+  it('clicking a clip marker selects the CLIP (bubble — no separate selection domain)', () => {
+    boot({ selection: [] });
+    fireEvent.click(screen.getByTestId('clip-marker-cm-1'));
+    expect(store().selection).toEqual(['el-2', 'el-7']); // the clip (A/V pair joins)
+    expect(store().selectedMarkerId).toBeNull();
+  });
+
+  it('clip menu: "Add clip marker here" adds at the playhead (inside the clip), remove rows delete', () => {
+    boot({ selection: ['el-2'] });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.keyDown(clip, { key: 'F10', shiftKey: true });
+    // playhead 16 is inside el-2 [8.5, 17) → offset 7.5
+    fireEvent.click(screen.getByTestId('shell-menu-clip-add-clip-marker'));
+    const markers = el('el-2').markers!;
+    expect(markers).toHaveLength(3);
+    expect(markers.at(-1)!.offset).toBe(7.5);
+    expect(store().past).toHaveLength(1); // undoable
+    // remove row per marker
+    fireEvent.keyDown(clip, { key: 'F10', shiftKey: true });
+    fireEvent.click(screen.getByTestId('shell-menu-clip-remove-clip-marker-cm-1'));
+    expect(el('el-2').markers!.map((m) => m.id)).not.toContain('cm-1');
+    expect(el('el-2').markers).toHaveLength(2);
+    expect(store().past).toHaveLength(2);
+  });
+
+  it('clip menu add with the playhead OUTSIDE the clip falls back to the clip mid', () => {
+    boot({ selection: ['el-3'], playhead: 0 }); // el-3 [17, 24) — playhead 0 outside
+    fireEvent.keyDown(screen.getByTestId('clip-el-3'), { key: 'F10', shiftKey: true });
+    fireEvent.click(screen.getByTestId('shell-menu-clip-add-clip-marker'));
+    const markers = el('el-3').markers!;
+    expect(markers).toHaveLength(2);
+    expect(markers.at(-1)!.offset).toBe(3.5); // mid of the 7 s clip
+  });
+});
+
+describe('R19 clip menu "Open in viewer" (th_mto3504c part — spec 18 §4.3 v1.1)', () => {
+  it('an online media clip enters source-preview mode', () => {
+    boot({});
+    fireEvent.keyDown(screen.getByTestId('clip-el-2'), { key: 'F10', shiftKey: true });
+    fireEvent.click(screen.getByTestId('shell-menu-clip-open-in-viewer'));
+    expect(store().viewerMode).toBe('source');
+    expect(store().sourceMediaId).toBe('m-02');
+    expect(store().toasts.at(-1)).toBeUndefined(); // no toast — real work
+  });
+
+  it('a text clip (no mediaId) answers with the honest toast, mode stays program', () => {
+    boot({});
+    fireEvent.keyDown(screen.getByTestId('clip-el-5'), { key: 'F10', shiftKey: true });
+    fireEvent.click(screen.getByTestId('shell-menu-clip-open-in-viewer'));
+    expect(store().viewerMode).toBe('program');
+    expect(store().toasts.at(-1)!.title).toBe('Open in viewer');
+    expect(store().toasts.at(-1)!.detail).toContain('text clips have no source media');
+  });
+
+  it('an OFFLINE asset answers with the honest toast', () => {
+    useUi.setState({
+      scenes: store().scenes.map((s) =>
+        s.id === 'sc-1'
+          ? { ...s, tracks: s.tracks.map((t) =>
+              t.id === 'tr-main' ? { ...t, elements: t.elements.map((e) =>
+                e.id === 'el-4' ? { ...e, mediaId: 'm-04' } : e) } : t) }
+          : s,
+      ),
+    });
+    boot({ selection: ['el-4'] });
+    fireEvent.keyDown(screen.getByTestId('clip-el-4'), { key: 'F10', shiftKey: true });
+    fireEvent.click(screen.getByTestId('shell-menu-clip-open-in-viewer'));
+    expect(store().viewerMode).toBe('program');
+    expect(store().toasts.at(-1)!.detail).toContain('offline');
+  });
+});
+
+describe('R19 caption chips (gap C34 — the tr-caption lane)', () => {
+  it('caption elements render as parchment chips with the caption body text (not generic text clips)', () => {
+    boot({});
+    const chip = screen.getByTestId('caption-chip-cap-1');
+    expect(chip).toHaveTextContent('We always visit this beach');
+    expect(chip.style.background).toBe('rgb(193, 181, 156)'); // #c1b59c (CAPTION_PARCHMENT — jsdom normalizes hex) 
+    expect(chip.className).toContain('rounded-[2px]');
+    expect(chip.className).toContain('h-[24px]'); // 24px chip in the 32px lane
+    expect(screen.getByTestId('caption-chip-cap-2')).toHaveTextContent('Nous venons tout le temps à la plage.');
+    // the chip label falls back to name when text is missing
+    expect(screen.queryByText('Sub 1')).toBeNull();
+  });
+
+  it('clicking a chip selects the caption element (→ CaptionInspector routing)', () => {
+    boot({ selection: [] });
+    fireEvent.click(screen.getByTestId('clip-cap-3'));
+    expect(store().selection).toEqual(['cap-3']);
+    // selected chip carries the standard accent ring (clip-box selection)
+    expect(screen.getByTestId('clip-cap-3').style.outline).toContain('var(--accent-selection)');
   });
 });

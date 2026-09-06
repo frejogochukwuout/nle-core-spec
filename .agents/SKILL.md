@@ -1146,3 +1146,40 @@ port), not what any env currently runs.
 65. **A vendored kit developed against repo-root projects breaks in quiet ways inside subdirectories — probe the GIT CWD assumptions.** storybook-annotakit v0.5's orphan-branch sync failed silently here: `refHasOurReadme` ran `git ls-tree <tree> -- README` through a helper that shells `git -C <projectRoot>`; pathspecs are CWD-relative, the project (`ui-mock/shell-mini`) is a SUBDIRECTORY of the repo, so the pathspec matched nothing → every remote branch read as "foreign" → sync never parented on it → every push after the first was rejected non-fast-forward, forever, with lastError: null. The kit author's dogfood project IS a repo root, so the bug was invisible upstream. Diagnosis recipe that cracked it: reproduce the kit's exact git invocation BY HAND from the project dir (my first reproduction from the repo ROOT passed — the wrong cwd made the check look healthy). Fix: cwd-independent forms — `git rev-parse <ref>:README` (colon-path) instead of pathspec-dependent `ls-tree`. Rebuild discipline from R17 gotcha 4 held: comments are STRIPPED by esbuild/tsup, so grep the dist for the CODE change (`rev-parse`/`ls-tree` call shapes), not the comment marker.
 
 66. **When two parallel streams share a git-backed store, watch the branch log for the OTHER stream's signature before diagnosing your own sync.** The remote `annotakit` orphan branch carries commit messages like `db=annotakit@shell-mini` and `db=annotakit@shell-variants` — the sibling env pushes to the SAME branch, so "the remote moved under me" (non-FF) can be healthy cross-stream logical-merge traffic, not a bug. The kit's design (union-by-id merge, tombstone propagation, pull-every-60s) is built for exactly this; verify convergence by watching a real mutation cycle end-to-end (create → UI badge → delete → tombstone → push → issue closed) instead of trusting a single health-state string — the `autoSync` label lags by design (debounced 6s + async cycle), and POST /sync short-circuits when the store isn't dirty.
+
+## R19 meta-learnings (feedback-wave + reference-integration round)
+
+69. **Mint spec-gap ids ONLY after reading the candidates ledger.** R19's
+    design doc blind-minted C29-C40 for its 12 new gaps; the ledger already
+    held C10-C32 from R15. The review wave caught 66 in-code citations
+    pointing at the wrong rows and the whole tree got swept to C33-C44. The
+    fix was cheap ONLY because a single review agent traced every citation;
+    in a bigger tree this is a silent spec-debt generator. Law: gap ids are
+    ledger-sequential — `rg '^### |^| C[0-9]' .agents/SPEC-REVISION-CANDIDATES.md`
+    BEFORE writing "gap C##" anywhere, and the design doc must carry the
+    id MAP, not just the ids.
+
+70. **A browser-automation session is a MEASUREMENT instrument — calibrate
+    it before believing a FAIL.** The R19 VLM round "failed" the mixer
+    (strips not filling vertically) and the timeline (no markers). Ground
+    truth: Storybook's canvas was 478px tall because the addons panel was
+    open (viewport ≠ story height), and the first DOM probe evaluated in the
+    MANAGER frame, not the story iframe. Three calibration laws: (a) append
+    `&nav=false&panel=false` to story URLs before measuring layout; (b) story
+    DOM probes go through
+    `document.getElementById('storybook-preview-iframe').contentDocument`
+    (agent-browser's `frame` command does not persist across CLI calls);
+    (c) when VLM and the DOM disagree, the DOM wins — re-screenshot after
+    calibrating before filing the bug.
+
+71. **Parallel implementation agents need FROZEN cross-file contracts, and
+    the stub is the cheapest freeze.** Five agents shipped 60 files with
+    zero cross-agent conflicts because every seam another agent would mount
+    (MarkerInspector/CaptionInspector/EditOverlay) existed as a compiled
+    stub BEFORE dispatch, and the AppShell routing was withheld to the
+    orchestrator (the only file everyone needed). The two in-flight agent
+    runs that the deadline killed mid-wave also recovered cleanly — the
+    late-arriving agent audited the partial work against the contract
+    instead of rewriting. Law: contracts-first (stubs compile), integration
+    ownership stays with the orchestrator, and re-issued tasks to a partially
+    completed tree should AUDIT-then-fix, not rebuild.

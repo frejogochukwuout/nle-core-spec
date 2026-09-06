@@ -1,92 +1,203 @@
-/* Mixer primitives — fader / pan knob / stereo strip meter.
+/* Mixer primitives — fader / pan knob / pan box / stereo strip meter.
    R15-A1: the knob is a DAW-grammar dial (270° SVG arc + dasharray + indicator
    line ABOVE center, vertical drag 200px/full-range, Shift ×0.2 fine,
-   non-passive wheel, pointer-release-only detent) restyled to OUR tokens —
-   no imported orange, no oklch sheet (design v2 borrow discipline).
+   non-passive wheel, pointer-release-only detent) restyled to OUR tokens.
    R15-A2: StripMeter is a view over the shared stereo metering engine
-   (lib/meterEngine): dB-linear display [−60,0], token palette anchored to the
-   well, LED segments, 1px peak line, mute/clip states.
-   R15-A3: fader polish — unity notch + end caps + dB scale column at TRUE
-   taper positions + master accent cap, all token-driven; grammar untouched.
-   Fader drag grammar (SCOUT-R8-C): Shift+drag = fine, double-click = reset,
-   full keyboard grammar (design doc §6). */
+   (lib/meterEngine).
+   R19-B1 (audio_mixer.html reference — r19-analysis/audio-cluster.md §2.5):
+   - NEW piecewise DISPLAY taper (dbToPos/posToDb): the MODEL stays linear
+     −60..+6 dB (mockMixer.dbToSlider, pinned by tests); the VIEW reproduces
+     the reference scale geometry — 0 dB at 15% from top, +10 dB headroom
+     above it, marks −5/−10/−15/−20/−30/−40/−50 at 28/42/55/68/80/90/98%,
+     −60 floor at 100%. Drag math routes through the map (px→pos→dB).
+     fixes th_mtoyq7jt
+   - Fader: 6px groove centered in a wide hit column, 22×36 gradient thumb
+     with grip lines, scale marks at the reference piecewise positions,
+     optional 24px HEADROOM strip carrying the dB readout (signed 1dp, no
+     unit, −∞ guard). fixes th_mtoyq7jt
+   - StripMeter: fillHeight no longer eats the strip width — the meter column
+     is FIXED (default 14px = 2×6.5px stereo bars + 1px gap, per the
+     reference). fixes th_mto617w1
+   - PanBox: the reference's 48px crosshair pan position box (4px dot at
+     left = 50 + pan/2 %) with OUR drag/keyboard grammar (mono tracks render
+     one dot — no stereo-flag field exists, gap noted in ChannelStrip).
+   Fader drag/keyboard grammar (SCOUT-R8-C + design doc §6) unchanged in the
+   dB domain: Shift+drag fine, double-click reset, full keyboard grammar. */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { dbLabel, dbToSlider, sliderToDb } from '../../state/mockMixer';
+import { dbLabel } from '../../state/mockMixer';
 import { useMeter } from '../../lib/meterEngine';
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
-/* ---------- vertical fader (dB-tapered) ----------
-   R15-A3: the track gains end caps + a 2px 0 dB unity notch (fg/30); the
-   thumb keeps the A0 --fader-thumb-1/2 gradient pair and gains the stable
-   data-testid hook; `scale` renders the dB label column at TRUE taper
-   positions (the taper is linear-in-dB, so (db+60)/66 positions are exact —
-   better than a decorative scale); `accent` swaps the thumb to the master
-   --fader-cap-accent-1/2 pair (flat cap, no glow — resolve's language).
-   Taper + drag + keyboard grammar are UNCHANGED (pinned by tests). */
-const FADER_SCALE: { db: number; label: string }[] = [
-  { db: 6, label: '+6' },
-  { db: 0, label: '0' },
-  { db: -6, label: '−6' },
-  { db: -12, label: '−12' },
-  { db: -24, label: '−24' },
-  { db: -48, label: '−48' },
-  { db: -60, label: '−∞' },
+/* ---------- piecewise display taper (R19-B1, reference §2.5) ----------
+   pos = 0..1 measured FROM THE TOP of the fader columns. Anchors are the
+   reference's exact mark positions. The map is strictly monotonic and
+   piecewise-linear, so dB→pos→dB round-trips exactly on the anchors and to
+   float precision everywhere else (pinned by unit tests). The MODEL range
+   stays −60..+6: values above +6 clamp at pos 6% (the top of +6..+10
+   headroom is display-only). */
+export const FADER_TAPER: ReadonlyArray<{ pos: number; db: number }> = [
+  { pos: 0.0, db: 10 },
+  { pos: 0.15, db: 0 },
+  { pos: 0.28, db: -5 },
+  { pos: 0.42, db: -10 },
+  { pos: 0.55, db: -15 },
+  { pos: 0.68, db: -20 },
+  { pos: 0.8, db: -30 },
+  { pos: 0.9, db: -40 },
+  { pos: 0.98, db: -50 },
+  { pos: 1.0, db: -60 },
 ];
 
-export function Fader({ db, onChange, height = 96, fillHeight = false, scale = false, accent = false, ariaLabel }: {
+/** dB → position 0..1 from the top (display map; clamps outside the taper) */
+export function dbToPos(db: number): number {
+  if (db <= -60) return 1;
+  if (db >= 10) return 0;
+  for (let i = 1; i < FADER_TAPER.length; i++) {
+    const a = FADER_TAPER[i - 1];
+    const b = FADER_TAPER[i];
+    if (db >= b.db) {
+      // dB falls in [b.db, a.db] — interpolate along the segment
+      return a.pos + ((db - a.db) / (b.db - a.db)) * (b.pos - a.pos);
+    }
+  }
+  return 1;
+}
+
+/** position 0..1 from the top → dB (display map; clamps outside the taper) */
+export function posToDb(pos: number): number {
+  const p = clamp(pos, 0, 1);
+  for (let i = 1; i < FADER_TAPER.length; i++) {
+    const a = FADER_TAPER[i - 1];
+    const b = FADER_TAPER[i];
+    if (p <= b.pos) {
+      return a.db + ((p - a.pos) / (b.pos - a.pos)) * (b.db - a.db);
+    }
+  }
+  return -60;
+}
+
+/* the model keeps the pinned linear −60..+6 range (mockMixer + tests); the
+   view clamps every onChange into it so the headroom above +6 is honest */
+const MODEL_MIN = -60;
+const MODEL_MAX = 6;
+
+/** headroom readout format (reference §2.5): signed 1dp, NO unit, −∞ floor */
+export const dbHeadroomLabel = (db: number) =>
+  db <= -59.5 ? '−∞' : `${db > 0 ? '+' : ''}${db.toFixed(1)}`;
+
+/** live peak readout format: signed 1dp, no unit, −∞ floor */
+export const peakLabel = (peakDb: number) =>
+  peakDb <= -60 ? '−∞' : `${peakDb > 0 ? '+' : ''}${peakDb.toFixed(1)}`;
+
+/* ---------- shared 24px headroom strip (fixes th_mtoyq7jt) ----------
+   One row above the fader/meter/scale columns: fader dB (signed 1dp, no
+   unit) left + live engine peak right. Strips, aux returns, master and the
+   channel editor all render it — the readout is SHARED by the columns
+   below instead of living inside the fader's own column. */
+export function HeadroomReadout({ db, peakDb, testId }: { db: number; peakDb: number; testId?: string }) {
+  return (
+    <div
+      data-testid={testId}
+      className="mono flex h-[24px] w-full shrink-0 items-baseline justify-between px-1.5 pt-0.5 text-[9px] leading-none"
+    >
+      <span className="text-tprimary">{dbHeadroomLabel(db)}</span>
+      <span className="text-[var(--meter-green)]">{peakLabel(peakDb)}</span>
+    </div>
+  );
+}
+
+/* ---------- vertical fader (dB-tapered) ----------
+   R19-B1 reference geometry: 6px groove centered in a ~46px hit column
+   (wide pointer target, same drag math — the groove spans the column's
+   full height), 22×36 gradient thumb (grip lines, overhangs the groove),
+   0 dB notch at 15% from the top, end caps, and the dB scale column
+   (14px) at the reference piecewise positions. `headroom` renders the
+   24px readout strip above the columns (default: on for standalone
+   faders; strips pass false and render the SHARED HeadroomReadout so the
+   meter column gets the same headroom). `accent` keeps the master
+   --fader-cap-accent-1/2 pair.
+   Grammar: drag routes through the piecewise map (px→pos→dB, model-clamped);
+   keyboard stays in the dB domain (arrows ±1/±0.2, Page ±6, Home/End,
+   double-click reset 0). */
+const FADER_SCALE_LABELS: { db: number; label: string }[] = [
+  { db: 0, label: '0' },
+  { db: -5, label: '−5' },
+  { db: -10, label: '−10' },
+  { db: -15, label: '−15' },
+  { db: -20, label: '−20' },
+  { db: -30, label: '−30' },
+  { db: -40, label: '−40' },
+  { db: -50, label: '−50' },
+];
+
+export function Fader({ db, onChange, height = 96, fillHeight = false, scale = false, accent = false, headroom = true, ariaLabel }: {
   db: number; onChange: (db: number) => void; height?: number;
-  /** side-dock mode: the track fills the strip's centerpiece height */
+  /** side-dock mode: the track fills the strip's fader-section height */
   fillHeight?: boolean;
-  /** dB label column at true taper positions — channel strips (not bridge) */
+  /** dB label column at the reference piecewise positions (channel strips) */
   scale?: boolean;
   /** master cap: --fader-cap-accent-1/2 gradient (flat, no glow) */
   accent?: boolean;
+  /** 24px headroom strip with the dB readout above the columns — strips
+      pass false and share one HeadroomReadout with the meter column */
+  headroom?: boolean;
   ariaLabel: string;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ startY: number; startDb: number } | null>(null);
+  // drag math routes through the display map: pos 0..1 FROM THE TOP
+  const drag = useRef<{ startY: number; startPos: number } | null>(null);
 
   const setFromEvent = useCallback((clientY: number, fine: boolean) => {
     const box = trackRef.current?.getBoundingClientRect();
     if (!box || !drag.current) return;
-    const dy = drag.current.startY - clientY;
-    const dDb = (dy / box.height) * 66 * (fine ? 0.25 : 1);
-    onChange(Math.min(6, Math.max(-60, drag.current.startDb + dDb)));
+    const dPos = ((drag.current.startY - clientY) / box.height) * (fine ? 0.25 : 1);
+    onChange(clamp(posToDb(drag.current.startPos + dPos), MODEL_MIN, MODEL_MAX));
   }, [onChange]);
 
   const capGradient = accent
     ? 'linear-gradient(180deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))'
     : 'linear-gradient(180deg, var(--fader-thumb-1), var(--fader-thumb-2))';
 
+  const pos = dbToPos(db);
+
   return (
-    <div className={`flex flex-col items-center gap-1 ${fillHeight ? 'self-stretch' : ''}`}>
-      <span className="mono text-[10px] text-tmuted">{dbLabel(db)}</span>
-      {/* track + optional scale column share one row so the labels align with
-          the track's exact height (items-stretch) — the scale sits BETWEEN the
-          meter and the fader in strip composition (labels hug the track) */}
+    <div className={`flex min-h-0 flex-col ${fillHeight ? 'self-stretch' : ''}`}>
+      {headroom && (
+        <div
+          data-testid="fader-headroom"
+          className="mono flex h-[24px] shrink-0 items-baseline pl-1 pr-1.5 text-[9px] leading-none text-tprimary"
+        >
+          {dbHeadroomLabel(db)}
+        </div>
+      )}
+      {/* scale column + hit column share one items-stretch row — the labels
+          align with the groove's exact height (equal-height law, th_mtoyq7jt) */}
       <div
-        className={`flex items-stretch justify-center ${fillHeight ? 'min-h-[80px] flex-1' : ''}`}
+        className={`flex items-stretch justify-center gap-1 ${fillHeight ? 'min-h-[80px] flex-1' : ''}`}
         style={fillHeight ? undefined : { height }}
       >
         {scale && (
           <div
             data-testid="fader-scale"
+            data-col="scale"
             aria-hidden="true"
-            className="relative mr-1 w-[15px] shrink-0 select-none text-right text-[8px] leading-none text-tprimary/40"
+            className="relative mr-0.5 w-[14px] shrink-0 self-stretch select-none text-right text-[8px] leading-none text-tfaint"
           >
-            {FADER_SCALE.map(({ db: t, label }) => (
+            {FADER_SCALE_LABELS.map(({ db: t, label }) => (
               <span
                 key={t}
                 className="absolute right-0"
-                style={{ bottom: `${dbToSlider(t) * 100}%`, transform: 'translateY(50%)' }}
+                style={{ top: `${dbToPos(t) * 100}%`, transform: 'translateY(-50%)' }}
               >
                 {label}
               </span>
             ))}
           </div>
         )}
+        {/* hit column — the whole fader column is the drag target (reference
+            §3.4: "widen the pointer hit area"); the 6px groove is centered */}
         <div
           ref={trackRef}
           role="slider"
@@ -96,14 +207,14 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, scale = f
           aria-valuemax={6}
           aria-valuenow={Math.round(db)}
           aria-valuetext={dbLabel(db)}
-          className="relative w-[14px] shrink-0 cursor-ns-resize rounded-[3px] bg-inset"
+          className="relative flex w-[46px] shrink-0 cursor-ns-resize select-none items-stretch justify-center self-stretch"
           onPointerDown={(e) => {
             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
             const box = trackRef.current!.getBoundingClientRect();
-            const v = 1 - (e.clientY - box.top) / box.height;
-            const nextDb = sliderToDb(v);
+            const p = clamp((e.clientY - box.top) / box.height, 0, 1);
+            const nextDb = clamp(posToDb(p), MODEL_MIN, MODEL_MAX);
             onChange(nextDb);
-            drag.current = { startY: e.clientY, startDb: nextDb };
+            drag.current = { startY: e.clientY, startPos: p };
           }}
           onPointerMove={(e) => {
             if (e.buttons !== 1 || !drag.current) return;
@@ -120,28 +231,36 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, scale = f
             else if (e.key === 'End') { e.preventDefault(); onChange(6); }
           }}
         >
-          {/* end caps — the slot's visible travel stops */}
-          <span data-testid="fader-endcap-top" className="absolute inset-x-0 top-0 h-[2px] rounded-t-[1px] bg-strong" aria-hidden="true" />
-          <span data-testid="fader-endcap-bottom" className="absolute inset-x-0 bottom-0 h-[2px] rounded-b-[1px] bg-strong" aria-hidden="true" />
-          {/* dB scale ticks */}
-          {[6, 0, -12, -24, -48, -60].map((t) => (
-            <span key={t} className="absolute left-0 h-px w-[3px] bg-tfaint" style={{ bottom: `${dbToSlider(t) * 100}%` }} aria-hidden="true" />
-          ))}
-          {/* 0 dB unity notch — 2px full-width, subtle fg/30 (A3) */}
-          <span
-            data-testid="fader-unity-notch"
-            className="absolute inset-x-0 h-[2px] bg-tprimary/30"
-            style={{ bottom: `calc(${dbToSlider(0) * 100}% - 1px)` }}
-            aria-hidden="true"
-          />
-          {/* thumb — A0 token pair (or the master accent pair), flat cap; the
-              data-testid is the stable hook the tests pin (R15-A3) */}
-          <span
-            data-testid="fader-thumb"
-            className="absolute left-1/2 h-[10px] w-[12px] -translate-x-1/2 rounded-[2px] border border-strong shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
-            style={{ bottom: `calc(${dbToSlider(db) * 100}% - 5px)`, background: capGradient }}
-            aria-hidden="true"
-          />
+          {/* groove — 6px, full column height, inset shadow (reference §2.5) */}
+          <div
+            data-testid="fader-groove"
+            data-col="groove"
+            className="relative w-[6px] shrink-0 self-stretch rounded-[3px] border border-strong bg-inset shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)]"
+          >
+            {/* end caps — the slot's visible travel stops */}
+            <span data-testid="fader-endcap-top" className="absolute inset-x-0 top-0 h-[2px] rounded-t-[1px] bg-strong" aria-hidden="true" />
+            <span data-testid="fader-endcap-bottom" className="absolute inset-x-0 bottom-0 h-[2px] rounded-b-[1px] bg-strong" aria-hidden="true" />
+            {/* 0 dB unity notch — reference: 1px #888 at 15% from the top,
+                extending 2px past both sides of the groove */}
+            <span
+              data-testid="fader-unity-notch"
+              className="absolute left-1/2 h-[1px] w-[10px] -translate-x-1/2 bg-tprimary/40"
+              style={{ top: '15%' }}
+              aria-hidden="true"
+            />
+            {/* thumb — 22×36 gradient (reference #d6d6d6→#999 ≈ our
+                --fader-thumb-1/2 pair), grip lines, centered on the taper
+                position (overhangs the groove by 8px each side) */}
+            <span
+              data-testid="fader-thumb"
+              className="absolute left-1/2 z-[2] h-[36px] w-[22px] -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-black shadow-[0_4px_6px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.6)]"
+              style={{ top: `${pos * 100}%`, background: capGradient }}
+              aria-hidden="true"
+            >
+              <span data-testid="fader-grip" className="absolute inset-x-[2px] top-1/2 h-[2px] -translate-y-1/2 bg-black/80" aria-hidden="true" />
+              <span className="absolute inset-x-[2px] top-[calc(50%-3px)] h-px bg-white/70" aria-hidden="true" />
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -339,18 +458,93 @@ export function PanKnob({ pan, onChange, size = 22, ariaLabel }: {
   );
 }
 
+/* ---------- pan crosshair box (R19-B1, reference §2.4 row 6) ----------
+   The Fairlight pan position box: 48px square, 1px crosshair at 50%, one
+   4px blue dot at top 25% / left = 50 + pan/2 % (mono — our model has no
+   stereo-flag field, so the reference's green stereo-extent dots are not
+   rendered; gap noted in ChannelStrip). Keeps OUR control grammar in the
+   box: click/drag = jump + relative horizontal drag (48px = ±100), keyboard
+   ±5 / ⇧±1, double-click center — same semantics as the PanKnob it
+   replaces on strips (the knob stays in the ChannelEditor). */
+export function PanBox({ pan, onChange, ariaLabel }: {
+  pan: number; onChange: (pan: number) => void; ariaLabel: string;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ startX: number; startPan: number } | null>(null);
+  const leftPct = 50 + pan / 2;
+
+  const setFromEvent = (clientX: number) => {
+    const box = boxRef.current?.getBoundingClientRect();
+    if (!box || !drag.current) return;
+    const dPan = ((clientX - drag.current.startX) / box.width) * 200;
+    onChange(clamp(drag.current.startPan + dPan, -100, 100));
+  };
+
+  return (
+    <div
+      ref={boxRef}
+      data-testid="pan-box"
+      role="slider"
+      tabIndex={0}
+      aria-label={ariaLabel}
+      aria-valuemin={-100}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(pan)}
+      aria-valuetext={panLabel(pan)}
+      title={`${ariaLabel}: ${panLabel(pan)}`}
+      className="relative h-[48px] w-[48px] cursor-ew-resize touch-none select-none rounded-[2px] border border-strong bg-inset"
+      onPointerDown={(e) => {
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch { /* inactive pointer id — drag still works, capture best-effort */ }
+        const box = boxRef.current!.getBoundingClientRect();
+        const p = clamp((e.clientX - box.left) / box.width, 0, 1);
+        const nextPan = clamp(p * 200 - 100, -100, 100);
+        onChange(nextPan);
+        drag.current = { startX: e.clientX, startPan: nextPan };
+      }}
+      onPointerMove={(e) => {
+        if (e.buttons !== 1 || !drag.current) return;
+        setFromEvent(e.clientX);
+      }}
+      onDoubleClick={() => onChange(0)}
+      onKeyDown={(e) => {
+        const step = e.shiftKey ? 1 : 5;
+        if (e.key === 'ArrowRight') { e.preventDefault(); onChange(clamp(pan + step, -100, 100)); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); onChange(clamp(pan - step, -100, 100)); }
+      }}
+    >
+      {/* crosshair grid — 1px lines at 50% (reference #2a2a2a → --border-soft) */}
+      <span className="pointer-events-none absolute top-1/2 h-px w-full bg-soft" aria-hidden="true" />
+      <span className="pointer-events-none absolute left-1/2 h-full w-px bg-soft" aria-hidden="true" />
+      {/* pan position dot — 4px, blue (reference #2fa1d6 ≈ --mk-blue) */}
+      <span
+        data-testid="pan-dot"
+        className="pointer-events-none absolute top-1/4 h-[4px] w-[4px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{ left: `${leftPct}%`, background: 'var(--mk-blue)' }}
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
+
 /* ---------- stereo strip meter — a view over the shared engine (R15-A2) ----------
    Display range [−60, 0] dBFS dB-linear: fill fraction = clamp((db+60)/60);
    db ≥ 0 → full + clip state. The palette gradient is anchored to the WELL via
    clip-path so the stops agree with the dB zones (amber 70% = −18 dB,
-   red 90% = −6 dB). LED segments: 3px repeating overlay (4 coarse chunks for
-   the 14px micro-meter). Peak line: 1px white/90 at the dB-linear peak
-   position. Muted: opacity 0.2 + data-state. Title keeps the pinned contract
-   (fader dB + live peak; 4 test files pin it). aria-hidden — never a live
-   region (design doc §4). */
-export function StripMeter({ trackId, db, height = 88, width = 7, duckAmount = 0, fillHeight = false, coarse = false, label }: {
+   red 90% = −6 dB). LED segments: 3px repeating overlay. Peak line: 1px
+   white/90 at the dB-linear peak position. Muted: opacity 0.2 + data-state.
+   R19-B1: fillHeight fills HEIGHT only — the column is a FIXED width
+   (default 6.5px per bar → 14px total = 2×6.5 + 1px gap, the reference
+   §2.5 geometry; fixes th_mto617w1 — it used to be w-full and squeezed
+   the fader). Palette stays OUR 3-zone + clip semantics (gap C41: the
+   reference is a 2-color continuous gradient — ours encodes −18/−6 dB
+   zones + clip, kept deliberately). Title keeps the pinned contract
+   (fader dB + live peak). aria-hidden — never a live region (design §4). */
+export function StripMeter({ trackId, db, height = 88, width = 6.5, duckAmount = 0, fillHeight = false, coarse = false, label }: {
   trackId: string; db: number; height?: number; width?: number; duckAmount?: number;
-  /** rail/strip mode: no inline height — fill the flex parent instead */
+  /** rail/strip mode: no inline height — fill the flex parent's height; the
+      WIDTH stays fixed (never w-full — th_mto617w1) */
   fillHeight?: boolean;
   /** micro-meter (toolbar, 14px): 4 coarse chunks, no 3px LED segments */
   coarse?: boolean;
@@ -366,8 +560,8 @@ export function StripMeter({ trackId, db, height = 88, width = 7, duckAmount = 0
 
   return (
     <div
-      className={`meter-well relative flex items-stretch gap-px overflow-hidden rounded-[2px] border border-hairline ${snap.muted ? 'opacity-20' : ''} ${fillHeight ? 'h-full min-h-0 w-full' : ''}`}
-      style={fillHeight ? undefined : { height, width: width * 2 + 1 }}
+      className={`meter-well relative flex items-stretch gap-px overflow-hidden rounded-[2px] border border-hairline ${snap.muted ? 'opacity-20' : ''} ${fillHeight ? 'h-full min-h-0' : ''}`}
+      style={{ ...(fillHeight ? {} : { height }), width: width * 2 + 1 }}
       aria-hidden="true"
       data-state={state}
       title={`${label}: ${dbLabel(db)} · peak ${peakText}`}

@@ -8,7 +8,7 @@
    return, close-then-dispatch) is tested here through its MediaPool host.
    Real timers: the skeleton is a real 900 ms timer, like the shipped code. */
 
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MediaPool } from './MediaPool';
 import { useUi } from '../../state/useUiStore';
@@ -156,6 +156,153 @@ describe('MediaPool (spec 18 §4.2)', () => {
     fireEvent.dblClick(cardByName('sunset_timelapse')); // m-05 backs el-4 at 24.0
     expect(S().mediaSelection).toEqual(['m-05']);
     expect(S().playhead).toBe(24 + 1 / 24); // +1 frame, ON the 24fps grid (R14: was 24.1 — 2.4 frames off)
+  });
+
+  /* ---- R19: type icons, import glyph, hover preview, source-preview ---- */
+
+  it('type badges are TYPE ICONS (th_mto2qzoh list + th_mto2sako card): Film/AudioLines/Image in the --type-* tokens with role=img labels', async () => {
+    await renderPool();
+    // every card carries exactly one labeled type-icon badge (5V + 2A + 1I)
+    const cards = screen.getAllByTestId('shell-mediapool-card');
+    expect(cards.filter((c) => c.querySelector('[role="img"][aria-label="Video"]'))).toHaveLength(5);
+    expect(cards.filter((c) => c.querySelector('[role="img"][aria-label="Audio"]'))).toHaveLength(2);
+    expect(cards.filter((c) => c.querySelector('[role="img"][aria-label="Image"]'))).toHaveLength(1);
+    // the glyphs + tokens: Film=video, AudioLines=audio, Image=still
+    const video = cardByName('A012').querySelector('[role="img"][aria-label="Video"]')!;
+    expect(video.querySelector('svg')!.getAttribute('class')).toContain('lucide-film');
+    expect(video.getAttribute('class')).toContain('text-[var(--type-video)]');
+    const audio = cardByName('ocean_ambience').querySelector('[role="img"][aria-label="Audio"]')!;
+    expect(audio.querySelector('svg')!.getAttribute('class')).toContain('lucide-audio-lines');
+    expect(audio.getAttribute('class')).toContain('text-[var(--type-audio)]');
+    const image = cardByName('title_card').querySelector('[role="img"][aria-label="Image"]')!;
+    expect(image.querySelector('svg')!.getAttribute('class')).toContain('lucide-image');
+    expect(image.getAttribute('class')).toContain('text-[var(--type-overlay)]');
+  });
+
+  it('list view swaps in the same type icons (th_mto2sako covers the rows too)', async () => {
+    await renderPool();
+    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+    const rows = screen.getAllByTestId('shell-mediapool-card');
+    expect(rows.filter((r) => r.querySelector('[role="img"][aria-label="Video"]'))).toHaveLength(5);
+    expect(rows.filter((r) => r.querySelector('[role="img"][aria-label="Audio"]'))).toHaveLength(2);
+    expect(rows.filter((r) => r.querySelector('[role="img"][aria-label="Image"]'))).toHaveLength(1);
+    expect(cardByName('ocean_ambience').querySelector('[role="img"] svg')!.getAttribute('class')).toContain('lucide-audio-lines');
+  });
+
+  it('Import affordance uses the proper IMPORT glyph (th_mto2t03u): Download, not the export-looking Upload arrow', async () => {
+    await renderPool();
+    const btn = screen.getByRole('button', { name: 'Import media' });
+    const svg = btn.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(svg!.getAttribute('class')).toContain('lucide-download');
+    expect(svg!.getAttribute('class')).not.toContain('lucide-upload');
+    // aria-label preserved — the affordance's name never changed
+    expect(btn).toHaveAttribute('aria-label', 'Import media');
+  });
+
+  it('hover-dwell preview (th_mto2s2nc): ≥400 ms dwell arms the PREVIEW chip + hairline; a quick pass never does; ambient = toast-free', () => {
+    vi.useFakeTimers();
+    try {
+      render(<MediaPool />);
+      act(() => { vi.advanceTimersByTime(950); }); // clear the OPFS boot skeleton
+      const card = cardByName('A012');
+      // quick pass: enter + leave inside the dwell window — nothing arms
+      fireEvent.mouseEnter(card);
+      act(() => { vi.advanceTimersByTime(399); });
+      fireEvent.mouseLeave(card);
+      act(() => { vi.advanceTimersByTime(50); });
+      expect(screen.queryByTestId('shell-mediapool-preview-chip')).toBeNull();
+      expect(screen.queryByTestId('shell-mediapool-preview-progress')).toBeNull();
+      // dwell: the 400 ms boundary arms the ambient preview
+      fireEvent.mouseEnter(card);
+      act(() => { vi.advanceTimersByTime(399); });
+      expect(screen.queryByTestId('shell-mediapool-preview-chip')).toBeNull(); // not yet
+      act(() => { vi.advanceTimersByTime(1); });
+      expect(screen.getByTestId('shell-mediapool-preview-chip')).toHaveTextContent('PREVIEW');
+      expect(screen.getByTestId('shell-mediapool-preview-progress')).toBeInTheDocument();
+      // gap C42 honesty: the preview is ambient state — never a toast event
+      expect(S().toasts).toHaveLength(0);
+      // leave resets immediately (no reverse theater)
+      fireEvent.mouseLeave(card);
+      expect(screen.queryByTestId('shell-mediapool-preview-chip')).toBeNull();
+      expect(screen.queryByTestId('shell-mediapool-preview-progress')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('hover preview pans the poster (ken-burns): object-position + scale transition while previewing (gap C42 note)', () => {
+    vi.useFakeTimers();
+    try {
+      render(<MediaPool />);
+      act(() => { vi.advanceTimersByTime(950); });
+      const card = cardByName('A012');
+      const img = card.querySelector('img')!;
+      expect(img.style.objectPosition).toBe('50% 50%'); // at rest
+      fireEvent.mouseEnter(card);
+      act(() => { vi.advanceTimersByTime(400); });
+      // preview: the sweep moves object-position + drifts scale over the window
+      expect(img.style.objectPosition).toBe('85% 50%');
+      expect(img.style.transform).toBe('scale(1.06)');
+      expect(img.style.transition).toContain('object-position 6s');
+      fireEvent.mouseLeave(card);
+      expect(img.style.transition).toBe('none'); // snap back
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('selection drives the viewer source-preview mode (th_mto3504c / C39): exactly 1 → enter; multi or 0 → program', async () => {
+    await renderPool();
+    expect(S().viewerMode).toBe('program'); // boot
+    fireEvent.click(cardByName('A012'));
+    expect(S().viewerMode).toBe('source');
+    expect(S().sourceMediaId).toBe('m-01');
+    // shift-range = multi → no single asset to show → program
+    fireEvent.click(cardByName('interview_marina.wav'), { shiftKey: true });
+    expect(S().viewerMode).toBe('program');
+    expect(S().sourceMediaId).toBeNull();
+    // single again → re-enter
+    fireEvent.click(cardByName('ocean_ambience'));
+    expect(S().sourceMediaId).toBe('m-06');
+    // ⌘-click the same card toggles it OFF → 0 selected → program
+    fireEvent.click(cardByName('ocean_ambience'), { metaKey: true });
+    expect(S().mediaSelection).toEqual([]);
+    expect(S().viewerMode).toBe('program');
+  });
+
+  it('keyboard Enter reveal does NOT enter source preview — reveal is playhead-only (B4 one-gesture ruling)', async () => {
+    await renderPool();
+    const region = screen.getByRole('listbox', { name: 'Media pool' });
+    fireEvent.pointerDown(region); // roving focus
+    fireEvent.keyDown(region, { key: 'Enter' }); // reveal the active option (m-02)
+    expect(S().mediaSelection).toEqual(['m-02']);
+    expect(S().playhead).toBeCloseTo(8.5 + 1 / 24, 6);
+    expect(S().viewerMode).toBe('program'); // no click preceded — pure reveal
+  });
+
+  it("double-click still reveals (playhead jump) — the reveal gesture adds no preview meaning (B4 one-gesture ruling)", async () => {
+    await renderPool();
+    fireEvent.dblClick(cardByName('sunset_timelapse'));
+    expect(S().mediaSelection).toEqual(['m-05']);
+    expect(S().playhead).toBe(24 + 1 / 24); // reveal unchanged (R14 frame grid)
+    // RTL's dblClick dispatches ONLY the dblclick event (no intermediate
+    // click events), so this pins the pure reveal semantics: reveal never
+    // enters source preview. In a real browser the FIRST click of the
+    // double-click previews the card (the C39 click law); the double-click
+    // itself adds the reveal meaning and nothing more.
+    expect(S().viewerMode).toBe('program');
+  });
+
+  it('Remove from pool filters selection and the preview follows (0 → program)', async () => {
+    await renderPool();
+    fireEvent.click(cardByName('title_card')); // m-08 unused → previewed
+    expect(S().sourceMediaId).toBe('m-08');
+    fireEvent.contextMenu(cardByName('title_card'));
+    fireEvent.click(screen.getByTestId('shell-menu-mediapool-remove'));
+    expect(screen.getAllByTestId('shell-mediapool-card')).toHaveLength(7);
+    expect(S().mediaSelection).toEqual([]);
+    expect(S().viewerMode).toBe('program'); // removed asset no longer previewed
   });
 
   /* ---- offline asset + footer ---- */

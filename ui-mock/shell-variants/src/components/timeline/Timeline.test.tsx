@@ -37,7 +37,7 @@ describe('Timeline', () => {
     // readout-style header zone carries the big TC readout
     expect(screen.getByTestId('shell-timeline-tc')).toHaveTextContent('00:00:16:00');
     const headers = screen.getByTestId('shell-track-headers');
-    for (const id of ['tr-overlay-1', 'tr-main', 'tr-audio-1', 'tr-audio-2']) {
+    for (const id of ['tr-overlay-1', 'tr-main', 'tr-audio-1', 'tr-audio-2', 'tr-caption']) {
       expect(within(headers).getByTestId(`shell-track-header-${id}`)).toBeInTheDocument();
     }
     /* R15 T9 clip virtualization: clips entirely outside [scrollLeft − 200,
@@ -56,8 +56,8 @@ describe('Timeline', () => {
     const head = document.querySelector('.cursor-col-resize') as HTMLElement;
     expect(head).not.toBeNull();
     fireEvent.pointerDown(head, { pointerId: 1, button: 0 });
-    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 460 }); // 460/46 = 10 s
-    expect(store().playhead).toBe(10);
+    fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 460 }); // 460/46 = 10 s raw → snaps to cap-4's 9.875 edge (R19 caption edges are element snap sources)
+    expect(store().playhead).toBe(9.875);
     // 790 px → 17.17 s, within the 10 px snap tolerance of the el-2/el-3 cut at 17 s
     fireEvent.pointerMove(head, { pointerId: 1, buttons: 1, clientX: 790 });
     expect(store().playhead).toBe(17);
@@ -142,10 +142,10 @@ describe('Timeline', () => {
     boot({});
     fireEvent.click(screen.getByRole('button', { name: 'Add audio track' }));
     const sc = scene1();
-    expect(sc.tracks).toHaveLength(5);
-    expect(sc.tracks[4]!.kind).toBe('audio');
-    expect(sc.tracks[4]!.badge).toBe('A3'); // 2 existing audio lanes → next badge A3
-    expect(screen.getByTestId(`shell-track-header-${sc.tracks[4]!.id}`)).toBeInTheDocument();
+    expect(sc.tracks).toHaveLength(6);
+    expect(sc.tracks[5]!.kind).toBe('audio');
+    expect(sc.tracks[5]!.badge).toBe('A3'); // 2 existing audio lanes → next badge A3
+    expect(screen.getByTestId(`shell-track-header-${sc.tracks[5]!.id}`)).toBeInTheDocument();
   });
 
   it('audio focus boosts audio lanes ×1.6 and compresses video/overlay (design doc §3.2, spec 16 §3.8)', () => {
@@ -173,6 +173,73 @@ describe('Timeline', () => {
     boot({});
     expect(screen.getByTestId('transition-el-2')).toHaveAttribute('aria-label', 'Crossfade transition, 0.75 seconds');
     expect(screen.queryByTestId('transition-el-1')).not.toBeInTheDocument(); // only el-2 carries one
+  });
+
+  /* fixes th_mto31dyp — Resolve-style transition restyle */
+  it('transition block restyle: full lane height minus 4px inset, clean 1px border, vertical 30→70% gradient (th_mto31dyp)', () => {
+    boot({});
+    const tr = screen.getByTestId('transition-el-2');
+    expect(tr.style.height).toBe('76px'); // main lane 80 − 4 inset
+    expect(tr.className).toContain('top-[2px]'); // 2px inset top/bottom
+    expect(tr.style.border).toBe('1px solid var(--transition-mark)');
+    expect(tr.style.background).toContain('to bottom'); // VERTICAL gradient
+    expect(tr.style.background).toContain('30%, transparent');
+    expect(tr.style.background).toContain('70%, transparent');
+    expect(tr.className).toContain('rounded-[2px]');
+    // slim crossfade glyph: two overlapping triangles (not the old X)
+    const paths = tr.querySelectorAll('svg path');
+    expect(paths.length).toBe(2);
+    for (const p of Array.from(paths)) expect(p.getAttribute('fill')).toBe('white');
+  });
+
+  /* fixes th_mto2zq0g — bounded scroll runway */
+  it('bounded scroll runway: contentW ≤ dur·pps + 25% viewport — scrolling STOPS just past the content end (th_mto2zq0g)', () => {
+    boot({});
+    const vw = 900; // jsdom's ResizeObserver-less viewport fallback
+    const content = document.getElementById('timeline-content')!;
+    const w = parseFloat(content.style.width);
+    const durPps = sceneDuration(scene1()) * store().pxPerSec; // 30 s × 46 = 1380
+    expect(w).toBe(durPps + 0.15 * vw); // default zoom: canonical 15% padding (under the cap)
+    // the LAW: scrollMax = scrollWidth − clientWidth = contentW − viewport ≤ 25% of the viewport
+    expect(w).toBeLessThanOrEqual(durPps + 0.26 * vw);
+    expect(w).toBeGreaterThan(durPps); // …and still renders a little past the content end
+    expect(content.style.width).toBe(`${w}px`);
+    // ruler ticks + lane backgrounds paint the FULL contentW
+    const ruler = content.querySelector('[data-testid="ruler-marker-band"]')!.parentElement as HTMLElement;
+    expect(ruler.style.width).toBe(`${w}px`);
+    // THE CAP BITES when the canonical padding exceeds 25% (long-scene /
+    // floored-min regime — simulated by a higher dynamic min): contentW is
+    // pinned to dur·pps + 25%·vw exactly, where the old formula rendered
+    // dur·pps + 32%·vw of trailing runway ("scrolling into nothing").
+    act(() => { useUi.setState({ zoomMinPps: 21 }); });
+    expect(parseFloat(content.style.width)).toBe(durPps + 0.25 * vw); // 1605 — capped
+    expect(parseFloat(content.style.width)).toBeLessThan(durPps + 0.32 * vw); // the un-capped canonical value
+  });
+
+  /* R19 caption lane (gap C34) */
+  it('the caption track renders a 32px dedicated-tint lane with parchment chips + a CC header carrying the caption count', () => {
+    boot({});
+    const lane = laneOf('cap-1');
+    expect(lane.style.height).toBe('32px');
+    expect(lane.style.background).toContain('color-mix(in srgb, #c1b59c 10%, var(--lane-overlay))');
+    // 5 chips render in the lane with body text
+    for (let i = 1; i <= 5; i++) expect(screen.getByTestId(`caption-chip-cap-${i}`)).toBeInTheDocument();
+    expect(screen.getByTestId('caption-chip-cap-1')).toHaveTextContent('We always visit this beach');
+    // header: CC badge + the clip count + lock/mute controls
+    const header = screen.getByTestId('shell-track-header-tr-caption');
+    expect(within(header).getByText('CC')).toBeInTheDocument();
+    expect(within(header).getByTestId('track-clip-count-CC')).toHaveTextContent('5 captions');
+    expect(within(header).getByTestId('shell-track-CC-btn-lock')).toBeInTheDocument();
+    expect(within(header).getByTestId('shell-track-CC-btn-mute')).toBeInTheDocument();
+  });
+
+  it('every tall track header shows its clip count (reference “V2 · 7 clips”); clicking a chip selects the caption', () => {
+    boot({ selection: [] });
+    expect(screen.getByTestId('track-clip-count-V1')).toHaveTextContent('4 clips'); // tr-main: el-1..4
+    expect(screen.getByTestId('track-clip-count-T1')).toHaveTextContent('1 clip');
+    expect(screen.getByTestId('track-clip-count-A1')).toHaveTextContent('1 clip');
+    fireEvent.click(screen.getByTestId('caption-chip-cap-3').closest('[data-clip-id]') as HTMLElement);
+    expect(store().selection).toEqual(['cap-3']);
   });
 
   it('pool drag-to-lane highlights the lane and a drop commits the mock toast (spec 18 §4.2)', () => {
@@ -212,7 +279,7 @@ describe('Timeline', () => {
     // honest-mock: paste is disabled until the clipboard round (spec 15 §4.3.70)
     expect(within(menu).getByTestId('shell-menu-timeline-empty-paste')).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(screen.getByTestId('shell-menu-timeline-empty-add-marker'));
-    expect(scene1().markers).toHaveLength(5); // 4 fixtures + the playhead marker
+    expect(scene1().markers).toHaveLength(6); // 5 fixtures + the playhead marker
   });
 
   /* ---- R15 T2 context-menu ROUTING (single scroll-surface handler;
@@ -249,11 +316,11 @@ describe('Timeline', () => {
     expect(screen.getByTestId('shell-confirm')).toBeInTheDocument();
     expect(screen.getByText('Delete 5 clips?')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('shell-confirm-cancel'));
-    expect(countEls()).toBe(7); // nothing deleted
+    expect(countEls()).toBe(12); // nothing deleted (7 + 5 captions)
     fireEvent.contextMenu(screen.getByTestId('clip-el-2'), { clientX: 10, clientY: 10 });
     fireEvent.click(screen.getByTestId('shell-menu-clip-delete'));
     fireEvent.click(screen.getByTestId('shell-confirm-confirm'));
-    expect(countEls()).toBe(2); // el-6 + el-7 remain
+    expect(countEls()).toBe(7); // el-6 + el-7 + 5 captions remain
   });
 
   it('R15 T2 escape ladder (composed): no gesture → Escape falls through to the shell listener and clears the selection', () => {
@@ -504,7 +571,7 @@ describe('R15 T3: 2D cross-track drag (drop-target plumbing + resolution)', () =
     expect(trackIds()[0]).toBe(mintedId); // the created track carries the pre-minted id
     expect(scene1().tracks[0]!.kind).toBe('overlay'); // video → overlay-section track (main stays singleton)
     expect(scene1().tracks[0]!.elements.map((e) => e.id)).toEqual(['el-1']);
-    expect(scene1().tracks).toHaveLength(5);
+    expect(scene1().tracks).toHaveLength(6);
     expect(store().past).toHaveLength(1);
   });
 
@@ -517,7 +584,7 @@ describe('R15 T3: 2D cross-track drag (drop-target plumbing + resolution)', () =
     const mintedId = ghost.getAttribute('data-track-id')!;
     expect(mintedId).toMatch(/^t-new-/);
     expect(screen.getByTestId('drag-insert-line')).toBeInTheDocument();
-    expect(ghost.style.top).toBe('306px'); // below the last lane (A2 ends at 304)
+    expect(ghost.style.top).toBe('338px'); // below the last lane (caption lane is 32px: 44+60+80+60+60+32 = 336 — R19)
     fireEvent.pointerUp(clip, { pointerId: 1, clientX: 200, clientY: laneY.belowAll });
     expect(trackIds().at(-1)).toBe(mintedId); // appended at the bottom
     expect(scene1().tracks.at(-1)!.kind).toBe('audio');
@@ -559,7 +626,7 @@ describe('R15 T3: 2D cross-track drag (drop-target plumbing + resolution)', () =
     fireEvent.pointerUp(clip, { pointerId: 1, clientX: 1771, clientY: laneY.aboveAll });
     expect(el2().trackId).toBe('tr-main'); // no commit
     expect(store().past).toHaveLength(pastBase); // nothing beyond the baseline
-    expect(scene1().tracks).toHaveLength(4); // no track created
+    expect(scene1().tracks).toHaveLength(5); // no track created
     expect(store().toasts.at(-1)!.detail).toContain('spec-05 §8.3 note 3');
   });
 
@@ -788,7 +855,7 @@ describe('R15-F1 FIX 3: mid-drag unmount + destructive-key gesture gate', () => 
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
     });
     expect(screen.getByTestId('clip-el-2')).toBeInTheDocument(); // alive
-    expect(countEls()).toBe(7); // nothing deleted
+    expect(countEls()).toBe(12); // nothing deleted
     expect(store().past).toHaveLength(0);
     expect(screen.getByTestId('drag-ghost-el-2')).toBeInTheDocument(); // the gesture itself is untouched
     // end the drag (release commits), then the same key fires normally
@@ -798,7 +865,7 @@ describe('R15-F1 FIX 3: mid-drag unmount + destructive-key gesture gate', () => 
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
     });
     expect(screen.queryByTestId('clip-el-2')).not.toBeInTheDocument(); // deleted — key restored
-    expect(countEls()).toBe(6);
+    expect(countEls()).toBe(11); // 12 − el-2 (R19 captions)
   });
 
   it('⌘Z mid-drag is likewise swallowed (the undo could unmount the dragged clip too)', () => {

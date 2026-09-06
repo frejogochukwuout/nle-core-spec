@@ -3,13 +3,19 @@
    tool-drag, toggleable), scrub-row (12px: in/out band + clip boundary ticks +
    hover TC + playhead marker), transport-row (32px: CENTER = jump/step/play
    cluster, RIGHT = loop, mark-in I, mark-out O, add-marker M + compact palette).
-   WebGPU canvas stand-in = static frame of the element under the playhead. */
+   WebGPU canvas stand-in = static frame of the element under the playhead.
+   R19: dual-purpose SOURCE PREVIEW MODE (th_mto3504c, spec 18 §4.3 v1.1) —
+   viewerMode 'source' swaps the chrome to a raw-asset poster view; caption
+   overlay chips (caption-track elements under the playhead); EditOverlay
+   docked strip on the frame's right edge (B5 fills the stub). */
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, ChevronDown, ChevronLeft, ChevronRight, SkipBack, SkipForward, Repeat, Flag, Frame, Eye } from 'lucide-react';
+import { Play, Pause, ChevronDown, ChevronLeft, ChevronRight, SkipBack, SkipForward, Repeat, Flag, Frame, Eye, X } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
-import { mediaById, type ElementJSON, type SceneJSON } from '../../lib/mockData';
+import { mediaById, type ElementJSON, type SceneJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc } from '../../lib/timecode';
+import { getWaveform } from '../../lib/waveform';
+import { EditOverlay } from '../panels/EditOverlay';
 
 /* multi-track law (R14): scan ALL tracks of the kind, topmost wins — the
    single-find version hid clips on a second Video/Text track (addTrack makes
@@ -29,6 +35,18 @@ function overlayElementAt(scene: SceneJSON, time: number): ElementJSON | null {
     if (hit) return hit;
   }
   return null;
+}
+
+/* R19 caption overlay: caption-track elements covering the playhead, ALL
+   caption tracks scanned, track order preserved (first = primary language).
+   Half-open [start, end) like every other at-time probe in the shell. */
+function captionHitsAt(scene: SceneJSON, time: number): { track: TrackJSON; el: ElementJSON }[] {
+  return scene.tracks
+    .filter((t) => t.kind === 'caption')
+    .flatMap((t) =>
+      t.elements
+        .filter((e) => time >= e.startTime && time < e.startTime + e.duration)
+        .map((el) => ({ track: t, el })));
 }
 
 function MarkIcon({ dir }: { dir: 'l' | 'r' }) {
@@ -60,6 +78,18 @@ export function Viewer({ duration }: { duration: number }) {
   const addMarker = useUi((s) => s.addMarker);
   const setLoopEnabled = useUi((s) => s.setLoopEnabled);
 
+  /* th_mto3504c — spec 18 §4.3 v1.1 source preview: the monitor is
+     dual-purpose; 'source' shows the raw asset poster (entered by the pool
+     selection law in MediaPool / the clip menu 'Open in viewer'), 'program'
+     is the timeline monitor. */
+  const viewerMode = useUi((s) => s.viewerMode);
+  const sourceMediaId = useUi((s) => s.sourceMediaId);
+  const exitSourcePreview = useUi((s) => s.exitSourcePreview);
+  const page = useUi((s) => s.page);
+  const sourceMode = viewerMode === 'source';
+  const sourceMedia = sourceMode ? mediaById(sourceMediaId ?? undefined) : undefined;
+  const sourceDur = sourceMedia?.duration ?? null;
+
   const scrubRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLSpanElement>(null);
   const [hoverX, setHoverX] = useState<number | null>(null);
@@ -76,6 +106,9 @@ export function Viewer({ duration }: { duration: number }) {
   const overlayEl = overlayElementAt(scene, playhead);
   const img = el ? mediaById(el.mediaId) : undefined;
   const boundaries = scene.tracks.find((t) => t.kind === 'main')?.elements ?? [];
+  /* R19 caption overlay data: caption elements covering the playhead
+     (program mode only — source preview shows the raw asset instead) */
+  const captionHits = sourceMode ? [] : captionHitsAt(scene, playhead);
 
   /* §4.2 viewer state rows (R14):
      - LOADING: when the resolved program element's mediaId CHANGES (a cut),
@@ -157,7 +190,35 @@ export function Viewer({ duration }: { duration: number }) {
 
   return (
     <div data-testid="shell-viewer" className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-shell">
-      {/* viewer-toolbar (28px) */}
+      {/* viewer-toolbar (28px) — th_mto3504c: SOURCE mode swaps the chrome to
+          exit-control + asset name + SOURCE chip + the asset's OWN res/fps
+          (honest: a 4K/30 source says 4K/30); program keeps the §4.3 contract */}
+      {sourceMode ? (
+        <div className="relative flex items-center gap-2 border-b border-hairline px-2 text-[11px]" style={{ height: 28, minHeight: 28 }}>
+          <button
+            type="button"
+            className="icon-btn !h-[20px] shrink-0"
+            onClick={exitSourcePreview}
+            data-tip="Back to program"
+            aria-label="Back to program"
+          >
+            <X size={13} strokeWidth={1.7} />
+          </button>
+          <span className="min-w-0 truncate font-semibold text-tprimary" title={sourceMedia?.name}>
+            {sourceMedia?.name ?? 'Source media missing'}
+          </span>
+          <span
+            data-testid="shell-viewer-source-chip"
+            className="mono shrink-0 rounded-sm border px-1 text-[10px] font-bold uppercase tracking-[0.08em]"
+            style={{ borderColor: 'var(--accent-selection)', color: 'var(--accent-selection)' }}
+          >
+            SOURCE
+          </span>
+          <div className="grow" />
+          {sourceMedia?.width ? <span className="tc-chip">{sourceMedia.width}×{sourceMedia.height}</span> : null}
+          {sourceMedia?.fps ? <span className="tc-chip">{sourceMedia.fps} fps</span> : null}
+        </div>
+      ) : (
       <div className="relative flex items-center gap-2 border-b border-hairline px-2 text-[11px]" style={{ height: 28, minHeight: 28 }}>
         <select aria-label="Viewer zoom" value={zoom} onChange={(e) => setZoom(e.target.value)} className="field cursor-pointer py-0">
           {zoomOptions.map((z) => <option key={z}>{z}</option>)}
@@ -185,13 +246,59 @@ export function Viewer({ duration }: { duration: number }) {
           <Frame size={13} strokeWidth={1.6} />
         </button>
       </div>
+      )}
 
-      {/* video-frame — letterboxed program monitor */}
+      {/* video-frame — letterboxed monitor: PROGRAM (program monitor + DOM
+          overlays) or SOURCE (asset poster, object-contain letterbox) */}
       <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-frame p-4">
         <div
           className="relative aspect-video max-h-full max-w-full overflow-hidden rounded-[var(--radius)] bg-black"
           style={zoomStyle}
         >
+        {sourceMode ? (
+          /* ---- SOURCE PREVIEW (th_mto3504c, spec 18 §4.3 v1.1) ----
+             letterboxed poster (object-contain); audio assets show the same
+             deterministic waveform grammar the pool uses; a small caption
+             names the mode honestly — the poster is NOT played back. */
+          <>
+            {sourceMedia && sourceMedia.type !== 'audio' && !sourceMedia.offline ? (
+              <img
+                src={sourceMedia.thumbnail}
+                alt={`Source preview: ${sourceMedia.name}`}
+                className="h-full w-full object-contain"
+                onError={() => pushToast({ kind: 'error', title: 'Source preview failed to decode', detail: 'poster decode failed — check the media pool (spec 18 §4.2)' })}
+              />
+            ) : sourceMedia?.type === 'audio' ? (
+              <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] px-10">
+                <svg width="100%" height={96} preserveAspectRatio="none" aria-hidden="true" className="max-h-[60%]">
+                  {getWaveform(sourceMedia.id, 96, { amplitude: 0.9 }).map((b, i, all) => (
+                    <rect
+                      key={i}
+                      x={`${i * (100 / all.length)}%`}
+                      y={48 - b.max * 48}
+                      width={`${100 / all.length - 0.5}%`}
+                      height={Math.max(1, (b.max + b.min) * 48)}
+                      fill="var(--waveform)"
+                      opacity={0.85}
+                      rx={0.5}
+                    />
+                  ))}
+                </svg>
+              </div>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] text-[13px] text-[#9a9aa5]">
+                {sourceMedia?.offline ? 'Media offline' : 'No source media — select a pool card'}
+              </div>
+            )}
+            <span
+              data-testid="shell-viewer-source-caption"
+              className="mono pointer-events-none absolute bottom-2 left-2 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white/85"
+            >
+              Source preview — spec 18 §4.3 v1.1
+            </span>
+          </>
+        ) : (
+          <>
           {/* one name, one channel: real alt text (alt="" would mark the
               monitor decorative and drop the name from the a11y tree —
               R13 review caught alt="" + aria-label conflicting) */}
@@ -245,6 +352,44 @@ export function Viewer({ duration }: { duration: number }) {
             </div>
           )}
 
+          {/* R19 caption overlay (edit page, program mode): chips for
+              caption-track elements under the playhead — bottom-anchored
+              centered column, bg-black/75 + white 12px, rounded 3px, max-w
+              80%. A SECOND overlapping caption renders under in yellow-400
+              (the FR reference line). TODO(bilingual pairing): the real impl
+              pairs an EN caption with its FR sibling across tracks by overlap;
+              the mock renders the active captions in track order — index > 0
+              takes the second-language styling. */}
+          {page === 'edit' && captionHits.length > 0 && (
+            <div
+              data-testid="shell-viewer-caption"
+              className="pointer-events-none absolute bottom-[7%] left-1/2 flex w-[80%] -translate-x-1/2 flex-col items-center gap-1"
+              aria-live="off"
+            >
+              {captionHits.map(({ el: capEl }, i) => (
+                <span
+                  key={capEl.id}
+                  className="rounded-[3px] bg-black/75 px-2 py-0.5 text-center text-[12px] leading-snug"
+                  style={i > 0 ? { color: '#facc15' } : undefined}
+                >
+                  {capEl.text}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* R19 EditOverlay dock (B5 fills the stub): 44px vertical strip
+              docked on the frame's RIGHT edge — embedded, not a floating
+              dialog (nle_edit_workflow reference §3.4; only program+edit). */}
+          {page === 'edit' && (
+            <div
+              data-testid="shell-viewer-edit-overlay-dock"
+              className="absolute right-0 top-1/2 z-10 flex w-[44px] -translate-y-1/2 flex-col items-center gap-1 rounded-l-[var(--radius)] border-l border-y border-strong bg-panel py-2"
+            >
+              <EditOverlay />
+            </div>
+          )}
+
       {/* safe-area guides (viewer UI pref) — broadcast convention:
               90% action-safe + 80% title-safe centered rects, thin lines
               (labels: 10px strip-family floor + drop-shadow like the
@@ -261,11 +406,29 @@ export function Viewer({ duration }: { duration: number }) {
               </span>
             </div>
           )}
+          </>
+        )}
 
         </div>
       </div>
 
-      {/* scrub-row — 12px (spec 18 §3.1): in/out band, boundary ticks, playhead, hover TC */}
+      {/* scrub-row — 12px (spec 18 §3.1). SOURCE mode (th_mto3504c): the
+          poster has no timeline to scrub — the row renders a STATIC
+          full-range band (no slider role, no pointer seeking); honest, no
+          fake scrubbing of a jpg. */}
+      {sourceMode ? (
+        <div
+          className="relative flex shrink-0 items-center border-t border-hairline px-2"
+          style={{ height: 12, minHeight: 12 }}
+          data-testid="shell-viewer-scrub"
+          aria-label="Source duration (static preview)"
+        >
+          <div className="relative h-full w-full">
+            <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 rounded-sm bg-[var(--border-soft)]" />
+            <div className="absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 rounded-sm" style={{ background: 'var(--accent-selection)', opacity: 0.35 }} />
+          </div>
+        </div>
+      ) : (
       <div
         ref={scrubRef}
         className="relative flex shrink-0 cursor-pointer items-center border-t border-hairline px-2"
@@ -325,8 +488,22 @@ export function Viewer({ duration }: { duration: number }) {
           )}
         </div>
       </div>
+      )}
 
-      {/* transport-row (32px, spec 18 §4.3): CENTER = transport cluster, RIGHT = loop + marks + marker palette */}
+      {/* transport-row (32px, spec 18 §4.3): CENTER = transport cluster,
+          RIGHT = loop + marks + marker palette. SOURCE mode (th_mto3504c):
+          the transport cluster is REPLACED by the source duration TC —
+          static + honest (no fake playback of a poster; the mark/loop ops
+          belong to the program timeline). */}
+      {sourceMode ? (
+        <div className="relative flex shrink-0 items-center px-2" style={{ height: 32, minHeight: 32 }} data-testid="shell-viewer-transport">
+          <div className="flex flex-1 items-center" />
+          <span className="mono shrink-0 text-[11px] text-tmuted" data-testid="shell-viewer-source-duration">
+            Source duration {sourceDur !== null ? tc(sourceDur) : '— still image'}
+          </span>
+          <div className="flex flex-1 items-center justify-end" />
+        </div>
+      ) : (
       <div className="relative flex shrink-0 items-center px-2" style={{ height: 32, minHeight: 32 }} data-testid="shell-viewer-transport">
         <div className="flex flex-1 items-center" />
 
@@ -419,6 +596,7 @@ export function Viewer({ duration }: { duration: number }) {
           </span>
         </div>
       </div>
+      )}
     </div>
   );
 }

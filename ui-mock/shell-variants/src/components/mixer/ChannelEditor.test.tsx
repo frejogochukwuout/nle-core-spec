@@ -1,13 +1,17 @@
 /* ChannelEditor component tests — the Audio-focus inspector swap (design doc
    §3.2): CLIP section (S-layer element fields) follows the selection, TRACK
    section (G-layer strip params) follows stripFocus, both write through the
-   store commands, plus the duck-under row and aux-return read-out. */
+   store commands, plus the duck-under row and aux-return read-out.
+   R19-B1: the TRACK section's fader block is the TERMINAL flex-1 element
+   (th_mto37ze9) with the same equal-height [meter | fader+scale] law as the
+   strips, and the aux pre/post tap point moved here from the strip. */
 
 import { describe, expect, it } from 'vitest';
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { ChannelEditor } from './ChannelEditor';
 import { renderPlain, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
+import { __setLevel } from '../../lib/meterEngine';
 
 const boot = (patch: UiPatch = {}) => {
   if (Object.keys(patch).length) useUi.setState(patch);
@@ -127,5 +131,57 @@ describe('ChannelEditor', () => {
     expect(screen.getByText('Reverb')).toBeInTheDocument(); // a1 bus name
     fireEvent.change(screen.getByLabelText('Aux 1 return gain'), { target: { value: '0' } });
     expect(store().mixer.buses.a1.returnGain).toBe(0);
+  });
+
+  it('the pre/post tap point is a real toggle writing auxPreFader (moved off the strip, R19-B1)', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    const tap = screen.getByRole('button', { name: 'Aux send pre-fader' });
+    expect(tap).toHaveAttribute('aria-pressed', 'false');
+    expect(tap).toHaveTextContent('post'); // mockMixer boots post-fader
+    fireEvent.click(tap);
+    expect(g('tr-audio-2').auxPreFader).toBe(true);
+    expect(tap).toHaveAttribute('aria-pressed', 'true');
+    expect(tap).toHaveTextContent('pre');
+  });
+});
+
+/* ---------- R19-B1: the terminal fader block (th_mto37ze9 / th_mtoyq7jt) ---------- */
+describe('ChannelEditor terminal fader block (R19-B1)', () => {
+  it('the fader block is the terminal stretch element, flush to the panel bottom (th_mto37ze9)', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    const block = screen.getByTestId('channel-editor-fader');
+    // the TRACK detail row is the flex-1 row; the fader block stretches its
+    // full height (self-stretch) and is the row's LAST child — nothing sits
+    // below the fader (was a fixed 84px fader with ~50% dead rail)
+    expect(block.className).toContain('self-stretch');
+    expect(block.className).toContain('min-h-[140px]');
+    expect(block.parentElement!.className).toContain('flex-1');
+    expect(block.parentElement!.lastElementChild).toBe(block);
+  });
+
+  it('shared 24px headroom readout: fader dB (signed 1dp, no unit) + live engine peak', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    const row = screen.getByTestId('channel-editor-readout');
+    expect(row.className).toContain('h-[24px]');
+    expect(row.className).toContain('mono');
+    expect(within(row).getByText('-12.0')).toBeInTheDocument(); // A2 boots −12, no unit
+    expect(within(row).getByText('−∞')).toBeInTheDocument(); // silent peak
+    act(() => { __setLevel('tr-audio-2', -6); });
+    expect(within(row).getByText('-6.0')).toBeInTheDocument();
+  });
+
+  it('equal-height law: the meter + fader columns share one height var; the meter is a fixed 14px', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    const block = screen.getByTestId('channel-editor-fader');
+    const cols = block.querySelector('[data-col="meter"]')!.parentElement as HTMLElement;
+    expect(cols.className).toContain('items-stretch');
+    expect(cols.style.getPropertyValue('--fader-col-h')).toBe('100%');
+    const meterCol = cols.querySelector('[data-col="meter"]') as HTMLElement;
+    const faderCol = cols.querySelector('[data-col="fader"]') as HTMLElement;
+    expect(meterCol.style.height).toBe('var(--fader-col-h)');
+    expect(faderCol.style.height).toBe('var(--fader-col-h)');
+    const well = meterCol.querySelector('.meter-well') as HTMLElement;
+    expect(well.style.width).toBe('14px'); // th_mto617w1 — fixed, never w-full
+    expect(faderCol.querySelector('[data-testid="fader-scale"]')).not.toBeNull(); // carries the scale column
   });
 });

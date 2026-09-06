@@ -41,7 +41,8 @@ import { snapToFrame } from './timecode';
 export function trackAcceptsElement(kind: TrackJSON['kind'], type: ElementJSON['type']): boolean {
   if (type === 'audio') return kind === 'audio';
   if (type === 'video') return kind === 'main' || kind === 'overlay';
-  return kind === 'overlay'; // image, text
+  if (type === 'text') return kind === 'overlay' || kind === 'caption'; // R19: caption lanes hold text elements (gap C34)
+  return kind === 'overlay'; // image
 }
 
 /** kind of a NEW track created for an element (canonical: visual elements

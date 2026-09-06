@@ -46,3 +46,41 @@ export const Deliver: StoryObj = {
   name: 'Full Shell — Deliver',
   render: () => <FullShell patch={{ page: 'deliver' }} />,
 };
+
+/* ---- R19 reference-integration stories ---- */
+
+/** Marker selected — the rail swaps to the embedded MarkerInspector (the
+ *  reference's marker DIALOG as a panel, per the user directive). */
+export const MarkerInspectorStory: StoryObj = {
+  name: 'Full Shell — Marker Inspector',
+  render: () => (
+    <FullShell
+      patch={{
+        selection: [],
+        selectedMarkerId: 'mk-5',
+      }}
+    />
+  ),
+};
+
+/** Caption selected — the rail swaps to the CaptionInspector (editor +
+ *  list table); the captions lane is in the timeline below. */
+export const CaptionInspectorStory: StoryObj = {
+  name: 'Full Shell — Caption Inspector',
+  render: () => <FullShell patch={{ selection: ['cap-3'] }} />,
+};
+
+/** Marker + range story: the purple 17→24 range marker + a point marker
+ *  with notes selected; ruler marker band + clip markers visible. */
+export const MarkersV2: StoryObj = {
+  name: 'Full Shell — Markers v2 (range + notes)',
+  render: () => (
+    <FullShell
+      patch={{
+        selection: [],
+        selectedMarkerId: 'mk-3',
+        playhead: 15.5,
+      }}
+    />
+  ),
+};

@@ -150,7 +150,7 @@ describe('TrackHeader R14 wiring (§4.9 height + add above/below)', () => {
     fireEvent.click(screen.getByTestId('shell-menu-track-add-above'));
     // default route would APPEND audio at the bottom; above puts A3 above A1
     expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.map((t) => t.badge))
-      .toEqual(['T1', 'V1', 'A3', 'A1', 'A2']);
+      .toEqual(['T1', 'V1', 'A3', 'A1', 'A2', 'CC']);
   });
 
   it('Add track below inserts one past the header index (spec 18 §4.9)', () => {
@@ -158,7 +158,7 @@ describe('TrackHeader R14 wiring (§4.9 height + add above/below)', () => {
     fireEvent.contextMenu(screen.getByTestId('shell-track-header-tr-audio-1'), { clientX: 5, clientY: 5 });
     fireEvent.click(screen.getByTestId('shell-menu-track-add-below'));
     expect(store().scenes.find((s) => s.id === 'sc-1')!.tracks.map((t) => t.badge))
-      .toEqual(['T1', 'V1', 'A1', 'A3', 'A2']); // A3 below A1, above A2
+      .toEqual(['T1', 'V1', 'A1', 'A3', 'A2', 'CC']); // A3 below A1, above A2
   });
 });
 

@@ -10,13 +10,13 @@ import { getRulerWindow } from '../../lib/rulerTiers';
 import { renderShell, store } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 
-function RulerHarness({ pxPerSec = 46, playhead = 16, duration = 30 }: { pxPerSec?: number; playhead?: number; duration?: number }) {
+function RulerHarness({ pxPerSec = 46, playhead = 16, duration = 30, contentW: cwOverride }: { pxPerSec?: number; playhead?: number; duration?: number; contentW?: number }) {
   const scene = useUi.getState().scenes.find((s) => s.id === 'sc-1')!;
-  const contentW = (duration + 4) * pxPerSec;
+  const contentW = cwOverride ?? (duration + 4) * pxPerSec;
   return <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} playhead={playhead} contentW={contentW} view={{ scrollLeft: 0, viewportW: 1200 }} />;
 }
 
-const boot = (props: { pxPerSec?: number; playhead?: number; duration?: number } = {}) => renderShell(<RulerHarness {...props} />);
+const boot = (props: { pxPerSec?: number; playhead?: number; duration?: number; contentW?: number } = {}) => renderShell(<RulerHarness {...props} />);
 const ruler = () => screen.getByRole('slider', { name: 'Timeline ruler' });
 const scene1 = () => store().scenes.find((s) => s.id === 'sc-1')!;
 
@@ -87,7 +87,7 @@ describe('Ruler', () => {
     const loop = screen.getByTestId('shell-menu-ruler-loop');
     expect(loop).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(screen.getByTestId('shell-menu-ruler-add-marker'));
-    expect(scene1().markers).toHaveLength(5);
+    expect(scene1().markers).toHaveLength(6);
     expect(scene1().markers.at(-1)!.time).toBe(16);
   });
 
@@ -110,10 +110,11 @@ describe('Ruler', () => {
     boot({ playhead: 16 });
     fireEvent.contextMenu(ruler(), { clientX: 30, clientY: 30 });
     // initial focus = first enabled item (add-marker); ArrowDown walks the
-    // enabled command items (goto-marker/clear-markers disabled → skipped)
-    // and keeps going INTO the custom palette row's dots — custom rows are
+    // enabled command items — goto-marker is now a REAL enabled custom row
+    // (R19 marker nav submenu) so it is a roving stop too — and keeps going
+    // INTO the custom palette row's dots — custom rows are
     // part of the roving order now, not pointer-only
-    await user.keyboard('{ArrowDown>5}'); // add-marker → mark-in → mark-out → clear-inout → loop → red dot
+    await user.keyboard('{ArrowDown>6}'); // add-marker → goto-marker → mark-in → mark-out → clear-inout → loop → red dot
     expect(screen.getByTestId('shell-menu-ruler-color-red')).toHaveFocus();
     // roving continues across the dots (DOM order) and wraps
     await user.keyboard('{ArrowDown}');
@@ -262,5 +263,149 @@ describe('R15 T8 (R15-F1): ruler scrub — element snap after the first move, cl
     const after = sc.scrollLeft;
     await act(async () => { await new Promise((res) => requestAnimationFrame(res)); });
     expect(sc.scrollLeft).toBe(after); // the loop stopped with the scrub
+  });
+});
+
+/* ---------- R19 markers v2 (th_mto2ytyo): dedicated marker band,
+     clickable pins, range bands, real Go-to-Marker, bracket clamp ---------- */
+
+describe('R19 markers v2 — marker band + point pins (th_mto2ytyo)', () => {
+  it('renders a DEDICATED marker band at the ruler bottom (inset bg + top hairline, 14px readout)', () => {
+    boot({});
+    const band = screen.getByTestId('ruler-marker-band');
+    expect(band).toHaveAttribute('aria-hidden', 'true');
+    expect(band.className).toContain('pointer-events-none');
+    expect(band.style.height).toBe('14px');
+    expect(band.className).toContain('border-t'); // the hairline separator
+    expect(band.style.background).toContain('color-mix');
+  });
+
+  it('point pins are buttons INSIDE the band geometry (top ≥ bandTop 30) — never in lane territory', () => {
+    boot({});
+    const pin = screen.getByTestId('ruler-marker-mk-2');
+    expect(pin.tagName).toBe('BUTTON');
+    expect(pin.style.top).toBe('30.5px'); // bandTop 30 + (14−13)/2 — centered in the band
+    expect(parseFloat(pin.style.top)).toBeGreaterThanOrEqual(30);
+    expect(parseFloat(pin.style.top) + parseFloat(pin.style.height)).toBeLessThanOrEqual(44); // ≤ ruler zoneH
+  });
+
+  it('clicking a pin selects the marker (selectMarker) WITHOUT seeking the playhead', () => {
+    boot({ playhead: 16 });
+    fireEvent.click(screen.getByTestId('ruler-marker-mk-2'));
+    expect(store().selectedMarkerId).toBe('mk-2');
+    expect(store().selection).toEqual([]); // marker selection clears the clip domain
+    expect(store().playhead).toBe(16); // pin press must not scrub
+  });
+
+  it('keyboard: Enter on a focused pin selects the marker too (a11y contract)', () => {
+    boot({});
+    const pin = screen.getByTestId('ruler-marker-mk-1');
+    fireEvent.keyDown(pin, { key: 'Enter' });
+    expect(store().selectedMarkerId).toBe('mk-1');
+  });
+
+  it('the selected pin gets the accent-selection ring', () => {
+    boot({});
+    act(() => { useUi.getState().selectMarker('mk-3'); });
+    const pin = screen.getByTestId('ruler-marker-mk-3');
+    expect(pin.style.outline).toContain('var(--accent-selection)');
+    expect(screen.getByTestId('ruler-marker-mk-1').style.outline).toBe('');
+  });
+});
+
+describe('R19 markers v2 — RANGE markers (mk-5: 17 → 24 s)', () => {
+  it('renders the span band: translucent 20% fill + 2px solid rails + shield end caps', () => {
+    boot({});
+    const range = screen.getByTestId('ruler-range-mk-5');
+    expect(range.tagName).toBe('BUTTON');
+    expect(range).toHaveAttribute('aria-label', 'Marker Drone sequence (range)');
+    expect(range).toHaveAttribute('data-tip', 'Drone sequence · 00:00:17:00–00:00:24:00');
+    // geometry: left 17s·46, width 7s·46, inside the marker band (y 31..43)
+    expect(range.style.left).toBe('782px');
+    expect(range.style.width).toBe('322px');
+    expect(range.style.top).toBe('31px');
+    expect(range.style.height).toBe('12px');
+    const fill = range.querySelector('span');
+    expect(fill!.style.background).toContain('color-mix(in srgb, var(--mk-purple) 20%, transparent)');
+    const rails = range.querySelectorAll('span[style*="--mk-purple"]');
+    expect(rails.length).toBeGreaterThanOrEqual(3); // fill + top rail + bottom rail
+    // shield end caps at both ends (full opacity handles)
+    expect(range.querySelectorAll('svg path[fill="var(--mk-purple)"]').length).toBe(2);
+  });
+
+  it('clicking the range band selects the marker (drag grammar deliberately deferred — R19-TODO)', () => {
+    boot({});
+    fireEvent.click(screen.getByTestId('ruler-range-mk-5'));
+    expect(store().selectedMarkerId).toBe('mk-5');
+    expect(store().playhead).toBe(16); // no scrub
+  });
+
+  it('point markers do not render as ranges and vice versa (taxonomy split)', () => {
+    boot({});
+    expect(screen.queryByTestId('ruler-range-mk-1')).toBeNull();
+    expect(screen.queryByTestId('ruler-marker-mk-5')).toBeNull();
+  });
+});
+
+describe('R19 — the ruler menu "Go to Marker ›" submenu is REAL', () => {
+  it('expands the marker list (label + tc) and picking a row seeks the playhead + closes', () => {
+    boot({ playhead: 16 });
+    fireEvent.contextMenu(ruler(), { clientX: 30, clientY: 30 });
+    const menu = screen.getByTestId('shell-menu-ruler');
+    const toggle = screen.getByTestId('shell-menu-ruler-goto-marker');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle); // expand the inline submenu
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const row = screen.getByTestId('shell-menu-ruler-goto-mk-3');
+    expect(row).toHaveTextContent('Pull quote');
+    expect(row).toHaveTextContent('00:00:15:12');
+    fireEvent.click(row);
+    expect(store().playhead).toBe(15.5); // setPlayhead — marker nav, not a mock toast
+    expect(screen.queryByTestId('shell-menu-ruler')).not.toBeInTheDocument(); // closed after select
+  });
+
+  it('the range marker row navigates to the marker start; empty-marker scenes keep an honest disabled row', () => {
+    const first = boot({ playhead: 16 });
+    fireEvent.contextMenu(ruler(), { clientX: 30, clientY: 30 });
+    fireEvent.click(screen.getByTestId('shell-menu-ruler-goto-marker'));
+    fireEvent.click(screen.getByTestId('shell-menu-ruler-goto-mk-5'));
+    expect(store().playhead).toBe(17);
+    first.unmount();
+    // empty scene: honest disabled row (no silent no-op)
+    act(() => {
+      useUi.setState({
+        scenes: store().scenes.map((s) => (s.id === 'sc-1' ? { ...s, markers: [] } : s)),
+      });
+    });
+    boot({});
+    fireEvent.contextMenu(ruler(), { clientX: 30, clientY: 30 });
+    expect(screen.getByTestId('shell-menu-ruler-goto-marker')).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+describe('R19 — in/out bracket clamp + mirror (th_mto2ook8)', () => {
+  it('loop start at 0: the in bracket stays fully visible (left ≥ 0) and mirrors its fan inward', () => {
+    act(() => { useUi.setState({ loop: { start: 0, end: 28 } }); });
+    boot({});
+    const inB = screen.getByTestId('shell-ruler-bracket-in');
+    expect(parseFloat(inB.style.left)).toBeGreaterThanOrEqual(0); // was −2 → half-cut-off
+    expect(inB).toHaveAttribute('data-mirrored'); // glyph points inward (scaleX −1)
+    expect(parseFloat(inB.style.left) + parseFloat(inB.style.width)).toBeLessThanOrEqual(13);
+  });
+
+  it('loop end at the content edge: the out bracket clamps into [0, contentW−13] and mirrors', () => {
+    act(() => { useUi.setState({ loop: { start: 2, end: 30 } }); });
+    const contentW = 1383; // bandRight 1380 − 7 → 1373 > contentW−13 = 1370 → clamp bites
+    boot({ contentW });
+    const outB = screen.getByTestId('shell-ruler-bracket-out');
+    expect(parseFloat(outB.style.left)).toBe(contentW - 13);
+    expect(outB).toHaveAttribute('data-mirrored');
+    expect(parseFloat(outB.style.left)).toBeLessThanOrEqual(contentW - 13);
+  });
+
+  it('unclamped brackets keep their natural position (no mirror attribute)', () => {
+    boot({}); // fixture loop {2, 28} — both well inside [0, 1564]
+    expect(screen.getByTestId('shell-ruler-bracket-in')).not.toHaveAttribute('data-mirrored');
+    expect(screen.getByTestId('shell-ruler-bracket-out')).not.toHaveAttribute('data-mirrored');
   });
 });

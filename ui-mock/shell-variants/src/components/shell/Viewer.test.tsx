@@ -2,7 +2,10 @@
    overlay compositing, empty-frame state), viewer-toolbar prefs are store
    state (Eye overlays, safe-area guides), overlays hide while a non-select
    tool is armed (§4.3/§9), zoom select, transport cluster wiring, mark
-   in/out, loop toggle and the marker color palette. No geometry assertions. */
+   in/out, loop toggle and the marker color palette. No geometry assertions.
+   R19: source preview mode (th_mto3504c — entered via the pool selection law
+   tested in MediaPool.test), the caption overlay (caption elements under
+   the playhead) and the EditOverlay dock mount (B5 fills the stub). */
 
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
@@ -114,13 +117,13 @@ describe('Viewer (spec 18 §4.3)', () => {
     render(<Viewer duration={DUR} />);
     const flag = screen.getByRole('button', { name: 'Add marker' });
     fireEvent.click(flag);
-    expect(S().scenes[0].markers).toHaveLength(5); // 4 fixtures + 1 (cycled palette color)
-    expect(S().scenes[0].markers.at(-1)!.color).toBe('blue'); // 4 existing → colors[4]
+    expect(S().scenes[0].markers).toHaveLength(6); // 5 fixtures + 1 (cycled palette color)
+    expect(S().scenes[0].markers.at(-1)!.color).toBe('purple'); // 5 existing → colors[5]
     fireEvent.contextMenu(flag); // §4.3: right-click reveals the compact palette
     expect(flag).toHaveAttribute('aria-expanded', 'true');
     const menu = screen.getByRole('menu', { name: 'Marker color' });
     fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'Marker color red' }));
-    expect(S().scenes[0].markers).toHaveLength(6);
+    expect(S().scenes[0].markers).toHaveLength(7);
     expect(S().scenes[0].markers.at(-1)!.color).toBe('red');
     expect(flag).toHaveAttribute('aria-expanded', 'false');
   });
@@ -132,10 +135,10 @@ describe('Viewer (spec 18 §4.3)', () => {
     expect(chevron).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(chevron);
     expect(chevron).toHaveAttribute('aria-expanded', 'true');
-    // radio state is honest: with the 4 fixture markers, a plain flag click
-    // would add colors[4 % 8] = blue — that dot is the checked one
+    // radio state is honest: with the 5 fixture markers, a plain flag click
+    // would add colors[5 % 8] = purple — that dot is the checked one
     const menu = screen.getByRole('menu', { name: 'Marker color' });
-    expect(within(menu).getByRole('menuitemradio', { name: 'Marker color blue' }))
+    expect(within(menu).getByRole('menuitemradio', { name: 'Marker color purple' }))
       .toHaveAttribute('aria-checked', 'true');
     expect(within(menu).getByRole('menuitemradio', { name: 'Marker color red' }))
       .toHaveAttribute('aria-checked', 'false');
@@ -248,5 +251,136 @@ describe('Viewer (spec 18 §4.3)', () => {
     act(() => { S().setPlayhead(0); });
     expect(screen.getByText('Media offline')).toBeInTheDocument();
     expect(container.querySelector('img')).toBeNull();
+  });
+});
+
+/* ---- R19: SOURCE PREVIEW MODE (th_mto3504c, spec 18 §4.3 v1.1) ----------
+   Entered via the MediaPool selection law (exactly 1 selected card) or the
+   clip-menu "Open in viewer" — these tests boot the store state directly
+   and pin the chrome swap + the honest static transport. */
+describe('Viewer source preview mode (R19 th_mto3504c)', () => {
+  it('source chrome: exit control + asset name + SOURCE chip; letterboxed poster + spec caption; static duration TC', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    const { container } = render(<Viewer duration={DUR} />);
+    expect(screen.getByTestId('shell-viewer-source-chip')).toHaveTextContent('SOURCE');
+    expect(screen.getByTitle('interview_marina.mp4')).toBeInTheDocument();
+    const img = container.querySelector('img')!;
+    expect(img).toHaveAttribute('alt', 'Source preview: interview_marina.mp4');
+    expect(img.className).toContain('object-contain'); // letterboxed poster, not cover
+    expect(screen.getByTestId('shell-viewer-source-caption')).toHaveTextContent('Source preview — spec 18 §4.3 v1.1');
+    // the media's OWN specs (m-02 is 1080p24 — honest, not the project chip)
+    expect(screen.getByText('1920×1080')).toBeInTheDocument();
+    expect(screen.getByText('24 fps')).toBeInTheDocument();
+    // scrub row is STATIC (no slider role — no fake scrubbing of a poster)
+    expect(screen.getByTestId('shell-viewer-scrub')).not.toHaveAttribute('role', 'slider');
+    // transport row carries the source duration TC (m-02 = 95.2 s)
+    expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Source duration 00:01:35:05');
+    // no transport buttons — no fake playback of a jpg
+    expect(screen.queryByTestId('shell-viewer-btn-play')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mark in' })).toBeNull();
+  });
+
+  it('the exit control (X / "Back to program") returns the monitor to program mode', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    const { container } = render(<Viewer duration={DUR} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to program' }));
+    expect(S().viewerMode).toBe('program');
+    expect(S().sourceMediaId).toBeNull();
+    // program monitor is back: playhead 16 → el-2 drives the frame
+    expect(container.querySelector('img')).toHaveAttribute('alt', 'Program monitor: Marina interview');
+    expect(screen.getByTestId('shell-viewer-tc')).toBeInTheDocument(); // program TC chip
+  });
+
+  it('audio source: the deterministic waveform replaces the poster (pool grammar)', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-06' });
+    const { container } = render(<Viewer duration={DUR} />);
+    expect(screen.getByTitle('ocean_ambience.wav')).toBeInTheDocument();
+    expect(container.querySelector('img')).toBeNull(); // no poster to letterbox
+    expect(container.querySelectorAll('svg rect').length).toBeGreaterThan(0); // waveform bars
+    expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Source duration 00:02:00:00'); // 120 s
+  });
+
+  it('offline source: the honest offline row, never a broken img', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-04' });
+    const { container } = render(<Viewer duration={DUR} />);
+    expect(screen.getByText('Media offline')).toBeInTheDocument();
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('still image source: duration readout is the honest still', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-08' });
+    render(<Viewer duration={DUR} />);
+    expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Source duration — still image');
+  });
+
+  it('missing source id (defensive): honest missing row, never a broken img', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: null });
+    const { container } = render(<Viewer duration={DUR} />);
+    expect(screen.getByText('No source media — select a pool card')).toBeInTheDocument();
+    expect(container.querySelector('img')).toBeNull();
+  });
+});
+
+/* ---- R19: caption overlay (caption-track elements under the playhead) --- */
+describe('Viewer caption overlay (R19)', () => {
+  it('renders the caption chip for the element covering the playhead (program + edit page)', () => {
+    render(<Viewer duration={DUR} />);
+    act(() => { S().setPlayhead(5); }); // cap-1 [100/24, 135/24) = [4.17, 5.63)
+    const overlay = screen.getByTestId('shell-viewer-caption');
+    expect(overlay).toHaveTextContent('We always visit this beach');
+  });
+
+  it('playhead outside every caption: no overlay (boot playhead 16 is past the last one)', () => {
+    render(<Viewer duration={DUR} />);
+    expect(screen.queryByTestId('shell-viewer-caption')).toBeNull(); // last caption ends at 13 s
+  });
+
+  it('a second overlapping caption renders UNDER in the second-language yellow (FR line)', () => {
+    // add a sibling FR caption track whose element overlaps cap-1's window
+    const scenes = S().scenes.map((sc) => sc.id === 'sc-1' ? {
+      ...sc,
+      tracks: [...sc.tracks, {
+        id: 'tr-caption-fr', kind: 'caption' as const, name: 'Sub 2', badge: 'CC', language: 'fr',
+        muted: false, solo: false, locked: false, visible: true,
+        elements: [{ id: 'cap-fr-1', type: 'text' as const, trackId: 'tr-caption-fr', name: 'Sub FR 1', startTime: 4.5, duration: 1.0, text: 'Nous venons tout le temps à la plage.' }],
+      }],
+    } : sc);
+    useUi.setState({ scenes });
+    render(<Viewer duration={DUR} />);
+    act(() => { S().setPlayhead(5); });
+    const chips = screen.getByTestId('shell-viewer-caption').querySelectorAll('span');
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toHaveTextContent('We always visit this beach'); // primary = white
+    expect(chips[1]).toHaveTextContent('Nous venons tout le temps à la plage.');
+    expect(chips[1]).toHaveStyle({ color: '#facc15' }); // the FR second-language line
+    expect(chips[0]).not.toHaveStyle({ color: '#facc15' });
+  });
+
+  it('source mode replaces the caption overlay (the raw asset is showing, not the program)', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    render(<Viewer duration={DUR} />);
+    act(() => { S().setPlayhead(5); });
+    expect(screen.queryByTestId('shell-viewer-caption')).toBeNull();
+  });
+});
+
+/* ---- R19: EditOverlay dock (B5 fills the stub; the mount is the contract) */
+describe('Viewer EditOverlay dock (R19)', () => {
+  it('program + edit page: the 44px dock strip mounts on the frame\'s right edge', () => {
+    render(<Viewer duration={DUR} />);
+    const dock = screen.getByTestId('shell-viewer-edit-overlay-dock');
+    expect(dock.className).toContain('w-[44px]');
+    expect(dock.className).toContain('rounded-l-');
+    expect(dock.className).toContain('bg-panel');
+  });
+
+  it('source mode and non-edit pages mount NO dock (edit actions need the program frame)', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    const { rerender } = render(<Viewer duration={DUR} />);
+    expect(screen.queryByTestId('shell-viewer-edit-overlay-dock')).toBeNull();
+    useUi.setState({ viewerMode: 'program' });
+    useUi.setState({ page: 'color' });
+    rerender(<Viewer duration={DUR} />);
+    expect(screen.queryByTestId('shell-viewer-edit-overlay-dock')).toBeNull();
   });
 });

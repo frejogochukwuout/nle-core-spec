@@ -4,13 +4,23 @@
    §6.1 parity, one command set). TRACK section = the focused track's G strip
    in detail: fader/pan/inserts/sends/output bus + the duck-under row.
    Mock-level: G values live in the mockMixer sidecar, element fields in the
-   doc slice. */
+   doc slice.
+
+   R19-B1 (th_mto37ze9): the TRACK section's fader block is now the
+   TERMINAL flex-1 element — [meter | fader+scale] fills ALL remaining
+   vertical space flush to the panel bottom (was a fixed 84px fader with
+   ~50% dead rail below), with the same equal-height law as the strips:
+   one SHARED 24px headroom readout (fader dB signed 1dp no unit + live
+   peak) above meter/fader columns sharing one height var. The aux
+   pre/post tap point moved here from the strip (the reference strip has
+   no sends surface — R19-B1 report note). */
 
 import { Volume2, Music2, Waves, AudioLines, Trash2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { mediaById, type ElementJSON } from '../../lib/mockData';
 import { ROLE_LABEL, dbLabel, type Role } from '../../state/mockMixer';
-import { Fader, PanKnob } from './MixerPrimitives';
+import { useMeter } from '../../lib/meterEngine';
+import { Fader, PanKnob, StripMeter, HeadroomReadout } from './MixerPrimitives';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -63,6 +73,11 @@ export function ChannelEditor() {
   const role = track ? (mixer.roles[track.id] as Role | undefined) : undefined;
   const duck = track ? mixer.ducking[track.id] : undefined;
 
+  // the editor's engine view for the headroom peak readout (same key as the
+  // strip/bridge meters — one engine, N views; idle key when no track)
+  const meter = useMeter(track?.id ?? 'channel-editor-idle');
+  const peak = Math.max(meter.l.peakDb, meter.r.peakDb);
+
   return (
     <div data-testid="shell-channel-editor" className="scroll-y flex h-full w-full min-h-0 flex-col bg-panel">
       <div className="flex items-center gap-2 border-b border-hairline px-2.5 py-2">
@@ -112,22 +127,26 @@ export function ChannelEditor() {
         )}
       </div>
 
-      {/* ---------- TRACK section (G-layer strip params) ---------- */}
-      <div className="px-2.5 py-2">
+      {/* ---------- TRACK section (G-layer strip params) ----------
+          R19-B1: terminal flex-1 — the detail stack scrolls, the fader block
+          fills ALL remaining vertical space flush to the panel bottom */}
+      <div className="flex min-h-0 flex-1 flex-col px-2.5 py-2">
         <div className="mb-1 flex items-center gap-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-tfaint">Track</span>
           <span className="text-[10px] text-tfaint">· signal layer</span>
           {role && <span className="ml-auto rounded-[2px] border border-hairline bg-inset px-1 text-[10px] font-semibold uppercase text-tmuted">{ROLE_LABEL[role]}</span>}
         </div>
         {track && strip ? (
-          <div className="flex flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="mb-2 flex items-center gap-2">
               <span className="mono flex h-[18px] w-[28px] items-center justify-center rounded-[2px] border border-[var(--type-audio)] text-[11px] font-semibold text-[var(--type-audio)]">{track.badge}</span>
               <span className="min-w-0 flex-1 truncate text-[11px] text-tprimary">{track.name}</span>
             </div>
-            <div className="flex gap-3">
-              <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} height={84} ariaLabel={`${track.name} fader`} />
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex min-h-0 flex-1 gap-2">
+              {/* detail stack — the aux/insert/bus/ducking editing that moved
+                  off the strips (the reference strip has no sends surface;
+                  R19-B1) */}
+              <div className="scroll-y flex min-h-0 min-w-0 flex-1 flex-col gap-1">
                 <Row label="Fader"><span className="mono text-[11px] text-tprimary">{dbLabel(strip.fader)}</span></Row>
                 <div className="flex items-center gap-2 py-1">
                   <span className="w-[52px] shrink-0 text-[11px] text-tmuted">Pan</span>
@@ -162,50 +181,85 @@ export function ChannelEditor() {
                     onChange={(e) => setMixerTrack(track.id, { auxB: +e.target.value })} aria-label={`${track.name} aux 2 send`} />
                   <span className="mono text-[10px] text-tmuted">{Math.round(strip.auxB * 100)}%</span>
                 </Row>
-              </div>
-            </div>
-
-            {/* duck-under (spec 20 §12.2 answer) */}
-            {duck && (
-              <div className="mt-2 flex flex-col gap-1 rounded-[var(--radius)] border border-hairline bg-inset px-2 py-2" data-testid={`channel-ducking-${track.badge}`}>
-                <div className="flex items-center gap-1.5">
-                  <Volume2 size={11} className="text-accent" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-tmuted">Duck under</span>
-                </div>
-                <Row label="Source">
-                  <select aria-label="Ducking source" className="field min-w-0 flex-1 cursor-pointer px-1 py-0 text-[10px]"
-                    value={duck.source ?? ''} onChange={(e) => setDucking(track.id, { source: e.target.value || null })}>
-                    <option value="">—</option>
-                    {audioTracks.filter((t) => t.id !== track.id).map((t) => <option key={t.id} value={t.id}>{t.badge} {t.name}</option>)}
-                  </select>
+                {/* tap point: ONE shared pre/post field per track (spec 20
+                    §4.2 auxPreFader) — real toggle via setMixerTrack; lived on
+                    the strip before R19-B1, moved here with the sends */}
+                <Row label="Tap">
+                  <button
+                    onClick={() => setMixerTrack(track.id, { auxPreFader: !strip.auxPreFader })}
+                    aria-pressed={strip.auxPreFader}
+                    aria-label="Aux send pre-fader"
+                    data-tip={`Aux tap point — ${strip.auxPreFader ? 'pre' : 'post'} fader`}
+                    className={`mono flex h-[14px] items-center justify-center rounded-[2px] border px-2 text-[9px] font-bold ${strip.auxPreFader ? 'border-accent bg-accent/20 text-accent' : 'border-strong bg-inset text-tmuted'}`}
+                  >
+                    {strip.auxPreFader ? 'pre' : 'post'}
+                  </button>
+                  <span className="text-[10px] text-tfaint">aux tap point</span>
                 </Row>
-                <Row label="Amount">
-                  <input type="range" min={0} max={1} step={0.05} value={duck.amount} className="h-[10px] min-w-0 flex-1"
-                    onChange={(e) => setDucking(track.id, { amount: +e.target.value })} aria-label="Ducking amount" />
-                  <span className="mono text-[10px] text-tmuted">{Math.round(duck.amount * 100)}%</span>
-                </Row>
-                <div className="flex items-center gap-3 text-[10px] text-tmuted">
-                  <span className="mono">attack {duck.attack} ms</span>
-                  <span className="mono">release {duck.release} ms</span>
+
+                {/* duck-under (spec 20 §12.2 answer) */}
+                {duck && (
+                  <div className="mt-1 flex flex-col gap-1 rounded-[var(--radius)] border border-hairline bg-inset px-2 py-2" data-testid={`channel-ducking-${track.badge}`}>
+                    <div className="flex items-center gap-1.5">
+                      <Volume2 size={11} className="text-accent" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-tmuted">Duck under</span>
+                    </div>
+                    <Row label="Source">
+                      <select aria-label="Ducking source" className="field min-w-0 flex-1 cursor-pointer px-1 py-0 text-[10px]"
+                        value={duck.source ?? ''} onChange={(e) => setDucking(track.id, { source: e.target.value || null })}>
+                        <option value="">—</option>
+                        {audioTracks.filter((t) => t.id !== track.id).map((t) => <option key={t.id} value={t.id}>{t.badge} {t.name}</option>)}
+                      </select>
+                    </Row>
+                    <Row label="Amount">
+                      <input type="range" min={0} max={1} step={0.05} value={duck.amount} className="h-[10px] min-w-0 flex-1"
+                        onChange={(e) => setDucking(track.id, { amount: +e.target.value })} aria-label="Ducking amount" />
+                      <span className="mono text-[10px] text-tmuted">{Math.round(duck.amount * 100)}%</span>
+                    </Row>
+                    <div className="flex items-center gap-3 text-[10px] text-tmuted">
+                      <span className="mono">attack {duck.attack} ms</span>
+                      <span className="mono">release {duck.release} ms</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* aux returns read-out */}
+                <div className="mt-1 border-t border-hairline pt-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-tfaint">Aux returns</span>
+                  <Row label="A1">
+                    <span className="mono text-[10px] text-tmuted">{mixer.buses.a1.name}</span>
+                    <input type="range" min={-60} max={6} step={1} value={mixer.buses.a1.returnGain} className="h-[10px] min-w-0 flex-1"
+                      onChange={(e) => setAuxBus('a1', { returnGain: +e.target.value })} aria-label="Aux 1 return gain" />
+                    <span className="mono text-[10px] text-tmuted">{dbLabel(mixer.buses.a1.returnGain)}</span>
+                  </Row>
+                </div>
+
+                {/* automation non-goal placeholder (design doc §8) */}
+                <div className="mt-1 flex items-center gap-2 rounded-[var(--radius)] border border-dashed border-soft px-2 py-1.5" data-testid="channel-automation-placeholder">
+                  <span className="text-[10px] text-tfaint">Automation — M2 (curve shape TBD, spec 20 §12.1)</span>
+                  <Trash2 size={10} className="ml-auto text-tfaint" aria-hidden="true" />
                 </div>
               </div>
-            )}
 
-            {/* aux returns read-out */}
-            <div className="mt-2 border-t border-hairline pt-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-tfaint">Aux returns</span>
-              <Row label="A1">
-                <span className="mono text-[10px] text-tmuted">{mixer.buses.a1.name}</span>
-                <input type="range" min={-60} max={6} step={1} value={mixer.buses.a1.returnGain} className="h-[10px] min-w-0 flex-1"
-                  onChange={(e) => setAuxBus('a1', { returnGain: +e.target.value })} aria-label="Aux 1 return gain" />
-                <span className="mono text-[10px] text-tmuted">{dbLabel(mixer.buses.a1.returnGain)}</span>
-              </Row>
-            </div>
-
-            {/* automation non-goal placeholder (design doc §8) */}
-            <div className="mt-2 flex items-center gap-2 rounded-[var(--radius)] border border-dashed border-soft px-2 py-1.5" data-testid="channel-automation-placeholder">
-              <span className="text-[10px] text-tfaint">Automation — M2 (curve shape TBD, spec 20 §12.1)</span>
-              <Trash2 size={10} className="ml-auto text-tfaint" aria-hidden="true" />
+              {/* the TERMINAL fader block (fixes th_mto37ze9): fills ALL
+                  remaining vertical space, flush to the panel bottom — same
+                  equal-height law as the strips (shared 24px headroom,
+                  [meter | fader+scale] columns on one height var, meter fixed
+                  14px wide) */}
+              <div data-testid="channel-editor-fader" className="flex min-h-[140px] shrink-0 self-stretch flex-col" style={{ width: 76 }}>
+                <HeadroomReadout db={strip.fader} peakDb={peak} testId="channel-editor-readout" />
+                <div
+                  className="flex min-h-0 flex-1 items-stretch justify-center gap-1"
+                  style={{ '--fader-col-h': '100%' } as React.CSSProperties}
+                >
+                  <div data-col="meter" className="flex min-h-0" style={{ height: 'var(--fader-col-h)' }}>
+                    <StripMeter trackId={track.id} db={strip.fader} fillHeight label={track.name} />
+                  </div>
+                  <div data-col="fader" className="flex min-h-0" style={{ height: 'var(--fader-col-h)' }}>
+                    <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} fillHeight scale headroom={false} ariaLabel={`${track.name} fader`} />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         ) : (

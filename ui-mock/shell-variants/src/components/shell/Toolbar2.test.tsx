@@ -1,6 +1,8 @@
 /* Toolbar2 — spec 18 §4.1 shell toolbar: panel toggles (aria-pressed ↔
-   store.panels wiring), center project identity, right-side inspector and
-   fullscreen affordances. Store-wiring + a11y only — no layout assertions
+   store.panels wiring), center project identity, right-side inspector
+   affordance. R19: the fullscreen toggle was REMOVED (th_mtoyu8bl, gap C38)
+   and the mac traffic-light dots are gone (th_mtoyslr9) — pinned here so
+   they can't creep back. Store-wiring + a11y only — no layout assertions
    (jsdom has no geometry). */
 
 import { describe, expect, it } from 'vitest';
@@ -62,14 +64,23 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
     expect(getByTitle('Beach Doc — Rough Cut')).toBeInTheDocument(); // truncate fallback
   });
 
-  it('the fullscreen affordance is honest: click pushes the §8.5 deferral toast', () => {
-    const { getByRole } = renderPlain(<Toolbar2 />);
-    // v2 surface isn't built — the control answers instead of staying silent
-    fireEvent.click(getByRole('button', { name: 'Toggle fullscreen viewer' }));
-    const t = S().toasts.at(-1)!;
-    expect(t.kind).toBe('info');
-    expect(t.title).toBe('Fullscreen viewer');
-    expect(t.detail).toBe('v2 surface (spec 18 §8.5) — not built in the mock');
+  /* th_mtoyu8bl (gap C38): honest REMOVAL — no fullscreen-viewer control at
+     all (the v2 surface isn't built; the old button only ever toasted a
+     deferral). The toolbar's last button is now the Inspector toggle. */
+  it('has NO fullscreen-viewer toggle (th_mtoyu8bl removal, gap C38)', () => {
+    renderPlain(<Toolbar2 />);
+    expect(screen.queryByRole('button', { name: /fullscreen/i })).toBeNull();
+    expect(screen.queryByTestId('shell-toolbar-btn-fullscreen')).toBeNull();
+  });
+
+  /* th_mtoyslr9: the mac traffic-light dots (3 aria-hidden colored circles)
+     are removed entirely — no faux window chrome in a web-page mock. (The
+     lucide svgs also carry aria-hidden, so the pin is the dot chrome itself:
+     no rounded-full dot spans, none of the three hard-coded dot colors.) */
+  it('has NO mac traffic-light dots (th_mtoyslr9 removal)', () => {
+    const { container } = renderPlain(<Toolbar2 />);
+    expect(container.querySelectorAll('.rounded-full')).toHaveLength(0);
+    expect(container.querySelectorAll('[class*="bg-[#fd5f4d]"], [class*="bg-[#fdbb2e]"], [class*="bg-[#28c83f]"]')).toHaveLength(0);
   });
 });
 
@@ -87,10 +98,9 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     await user.tab(); // "before"
     await user.tab(); // enters the toolbar — single tab stop
     expect(document.activeElement).toBe(btn('Media Pool'));
-    // one tab stop: the other three are removed from the tab order
+    // one tab stop: the other two are removed from the tab order
     expect(btn('Effects')).toHaveAttribute('tabindex', '-1');
     expect(btn('Inspector')).toHaveAttribute('tabindex', '-1');
-    expect(btn('Toggle fullscreen viewer')).toHaveAttribute('tabindex', '-1');
   });
 
   it('ArrowRight/ArrowLeft move focus between buttons in DOM order (wrapping)', () => {
@@ -104,11 +114,12 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     // ← walks back
     fireEvent.keyDown(btn('Inspector'), { key: 'ArrowLeft' });
     expect(document.activeElement).toBe(btn('Effects'));
-    // wrap: ← from the first lands on the LAST, → from the last on the first
+    // wrap: ← from the first lands on the LAST (Inspector after the C38
+    // removal), → from the last on the first
     focus('Media Pool');
     fireEvent.keyDown(btn('Media Pool'), { key: 'ArrowLeft' });
-    expect(document.activeElement).toBe(btn('Toggle fullscreen viewer'));
-    fireEvent.keyDown(btn('Toggle fullscreen viewer'), { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(btn('Inspector'));
+    fireEvent.keyDown(btn('Inspector'), { key: 'ArrowRight' });
     expect(document.activeElement).toBe(btn('Media Pool'));
     // the tab stop follows the rover, not the boot index
     expect(btn('Media Pool')).toHaveAttribute('tabindex', '0');
@@ -124,8 +135,8 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     );
     act(() => { btn('Media Pool').focus(); });
     fireEvent.keyDown(btn('Media Pool'), { key: 'End' });
-    expect(document.activeElement).toBe(btn('Toggle fullscreen viewer'));
-    fireEvent.keyDown(btn('Toggle fullscreen viewer'), { key: 'Home' });
+    expect(document.activeElement).toBe(btn('Inspector'));
+    fireEvent.keyDown(btn('Inspector'), { key: 'Home' });
     expect(document.activeElement).toBe(btn('Media Pool'));
     // Tab is NOT intercepted — it leaves the toolbar for the next stop
     await user.tab();

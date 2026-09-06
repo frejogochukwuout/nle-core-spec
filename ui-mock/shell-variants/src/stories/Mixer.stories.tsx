@@ -7,7 +7,12 @@
    meter levels injected through the shared engine's __setLevel debug hook
    (fixed values, holds re-armed; see decorators.MeterLevels), so the base
    bars / readout rows / peak lines / clip state are screenshottable without
-   the seeded program walk. */
+   the seeded program walk.
+   R19-B1: strips carry the Fairlight reference anatomy (3px top bar, input
+   row, FX chip rack + "I", graph thumbnails, R/S/M, pan box) with the
+   TERMINAL fader section — shared 24px headroom + equal-height
+   [meter | fader+scale] columns; aux returns + master pin to the dock's
+   right edge. */
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MixerDock } from '../components/mixer/MixerDock';
@@ -138,15 +143,20 @@ function StripSolo({ compact = false }: { compact?: boolean }) {
   const track = useUi((s) => s.scenes[0].tracks.find((t): t is TrackJSON => t.id === 'tr-audio-2'));
   if (!track) return null;
   return (
-    <div className={`flex items-stretch border border-hairline ${compact ? 'h-[260px]' : 'h-[460px]'}`}>
+    <div className={`flex items-stretch border border-hairline ${compact ? 'h-[360px]' : 'h-[520px]'}`}>
       <ChannelStrip track={track} sceneId="sc-1" compact={compact} focused onStripClick={() => { /* demo */ }} />
     </div>
   );
 }
 
-/** A2 (BGM role): full strip with duck-under row, focused ring. */
+/** A2 (BGM role): the full reference anatomy — 3px role top bar, "No Input"
+ *  row, FX chip rack ("+" add slots — A2 ships empty, honest toast on click)
+ *  + gold "I" power button, EQ/dynamics thumbnails, role label, R/S/M, 48px
+ *  pan crosshair box, then the TERMINAL fader section: shared 24px headroom
+ *  readout (−12.0 + live peak) over equal-height [meter | fader+scale]
+ *  columns, flush to the strip bottom. Focused ring. */
 export const ChannelStripSolo: StoryObj = {
-  name: 'Mixer — ChannelStrip solo',
+  name: 'Mixer — ChannelStrip solo (reference anatomy)',
   parameters: { layout: 'padded' },
   render: () => (
     <>
@@ -156,15 +166,16 @@ export const ChannelStripSolo: StoryObj = {
   ),
 };
 
-/* The solo strip with live levels: A2 bgm at −18 with the duck-under row
-   visible — the readout row's live peak (engine view) + the strip meter run
-   at the injected level while the ducking row shows the v2.2 §5 sidechain
-   mock (amount 0.6 under A1). */
+/* The solo strip with live levels: A2 bgm at −18 — the headroom readout's
+   live peak (engine view) + the strip meter run at the injected level; the
+   terminal fader fills the remaining strip height (fader = meter height,
+   th_mtoyq7jt) while the ducking mock (amount 0.6 under A1) reads from the
+   store in the ChannelEditor rail. */
 const SOLO_LEVELS: { key: string; db: number }[] = [{ key: 'tr-audio-2', db: -18 }];
 
-/** ChannelStrip solo + deterministic level (−18) + the A4 chrome: bgm role
- *  base bar, readout row (fader dB −12.0 + live peak −18.0), duck-under row,
- *  scale column + unity notch on the fader, 24px dial. */
+/** ChannelStrip solo + deterministic level (−18): the full reference anatomy
+ *  + live metering — headroom readout (−12.0 + peak −18.0), meter fill at
+ *  −18, the piecewise dB scale marks down the fader column. */
 export const ChannelStripSoloLevel: StoryObj = {
   name: 'Mixer — ChannelStrip solo, deterministic level',
   parameters: { layout: 'padded' },
@@ -192,7 +203,9 @@ export const ChannelStripCompact: StoryObj = {
 /* ---- channel editor (audio-focus inspector) -------------------------------- */
 
 /** CLIP section = selected element's audio fields; TRACK section = the
- *  focused track's G-strip in detail (fader/pan/inserts/sends/bus/duck). */
+ *  focused track's G-strip in detail (pan/inserts/sends/bus/duck) beside
+ *  the TERMINAL fader block — [meter | fader+scale] fills all remaining
+ *  vertical space with the shared headroom readout (R19-B1). */
 export const ChannelEditorStory: StoryObj = {
   name: 'Channel editor',
   parameters: { layout: 'padded' },

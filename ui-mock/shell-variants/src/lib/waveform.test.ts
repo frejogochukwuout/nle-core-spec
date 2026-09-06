@@ -57,3 +57,41 @@ describe('getWaveform', () => {
     expect(bars.every((b) => b.min >= 0)).toBe(true);
   });
 });
+
+describe('R19 B3: attack/decay ramps (opt-in `ramp` — fixes th_mto2xtgc pattern)', () => {
+  it('ramp:0 (the default) is bit-identical to the no-opts call', () => {
+    const a = getWaveform('ramp-zero', 120);
+    const b = getWaveform('ramp-zero', 120, { ramp: 0 });
+    expect(b).toEqual(a);
+  });
+
+  it('shapes a QUIET head + tail; the body bars are untouched', () => {
+    const plain = getWaveform('ramp-shape', 200);
+    const ramped = getWaveform('ramp-shape', 200, { ramp: 0.25 }); // 50 head / 50 tail
+    // head/tail strictly quieter than their no-ramp twins (same rand sequence
+    // per index — the ramp only scales the generated peak)
+    expect(ramped[0]!.max).toBeLessThan(plain[0]!.max);
+    expect(ramped[199]!.max).toBeLessThan(plain[199]!.max);
+    // body (shape = 1) is EXACTLY the no-ramp values
+    for (let i = 60; i < 140; i++) {
+      expect(ramped[i]!.max).toBe(plain[i]!.max);
+      expect(ramped[i]!.min).toBe(plain[i]!.min);
+    }
+    // the ramp rises: an early head bar is quieter than a late head bar
+    expect(ramped[5]!.max).toBeLessThan(ramped[45]!.max);
+    // never a hard zero (apex kept inside the window)
+    expect(ramped[0]!.max).toBeGreaterThan(0);
+    // still 0..1
+    for (const bar of ramped) expect(bar.max).toBeLessThanOrEqual(1);
+  });
+
+  it('ramp stays deterministic + cached under its own key', () => {
+    const a = getWaveform('ramp-cache', 64, { ramp: 0.1 });
+    const b = getWaveform('ramp-cache', 64, { ramp: 0.1 });
+    expect(b).toBe(a); // same reference — cache hit
+    const other = getWaveform('ramp-cache', 64, { ramp: 0.2 });
+    expect(other).not.toBe(a);
+    expect(other).not.toEqual(a);
+  });
+});
+
