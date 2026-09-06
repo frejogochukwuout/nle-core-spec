@@ -1045,15 +1045,18 @@ describe('PR69 C15: append never lands below the tail', () => {
   });
 });
 
-describe('PR69 C19: the interaction lock finally covers tick', () => {
-  it('tick freezes the playhead while dragActive (the magnet field is static mid-gesture)', () => {
+describe('R22 — the plain playback law (R18k restored): tick runs mid-gesture', () => {
+  it('tick advances the playhead while dragActive (the C19 freeze retired with the machinery)', () => {
     useMini.setState({ playhead: 3, playing: true });
     S().beginDrag();
     S().tick(0.5);
-    expect(S().playhead).toBe(3); // was 3.5 — the rAF writer bypassed the lock
+    // the R18k law: playback keeps writing while a drag runs — the magnet
+    // field is LIVE by design (the playhead is its first target), and the
+    // doc-touching lock (commit/mutations) is unaffected by the tick
+    expect(S().playhead).toBe(3.5);
     S().endDrag();
     S().tick(0.5);
-    expect(S().playhead).toBe(3.5); // playback resumes the frame after the session
+    expect(S().playhead).toBe(4); // playback continues through the session end
   });
 });
 
@@ -1123,39 +1126,8 @@ describe('PR69 C48: split keeps the LEFT half selected (both paths)', () => {
   });
 });
 
-describe('PR69 C53: the pending-gesture window', () => {
-  it('opens at pointerdown and closes at end (sub-threshold included)', () => {
-    expect(S().gesturePending).toBe(false);
-    S().beginPendingGesture();
-    expect(S().gesturePending).toBe(true);
-    S().endPendingGesture();
-    expect(S().gesturePending).toBe(false);
-  });
-
-  it('an ACTIVE drag supersedes the pending window (one owner)', () => {
-    S().beginDrag();
-    S().beginPendingGesture(); // a second pointerdown mid-drag: rejected
-    expect(S().gesturePending).toBe(false);
-    S().endDrag();
-  });
-
-  it('endDrag/cancelDrag sweep the flag too (direct-API belt)', () => {
-    S().beginPendingGesture();
-    S().beginDrag();
-    S().endDrag();
-    expect(S().gesturePending).toBe(false);
-  });
-});
-
-describe('R2-a P3-c: commits obey the pending window too', () => {
-  it('trimClip is inert while a scrub holds the window open (the keyboard trim reached commit)', () => {
-    S().beginPendingGesture();
-    S().trimClip('c1', 'end', 3); // the old law: one history entry mid-scrub
-    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(3.5); // untouched
-    expect(S().past).toHaveLength(0);
-    S().endPendingGesture();
-    S().trimClip('c1', 'end', 3);
-    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(3);
-    expect(S().past).toHaveLength(1); // live after the release
-  });
-});
+/* R22 (user directive 2026-09-07): the pending-gesture window and the
+   commit gate are RETIRED with the whole gesture-machinery family —
+   their store-level nets went with them. The R18k law: the lock family
+   is dragActive only (commit/undo/redo/select gates, already pinned in
+   the interaction-lock block above). */

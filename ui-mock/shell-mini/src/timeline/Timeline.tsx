@@ -17,19 +17,22 @@
    the toggle is the MAGNET ONLY — the pro-NLE convention (Premiere /
    Resolve / FCP / Avid snap to edit points + playhead, never a time
    grid); the 0.5s beat-quantize left the snap path, so a snap-on drag
-   is smooth except where it magnet-jumps to an edit point. R19: BOTH
-   edges of the moving clip magnet (OT snapGroupEdges parity — nearest
-   wins, ties → left) and the magnet field is FROZEN at gesture start
-   (targets from the pre-drag snapshot: a gesture never magnetizes to
-   positions it created).
+   is smooth except where it magnet-jumps to an edit point.
 
    R21 (user P0 revert, 2026-09-06): the drag law is the R18k clamp law
    RESTORED — the mover clamps between its same-track neighbors
    (neighbors never move mid-gesture), the preview is the committed
    state, the UP seals one plain history entry. The R19 insert-push and
    R20 escape/verdict rounds are RETIRED by the user's directive.
-   R19 (thread #51): trim gestures draw the GHOST edge — the
-   dotted extent of how much further the edge can reach (outward only).
+
+   R22 (user directive, 2026-09-07 — "the simple version"): the FULL
+   gesture-machinery retirement. Everything drag-related layered on
+   after R18k is gone: the both-edges magnet + frozen field (back to
+   the single-edge live-target law), the trim ghost, commit-at-UP,
+   the pending-gesture window family, the scrub-surface edge
+   auto-scroll, the unmount sweeps. The pointer path is R18k's again,
+   verbatim in behavior; kept non-drag work (zoom anchor, extent
+   origin, memo law, a11y, scroll preservation across minimize).
 
    R18e additions: RH cut styles (cut head / cut tail at playhead —
    feedback #7), ripple toggle (#16), filmstrip↔color-block toggle
@@ -66,12 +69,11 @@ import {
   insertionAt,
   labelStepFor,
   magnetTarget,
-  magnetMove,
+  resolveSnap,
   ppsFor,
   PPS_STEPS,
   timeToPx,
   pxToTime,
-  trimGhostBound,
 } from '../lib/geometry';
 import { fmtRulerLabel, fmtTimecode } from '../lib/timecode';
 import { filmstripFor } from '../lib/filmstrip';
@@ -385,21 +387,17 @@ interface ClipProps {
    *  (46, after the fixed head rail) vs the compact strip (10, no rail).
    *  The gesture math is origin-relative; the default matches full lanes. */
   originPx?: number;
-  /** R19 (thread #51): the clip reports its outward trim (the ghost-edge
-   *  signal) — the LANE paints the ghost (the clip body clips overflow,
-   *  and the ghost extends beyond the clip's own box). */
-  onTrimGhost?: (ghost: { id: string; edge: 'start' | 'end' } | null) => void;
 }
 
 /* exported for the solo Clip story (R18k storybook restructure — the
    clip-anatomy review surface at natural size, no panel chrome).
    PR69 C56: memoized — the playhead tick no longer re-renders the whole
    clip tree (Lane passes a per-track memoized target map; the playhead
-   magnet target is read live inside the gesture, where it is frozen).
+   magnet target is read live inside the gesture).
    PR69 C2: role="button" + aria-pressed — the clip finally exposes
    name/role/value (WCAG 4.1.2); Enter activates (select), Space routes
    to the global transport law (C46 — registered deviation). */
-export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact, originPx = RENDER_ORIGIN_PX, onTrimGhost }: ClipProps) {
+export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact, originPx = RENDER_ORIGIN_PX }: ClipProps) {
   const select = useMini((s) => s.select);
   const beginDrag = useMini((s) => s.beginDrag);
   const endDrag = useMini((s) => s.endDrag);
@@ -412,10 +410,7 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
 
   /* gesture session (component-held; the store holds the doc snapshot).
    *  R18i adds contentEl + lastX: the edge auto-scroll loop re-applies the
-   *  gesture against the LIVE content rect while the timeline scrolls.
-   *  R19 adds snapStart/snapEnd: the RESTING edges at pointerdown — the
-   *  ghost's outward test compares the request against them (a trim that
-   *  moves the edge away from the resting position is outward). */
+   *  gesture against the LIVE content rect while the timeline scrolls. */
   const g = useRef<{
     kind: 'move' | 'trim-start' | 'trim-end' | null;
     pointerId: number | null; // this gesture owns exactly one pointer (fix #4)
@@ -425,28 +420,25 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
     id: string;
     contentEl: HTMLElement | null; // the shared scroll content (origin law)
     lastX: number; // latest pointer clientX (auto-scroll reads it each frame)
-    snapStart: number; // resting clip.start at pointerdown (R19 ghost law)
-    snapEnd: number; // resting clip end at pointerdown (R19 ghost law)
-  }>({ kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0, snapStart: 0, snapEnd: 0 });
+  }>({ kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0 });
   const autoScrollRaf = useRef<number | null>(null);
   /** R18k (panel thread #1): WHICH edge is being trimmed while the
    *  gesture runs — drives the trim-mode edge shade (the standing filmstrip
    *  shade is gone; it returns ONLY as this affordance). */
   const [trimmingEdge, setTrimmingEdge] = useState<'start' | 'end' | null>(null);
 
-  /* PR69 C9: unmount mid-gesture (story switch, HMR, parent-driven
-   * unmount) must release the interaction lock + pending window —
-   * otherwise every mutating key stays dead except Esc, with no visible
-   * cause. The 5px pre-activation case only needs the pending flag
-   * dropped (no lock was taken yet). */
+  /* unmount mid-gesture (story switch, HMR, parent-driven unmount)
+   * releases the interaction lock — otherwise dragActive stays true and
+   * every mutating key + every future gesture is bricked with no visible
+   * cause (PR69 C9; the R22 retirement keeps this lock-release but drops
+   * the pending-window half — that store field is gone with the window). */
   useEffect(
     () => () => {
       const gs = g.current;
       if (!gs.kind) return;
       stopAutoScroll();
       if (gs.active) cancelDrag();
-      useMini.getState().endPendingGesture();
-      g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0, snapStart: 0, snapEnd: 0 };
+      g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0 };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs + stable store actions only
     [],
@@ -465,10 +457,6 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
     if (e.button !== 0) return;
     if (useMini.getState().dragActive) return; // one gesture at a time (fix #4)
     select(clip.id); // select-on-pointerdown (before the lock can engage)
-    /* PR69 C53: the pending window opens at POINTERDOWN — the mutating
-     * keyboard surface dies here, not 5px later (⌘Z under a held
-     * pointer was live-proven). Cleared at finish/unmount. */
-    useMini.getState().beginPendingGesture();
     // R19: the clip owns this pointerdown — the lane's empty-area track
     // select (thread #26) must not fire through the bubbling phase
     e.stopPropagation();
@@ -483,8 +471,6 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
         '[data-qc-scroll-content]',
       ) as HTMLElement | null,
       lastX: e.clientX,
-      snapStart: clip.start,
-      snapEnd: clip.start + clip.duration,
     };
     /* R20 (live-caught robustness bug): untrusted pointers (jsdom,
      * synthetic dispatch, CDP races) throw NotFoundError from
@@ -510,36 +496,24 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
     const content = gs.contentEl;
     const origin = (content ? content.getBoundingClientRect().left : 0) + originPx;
     const t = pxToTime(clientX - origin, pps);
-    /* PR69 C56: the playhead magnet target is read LIVE (getState, no
-     * subscription) and prepended to the frozen neighbor edges — since
-     * C19 the tick loop freezes while dragActive, so the field is exactly
-     * as static as it was when Lane threaded the prop down, without the
-     * per-tick re-render of the whole clip tree. */
+    /* PR69 C56 (kept through R22): the playhead magnet target is read
+     * LIVE (getState, no subscription) and prepended to the neighbor
+     * edges — R18k's live field without the per-tick re-render of the
+     * whole clip tree. R22: LIVE again (the C19 tick freeze retired
+     * with the machinery) — during playback the playhead target moves,
+     * exactly the R18k law. */
     const targets = [useMini.getState().playhead, ...snapTargets];
     if (gs.kind === 'move') {
       const raw = t - gs.grabOffset;
-      /* R19: BOTH edges magnet (OT snapGroupEdges parity — the left edge
-       * AND the right edge of the moving clip are candidates; nearest
-       * wins, ties → left). The guide paints at the engaged edge's
-       * target. The mover CLAMPS between its neighbors (R21 revert) —
-       * overlap is impossible, so a snap target beyond the clamp bound
-       * lands on the clamp, not past it. */
-      const m = snapOn ? magnetMove(raw, pps, clip.duration, targets) : null;
-      onSnapGuide(m ? m.guide : null);
-      previewMove(clip.id, m ? m.start : raw);
+      // R18e: report the engaged magnet (guide paints at the TARGET)
+      onSnapGuide(snapOn ? magnetTarget(raw, pps, targets) : null);
+      previewMove(clip.id, resolveSnap(raw, snapOn, pps, targets));
     } else if (gs.kind === 'trim-start') {
-      const magnet = snapOn ? magnetTarget(t, pps, targets) : null;
-      onSnapGuide(magnet);
-      previewTrim(clip.id, 'start', magnet !== null ? magnet : t);
-      /* R19 (thread #51): the ghost signal fires only on an OUTWARD
-       *  request (left of the resting start) — the lane paints the dotted
-       *  extent; inward trims and no-room bounds never ghost. */
-      onTrimGhost?.(t < gs.snapStart - 1e-9 ? { id: clip.id, edge: 'start' } : null);
+      onSnapGuide(snapOn ? magnetTarget(t, pps, targets) : null);
+      previewTrim(clip.id, 'start', resolveSnap(t, snapOn, pps, targets));
     } else {
-      const magnet = snapOn ? magnetTarget(t, pps, targets) : null;
-      onSnapGuide(magnet);
-      previewTrim(clip.id, 'end', magnet !== null ? magnet : t);
-      onTrimGhost?.(t > gs.snapEnd + 1e-9 ? { id: clip.id, edge: 'end' } : null);
+      onSnapGuide(snapOn ? magnetTarget(t, pps, targets) : null);
+      previewTrim(clip.id, 'end', resolveSnap(t, snapOn, pps, targets));
     }
   };
 
@@ -619,26 +593,14 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
     } catch {
       /* pointer already released (jsdom-safe) */
     }
-    /* R19: the clears run AFTER the commit-at-up application — the
-     * applyGesture call below re-reports the guide/ghost signals (it is
-     * the same shared gesture applier), so clearing first would be undone
-     * immediately. */
+    onSnapGuide(null); // guide clears with the gesture (R18e)
     if (gs.active) {
       if (canceled) cancelDrag(); // Esc / pointercancel
-      else {
-        /* R19 (review P2-11): commit at the UP position — a fast flick
-         * would otherwise land the LAST pointermove spot, not the drop
-         * spot (OT resolves at the up coordinates). */
-        applyGesture(e.clientX);
-        endDrag(); // ONE history entry per committed gesture
-      }
+      else endDrag(); // ONE history entry per committed gesture
     }
-    onSnapGuide(null); // guide clears with the gesture (R18e)
-    onTrimGhost?.(null); // the ghost leaves with the gesture (R19)
     setDragging(false);
     setTrimmingEdge(null); // R18k: the trim-mode shade leaves with the gesture
-    useMini.getState().endPendingGesture(); // PR69 C53: the window closes with the gesture
-    g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0, snapStart: 0, snapEnd: 0 };
+    g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0 };
   };
 
   /** keyboard trim on the handles (review fix #7: no inert controls) */
@@ -993,15 +955,6 @@ function Lane({
   const selectedId = useMini((s) => s.selectedId);
   const audioLaneVisible = useMini((s) => s.audioLaneVisible);
   const toggleAudioLane = useMini((s) => s.toggleAudioLane);
-  /* R19: the magnet field is FROZEN at gesture start — while a gesture
-   * runs, targets come from the PRE-DRAG SNAPSHOT (a gesture never
-   * magnetizes to positions it created; also fixes the latent ripple-trim
-   * ratchet where pushed followers fed their own new edges back as
-   * magnets). R21 (user P0 revert): with the clamp law restored nothing
-   * moves except the mover — the frozen snapshot IS the live doc. */
-  const dragActive = useMini((s) => s.dragActive);
-  const dragSnapshot = useMini((s) => s.dragSnapshot);
-  const rippleOn = useMini((s) => s.rippleOn);
   const selectTrack = useMini((s) => s.selectTrack);
   /* the collapsed-audio-bar branch validates + places directly (PR69 C54) */
   const insertMediaAt = useMini((s) => s.insertMediaAt);
@@ -1013,19 +966,10 @@ function Lane({
     pps,
     originPx: RENDER_ORIGIN_PX,
   });
-  /* R1-a#1: memoized — the snapshot-derived array feeds useTargetsById's
-   * useMemo; a fresh allocation per render defeated the memo (and with it
-   * every memo(ClipItem)). Identity flips only on real doc/snapshot changes. */
-  const magnetClips = useMemo(
-    () => (dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips),
-    [dragActive, dragSnapshot, clips, track.id],
-  );
-  const targetsById = useTargetsById(magnetClips);
-  /* R19 (thread #51): the trim-ghost signal — which clip is trimming
-   * which edge OUTWARD. The ghost rect is derived (bound ↔ live edge) so
-   * it shrinks as the trim extends; the lane paints it OUTSIDE the clip
-   * (the clip body clips its own overflow). */
-  const [trimGhost, setTrimGhost] = useState<{ id: string; edge: 'start' | 'end' } | null>(null);
+  /* R22: the magnet field is the LIVE doc again (the R18k law) — targets
+   * recompute when a preview mutates the doc; under the clamp law only
+   * the mover changes position and it is excluded from its own targets. */
+  const targetsById = useTargetsById(clips);
 
   if (track.kind === 'audio' && !audioLaneVisible) {
     // R18f (review P2-3): a collapsed placeholder instead of vanishing —
@@ -1077,26 +1021,6 @@ function Lane({
 
   const dropping = drop !== null;
 
-  /* R19 (thread #51): the ghost rect — from the LIVE edge to the bound
-   * (media/neighbor extent the drag clamps to). Under ripple ON the
-   * start edge is suppressed (frozen-left law) and the end bound ignores
-   * the neighbor (followers push) — trimGhostBound encodes both. */
-  let ghostRect: { left: number; width: number } | null = null;
-  if (trimGhost) {
-    const c = clips.find((x) => x.id === trimGhost.id);
-    if (c) {
-      const m = doc.media.find((x) => x.id === c.mediaId);
-      const bound = trimGhostBound(doc, c, trimGhost.edge, rippleOn, m);
-      if (bound !== null) {
-        const liveEdge = trimGhost.edge === 'start' ? c.start : c.start + c.duration;
-        ghostRect =
-          trimGhost.edge === 'start'
-            ? { left: timeToPx(bound, pps), width: timeToPx(liveEdge - bound, pps) }
-            : { left: timeToPx(liveEdge, pps), width: timeToPx(bound - liveEdge, pps) };
-      }
-    }
-  }
-
   return (
     <div
       className={`qc-track-row__content${dropping ? ' is-drop-target' : ''}${track.muted ? ' is-muted' : ''}`}
@@ -1131,17 +1055,8 @@ function Lane({
           filmstripOn={filmstripOn}
           snapTargets={targetsById.get(c.id) ?? EMPTY_TARGETS}
           onSnapGuide={onSnapGuide}
-          onTrimGhost={setTrimGhost}
         />
       ))}
-      {ghostRect && (
-        <div
-          className="qc-trim-ghost"
-          aria-hidden="true"
-          style={{ left: ghostRect.left, width: Math.max(ghostRect.width, 2) }}
-          data-testid={trimGhost ? `mini-trim-ghost-${trimGhost.id}` : undefined}
-        />
-      )}
       {drop && (
         <div
           className="qc-drop-outline"
@@ -1175,25 +1090,15 @@ function MinLane({
 }) {
   const doc = useMini((s) => s.doc);
   const selectedId = useMini((s) => s.selectedId);
-  /* R19: the same frozen-magnet law as the full lanes — the strip runs
-   * the identical gesture engine (the clamp law; no per-surface drift).
-   * PR69 C13: the shared DnD engine (originPx is the ONLY difference
-   * from the full lanes — 10, no head rail). */
-  const dragActive = useMini((s) => s.dragActive);
-  const dragSnapshot = useMini((s) => s.dragSnapshot);
+  /* PR69 C13: the shared DnD engine (originPx is the ONLY difference
+   * from the full lanes — 10, no head rail). R22: live-doc targets — the
+   * same law as the full lanes (R18k, no per-surface drift). */
   const { drop, onDragOver, onDragLeave, onDrop, clips } = useLaneDnd({
     track,
     pps,
     originPx: MIN_ORIGIN_PX,
   });
-  /* R1-a#1: memoized — the snapshot-derived array feeds useTargetsById's
-   * useMemo; a fresh allocation per render defeated the memo (and with it
-   * every memo(ClipItem)). Identity flips only on real doc/snapshot changes. */
-  const magnetClips = useMemo(
-    () => (dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips),
-    [dragActive, dragSnapshot, clips, track.id],
-  );
-  const targetsById = useTargetsById(magnetClips);
+  const targetsById = useTargetsById(clips);
 
   return (
     <div
@@ -1249,31 +1154,18 @@ function Playhead({
 }) {
   const playhead = useMini((s) => s.playhead);
   const setPlayhead = useMini((s) => s.setPlayhead);
-  /* R1-b P2-1/R2: scrub surfaces open the PENDING window too — mutating
-   * keys die mid-scrub (an ⌘Z under an open pointer gesture is the exact
-   * relayout-mid-gesture trap), and tick freezes so playback and the
-   * user's hand stop fighting over the playhead (R1-b P3-8). */
-  const beginPendingGesture = useMini((s) => s.beginPendingGesture);
-  const endPendingGesture = useMini((s) => s.endPendingGesture);
   const [dragging, setDragging] = useState(false);
-  /* R2-a P3-b (round 3): unmount sweep — the min/full branches render
-   * DIFFERENT Playhead instances, so a mode flip mid-handle-scrub unmounts
-   * the scrubbing one with no pointerup ever coming. The window closes
-   * with the surface (edge.stop is the hook's own unmount law). */
-  useEffect(() => () => endPendingGesture(), [endPendingGesture]);
   const x = timeToPx(playhead, pps);
   const atStart = playhead < 0.5;
   const atEnd = playhead > endTime - 0.5;
-  /* PR69 C8: the playhead-handle drag gets the same edge auto-scroll the
-   * clip gestures have had since R18i — a handle dragged to the viewport
-   * edge keeps scrolling + following instead of going blind. */
-  const edge = useEdgeAutoScroll();
-  const contentRef = useRef<HTMLElement | null>(null);
 
-  const applyScrub = (clientX: number) => {
-    const content = contentRef.current;
+  /* R18k (restored R22): the scrub reads the scroll content from the
+   * event target on each move — no contentRef, no edge loop, no pending
+   * window. The handle scrubs, plainly. */
+  const scrubFrom = (e: ReactPointerEvent<HTMLElement>) => {
+    const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
     const origin = (content ? content.getBoundingClientRect().left : 0) + originPx;
-    setPlayhead(pxToTime(clientX - origin, pps));
+    setPlayhead(pxToTime(e.clientX - origin, pps));
   };
 
   return (
@@ -1294,20 +1186,10 @@ function Playhead({
           } catch {
             /* untrusted pointer — scrub proceeds without capture */
           }
-          contentRef.current = e.currentTarget.closest(
-            '[data-qc-scroll-content]',
-          ) as HTMLElement | null;
-          edge.setSession(applyScrub, contentRef.current);
-          edge.note(e.clientX);
-          beginPendingGesture();
           setDragging(true);
         }}
         onPointerMove={(e) => {
-          if (dragging) {
-            edge.note(e.clientX);
-            applyScrub(e.clientX);
-            edge.maybeStart();
-          }
+          if (dragging) scrubFrom(e);
         }}
         onPointerUp={(e) => {
           try {
@@ -1315,22 +1197,18 @@ function Playhead({
           } catch {
             /* jsdom-safe */
           }
-          edge.stop();
-          endPendingGesture();
           setDragging(false);
         }}
-        /* R1-a#2/R1-b P2-1: pointercancel runs the FULL release path — the
-         * old handler only stopped the auto-scroll, leaving `dragging`
-         * true so later HOVER moves kept scrubbing with no button held
-         * (touch/pen scrubs interrupted by a browser gesture hit this). */
+        /* pointercancel hygiene (kept through R22): release + drop the
+         * dragging flag so a touch/pen scrub interrupted by a browser
+         * gesture never leaves hover-moves scrubbing with no button held —
+         * plain state cleanup, no gesture machinery. */
         onPointerCancel={(e) => {
           try {
             (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
           } catch {
             /* jsdom-safe */
           }
-          edge.stop();
-          endPendingGesture();
           setDragging(false);
         }}
         onKeyDown={(e) => {
@@ -1363,69 +1241,13 @@ function Playhead({
 const EDGE_PX = 48;
 const SCROLL_SPEED_PX = 12; // per frame ≈ 720px/s at 60fps
 
-/** PR69 C8: the R18i edge auto-scroll law, shared by the SCRUB surfaces
- *  (ruler + playhead handle) — the same loop ClipItem's maybeAutoScroll
- *  runs for clip gestures. The session is set at pointerdown; `note`
- *  tracks the pointer; `maybeStart` spins the rAF loop only while the
- *  pointer parks within EDGE_PX of the scroll viewport (jsdom-safe: a
- *  zero-width scroll element never starts); the stall bound (12 frames
- *  without scroll progress) terminates at the content edge. */
-function useEdgeAutoScroll() {
-  const rafRef = useRef<number | null>(null);
-  const lastXRef = useRef(0);
-  const activeRef = useRef(false);
-  const applyRef = useRef<(clientX: number) => void>(() => {});
-  const contentRef = useRef<HTMLElement | null>(null);
-
-  const setSession = (apply: (clientX: number) => void, contentEl: HTMLElement | null) => {
-    applyRef.current = apply;
-    contentRef.current = contentEl;
-  };
-  const note = (clientX: number) => {
-    lastXRef.current = clientX;
-  };
-  const stop = () => {
-    activeRef.current = false;
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-  };
-  const maybeStart = () => {
-    const scroll = contentRef.current?.closest('.qc-scroll') as HTMLElement | null;
-    if (!scroll || scroll.clientWidth <= 0 || rafRef.current !== null) return;
-    const vr = scroll.getBoundingClientRect();
-    if (vr.width <= 0) return; // jsdom / unmeasured
-    const dir =
-      lastXRef.current > vr.right - EDGE_PX ? 1 : lastXRef.current < vr.left + EDGE_PX ? -1 : 0;
-    if (dir === 0) return;
-    activeRef.current = true;
-    let stalls = 0;
-    const step = () => {
-      const sc = contentRef.current?.closest('.qc-scroll') as HTMLElement | null;
-      if (!sc || !activeRef.current) {
-        rafRef.current = null;
-        return;
-      }
-      const rect = sc.getBoundingClientRect();
-      const d =
-        lastXRef.current > rect.right - EDGE_PX ? 1 : lastXRef.current < rect.left + EDGE_PX ? -1 : 0;
-      const before = sc.scrollLeft;
-      if (d !== 0) sc.scrollLeft = before + d * SCROLL_SPEED_PX;
-      applyRef.current(lastXRef.current); // content moved under the stationary pointer
-      stalls = sc.scrollLeft !== before ? 0 : stalls + 1;
-      if (d !== 0 && stalls < 12) rafRef.current = requestAnimationFrame(step);
-      else rafRef.current = null;
-    };
-    rafRef.current = requestAnimationFrame(step);
-  };
-  useEffect(() => stop, []); // the loop never outlives its surface
-  return { setSession, note, maybeStart, stop };
-}
-
-/* PR69 C13+C8: ONE ruler scrub surface — the full ruler and the compact
- * strip's ruler were line-identical twins; now one component carries the
- * pointer-scrub law (unquantized, lock-gated) + the edge auto-scroll. */
+/* PR69 C13: ONE ruler scrub surface — the full ruler and the compact
+ * strip's ruler were line-identical twins; one component carries the
+ * R18k pointer-scrub law (stateless, buttons-gated, lock-gated):
+ * pointerdown takes capture (guarded) and seeks; pointermove scrubs
+ * while the button is held. The R22 sweep retired the edge auto-scroll
+ * and the pending window this component carried — the twins' plain law
+ * is back, verbatim. */
 function RulerScrub({
   pps,
   endTime,
@@ -1437,36 +1259,8 @@ function RulerScrub({
   compact?: boolean;
   setPlayhead: (t: number) => void;
 }) {
-  const elRef = useRef<HTMLDivElement | null>(null);
-  const edge = useEdgeAutoScroll();
-  /* R1-b P2-1/R2: the pending window opens with the scrub (mutating keys
-   * die; tick freezes — see Playhead) and closes on ANY exit path. */
-  const beginPendingGesture = useMini((s) => s.beginPendingGesture);
-  const endPendingGesture = useMini((s) => s.endPendingGesture);
-  const apply = (clientX: number) => {
-    const rect = elRef.current?.getBoundingClientRect();
-    setPlayhead(pxToTime(clientX - (rect ? rect.left : 0), pps));
-  };
-  /* R2-a P2-1 (round 3): the release path stops the EDGE LOOP too — the
-   * R21c wiring changed up/cancel to endPendingGesture only, deleting the
-   * edge.stop the playhead handle kept: releasing with the pointer parked
-   * in the 48px edge zone left the rAF loop gliding the timeline and
-   * re-seeking the playhead long after the up (the user's release
-   * position destroyed). */
-  const releaseScrub = () => {
-    edge.stop();
-    endPendingGesture();
-  };
-  /* R2-a P3-b (round 3): unmount sweep (ClipItem C9 parity) — a surface
-   * swap mid-scrub (minimize flip, host remount, HMR) never delivers a
-   * pointerup/cancel; the shared pending window must close with the
-   * surface or mutating keys stay dead + the tick frozen until the next
-   * gesture completes. edge.stop is the hook's own unmount law. The
-   * zustand action identity is stable, so the mount-only deps are safe. */
-  useEffect(() => () => endPendingGesture(), [endPendingGesture]);
   return (
     <div
-      ref={elRef}
       className={`qc-ruler__content${compact ? ' qc-ruler__content--min' : ''}`}
       data-testid="mini-ruler"
       onPointerDown={(e) => {
@@ -1478,23 +1272,15 @@ function RulerScrub({
         } catch {
           /* untrusted pointer — scrub proceeds without capture */
         }
-        edge.setSession(
-          apply,
-          e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null,
-        );
-        edge.note(e.clientX);
-        beginPendingGesture();
-        apply(e.clientX);
+        const rect = e.currentTarget.getBoundingClientRect();
+        setPlayhead(pxToTime(e.clientX - rect.left, pps));
       }}
       onPointerMove={(e) => {
         if (e.buttons === 1 && !useMini.getState().dragActive) {
-          edge.note(e.clientX);
-          apply(e.clientX);
-          edge.maybeStart();
+          const rect = e.currentTarget.getBoundingClientRect();
+          setPlayhead(pxToTime(e.clientX - rect.left, pps));
         }
       }}
-      onPointerUp={releaseScrub}
-      onPointerCancel={releaseScrub}
     >
       <RulerMarks pps={pps} endTime={endTime} compact={compact} />
     </div>
@@ -1705,8 +1491,8 @@ export function Timeline({ style }: { style?: CSSProperties }) {
             >
               <div className="qc-ruler qc-ruler--min">
                 <div className="qc-ruler__inner">
-                  {/* PR69 C13/C8: the shared scrub surface (was a twin of
-                      the full ruler block, now with edge auto-scroll) */}
+                  {/* PR69 C13: the shared scrub surface (one law — the
+                      R18k twin behavior, deduped) */}
                   <RulerScrub pps={pps} endTime={endTime} compact setPlayhead={setPlayhead} />
                 </div>
               </div>
@@ -1771,8 +1557,8 @@ export function Timeline({ style }: { style?: CSSProperties }) {
           >
             <div className="qc-ruler">
               <div className="qc-ruler__inner">
-                {/* PR69 C13/C8: the shared scrub surface (one law, edge
-                    auto-scroll included — was duplicated line-for-line in
+                {/* PR69 C13: the shared scrub surface (one law — the R18k
+                    twin behavior, deduped; was duplicated line-for-line in
                     the minimized branch) */}
                 <RulerScrub pps={pps} endTime={endTime} setPlayhead={setPlayhead} />
               </div>

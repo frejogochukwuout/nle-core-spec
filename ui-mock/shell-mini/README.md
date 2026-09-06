@@ -10,7 +10,7 @@ set + DOM anatomy).
 The build contract is [`docs/DESIGN-mvp.md`](docs/DESIGN-mvp.md) (v2.1
 FINAL — design-audit + code-review rounds folded). `../shell-variants/`
 remains the full spec-18 study; this app is the deliberately small sibling:
-~28 source files vs 100+, 358 tests vs 596, 13 stories vs 83 (PR69 refresh; R2-a round 3: +7 nets).
+~28 source files vs 100+, 333 tests vs 596, 13 stories vs 83 (PR69 refresh; R22: the drag-machinery retirement — 358 → 333 with the retired-law nets).
 
 ## Run it
 
@@ -19,7 +19,7 @@ npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-
 npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
                     #   run via `python3 scripts/dev3000.py` double-fork daemon so it
                     #   survives the per-toolcall process reaping — plain nohup/setsid die)
-npm test            # vitest — 7 files / 358 tests (jsdom)
+npm test            # vitest — 7 files / 333 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # the FULL dev server on :3000 (run via `python3
@@ -370,15 +370,15 @@ Run it at boot or any time; safe twice.
 34. **Key-repeat ignored on the whole keyboard surface** (PR69 C16):
    rapid-fire ⌘Z was never a registered feature; a held S committed
    double splits (live-proven) — all bindings are single-shot now.
-35. **Drag law = R18k clamp (user P0 revert, 2026-09-06)**: rounds R19
-   (free drag + insert-push) and R20 (OT-faithful escape/verdict) are
-   RETIRED — the user judged both "making things worse". The mover
-   clamps between its same-track neighbors; overlap never renders;
-   history entries are plain docs again; the escape's binding-aware
-   undo, mintTrackId, dropEscape/dragMoverId session fields, and the
-   verdict-chip CSS are deleted. The gesture ENGINE improvements stay
-   (capture guards, edge auto-scroll, commit-at-UP, pending-gesture
-   keyboard lock, unmount cleanup, frozen magnet field).
+35. **Drag law = R18k clamp (user P0 revert, 2026-09-06; engine extras
+   retired by R22 — see #39)**: rounds R19 (free drag + insert-push)
+   and R20 (OT-faithful escape/verdict) are RETIRED — the user judged
+   both "making things worse". The mover clamps between its same-track
+   neighbors; overlap never renders; history entries are plain docs
+   again; the escape's binding-aware undo, mintTrackId,
+   dropEscape/dragMoverId session fields, and the verdict-chip CSS are
+   deleted. Of the R21b engine keep-list, ONLY the capture guards and
+   the ClipItem-C9 lock-release sweep survived R22 — see #39.
 36. **Clip root nests the trim-zone buttons** (R1-b review): the clip is
    role="button" (C2) with two real <button> trim handles inside —
    ARIA discourages interactive descendants of a button. Registered
@@ -386,26 +386,43 @@ Run it at boot or any time; safe twice.
    (focus/keyboard), the clip needs a role with a value; the pragmatic
    composition is a documented deviation. Keyboard: Enter selects the
    clip, Tab reaches the handles, arrows trim, Space steps the handle.
-37. **Scrub surfaces share the gesture lock family** (R2): ruler/playhead-
-   handle/scrub-bar pointer sessions open the pending-gesture window
-   (mutating keys die, tick freezes — playback pauses its playhead
-   writes while the user's hand owns the playhead) and run the FULL
-   release path on pointercancel (a touch scrub interrupted by a
-   browser gesture used to leave the surface armed for hover-scrub).
-   Timeline gesture surfaces carry touch-action:none (the splitter and
-   viewer bar already did).
-38. **The pending window is a shared boolean, and the scrub-surface
-   unmount sweeps are unconditional** (R3-a F1, P3): a layout flip
-   mid-ScrubBar-scrub (Space/Enter on a pre-focused native button —
-   the yield fires natively even under the lock — or multi-touch)
-   unmounts the timeline's full-mode scrub surfaces, whose sweeps
-   close a window owned by the still-live Viewer bar: one mutating
-   key commits mid-gesture. Self-healing (the bar's own release
-   closes nothing further; next gesture is clean), no corruption.
-   Fix shape when wanted: owner-token windows in the store or
-   ClipItem-C9's local session-open-ref shape (Timeline.tsx ~442).
-   The multi-touch early-close note (R2-a observation) is the same
-   family.
+37. **Scrub surfaces: plain pointercancel hygiene only** (R2 → R22
+   revised): the shared pending-gesture window + tick freeze + unmount
+   sweeps that R21c/d layered onto the scrub surfaces are RETIRED —
+   the ruler and playhead-handle scrubs are the R18k stateless/
+   dragging-flag laws again; the stateful surfaces (playhead handle,
+   viewer bar) keep only a minimal pointercancel handler (release +
+   drop the dragging flag) so a touch scrub interrupted by a browser
+   gesture never leaves hover-moves scrubbing. Timeline gesture
+   surfaces carry touch-action:none (the splitter and viewer bar
+   already did).
+38. ~~The pending window is a shared boolean~~ — **MOOT (R22)**: the
+   R3-a F1 cross-surface window-sharing bug family is deleted with the
+   machinery — there is NO pending window, NO commit gate, NO tick
+   freeze, NO unmount sweeps to false-close. Keyboard mutations follow
+   the plain R18k dragActive-only lock.
+39. **R22 — the full gesture-machinery retirement** (user directive
+   2026-09-07: "fully clean up any timeline drag related handling done
+   in the last two-three sessions to the one before that — it was
+   actually better back then"): everything drag-related layered on
+   after R18k is gone, restoring the R18k pointer law verbatim in
+   behavior. RETIRED: the both-edges magnet + frozen magnet field
+   (back to single-edge magnetTarget/resolveSnap on the LIVE field —
+   playhead included, moving during playback by design), the trim
+   ghost (thread #51 affordance + trimGhostBound + CSS), commit-at-UP
+   (the UP seals the LAST PREVIEWED move — a fast flick lands at the
+   last-move spot), the PR69 C53 pending-gesture window (store field +
+   useKeys branches + commit gate), the PR69 C19 tick freeze (playback
+   writes the playhead mid-gesture — the R18k live-magnet law), the
+   PR69 C8 scrub-surface edge auto-scroll (ruler/playhead scrub no
+   longer glides at the viewport edge), and the scrub-surface unmount
+   sweeps. KEPT: the clamp law, the R18i CLIP edge auto-scroll
+   (R18k baseline), capture guards, ClipItem-C9 lock-release on
+   unmount, and every non-drag fix (C1/C16/C46/C2 keyboard+a11y, C7a
+   zoom anchor, C24 extent origin, C13 dedupes, C56 memo law, scroll
+   preservation across minimize, C3 singleton playback, C54/C52/C4/
+   C15/C18, track markers/mute/lane-select, ScrubBar + seek controls).
+   Tests: 333 (the retired-law nets deleted; R18k-law pins added).
 
 ## The topbar is a downstream customization point (R18j, thread #17)
 

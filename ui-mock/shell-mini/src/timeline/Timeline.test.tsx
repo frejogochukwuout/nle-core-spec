@@ -862,21 +862,20 @@ describe('R18k trim-mode edge shade (panel thread #1)', () => {
 
 /* ---- R19: drag insert affordances, ghost edges, track selection ---- */
 
-describe('R20 — commit at the UP position (review P2-11)', () => {
-  it('a fast flick commits the UP spot, not the last pointermove', () => {
+describe('R22 — the plain commit law (R18k restored): the UP seals the last preview', () => {
+  it('a fast flick commits the LAST PREVIEWED MOVE, not the up coordinates (commit-at-UP retired)', () => {
     render(<Timeline />);
     const c2 = screen.getByTestId('mini-clip-c2');
     // activate the gesture with a small move, then RELEASE at +96px with
-    // NO intermediate move there — the old code would commit the small move
+    // NO intermediate move there — the R18k law commits the previewed
+    // (last-move) state; the up position itself never re-applies
     fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 216, clientY: 10 });
     fireEvent.pointerMove(c2, { pointerId: 7, clientX: 222, clientY: 10 });
     fireEvent.pointerUp(c2, { pointerId: 7, clientX: 216 + 96, clientY: 10 });
-    // raw at the up position = 4.5 + (312−216)/48 = 6.5 → span [6.5,10)
-    // hits c3@9 → the R18k clamp parks the mover at 9 − 3.5 = 5.5 (R21
-    // user P0 revert: no escape, no minted track)
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V1');
-    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // never moved
+    // raw at the last move = 4.5 + (222−216)/48 = 4.625 — inside the clamp
+    // span [3.5, 5.5]; committed as-is, one history entry
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBeCloseTo(4.625, 5);
+    expect(S().past).toHaveLength(1);
   });
 });
 
@@ -937,56 +936,13 @@ describe('R20 — untrusted pointer capture never kills a gesture (live-caught b
       }).not.toThrow();
       expect(S().dragActive).toBe(true); // the session engaged despite the throw
       fireEvent.pointerUp(c2, { pointerId: 7, clientX: 216 + 48, clientY: 10 });
-      expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+      // R18k law (R22): the UP seals the LAST PREVIEWED move (x=222 →
+      // 4.5 + 6/48 = 4.625); the up coordinates never re-apply
+      expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBeCloseTo(4.625, 5);
       expect(S().past).toHaveLength(1);
     } finally {
       proto.setPointerCapture = original;
     }
-  });
-});
-
-describe('R19 — trim ghost edges (thread #51)', () => {
-  const trim = (el: Element, fromX: number, toX: number) => {
-    fireEvent.pointerDown(el, { button: 0, pointerId: 7, clientX: fromX, clientY: 10 });
-    fireEvent.pointerMove(el, { pointerId: 7, clientX: fromX + 6, clientY: 10 }); // activate
-    fireEvent.pointerMove(el, { pointerId: 7, clientX: toX, clientY: 10 });
-  };
-
-  it('OUTWARD end-trim paints the ghost; it leaves with the gesture', () => {
-    render(<Timeline />);
-    // c1 [0,3.5) media 4.5s — the end can reach 4.5 (min(neighbor 4.5, source 4.5))
-    trim(screen.getByTestId('mini-trim-end-c1'), 162, 202); // t≈(202−46)/48 = 3.25 → outward? no: 3.25 < 3.5!
-    // use a clearly outward target: x=250 → t = (250−46)/48 = 4.25 > 3.5
-    fireEvent.pointerMove(screen.getByTestId('mini-trim-end-c1'), { pointerId: 7, clientX: 250, clientY: 10 });
-    expect(screen.getByTestId('mini-trim-ghost-c1')).toBeInTheDocument();
-    fireEvent.pointerUp(screen.getByTestId('mini-trim-end-c1'), { pointerId: 7, clientX: 250, clientY: 10 });
-    expect(screen.queryByTestId('mini-trim-ghost-c1')).toBeNull();
-  });
-
-  it('INWARD end-trim never ghosts', () => {
-    render(<Timeline />);
-    trim(screen.getByTestId('mini-trim-end-c1'), 250, 180); // inward from 3.5 toward 2.8
-    expect(screen.queryByTestId('mini-trim-ghost-c1')).toBeNull();
-    fireEvent.pointerUp(screen.getByTestId('mini-trim-end-c1'), { pointerId: 7, clientX: 180, clientY: 10 });
-  });
-
-  it('at max (no room): no ghost even outward', () => {
-    render(<Timeline />);
-    // c1 is already at its media max? c1 [0,3.5) with media 4.5 has room. Use c3:
-    // c3 [9,12.5) media m-title 3.5s → end bound = 9+3.5 = 12.5 = current end → no room
-    trim(screen.getByTestId('mini-trim-end-c3'), 574, 620);
-    expect(screen.queryByTestId('mini-trim-ghost-c3')).toBeNull();
-    fireEvent.pointerUp(screen.getByTestId('mini-trim-end-c3'), { pointerId: 7, clientX: 620, clientY: 10 });
-  });
-
-  it('ripple ON suppresses the START-edge ghost (frozen-left law)', () => {
-    render(<Timeline />);
-    S().toggleRipple();
-    // c2 [4.5,8): start handle pulled outward-left → under ripple the left edge freezes
-    trim(screen.getByTestId('mini-trim-start-c2'), 250, 130); // t < 4.5 → outward request
-    expect(screen.queryByTestId('mini-trim-ghost-c2')).toBeNull();
-    fireEvent.pointerUp(screen.getByTestId('mini-trim-start-c2'), { pointerId: 7, clientX: 130, clientY: 10 });
-    S().toggleRipple();
   });
 });
 
@@ -1121,27 +1077,8 @@ describe('PR69 C2/C46: the clip is a real button (Enter selects, Space is the tr
   });
 });
 
-describe('PR69 C53: mutating keys die at POINTERDOWN (the 5px window)', () => {
-  it('⌘Z under a held pointer is inert until the gesture ends', () => {
-    render(<Timeline />);
-    setStore(() => S().select('c2'));
-    setStore(() => S().moveClip('c2', 5.5)); // one history entry to undo
-    const clip = screen.getByTestId('mini-clip-c2');
-    // pointerdown WITHOUT movement: pending window open, lock not yet engaged
-    fireEvent.pointerDown(clip, { button: 0, pointerId: 11, clientX: 264, clientY: 10 });
-    expect(S().gesturePending).toBe(true);
-    fireEvent.keyDown(window, { key: 'z', metaKey: true });
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5); // NOT undone under the held pointer
-    fireEvent.pointerUp(clip, { pointerId: 11, clientX: 264, clientY: 10 });
-    expect(S().gesturePending).toBe(false);
-    // after release the surface is live again
-    fireEvent.keyDown(window, { key: 'z', metaKey: true });
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
-  });
-});
-
 describe('PR69 C9: a clip unmounting mid-gesture releases the lock', () => {
-  it('unmount with an active drag clears dragActive + gesturePending', () => {
+  it('unmount with an active drag clears dragActive', () => {
     const view = render(<Timeline />);
     const clip = screen.getByTestId('mini-clip-c2');
     fireEvent.pointerDown(clip, { button: 0, pointerId: 12, clientX: 264, clientY: 10 });
@@ -1149,7 +1086,6 @@ describe('PR69 C9: a clip unmounting mid-gesture releases the lock', () => {
     expect(S().dragActive).toBe(true);
     view.unmount(); // story switch / HMR / parent-driven unmount
     expect(S().dragActive).toBe(false);
-    expect(S().gesturePending).toBe(false);
     // the keyboard surface works again without knowing the Esc law
     fireEvent.keyDown(window, { key: 's' });
     expect(S().past.length).toBeGreaterThanOrEqual(0); // no lock trap
@@ -1182,7 +1118,6 @@ describe('R2: pointercancel never leaves a scrub gesture stuck (R1-b P2-1/P2-2)'
     // dragging stayed true and the playhead followed the hover)
     fireEvent.pointerMove(ph, { pointerId: 9, buttons: 0, clientX: 500, clientY: 20 });
     expect(S().playhead).toBeCloseTo((282 - 46) / 48, 5); // unchanged
-    expect(S().gesturePending).toBe(false); // the window closed too
   });
 
   it('viewer scrub bar: cancel releases dragging — hover moves do NOT seek', () => {
@@ -1192,38 +1127,6 @@ describe('R2: pointercancel never leaves a scrub gesture stuck (R1-b P2-1/P2-2)'
     fireEvent.pointerCancel(bar, { pointerId: 4, clientX: 100, clientY: 20 });
     fireEvent.pointerMove(bar, { pointerId: 4, buttons: 0, clientX: 400, clientY: 20 });
     expect(S().playhead).toBe(0); // jsdom rect 0 → the hover seek would move it if armed
-    expect(S().gesturePending).toBe(false);
-  });
-});
-
-describe('R2: scrub surfaces share the gesture lock family (R1-b P3-8)', () => {
-  it('a ruler scrub opens the pending window — mutating keys + tick freeze', () => {
-    render(<Timeline />);
-    const ruler = screen.getByTestId('mini-ruler');
-    fireEvent.pointerDown(ruler, { button: 0, pointerId: 3, clientX: 244, clientY: 20 });
-    expect(S().gesturePending).toBe(true);
-    fireEvent.keyDown(window, { key: 'z', metaKey: true }); // ⌘Z mid-scrub: inert
-    expect(S().past).toHaveLength(0);
-    useMini.setState({ playing: true, playhead: 2 });
-    S().tick(0.5); // tick freezes while the user's hand owns the playhead
-    expect(S().playhead).toBe(2);
-    fireEvent.pointerUp(ruler, { pointerId: 3, clientX: 244, clientY: 20 });
-    expect(S().gesturePending).toBe(false);
-    S().tick(0.5); // playback resumes the frame after
-    expect(S().playhead).toBe(2.5);
-  });
-});
-
-describe('R2: Esc during the pending window (R1-a #5)', () => {
-  it('Esc mid-pending does NOT deselect the clip under the pointer', () => {
-    render(<Timeline />);
-    setStore(() => S().select('c2'));
-    const clip = screen.getByTestId('mini-clip-c2');
-    fireEvent.pointerDown(clip, { button: 0, pointerId: 21, clientX: 264, clientY: 10 });
-    expect(S().gesturePending).toBe(true);
-    fireEvent.keyDown(window, { key: 'Escape' });
-    expect(S().selectedId).toBe('c2'); // the old fall-through deselected mid-gesture
-    fireEvent.pointerUp(clip, { pointerId: 21, clientX: 264, clientY: 10 });
   });
 });
 
@@ -1241,14 +1144,7 @@ describe('R2: trim handles are keyboard-activatable (R1-a #4)', () => {
   });
 });
 
-describe('R2: reset + ruler extent re-publish (R1-b P2-3/P2-4)', () => {
-  it('reset sweeps gesturePending (the keyboard law never stays dead)', () => {
-    render(<Timeline />);
-    S().beginPendingGesture();
-    S().reset();
-    expect(S().gesturePending).toBe(false);
-  });
-
+describe('R2: ruler extent re-publish (R1-b P2-4)', () => {
   it('a same-extent reset re-publishes the ruler extent — scrubs reach the painted surface', () => {
     render(<Timeline />);
     expect(S().rulerEnd).toBeCloseTo(12.5, 5); // published on mount
@@ -1332,87 +1228,20 @@ describe('R2-a round 3 — scroll preservation (P2-2/P3-a)', () => {
   });
 });
 
-describe('R2-a round 3 — ruler release stops the edge loop (P2-1)', () => {
-  it('pointerup kills the auto-scroll — the timeline stops gliding after release', () => {
-    // jsdom clamps programmatic scrollLeft — intercept so the loop's
-    // writes stick and the stall guard never fires
-    const io = interceptScrollLeft();
-    // manual rAF queue: frames advance ONLY when driven
-    let queue: FrameRequestCallback[] = [];
-    let rafId = 0;
-    const tickFrames = (n: number) =>
-      act(() => {
-        for (let i = 0; i < n; i++) {
-          const q = queue;
-          queue = [];
-          q.forEach((cb) => cb(performance.now()));
-        }
-      });
-    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(((cb: FrameRequestCallback) => {
-      queue.push(cb);
-      return ++rafId;
-    }) as typeof window.requestAnimationFrame);
-    try {
-      render(<Timeline />);
-      const scroll = screen.getByTestId('mini-timeline-scroll') as HTMLElement;
-      // jsdom measures 0 — give the loop a real viewport to push against
-      Object.defineProperty(scroll, 'clientWidth', { configurable: true, get: () => 800 });
-      scroll.getBoundingClientRect = () =>
-        ({ left: 0, right: 800, width: 800, top: 0, bottom: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
-      const ruler = screen.getByTestId('mini-ruler');
-      // pointerdown + move parked 10px inside the right edge (dir = 1)
-      fireEvent.pointerDown(ruler, { button: 0, pointerId: 21, clientX: 790 });
-      fireEvent.pointerMove(ruler, { pointerId: 21, clientX: 790, buttons: 1 });
-      tickFrames(3); // 3 driven frames → scrollLeft 12px/frame = 36
-      expect(io.state.val).toBe(36);
-      // RELEASE: the old law kept the loop gliding + re-seeking; the new
-      // release path runs edge.stop first
-      fireEvent.pointerUp(ruler, { pointerId: 21, clientX: 790 });
-      tickFrames(6);
-      expect(io.state.val).toBe(36); // frozen at the release spot
-    } finally {
-      rafSpy.mockRestore();
-      io.restore();
-    }
-  });
-});
-
 describe('R2-a round 3 — surface swaps + the pending window (P3-b/P3-c)', () => {
-  it('a minimize flip mid-scrub closes the pending window (no dead keys after the swap)', () => {
+  it('a minimize flip mid-scrub leaves the keyboard surface live (the pending window is retired — R22)', () => {
     render(<Timeline />);
     fireEvent.pointerDown(screen.getByTestId('mini-ruler'), {
       button: 0,
       pointerId: 22,
       clientX: 120,
     });
-    expect(S().gesturePending).toBe(true);
-    // the surface swap unmounts the scrubbing RulerScrub with no pointerup
+    // the surface swap unmounts the scrubbing RulerScrub with no pointerup —
+    // the R18k law has NO shared window to strand: the keys stay live through
+    // the flip (the R22 sweep deleted the pending-gesture machinery)
     fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
-    expect(S().gesturePending).toBe(false); // the unmount sweep closed it
-    // the keys are live again: a commit goes through
     setStore(() => S().trimClip('c1', 'end', 3));
     expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(3);
-    expect(S().past).toHaveLength(1);
-  });
-
-  it('the keyboard trim is inert while a scrub holds the pending window, live after release', () => {
-    render(<Timeline />);
-    setStore(() => S().select('c1')); // tabIndex only when selected
-    const handle = screen.getByTestId('mini-trim-end-c1');
-    fireEvent.pointerDown(screen.getByTestId('mini-ruler'), {
-      button: 0,
-      pointerId: 23,
-      clientX: 200,
-    });
-    // the old law: the arrows stepped the doc mid-scrub (a history entry
-    // minted while the pointer held the window)
-    fireEvent.keyDown(handle, { key: 'ArrowRight' });
-    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(3.5);
-    expect(S().past).toHaveLength(0);
-    // release, then the same key steps the edge
-    fireEvent.pointerUp(screen.getByTestId('mini-ruler'), { pointerId: 23 });
-    fireEvent.keyDown(handle, { key: 'ArrowRight' });
-    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(4);
     expect(S().past).toHaveLength(1);
   });
 });
