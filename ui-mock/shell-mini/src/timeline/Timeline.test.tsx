@@ -1314,7 +1314,11 @@ describe('R2-a round 3 — scroll preservation (P2-2/P3-a)', () => {
     const io = interceptScrollLeft();
     try {
       render(<Timeline />);
-      const full = screen.getByTestId('mini-timeline-scroll');
+      const full = screen.getByTestId('mini-timeline-scroll') as HTMLElement;
+      // R3-a F2: stub a REAL width — jsdom's clientWidth=0 hid the old
+      // law's `if (w > 0)`-guarded re-anchor entirely (the exact blind
+      // spot that let P2-2 ship: this net passed on the broken code)
+      Object.defineProperty(full, 'clientWidth', { configurable: true, get: () => 800 });
       io.state.val = 500;
       fireEvent.scroll(full);
       const writes = io.sets.length;
