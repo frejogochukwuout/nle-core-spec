@@ -6,8 +6,7 @@ import {
   PPS_STEPS,
   DEFAULT_ZOOM_STEP,
   wouldOverlap,
-  insertPlacement,
-  insertPushedIds,
+  resolveDropEscape,
   trimGhostBound,
   magnetMove,
   clampPlayhead,
@@ -26,7 +25,7 @@ import {
   timeToPx,
   pxToTime,
 } from './geometry';
-import { seedDoc, type Clip, type Doc, type Media } from './mockData';
+import { seedDoc, multiTrackDoc, mintTrackId, type Clip, type Doc, type Media, type Track } from './mockData';
 
 const clip = (over: Partial<Clip>): Clip => ({
   id: 'x',
@@ -139,89 +138,121 @@ describe('wouldOverlap (R19 — the OT wire validation law)', () => {
   });
 });
 
-/* ---- R19: the insert placement (drag-drop conflict law) ---- */
+/* ---- R20: the OT drop law (resolveDropEscape) + mintTrackId ---- */
 
-describe('insertPlacement (Premiere insert-edit geometry)', () => {
-  // the seed V1 lane: c1 [0,3.5) c2 [4.5,8) c3 [9,12.5)
-  const seed = () => seedDoc().clips.filter((c) => c.trackId === 'V1');
-
-  it('free span: plain move — self relocates, nobody shifts', () => {
-    const out = insertPlacement(seed(), 'c1', 13, 3.5); // [13,16.5) past c3's end — free
-    expect(out.find((c) => c.id === 'c1')!.start).toBe(13);
-    expect(out.find((c) => c.id === 'c2')!.start).toBe(4.5); // untouched
-    expect(out.find((c) => c.id === 'c3')!.start).toBe(9);
-    expect(insertPushedIds(seed(), 'c1', 13, 3.5)).toEqual([]);
+describe('resolveDropEscape (R20 — OT free / escape / conflict, windowed)', () => {
+  // the seed V1 lane: c1 [0,3.5) c2 [4.5,8) c3 [9,12.5); tracks V1+A1 only
+  it('free span: plain drop — the mover keeps its own track', () => {
+    expect(resolveDropEscape(seedDoc(), 'c1', 13, 3.5)).toEqual({ verdict: 'free' });
   });
 
-  it('drag LEFT in front of a clip: the tail pushes right (the one-lane fix)', () => {
-    // c3 (dur 3.5) dropped at 2 → conflicts c1 [0,3.5) and c2 [4.5,8)
-    // first = c1; delta = 5.5 − 0 = 5.5; c1 → 5.5, c2 → 10
-    const out = insertPlacement(seed(), 'c3', 2, 3.5);
-    expect(out.find((c) => c.id === 'c3')!.start).toBe(2);
-    expect(out.find((c) => c.id === 'c1')!.start).toBe(5.5);
-    expect(out.find((c) => c.id === 'c2')!.start).toBe(10);
-    expect(insertPushedIds(seed(), 'c3', 2, 3.5)).toEqual(['c1', 'c2']);
+  it('touching edges are NOT conflicts (butt-joint is a legal drop)', () => {
+    // c3 at 8: span [8,11.5) — c2 ends exactly at 8 (touch), c3 is the mover
+    expect(resolveDropEscape(seedDoc(), 'c3', 8, 3.5)).toEqual({ verdict: 'free' });
   });
 
-  it('drag RIGHT over the next clip: only the conflicting tail shifts', () => {
-    // c1 (dur 3.5) dropped at 9.5 → conflicts c3 [9,12.5); first = c3,
-    // delta = 13 − 9 = 4; c3 → 13. c2 (before the block) untouched.
-    const out = insertPlacement(seed(), 'c1', 9.5, 3.5);
-    expect(out.find((c) => c.id === 'c1')!.start).toBe(9.5);
-    expect(out.find((c) => c.id === 'c2')!.start).toBe(4.5);
-    expect(out.find((c) => c.id === 'c3')!.start).toBe(13);
+  it('seed doc has no second video track: a conflict can only mint → conflict', () => {
+    // c3 (dur 3.5) at 2: span [2,5.5) overlaps c1 [0,3.5)
+    expect(resolveDropEscape(seedDoc(), 'c3', 2, 3.5)).toEqual({ verdict: 'conflict' });
   });
 
-  it('SUB-GRID delta still clears the first follower (the R19 review P1)', () => {
-    // c1 dragged to R=1.1 → span [1.1,4.6) conflicts c2@4.5 by 0.1s.
-    // quantize(0.1)=0 — the old rippleShiftAfter identity would commit
-    // the overlap; insertPlacement's ALWAYS-floor must clear it.
-    const out = insertPlacement(seed(), 'c1', 1.1, 3.5);
-    expect(out.find((c) => c.id === 'c1')!.start).toBe(1.1);
-    expect(out.find((c) => c.id === 'c2')!.start).toBeGreaterThanOrEqual(1.1 + 3.5);
-    // and c2 clears with at most the 0.25s floor adjustment
-    expect(out.find((c) => c.id === 'c2')!.start).toBeLessThanOrEqual(4.5 + 0.25);
+  it('mover missing → free (degenerate guard)', () => {
+    expect(resolveDropEscape(seedDoc(), 'nope', 2, 3.5)).toEqual({ verdict: 'free' });
   });
 
-  it('R=0 with a sibling at 0: prepend pushes it to the inserted tail', () => {
-    const out = insertPlacement(seed(), 'c2', 0, 3.5);
-    expect(out.find((c) => c.id === 'c2')!.start).toBe(0);
-    expect(out.find((c) => c.id === 'c1')!.start).toBe(3.5);
+  it('multiTrackDoc: PREFER-EXISTING — a free same-kind track hosts the escape', () => {
+    // V1: c1[0,3.5) c2[4.5,8) c3[9,12.5); V2: c5[1,6.5) c6[8,12)
+    // c1 at 12: span [12,15.5) conflicts c3 on V1; V2 is free past 12
+    expect(resolveDropEscape(multiTrackDoc(), 'c1', 12, 3.5)).toEqual({
+      verdict: 'escape',
+      trackId: 'V2',
+      minted: false,
+    });
   });
 
-  it('negative R clamps to 0', () => {
-    const out = insertPlacement(seed(), 'c3', -2, 3.5);
-    expect(out.find((c) => c.id === 'c3')!.start).toBe(0);
+  it('multiTrackDoc: an existing-but-BUSY track does not host → conflict (mint is next)', () => {
+    // c1 at 2: span [2,5.5) overlaps c2 [4.5,8) on V1; V2's c5 [1,6.5)
+    // covers the span → busy → no existing host → conflict (the store mints)
+    expect(resolveDropEscape(multiTrackDoc(), 'c1', 2, 3.5)).toEqual({ verdict: 'conflict' });
   });
 
-  it('the committed lane never contains overlaps (invariant sweep)', () => {
-    const clips = seed();
-    for (const r of [0, 0.7, 1.1, 2.3, 4.6, 5.5, 8.9, 10, 12.4, 20]) {
-      for (const id of ['c1', 'c2', 'c3']) {
-        const out = insertPlacement(clips, id, r, 3.5).sort((a, b) => a.start - b.start);
-        for (let i = 0; i + 1 < out.length; i += 1) {
-          expect(out[i].start + out[i].duration).toBeLessThanOrEqual(out[i + 1].start + 1e-9);
-        }
-      }
-    }
+  it('audio never escapes to a VIDEO track (same-kind candidates only)', () => {
+    const doc: Doc = {
+      tracks: [
+        { id: 'V1', kind: 'video', label: 'V1' },
+        { id: 'V2', kind: 'video', label: 'V2' },
+        { id: 'A1', kind: 'audio', label: 'A1' },
+      ],
+      media: [],
+      clips: [
+        { id: 'a1', trackId: 'A1', mediaId: 'm', start: 2, duration: 3 },
+        { id: 'a2', trackId: 'A1', mediaId: 'm', start: 8, duration: 3 },
+        { id: 'v1', trackId: 'V1', mediaId: 'm', start: 0, duration: 20 },
+        { id: 'v2', trackId: 'V2', mediaId: 'm', start: 0, duration: 20 }, // both video tracks busy — but irrelevant
+      ],
+    };
+    // a2 at 3: span [3,6) overlaps a1 [2,5) on A1; V1/V2 are video — never candidates
+    expect(resolveDropEscape(doc, 'a2', 3, 3)).toEqual({ verdict: 'conflict' });
   });
 
-  it('self is never a follower (snapshot identity — no double-shift)', () => {
-    const out = insertPlacement(seed(), 'c2', 2, 3.5);
-    expect(out.find((c) => c.id === 'c2')!.start).toBe(2); // landed exactly at R
+  it('FIRST same-kind track in doc order wins when several are free (deterministic)', () => {
+    const tracks: Track[] = [
+      { id: 'V1', kind: 'video', label: 'V1' },
+      { id: 'V2', kind: 'video', label: 'V2' },
+      { id: 'V3', kind: 'video', label: 'V3' },
+    ];
+    const doc: Doc = {
+      tracks,
+      media: [],
+      clips: [
+        { id: 'm1', trackId: 'V1', mediaId: 'm', start: 0, duration: 4 },
+        { id: 'm2', trackId: 'V1', mediaId: 'm', start: 6, duration: 4 },
+      ],
+    };
+    // m2 at 2: span [2,6) overlaps m1 on V1; V2 and V3 both free → V2 (doc order)
+    expect(resolveDropEscape(doc, 'm2', 2, 4)).toEqual({
+      verdict: 'escape',
+      trackId: 'V2',
+      minted: false,
+    });
   });
 
-  it('CROSS-TRACK law: audio clips under the span are never conflicts (the full-doc form)', () => {
-    // the full seed doc includes c4 on A1 [1.5,8.5) — a video-span insert
-    // must treat ONLY V1 siblings as conflicts (caught live by the
-    // drag-session store test; the V1-filtered sweep above masks it)
-    const full = seedDoc().clips;
-    const out = insertPlacement(full, 'c3', 2, 3.5);
-    expect(out.find((c) => c.id === 'c3')!.start).toBe(2);
-    expect(out.find((c) => c.id === 'c1')!.start).toBe(5.5);
-    expect(out.find((c) => c.id === 'c2')!.start).toBe(10);
-    expect(out.find((c) => c.id === 'c4')!.start).toBe(1.5); // A1 untouched
-    expect(insertPushedIds(full, 'c3', 2, 3.5)).toEqual(['c1', 'c2']);
+  it('CROSS-TRACK law: an audio clip under the span is not a conflict source', () => {
+    // c3 at 2 overlaps c1 on V1 — c4 [1.5,8.5) on A1 sits under the span
+    // and must not be read as a conflict for a V1 mover
+    expect(resolveDropEscape(seedDoc(), 'c3', 2, 3.5)).toEqual({ verdict: 'conflict' });
+    // (the verdict is conflict because V1's OWN c1 conflicts — not because of c4;
+    // the store-level mint then lands the escape on a minted V2, and c4 stays)
+  });
+});
+
+describe('mintTrackId (R20 — the new-track fallback naming law)', () => {
+  it('seed doc: video mints V2, audio mints A2 (kind-local series)', () => {
+    expect(mintTrackId(seedDoc().tracks, 'video')).toBe('V2');
+    expect(mintTrackId(seedDoc().tracks, 'audio')).toBe('A2');
+  });
+
+  it('multiTrackDoc: V3 / A3 past the existing pairs', () => {
+    expect(mintTrackId(multiTrackDoc().tracks, 'video')).toBe('V3');
+    expect(mintTrackId(multiTrackDoc().tracks, 'audio')).toBe('A3');
+  });
+
+  it('a GAP in the series never re-mints an existing id (V1,V3 → V4)', () => {
+    const tracks: Track[] = [
+      { id: 'V1', kind: 'video', label: 'V1' },
+      { id: 'V3', kind: 'video', label: 'V3' },
+      { id: 'A1', kind: 'audio', label: 'A1' },
+    ];
+    expect(mintTrackId(tracks, 'video')).toBe('V4');
+  });
+
+  it('the two series are independent (A mints ignore V numbers)', () => {
+    const tracks: Track[] = [
+      { id: 'V1', kind: 'video', label: 'V1' },
+      { id: 'V5', kind: 'video', label: 'V5' },
+      { id: 'A1', kind: 'audio', label: 'A1' },
+    ];
+    expect(mintTrackId(tracks, 'audio')).toBe('A2');
   });
 });
 

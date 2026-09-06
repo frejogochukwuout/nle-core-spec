@@ -22,6 +22,12 @@
     rgba(255, 255, 255, 0.024) 0 1px inset;
   overflow: hidden;
   z-index: 1;
+  /* R20 (thread th_mtpf59ol): drag/scrub gestures across the timeline
+     selected body text (ruler + tools + lanes + min strip) — the whole
+     panel is a gesture surface, not a text surface. user-select does not
+     gate pointer events, so area-selection stays possible later. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* tools row — 42px, right-aligned controls (RH-verbatim) */
@@ -326,10 +332,17 @@
   pointer-events: auto;
 }
 
-/* time label pill + triangle (RH-verbatim, hover/drag reveal) */
+/* time label pill + triangle (RH-verbatim, hover/drag reveal).
+   R20 (thread th_mtpf397v): the pill lives INSIDE the ruler band in ALL
+   modes — structural, no mode fork. Was top:-31px (poking 12px ABOVE the
+   ruler top, fine under the tools row in full mode, CROPPED in video-only
+   where the ruler is the panel's first row). The button's top:19px +
+   top:-17px = overlay y 2–22: fully inside the 34px ruler, above the line
+   start; the triangle follows at the pill's bottom edge. The handle dot
+   (y15) passes under the pill while it shows — the pill IS the readout. */
 .qc-ruler__playhead::after {
   position: absolute;
-  top: -31px;
+  top: -17px;
   left: 50%;
   min-width: 38px;
   height: 20px;
@@ -353,7 +366,7 @@
 
 .qc-ruler__playhead::before {
   position: absolute;
-  top: -12px;
+  top: 3px;
   left: 50%;
   width: 0;
   height: 0;
@@ -554,6 +567,41 @@
   transition: background 0.12s, color 0.12s;
 }
 
+/* R20 (thread #29 — wave 8): the mute STATE chip — rides the head next to
+   the identity (selector/marker); a real button (click = unmute). The
+   red-family tint matches the refuse affordance / toast error text. */
+.qc-track-mute-chip {
+  flex: 0 0 auto;
+  height: 18px;
+  width: 20px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid rgba(255, 157, 157, 0.4);
+  border-radius: 4px;
+  background: rgba(255, 157, 157, 0.12);
+  color: #ff9d9d;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.qc-track-mute-chip:hover {
+  background: rgba(255, 157, 157, 0.22);
+}
+
+/* the muted LANE: content dims to half presence (the pro convention); the
+   lane keeps its geometry + interactivity (mute is edit state, not a
+   lock — clips stay selectable/draggable). Same law in the min strip. */
+.qc-track-row__content.is-muted {
+  opacity: 0.5;
+}
+
+.qc-min-lane.is-muted {
+  opacity: 0.55;
+}
+
 .qc-track-marker:hover {
   color: var(--canvas-editor-text-default);
   background: rgba(20, 20, 20, 0.9);
@@ -586,11 +634,57 @@
   pointer-events: none;
 }
 
-/* R19: the insert-preview push affordance — followers the live drag is
-   pushing get the DnD-drop-outline family's sky hairline so the insert
-   result reads WHILE dragging (the WYSIWYG of the insert law). */
-.qc-track-item.is-pushed {
-  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.45);
+/* R20 — the drag VERDICT affordance (replaces R19's is-pushed follower
+   tint: the insert-push law is gone, neighbors never move mid-gesture,
+   so the honest signal is on the MOVER — what the UP will do):
+   - is-drop-escape: amber DASHED inset ring + `→ V2` chip — the span
+     overlaps a sibling and the drop will take OT's new-track fallback
+     through the window (an existing free same-kind track when one
+     fits, else a minted one — the chip names the target)
+   - is-drop-refuse: red SOLID ring + `no room · locked` chip — the host
+     pinned the window (trackBindingLocked); the drop will restore the
+     pre-drag doc (OT's {ok:false, code:'CONFLICT'})
+   Amber ~ #f59e0b (warning family); red matches the toast error text
+   (#ff9d9d) for semantic parity. */
+.qc-track-item.is-drop-escape {
+  outline: 1.5px dashed rgba(245, 158, 11, 0.9);
+  outline-offset: -1.5px;
+}
+
+.qc-track-item.is-drop-refuse {
+  outline: 1.5px solid rgba(255, 157, 157, 0.9);
+  outline-offset: -1.5px;
+}
+
+/* The verdict chip rides the mover's top edge, INSIDE the clip (both
+   the clip body and the lane clip overflow — the ghost taught us this;
+   a top-strip chip needs no headroom). Solid chrome surface so it reads
+   over filmstrips/waveforms; ellipsizes on narrow clips. */
+.qc-track-item__drop-chip {
+  position: absolute;
+  z-index: 4;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 8px);
+  padding: 0 6px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--canvas-chrome-control-surface);
+  color: #f5b950;
+  font-size: 9px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.qc-track-item__drop-chip.is-refuse {
+  color: #ff9d9d;
 }
 
 /* ---- clips (RH-verbatim anatomy + gradient bodies) ---------- */
@@ -788,8 +882,12 @@
 
 /* ---- drag ghost shading (preview state) --------------------- */
 
+/* R20: the mover renders ABOVE its lane (OT's drag view — overlap is
+   allowed visually while the doc stays frozen); the verdict ring +
+   chip carry the drop meaning. */
 .qc-track-item.is-dragging {
   opacity: 0.85;
+  z-index: 5;
 }
 
 /* ---- snap guide (R18e: ported sibling T5 pattern, feedback deferral

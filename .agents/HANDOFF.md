@@ -434,3 +434,25 @@ StripMeter, fader scale, TrackHeader micro-meters, 83 stories).
   layout, or every "not filling vertically" reading is a lie; (3) the eval-in
   manager-vs-iframe trap — story DOM probes must go through
   `document.getElementById('storybook-preview-iframe').contentDocument`.
+
+## R20 live-state (post wave-8 close)
+
+- **The drag law is now OT-faithful** (`.agents/design/r20-drag-ot-law.md`
+  + docs/OT-SEAMS.md §1.1–1.3): mover-only preview, verdict affordance on
+  the mover, drop resolved at the UP (free / escape-with-rebind / refuse).
+  Live-verified through :3001 with real drags + VLM: neighbors frozen
+  through a full sweep over both neighbors (the R19 comedy is dead),
+  escape lands on minted V2 + window rebinds + toast, undo restores doc
+  AND binding, locked window refuses with the error toast + doc restore.
+- **Feedback queue**: the mini's wave-8 threads are ALL resolved + synced
+  (pill crop, text selection, mute/unmute, topbar recalibration). The open
+  threads on `timeline--clip-states` / `timeline--default` /
+  `mixer--channel-strip-solo` are the SIBLING's demo stories (their
+  testids: `clip-trim-r-demo-*`, `/media/*.jpg`, crossfade blocks) — do
+  not sweep them into the mini's queue again.
+- **History shape**: `past`/`future` are `HistoryEntry = {doc,
+  boundVideoTrack, boundAudioTrack}` — any direct `useMini.setState({past:
+  [...]})` in a test/story must wrap the doc. Undo/redo restore bindings.
+- **New surfaces**: `Track.muted` (doc state) + `toggleTrackMute` +
+  inspector mute button (`mini-track-mute`) + head M chip
+  (`mini-track-mute-chip-*`) + lane `is-muted` dim; topbar is 40px.

@@ -166,3 +166,53 @@ in sync + iterative sub-agent design/code review.
 **Standing for the next round:** CodeRabbit re-review of the 14-commit range
 on PR #1; V2's 2 deferred P3s (duplicateAndMove raw-API edges, snap-ON
 head-drag fallthrough); G.4 deferral ledger items are engine-team questions.
+
+## R20 — the OT-faithful drag law (wave 8 + the user's "comically buggy" verdict)
+
+**Trigger.** The user live-rejected the R19 drag ("your timeline drag logic
+is extremely buggy almost comical — did you follow OT seams at all?").
+Reproduction confirmed: `previewMove` ran the R19 `insertPlacement`
+(Premiere insert-push improvisation) on EVERY pointermove, mutating the live
+doc — neighbors teleported mid-gesture (c2 +297px, c1 +313px, sliding back
+as the span moved). OT never mutates the doc during a drag at all.
+
+**Landed (single commit, 302 → 317 tests, tsc clean, builds green):**
+- Design doc `.agents/design/r20-drag-ot-law.md` (the full indictment + the
+  windowed OT law) + adversarial review round (4 P1 / 7 P2 — atomic escape
+  via direct set(), binding-aware history entries, drop position =
+  preview-rendered position, snap-induced conflicts flow through the drop
+  law, prefer-existing-free-track, structural pill fix, guard all six
+  capture sites, up-within-threshold cancel, dragMoverId) — all adopted
+  as §8 amendments before implementation.
+- DRAG LAW REWRITTEN against the real OT source (element-interaction-
+  controller + group-move + drop-target, re-read from clone): preview =
+  mover-only (neighbors NEVER move mid-gesture — pinned by a sweep test
+  at store AND component level); overlap allowed visually (mover renders
+  above its lane) with the live verdict affordance (amber dashed +
+  `→ V2` chip / red + `no room · locked` chip); drop at the UP: free →
+  plain commit; conflict + unlocked → the OT escape THROUGH the window
+  (existing free same-kind track, doc order — else MINTED V/A-series
+  track; ONE atomic set: mint + move + REBIND + binding-aware history
+  entry + toast); conflict + trackBindingLocked → refuse (doc restored
+  bit-for-bit, NO history, error toast = OT's CONFLICT). insertPlacement /
+  insertPushedIds / pushedIds DELETED. Undo restores doc AND binding.
+- mintTrackId (kind-local series, V1,V3→V4) + resolveDropEscape (pure).
+- All six setPointerCapture sites guarded (untrusted pointers throw
+  NotFoundError — live page errors caught during reproduction; the release
+  side was always guarded, the capture side was not).
+- Wave-8 threads closed with live evidence: playhead pill structural fix
+  (inside the ruler band in ALL modes — VLM-verified un-cropped in
+  video-only), user-select:none on the whole timeline panel, mute/unmute
+  on the inspector track card (doc state + lane dim + head M chip — thread
+  #29), topbar 36→40px recalibration (thread #30 follow-up).
+- docChanged now compares TRACKS too (the mute trap: clips-only comparison
+  silently swallowed track-state commits — same class as the media-only
+  miss).
+- OT-SEAMS.md §1 rows 1/2/3/12 + §2 matrix + §3/§4 rewritten to the
+  faithful law; README deviations #22 superseded (insert-push RETIRED —
+  "a redesign masquerading as a seam delta"); the swap path simplifies
+  (drag commit ≈ moveElements({moves, createTracks}) 1:1).
+
+**Standing for the next round:** the sibling's R20 is active in
+shell-variants (their queue: 3 reviewer threads + their mixer/pages work);
+annotakit vendor upgrade to v0.5.2 still deferred to a quiet window.

@@ -88,80 +88,64 @@ export function wouldOverlap(
   );
 }
 
-/** INSERT placement (R19 — the drag-drop conflict law, Premiere insert-
- *  edit geometry): land the moving clip at R and push the conflicting
- *  tail right. Pure over the TRACK's clips (self excluded via excludeId).
- *  Law: first = earliest-starting clip intersecting [R, R+dur); followers
- *  = clips with start >= first.start (excluding the mover — note a clip
- *  the mover fully PASSED does not move: it is before first only when the
- *  mover's span starts at/after its end). follower' = max(R + dur,
- *  start + quantize(delta)) — the floor applies ALWAYS (unlike
- *  rippleShiftAfter's zero-shift identity: a sub-grid delta must still
- *  clear the first follower or the doc commits an overlap). At most one
- *  follower can be floored (consecutive starts are >= MIN_DUR apart
- *  while |delta − quantize(delta)| <= 0.25). Uniform EXCEPT that one
- *  floored follower (<= 0.25s adjustment, tail spacing otherwise
- *  preserved). No split-at-insert — the whole conflicting clip relocates
- *  (documented deviation from Premiere, which splits the host clip).
- *  Returns the resolved clips (self at R + shifted followers); identity
- *  when the span is already free. */
-export function insertPlacement(
-  clips: Clip[],
-  excludeId: string,
-  r: number,
-  dur: number,
-): Clip[] {
-  const spanStart = Math.max(0, r);
-  const spanEnd = spanStart + dur;
-  /* SAME-TRACK law (caught live by the drag-session test): the conflict
-   * set is the moving clip's TRACK siblings only — an audio clip under
-   * the video span is not a conflict (the mini's lanes are parallel
-   * worlds, never stacked). */
-  const trackId = clips.find((c) => c.id === excludeId)?.trackId;
-  if (trackId === undefined) return clips;
-  const lane = clips.filter((c) => c.trackId === trackId);
-  const sorted = [...lane].filter((c) => c.id !== excludeId).sort((a, b) => a.start - b.start);
-  const conflicts = sorted.filter(
-    (c) => spanStart < c.start + c.duration - 1e-9 && spanEnd > c.start + 1e-9,
-  );
-  if (conflicts.length === 0) {
-    // free span — plain move: self relocates, nobody shifts
-    return clips.map((c) => (c.id === excludeId ? { ...c, start: spanStart } : c));
-  }
-  const first = conflicts[0];
-  const delta = spanEnd - first.start; // > 0 by the intersection test
-  const shift = quantize(delta);
-  const floor = spanEnd;
-  return clips.map((c) => {
-    if (c.id === excludeId) return { ...c, start: spanStart };
-    if (c.trackId !== trackId) return c; // other lanes never move
-    if (c.start < first.start - 1e-9) return c; // before the conflict block — untouched
-    const nextStart = Math.max(floor, c.start + shift);
-    return nextStart === c.start ? c : { ...c, start: nextStart };
-  });
-}
+/* R20 — the insert-push law that lived here (insertPlacement /
+ * insertPushedIds) is DELETED. It was an improvisation masquerading as a
+ * seam deviation: OT has NO insert-push anywhere. The real OT drop law
+ * (element-interaction-controller → resolveGroupMove →
+ * canApplyMovesToExistingTracks → ?? newTracksFallback) is now
+ * resolveDropEscape below, and the store refuses/escapes at the UP —
+ * never pushes neighbors, never mid-gesture. */
 
-/** The follower ids an insert at (r, dur) would push — for the live
- *  is-pushed affordance (pure derivation of insertPlacement's decision). */
-export function insertPushedIds(
-  clips: Clip[],
-  excludeId: string,
-  r: number,
+export type DropEscape =
+  | { verdict: 'free' }
+  | { verdict: 'escape'; trackId: string; minted: boolean }
+  | { verdict: 'conflict' };
+
+/** The OT drop law, windowed (R20). Where a MOVE gesture's span
+ *  [start, start+dur) resolves at the UP:
+ *
+ *  - 'free' — the span is conflict-free on the mover's own track; the
+ *    drop commits as a plain move (OT: resolveExistingTrackMove +
+ *    canApplyMovesToExistingTracks pass).
+ *  - 'escape' — the span conflicts on the mover's track, and OT's
+ *    escape hatch applies THROUGH the window: an EXISTING same-kind
+ *    track that can host the span conflict-free is preferred (doc track
+ *    order — deterministic; OT's canApplyMovesToExistingTracks tried
+ *    against the drop target); otherwise a MINTED track (OT's
+ *    newTracksFallback — mintTrackId supplies the id).
+ *  - 'conflict' — no existing track fits and minting is the only way
+ *    out; the STORE upgrades this to 'refuse' when trackBindingLocked
+ *    pins the window (the mini's rendering of OT's {ok:false,
+ *    code:'CONFLICT'} when the host forbids track creation).
+ *
+ *  Pure: reads the (pre-drag) doc, never mutates. Cross-track law: only
+ *  SAME-kind tracks are escape candidates (audio never escapes to a
+ *  video lane); a clip on the mover's own track is the only conflict
+ *  source (lanes are parallel worlds, never stacked). */
+export function resolveDropEscape(
+  doc: Pick<Doc, 'tracks' | 'clips'>,
+  moverId: string,
+  start: number,
   dur: number,
-): string[] {
-  const spanStart = Math.max(0, r);
-  const spanEnd = spanStart + dur;
-  const trackId = clips.find((c) => c.id === excludeId)?.trackId;
-  if (trackId === undefined) return [];
-  const sorted = [...clips]
-    .filter((c) => c.trackId === trackId && c.id !== excludeId)
-    .sort((a, b) => a.start - b.start);
-  const conflicts = sorted.filter(
-    (c) => spanStart < c.start + c.duration - 1e-9 && spanEnd > c.start + 1e-9,
-  );
-  if (conflicts.length === 0) return [];
-  const first = conflicts[0];
-  return sorted.filter((c) => c.start >= first.start - 1e-9).map((c) => c.id);
+): DropEscape {
+  const mover = doc.clips.find((c) => c.id === moverId);
+  if (!mover) return { verdict: 'free' };
+  const end = start + dur;
+  const overlapsOn = (trackId: string) =>
+    doc.clips.some(
+      (c) =>
+        c.id !== moverId &&
+        c.trackId === trackId &&
+        start < c.start + c.duration - 1e-9 &&
+        end > c.start + 1e-9,
+    );
+  if (!overlapsOn(mover.trackId)) return { verdict: 'free' };
+  const kind = doc.tracks.find((t) => t.id === mover.trackId)?.kind ?? 'video';
+  for (const t of doc.tracks) {
+    if (t.kind !== kind || t.id === mover.trackId) continue;
+    if (!overlapsOn(t.id)) return { verdict: 'escape', trackId: t.id, minted: false };
+  }
+  return { verdict: 'conflict' };
 }
 
 /** TRIM ghost bounds (R19, thread #51): how much further the trimmed edge

@@ -49,7 +49,13 @@ export function Splitter({ orientation, value, min, max, initial, onChange, labe
       startPos: isRow ? e.clientY : e.clientX,
       startSize: value,
     };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // R20: capture guarded for untrusted pointers (jsdom/synthetic dispatch
+    // throw NotFoundError from an inactive pointer — Viewer parity)
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* untrusted pointer — the resize gesture proceeds without capture */
+    }
     setActive(true);
   };
 

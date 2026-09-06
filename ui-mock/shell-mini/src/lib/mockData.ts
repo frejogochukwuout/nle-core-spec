@@ -18,6 +18,12 @@ export interface Track {
   id: string;
   kind: TrackKind;
   label: string; // "V1" | "A1"
+  /** R20 (thread #29 — wave 8): per-track edit-state MUTE flag. Unmuted by
+   *  default (optional so every existing Track literal stays valid). The
+   *  mini has no audio engine — this is the SAVED edit state + the visual
+   *  law (the lane dims, the head carries an M chip); audible rendering is
+   *  the nle-engine audio seam's job at swap time. */
+  muted?: boolean;
 }
 
 export interface Clip {
@@ -116,4 +122,21 @@ export function mintClipId(): string {
 /** Test hook: reset the id sequence so suites stay deterministic. */
 export function __resetClipIds(): void {
   clipSeq = 0;
+}
+
+/** R20 (the drag escape — OT's newTracksFallback windowed): mint the next
+ *  track id of a kind. The law: max numeric suffix + 1 WITHIN the kind's
+ *  own series (V1,V3 → V4 — never a duplicate of an existing id; the
+ *  audio series mints independently: A1,A2 → A3). The minted id IS the
+ *  label (the V{n}/A{n} convention is the doc's own naming law). Pure —
+ *  takes the track list, returns the id; the caller builds the Track. */
+export function mintTrackId(tracks: Track[], kind: TrackKind): string {
+  const prefix = kind === 'audio' ? 'A' : 'V';
+  let max = 0;
+  for (const t of tracks) {
+    if (t.kind !== kind) continue;
+    const m = new RegExp(`^${prefix}(\\d+)$`).exec(t.id);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return `${prefix}${max + 1}`;
 }

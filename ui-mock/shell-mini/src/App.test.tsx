@@ -490,4 +490,38 @@ describe('R19 — inspector track card', () => {
     expect(screen.queryByTestId('mini-inspector-track')).toBeNull();
     expect(screen.getByTestId('mini-inspector-name')).toHaveTextContent('beach_wide.mp4');
   });
+
+  /* R20 (thread #29 — wave 8): the named basic control — mute. */
+  it('the MUTE control toggles doc state: one entry, lane dims, head chip, undo restores', () => {
+    renderApp();
+    setStore(() => S().selectTrack('A1'));
+    const btn = screen.getByTestId('mini-track-mute');
+    expect(btn).toHaveTextContent('Mute');
+    expect(screen.getByTestId('mini-lane-A1')).not.toHaveClass('is-muted');
+    fireEvent.click(btn);
+    expect(S().doc.tracks.find((t) => t.id === 'A1')!.muted).toBe(true);
+    expect(S().past).toHaveLength(1); // doc state — one history entry
+    expect(screen.getByTestId('mini-track-mute')).toHaveTextContent('Unmute');
+    expect(screen.getByTestId('mini-lane-A1')).toHaveClass('is-muted'); // the lane dims
+    expect(screen.getByTestId('mini-track-mute-chip-A1')).toBeInTheDocument(); // the head M chip
+    // the chip unmutes from the timeline surface (a real button, not a badge)
+    fireEvent.click(screen.getByTestId('mini-track-mute-chip-A1'));
+    expect(S().doc.tracks.find((t) => t.id === 'A1')!.muted).toBe(false); // unmuted (saved as false — round-trip shape)
+    expect(screen.queryByTestId('mini-track-mute-chip-A1')).toBeNull();
+    // undo restores the pre-toggle doc exactly (mute is history, not view)
+    fireEvent.click(screen.getByTestId('mini-track-mute'));
+    setStore(() => S().undo());
+    expect(S().doc.tracks.find((t) => t.id === 'A1')!.muted).toBeFalsy(); // the pre-toggle doc restored
+    expect(screen.getByTestId('mini-lane-A1')).not.toHaveClass('is-muted');
+  });
+
+  it('mute is suppressed mid-gesture (the interaction lock family)', () => {
+    renderApp();
+    setStore(() => S().selectTrack('A1'));
+    S().beginDrag();
+    fireEvent.click(screen.getByTestId('mini-track-mute'));
+    expect(S().doc.tracks.find((t) => t.id === 'A1')!.muted).toBeFalsy();
+    expect(S().past).toHaveLength(0);
+    S().cancelDrag();
+  });
 });

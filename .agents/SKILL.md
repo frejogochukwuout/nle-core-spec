@@ -1234,3 +1234,45 @@ port), not what any env currently runs.
     a live gesture result is off by a clean RATIO, suspect the zoom pps
     before the gesture law — read it back from the live DOM
     (style.left÷time) first.
+
+76. **A per-event preview that mutates the live doc IS the comedy.** R19's
+    drag law ran insert-push geometry on every pointermove — neighbors
+    teleported hundreds of px mid-gesture and slid back, "extremely buggy
+    almost comical". OT's law: the doc is NEVER mutated during a drag;
+    the mover renders from a drag view and the drop resolves at the UP.
+    Law: a preview may move ONLY the mover, computed against the snapshot
+    (idempotent per event); anything that resolves conflicts must run at
+    the UP, never per-event. If a mid-drag probe shows a NON-mover at a
+    different position than its snapshot, the law is broken no matter
+    how correct the committed doc looks.
+
+77. **Store actions outside act() leave the DOM stale — flush before
+    asserting.** The mute test called `S().undo()` directly (not wrapped
+    in act): the store restored the doc, the NEXT store assertion passed,
+    but the component assertion (`not.toHaveClass('is-muted')`) failed on
+    a stale render. Law: in component tests, every direct store call
+    between fireEvent interactions goes through the `setStore(() => ...)`
+    act wrapper — the store is not the DOM.
+
+78. **A toast can fire while nobody renders it.** The refuse-drop toast
+    verified fine in the store test but showed NOTHING in the timeline
+    panel story — ToastRegion lives in the shell, not the panel. Law:
+    verify toasts in a FullShell story (or the app), never in the panel
+    story; "the toast didn't fire" needs a rendering-surface check before
+    it becomes a logic debug.
+
+79. **A history-entry shape change sweeps EVERY direct assignment site.**
+    HistoryEntry {doc + bindings} replaced bare Docs in past/future: two
+    non-store sites (a test's `setState({past: [seedDoc()]})` and a story's
+    `past: hasHistory ? [seedDoc()] : []`) broke the typecheck. Law: when
+    a store field's type changes, grep the FIELD NAME across src/ (not
+    just the store + its tests) — stories and sibling tests patch state
+    directly and are the first silent casualties.
+
+80. **A failed MultiEdit batch can leave earlier edits applied.** Twice
+    this round a MultiEdit reported "No replacement was performed" for one
+    edit while the edits BEFORE it in the same batch had already landed
+    (interface fields updated, later blocks not). Law: after any failed
+    batch, re-grep the target symbols before re-running the "same" batch —
+    construct the new batch against what's actually on disk, not what the
+    error message implies.

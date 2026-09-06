@@ -67,15 +67,21 @@ describe('drag-move (48pps default zoom)', () => {
     expect(S().past).toHaveLength(1); // one entry per gesture
   });
 
-  it('R19: dragging over the next neighbor INSERTS — the tail pushes (one-lane street gone)', () => {
+  it('R20: dragging over the next neighbor ESCAPES to a minted V2 — c3 never moves (the OT drop law)', () => {
     render(<Timeline />);
     const c2 = screen.getByTestId('mini-clip-c2');
     drag(c2, 216, 216 + 300); // raw start = 4.5 + 6.25 = 10.75
-    // span [10.75, 14.25) conflicts c3 [9,12.5) → c3 pushes right:
-    // delta = 5.25 → quantized shift 5.5 → c3 = max(14.25, 9+5.5) = 14.5
+    // span [10.75, 14.25) conflicts c3 [9,12.5) on V1; the seed doc has no
+    // second video track → OT's newTracksFallback through the window:
+    // V2 minted, the clip lands there, the window rebinds, c3 NEVER moves
     expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(10.75);
-    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(14.5);
-    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0); // before the block — untouched
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V2');
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // frozen
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0);
+    expect(S().doc.tracks.map((t) => t.id)).toEqual(['V1', 'V2', 'A1']);
+    expect(S().boundVideoTrack).toBe('V2'); // the window followed the clip
+    expect(S().past).toHaveLength(1);
+    expect(S().toast?.text).toContain('new track V2');
   });
 
   it('sub-threshold wobble: no drag, no history', () => {
@@ -623,10 +629,11 @@ describe('R18j minimized timeline (thread #13)', () => {
     fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
     const c2 = screen.getByTestId('mini-clip-c2'); // 4.5→8, grab offset honored
     drag(c2, 250, 300); // 5px threshold crossed → active drag → +50px ≈ +1.04s
-    // R19: raw = 4.5 + 50/48 = 5.5417; span end 9.0417 overlaps c3@9 by
-    // 0.0417 → insert: c3 floored onto 9.0417 (sub-grid delta, ALWAYS-floor)
+    // R20: raw = 4.5 + 50/48 = 5.5417; span end 9.0417 overlaps c3@9 by
+    // 0.0417 → escape: c2 lands on MINTED V2, c3 stays exactly at 9
     expect(S().doc.clips.find((x) => x.id === 'c2')!.start).toBeCloseTo(5.5417, 3);
-    expect(S().doc.clips.find((x) => x.id === 'c3')!.start).toBeCloseTo(9.0417, 3);
+    expect(S().doc.clips.find((x) => x.id === 'c2')!.trackId).toBe('V2');
+    expect(S().doc.clips.find((x) => x.id === 'c3')!.start).toBe(9); // NEVER pushed
     expect(S().past).toHaveLength(1); // exactly one entry for the gesture
   });
 
@@ -853,7 +860,7 @@ describe('R18k trim-mode edge shade (panel thread #1)', () => {
 
 /* ---- R19: drag insert affordances, ghost edges, track selection ---- */
 
-describe('R19 — commit at the UP position (review P2-11)', () => {
+describe('R20 — commit at the UP position (review P2-11)', () => {
   it('a fast flick commits the UP spot, not the last pointermove', () => {
     render(<Timeline />);
     const c2 = screen.getByTestId('mini-clip-c2');
@@ -862,27 +869,82 @@ describe('R19 — commit at the UP position (review P2-11)', () => {
     fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 216, clientY: 10 });
     fireEvent.pointerMove(c2, { pointerId: 7, clientX: 222, clientY: 10 });
     fireEvent.pointerUp(c2, { pointerId: 7, clientX: 216 + 96, clientY: 10 });
-    // raw at the up position = 4.5 + (312−222)/48 = 6.375? No: grabOffset anchored at
-    // 216 → raw = 4.5 + (312−216)/48 = 6.5 → span [6.5,10) conflicts c3@9 →
-    // insert: c3 floored onto 10
+    // raw at the up position = 4.5 + (312−216)/48 = 6.5 → span [6.5,10)
+    // conflicts c3@9 → R20 escape: c2 lands on minted V2 at 6.5, c3 at 9
     expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(6.5);
-    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(10);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V2');
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // never moved
   });
 });
 
-describe('R19 — is-pushed affordance (the insert preview made visible)', () => {
-  it('followers being pushed carry is-pushed during the gesture; cleared after', () => {
+describe('R20 — the OT drag view: neighbors NEVER move mid-gesture (the comedy, pinned at the component level)', () => {
+  it('dragging c2 across c3: c3/c1 hold their snapshot positions; the mover paints the verdict', () => {
     render(<Timeline />);
     const c2 = screen.getByTestId('mini-clip-c2');
     fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 216, clientY: 10 });
     fireEvent.pointerMove(c2, { pointerId: 7, clientX: 222, clientY: 10 }); // activate
-    fireEvent.pointerMove(c2, { pointerId: 7, clientX: 216 + 300, clientY: 10 }); // over c3
-    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(14.5); // live insert preview
-    expect(screen.getByTestId('mini-clip-c3')).toHaveClass('is-pushed');
-    expect(screen.getByTestId('mini-clip-c1')).not.toHaveClass('is-pushed'); // before the block
-    fireEvent.pointerUp(c2, { pointerId: 7, clientX: 216 + 300, clientY: 10 });
-    expect(screen.getByTestId('mini-clip-c3')).not.toHaveClass('is-pushed');
-    expect(S().pushedIds).toEqual([]);
+    // sweep right across c3's span — the R19 law teleported c3 here
+    for (const x of [300, 400, 500, 516, 400, 300]) {
+      fireEvent.pointerMove(c2, { pointerId: 7, clientX: x, clientY: 10 });
+      expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // FROZEN
+      expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0); // FROZEN
+    }
+    // the mover paints the live drop verdict: amber ring + the chip naming
+    // the escape target (the seed doc mints V2)
+    expect(c2).toHaveClass('is-drop-escape');
+    expect(screen.getByTestId('mini-drop-chip-c2')).toHaveTextContent('→ V2');
+    // drop: the escape lands on the minted V2; neighbors still frozen
+    fireEvent.pointerUp(c2, { pointerId: 7, clientX: 516, clientY: 10 });
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V2');
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9);
+    // the affordance leaves with the gesture
+    expect(screen.queryByTestId('mini-drop-chip-c2')).not.toBeInTheDocument();
+    expect(S().dropEscape).toBeNull();
+    expect(S().dragMoverId).toBeNull();
+  });
+
+  it('a REFUSING drop (locked window): red ring + no-room chip; the doc restores', () => {
+    render(<Timeline />);
+    act(() => {
+      useMini.setState({ trackBindingLocked: true });
+    });
+    const c3 = screen.getByTestId('mini-clip-c3');
+    fireEvent.pointerDown(c3, { button: 0, pointerId: 7, clientX: 432, clientY: 10 });
+    fireEvent.pointerMove(c3, { pointerId: 7, clientX: 438, clientY: 10 }); // activate
+    fireEvent.pointerMove(c3, { pointerId: 7, clientX: 150, clientY: 10 }); // onto c1
+    expect(c3).toHaveClass('is-drop-refuse');
+    expect(screen.getByTestId('mini-drop-chip-c3')).toHaveTextContent('no room · locked');
+    fireEvent.pointerUp(c3, { pointerId: 7, clientX: 150, clientY: 10 });
+    // OT's no-commit: doc restored, no history
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9);
+    expect(S().past).toHaveLength(0);
+    expect(S().toast?.kind).toBe('error');
+  });
+});
+
+describe('R20 — untrusted pointer capture never kills a gesture (live-caught bug)', () => {
+  it('a THROWING setPointerCapture is swallowed; the drag still runs and commits', () => {
+    render(<Timeline />);
+    const c2 = screen.getByTestId('mini-clip-c2');
+    const proto = HTMLElement.prototype as unknown as {
+      setPointerCapture: (id: number) => void;
+    };
+    const original = proto.setPointerCapture;
+    proto.setPointerCapture = () => {
+      throw new DOMException('Invalid pointer id', 'NotFoundError');
+    };
+    try {
+      expect(() => {
+        fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 216, clientY: 10 });
+        fireEvent.pointerMove(c2, { pointerId: 7, clientX: 222, clientY: 10 });
+      }).not.toThrow();
+      expect(S().dragActive).toBe(true); // the session engaged despite the throw
+      fireEvent.pointerUp(c2, { pointerId: 7, clientX: 216 + 48, clientY: 10 });
+      expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+      expect(S().past).toHaveLength(1);
+    } finally {
+      proto.setPointerCapture = original;
+    }
   });
 });
 

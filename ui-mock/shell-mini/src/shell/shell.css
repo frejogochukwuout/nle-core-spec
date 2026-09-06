@@ -862,6 +862,43 @@
   color: var(--canvas-editor-text-muted);
 }
 
+/* R20 (thread #29 — wave 8): the track card's mute control — the named
+   "most basic control". Grammar = the nudge family (border-top separator,
+   same muted surface). is-muted swaps to the red refuse family. */
+.mini-inspector__track-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  border-top: 1px solid rgba(0, 0, 0, 0.14);
+  margin-top: var(--canvas-editor-space-md);
+  padding-top: var(--canvas-editor-space-md);
+}
+
+.mini-inspector__mute {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--canvas-editor-radius-control);
+  background: var(--canvas-editor-control-surface);
+  color: var(--canvas-editor-text-default);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.mini-inspector__mute:hover {
+  background: var(--canvas-editor-control-hover);
+}
+
+.mini-inspector__mute.is-muted {
+  border-color: rgba(255, 157, 157, 0.4);
+  background: rgba(255, 157, 157, 0.12);
+  color: #ff9d9d;
+}
+
 /* purpose-drawn seek glyphs sized like the transport's lucide pair
    (they take no size prop — CSS owns their box) */
 .mini-viewer__seekbtn svg {

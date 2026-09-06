@@ -379,9 +379,6 @@ interface ClipProps {
    *  (46, after the fixed head rail) vs the compact strip (10, no rail).
    *  The gesture math is origin-relative; the default matches full lanes. */
   originPx?: number;
-  /** R19: this clip is one of the followers the live insert-preview is
-   *  pushing (soft tint affordance — the drag law made visible). */
-  pushed?: boolean;
   /** R19 (thread #51): the clip reports its outward trim (the ghost-edge
    *  signal) — the LANE paints the ghost (the clip body clips overflow,
    *  and the ghost extends beyond the clip's own box). */
@@ -390,7 +387,7 @@ interface ClipProps {
 
 /* exported for the solo Clip story (R18k storybook restructure — the
    clip-anatomy review surface at natural size, no panel chrome) */
-export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact, originPx = RENDER_ORIGIN_PX, pushed, onTrimGhost }: ClipProps) {
+export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact, originPx = RENDER_ORIGIN_PX, onTrimGhost }: ClipProps) {
   const select = useMini((s) => s.select);
   const beginDrag = useMini((s) => s.beginDrag);
   const endDrag = useMini((s) => s.endDrag);
@@ -399,6 +396,11 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
   const previewTrim = useMini((s) => s.previewTrim);
   const trimClip = useMini((s) => s.trimClip);
   const rippleOn = useMini((s) => s.rippleOn); // R18f: handle hints change under ripple
+  /* R20: the live drop verdict — the MOVER paints what the UP will do
+   * (escape chip / refuse chip). Only this instance's own gesture has
+   * `dragging` true, so the affordance is scoped to the mover without a
+   * prop chain (the store field is global; the local state selects). */
+  const dropEscape = useMini((s) => s.dropEscape);
   const [dragging, setDragging] = useState(false);
 
   /* gesture session (component-held; the store holds the doc snapshot).
@@ -455,7 +457,19 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
       snapStart: clip.start,
       snapEnd: clip.start + clip.duration,
     };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    /* R20 (live-caught robustness bug): untrusted pointers (jsdom,
+     * synthetic dispatch, CDP races) throw NotFoundError from
+     * setPointerCapture — the release side was always guarded, the
+     * capture side was not, and the throw killed the event dispatch
+     * mid-gesture (live page errors on record). Capture is an
+     * enhancement (outside-element tracking); the gesture itself runs
+     * from the React handlers either way (registered micro-delta: OT
+     * uses document listeners instead of capture). */
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* untrusted pointer — the gesture proceeds without capture */
+    }
   };
 
   /** apply the gesture at a pointer position (shared by pointermove and
@@ -472,8 +486,10 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
       /* R19: BOTH edges magnet (OT snapGroupEdges parity — the left edge
        * AND the right edge of the moving clip are candidates; nearest
        * wins, ties → left). The guide paints at the engaged edge's
-       * target. The span itself stays free — the store's previewMove
-       * resolves any conflict via insert-push. */
+       * target. R20: the span may overlap a neighbor — that is the
+       * OT drag VIEW (the mover renders above its lane); the verdict
+       * chip tells the user what the UP will do, and a snap-induced
+       * conflict flows through the same drop law (review P1-4). */
       const m = snapOn ? magnetMove(raw, pps, clip.duration, snapTargets) : null;
       onSnapGuide(m ? m.guide : null);
       previewMove(clip.id, m ? m.start : raw);
@@ -612,9 +628,23 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
     style.background = 'linear-gradient(135deg, rgba(120,120,120,0.95), rgba(72,72,72,0.92))';
   }
 
+  /* R20: the mover's live verdict classes — the honest affordance while
+   * the span overlaps a same-track sibling (the mover renders ABOVE its
+   * lane; the chip says what the UP will do). escape = amber dashed +
+   * `→ V2` (OT's new-track fallback through the window — or an existing
+   * free same-kind track); refuse = red + locked note (the host pins the
+   * window). Only the MOVER paints these: `dragging` is this instance's
+   * own gesture state, dropEscape is null outside any session. */
+  const escapeChip =
+    dragging && dropEscape?.verdict === 'escape'
+      ? { cls: 'is-drop-escape', label: `→ ${dropEscape.trackId}`, refuse: false }
+      : dragging && dropEscape?.verdict === 'refuse'
+        ? { cls: 'is-drop-refuse', label: 'no room · locked', refuse: true }
+        : null;
+
   return (
     <div
-      className={`qc-track-item${compact ? ' qc-track-item--pill' : ''}${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${trimmingEdge ? ` is-trimming-${trimmingEdge}` : ''}${pushed ? ' is-pushed' : ''}`}
+      className={`qc-track-item${compact ? ' qc-track-item--pill' : ''}${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${trimmingEdge ? ` is-trimming-${trimmingEdge}` : ''}${escapeChip ? ` ${escapeChip.cls}` : ''}`}
       style={style}
       data-testid={`mini-clip-${clip.id}`}
       data-clip-id={clip.id}
@@ -653,6 +683,17 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
         />
       )}
       <span className="qc-track-item__label">{media?.name ?? clip.id}</span>
+      {/* R20: the verdict chip rides the mover's TOP edge (the drag law
+          made visible — OT's drop-target affordance, windowed). */}
+      {escapeChip && (
+        <span
+          className={`qc-track-item__drop-chip${escapeChip.refuse ? ' is-refuse' : ''}`}
+          aria-hidden="true"
+          data-testid={`mini-drop-chip-${clip.id}`}
+        >
+          {escapeChip.label}
+        </span>
+      )}
       {/* R18i (thread #10 repost): trim affordance = a 2px accent line AT
           the edge, ONLY on hover/press/focus (CSS) — the R18h dark-scrim
           shade is gone (it fought the filmstrip). The zone stays a real
@@ -738,6 +779,11 @@ function TrackHead({ track, collapsed }: { track: Track; collapsed: boolean }) {
   const setBoundAudio = useMini((s) => s.setBoundAudioTrack);
   const selectTrack = useMini((s) => s.selectTrack);
   const selectedTrackId = useMini((s) => s.selectedTrackId);
+  /* R20 (thread #29): the M chip — the muted STATE badge (orthogonal to
+   * the identity law below: the selector/marker carry WHO the lane is,
+   * the chip carries what the edit says; even a locked (host-bound) lane
+   * shows its mute state honestly). A real button — click unmutes. */
+  const toggleTrackMute = useMini((s) => s.toggleTrackMute);
   const candidates = doc.tracks.filter((t) => t.kind === track.kind);
   const showSelect = !locked && !collapsed && candidates.length >= 2;
   /* R19 (thread #28) — the head law, revised: multi-track + unlocked →
@@ -784,6 +830,18 @@ function TrackHead({ track, collapsed }: { track: Track; collapsed: boolean }) {
           {track.label}
         </button>
       )}
+      {track.muted && !collapsed && (
+        <button
+          type="button"
+          className="qc-track-mute-chip"
+          onClick={() => toggleTrackMute(track.id)}
+          aria-label={`Unmute ${track.label} lane`}
+          title={`${track.label} is muted — saved with the project; click to unmute`}
+          data-testid={`mini-track-mute-chip-${track.id}`}
+        >
+          M
+        </button>
+      )}
     </div>
   );
 }
@@ -819,10 +877,11 @@ function Lane({
    * runs, targets come from the PRE-DRAG SNAPSHOT (a gesture never
    * magnetizes to positions it created; also fixes the latent ripple-trim
    * ratchet where pushed followers fed their own new edges back as
-   * magnets). Plus the push + ghost affordance subscriptions. */
+   * magnets). R20: the push affordance subscription is GONE — the
+   * mover's own verdict chip (store dropEscape, read in ClipItem)
+   * replaces the followers' is-pushed tint. */
   const dragActive = useMini((s) => s.dragActive);
   const dragSnapshot = useMini((s) => s.dragSnapshot);
-  const pushedIds = useMini((s) => s.pushedIds);
   const rippleOn = useMini((s) => s.rippleOn);
   const selectTrack = useMini((s) => s.selectTrack);
   const clips = clipsOfTrack(doc, track.id);
@@ -950,7 +1009,7 @@ function Lane({
 
   return (
     <div
-      className={`qc-track-row__content${dropping ? ' is-drop-target' : ''}`}
+      className={`qc-track-row__content${dropping ? ' is-drop-target' : ''}${track.muted ? ' is-muted' : ''}`}
       role="group"
       aria-label={`${track.kind === 'audio' ? 'Audio' : 'Video'} track ${track.label}`}
       data-testid={`mini-lane-${track.id}`}
@@ -988,7 +1047,6 @@ function Lane({
             filmstripOn={filmstripOn}
             snapTargets={targets}
             onSnapGuide={onSnapGuide}
-            pushed={pushedIds.includes(c.id)}
             onTrimGhost={setTrimGhost}
           />
         );
@@ -1037,11 +1095,11 @@ function MinLane({
   const doc = useMini((s) => s.doc);
   const selectedId = useMini((s) => s.selectedId);
   const insertMediaAt = useMini((s) => s.insertMediaAt);
-  /* R19: the same frozen-magnet + push laws as the full lanes — the
-   * strip runs the identical gesture engine. */
+  /* R19: the same frozen-magnet law as the full lanes — the strip runs
+   * the identical gesture engine (R20: same drop law + verdict chip
+   * too; ClipItem reads dropEscape from the store directly). */
   const dragActive = useMini((s) => s.dragActive);
   const dragSnapshot = useMini((s) => s.dragSnapshot);
-  const pushedIds = useMini((s) => s.pushedIds);
   const clips = clipsOfTrack(doc, track.id);
   const magnetClips = dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips;
   const [drop, setDrop] = useState<DropPreview | null>(null);
@@ -1092,7 +1150,7 @@ function MinLane({
 
   return (
     <div
-      className={`qc-min-lane${drop ? ' is-drop-target' : ''}${track.kind === 'audio' ? ' qc-min-lane--audio' : ''}`}
+      className={`qc-min-lane${drop ? ' is-drop-target' : ''}${track.kind === 'audio' ? ' qc-min-lane--audio' : ''}${track.muted ? ' is-muted' : ''}`}
       role="group"
       aria-label={`${track.kind === 'audio' ? 'Audio' : 'Video'} pills ${track.label}`}
       data-testid={`mini-min-lane-${track.id}`}
@@ -1118,7 +1176,6 @@ function MinLane({
             filmstripOn={false}
             snapTargets={targets}
             onSnapGuide={onSnapGuide}
-            pushed={pushedIds.includes(c.id)}
             compact
             originPx={MIN_ORIGIN_PX}
           />
@@ -1175,7 +1232,12 @@ function Playhead({
         data-testid="mini-playhead"
         onPointerDown={(e) => {
           if (e.button !== 0) return;
-          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          // R20: capture guarded for untrusted pointers (Viewer parity)
+          try {
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          } catch {
+            /* untrusted pointer — scrub proceeds without capture */
+          }
           setDragging(true);
         }}
         onPointerMove={(e) => {
@@ -1359,7 +1421,12 @@ export function Timeline({ style }: { style?: CSSProperties }) {
                     onPointerDown={(e) => {
                       if (e.button !== 0) return;
                       if (useMini.getState().dragActive) return; // lock (fix #4)
-                      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                      // R20: capture guarded for untrusted pointers
+                      try {
+                        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                      } catch {
+                        /* untrusted pointer — scrub proceeds without capture */
+                      }
                       const rect = e.currentTarget.getBoundingClientRect();
                       setPlayhead(pxToTime(e.clientX - rect.left, pps));
                     }}
@@ -1442,7 +1509,12 @@ export function Timeline({ style }: { style?: CSSProperties }) {
                   onPointerDown={(e) => {
                     if (e.button !== 0) return;
                     if (useMini.getState().dragActive) return; // lock (fix #4)
-                    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                    // R20: capture guarded for untrusted pointers
+                    try {
+                      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                    } catch {
+                      /* untrusted pointer — scrub proceeds without capture */
+                    }
                     const rect = e.currentTarget.getBoundingClientRect();
                     setPlayhead(pxToTime(e.clientX - rect.left, pps));
                   }}

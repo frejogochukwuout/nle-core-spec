@@ -791,9 +791,9 @@ describe('R19 moveClip (overlap-REJECT, the OT wire law)', () => {
   });
 });
 
-/* ---- R19: previewMove — free drag + insert-push (the one-lane fix) ---- */
+/* ---- R20: previewMove — the OT-faithful preview (the comedy fix) ---- */
 
-describe('R19 previewMove (free + insert, from the snapshot)', () => {
+describe('R20 previewMove (mover-only, from the live doc — neighbors NEVER move)', () => {
   it('free span: plain move, idempotent across repeated events', () => {
     S().beginDrag();
     S().previewMove('c2', 5.5); // [5.5,9) ends exactly at c3's start — touching, not overlapping
@@ -801,53 +801,170 @@ describe('R19 previewMove (free + insert, from the snapshot)', () => {
     S().previewMove('c2', 5.5);
     expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
     expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // nobody moved
-    expect(S().pushedIds).toEqual([]);
+    expect(S().dropEscape).toEqual({ verdict: 'free' });
     S().endDrag();
     expect(S().past).toHaveLength(1);
   });
 
-  it('conflicting span: insert-push — the tail shifts, floor law holds', () => {
+  it('THE COMEDY PINNED: dragging c3 across c1/c2 — neighbors stay at snapshot positions', () => {
+    // the R19 law teleported c2 +297px mid-gesture (insertPlacement ran
+    // per pointermove, mutating the live doc); OT never moves anything
+    // but the mover during a drag. Every event, exact positions.
     S().beginDrag();
-    S().previewMove('c3', 2); // [2,5.5) → c1 → 5.5, c2 → 10
-    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(2);
-    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(5.5);
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(10);
-    expect(S().pushedIds).toEqual(['c1', 'c2']);
-    // idempotent: the same event twice must not double-shift
+    for (const r of [8.4, 8, 7, 6, 5, 4, 3, 2, 1, 0.5, 1.5, 2.5, 3.5]) {
+      S().previewMove('c3', r);
+      expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0);
+      expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+      expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(r);
+      expect(S().doc.clips.find((c) => c.id === 'c4')!.start).toBe(1.5); // A1 untouched
+    }
+    // the verdict is live: [2,5.5) overlaps c1 → the seed doc has no
+    // second video track → mint candidate V2
     S().previewMove('c3', 2);
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(10);
-    // moving further re-resolves from the SNAPSHOT (no accumulation)
-    S().previewMove('c3', 3);
-    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(3);
-    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(6.5);
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(11);
-    S().endDrag();
-    expect(S().past).toHaveLength(1); // ONE entry for the whole gesture
-    S().undo();
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5); // pristine restored
+    expect(S().dropEscape).toEqual({ verdict: 'escape', trackId: 'V2', minted: true });
+    S().cancelDrag();
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // restored
+    expect(S().dropEscape).toBeNull();
+    expect(S().past).toHaveLength(0); // no history for a canceled gesture
   });
 
-  it('cancelDrag restores the snapshot after an insert preview', () => {
+  it('conflicting span: the mover overlaps freely (visual overlap allowed — OT drag view)', () => {
+    S().beginDrag();
+    S().previewMove('c3', 2); // span [2,5.5) sits ON c1 — allowed visually
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(2);
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0); // c1 DOES NOT teleport
+    S().cancelDrag();
+  });
+
+  it('cancelDrag restores the snapshot after an overlap preview', () => {
     S().beginDrag();
     S().previewMove('c3', 2);
     S().cancelDrag();
     expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9);
-    expect(S().pushedIds).toEqual([]);
+    expect(S().dropEscape).toBeNull();
+    expect(S().dragMoverId).toBeNull();
   });
 
-  it('pushedIds clear at endDrag (the affordance leaves with the gesture)', () => {
+  it('a snap-induced conflict flows through the same law (review P1-4)', () => {
+    // the component resolves the magnet then calls previewMove — a
+    // magnet landing ON a sibling is a normal conflict (no special case)
+    S().beginDrag();
+    S().previewMove('c2', 0); // magnet-lane butt-joint INTO c1's span
+    expect(S().dropEscape?.verdict).toBe('escape');
+    S().cancelDrag();
+  });
+});
+
+/* ---- R20: endDrag — the OT drop law (free / escape / refuse) ---- */
+
+describe('R20 endDrag (the OT drop law at the UP)', () => {
+  it('free drop: ONE history entry; undo restores (didMove law)', () => {
+    S().select('c2');
+    S().beginDrag();
+    S().previewMove('c2', 12.5); // tail — free
+    S().endDrag();
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(12.5);
+    expect(S().past).toHaveLength(1);
+    expect(S().selectedId).toBe('c2'); // selection survives a plain move
+    S().undo();
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+  });
+
+  it('a drop that returned to the snapshot position commits NOTHING (OT cancel)', () => {
+    S().beginDrag();
+    S().previewMove('c2', 8); // wander
+    S().previewMove('c2', 4.5); // ...and return exactly to rest
+    S().endDrag();
+    expect(S().past).toHaveLength(0); // changed=false → no entry
+    expect(S().future).toHaveLength(0);
+  });
+
+  it('conflict drop + unlocked: mint V2, move + REBIND atomically, ONE entry, toast, selection survives', () => {
+    S().select('c3');
+    S().beginDrag();
+    S().previewMove('c3', 2); // [2,5.5) on c1 — escape minted V2
+    S().endDrag();
+    // the escape: V2 minted into the video section, c3 lives on it
+    expect(S().doc.tracks.map((t) => t.id)).toEqual(['V1', 'V2', 'A1']);
+    const moved = S().doc.clips.find((c) => c.id === 'c3')!;
+    expect(moved.trackId).toBe('V2');
+    expect(moved.start).toBe(2); // the PREVIEW-rendered position (magnet included)
+    // the window followed the clip
+    expect(S().boundVideoTrack).toBe('V2');
+    // one entry, the pre-drag binding captured
+    expect(S().past).toHaveLength(1);
+    expect(S().toast?.kind).toBe('info');
+    expect(S().toast?.text).toContain('V2');
+    // the mover stays selected (it is on the now-bound track)
+    expect(S().selectedId).toBe('c3');
+    // undo restores doc AND binding exactly
+    S().undo();
+    expect(S().doc.tracks.map((t) => t.id)).toEqual(['V1', 'A1']);
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.trackId).toBe('V1');
+    expect(S().boundVideoTrack).toBe('V1');
+    expect(S().selectedId).toBe('c3'); // back on V1 — still visible, still selected
+    S().redo();
+    expect(S().boundVideoTrack).toBe('V2'); // redo carries the binding forward again
+  });
+
+  it('PREFER-EXISTING: an escape targets a free same-kind track before minting (review P2-5)', () => {
+    useMini.setState({ doc: multiTrackDoc() }); // V1,V2,A1,A2; V2 busy at [1,12)
+    S().select('c1');
+    S().beginDrag();
+    // c1 (dur 3.5) at 12: conflicts c3 [9,12.5) on V1; V2's clips end at 12 → free
+    S().previewMove('c1', 12);
+    expect(S().dropEscape).toEqual({ verdict: 'escape', trackId: 'V2', minted: false });
+    S().endDrag();
+    expect(S().doc.tracks.map((t) => t.id)).toEqual(['V1', 'V2', 'A1', 'A2']); // NO mint
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.trackId).toBe('V2');
+    expect(S().boundVideoTrack).toBe('V2');
+    expect(S().toast?.text).toContain('moved to V2');
+    expect(S().toast?.text).not.toContain('new track'); // it wasn't a mint
+  });
+
+  it('conflict drop + trackBindingLocked: REFUSE — restore bit-for-bit, no history, honest toast', () => {
+    useMini.setState({ trackBindingLocked: true });
+    S().select('c3');
+    const pristine = S().doc;
     S().beginDrag();
     S().previewMove('c3', 2);
-    expect(S().pushedIds.length).toBeGreaterThan(0);
+    expect(S().dropEscape).toEqual({ verdict: 'refuse' });
     S().endDrag();
-    expect(S().pushedIds).toEqual([]);
+    expect(S().doc).toEqual(pristine); // restored bit-for-bit
+    expect(S().past).toHaveLength(0); // OT: groupMoveResult null → NO commit
+    expect(S().toast?.kind).toBe('error');
+    expect(S().toast?.text).toContain('locked');
+    expect(S().dropEscape).toBeNull();
   });
 
-  it('the audio lane never moves for a video insert (cross-track law)', () => {
+  it('AUDIO mover: mints the audio series (A2) and rebinds the AUDIO side only', () => {
+    // seed A1 carries only c4 — build a same-track audio conflict
+    useMini.setState({
+      doc: {
+        tracks: S().doc.tracks,
+        media: S().doc.media,
+        clips: [
+          ...S().doc.clips.filter((c) => c.id !== 'c4'),
+          { id: 'a2', trackId: 'A1', mediaId: 'm-ambience', start: 10, duration: 6 },
+          { id: 'a1', trackId: 'A1', mediaId: 'm-interview', start: 2, duration: 3 },
+        ],
+      },
+    });
+    S().select('a2');
     S().beginDrag();
-    S().previewMove('c3', 0.5); // span covers c4's A1 range
+    S().previewMove('a2', 3); // [3,9) overlaps a1 [2,5)
+    expect(S().dropEscape).toEqual({ verdict: 'escape', trackId: 'A2', minted: true });
+    S().endDrag();
+    expect(S().doc.tracks.map((t) => t.id)).toEqual(['V1', 'A1', 'A2']); // audio section
+    expect(S().doc.clips.find((c) => c.id === 'a2')!.trackId).toBe('A2');
+    expect(S().boundAudioTrack).toBe('A2');
+    expect(S().boundVideoTrack).toBe('V1'); // video binding untouched
+  });
+
+  it('the audio lane never moves for a video drag (cross-track law)', () => {
+    S().beginDrag();
+    S().previewMove('c3', 0.5); // span covers c4's A1 range — A1 is a parallel world
     expect(S().doc.clips.find((c) => c.id === 'c4')!.start).toBe(1.5);
-    expect(S().pushedIds).not.toContain('c4');
     S().cancelDrag();
   });
 });
@@ -898,7 +1015,10 @@ describe('R19 track selection', () => {
     useMini.setState({ doc: multiTrackDoc() });
     S().selectTrack('V2');
     S().select('c5'); // V2 clip → history entry via a move? select has no history; use nudge
-    useMini.setState({ past: [seedDoc()] });
+    // R20: history entries are binding-aware {doc, boundVideoTrack, boundAudioTrack}
+    useMini.setState({
+      past: [{ doc: seedDoc(), boundVideoTrack: 'V1', boundAudioTrack: 'A1' }],
+    });
     S().undo(); // doc back to the single-pair seed (no V2)
     expect(S().selectedTrackId).toBeNull();
   });

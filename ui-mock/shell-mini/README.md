@@ -81,16 +81,26 @@ Run it at boot or any time; safe twice.
   labels + minor tick band, white playhead with hover/drag time pill,
   2 lanes (V1+A1, 36px base, markers) that FLEX-TALL when the timeline is
   resized.
-- **R19 drag law** (the R19 deep pass + `docs/OT-SEAMS.md`): clips drag
-  FREELY across the lane (the one-lane neighbor clamp is GONE); a
-  conflicting drop INSERTS — the conflicting tail pushes right (Premiere
-  insert-edit geometry, floor law, tail spacing preserved, followers
-  tinted `is-pushed` live during the drag); free spans land at the pointer
-  (commit at the UP position); Esc restores the pre-drag doc; both clip
-  edges magnet (OT snapGroupEdges parity, nearest-wins); the magnet field
-  freezes at gesture start (a gesture never magnetizes to positions it
-  created). Programmatic `moveClip` follows the OT wire law instead:
-  overlap ⇒ REFUSE + honest toast (nudge routes it too).
+- **R20 drag law — the OT-faithful pass** (`docs/OT-SEAMS.md` §1.1–1.3,
+  `.agents/design/r20-drag-ot-law.md`): clips drag FREELY across the lane
+  and NOTHING ELSE MOVES mid-gesture (OT's drag view — the R19
+  insert-push law teleported neighbors per pointermove and is RETIRED);
+  overlap is allowed visually, the mover rendering above its lane with the
+  live drop verdict (amber dashed ring + `→ V2` chip while the drop will
+  escape; red ring + `no room · locked` chip while it will refuse). At the
+  UP: free span → plain commit (one history entry); conflicting span → OT's
+  escape THROUGH the window — an existing free same-kind track hosts the
+  drop when one fits, else a MINTED track (V/A series), and the window
+  REBINDS to follow the clip (undo restores doc AND binding — history
+  entries are binding-aware); `trackBindingLocked` → REFUSE (doc restored,
+  no history, honest toast — the mini's CONFLICT). Free spans land at the
+  PREVIEW-rendered position (magnet included, commit at the UP); Esc
+  restores the pre-drag doc; both clip edges magnet (OT snapGroupEdges
+  parity, nearest-wins) and a snap-induced conflict flows through the same
+  drop law; the magnet field freezes at gesture start. All six
+  `setPointerCapture` sites guarded (untrusted pointers throw NotFoundError
+  — live-caught). Programmatic `moveClip` keeps the OT wire law: overlap ⇒
+  REFUSE + honest toast (nudge routes it too).
 - **R19 trim ghosts** (thread #51): while trimming OUTWARD, the dotted
   ghost edge shows how much further the clip can extend (the
   source/neighbor bound — "how far you can go before you max out the
@@ -311,13 +321,16 @@ Run it at boot or any time; safe twice.
    shade returns ONLY while trimming: hovering an edge drag zone
    (:has()) or actively dragging it (is-trimming-* from the gesture
    engine) shades exactly that edge, alongside the 2px accent line.
-22. **Insert-push move conflicts** (R19, `docs/OT-SEAMS.md` §1.3): OT's
-   move law is overlap-REJECT with a new-track escape; the mini's
-   single-pair window has no track escape, and reject-by-default kept
-   reordering impossible (the user's one-lane-street complaint). The
-   gesture's conflict law is INSERT-PUSH (Premiere insert-edit); the OT
-   wire law survives verbatim in the programmatic `moveClip` (refuse +
-   toast). No split-at-insert (whole-clip relocation).
+22. **Windowed drag escape** (R20 — SUPERSEDES the R19 insert-push
+   deviation, `docs/OT-SEAMS.md` §1.3): OT's move law is overlap-reject
+   with a new-track escape; the mini now follows it THROUGH the window —
+   a conflicting drop escapes to an existing free same-kind track, else a
+   minted one, and the window rebinds (locked ⇒ refuse). The R19
+   insert-push improvisation (Premiere insert-edit via a per-event doc
+   mutation — the "comically buggy" neighbor teleportation) is retired
+   from the register: it was a redesign masquerading as a seam delta. The
+   OT wire law survives verbatim in the programmatic `moveClip` (refuse +
+   toast).
 23. **9-step zoom ladder** (R19, thread #52): [24, 36, 48, 72, 96, 144,
    192, 288, 384] — the five R18 anchors preserved with a new rung
    between each (×1.5); default step 2 (48pps unchanged).

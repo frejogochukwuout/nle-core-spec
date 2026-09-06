@@ -11,7 +11,7 @@
 import type { ArgTypes, Meta, StoryObj } from '@storybook/react-vite';
 import { Timeline, ToolsRow, ClipItem } from '../timeline/Timeline';
 import { ppsFor } from '../lib/geometry';
-import { seedDoc } from '../lib/mockData';
+import { seedDoc, TRACK_VIDEO, TRACK_AUDIO } from '../lib/mockData';
 import { StoreArgs, docFor, selectionFor, type Patch } from './storyKit';
 
 const meta: Meta = {
@@ -155,7 +155,9 @@ export const Toolbar: StoryObj<ToolbarArgs> = {
         filmstripOn,
         audioLaneVisible,
         trackMode: videoOnly ? 'video' : 'paired',
-        past: hasHistory ? [seedDoc()] : [],
+        past: hasHistory
+          ? [{ doc: seedDoc(), boundVideoTrack: TRACK_VIDEO, boundAudioTrack: TRACK_AUDIO }]
+          : [],
         future: [],
         selectedId: hasSelection ? 'c2' : null,
       }}

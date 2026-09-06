@@ -112,8 +112,11 @@
   /* R18j (thread #17): slimmed 56 → 36 — the bar is chrome-only since the
      transport moved into the viewer (R18g), so it no longer earns a tall
      strip; downstream hosts will restyle this bar anyway (customization
-     point, see Topbar.tsx note) */
-  --mini-topbar-h: 36px;
+     point, see Topbar.tsx note).
+     R20 (thread #30 follow-up, "now they are too thin be slightly
+     taller"): 36 → 40 — the calibration between the old 56 and the R18j
+     36; still a dense chrome strip, comfortable for the 14px logo. */
+  --mini-topbar-h: 40px;
   /* R18j (threads #13/#14): the collapsed panel rail width (pool left /
      inspector right — vertical label + expand button) */
   --mini-rail-w: 30px;

@@ -6,7 +6,7 @@
    (thread #18 — a still has no source length; its extent on the
    timeline is an edit decision, shown as Duration). */
 
-import { ChevronLeft, ChevronRight, MousePointerClick, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MousePointerClick, PanelRightClose, PanelRightOpen, Volume2, VolumeX } from 'lucide-react';
 import { useMini } from '../state/useMini';
 import { fmtTimecode } from '../lib/timecode';
 import { neighborBounds } from '../lib/geometry';
@@ -33,6 +33,10 @@ export function Inspector() {
    * law both ways). Fallback order: clip → track → empty. */
   const selectedTrackId = useMini((s) => s.selectedTrackId);
   const selTrack = selectedTrackId ? doc.tracks.find((t) => t.id === selectedTrackId) : undefined;
+  /* R20 (thread #29 — wave 8): the track card's named basic control —
+   * MUTE. Doc state (one history entry, undoable); the "etc." beyond
+   * mute is deferred to the nle-engine audio seam. */
+  const toggleTrackMute = useMini((s) => s.toggleTrackMute);
   const canNudge = (delta: number): boolean => {
     if (!clip) return false;
     const { prevEnd, nextStart } = neighborBounds(doc, clip);
@@ -142,10 +146,10 @@ export function Inspector() {
           </div>
         </div>
       ) : selTrack ? (
-        /* R19 (thread #47): the TRACK card — track-specific facts. Honest
-         * scope: the mini's track model has no per-track mute/gain state
-         * (the audio lane's visibility toggle is VIEW state, toolbar-
-         * owned) — the card reports what the model actually holds. */
+        /* R19 (thread #47): the TRACK card — track-specific facts. R20
+         * (thread #29): + the MUTE control — the named "most basic
+         * control" (doc state, one entry, undoable; the lane dims + the
+         * head carries an M chip — see Timeline). */
         <div className="mini-inspector__body" data-testid="mini-inspector-track">
           <div className="mini-inspector__name">{selTrack.label} lane</div>
           <dl className="mini-inspector__facts">
@@ -174,10 +178,27 @@ export function Inspector() {
               <dd>{selTrack.kind === 'video' ? 'video lane' : 'audio lane'}</dd>
             </div>
           </dl>
+          <div className="mini-inspector__track-controls">
+            <button
+              type="button"
+              className={`mini-inspector__mute${selTrack.muted ? ' is-muted' : ''}`}
+              onClick={() => toggleTrackMute(selTrack.id)}
+              aria-pressed={selTrack.muted ?? false}
+              title={
+                selTrack.muted
+                  ? `Unmute ${selTrack.label} — the lane renders at full presence`
+                  : `Mute ${selTrack.label} — the lane dims; an edit decision saved with the project`
+              }
+              data-testid="mini-track-mute"
+            >
+              {selTrack.muted ? <VolumeX size={14} strokeWidth={1.75} aria-hidden="true" /> : <Volume2 size={14} strokeWidth={1.75} aria-hidden="true" />}
+              <span>{selTrack.muted ? 'Unmute' : 'Mute'}</span>
+            </button>
+          </div>
           <p className="mini-inspector__track-hint">
             {selTrack.kind === 'audio'
-              ? 'Audio lane visibility is the toolbar eye toggle.'
-              : 'Rebind the lane from its track head (multi-track projects).'}
+              ? 'Mute is saved with the project (undoable). Audio lane visibility is the toolbar eye toggle.'
+              : 'Mute is saved with the project (undoable). Rebind the lane from its track head (multi-track projects).'}
           </p>
         </div>
       ) : (
