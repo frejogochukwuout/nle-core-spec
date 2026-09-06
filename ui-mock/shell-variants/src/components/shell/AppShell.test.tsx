@@ -115,7 +115,7 @@ describe('mixer dock (design doc v2.2 §4 — side by side with the lanes)', () 
   it('Edit default: collapsed state renders NO mixer dock surface', () => {
     renderAppShell();
     expect(store().mixerState).toBe('collapsed');
-    expect(screen.queryByTestId('mixer-dock-bridge')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mixer-dock-meters')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mixer-dock-full')).not.toBeInTheDocument();
   });
 
@@ -136,13 +136,14 @@ describe('mixer dock (design doc v2.2 §4 — side by side with the lanes)', () 
     expect(screen.getByTestId('mixer-strip-master')).toBeInTheDocument();
   });
 
-  it('mixerState=bridge: the 44px meter-bridge rail with per-track vertical meters', () => {
-    renderAppShell({ mixerState: 'bridge' });
-    expect(screen.getByTestId('mixer-dock-bridge')).toBeInTheDocument();
+  it('mixerState=meters: the full-height meter-column dock beside the lanes (R20-W1 D1.4)', () => {
+    renderAppShell({ mixerState: 'meters' });
+    expect(screen.getByTestId('mixer-dock-meters')).toBeInTheDocument();
     expect(screen.queryByTestId('mixer-dock-full')).not.toBeInTheDocument();
-    expect(screen.getByTestId('bridge-A1')).toBeInTheDocument();
-    expect(screen.getByTestId('bridge-A2')).toBeInTheDocument();
-    // lanes still present beside the rail
+    expect(screen.getByTestId('meter-col-A1')).toBeInTheDocument();
+    expect(screen.getByTestId('meter-col-A2')).toBeInTheDocument();
+    expect(screen.getByTestId('meter-col-master')).toBeInTheDocument(); // pinned right
+    // lanes still present beside the columns
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
   });
 });

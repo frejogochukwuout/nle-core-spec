@@ -21,8 +21,18 @@
    - PanBox: the reference's 48px crosshair pan position box (4px dot at
      left = 50 + pan/2 %) with OUR drag/keyboard grammar (mono tracks render
      one dot — no stereo-flag field exists, gap noted in ChannelStrip).
-   Fader drag/keyboard grammar (SCOUT-R8-C + design doc §6) unchanged in the
-   dB domain: Shift+drag fine, double-click reset, full keyboard grammar. */
+   R20-W1 (mixer-contract §1/§3/§4.4, DESIGN-R20 D1.2/D1.3):
+   - B7: the Fader now has the Knob's full pointer-release discipline
+     (pointerup + pointercancel + lostpointercapture clear the drag state).
+   - B8: aria-orientation on both sliders (vertical fader, horizontal pan).
+   - B9: StripMeter maps its fill through the SAME piecewise taper as the
+     fader/scale/grid — fill = 1 − dbToPos(db) → 0 dB lands at 85% height
+     (the 15% gridline), and the zone stops re-anchor to the taper
+     positions (−18 dB → 37.2%, −6 dB → 69.2%). Palette stays OUR 3-zone
+     + clip semantics (deliberate C41 deviation).
+   - D2: FaderGridlines — the reference's .fader-section::before technique
+     (token-colored 1px bands at 15/28/42/55/68/80/90%) so 0 dB reads
+     across strips. */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { dbLabel } from '../../state/mockMixer';
@@ -76,6 +86,31 @@ export function posToDb(pos: number): number {
     }
   }
   return -60;
+}
+
+/* ---------- cross-strip dB gridlines (R20-W1 D2, contract §1.3) ----------
+   The reference's .fader-section::before technique: ONE multi-stop gradient
+   painting 1px token-colored bands at the taper positions (0dB@15, −5@28,
+   −10@42, −15@55, −20@68, −30@80, −40@90% — the −50@98 stop is dropped:
+   it would collide with the bottom endcap) spanning the whole trio row
+   (scale + groove + meter), so 0dB reads ACROSS strips. Rendered by the
+   fader section's columns row; pointer-events none, painted BEHIND the
+   columns (first positioned child, same z, DOM order wins). */
+const GRIDLINE_POSITIONS = [15, 28, 42, 55, 68, 80, 90] as const;
+const GRIDLINE_GRADIENT =
+  `linear-gradient(to bottom, ${GRIDLINE_POSITIONS.flatMap((p) => [
+    `transparent ${p - 0.5}%`, `var(--fader-grid) ${p}%`, `transparent ${p + 0.5}%`,
+  ]).join(', ')})`;
+
+export function FaderGridlines() {
+  return (
+    <div
+      data-testid="fader-gridlines"
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0"
+      style={{ backgroundImage: GRIDLINE_GRADIENT }}
+    />
+  );
 }
 
 /* the model keeps the pinned linear −60..+6 range (mockMixer + tests); the
@@ -156,6 +191,18 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, scale = f
     onChange(clamp(posToDb(drag.current.startPos + dPos), MODEL_MIN, MODEL_MAX));
   }, [onChange]);
 
+  /* R20-W1 B7 (contract §3.1): the Knob's pointer-release discipline — a
+     stray pointerup/pointercancel/lostpointercapture must clear the drag
+     anchor, or the NEXT pointerdown could inherit a stale startPos. The
+     capture release is guarded (browsers/jsdom disagree on double release). */
+  const releaseDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    drag.current = null;
+    try {
+      const el = e.currentTarget;
+      if (el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    } catch { /* capture already released */ }
+  };
+
   const capGradient = accent
     ? 'linear-gradient(180deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))'
     : 'linear-gradient(180deg, var(--fader-thumb-1), var(--fader-thumb-2))';
@@ -203,13 +250,16 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, scale = f
           role="slider"
           tabIndex={0}
           aria-label={ariaLabel}
+          aria-orientation="vertical"
           aria-valuemin={-60}
           aria-valuemax={6}
           aria-valuenow={Math.round(db)}
           aria-valuetext={dbLabel(db)}
           className="relative flex w-[46px] shrink-0 cursor-ns-resize select-none items-stretch justify-center self-stretch"
           onPointerDown={(e) => {
-            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            try {
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            } catch { /* inactive pointer id — drag still works, capture best-effort */ }
             const box = trackRef.current!.getBoundingClientRect();
             const p = clamp((e.clientY - box.top) / box.height, 0, 1);
             const nextDb = clamp(posToDb(p), MODEL_MIN, MODEL_MAX);
@@ -220,6 +270,9 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, scale = f
             if (e.buttons !== 1 || !drag.current) return;
             setFromEvent(e.clientY, e.shiftKey);
           }}
+          onPointerUp={releaseDrag}
+          onPointerCancel={releaseDrag}
+          onLostPointerCapture={() => { drag.current = null; }}
           onDoubleClick={() => onChange(0)}
           onKeyDown={(e) => {
             const step = e.shiftKey ? 0.2 : 1;
@@ -466,8 +519,10 @@ export function PanKnob({ pan, onChange, size = 22, ariaLabel }: {
    box: click/drag = jump + relative horizontal drag (48px = ±100), keyboard
    ±5 / ⇧±1, double-click center — same semantics as the PanKnob it
    replaces on strips (the knob stays in the ChannelEditor). */
-export function PanBox({ pan, onChange, ariaLabel }: {
+export function PanBox({ pan, onChange, ariaLabel, size = 48 }: {
   pan: number; onChange: (pan: number) => void; ariaLabel: string;
+  /** 48px reference box (T0) / 36px lean box (T1-T2, DESIGN-R20 D1.3) */
+  size?: number;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ startX: number; startPan: number } | null>(null);
@@ -487,12 +542,13 @@ export function PanBox({ pan, onChange, ariaLabel }: {
       role="slider"
       tabIndex={0}
       aria-label={ariaLabel}
+      aria-orientation="horizontal"
       aria-valuemin={-100}
       aria-valuemax={100}
       aria-valuenow={Math.round(pan)}
       aria-valuetext={panLabel(pan)}
       title={`${ariaLabel}: ${panLabel(pan)}`}
-      className="relative h-[48px] w-[48px] cursor-ew-resize touch-none select-none rounded-[2px] border border-strong bg-inset"
+      className={`relative ${size === 48 ? 'h-[48px] w-[48px]' : 'h-[36px] w-[36px]'} cursor-ew-resize touch-none select-none rounded-[2px] border border-strong bg-inset`}
       onPointerDown={(e) => {
         try {
           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -529,17 +585,19 @@ export function PanBox({ pan, onChange, ariaLabel }: {
 }
 
 /* ---------- stereo strip meter — a view over the shared engine (R15-A2) ----------
-   Display range [−60, 0] dBFS dB-linear: fill fraction = clamp((db+60)/60);
-   db ≥ 0 → full + clip state. The palette gradient is anchored to the WELL via
-   clip-path so the stops agree with the dB zones (amber 70% = −18 dB,
-   red 90% = −6 dB). LED segments: 3px repeating overlay. Peak line: 1px
-   white/90 at the dB-linear peak position. Muted: opacity 0.2 + data-state.
+   R20-W1 B9 (contract §4.4): the fill maps through the SAME piecewise taper
+   as the fader/scale/gridlines — fillPct = 1 − dbToPos(db) — so 0 dB lands
+   at 85% height (the 15% gridline position) instead of 100%, and the strip's
+   two instruments finally agree about where 0 dB is. Zone stops re-anchor to
+   the taper positions: amber at dbToPos(−18) → 37.2% fill, red at
+   dbToPos(−6) → 69.2% fill (the engine's dB-linear `level` 0..1 is converted
+   back to dB first). Peak line: 1px white/90 at the SAME taper position
+   (kept white over the reference's yellow — documented choice, B10). The
+   palette keeps OUR 3-zone + clip semantics (deliberate C41 deviation).
+   LED segments: 3px repeating overlay. Muted: opacity 0.2 + data-state.
    R19-B1: fillHeight fills HEIGHT only — the column is a FIXED width
    (default 6.5px per bar → 14px total = 2×6.5 + 1px gap, the reference
-   §2.5 geometry; fixes th_mto617w1 — it used to be w-full and squeezed
-   the fader). Palette stays OUR 3-zone + clip semantics (gap C41: the
-   reference is a 2-color continuous gradient — ours encodes −18/−6 dB
-   zones + clip, kept deliberately). Title keeps the pinned contract
+   §2.5 geometry; fixes th_mto617w1). Title keeps the pinned contract
    (fader dB + live peak). aria-hidden — never a live region (design §4). */
 export function StripMeter({ trackId, db, height = 88, width = 6.5, duckAmount = 0, fillHeight = false, coarse = false, label }: {
   trackId: string; db: number; height?: number; width?: number; duckAmount?: number;
@@ -558,6 +616,15 @@ export function StripMeter({ trackId, db, height = 88, width = 6.5, duckAmount =
   const peakText = peak <= -60 ? '−∞' : `${peak > 0 ? '+' : ''}${peak.toFixed(1)} dB`;
   const state = snap.muted ? 'muted' : snap.l.clipped || snap.r.clipped ? 'clip' : undefined;
 
+  /* the taper display map, shared with the fader: dB → fill fraction from
+     the BOTTOM. 0dB → 0.85 (the 15% gridline), −60 → 0, +10 headroom → 1.
+     The engine's `level` is dB-linear 0..1 over [−60, 0] — convert to dB
+     first, then map (the fill and the peak use the SAME dB→fill map). */
+  const fillOfDb = (db: number) => 1 - dbToPos(db);
+  // zone stops re-anchored to the taper (C41 palette, B9 geometry)
+  const AMBER_STOP = Math.round((1 - dbToPos(-18)) * 1000) / 10; // 37.2
+  const RED_STOP = Math.round((1 - dbToPos(-6)) * 1000) / 10; // 69.2
+
   return (
     <div
       className={`meter-well relative flex items-stretch gap-px overflow-hidden rounded-[2px] border border-hairline ${snap.muted ? 'opacity-20' : ''} ${fillHeight ? 'h-full min-h-0' : ''}`}
@@ -568,18 +635,19 @@ export function StripMeter({ trackId, db, height = 88, width = 6.5, duckAmount =
     >
       {(['l', 'r'] as const).map((ch) => {
         const c = snap[ch];
-        const pct = Math.round(c.level * 10000) / 100;
-        const peakPct = c.peakDb <= -60 ? null : Math.round(Math.min(1, (c.peakDb + 60) / 60) * 10000) / 100;
+        const pct = Math.round(fillOfDb(c.level * 60 - 60) * 10000) / 100;
+        const peakPct = c.peakDb <= -60 ? null : Math.round(Math.min(1, fillOfDb(c.peakDb)) * 10000) / 100;
         return (
           <div key={ch} data-channel={ch} className="relative min-w-0 flex-1 overflow-hidden">
             {/* fill: full-height gradient layer clipped from the top — the
-                stops stay at absolute dB positions (amber = −18, red = −6) */}
+                stops sit at the TAPER positions (amber = −18 dB → 37.2%,
+                red = −6 dB → 69.2%), agreeing with the gridlines above */}
             <div
               className="absolute inset-x-0 bottom-0 h-full"
               style={{
                 background: c.clipped
                   ? 'var(--meter-red)'
-                  : 'linear-gradient(to top, var(--meter-green) 0%, var(--meter-amber) 70%, var(--meter-red) 90%)',
+                  : `linear-gradient(to top, var(--meter-green) 0%, var(--meter-amber) ${AMBER_STOP}%, var(--meter-red) ${RED_STOP}%)`,
                 clipPath: `inset(${100 - pct}% 0 0 0)`,
                 transition: 'clip-path 50ms linear, background 100ms linear',
               }}

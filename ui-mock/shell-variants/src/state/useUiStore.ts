@@ -37,7 +37,9 @@ export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' |
 export type Page = 'edit' | 'color' | 'audio' | 'deliver';
 export type InspectorTab = 'video' | 'audio' | 'effects' | 'transition';
 export type ToastKind = 'info' | 'success' | 'error' | 'persist';
-export type MixerDockState = 'collapsed' | 'bridge' | 'full';
+/* R20-W1 (DESIGN-R20 D1.4): 'bridge' renamed 'meters' — the minimized
+   state is now full-height thin meter COLUMNS, not a stacked rail. */
+export type MixerDockState = 'collapsed' | 'meters' | 'full';
 /* R19 edit-overlay ops (nle_edit_workflow reference): the 7 Resolve edit
    functions. insert/overwrite/append/placeOnTop/rippleOverwrite are REAL
    placement (timelinePlacement laws); replace needs a selected element;
@@ -370,6 +372,15 @@ interface UiState {
   audioLaneBoost: boolean;
   stripFocus: string | null;
   stripFlash: number;
+  /* R20-W1 B6 (mixer-contract §3.1): strip display flags live at the STORE
+     level (not component useState) so they survive dock unmounts / state
+     cycles / scene switches. View-state only — the G-slice shape is
+     unchanged and there is no doc-slice field (gap C40 honesty toasts stay). */
+  stripArm: Record<string, boolean>;       // record-arm display state per trackId
+  stripInsertsOn: Record<string, boolean>;  // inserts-power display state per trackId
+  /* R20-W1 D1.3: ONE honest floor-fallback toast per session — the dock
+     auto-falls back to the meters state below MIXER_TIER.FLOOR. */
+  mixerFloorWarned: boolean;
   /* spec 18 §4.9 track-header Height rows (Compact/Normal/Tall): GLOBAL lane-
      height pref (null = auto: kind-based trackHeights()). B3 registration: the
      state-home question (per-track vs global) is a seal item — the mock answers
@@ -454,6 +465,8 @@ interface UiState {
   exitAudioFocus: () => void;
   setMixerState: (m: MixerDockState) => void;
   cycleMixerState: () => void;
+  toggleStripArm: (trackId: string) => void;
+  toggleStripInserts: (trackId: string) => void;
   setAudioLaneBoost: (v: boolean) => void;
   setTrackHeightPref: (p: UiState['trackHeightPref']) => void;
   setStripFocus: (id: string | null) => void;
@@ -665,6 +678,9 @@ export const useUi = create<UiState>((set, get) => ({
   audioLaneBoost: false,
   stripFocus: null,
   stripFlash: 0,
+  stripArm: {},
+  stripInsertsOn: {},
+  mixerFloorWarned: false,
   trackHeightPref: null,
 
   setPage: (p) => set((s) => ({
@@ -1176,12 +1192,14 @@ export const useUi = create<UiState>((set, get) => ({
   exitAudioFocus: () => set({ page: 'edit', audioLaneBoost: false }),
   setMixerState: (m) => set({ mixerState: m }),
   cycleMixerState: () => set((s) => {
-    // design doc v2.2 revision (end of file): Edit — collapsed → bridge →
-    // full (compact is now a height-driven property of the dock, not a 4th
-    // state); Audio — bridge ↔ full
-    if (s.page === 'audio') return { mixerState: s.mixerState === 'full' ? 'bridge' : 'full' };
-    return { mixerState: s.mixerState === 'collapsed' ? 'bridge' : s.mixerState === 'bridge' ? 'full' : 'collapsed' };
+    // R20-W1 (DESIGN-R20 D1.4, thread #61): Edit — collapsed → meters →
+    // full → collapsed; Audio — meters ↔ full (the page-aware branch is
+    // PRESERVED from the v2.2 revision — pinned by useUiStore.test).
+    if (s.page === 'audio') return { mixerState: s.mixerState === 'full' ? 'meters' : 'full' };
+    return { mixerState: s.mixerState === 'collapsed' ? 'meters' : s.mixerState === 'meters' ? 'full' : 'collapsed' };
   }),
+  toggleStripArm: (trackId) => set((s) => ({ stripArm: { ...s.stripArm, [trackId]: !(s.stripArm[trackId] ?? false) } })),
+  toggleStripInserts: (trackId) => set((s) => ({ stripInsertsOn: { ...s.stripInsertsOn, [trackId]: !(s.stripInsertsOn[trackId] ?? true) } })),
   setAudioLaneBoost: (v) => set({ audioLaneBoost: v }),
   setTrackHeightPref: (p) => set({ trackHeightPref: p }), /* §4.9 Height pref — view state, no history */
   setStripFocus: (id) => set({ stripFocus: id }),

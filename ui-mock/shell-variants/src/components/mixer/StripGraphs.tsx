@@ -3,8 +3,11 @@
    display: the curves are DETERMINISTIC per key (FNV-1a seed → mulberry32),
    so the same track always paints the same curves across renders/tests —
    no state, no engine. Token strokes only (the reference's cyan/olive/blue
-   map to --type-audio / --meter-amber / --knob-active).
-   R19-B1: part of the reference strip anatomy integration. */
+   map to --type-audio / --meter-amber / --knob-active — D8 deferred: the
+   token law wins over the reference's one-off hexes, mapping noted here).
+   R19-B1: part of the reference strip anatomy integration.
+   R20-W1 (DESIGN-R20 D1.3): CombinedThumb — the T1 lean-tier single 28px
+   row overlaying both curves in ONE box (graphs → 1 combined row). */
 
 /** FNV-1a string hash → 32-bit seed (same family as meterEngine/waveform) */
 export function hashSeed(s: string): number {
@@ -77,6 +80,28 @@ export function DynThumb({ trackKey, testId = 'dyn-thumb' }: { trackKey: string;
       className="h-[28px] w-full shrink-0 rounded-[2px] border border-strong bg-inset"
     >
       <path data-testid={`${testId}-path`} d={path} fill="none" stroke="var(--meter-amber)" strokeWidth={1.5} />
+      <line x1={threshold} y1={2} x2={threshold} y2={28} stroke="var(--knob-active)" strokeWidth={1} />
+    </svg>
+  );
+}
+
+/** Combined thumbnail (R20-W1 D1.3, T1 lean tier): ONE 28px box with the
+    EQ curve + the dynamics transfer + threshold overlaid — the same
+    deterministic paths as the T0 pair, so a T1 strip reads the same track. */
+export function CombinedThumb({ trackKey, flat = false, testId = 'graph-thumb' }: {
+  trackKey: string; flat?: boolean; testId?: string;
+}) {
+  const { path, threshold } = dynCurveFor(trackKey);
+  return (
+    <svg
+      data-testid={testId}
+      viewBox="0 0 100 30"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      className="h-[28px] w-full shrink-0 rounded-[2px] border border-strong bg-inset"
+    >
+      <path data-testid="eq-thumb-path" d={eqPathFor(trackKey, flat)} fill="none" stroke="var(--type-audio)" strokeWidth={1.5} />
+      <path data-testid="dyn-thumb-path" d={path} fill="none" stroke="var(--meter-amber)" strokeWidth={1.5} opacity={0.85} />
       <line x1={threshold} y1={2} x2={threshold} y2={28} stroke="var(--knob-active)" strokeWidth={1} />
     </svg>
   );

@@ -20,7 +20,7 @@ import { useUi } from '../../state/useUiStore';
 import { mediaById, type ElementJSON } from '../../lib/mockData';
 import { ROLE_LABEL, dbLabel, type Role } from '../../state/mockMixer';
 import { useMeter } from '../../lib/meterEngine';
-import { Fader, PanKnob, StripMeter, HeadroomReadout } from './MixerPrimitives';
+import { Fader, PanKnob, StripMeter, HeadroomReadout, FaderGridlines } from './MixerPrimitives';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -243,20 +243,21 @@ export function ChannelEditor() {
 
               {/* the TERMINAL fader block (fixes th_mto37ze9): fills ALL
                   remaining vertical space, flush to the panel bottom — same
-                  equal-height law as the strips (shared 24px headroom,
-                  [meter | fader+scale] columns on one height var, meter fixed
-                  14px wide) */}
+                  law as the strips (shared 24px headroom, [scale | fader |
+                  meter] columns on one height var — R20-W1 D1 column order —
+                  meter fixed 14px, D2 gridlines) */}
               <div data-testid="channel-editor-fader" className="flex min-h-[140px] shrink-0 self-stretch flex-col" style={{ width: 76 }}>
                 <HeadroomReadout db={strip.fader} peakDb={peak} testId="channel-editor-readout" />
                 <div
-                  className="flex min-h-0 flex-1 items-stretch justify-center gap-1"
+                  className="relative flex min-h-0 flex-1 items-stretch justify-center gap-1"
                   style={{ '--fader-col-h': '100%' } as React.CSSProperties}
                 >
-                  <div data-col="meter" className="flex min-h-0" style={{ height: 'var(--fader-col-h)' }}>
-                    <StripMeter trackId={track.id} db={strip.fader} fillHeight label={track.name} />
-                  </div>
-                  <div data-col="fader" className="flex min-h-0" style={{ height: 'var(--fader-col-h)' }}>
+                  <FaderGridlines />
+                  <div data-col="fader" className="relative flex min-h-0" style={{ height: 'var(--fader-col-h)' }}>
                     <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} fillHeight scale headroom={false} ariaLabel={`${track.name} fader`} />
+                  </div>
+                  <div data-col="meter" className="relative flex min-h-0" style={{ height: 'var(--fader-col-h)' }}>
+                    <StripMeter trackId={track.id} db={strip.fader} fillHeight label={track.name} />
                   </div>
                 </div>
               </div>

@@ -1,27 +1,41 @@
 /* ChannelStrip — one mixer strip per audio track (spec 20 §4.2 G-layer
-   projection), REBUILT R19-B1 to the Fairlight reference anatomy
-   (audio_mixer.html — r19-analysis/audio-cluster.md §2.4/§3.2):
+   projection), REBUILT R20-W1 to the Fairlight reference anatomy
+   (audio_mixer.html — docs/r20/mixer-contract.md §1-§2, DESIGN-R20 D1.2):
 
-   3px role-color TOP bar → badge+name header → "No Input" row → FX chip
-   rack (gold chips = the 2 REAL MixerTrackSettings.inserts slots + "+"
-   add-slot chips, honest insert-browser toast) + gold "I" 16×16 power
-   button (display state, gap C40) → EQ/dynamics graph thumbnails
-   (deterministic per trackId) → role label (gold for music) → R/S/M row
-   (R record-arm display-only, gap C40; S/M real toggleTrackCmd) → 48px pan
-   crosshair box → the TERMINAL flex-1 fader section: one SHARED 24px
-   headroom readout + [meter | fader+scale] equal-height columns.
+   - Uniform 86px strips (aux/master too — D7); column order in the terminal
+     fader section is **scale | fader | meter** (D1 — was mirrored).
+   - T0 vertical stack (exact heights, contract §1.2): 3px kind-color top bar
+     + 25px ID-only header (= the reference's 28px bordered header, D5/D13) →
+     input 22 → fx-rack 105 (5 slots: 2 REAL inserts gold + dim empties + the
+     last "+" add, D3) → I 26 (16×16 gold) → graphs 66 (EQ 28 + dynamics 28)
+     → pan 56 (48×48 box) → routing 24 (16×16 "1"/"2" bus buttons, D4) →
+     title 26 (track NAME — gold for music; the header stays ID-only) →
+     RSM 24 (20×20 squares) → fader section (flex-1 TERMINAL, nothing below).
+   - Cross-strip dB gridlines + the 24px headroom readout live INSIDE the
+     pinned fader section (D2/D15).
 
-   Fixes: th_mto617w1 (meter was w-full, squeezed the fader), th_mto37ze9 /
-   th_mto6496s (the fader block is now the terminal flex-1 section — the
-   accessory rows are fixed and sit ABOVE it; nothing sits below the
-   fader), th_mtoyq7jt (meter / scale / groove exactly equal height,
-   top-aligned under one headroom strip).
+   Height tiers (D1.3, contract §4.2 revised): the DOCK measures once and
+   passes the tier down (cross-strip fader-top alignment requires a SHARED
+   tier) — T0 ≥560 full anatomy; T1 420-559 (name merges into the header,
+   graphs → ONE combined 28px row, pan box 36, fx-rack 3 slots, no
+   routing/title rows); T2 340-419 (graphs + input hidden, fx count chip in
+   the header, expandable); T3 280-339 (the accessory stack scrolls INSIDE
+   the strip; the trio + RSM pin at the bottom, faderSection = clamp(H−53−
+   scrollMin, 164, 260) with scrollMin = max(40, H−53−164)). Below the 280px
+   FLOOR the dock auto-falls back to the meters state (MixerDock).
 
-   Aux return strips + the master strip live here too (MixerDock composes
-   them; master = same anatomy minus pan box, accent top bar, M-only RSM
-   per reference M1). Aux sends / pre-post / output bus / ducking editing
-   moved to the ChannelEditor rail — the reference strip has no sends
-   surface and the terminal fader needs the room (R19-B1 report note). */
+   Width compaction is DECOUPLED from height: `narrow` (72px strips, trio
+   drops the meter column) fires when the dock's width budget < N×86.
+
+   Aux returns + master: same 86px width + tier law (our divergence — the
+   reference has neither; model-backed per spec 20 §4.2). Master mirrors the
+   channel rows with SPACERS (input/I/pan/routing) so the fader tops align
+   exactly (contract D11 accepted deviation) and carries the honest LUFS-v2
+   note in the routing-spacer row (D12).
+
+   B6: R (record-arm) + I (inserts power) are display state with no
+   G-surface field (gap C40) — they now live in STORE view-state flags so
+   they survive dock unmounts. S/M stay the undoable toggleTrackCmd. */
 
 import { useState } from 'react';
 import { useUi } from '../../state/useUiStore';
@@ -30,11 +44,12 @@ import { useMeter } from '../../lib/meterEngine';
 
 const DEFAULT_STRIP: MixerTrackSettings = { fader: -6, pan: 0, inserts: [null, null], auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0 };
 import type { TrackJSON } from '../../lib/mockData';
+import type { MixerTier } from './MixerDock';
 
-import { Fader, PanBox, StripMeter, HeadroomReadout } from './MixerPrimitives';
-import { EqThumb, DynThumb } from './StripGraphs';
+import { Fader, PanBox, StripMeter, HeadroomReadout, FaderGridlines } from './MixerPrimitives';
+import { EqThumb, DynThumb, CombinedThumb } from './StripGraphs';
 
-// single source of truth: the undoable store command (headers, strips, bridge)
+// single source of truth: the undoable store command (headers, strips, meters)
 const toggleTrack = (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked') =>
   useUi.getState().toggleTrackCmd(sceneId, trackId, field);
 
@@ -43,98 +58,167 @@ const toggleTrack = (sceneId: string, trackId: string, field: 'muted' | 'solo' |
 /** section hairline — --border-strong, decorative */
 const Hairline = () => <div className="h-px w-full shrink-0 bg-strong" aria-hidden="true" />;
 
-/** 3px role-color top bar pinned to the strip's top edge (reference §2.4
-    row 1: the strip's at-a-glance identity; master = accent gradient) —
-    replaces the old h-1 BOTTOM base bar (R19-B1 fidelity pick: top) */
+/** 3px kind-color top bar (reference .track-header border-top, §1.2 row 1);
+    + the 25px ID row below = the reference's 28px bordered header */
 const TopBar = ({ testId, background }: { testId: string; background: string }) => (
   <div data-testid={testId} className="h-[3px] w-full shrink-0" style={{ background }} aria-hidden="true" />
 );
 
-/** role → --mk-role-* top-bar color (A0 single ramp set, light overrides) */
-const ROLE_BAR: Record<Role, string> = {
+/** role → --mk-role-* top-bar color (A0 single ramp set; D14: token law wins
+    over the reference's orange/teal/gray family ramp — mapping documented).
+    Exported for the meters dock's badge row (same family color). */
+export const ROLE_BAR: Record<Role, string> = {
   dialogue: 'var(--mk-role-dialogue)',
   bgm: 'var(--mk-role-bgm)',
   sfx: 'var(--mk-role-sfx)',
   music: 'var(--mk-role-music)',
 };
 
-/* ---------- FX chip rack + "I" power button (reference rows 3–4) ----------
-   Gold chips display the REAL inserts (2 slots, spec 20 §4.2); each empty
-   slot renders a "+" add chip; clicking an add chip answers honestly —
-   the insert browser is a v2 surface (gap C40). The gold "I" 16×16 button
-   is the inserts power/bypass: display state + honest toast (no G-surface
-   field, gap C40). Insert EDITING stays in the ChannelEditor rail (2 real
-   selects through setMixerTrack). */
-function FxRack({ inserts, name, pushToast }: {
-  inserts: [string | null, string | null]; name: string; pushToast: ReturnType<typeof useUi.getState>['pushToast'];
-}) {
-  const [power, setPower] = useState(true);
+/** 25px header row. T0/T3: track ID ONLY (the NAME lives in the 26px title
+    row — D5). T1/T2: ID + name merged up (those tiers drop the title row);
+    T2 channels add the expandable fx-count chip. */
+function StripHeader({ badge, name, children }: { badge: string; name?: string; children?: React.ReactNode }) {
   return (
-    <>
-      <div data-testid="fx-rack" className="flex w-full shrink-0 flex-col gap-[2px] px-1 pt-1">
-        {inserts.map((ins, i) =>
-          ins ? (
-            <span
-              key={i}
-              data-testid="fx-chip"
-              title={`${ins} insert — edit in the channel editor`}
-              className="flex h-[18px] w-full shrink-0 items-center truncate rounded-[2px] border border-strong bg-inset pl-1 text-[10px] font-medium text-[var(--solo)]"
-            >
-              {ins}
-            </span>
-          ) : (
-            <button
-              key={i}
-              data-testid="fx-add"
-              onClick={() =>
-                pushToast({
-                  kind: 'info',
-                  title: 'Insert browser',
-                  detail: 'Browsing/adding insert effects is a v2 surface (gap C40) — the channel editor edits the 2 real slots',
-                })
-              }
-              aria-label={`Add insert ${i + 1}`}
-              data-tip="Add insert (browser is v2)"
-              className="flex h-[18px] w-full shrink-0 items-center justify-center rounded-[2px] border border-strong bg-inset text-[10px] text-tmuted hover:text-tprimary"
-            >
-              +
-            </button>
-          ),
-        )}
-      </div>
-      {/* "I" power row — 26px, centered (reference §2.4 row 4) */}
-      <div className="flex h-[26px] w-full shrink-0 items-center justify-center">
-        <button
-          data-testid="fx-power"
-          onClick={() => {
-            setPower(!power);
-            pushToast({
-              kind: 'info',
-              title: 'Inserts power',
-              detail: 'Insert-chain bypass has no G-surface field yet (gap C40) — display state only',
-            });
-          }}
-          aria-pressed={power}
-          aria-label={`${name} inserts power`}
-          data-tip="Inserts power (display state, gap C40)"
-          className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${
-            power ? 'border-[var(--solo)] bg-[var(--solo)] text-black' : 'border-[var(--solo)] text-[var(--solo)]'
-          }`}
-        >
-          I
-        </button>
-      </div>
-    </>
+    <div className="flex h-[25px] w-full shrink-0 items-center justify-center gap-1 overflow-hidden px-1">
+      <span className="mono shrink-0 text-[12px] font-semibold text-tprimary">{badge}</span>
+      {name && <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-tprimary" title={name}>{name}</span>}
+      {children}
+    </div>
   );
 }
 
-/* ---------- R/S/M row (reference row 9) ----------
-   R = record arm: DISPLAY-ONLY toggle (no G-surface field — gap C40; toggle
-   state + honest toast, never a silent no-op). S/M stay REAL — the same
-   undoable toggleTrackCmd commands as the track headers. 20×20 letter
-   buttons with the reference's inset top highlight. */
+/* ---------- FX chip rack (reference §1.2 row 3, D3) ----------
+   Slots 1-2 = the REAL MixerTrackSettings.inserts (gold text + ellipsis when
+   filled, DIM when empty); T0 adds two more dim slots (5-row rack); the LAST
+   row is always the reference's "+" add (honest toast — the insert browser is
+   a v2 surface, gap C40). Insert EDITING stays in the ChannelEditor rail. */
+function FxRack({ inserts, name, slots, pushToast }: {
+  inserts: [string | null, string | null]; name: string; slots: 3 | 5;
+  pushToast: ReturnType<typeof useUi.getState>['pushToast'];
+}) {
+  const filled = (ins: string, i: number) => (
+    <span
+      key={`fx-${i}`}
+      data-testid="fx-chip"
+      title={`${ins} insert — edit in the channel editor`}
+      className="flex h-[18px] w-full shrink-0 items-center truncate rounded-[2px] border border-strong bg-inset pl-1 text-[10px] font-medium text-[var(--solo)]"
+    >
+      {ins}
+    </span>
+  );
+  const dim = (i: number) => (
+    <span
+      key={`dim-${i}`}
+      data-testid="fx-slot-empty"
+      title="Empty insert slot"
+      className="h-[18px] w-full shrink-0 rounded-[2px] border border-strong/60 bg-inset/40"
+    />
+  );
+  return (
+    <div
+      data-testid="fx-rack"
+      className="flex w-full shrink-0 flex-col gap-[2px] px-[4px] py-[2px]"
+      style={{ height: slots === 5 ? 105 : 62 }}
+    >
+      {inserts.map((ins, i) => (ins ? filled(ins, i) : dim(i)))}
+      {slots === 5 && [dim(2), dim(3)]}
+      <button
+        data-testid="fx-add"
+        onClick={() =>
+          pushToast({
+            kind: 'info',
+            title: 'Insert browser',
+            detail: 'Browsing/adding insert effects is a v2 surface (gap C40) — the channel editor edits the 2 real slots',
+          })
+        }
+        aria-label={`Add insert ${name}`}
+        data-tip="Add insert (browser is v2)"
+        className="flex h-[18px] w-full shrink-0 items-center justify-center rounded-[2px] border border-strong bg-inset text-[10px] font-semibold text-tmuted hover:text-tprimary"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+/** T2 fx-count chip (D1.3 "fx-rack → header + count"): shows the real insert
+    count and EXPANDS a small popover listing the 2 model slots (edit hint
+    stays honest — the ChannelEditor owns the writes). */
+function FxCountChip({ inserts, name }: { inserts: [string | null, string | null]; name: string }) {
+  const [open, setOpen] = useState(false);
+  const count = inserts.filter(Boolean).length;
+  return (
+    <span className="relative shrink-0">
+      <button
+        data-testid="fx-count"
+        aria-expanded={open}
+        aria-label={`${name} insert slots (${count})`}
+        data-tip="Insert slots (expand)"
+        onClick={() => setOpen(!open)}
+        className={`mono rounded-[2px] border px-1 text-[10px] font-bold leading-4 ${open ? 'border-[var(--solo)] text-[var(--solo)]' : 'border-strong text-tmuted'}`}
+      >
+        FX{count}
+      </button>
+      {open && (
+        <span
+          data-testid="fx-count-popover"
+          role="group"
+          aria-label={`${name} insert slots`}
+          className="absolute left-0 top-[26px] z-20 flex w-[78px] flex-col gap-0.5 rounded-[var(--radius-sm)] border border-strong bg-panel p-1 shadow-lg"
+        >
+          {inserts.map((ins, i) => (
+            <span key={i} className={`flex h-[16px] items-center truncate text-[10px] ${ins ? 'font-medium text-[var(--solo)]' : 'text-tfaint'}`}>
+              {ins ?? '—'}
+            </span>
+          ))}
+          <span className="border-t border-hairline pt-0.5 text-[10px] leading-tight text-tfaint">edit in the channel editor</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/* ---------- "I" inserts-power row (reference §1.2 row 4) ----------
+   16×16 gold-outlined button. B6: the display state lives in the STORE
+   (stripInsertsOn) — it survives dock unmounts / state cycles / scene
+   switches; the honest gap-C40 toast stays. */
+function IRow({ trackId, name }: { trackId: string; name: string }) {
+  const on = useUi((s) => s.stripInsertsOn[trackId] ?? true);
+  const toggleStripInserts = useUi((s) => s.toggleStripInserts);
+  const pushToast = useUi((s) => s.pushToast);
+  return (
+    <div className="flex h-[26px] w-full shrink-0 items-center justify-center">
+      <button
+        data-testid="fx-power"
+        onClick={() => {
+          toggleStripInserts(trackId);
+          pushToast({
+            kind: 'info',
+            title: 'Inserts power',
+            detail: 'Insert-chain bypass has no G-surface field yet (gap C40) — display state only',
+          });
+        }}
+        aria-pressed={on}
+        aria-label={`${name} inserts power`}
+        data-tip="Inserts power (display state, gap C40)"
+        className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${
+          on ? 'border-[var(--solo)] bg-[var(--solo)] text-black' : 'border-[var(--solo)] text-[var(--solo)]'
+        }`}
+      >
+        I
+      </button>
+    </div>
+  );
+}
+
+/* ---------- R/S/M row (reference §1.2 row 9) ----------
+   R = record arm: DISPLAY-ONLY toggle (no G-surface field — gap C40; B6: the
+   flag lives in the store now). S/M stay REAL — the same undoable
+   toggleTrackCmd commands as the track headers. 20×20 letter buttons with
+   the reference's inset top highlight. */
 function RsmRow({ sceneId, track, name }: { sceneId: string; track: TrackJSON; name: string }) {
-  const [armed, setArmed] = useState(false);
+  const armed = useUi((s) => s.stripArm[track.id] ?? false);
+  const toggleStripArm = useUi((s) => s.toggleStripArm);
   const pushToast = useUi((s) => s.pushToast);
   const btn = 'mono flex h-[20px] w-[20px] items-center justify-center rounded-[2px] border text-[10px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]';
   return (
@@ -142,7 +226,7 @@ function RsmRow({ sceneId, track, name }: { sceneId: string; track: TrackJSON; n
       <button
         data-testid="strip-rec-arm"
         onClick={() => {
-          setArmed(!armed);
+          toggleStripArm(track.id);
           pushToast({ kind: 'info', title: 'Record arm', detail: 'Record-arm has no G-surface field yet (gap C40) — display state only' });
         }}
         aria-pressed={armed}
@@ -160,23 +244,81 @@ function RsmRow({ sceneId, track, name }: { sceneId: string; track: TrackJSON; n
   );
 }
 
-/* ---------- the TERMINAL fader section (reference §2.5 — the centerpiece) ----------
+/** input label row (reference §1.2 row 2, 22px) — display state; input
+    routing has no G-surface field (gap C40, title documents it) */
+const InputRow = () => (
+  <div
+    data-testid="strip-input"
+    title="Input routing — no G-surface field (gap C40)"
+    className="flex h-[22px] w-full shrink-0 items-center bg-inset pl-1.5 text-[10px] text-tfaint"
+  >
+    No Input
+  </div>
+);
+
+/** routing row (reference §1.2 row 7, D4): two 16×16 "1"/"2" buttons — REAL
+    outputBus writes (1 = aux A1 green, 2 = aux A2 gold per the reference's
+    colors); pressing the active bus returns to the master (0). The
+    ChannelEditor select stays the full bus editor. */
+function RoutingRow({ track, strip, onBus }: { track: TrackJSON; strip: MixerTrackSettings; onBus: (bus: 0 | 1 | 2) => void }) {
+  const btn = (bus: 1 | 2, color: string) => {
+    const active = strip.outputBus === bus;
+    return (
+      <button
+        data-testid={`strip-bus-${bus}`}
+        onClick={() => onBus(active ? 0 : bus)}
+        aria-pressed={active}
+        aria-label={`Route ${track.name} to aux ${bus}`}
+        data-tip={`Output bus: ${strip.outputBus === 0 ? 'master' : `aux ${bus}`} (click to ${active ? 'return to master' : `route to aux ${bus}`})`}
+        className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${active ? 'text-black' : ''}`}
+        style={{ borderColor: color, background: active ? color : 'transparent', color: active ? '#000' : color }}
+      >
+        {bus}
+      </button>
+    );
+  };
+  return (
+    <div className="flex h-[24px] w-full shrink-0 items-center gap-1 pl-1.5">
+      {btn(1, 'var(--type-audio)')}
+      {btn(2, 'var(--solo)')}
+    </div>
+  );
+}
+
+/** title row (reference §1.2 row 8, D5/D6): the track NAME, 11.5px/700 →
+    ours 11px bold; gold for the music role (reference .track-title.gold) */
+const TitleRow = ({ name, gold }: { name: string; gold: boolean }) => (
+  <div className="flex h-[26px] w-full shrink-0 items-center justify-center overflow-hidden px-1">
+    <span data-testid="strip-title" title={name} className={`truncate text-[11px] font-bold tracking-wide ${gold ? 'text-[var(--solo)]' : 'text-tprimary'}`}>
+      {name}
+    </span>
+  </div>
+);
+
+/* ---------- the TERMINAL fader section (reference §1.2 row 10/§1.3) ----------
    One SHARED 24px headroom strip (fader dB signed 1dp no unit + live engine
-   peak) above [meter | fader+scale] columns that share one height var —
-   EXACTLY equal, top-aligned. The section is the strip's terminal flex-1
-   block: it absorbs ALL remaining strip height and nothing sits below the
-   fader. fixes th_mto37ze9, th_mto6496s, th_mtoyq7jt */
-function FaderSection({ id, db, peakDb, children }: {
-  id: string; db: number; peakDb: number; children: React.ReactNode;
+   peak, D15) above the [scale | fader | meter] columns (D1 order) sharing one
+   height var — exactly equal, top-aligned — with the cross-strip dB
+   gridlines (D2) painted behind them. The section is the strip's TERMINAL
+   flex-1 block at T0-T2 (travel floor: section min 164 = 140 travel + the
+   24px headroom); at T3 it takes the clamp formula's FIXED height so the
+   trio pins at the strip bottom while the accessory stack scrolls above. */
+function FaderSection({ id, db, peakDb, pinnedHeight, children }: {
+  id: string; db: number; peakDb: number; pinnedHeight?: number; children: React.ReactNode;
 }) {
   return (
-    <div data-testid={`fader-section-${id}`} className="flex min-h-[124px] w-full flex-1 flex-col">
+    <div
+      data-testid={`fader-section-${id}`}
+      className={`flex w-full flex-col ${pinnedHeight !== undefined ? 'shrink-0' : 'min-h-[164px] flex-1'}`}
+      style={pinnedHeight !== undefined ? { height: `${Math.round(pinnedHeight)}px` } : undefined}
+    >
       <HeadroomReadout db={db} peakDb={peakDb} testId={`mixer-readout-${id}`} />
       <div
         data-testid={`fader-cols-${id}`}
-        className="flex min-h-0 flex-1 items-stretch justify-center gap-[3px] px-1 pb-1"
+        className="relative flex min-h-0 flex-1 items-stretch justify-center gap-[3px] px-1 pb-1"
         style={{ '--fader-col-h': '100%' } as React.CSSProperties}
       >
+        <FaderGridlines />
         {children}
       </div>
     </div>
@@ -184,15 +326,36 @@ function FaderSection({ id, db, peakDb, children }: {
 }
 
 /** equal-height column wrapper — every column of the fader section carries
-    the same height var (the shared-style-var equal-height law, th_mtoyq7jt) */
+    the same height var (the shared-style-var equal-height law, th_mtoyq7jt);
+    `relative` keeps the column ABOVE the gridline layer (DOM order) */
 const FaderCol = ({ col, children }: { col: string; children: React.ReactNode }) => (
-  <div data-col={col} className="flex min-h-0" style={{ height: 'var(--fader-col-h)' }}>
+  <div data-col={col} className="relative flex min-h-0" style={{ height: 'var(--fader-col-h)' }}>
     {children}
   </div>
 );
 
-export function ChannelStrip({ track, sceneId, compact, focused, flashing, index = 0, onStripClick }: {
-  track: TrackJSON; sceneId: string; compact: boolean; focused: boolean; flashing?: boolean;
+/* ---------- T3 scroll math (D1.3 / contract §4.2 — exact) ----------
+   Fixed part = top bar 3 + header 25 + hairline 1 + RSM 24 = 53; the scroll
+   region floors at max(40, H−53−164) and the fader section takes
+   clamp(H−53−scrollMin, 164, 260): the ≥140px travel floor WINS, the scroll
+   floor yields to 40px. */
+const T3_FIXED = 53;
+export function t3FaderLayout(H: number): { faderHeight: number; scrollMin: number } {
+  const scrollMin = Math.max(40, H - T3_FIXED - 164);
+  const faderHeight = Math.min(260, Math.max(164, H - T3_FIXED - scrollMin));
+  return { faderHeight, scrollMin };
+}
+
+export function ChannelStrip({ track, sceneId, tier = 0, narrow = false, stripH, focused, flashing, index = 0, onStripClick }: {
+  track: TrackJSON; sceneId: string;
+  /** height tier (D1.3) — the dock measures once and shares it so fader
+      tops align across strips; 0 = full reference anatomy */
+  tier?: MixerTier;
+  /** width-tier fallback (decoupled from height): 72px strip, scale+fader */
+  narrow?: boolean;
+  /** the measured strip height (T3 clamp math; dock/stories pass it) */
+  stripH?: number;
+  focused: boolean; flashing?: boolean;
   /** strip position in the dock row — drives the subtle bg parity (A4) */
   index?: number;
   onStripClick: () => void;
@@ -210,112 +373,171 @@ export function ChannelStrip({ track, sceneId, compact, focused, flashing, index
   const meter = useMeter(track.id);
   const peak = Math.max(meter.l.peakDb, meter.r.peakDb);
 
-  const badgeCls = 'border-[var(--type-audio)] text-[var(--type-audio)]';
   // subtle alternating row parity (A4) — raised on odd strips, shell on even
   const parityBg = index % 2 === 1 ? 'bg-raised' : 'bg-shell';
+
+  /* ---- the accessory stack, parameterized by tier ---- */
+  const inputRow = tier === 2 ? null : <InputRow />;
+  const fxRack = <FxRack inserts={strip.inserts} name={track.name} slots={tier === 0 || tier === 3 ? 5 : 3} pushToast={pushToast} />;
+  const iRow = <IRow trackId={track.id} name={track.name} />;
+  const graphs =
+    tier === 0 || tier === 3 ? (
+      <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
+        <EqThumb trackKey={track.id} />
+        <DynThumb trackKey={track.id} />
+      </div>
+    ) : tier === 1 ? (
+      <div data-testid="strip-graphs" className="flex w-full shrink-0 px-1 py-[2px]">
+        <CombinedThumb trackKey={track.id} />
+      </div>
+    ) : null;
+  const panRow = (
+    <div className={`flex w-full shrink-0 items-center justify-center ${tier === 0 || tier === 3 ? 'h-[56px]' : 'h-[44px]'}`}>
+      <PanBox pan={strip.pan} size={tier === 0 || tier === 3 ? 48 : 36} onChange={(pan) => setMixerTrack(track.id, { pan })} ariaLabel={`${track.name} pan`} />
+    </div>
+  );
+  const routingRow = <RoutingRow track={track} strip={strip} onBus={(bus) => setMixerTrack(track.id, { outputBus: bus })} />;
+  const titleRow = <TitleRow name={track.name} gold={role === 'music'} />;
+  const rsmRow = <RsmRow sceneId={sceneId} track={track} name={track.name} />;
+
+  /* ---- tier structure ---- */
+  const headerName = tier === 1 || tier === 2 ? track.name : undefined;
+  const fxCount = tier === 2 ? <FxCountChip inserts={strip.inserts} name={track.name} /> : null;
+
+  let body: React.ReactNode;
+  if (tier === 3) {
+    // the accessory stack scrolls; hairline + RSM + the pinned trio follow
+    const { faderHeight, scrollMin } = t3FaderLayout(stripH ?? 300);
+    body = (
+      <>
+        <TopBar testId={`mixer-topbar-${track.badge}`} background={role ? ROLE_BAR[role] : 'var(--type-audio)'} />
+        <StripHeader badge={track.badge} />
+        <div
+          data-testid={`strip-scroll-${track.badge}`}
+          className="scroll-y flex min-h-0 w-full flex-1 flex-col"
+          style={{ minHeight: `${scrollMin}px` }}
+        >
+          {inputRow}
+          {fxRack}
+          {graphs}
+          {panRow}
+          {routingRow}
+          {titleRow}
+        </div>
+        <Hairline />
+        {rsmRow}
+        <FaderSection id={track.badge} db={strip.fader} peakDb={peak} pinnedHeight={faderHeight}>
+          <FaderCol col="fader">
+            <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} fillHeight scale headroom={false} ariaLabel={`${track.name} fader`} />
+          </FaderCol>
+          {!narrow && (
+            <FaderCol col="meter">
+              <StripMeter
+                trackId={track.id}
+                db={strip.fader}
+                duckAmount={role === 'bgm' || role === 'music' ? (duck?.amount ?? 0) : 0}
+                fillHeight
+                label={track.name}
+              />
+            </FaderCol>
+          )}
+        </FaderSection>
+      </>
+    );
+  } else if (tier === 0) {
+    body = (
+      <>
+        <TopBar testId={`mixer-topbar-${track.badge}`} background={role ? ROLE_BAR[role] : 'var(--type-audio)'} />
+        <StripHeader badge={track.badge} />
+        <Hairline />
+        {inputRow}
+        {fxRack}
+        {iRow}
+        {graphs}
+        <Hairline />
+        {panRow}
+        <Hairline />
+        {routingRow}
+        {titleRow}
+        {rsmRow}
+        <FaderSection id={track.badge} db={strip.fader} peakDb={peak}>
+          <FaderCol col="fader">
+            <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} fillHeight scale headroom={false} ariaLabel={`${track.name} fader`} />
+          </FaderCol>
+          {!narrow && (
+            <FaderCol col="meter">
+              <StripMeter
+                trackId={track.id}
+                db={strip.fader}
+                duckAmount={role === 'bgm' || role === 'music' ? (duck?.amount ?? 0) : 0}
+                fillHeight
+                label={track.name}
+              />
+            </FaderCol>
+          )}
+        </FaderSection>
+      </>
+    );
+  } else {
+    // T1/T2 — the leaner row set (name merges into the header; T2 hides
+    // graphs + input AND the fx rack — the count chip in the header replaces
+    // it; T1 keeps the input row + the 3-slot rack)
+    body = (
+      <>
+        <TopBar testId={`mixer-topbar-${track.badge}`} background={role ? ROLE_BAR[role] : 'var(--type-audio)'} />
+        <StripHeader badge={track.badge} name={headerName}>
+          {fxCount}
+        </StripHeader>
+        <Hairline />
+        {inputRow}
+        {tier === 1 && fxRack}
+        {iRow}
+        {graphs}
+        {tier === 1 && <Hairline />}
+        {panRow}
+        {rsmRow}
+        <FaderSection id={track.badge} db={strip.fader} peakDb={peak}>
+          <FaderCol col="fader">
+            <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} fillHeight scale headroom={false} ariaLabel={`${track.name} fader`} />
+          </FaderCol>
+          {!narrow && (
+            <FaderCol col="meter">
+              <StripMeter
+                trackId={track.id}
+                db={strip.fader}
+                duckAmount={role === 'bgm' || role === 'music' ? (duck?.amount ?? 0) : 0}
+                fillHeight
+                label={track.name}
+              />
+            </FaderCol>
+          )}
+        </FaderSection>
+      </>
+    );
+  }
 
   return (
     <div
       data-flash={flashing ? 'on' : undefined}
       className={`mixer-strip relative flex h-full min-h-0 shrink-0 flex-col border-r border-hairline ${focused ? 'bg-[color-mix(in_srgb,var(--accent-selection)_12%,var(--bg-shell)))] ring-1 ring-[var(--accent-selection)]' : `${parityBg} hover:bg-[var(--hover-overlay)]`}`}
-      style={{ width: compact ? 72 : 86 }}
+      style={{ width: narrow ? 72 : 86 }}
       data-testid={`mixer-strip-${track.badge}`}
       onClick={onStripClick}
       role="group"
       aria-label={`${track.name} channel strip`}
     >
-      {/* 3px role-color top bar (reference row 1) */}
-      <TopBar testId={`mixer-topbar-${track.badge}`} background={role ? ROLE_BAR[role] : 'var(--type-audio)'} />
-
-      {/* header: badge + name (task reference anatomy row 2) */}
-      <div className="flex h-[24px] w-full shrink-0 items-center gap-1 px-1.5">
-        <span className={`mono flex h-[16px] w-[24px] shrink-0 items-center justify-center rounded-[2px] border text-[10px] font-semibold ${badgeCls}`}>
-          {track.badge}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-tprimary">{track.name}</span>
-      </div>
-      <Hairline />
-
-      {/* input label row (reference row 2, 22px) — display state; input
-          routing has no G-surface field (gap C40, title documents it) */}
-      {!compact && (
-        <div
-          data-testid="strip-input"
-          title="Input routing — no G-surface field (gap C40)"
-          className="flex h-[22px] w-full shrink-0 items-center bg-inset pl-1.5 text-[10px] text-tfaint"
-        >
-          No Input
-        </div>
-      )}
-
-      {/* FX chip rack + "I" power (reference rows 3–4) */}
-      <FxRack inserts={strip.inserts} name={track.name} pushToast={pushToast} />
-
-      {/* EQ + dynamics thumbnails (reference row 5, 2×28px, deterministic) */}
-      {!compact && (
-        <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
-          <EqThumb trackKey={track.id} />
-          <DynThumb trackKey={track.id} />
-        </div>
-      )}
-      <Hairline />
-
-      {/* track-type role label (reference row 8 title; gold for music) */}
-      {role && (
-        <div className="flex h-[22px] w-full shrink-0 items-center justify-center overflow-hidden px-1">
-          <span
-            data-testid="strip-role"
-            className={`truncate text-[11px] font-bold tracking-wide ${role === 'music' ? 'text-[var(--solo)]' : 'text-tprimary'}`}
-          >
-            {ROLE_LABEL[role]}
-          </span>
-        </div>
-      )}
-
-      {/* R/S/M (reference row 9) */}
-      <RsmRow sceneId={sceneId} track={track} name={track.name} />
-      <Hairline />
-
-      {/* pan crosshair box (reference row 6, 48px + padding = 56px row) —
-          our drag/keyboard grammar inside the reference look (PanKnob's
-          semantics; mono = 1 dot — no stereo-flag field in the model) */}
-      <div className="flex h-[56px] w-full shrink-0 items-center justify-center">
-        <PanBox pan={strip.pan} onChange={(pan) => setMixerTrack(track.id, { pan })} ariaLabel={`${track.name} pan`} />
-      </div>
-
-      {/* the TERMINAL fader section (reference row 10) — shared headroom +
-          equal-height [meter | fader+scale] columns; the meter column is a
-          FIXED 14px (th_mto617w1), never w-full */}
-      <FaderSection id={track.badge} db={strip.fader} peakDb={peak}>
-        <FaderCol col="meter">
-          <StripMeter
-            trackId={track.id}
-            db={strip.fader}
-            duckAmount={role === 'bgm' || role === 'music' ? (duck?.amount ?? 0) : 0}
-            fillHeight
-            label={track.name}
-          />
-        </FaderCol>
-        <FaderCol col="fader">
-          <Fader
-            db={strip.fader}
-            onChange={(db) => setMixerTrack(track.id, { fader: db })}
-            fillHeight
-            scale
-            headroom={false}
-            ariaLabel={`${track.name} fader`}
-          />
-        </FaderCol>
-      </FaderSection>
+      {body}
     </div>
   );
 }
 
 /* ---------- aux return strip ----------
    Ours, not in the reference (model-backed, spec 20 §4.2 — deliberate
-   divergence, flagged in the R19-B1 report): lean strip with the same
-   TERMINAL fader section + shared headroom + equal-height columns. */
-export function AuxStrip({ bus, compact }: { bus: 'a1' | 'a2'; compact: boolean }) {
+   divergence, flagged in the R19-B1 report): the same 86px/tier law with a
+   lean accessory stack — the real bus ON/OFF toggle + the honest no-source
+   chip share the 22px input-row slot; the bus name lives in the header (T1+)
+   or the title row (T0). Same TERMINAL fader section law as the channels. */
+export function AuxStrip({ bus, tier = 0, narrow = false }: { bus: 'a1' | 'a2'; tier?: MixerTier; narrow?: boolean }) {
   const settings = useUi((s) => s.mixer.buses[bus]);
   const setAuxBus = useUi((s) => s.setAuxBus);
   const key = bus === 'a1' ? 'auxA' : 'auxB';
@@ -337,11 +559,12 @@ export function AuxStrip({ bus, compact }: { bus: 'a1' | 'a2'; compact: boolean 
       return bus === 'a1' ? strip.auxA > 0 : strip.auxB > 0;
     });
   });
+  const badge = bus === 'a1' ? 'A1' : 'A2';
 
   return (
     <div
       className="relative flex h-full min-h-0 shrink-0 flex-col border-r border-hairline bg-inset"
-      style={{ width: compact ? 72 : 88 }}
+      style={{ width: narrow ? 72 : 86 }}
       role="group"
       aria-label={`Aux ${bus} return strip`}
       data-testid={`mixer-strip-aux-${bus}`}
@@ -349,55 +572,57 @@ export function AuxStrip({ bus, compact }: { bus: 'a1' | 'a2'; compact: boolean 
       {/* A4 grammar: aux top bar — the audio-type token (returns are
           audio-utility surfaces; the --mk-role-* ramp is reserved for roles) */}
       <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
-      <div className="flex h-[24px] w-full shrink-0 items-center gap-1 px-1.5">
-        <span className="mono shrink-0 text-[10px] font-semibold text-tmuted">A{bus === 'a1' ? '1' : '2'}</span>
-        <span className="min-w-0 flex-1 truncate text-[10px] text-tprimary">{settings.name}</span>
-      </div>
-      {/* no-source state: honest-disabled chip (aria-disabled + dashed border
-          + data-tip — the codebase's mock-unavailable idiom; controls stay
-          live because they write real store state) */}
-      {!hasSource && (
-        <span
-          aria-disabled="true"
-          data-tip="No track sends or routes feed this bus"
-          data-testid={`mixer-nosource-${bus}`}
-          className="mx-1 mb-1 w-auto shrink-0 select-none rounded-[2px] border border-dashed border-strong text-center text-[9px] uppercase leading-4 tracking-wide text-tfaint"
-        >
-          no source
-        </span>
-      )}
+      <StripHeader badge={badge} name={tier >= 1 ? settings.name : undefined} />
       <Hairline />
-      {/* bus output enable — spec 20 §4.2 AuxBusSettings.on: real toggle via
-          setAuxBus, was a static ON badge (R14) */}
-      <button
-        onClick={() => setAuxBus(bus, { on: !settings.on })}
-        aria-pressed={settings.on}
-        aria-label={`Aux ${bus} bus on`}
-        data-tip="Aux bus output enable"
-        className={`mono mx-1 my-1 rounded-[2px] border px-1.5 py-px text-[10px] font-bold ${settings.on ? 'border-[var(--solo)] text-[var(--solo)]' : 'border-strong text-tmuted'}`}
-      >
-        {settings.on ? 'ON' : 'OFF'}
-      </button>
+      {/* bus row — spec 20 §4.2 AuxBusSettings.on: real toggle via setAuxBus
+          (R14); the honest no-source chip rides beside it when unfed */}
+      <div className="flex h-[22px] w-full shrink-0 items-center gap-1 pl-1">
+        <button
+          onClick={() => setAuxBus(bus, { on: !settings.on })}
+          aria-pressed={settings.on}
+          aria-label={`Aux ${bus} bus on`}
+          data-tip="Aux bus output enable"
+          className={`mono shrink-0 rounded-[2px] border px-1 text-[10px] font-bold ${settings.on ? 'border-[var(--solo)] text-[var(--solo)]' : 'border-strong text-tmuted'}`}
+        >
+          {settings.on ? 'ON' : 'OFF'}
+        </button>
+        {!hasSource && (
+          <span
+            aria-disabled="true"
+            data-tip="No track sends or routes feed this bus"
+            data-testid={`mixer-nosource-${bus}`}
+            className="min-w-0 flex-1 truncate text-right pr-1 text-[9px] uppercase tracking-wide text-tfaint"
+            title="No track sends or routes feed this bus"
+          >
+            no source
+          </span>
+        )}
+      </div>
+      {tier === 0 && <TitleRow name={settings.name} gold={false} />}
       {/* terminal fader section — same law as the channel strips */}
       <FaderSection id={`aux-${bus}`} db={settings.returnGain} peakDb={peak}>
-        <FaderCol col="meter">
-          {/* R15-A2: ONE engine key per bus — 'auxA'/'auxB' (unified registry) */}
-          <StripMeter trackId={key} db={settings.returnGain} fillHeight label={`Aux ${bus}`} />
-        </FaderCol>
         <FaderCol col="fader">
           <Fader db={settings.returnGain} onChange={(db) => setAuxBus(bus, { returnGain: db })} fillHeight headroom={false} ariaLabel={`Aux ${bus} return`} />
         </FaderCol>
+        {!narrow && (
+          <FaderCol col="meter">
+            {/* R15-A2: ONE engine key per bus — 'auxA'/'auxB' (unified registry) */}
+            <StripMeter trackId={key} db={settings.returnGain} fillHeight label={`Aux ${bus}`} />
+          </FaderCol>
+        )}
       </FaderSection>
     </div>
   );
 }
 
 /* ---------- master strip (reference M1) ----------
-   Same anatomy minus the pan box (spacer keeps the fader tops aligned),
-   accent top bar + accent fader cap, M-only RSM (the real store master
-   mute — same values as timeline-toolbar, 18 §4.5), input row hidden for
-   alignment, FX rack renders as honest add chips (no master insert model). */
-export function MasterStrip({ compact }: { compact: boolean }) {
+   Mirrors the channel anatomy with SPACERS (input 22 / I 26 / pan 56→44 at
+   T1-2 / routing 24) so the fader tops align EXACTLY with the channels
+   (contract D11 accepted deviation — the reference's own 48px spacer leaves
+   the master fader ~10px high). The routing spacer carries the honest
+   LUFS-v2 note (D12). M-only RSM (the real store master mute — same values
+   as the toolbar, 18 §4.5); accent top bar + accent fader cap (D10). */
+export function MasterStrip({ tier = 0, narrow = false, stripH }: { tier?: MixerTier; narrow?: boolean; stripH?: number }) {
   const masterMuted = useUi((s) => s.masterMuted);
   const masterVolume = useUi((s) => s.masterVolume);
   const toggleMasterMute = useUi((s) => s.toggleMasterMute);
@@ -408,55 +633,140 @@ export function MasterStrip({ compact }: { compact: boolean }) {
   const meter = useMeter('master');
   const peak = Math.max(meter.l.peakDb, meter.r.peakDb);
 
+  const Spacer = ({ h }: { h: number }) => <div aria-hidden="true" className={`w-full shrink-0`} style={{ height: h }} />;
+  const LufsRow = () => (
+    <div className="flex h-[24px] w-full shrink-0 items-center justify-center">
+      <span className="mono text-[9px] leading-none text-tfaint" title="Master loudness (LUFS) metering is a v2 surface">
+        LUFS — v2
+      </span>
+    </div>
+  );
+  const mRow = (
+    <div className="flex h-[24px] w-full shrink-0 items-center justify-center">
+      <button
+        onClick={toggleMasterMute}
+        aria-pressed={masterMuted}
+        aria-label="Master mute"
+        className={`mono flex h-[20px] w-[20px] items-center justify-center rounded-[2px] border text-[10px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] ${masterMuted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-raised text-tmuted'}`}
+      >
+        M
+      </button>
+    </div>
+  );
+  const graphs =
+    tier === 0 || tier === 3 ? (
+      <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
+        {/* reference M1's EQ graph is a flat line — deterministic flat */}
+        <EqThumb trackKey="master" flat />
+        <DynThumb trackKey="master" />
+      </div>
+    ) : tier === 1 ? (
+      <div data-testid="strip-graphs" className="flex w-full shrink-0 px-1 py-[2px]">
+        <CombinedThumb trackKey="master" flat />
+      </div>
+    ) : null;
+
+  const faderBlock = (pinnedHeight?: number) => (
+    <FaderSection id="master" db={db} peakDb={peak} pinnedHeight={pinnedHeight}>
+      <FaderCol col="fader">
+        <Fader db={db} onChange={(ndb) => setMasterVolume(Math.max(0, Math.min(1, (ndb + 60) / 66)))} fillHeight accent headroom={false} ariaLabel="Master fader" />
+      </FaderCol>
+      {!narrow && (
+        <FaderCol col="meter">
+          <StripMeter trackId="master" db={db} fillHeight label="Master" />
+        </FaderCol>
+      )}
+    </FaderSection>
+  );
+
+  /* the scrolling/spacer accessory set — master has no input/I/pan/routing
+     controls (no model fields), so those rows are alignment spacers; the
+     hairline rhythm matches the channels so the fader tops align EXACTLY
+     (T0: 380 fixed rows both; T1: 240; T2: 123) */
+  const accessory = (t: 0 | 3) => (
+    <>
+      <Spacer h={22} />
+      <FxRack inserts={[null, null]} name="Master" slots={5} pushToast={pushToast} />
+      <Spacer h={26} />
+      {graphs}
+      <Hairline />
+      <Spacer h={56} />
+      <Hairline />
+      <LufsRow />
+      <TitleRow name="Master" gold={false} />
+    </>
+  );
+
+  let body: React.ReactNode;
+  if (tier === 3) {
+    const { faderHeight, scrollMin } = t3FaderLayout(stripH ?? 300);
+    body = (
+      <>
+        <TopBar testId="mixer-topbar-master" background="linear-gradient(90deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))" />
+        <StripHeader badge="M1" />
+        <div
+          data-testid="strip-scroll-master"
+          className="scroll-y flex min-h-0 w-full flex-1 flex-col"
+          style={{ minHeight: `${scrollMin}px` }}
+        >
+          {accessory(3)}
+        </div>
+        <Hairline />
+        {mRow}
+        {faderBlock(faderHeight)}
+      </>
+    );
+  } else if (tier === 0) {
+    body = (
+      <>
+        <TopBar testId="mixer-topbar-master" background="linear-gradient(90deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))" />
+        <StripHeader badge="M1" />
+        <Hairline />
+        {accessory(0)}
+        {mRow}
+        {faderBlock()}
+      </>
+    );
+  } else if (tier === 1) {
+    body = (
+      <>
+        <TopBar testId="mixer-topbar-master" background="linear-gradient(90deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))" />
+        <StripHeader badge="M1" name="Master" />
+        <Hairline />
+        <Spacer h={22} />
+        <FxRack inserts={[null, null]} name="Master" slots={3} pushToast={pushToast} />
+        <Spacer h={26} />
+        {graphs}
+        <Hairline />
+        <Spacer h={44} />
+        {mRow}
+        {faderBlock()}
+      </>
+    );
+  } else {
+    // T2 — 123 fixed rows, matching the lean channels exactly
+    body = (
+      <>
+        <TopBar testId="mixer-topbar-master" background="linear-gradient(90deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))" />
+        <StripHeader badge="M1" name="Master" />
+        <Hairline />
+        <Spacer h={26} />
+        <Spacer h={44} />
+        {mRow}
+        {faderBlock()}
+      </>
+    );
+  }
+
   return (
     <div
       className="relative flex h-full min-h-0 shrink-0 flex-col"
-      style={{ width: compact ? 84 : 96 }}
+      style={{ width: narrow ? 72 : 86 }}
       role="group"
       aria-label="Master strip"
       data-testid="mixer-strip-master"
     >
-      {/* accent top bar (reference M1 has no track color; ours = the master
-          accent pair, flat — no glow) */}
-      <TopBar testId="mixer-topbar-master" background="linear-gradient(90deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))" />
-      <div className="flex h-[24px] w-full shrink-0 items-center justify-center px-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-tprimary">Master</span>
-      </div>
-      <Hairline />
-      {/* input row kept as a hidden spacer (reference M1 alignment) */}
-      <div aria-hidden="true" className="h-[22px] w-full shrink-0" />
-      <FxRack inserts={[null, null]} name="Master" pushToast={pushToast} />
-      {!compact && (
-        <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
-          {/* reference M1's EQ graph is a flat line — deterministic flat */}
-          <EqThumb trackKey="master" flat />
-          <DynThumb trackKey="master" />
-        </div>
-      )}
-      <Hairline />
-      {!compact && <span className="mono px-1 text-center text-[9px] leading-4 text-tfaint">LUFS — v2</span>}
-      {/* M only (reference M1) — real store toggle */}
-      <div className="flex h-[24px] w-full shrink-0 items-center justify-center">
-        <button
-          onClick={toggleMasterMute}
-          aria-pressed={masterMuted}
-          aria-label="Master mute"
-          className={`mono flex h-[20px] w-[20px] items-center justify-center rounded-[2px] border text-[10px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] ${masterMuted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-raised text-tmuted'}`}
-        >
-          M
-        </button>
-      </div>
-      {/* no pan box — spacer keeps the fader tops aligned with channels */}
-      <div aria-hidden="true" className="h-[56px] w-full shrink-0" />
-      {/* terminal fader section — A4: accent cap (--fader-cap-accent-1/2) */}
-      <FaderSection id="master" db={db} peakDb={peak}>
-        <FaderCol col="meter">
-          <StripMeter trackId="master" db={db} fillHeight label="Master" />
-        </FaderCol>
-        <FaderCol col="fader">
-          <Fader db={db} onChange={(ndb) => setMasterVolume(Math.max(0, Math.min(1, (ndb + 60) / 66)))} fillHeight accent headroom={false} ariaLabel="Master fader" />
-        </FaderCol>
-      </FaderSection>
+      {body}
     </div>
   );
 }
