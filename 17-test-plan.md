@@ -1,10 +1,25 @@
 # 17 — Overall Test Plan: Methodology, Test Matrix, Per-Module Template
 
 **Stream:** Test methodology (umbrella)
-**Status:** v1.2 (Round 15 — §17A added: the app-tier roof suites (Decision 17 / ARCH-R15 §3 — S1-S5 table, regression-continuity law, CI composition, pin-lockset assertion); §13A.7 re-tier row re-baselined to the R15 verified counts (engine 274+265+318; OT 423; WDC 721; mock 596) + three new facet rows; §13A.5 audio-seam citation corrected post-M1.6 (bridge + its tests live in nle-engine); §18.5 header re-baselined. v1.1 (Round 8 — §13A added: facet coverage matrix, NFR verification recipes, a11y spot suite, absorbed-semantics fixtures, wire-protocol conformance suite, seam property tests, UI-shell v1.1 facet tests; §2.5 gains the error-path-census + NFR-recipe rules). Supersedes the methodology portions of `12-testing-strategy.md`
+**Status:** v1.3 (Round 22 — the finality round: §0A the acceptance-executability law (the posture law's test-side half: every BASE row carries its regression role — suite + count + pin; every GAP row carries its acceptance gate + facet row); §13A.7 + §17A + §18.5 re-baselined to the 2026-09-07 fleet counts (engine 356; OT 459 incl. 130 real-mouse; WDC 740; nle-ui 640; app 83; mini 333; variants 1334) + the crawl's law-net-corpus gate family (LAW-NET-INVENTORY, C1/C4) + the app-promotion (nle-test-app IS the roof). v1.2 (Round 15 — §17A added: the app-tier roof suites (Decision 17 / ARCH-R15 §3 — S1-S5 table, regression-continuity law, CI composition, pin-lockset assertion); §13A.7 re-tier row re-baselined to the R15 verified counts; §13A.5 audio-seam citation corrected post-M1.6; §18.5 header re-baselined. v1.1 (Round 8 — §13A added: facet coverage matrix, NFR verification recipes, a11y spot suite, absorbed-semantics fixtures, wire-protocol conformance suite, seam property tests, UI-shell v1.1 facet tests; §2.5 gains the error-path-census + NFR-recipe rules). Supersedes the methodology portions of `12-testing-strategy.md`
 **Spec file:** `17-test-plan.md`
 **Owner:** Test architecture (this stream)
 **Consumers:** Every per-spec author (01–12), CI engineering, QA lead, implementation team
+
+---
+
+## 0A. The acceptance-executability law (R22 — the posture law's test-side half)
+
+The spec set is now a FORWARD contract (00 §2.5 R22 / ARCH-R22 Ruling D). Its test-side law:
+
+1. **BASE rows state their regression role.** Every accepted-code row in every spec's §0 carries: the pin (repo@SHA), the suite that pins it, and the count at that pin (e.g. "OT @ `05584d8`, 459/459 incl. 130 real-mouse"). The suite is the acceptance EXECUTION for existing code — the spec does not re-describe what the suite already proves.
+2. **GAP rows state their acceptance gate.** Every remaining-work row carries a testable gate (the phase exit in spec 14) + a facet row here (§13A) — a gap row with neither is a spec bug.
+3. **The crawl's law-net corpus is a first-class gate family:** `ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md` (pre-C1/pre-C4) is the acceptance list the crawl app's re-expressed tests must satisfy; the C4 exit is the corpus checked row-by-row (mini-parity, ARCH-R22 Ruling B).
+4. **Count discipline is battery-enforced:** declared == actual at the current pins; stale counts are failures (the R15→R22 drift — engine 274+265+318→356, OT 423→459, WDC 721→740, mock 596→640+333+1334+83 — is exactly the drift class the battery now catches).
+
+**BASE (accepted, pinned 2026-09-07):** the three-tier methodology + matrix + template (§2-§11); the facet matrix §13A; the roof-suite law §17A — all EXECUTING (the fleet's suites are the proof: engine 356/356, OT 459/459 + 130 real-mouse, WDC 740/740, nle-ui 640, app 83/83, mini 333, variants 1334; all CI-green).
+
+**GAP (the work — owner + phase per spec 14):** the LAW-NET-INVENTORY (pre-C1/pre-C4); the crawl app's test authoring (~130-180 laws, C4); the W-audio offline-parity threshold pins + the null rig (pass: max deviation ≤ −60 dBFS any channel); the W-color grade-math parity pins; the W-n5 real-file decode corpus; the R-fcpxml fixture corpus (phase-entry artifact); the battery's posture checks (R22).
 
 ---
 
@@ -2271,7 +2286,7 @@ Properties (fast-check, 1,000 runs each in the nightly, 100 in PR-scope):
 - **Never-loss invariant**: total element count is preserved through projection (the cheap oracle that catches silent drops — the engine's pre-4D-A persistence silently dropped image/adjustment clips; this property is the regression test for that class)
 - **No-readback invariant**: no editing op consumes engine-state output (a static-architecture check: the editing-wire dispatcher's dependency graph contains no path from the projection back into SceneTracks)
 - **Taxonomy warning path**: 5-kind TrackType input maps to the 3-kind wire taxonomy with `text/graphic/effect → overlay` + a warning recorded (never data loss, never a crash)
-- **Audio-domain seam properties (spec 20 §5, web-daw-core's suites as the executable reference)**: merge laws (same-media adjacent segments merge phase-continuously; fades block; rate boundaries never merge), null-parity ≥60 dB offline-vs-realtime, canonical send/return (no dry leak), pan law −3 dB at strip level — pinned by WDC's `nle-audio-core-derisk.test.ts` (H0-H7 incl. H3, **721/721 — Round 15 re-run**) + the bridge suite NOW AT nle-engine `tests/vitest/nle-bridge.test.ts` (37 tests, C1/H8-H17; relocated verbatim with the bridge per WDC's M1.6 — the old in-WDC nle-bridge citation is superseded)
+- **Audio-domain seam properties (spec 20 §5, web-daw-core's suites as the executable reference)**: merge laws (same-media adjacent segments merge phase-continuously; fades block; rate boundaries never merge), null-parity ≥60 dB offline-vs-realtime, canonical send/return (no dry leak), pan law −3 dB at strip level — pinned by WDC's `nle-audio-core-derisk.test.ts` (H0-H7 incl. H3, **740/740 — R22 re-run @ `fe05d85`**) + the bridge suite NOW AT nle-engine `tests/vitest/nle-bridge.test.ts` (37 tests, C1/H8-H17; relocated verbatim with the bridge per WDC's M1.6 — the old in-WDC nle-bridge citation is superseded)
 
 ### 13A.6 UI shell v1.1 facet tests (T3 — spec 18 v1.1)
 
@@ -2322,7 +2337,7 @@ Every facet added or materially amended in Rounds 7-8, with its verification. (L
 | Projector parity vs engine-native Timeline oracle (Round 15) | 00 D12.1, 14 §3 A1, 05 §16.5A | F | T2 | §17A S4: parity corpus, pixel-exact vs the engine `Timeline` oracle — primary venue is ENGINE CI (its ~8-min real-WebGPU milestone runner + vitest); app S4 nightly adds the Xvfb+SwiftShader venue | parity green on the corpus (audio + stills) |
 | Event-staircase completeness + mapping (Round 15) | 15 §9, 18 §5 | F | T1 | §17A S1/S2 rows: every spec-15 §9 `EngineEvent` emitted-or-justified; engine-name↔spec-name mapping register (a C-register row, same discipline as C7); playhead mirror, export progress, meters rows asserted | zero unmapped events; S2 event rows green |
 | Routing-dispatch completeness (78-member disposition) (Round 15) | 15 §4.1A | F | T1 + mechanical | §17A S5 battery: routing-disposition table check — every implemented row cites a module pin SHA; every DEFERRED row dispatches typed `NOT_IMPLEMENTED` + cites a phase or signed deferral; exhaustive-switch compiles | zero unowned union members; the switch is honest |
-| Reference-repo re-tiering (Round 15: engine 274+265+318, OT 423, WDC 721, ui-mock 596) | 19 §12, 00 D14 | NF (process) | — | re-baselined to the **Round 15 verified counts**: engine 274 vitest (237 engine + 37 bridge) + 265 browser milestone rows + 318 probes → T1/T2 (its CI runs 3 jobs — the re-tier is de facto done engine-side); OT 423 (303 in-page + 120 real-mouse) → T1/T2/T3 (the real-mouse phases ARE Tier-3-grade, in-repo); WDC 721 → T1 (null-test gates are the audio T1; 1 CI gate job); ui-mock 596 → **T1 local** (no CI workflow — ported into the app at A3, retires as a repo after A7); count discipline (declared == scraped) | zero count drift |
+| Reference-repo re-tiering (**R22 re-baseline: engine 356, OT 459 (incl. 130 real-mouse), WDC 740, nle-ui 640, nle-test-app 83, mini 333, variants 1334**) | 19 §12, 00 D14 | NF (process) | — | re-baselined to the **2026-09-07 verified counts**: engine 356 vitest → T1/T2 (3-job CI); OT 459 (329 in-page M1-M43 + 130 real-mouse across 14 phases) → T1/T2/T3 (the real-mouse phases ARE Tier-3-grade, in-repo); WDC 740 → T1 (null-test gates are the audio T1); nle-ui 640 → T3-package (engine-free chrome tier, boundary-script-gated); **nle-test-app 83 → THE ROOF** (the app tier: the seam/wired-whole suite — promoted from the retired "mock 596" row: the mock split into nle-ui (640) + the crawl-app corpus (C4, LAW-NET-INVENTORY)); mini 333 + variants 1334 → design-reference tier (local + annotakit; retire per the port-then-swap law); count discipline (declared == scraped, battery-enforced) | zero count drift |
 
 **Coverage-gap check (the enforcement rule):** a spec facet introduced by any future round must land in this matrix (or §3.1) in the same PR that introduces it — the §14.4 author checklist gains this as step 0. The 00-master §6A NFR table and this matrix cross-reference each other bidirectionally; neither may gain a row without the other.
 
@@ -2692,7 +2707,7 @@ For each spec 01 through 12:
 
 ## 17A. The App-Tier Suites — The Roof (Round 15, Decision 17)
 
-> This section lands ARCH-R15 §3 (Ruling 3) as canon. **The principle — four walls, one roof:** module repos keep their full gates UNDILUTED (engine: 3-job CI, 274 vitest + 265 browser rows + 318 probes; OT: 423 incl. the 120 real-mouse phases; WDC: 721 + tsc behind its `gate` job; mock: 596 + tsc, **local only — the mock has no CI and is not required to add one: it is ported into the app at A3 and retires as a repo after A7**). The app does NOT re-test module internals — with the one sanctioned exception of S3(a), which re-runs OT's real-mouse phases specifically to verify the VIEW COMPONENT in the app's host context (bundler/CSS/React), not the engine semantics. The app tests ONLY the seams and the wired whole. All counts below are the PR2-corrected figures from ARCH-R15 §3.2.
+> This section lands ARCH-R15 §3 (Ruling 3) as canon. **The principle — four walls, one roof:** module repos keep their full gates UNDILUTED (**R22 counts**: engine: CI + 356 vitest; OT: 459 incl. the 130 real-mouse phases; WDC: 740 + tsc behind its `gate` job; nle-ui: 640 + boundary script; **the app repo (nle-test-app) is the roof: 83 seam/wired-whole tests + the crawl's C4 law-net corpus**; the mocks — mini 333 / variants 1334, local + annotakit — are design references that retire per the port-then-swap law). The app does NOT re-test module internals — with the one sanctioned exception of S3(a), which re-runs OT's real-mouse phases specifically to verify the VIEW COMPONENT in the app's host context (bundler/CSS/React), not the engine semantics. The app tests ONLY the seams and the wired whole. All counts below are the PR2-corrected figures from ARCH-R15 §3.2.
 
 ### 17A.1 The five suites
 
@@ -2756,7 +2771,7 @@ This section documents how this spec itself was tested for correctness.
 
 ### 18.5 Code References — nle-engine (reference, NOT canon)
 
-nle-engine (github.com/bearachprema/nle-engine — **Round 15 re-baseline: ~52k LOC (51,968) across 58 files in `src/lib/nle/`; 274/274 vitest + 265/265 browser milestone rows (31 milestones, real-WebGPU re-run) + 318 probe checks; tsc 0; 453-name API freeze + 52-edge layer fence; review ledger closed, zero open P2**) is a clean-room
+nle-engine (github.com/bearachprema/nle-engine — **R22 re-baseline @ `f68ab8c`: 356/356 vitest + tsc 0; the N1-N4 seam family + W1 meter bridge landed; vendor pins: OT @ `3420b5f`, WDC @ `5570321`; the 453-name API freeze + layer fence stand**) is a clean-room
 FreeCut-port **in-between reference, NOT canon**. Its R7-era test reality was single-tier (one
 Playwright-driven in-app harness — the pattern this spec's three-tier methodology corrects; its own audit independently recommended the same split); as of Round 15 the engine's CI runs three venues (Node vitest / browser milestones / probes) — the C4 re-tiering has de facto converged engine-side, and the remaining re-tier surface is the app's (§17A). Where engine and spec conflict,
 **the spec wins**. Full reconciliation: `19-code-references.md`.
