@@ -1,7 +1,7 @@
 # 16 — Keyboard Shortcuts: Comprehensive Interaction Spec
 
 **Stream:** Keyboard interaction layer (UI → engine command bus)
-**Status:** v1.1 (Round 15 amendment pass — A1/A6/N8/N11/N12/N15 resolutions + C2-extension registration per `.agents/SPEC-REVISION-CANDIDATES.md`, ARCH-R15 §4; original v1.0 authored under task TEST-03)
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the app's landed key surface @ `e662759` 83/83 + the mini's editing keys are the BASE; the gap is the C22 long tail + C1/W-ops surfaces); v1.1 (Round 15 amendment pass — A1/A6/N8/N11/N12/N15 resolutions + C2-extension registration per `.agents/SPEC-REVISION-CANDIDATES.md`, ARCH-R15 §4; original v1.0 authored under task TEST-03)
 **Primary teacher:** FCP/Premiere/DaVinci Resolve muscle-memory conventions + FreeCut `config/hotkeys.ts` + OpenCut-classic `OC-Actions/definitions.ts`
 **Consumers:** UI keyboard handler (`src/ui/keyboard/`), test harness (`tests/e2e/keyboard.spec.ts`), cheat-sheet modal (`src/ui/cheat-sheet/`)
 **Predecessor:** `05-timeline.md` §19 (unified shortcut table — ~50 actions)
@@ -9,7 +9,23 @@
 
 ---
 
-## 0. What This Spec Adds (TL;DR)
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- nle-test-app @ `e662759` — 83/83, tsc 0. The app's landed key surface: JKL/split/delete/home per the OT Wave B migration.
+- The mini's editing keys — `ui-mock/shell-mini` (333 tests) + the law register `ui-mock/shell-mini/docs/OT-SEAMS.md`.
+- C22 ledger state: ~54 of ~178 rows implemented; the ledger lives in `.agents/SPEC-REVISION-CANDIDATES.md` §C + the mocks.
+
+**GAP (the work — owner + phase per spec 14; the register is spec 14 §4.1):**
+- Keymap long tail (R-polish; acceptance: the C22 ledger closed row-by-row + spec 17 facet rows).
+- The crawl's editing keyboard surface + undo/redo exposure — MiniShell owns the editing keys (C1; acceptance: the mini's key laws re-expressed as app-side tests, the LAW-NET-INVENTORY corpus).
+- W-ops keymap surfaces for the new op families (W-ops; acceptance: keymap rows + nle-ui sync).
+
+**ACCEPTANCE & TEST PLAN:** §9 (Test Verification) + Appendix A (the flat registry for enumeration) are this spec's battery; BASE acceptance = the cited suites at the cited pins (app 83; mini 333) — the regression role. GAP acceptance is per-row above; facet rows in spec 17 §13A.
+
+---
+
+## 0A. What This Spec Adds (TL;DR)
 
 | Area | Before (spec 05 §19) | After (this spec) |
 |---|---|---|
@@ -21,7 +37,7 @@
 | Non-US keyboards | (unaddressed) | **`event.code`-based lookup** as primary, `event.key` as fallback (§8.4) |
 | Customization | "v2" stub | **`ShortcutMap` interface + `localStorage` persistence** contract (§7, §8.6) |
 
-### 0.1 Why a dedicated spec
+### 0A.1 Why a dedicated spec
 
 `05-timeline.md` §19 documented the *union* of shortcuts across FreeCut and OpenCut-classic as a discovery exercise. That table answers "what do the reference repos do?" This spec answers the different question: **"what is the complete, consistent, test-enumerable keyboard contract for OUR NLE?"** Concretely:
 
@@ -30,7 +46,7 @@
 3. §19 did not bind shortcuts to the engine command bus; this spec maps every shortcut to a **serializable `EngineCommand`** (§3, §12) so tests can replay via `page.evaluate({ type, params })` without touching the DOM.
 4. §19 had no implementation guidance; this spec defines the handler architecture (§8), the resolver that converts `EngineCommand` → `Command` instance / manager call (§8.3), and the cheat-sheet data model (§7.3).
 
-### 0.2 Alignment with spec 15 (`15-wire-protocol.md`)
+### 0A.2 Alignment with spec 15 (`15-wire-protocol.md`)
 
 The `EngineCommand` type used throughout this spec is the **serializable command descriptor** that the keyboard handler emits and that tests inject via `page.evaluate`. Spec 15 (`15-wire-protocol.md`, shipped under TEST-02, amended Round 7) is the **canonical definition** of this type — its §4.1 defines a 78-type discriminated union (73 at TEST-02 + 5 Round-7 additions: 3 export commands and 2 project commands) covering Timeline, Track, Playback, Project, Scene, Media, Tool, Marker, Effect, Mask, Transition, Keyframe, Clipboard, Undo/Redo, Snapshot, and Export categories. Spec 15 §4.2 maps every command type 1:1 to a manager method on `EditorCore`.
 
@@ -2262,7 +2278,7 @@ kbd-context-help            | F1                 | Contextual help              
 kbd-close-modal             | Escape             | Close modal / cancel                | help      | When modal open
 ```
 
-**Total bindings: 181 rows** (180 at v1.0 + `Option+R` from the R15/A6 amendment; the A1 delete-family re-row is count-neutral — Backspace-alias + `Shift+Delete`-ripple replace Backspace-ripple + `Cmd+Delete`-ripple-alt, the latter dropped). Each row maps 1:1 to a test in `tests/e2e/keyboard.spec.ts`. Unique actions: **~110** (after parameterizing: effect presets 1–9 counted as 1 unique action, effect toggles 1–9 as 1, panel toggles as 1, workspace switches as 1, alt bindings merged with primaries — collapsing rule: 181 → ~150 → ~120 → ~110). This 181 / ~110 split is the canonical binding count referenced in §0 TL;DR, §16 test matrix, and §11 net-change summary (spec 15 §13.5's citation now reads **181 bindings** — the R15 15-side sync landed; its old "180 bindings" text predates the R15 pass).
+**Total bindings: 181 rows** (180 at v1.0 + `Option+R` from the R15/A6 amendment; the A1 delete-family re-row is count-neutral — Backspace-alias + `Shift+Delete`-ripple replace Backspace-ripple + `Cmd+Delete`-ripple-alt, the latter dropped). Each row maps 1:1 to a test in `tests/e2e/keyboard.spec.ts`. Unique actions: **~110** (after parameterizing: effect presets 1–9 counted as 1 unique action, effect toggles 1–9 as 1, panel toggles as 1, workspace switches as 1, alt bindings merged with primaries — collapsing rule: 181 → ~150 → ~120 → ~110). This 181 / ~110 split is the canonical binding count referenced in §0A TL;DR, §16 test matrix, and §11 net-change summary (spec 15 §13.5's citation now reads **181 bindings** — the R15 15-side sync landed; its old "180 bindings" text predates the R15 pass).
 
 ---
 
@@ -2331,7 +2347,7 @@ Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status co
 | Help (§3.13) | 5 | 0 | pending Phase 6 |
 | **Total** | **181** | **0** | — |
 
-(The 181 count is the canonical Appendix A row count — see §0 TL;DR. Tests cover all 181 rows, with effect presets (1–9) and effect toggles (1–9) parameterized into 2 unique-action test groups (9 + 9 = 18 rows → 2 parameterized tests). Adjusted unique-action test count: ~110. Multi-tap JKL combos (`J`×2, `J`×3, `L`×2, `L`×3, `K`+`J`, `K`+`L`) are tested via the base `J`/`L`/`K` testIds with timed multi-press sequences — see §9.2 JKL shuttle recipe and Appendix A scope note.)
+(The 181 count is the canonical Appendix A row count — see §0A TL;DR. Tests cover all 181 rows, with effect presets (1–9) and effect toggles (1–9) parameterized into 2 unique-action test groups (9 + 9 = 18 rows → 2 parameterized tests). Adjusted unique-action test count: ~110. Multi-tap JKL combos (`J`×2, `J`×3, `L`×2, `L`×3, `K`+`J`, `K`+`L`) are tested via the base `J`/`L`/`K` testIds with timed multi-press sequences — see §9.2 JKL shuttle recipe and Appendix A scope note.)
 
 ---
 

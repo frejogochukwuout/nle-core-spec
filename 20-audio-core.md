@@ -5,7 +5,7 @@
 **Spec file:** `20-audio-core.md` (single canon file per 00-master §2.5)
 **Primary teacher:** web-daw-core (`github.com/bearachprema/web-daw-core`, private) — the DAW-grade engine extracted from web-daw `main@913d0d7`
 **Baseline:** 737/737 tests green in Node (~70 s), `tsc --noEmit` clean, zero runtime deps, manifest-synced from the only LIVING ancestor (web-daw) — *(R9-era field; superseded by the R15 re-baseline line below — 721/721 PURE core after the M1.6 bridge relocation)*
-**R15 re-baseline + amendments (SCOUT-R15-C, verified by running):** web-daw-core @ `374711c` — **721/721** re-run, `tsc --noEmit` clean, **zero submodules** (the bridge relocated to nle-engine at M1.6); nle-engine @ `f526e67` — **274/274** vitest + **265/265** browser rows + **318** probe checks (its `vendor/web-daw-core` pin `5243c49` sits one docs-only commit behind WDC HEAD). Amendments: §4.1/§4.2/§5/§6.2/§11 bridge-home corrections (M1.6 relocation), §4.2 G-surface authoring contract (A4), §6.5/§10/§12.4 retirement rows CLOSED (AudioMixer deleted @`20fa266`; direct mix retired @`abdf9ee`), §7 M2 re-scoped as the app's A4 phase (ARCH-R15 §3.4)
+**R15 re-baseline + amendments (SCOUT-R15-C, verified by running):** web-daw-core @ `374711c` — **721/721** re-run, `tsc --noEmit` clean, **zero submodules** (the bridge relocated to nle-engine at M1.6); nle-engine @ `f526e67` — **274/274** vitest + **265/265** browser rows + **318** probe checks (R15-era pin — superseded by the R22 pin `f68ab8c`, 356/356) (its `vendor/web-daw-core` pin `5243c49` sits one docs-only commit behind WDC HEAD). Amendments: §4.1/§4.2/§5/§6.2/§11 bridge-home corrections (M1.6 relocation), §4.2 G-surface authoring contract (A4), §6.5/§10/§12.4 retirement rows CLOSED (AudioMixer deleted @`20fa266`; direct mix retired @`abdf9ee`), §7 M2 re-scoped as the app's A4 phase (ARCH-R15 §3.4)
 
 ---
 
@@ -18,7 +18,7 @@
 
 **GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
 - **M2** — SoundTouch offline pitch, sidechain helper, PDC coordination, automation shapes. app+WDC+engine; W-audio (acceptance: offline parity pins ≤ −60 dBFS + the realtime-vs-offline null rig).
-- **Mixer G-surface FULL wiring** — inserts/sends/aux real (today: `bridgeSceneSettings` materializes unity faders + solo only, §7's honest gap). app+engine; W-audio (acceptance: mixer params audible-parity offline pins).
+- **Mixer G-surface FULL wiring** — inserts/sends/aux real (today: `bridgeSceneSettings` materializes unity faders + solo only, §7's honest gap). app+engine; W-audio (acceptance: offline parity pins (max deviation ≤ −60 dBFS any channel)).
 - **N2b keyframed volume** — engine design round queued. Engine; W-audio (acceptance: per-segment gain automation + mixdown parity pins).
 - Register: spec 14 §4.3 — the worklist; acceptance lives here.
 
@@ -160,7 +160,7 @@ The G layer is the natural home of the spec-15 audio command family: track-level
 | Onset/seek exactness | F | T1 | H2/H5 | sample-accurate; phase-exact reschedule |
 | Send/return routing | F | T1 | H11a-d (no dry leak; return arrives; canonical sever law) | routing table asserts |
 | MIDI path | F | T1 | H12 instrument notes through the same graph | mixed render audible content |
-| Triangle conformance | F | T1 | C1/H8-H12 with opencut's real types+ops | all green (721 suite — Round 15 re-baseline, WDC @ `374711c`) |
+| Triangle conformance | F | T1 | C1/H8-H12 with opencut's real types+ops | all green (721 suite — Round 15 re-baseline, WDC @ `374711c` [R15-era pin — superseded by the R22 pin `fe05d85`, 740/740]) |
 | DSP kernel correctness | F | T1 | analytic-oracle programme (fft/metrics/transfer closed forms) | closed-form bounds |
 | Upstream drift | NF | T1 | `bun run sync -- --check` (lock hashes + import validation) | clean; new seams FAIL LOUDLY |
 | Retirement gate | F | T1/T2 | m23 ported expectations + null parity, then LOC asserts on AudioMixer deletion | gate green before deletion (§6.5) — **CLOSED/EXECUTED (Round 15)**: deleted @`20fa266`, direct mix retired @`abdf9ee`, verified R15 |

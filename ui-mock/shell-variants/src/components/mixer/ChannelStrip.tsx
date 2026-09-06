@@ -537,9 +537,10 @@ export function ChannelStrip({ track, sceneId, tier = 0, narrow = false, stripH,
    lean accessory stack — the real bus ON/OFF toggle + the honest no-source
    chip share the 22px input-row slot; the bus name lives in the header (T1+)
    or the title row (T0). Same TERMINAL fader section law as the channels. */
-export function AuxStrip({ bus, tier = 0, narrow = false }: { bus: 'a1' | 'a2'; tier?: MixerTier; narrow?: boolean }) {
+export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' | 'a2'; tier?: MixerTier; narrow?: boolean; stripH?: number }) {
   const settings = useUi((s) => s.mixer.buses[bus]);
   const setAuxBus = useUi((s) => s.setAuxBus);
+  const pushToast = useUi((s) => s.pushToast);
   const key = bus === 'a1' ? 'auxA' : 'auxB';
   // the strip's engine view for the peak readout (ONE key per bus, R15-A2)
   const meter = useMeter(key);
@@ -561,6 +562,151 @@ export function AuxStrip({ bus, tier = 0, narrow = false }: { bus: 'a1' | 'a2'; 
   });
   const badge = bus === 'a1' ? 'A1' : 'A2';
 
+  /* R22 (#72 — "bus and master strips vs. channel all have separate length
+     on the dailer and meter which looks bad"): the aux strips now carry the
+     MASTER's alignment grammar — the same spacer stack (input 22 / fx-rack /
+     I 26 / graphs / hairline / pan 56 / hairline / routing-slot 24) so the
+     FADER + METER sections start at exactly the channel/master y. The bus
+     ON/OFF rides the mRow slot (the terminal 24px row above the fader —
+     the master's M row position). */
+  const Spacer = ({ h }: { h: number }) => <div aria-hidden="true" className="w-full shrink-0" style={{ height: h }} />;
+  const graphs =
+    tier === 0 || tier === 3 ? (
+      <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
+        <EqThumb trackKey={bus === 'a1' ? 'auxA' : 'auxB'} flat />
+        <DynThumb trackKey={bus === 'a1' ? 'auxA' : 'auxB'} />
+      </div>
+    ) : tier === 1 ? (
+      <div data-testid="strip-graphs" className="flex w-full shrink-0 px-1 py-[2px]">
+        <CombinedThumb trackKey={bus === 'a1' ? 'auxA' : 'auxB'} flat />
+      </div>
+    ) : null;
+
+  /* the routing-slot row (the master's LUFS position): the honest no-source
+     chip when the bus is unfed; empty otherwise */
+  const sourceRow = (
+    <div className="flex h-[24px] w-full shrink-0 items-center justify-center">
+      {!hasSource ? (
+        <span
+          aria-disabled="true"
+          data-tip="No track sends or routes feed this bus"
+          data-testid={`mixer-nosource-${bus}`}
+          className="mono text-[9px] uppercase tracking-wide text-tfaint"
+          title="No track sends or routes feed this bus"
+        >
+          no source
+        </span>
+      ) : null}
+    </div>
+  );
+
+  /* the mRow slot: the bus ON/OFF — the aux's one real terminal control
+     (spec 20 §4.2 AuxBusSettings.on), M-row position parity */
+  const onRow = (
+    <div className="flex h-[24px] w-full shrink-0 items-center justify-center">
+      <button
+        onClick={() => setAuxBus(bus, { on: !settings.on })}
+        aria-pressed={settings.on}
+        aria-label={`Aux ${bus} bus on`}
+        data-tip="Aux bus output enable"
+        className={`mono shrink-0 rounded-[2px] border px-1 text-[10px] font-bold ${settings.on ? 'border-[var(--solo)] text-[var(--solo)]' : 'border-strong text-tmuted'}`}
+      >
+        {settings.on ? 'ON' : 'OFF'}
+      </button>
+    </div>
+  );
+
+  const faderBlock = (pinnedHeight?: number) => (
+    <FaderSection id={`aux-${bus}`} db={settings.returnGain} peakDb={peak} pinnedHeight={pinnedHeight}>
+      <FaderCol col="fader">
+        <Fader db={settings.returnGain} onChange={(db) => setAuxBus(bus, { returnGain: db })} fillHeight headroom={false} ariaLabel={`Aux ${bus} return`} />
+      </FaderCol>
+      {!narrow && (
+        <FaderCol col="meter">
+          {/* R15-A2: ONE engine key per bus — 'auxA'/'auxB' (unified registry) */}
+          <StripMeter trackId={key} db={settings.returnGain} fillHeight label={`Aux ${bus}`} />
+        </FaderCol>
+      )}
+    </FaderSection>
+  );
+
+  /* the accessory stack per tier — MIRRORS the master's spacer grammar so
+     every strip in the dock aligns (#72) */
+  const accessory = (t: 0 | 3) => (
+    <>
+      <Spacer h={22} />
+      <FxRack inserts={[null, null]} name={`Aux ${badge}`} slots={5} pushToast={pushToast} />
+      <Spacer h={26} />
+      {graphs}
+      <Hairline />
+      <Spacer h={56} />
+      <Hairline />
+      {sourceRow}
+      <TitleRow name={settings.name} gold={false} />
+    </>
+  );
+
+  let body: React.ReactNode;
+  if (tier === 3) {
+    const { faderHeight, scrollMin } = t3FaderLayout(stripH ?? 300);
+    body = (
+      <>
+        <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
+        <StripHeader badge={badge} />
+        <div
+          data-testid={`strip-scroll-aux-${bus}`}
+          className="scroll-y flex min-h-0 w-full flex-1 flex-col"
+          style={{ minHeight: `${scrollMin}px` }}
+        >
+          {accessory(3)}
+        </div>
+        <Hairline />
+        {onRow}
+        {faderBlock(faderHeight)}
+      </>
+    );
+  } else if (tier === 0) {
+    body = (
+      <>
+        <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
+        <StripHeader badge={badge} name={settings.name} />
+        <Hairline />
+        {accessory(0)}
+        {onRow}
+        {faderBlock()}
+      </>
+    );
+  } else if (tier === 1) {
+    body = (
+      <>
+        <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
+        <StripHeader badge={badge} name={settings.name} />
+        <Hairline />
+        <Spacer h={22} />
+        <FxRack inserts={[null, null]} name={`Aux ${badge}`} slots={3} pushToast={pushToast} />
+        <Spacer h={26} />
+        {graphs}
+        <Hairline />
+        <Spacer h={44} />
+        {onRow}
+        {faderBlock()}
+      </>
+    );
+  } else {
+    // T2 — 123 fixed rows, matching the lean channels + master exactly
+    body = (
+      <>
+        <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
+        <StripHeader badge={badge} name={settings.name} />
+        <Hairline />
+        <Spacer h={26} />
+        <Spacer h={44} />
+        {onRow}
+        {faderBlock()}
+      </>
+    );
+  }
+
   return (
     <div
       className="relative flex h-full min-h-0 shrink-0 flex-col border-r border-hairline bg-inset"
@@ -569,48 +715,7 @@ export function AuxStrip({ bus, tier = 0, narrow = false }: { bus: 'a1' | 'a2'; 
       aria-label={`Aux ${bus} return strip`}
       data-testid={`mixer-strip-aux-${bus}`}
     >
-      {/* A4 grammar: aux top bar — the audio-type token (returns are
-          audio-utility surfaces; the --mk-role-* ramp is reserved for roles) */}
-      <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
-      <StripHeader badge={badge} name={tier >= 1 ? settings.name : undefined} />
-      <Hairline />
-      {/* bus row — spec 20 §4.2 AuxBusSettings.on: real toggle via setAuxBus
-          (R14); the honest no-source chip rides beside it when unfed */}
-      <div className="flex h-[22px] w-full shrink-0 items-center gap-1 pl-1">
-        <button
-          onClick={() => setAuxBus(bus, { on: !settings.on })}
-          aria-pressed={settings.on}
-          aria-label={`Aux ${bus} bus on`}
-          data-tip="Aux bus output enable"
-          className={`mono shrink-0 rounded-[2px] border px-1 text-[10px] font-bold ${settings.on ? 'border-[var(--solo)] text-[var(--solo)]' : 'border-strong text-tmuted'}`}
-        >
-          {settings.on ? 'ON' : 'OFF'}
-        </button>
-        {!hasSource && (
-          <span
-            aria-disabled="true"
-            data-tip="No track sends or routes feed this bus"
-            data-testid={`mixer-nosource-${bus}`}
-            className="min-w-0 flex-1 truncate text-right pr-1 text-[9px] uppercase tracking-wide text-tfaint"
-            title="No track sends or routes feed this bus"
-          >
-            no source
-          </span>
-        )}
-      </div>
-      {tier === 0 && <TitleRow name={settings.name} gold={false} />}
-      {/* terminal fader section — same law as the channel strips */}
-      <FaderSection id={`aux-${bus}`} db={settings.returnGain} peakDb={peak}>
-        <FaderCol col="fader">
-          <Fader db={settings.returnGain} onChange={(db) => setAuxBus(bus, { returnGain: db })} fillHeight headroom={false} ariaLabel={`Aux ${bus} return`} />
-        </FaderCol>
-        {!narrow && (
-          <FaderCol col="meter">
-            {/* R15-A2: ONE engine key per bus — 'auxA'/'auxB' (unified registry) */}
-            <StripMeter trackId={key} db={settings.returnGain} fillHeight label={`Aux ${bus}`} />
-          </FaderCol>
-        )}
-      </FaderSection>
+      {body}
     </div>
   );
 }

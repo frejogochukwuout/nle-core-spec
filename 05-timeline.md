@@ -1,10 +1,29 @@
 # 05 — Timeline: UI, Data Model, Virtualization, Interactions
 
 **Stream:** Timeline component (DOM-based, virtualized)
-**Status:** Refined by sub-agent scout (SCOUT-05) — open questions answered with source code references. Round-8 amendments: §5.2 zoom reworded (implementable multiplier model), §8.3 drag contract notes + canonical move shape, §9 screen-space snap threshold, §14.5A magnetic zero-anchor (all absorbed from the opencut-timeline reference), §16.5 opencut-timeline code-reference table. **Round-15 amendments:** §11.1 markers per-scene + ruler-seeks (A2/N10), §11.2 InOutPoints superseded by setLoop halves (N12), §5.2 zoom-ladder mock registration (N13/C28), §16.5A projector clauses (ARCH-R15 §2.2) — per `.agents/SPEC-REVISION-CANDIDATES.md`
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: OT @ `05584d8` 459/459 is the accepted interaction-contract BASE; the gap is the W-ops/C1 tails); Refined by sub-agent scout (SCOUT-05) — open questions answered with source code references. Round-8 amendments: §5.2 zoom reworded (implementable multiplier model), §8.3 drag contract notes + canonical move shape, §9 screen-space snap threshold, §14.5A magnetic zero-anchor (all absorbed from the opencut-timeline reference), §16.5 opencut-timeline code-reference table. **Round-15 amendments:** §11.1 markers per-scene + ruler-seeks (A2/N10), §11.2 InOutPoints superseded by setLoop halves (N12), §5.2 zoom-ladder mock registration (N13/C28), §16.5A projector clauses (ARCH-R15 §2.2) — per `.agents/SPEC-REVISION-CANDIDATES.md`
 **Primary teacher:** OpenCut-classic DOM approach + FreeCut's per-element NLE op UI
 **Spec file:** `05-timeline.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 **Reference repos audited:** `/tmp/opencut-classic` (archived MIT), `/tmp/freecut` (MIT); **opencut-timeline** (github.com/bearachprema/opencut-timeline, landed Round 8) is the live executable code reference for this stream's algorithmic core (components pending its W4); see spec 19 §3.2 and §16.5 below.
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- opencut-timeline (OT) @ `05584d8` — 459/459 (329 in-page + 130 real-mouse across 14 phases), tsc 0. This spec's interaction contract is executable there: the ops layer (split/trim/move/ripple/delete), snapping/placement/view-math, the headless API; the S-round landed (S1 transport policy — playbackRate/loopRegion/anti-drift/atomic boundary pause; S2 track lock; S3 transitionOut with the null=DELETE key law + split left-drops; S4 bookmark color/note + D-S5 typed ElementParams).
+- nle-test-app @ `e662759` — 83/83, tsc 0. The React view tree of this spec lives APP-side (`timeline-port/`); OT `view/` is utils-only.
+- In-repo law register: `ui-mock/shell-mini/docs/OT-SEAMS.md` — the 14-row op map + the R22 drag-machinery retirement (the verbatim R18k law: clamp between same-track neighbors, single-edge live-field magnet, last-preview seal; shell-mini 333 tests).
+
+**GAP (the work — owner + phase per spec 14; the register is spec 14 §4.1, pointed not duplicated):**
+- Op-family variants slip/slide/roll/rateStretch + wave-2 retime/freezeFrame/rangeRemoval (W-ops; tests carried from nle-engine timeline.ts — acceptance: carried engine tests green).
+- C7 rename: 24 prefixed wire names → bare spec-15 union, at W-ops END with the one-day app migration + keymap sync sub-gate (acceptance: spec 15 §13.15 rows flip to ALIGNED).
+- Error-code coarseness — spec 15 §6.3 amendment first, then OT follows (W-ops; acceptance: the ~24-code envelope).
+- Zoom-ladder config / ripple-toggle semantics exposure — the OT-side halves of the C1 mini laws (C1; acceptance: the C1 gate's law-subset rows hold-on-OT or gap-with-owner).
+- Selection single-subject projection over multi-ref (C1, pre-registered; acceptance: app-level projection pinned).
+- `onViewStateChange` on `TimelineViewProps` (W-ops additive; acceptance: prop + view-state persistence tests).
+
+**ACCEPTANCE & TEST PLAN:** §15 below is this stream's battery; BASE acceptance = the cited suites at the cited pins (OT 459 incl. the 14-phase real-mouse run; app 83) — the regression role. GAP acceptance is per-row above; facet rows live in spec 17 §13A.
 
 ---
 
@@ -1167,7 +1186,7 @@ Every file path below is absolute within its reference repo. **OC** = `/tmp/open
 
 ### 16.5. Code References — opencut-timeline (the editing-domain core per Decision 12; contract still canon)
 
-> opencut-timeline (`github.com/bearachprema/opencut-timeline` @ `0412e41` — Round 15 re-baseline, ~42k LOC total: ~9.7k engine core + ~3.2k controllers + ~7.4k React view (≈20.2k implementation) + ~21.6k test harness (in-page 12.4k + real-mouse scripts 6.5k + fixtures 2.0k), **423/423 tests (303 in-page + 120 real-mouse, re-run Round 15)** — the W8 classic-parity UI round + W9 full-repo review are landed and terminal, **zero open P1/P2** per its own HANDOFF, real-mouse + fuzz + review-regression suites included) is a clean-room OpenCut-classic timeline port **built with this spec set in hand** (its README cites Decision-2 types and the spec-15 wire protocol). Per Decision 12 it is the **EDITING-domain normative core**: the executable reference for this stream's entire scope — the OC tables in §16.1 describe the ORIGINAL; OT is the running, tested version of the same algorithms, and its **W8 classic-parity React components + controllers have landed and are terminal** (this spec's §4 component hierarchy and §14.4 controller contracts now have an executable implementation). Where OT code conflicts with this spec, **the spec wins** (the known deltas: prefixed headless command names (C7 — 24 types since W5, worklist refreshed R15), 5-kind TrackType taxonomy, `TIMELINE_INDICATOR_LINE_WIDTH_PX = 2` vs OC's 3px — OC's verified read wins for the visual constant, pending an OT-side correction).
+> opencut-timeline (`github.com/bearachprema/opencut-timeline` @ `0412e41` — Round 15 re-baseline [R15-era pin — superseded by the R22 pin `05584d8`; counts are R15-era], ~42k LOC total: ~9.7k engine core + ~3.2k controllers + ~7.4k React view (≈20.2k implementation) + ~21.6k test harness (in-page 12.4k + real-mouse scripts 6.5k + fixtures 2.0k), **423/423 tests (303 in-page + 120 real-mouse, re-run Round 15)** — the W8 classic-parity UI round + W9 full-repo review are landed and terminal, **zero open P1/P2** per its own HANDOFF, real-mouse + fuzz + review-regression suites included) is a clean-room OpenCut-classic timeline port **built with this spec set in hand** (its README cites Decision-2 types and the spec-15 wire protocol). Per Decision 12 it is the **EDITING-domain normative core**: the executable reference for this stream's entire scope — the OC tables in §16.1 describe the ORIGINAL; OT is the running, tested version of the same algorithms, and its **W8 classic-parity React components + controllers have landed and are terminal** (this spec's §4 component hierarchy and §14.4 controller contracts now have an executable implementation). Where OT code conflicts with this spec, **the spec wins** (the known deltas: prefixed headless command names (C7 — 24 types since W5, worklist refreshed R15), 5-kind TrackType taxonomy, `TIMELINE_INDICATOR_LINE_WIDTH_PX = 2` vs OC's 3px — OC's verified read wins for the visual constant, pending an OT-side correction).
 
 | Spec section | OT file:line | Key exports / behavior | Status | Note |
 |---|---|---|---|---|

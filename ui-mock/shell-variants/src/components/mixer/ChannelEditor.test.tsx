@@ -184,4 +184,34 @@ describe('ChannelEditor terminal fader block (R19-B1)', () => {
     expect(well.style.width).toBe('14px'); // th_mto617w1 — fixed, never w-full
     expect(faderCol.querySelector('[data-testid="fader-scale"]')).not.toBeNull(); // carries the scale column
   });
+
+  /* R22 #81: the EQ/FX insert sections live HERE (the strips stay lean);
+     the param rows are honest view-state mocks (gap C60). */
+  it('R22 #81: the EQ/FX insert group renders the two slots; selecting EQ reveals the param rows', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    const group = screen.getByTestId('channel-inserts-A2');
+    expect(group).toBeInTheDocument();
+    const slot1 = screen.getByLabelText('Insert slot 1');
+    expect(slot1).toBeInTheDocument();
+    // no insert selected → no param rows
+    expect(screen.queryByTestId('channel-insert-params-A2-EQ')).toBeNull();
+    fireEvent.change(slot1, { target: { value: 'EQ' } });
+    expect(useUi.getState().mixer.tracks['tr-audio-2'].inserts[0]).toBe('EQ');
+    const params = screen.getByTestId('channel-insert-params-A2-EQ');
+    expect(screen.getByLabelText('EQ Low for A2')).toBeInTheDocument();
+    expect(screen.getByLabelText('EQ High for A2')).toBeInTheDocument();
+    // a param drag changes the readout (view-state mock, never the G-slice)
+    const low = screen.getByLabelText('EQ Low for A2') as HTMLInputElement;
+    fireEvent.change(low, { target: { value: '4.5' } });
+    expect((screen.getByLabelText('EQ Low for A2') as HTMLInputElement).value).toBe('4.5');
+  });
+
+  it('R22 #81: Comp params carry the dB/ratio/ms grammar (slot 2)', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    const slot2 = screen.getByLabelText('Insert slot 2');
+    fireEvent.change(slot2, { target: { value: 'Comp' } });
+    expect(useUi.getState().mixer.tracks['tr-audio-2'].inserts[1]).toBe('Comp');
+    expect(screen.getByTestId('channel-insert-params-A2-Comp')).toBeInTheDocument();
+    expect(screen.getByLabelText('Comp Thresh for A2')).toBeInTheDocument();
+  });
 });

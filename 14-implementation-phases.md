@@ -15,7 +15,7 @@ Define the implementation order from TODAY (seven live repos — three sealed mo
 
 | Repo | Role | HEAD pin (2026-09-07) | Consumer pin | Gates |
 |---|---|---|---|---|
-| `nle-engine` | runtime core: decode/compose/playback/export, bridge seams (N1 composition-frame → `ProgramCanvas`; N2 volume/mute flatten; N3 transition windows; N4 av-link; W1 meter-tap bridge) | `f68ab8c` | — (pin source) | 356/356, tsc 0 |
+| `nle-engine` | runtime core: decode/compose/playback/export, bridge seams (N1 composition-frame → `ProgramCanvas`; N2 volume/mute flatten; N3 transition windows; N4 av-link; W1 meter-tap bridge) | `f68ab8c` | vendors OT @ `3420b5f` (35 commits behind OT HEAD — registered residual, moves with the pin-lockset law, never ahead of it) | 356/356, tsc 0 |
 | `opencut-timeline` (OT) | editing core: doc model, ops, controllers; S-round (transport policy, track lock, transitionOut, bookmarks); the React view tree lives APP-side (`timeline-port/`); OT's `view/` is utils-only | `05584d8` | vendored `src/lib/timeline` mirror @ `ea10c42` (app) | 459/459 incl. 130 real-mouse, tsc 0 |
 | `web-daw-core` (WDC) | pure audio core (one-audio-engine; W1 canonical meter taps, upstream push landed) | `fe05d85` | `5570321` (engine + app) | 740/740, tsc 0 |
 | `nle-ui` | the chrome/UI PACKAGE, engine-free (shell-variants grammar `AppShell`; MiniShell to come) | `dba8d52` | `752991d` (app's `vendor/nle-ui`) | 640 tests, boundary script |

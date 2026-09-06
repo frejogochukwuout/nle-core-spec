@@ -1,14 +1,31 @@
 # 15 — JSON Wire Protocol: `EngineCommand`, `CommandResult`, `EngineEvent` (NEW)
 
 **Stream:** Data-driven engine protocol (the unifying abstraction)
-**Status:** NEW (TEST-02). Defines the runtime-operations layer that makes the engine fully data-driven.
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the wire is the S-round's shape @ OT `05584d8` + the app consumer @ `e662759`; the gap is C7/error-envelope/staircase); NEW (TEST-02). Defines the runtime-operations layer that makes the engine fully data-driven.
 **Primary teacher:** OpenCut-classic `commands/` (class-based `Command`/`BatchCommand`/`TracksSnapshotCommand` architecture) + FreeCut `headless/contract.test.mjs` (Zod schema in test pattern) + the architect's decision that the engine must be drivable without a UI (master spec §3 "Architecture", §2 Decision 6 "One engine, two entry points").
 **Predecessor specs:** `01-core-engine.md` (manager API), `06-nle-ops.md` (op inventory), `09-project-model.md` (ProjectJSON — Layer 1).
 **Successor specs:** `12-testing-strategy.md` (tier 1 infrastructure; methodology superseded by 17), `16-keyboard-shortcuts.md` (TEST-03, shipped — every shortcut maps to an `EngineCommand`, see §13.5), `17-test-plan.md` (TEST-04, shipped — Tier 1 tests use this protocol, see §13.6), `18-ui-shell.md` (UI shell panels dispatch `EngineCommand`s via this protocol, see §13.12), `19-code-references.md` (reference-repo map and nle-engine reconciliation, see §13.13).
 
 ---
 
-## 0. TL;DR
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- opencut-timeline (OT) @ `05584d8` — 459/459 (329 in-page + 130 real-mouse across 14 phases), tsc 0. The wire surface in its S-round shape: the headless API + the real-mouse net; the S-round widened the surface (24/78 command coverage).
+- nle-test-app @ `e662759` — 83/83, tsc 0. The consumer side: the OT S-round consumer migration (Wave B) landed.
+- Spec-internal registers: §4.1A (the routing-disposition table, 78 members) + §9.5 (the event staircase register) + §13.15 (the C7 worklist) — pointed below, not duplicated.
+
+**GAP (the work — owner + phase per spec 14; the register is spec 14 §4.1):**
+- C7 (W-ops, at END + migration sub-gate; acceptance: §13.15 rows ALIGNED + the app migrated within one business day).
+- Error-envelope §6.3 refinement (W-ops; acceptance: the ~24-code table + OT follows).
+- Event staircase at full scope (W-media; acceptance: every §9.5 row published + consumed + pinned — the staircase suite).
+- Routing-disposition verification (W-ops; acceptance: every implemented §4.1A row cites a module pin; every DEFERRED row dispatches typed NOT_IMPLEMENTED).
+
+**ACCEPTANCE & TEST PLAN:** §12 (Test Harness Usage) is this spec's battery; BASE acceptance = the cited suites at the cited pins (OT 459; app 83) — the regression role. GAP acceptance is per-row above; facet rows in spec 17 §13A.
+
+---
+
+## 0A. TL;DR
 
 This spec defines **Layer 2 of the three-layer JSON protocol**: the `EngineCommand` discriminated union that captures every runtime operation the engine can perform. Layer 1 (static project state, `ProjectJSON`) is defined in spec 09. Layer 3 (render output, `FrameDescriptor` + pixels + audio PCM) is defined in specs 04 and 07. This spec fills the gap between them.
 
@@ -4865,7 +4882,7 @@ nle-engine (github.com/bearachprema/nle-engine, 37,958 LOC) is a clean-room Free
 
 The timeline-side headless surface (`src/lib/timeline/headless/api.ts`). It is **structurally the spec-15 skeleton** (same `EngineCommand`/`CommandResult` envelope idea, same single-dispatcher design, atomic `applyBatch`, never-throws `apply()`) with two systemic deltas: **prefixed command names (C7 — deliberately deferred by the repo, DECISIONS #9, pending this spec's own conflict resolution which Round 15 now supplies)** and **coarse error codes**. Full command-by-command table: SCOUT-R8-A §3.2 (R8-era) + SCOUT-R15-B §4 (current).
 
-| Spec 15 contract | opencut-timeline (file:line @ `0412e41`) | Status | Delta |
+| Spec 15 contract | opencut-timeline (file:line @ `0412e41` — R15-era pin, superseded by the R22 pin `05584d8`; re-grep at W-ops) | Status | Delta |
 |---|---|---|---|
 | §4.1 bare type discriminator | `headless/api.ts:39-125` — **24 types** (since W5; the R8-era "18" citation was stale), all `timeline.*`/`track.*`-prefixed | **CORRECTIVE (C7)** | Premise refuted (00-master:234/:562 are bare — the repo mistook §4.2's manager-method column for the command union). **Rename pass (24):** `timeline.insert/trim/split/delete/move/duplicate/updateElements/seek/play/pause/selectElements/undo/redo`→bare; `timeline.rippleDelete`→wrapper (see row below); `track.toggleMute/toggleVisibility`→`toggleTrackMute/toggleTrackVisibility`; `track.add`→`addTrack`; `track.remove`→`deleteTrack`; **`timeline.toggleBookmark/removeBookmark/moveBookmark`→ the unified marker family** (fold with the 09 A2-amendment: `addMarker/updateMarker/deleteMarker` semantics — toggle≈add/delete, move≈update position); **`timeline.upsertKeyframe/removeKeyframe/retimeKeyframe`→ singular per-key forms** of `upsertKeyframes/removeKeyframes/retimeKeyframe` (upsert/remove are plural in the union, retime is singular — §4.1A; batch engine-ops exist at timeline-core.ts:1210/:1437 — align wire forms) |
 | §4.3.3 MoveCommand | `ops/group-move.ts:69-74` — `PlannedElementMove {elementId, sourceTrackId, targetTrackId, newStartTime}` | **ALIGNED (exact)** | Field-for-field match incl. `PlannedTrackCreation`; repo implements only the movePlan form — add the simple `{elementIds, delta, targetTrackId}` form |
