@@ -1062,7 +1062,12 @@ export function Timeline() {
             const elsById = new Map<string, ElementJSON>();
             for (const t of scene.tracks) for (const e of t.elements) elsById.set(e.id, e);
             return (
-              <div data-testid="insert-preview-layer" aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ zIndex: 10 }}>
+              <div data-testid="insert-preview-layer" aria-hidden="true" className="insert-preview-anim pointer-events-none absolute inset-0" style={{ zIndex: 10 }}>
+                {/* R22 #83: the preview FADES+SLIDES in (the reference's own
+                    motion: fadeIn 0.3s ease-in-out + translateY 4px — never
+                    an instant pop); the layer persists while armed so the CSS
+                    animation runs once per arm; prefers-reduced-motion is
+                    honored by the override in app.css. */}
                 {/* ghost clip — the reference .clip-ghost law: 2px dashed
                     border (≈#646464 → --border-strong token), radius 4,
                     ghostBg(type) fill (contract §3.2) */}

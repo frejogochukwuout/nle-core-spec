@@ -23,17 +23,21 @@
      Keyboard and pointer have parity (REV-A P2-5). ok:false previews arm
      too — the button's data-tip swaps to the honest refusal reason and the
      shared status line announces it; NO geometry ever paints.
-   - Below ~560px available width the five secondary modes collapse into a
-     kebab overflow menu (Insert/Overwrite + divider + kebab stay inline).
-     R20-W6FIX (P2-3): the menu carries the APG menu keyboard law — ↑/↓
-     rove among the items (wrapping), Home/End jump, focus lands on the
-     FIRST item on open, Escape returns to the kebab, Tab closes; handled
-     keys stop propagation so the toolbar rover cannot hijack mid-menu.
+   - R22 (#83: "i think we are missing a few timeline insert / edit modes you
+     only showed two buttons here"): ALL SEVEN mode buttons are ALWAYS
+     visible inline — the old <560px kebab collapse HID five modes (the
+     reviewer saw two) and is RETIRED. At genuinely narrow widths the bar
+     WRAPS to a second row (flex-wrap) and the labels truncate; the mode
+     set is the reference's six (insert/overwrite/replace/append/ripple/
+     fitfill) + placeOnTop (nle_edit_workflow §3.4).
+   - R22 (#83): the hover placement preview FADES+SLIDES in/out (the
+     reference's own motion: 0.3s ease-in-out, translateY 4px — CSS on the
+     timeline's insert-preview layer, prefers-reduced-motion honored), never
+     an instant pop.
    - After a commit the preview clears and the viewer STAYS in source mode
      (repeated inserts are the point — Resolve/Premiere behavior). */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { MoreVertical } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useUi, type InsertMediaMode } from '../../state/useUiStore';
 import { useInsertPreview } from '../../hooks/useInsertPreview';
 import { tc } from '../../lib/timecode';
@@ -48,10 +52,6 @@ import {
 /** hover/focus dwell before the preview arms — long enough that a fast
  *  pointer pass never flashes geometry, short enough to feel instant. */
 const DWELL_MS = 150;
-/** below this AVAILABLE width the five secondary modes collapse into the
- *  kebab overflow menu (contract §2.2: all 7 visible at ≥560px). */
-const OVERFLOW_BELOW_PX = 560;
-
 const slug = (label: string) => label.toLowerCase().replace(/\s+/g, '-');
 
 /* primary pair + the secondary five — reference descriptions condensed to
@@ -149,27 +149,9 @@ export function SourceEditBar() {
   const setHover = useUi((s) => s.setHoverInsertPreview);
   const plan = useInsertPreview();
 
-  /* ---- width-driven overflow: all 7 inline ≥560px, kebab below (the RO
-     measures the bar's AVAILABLE width; a 0 measurement = unknown layout
-     (jsdom) and stays expanded — collapse only on a REAL narrow measure) */
-  const barRef = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useLayoutEffect(() => {
-    const el = barRef.current;
-    if (!el) return;
-    const measure = (w: number) => setNarrow(w > 0 && w < OVERFLOW_BELOW_PX);
-    if (el.clientWidth > 0) measure(el.clientWidth);
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) measure(entry.contentRect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
   /* ---- roving tabindex (Toolbar2 pattern, horizontal): ONE tab stop;
      ←/→ move in DOM order (wrapping), Home/End jump the ends. The roster
-     is the VISIBLE action surface (7 inline, or Insert+Overwrite+kebab). */
+     is ALL SEVEN mode buttons — always visible (#83), never a kebab. */
   const roverRefs = useRef<(HTMLElement | null)[]>([]);
   const [rover, setRover] = useState(0);
   const focusRover = (i: number) => {
@@ -194,63 +176,6 @@ export function SourceEditBar() {
     onFocus: () => setRover(i),
   });
 
-  /* ---- kebab overflow menu state (narrow only) */
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuHostRef = useRef<HTMLSpanElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const kebabRef = useRef<HTMLButtonElement>(null);
-  /* P2-3 (R20-W6FIX): the collapsed secondary items get the APG menu
-     keyboard law — they were tabIndex -1 with NO roving (only Escape +
-     outside-click closed the menu, keyboard users were stranded on the
-     kebab). ↑/↓ move focus among the items (wrapping), Home/End jump the
-     ends; handled keys STOP PROPAGATION so the toolbar's horizontal rover
-     never hijacks them mid-menu. */
-  const menuItems = () =>
-    Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
-  const focusMenu = (i: number) => {
-    const items = menuItems();
-    const n = items.length;
-    if (n === 0) return;
-    items[((i % n) + n) % n]!.focus();
-  };
-  const onMenuKey = (e: React.KeyboardEvent) => {
-    const items = menuItems();
-    const n = items.length;
-    if (n === 0) return;
-    const cur = items.indexOf(document.activeElement as HTMLElement);
-    if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); focusMenu(cur === -1 ? 0 : cur + 1); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); focusMenu(cur === -1 ? n - 1 : cur - 1); }
-    else if (e.key === 'Home') { e.preventDefault(); e.stopPropagation(); focusMenu(0); }
-    else if (e.key === 'End') { e.preventDefault(); e.stopPropagation(); focusMenu(n - 1); }
-    else if (e.key === 'Tab') {
-      // APG: Tab leaves the menu (default focus move) and CLOSES it — no
-      // stranded open popup with focus gone
-      setMenuOpen(false);
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      // a vertical menu does not use the horizontal keys — swallow them so
-      // the toolbar's ←/→ rover cannot steal focus out of an open menu
-      e.stopPropagation();
-    }
-  };
-  useEffect(() => {
-    if (!menuOpen) return;
-    // APG: focus moves to the FIRST item when the menu opens (keyboard and
-    // pointer openers alike — the task-pinned law)
-    menuItems()[0]?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); setMenuOpen(false); kebabRef.current?.focus(); }
-    };
-    const onPointerDown = (e: PointerEvent) => {
-      if (menuHostRef.current && !menuHostRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    window.addEventListener('keydown', onKey, true);
-    window.addEventListener('pointerdown', onPointerDown);
-    return () => {
-      window.removeEventListener('keydown', onKey, true);
-      window.removeEventListener('pointerdown', onPointerDown);
-    };
-  }, [menuOpen]);
-
   /* ---- the commit: one-shot action on the SOURCE asset (wrong-asset bug
      fix — never mediaSelection). Refusal honesty lives in the planner.
      After the commit the preview clears and the viewer STAYS in source
@@ -268,13 +193,7 @@ export function SourceEditBar() {
     }
     insertMediaAt(sourceMediaId, mode);
     useUi.getState().setHoverInsertPreview(null); // preview clears on commit
-    setMenuOpen(false);
     return true;
-  };
-  /* APG menu law: activating an item closes the menu — focus returns to the
-     invoking control (the kebab), never strands on a removed node. */
-  const runFromMenu = (mode: InsertMediaMode) => {
-    if (run(mode)) kebabRef.current?.focus();
   };
 
   /* ---- the shared live description (aria-describedby target): announces
@@ -293,13 +212,12 @@ export function SourceEditBar() {
 
   return (
     <div
-      ref={barRef}
       data-testid="shell-source-edit-bar"
       role="toolbar"
       aria-label="Edit functions"
       aria-orientation="horizontal"
       onKeyDown={onToolbarKey}
-      className="flex w-full min-w-0 items-center gap-0.5"
+      className="flex w-full min-w-0 flex-wrap items-center gap-0.5"
     >
       {primary.map((def, i) => (
         <ModeButton
@@ -316,59 +234,17 @@ export function SourceEditBar() {
       {/* hairline divider: the universal pair | the secondary modes */}
       <div role="separator" aria-orientation="vertical" className="mx-1 h-[16px] w-px shrink-0 bg-hairline" />
 
-      {narrow ? (
-        <span ref={menuHostRef} className="relative flex items-center">
-          <button
-            tabIndex={rover === 2 ? 0 : -1}
-            onFocus={() => setRover(2)}
-            ref={(el: HTMLButtonElement | null) => { roverRefs.current[2] = el; kebabRef.current = el; }}
-            type="button"
-            className="icon-btn !h-[22px] !w-[22px]"
-            aria-label="More edit modes"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            data-testid="shell-source-edit-overflow"
-            data-tip="More edit modes"
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            <MoreVertical size={14} strokeWidth={1.7} />
-          </button>
-          {menuOpen && (
-            <div
-              ref={menuRef}
-              role="menu"
-              aria-label="More edit modes"
-              data-testid="shell-source-edit-overflow-menu"
-              onKeyDown={onMenuKey}
-              className="absolute left-0 top-[110%] z-50 flex flex-col gap-0.5 rounded-[var(--radius)] border border-strong bg-inset p-1"
-            >
-              {secondary.map((def) => (
-                <ModeButton
-                  key={def.mode}
-                  def={def}
-                  mediaId={sourceMediaId}
-                  run={runFromMenu}
-                  setHover={setHover}
-                  refusal={refusalFor(def.mode)}
-                  asMenuItem
-                />
-              ))}
-            </div>
-          )}
-        </span>
-      ) : (
-        secondary.map((def, i) => (
-          <ModeButton
-            key={def.mode}
-            def={def}
-            mediaId={sourceMediaId}
-            run={run}
-            setHover={setHover}
-            refusal={refusalFor(def.mode)}
-            extraProps={roverProps(i + 2)}
-          />
-        ))
-      )}
+      {secondary.map((def, i) => (
+        <ModeButton
+          key={def.mode}
+          def={def}
+          mediaId={sourceMediaId}
+          run={run}
+          setHover={setHover}
+          refusal={refusalFor(def.mode)}
+          extraProps={roverProps(i + 2)}
+        />
+      ))}
 
       {/* shared live description — one element, described-by every button
           (a11y: the preview state is announced, not just visible) */}
