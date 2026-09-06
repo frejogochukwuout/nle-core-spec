@@ -1,53 +1,72 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-06 ~09:0xZ, end of the R21-2 session (the P0
-drag-revert round). **READ THIS SECTION FIRST — everything below the
+**Written:** 2026-09-06 ~22:1xZ, end of the R21e session (the opus
+review loop CLOSED). **READ THIS SECTION FIRST — everything below the
 `-----` divider is R18-era serving/environment detail that is still
 ACCURATE as background (env layout, :3000 ownership, annotakit kit,
-mirror repo) but predates R19/R20/R21.**
+mirror repo) but predates R19-R21e.**
 
-## Current state (R21 — the P0 is DONE)
+## Current state (R21e — the review loop is CLOSED at only-P3)
 
-- **The user's P0 (user-msg, 07:46Z) is EXECUTED**: the R19 (insert-push)
-  and R20 (OT-faithful escape) drag-law rewrites are REVERTED; the drag is
-  the R18k clamp law again (mover clamps between same-track neighbors;
-  neighbors never move; plain-Doc history entries; verdict chips/rings
-  gone). Executed by the sibling session as `c8b174d` (R21b) on top of
-  `0bc5fc4` (R21 — the full PR-69 review round: 56 comments, vendor
-  hardening, a11y sweep, 343/343 tests). Verified independently by THIS
-  session in a fresh sandbox: tsc 0, 343/343, vite + storybook builds
-  green, live drags clean (neighbors frozen, clamp, no chip, zero page
-  errors). Forensics + the race record: `.agents/design/r21-p0-forensics.md`.
-- **user-msg is CONSUMED** (deleted in the R21-2 wrap commit — the full
-  text is quoted in the R21b commit message + the forensics doc). If a new
-  user-msg appears, read it FIRST and re-fetch origin before acting
-  (SKILL #81: the sibling sessions race).
-- **The strict-vs-pragmatic divergence is registered, not open**: the
-  nearest magnet survives the revert (the user's own PR-69 reply at 08:44Z
-  demands it); commit-at-UP + moveClip refuse+toast are the sibling's
-  documented keeps. If the user wants the stricter variants (silent
-  moveClip, last-move commit), each is a one-small-commit change — see
-  forensics doc §3.
-- **Issue #57** (the P0's referenced annotakit thread) is a shell-VARIANTS
-  review issue ("Full Shell — Audio Focus — shouldn't show half and crop
-  by half") — THEIR queue, not the mini's (cross-stream-serve prohibition).
-- **The variants stream is mid-color-wave** (R20 W4a-W4c landed through
-  08:44Z: real color math, grade state/console, graded viewer + scopes).
-  Expect their commits to interleave with yours — merge-first, never force.
+- **The user's directive is COMPLETE**: "fully address all the comments
+  from PR #69, then spin up opus sub-agents for local code reviews and
+  iterate till only P3 issues left." All 56 PR-69 threads were resolved
+  with inline evidence replies (R21/R21b on main; PR branch
+  `shell-mini-review` synced). The opus review loop then ran THREE
+  rounds: R1 (5 P2 + P3s found → fixed in R21c/08eefd0), R2 (2
+  fix-induced P2s found → fixed in R21d/fb0d40b), R3 (verdict: **PASS —
+  no P0/P1/P2 open; only 2 P3s remain, both registered** — see
+  worklog R3-a for the full report with live + net-discrimination
+  evidence).
+- **R21d (fb0d40b) closed the R2-a regressions**: RulerScrub release
+  re-runs edge.stop (the post-release glide); minimize/expand scroll
+  preservation reworked behind the App SINGLE-SLOT law (splitter slot
+  goes null, one Timeline fiber both modes) + a CONTINUOUS onScroll
+  stash + a once-per-swap restore in the effect body (a resize never
+  re-anchors); unmount sweeps on all three scrub surfaces; commit()
+  gates on gesturePending (keyboard trim can't mint history
+  mid-scrub). R21e (9a8674f): the resize net hardened (clientWidth
+  stub) + README deviation #38.
+- **The two registered P3s** (README #38 + R3-a F2→fixed): (F1) the
+  pending window is a shared boolean and the unmount sweeps are
+  unconditional — a layout flip mid-ScrubBar-scrub can close the
+  Viewer bar's window early (self-healing, no corruption; fix shape
+  documented: owner-token or ClipItem-C9's session-open-ref shape).
+  (F2) fixed in R21e.
+- **The drag law is the USER-DIRECTED R18k clamp law** (R19 AND R20
+  were both reverted by the P0 — never re-architect drag unprompted;
+  the OT-SEAMS tombstoned rows are the seam map for a future
+  USER-REQUESTED retry). Non-drag user-approved keeps: capture guards,
+  commit-at-UP, edge auto-scroll, frozen magnet + nearest magnet,
+  scrubbing, zoom ladder, pill crop, mute, user-select:none.
+- **Gates at close:** tsc 0, **358/358**, vite + storybook builds
+  green; daemons live on the new code (SB :3000 / app :3001, both
+  from /home/z/nle-core-spec — the clone is now the working tree,
+  reset from the stale r20 bundle); live-verified: scroll roundtrip
+  origin-exact 300→336→300, edge glide frozen at release, zero
+  console errors.
+- **All three durable stores current at 9a8674f / PR branch eb5da9c**:
+  GitHub (origin main + shell-mini-review), GitLab
+  (ansgareutychisO/nle-core-spec — push via GIT_ASKPASS helper, token
+  NEVER in argv), /home/sync (nle-core-spec-r21e.bundle complete
+  history + -src.tar.gz).
+- **user-msg is CONSUMED.** If a new user-msg appears, read it FIRST
+  and re-fetch origin before acting (SKILL #81: the sibling sessions
+  race). The variants stream interleaves commits — merge-first, never
+  force push.
 
 ## Next session scope (immediate)
 
-1. **The user's next review round** on (a) the reverted drag feel and
-   (b) the R21 PR-69 fixes — watch the annotakit mirror
-   (melodietexoss/shell-mini-review — PAT owner, NOT our two PATs; threads
-   also live in the orphan `annotakit` branch store) + a possible new
-   `user-msg` file.
-2. Quiet-window chores (standing): annotakit vendor upgrade to v0.5.2
-   upstream; the OT-SEAMS tombstoned drag rows are the seam map for any
-   future USER-REQUESTED drag retry (never re-architect drag unprompted —
-   two consecutive user rejections, R19 AND R20).
+1. **The user's next review round** on (a) the reverted drag feel,
+   (b) the R21/R21d PR-69 fixes — watch the annotakit mirror
+   (melodietexoss/shell-mini-review) + the orphan `annotakit` branch
+   store + a possible new `user-msg` file.
+2. Optional P3 polish (small, documented fix shapes): the owner-token
+   pending window (F1); the wave-8 leftovers if the user re-raises
+   them. Quiet-window chores: annotakit vendor upgrade to upstream
+   v0.5.2+.
 3. Long horizon: the A0-A7b assembly plan (spec 14 / ARCH-R15) — the
-   mini stays the MVP-era UI surface.
+  mini stays the MVP-era UI surface.
 
 -----
 
