@@ -35,7 +35,8 @@ export const AudioFocus: StoryObj = {
   ),
 };
 
-/** Color page — grading stack swaps the right rail (ColorPage). */
+/** Color page — R20-W4b composition: console in the timeline area, color
+ *  sections in the rail, node graph in the left dock, scope strip below. */
 export const Color: StoryObj = {
   name: 'Full Shell — Color',
   render: () => <FullShell patch={{ page: 'color' }} />,

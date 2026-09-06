@@ -20,10 +20,12 @@ export default meta;
 
 /* ---- color page (spec 18 §4.8) --------------------------------------------- */
 
-/** The single-column grading stack at rail width: 2×2 wheels, primaries
- *  sliders, curves + scopes, LUT / HSL qualifier — nothing clipped at 340px. */
+/** R20-W4b: the color page's RAIL = the clip-level color sections (W3
+ *  grammar, store-bound to the grade target); the wheels/curves/qualifier
+ *  live in the TIMELINE-AREA console (see Color stories) and the scope
+ *  strip sits under the viewer. */
 export const ColorPageStory: StoryObj = {
-  name: 'Color page — grading stack',
+  name: 'Color page — inspector rail',
   parameters: { layout: 'padded' },
   render: () => (
     <>

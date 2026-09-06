@@ -149,18 +149,39 @@ describe('mixer dock (design doc v2.2 §4 — side by side with the lanes)', () 
 });
 
 describe('page switching via the AppDock (spec 18 §4.8)', () => {
-  it('Edit → Color swaps the rail to the grading panel + node graph dock + scopes (R19 composition)', async () => {
+  it('Edit → Color: rail = color sections + node-graph dock + scope strip + CONSOLE in the timeline area (R20-W4b D3 composition)', async () => {
     const user = userEvent.setup();
     renderAppShell();
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     await user.click(screen.getByTestId('shell-dock-page-color'));
     expect(store().page).toBe('color');
-    // rail = the wheels/qualifier tabs; left dock = the node graph; scopes under the viewer
+    // timeline area = the ColorConsole (the full Timeline is GONE on this page)
+    expect(screen.getByTestId('shell-color-console')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
+    // rail = the clip-level color sections (W3 grammar, same grade target)
     expect(screen.getByTestId('shell-color-rail')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
+    // left dock = the node graph; under the viewer = the scope strip slot
     expect(screen.getByTestId('shell-color-nodegraph')).toBeInTheDocument();
     expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
-    expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Color' })).toHaveAttribute('aria-current', 'page');
+    // the console's lane strip + tab bar mount inside the timeline block
+    expect(screen.getByTestId('shell-color-console-lanes')).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Color console tools' })).toBeInTheDocument();
+  });
+
+  it('the mixer dock does NOT render in color mode (the console owns the timeline row, color-layout §2.4)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ mixerState: 'full' });
+    expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument(); // edit page: side by side
+    await user.click(screen.getByTestId('shell-dock-page-color'));
+    expect(screen.queryByTestId('mixer-dock-full')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-console')).toBeInTheDocument();
+    // leaving color restores the mixer dock
+    await user.click(screen.getByTestId('shell-dock-page-edit'));
+    expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-console')).not.toBeInTheDocument();
   });
 
   it('Audio dock button enters audio focus: page + full mixer + lane boost + SoundLibrary/ChannelEditor', async () => {
