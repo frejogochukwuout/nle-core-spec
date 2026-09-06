@@ -73,7 +73,8 @@ describe('pool type tabs (R18i thread #11)', () => {
   it('empty tab shows the honest empty state, not a silent blank', () => {
     render(<MediaPool />);
     // empty the image media out of the doc (setState: commit's docChanged
-    // only inspects clips, so a media-only _commit would be a no-op)
+    // compares tracks + clips, never media, so a media-only _commit would
+    // be a no-op)
     useMini.setState({
       doc: { ...S().doc, media: S().doc.media.filter((m) => m.kind !== 'image') },
     });

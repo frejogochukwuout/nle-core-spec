@@ -23,7 +23,7 @@ import {
   timeToPx,
   pxToTime,
 } from './geometry';
-import { seedDoc, type Clip, type Doc, type Media, type Track } from './mockData';
+import { seedDoc, type Clip } from './mockData';
 
 const clip = (over: Partial<Clip>): Clip => ({
   id: 'x',

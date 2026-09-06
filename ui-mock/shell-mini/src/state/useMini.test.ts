@@ -1131,3 +1131,21 @@ describe('PR69 C48: split keeps the LEFT half selected (both paths)', () => {
    their store-level nets went with them. The R18k law: the lock family
    is dragActive only (commit/undo/redo/select gates, already pinned in
    the interaction-lock block above). */
+
+describe('R6 (R5-b P2-1): post-edit selection keeps the XOR law (one inspector subject)', () => {
+  it('split with a TRACK selected selects the product AND yields the track card', () => {
+    S().selectTrack('V1');
+    useMini.setState({ playhead: 2, selectedId: null });
+    S().splitAtPlayhead();
+    expect(S().selectedId).toBe('c1'); // the split product the user is editing
+    expect(S().selectedTrackId).toBeNull(); // the track card yielded — no dual subjects
+  });
+
+  it('cut-head with a TRACK selected selects the clip AND yields the track card', () => {
+    S().selectTrack('V1');
+    useMini.setState({ playhead: 2, selectedId: null });
+    S().cutHeadAtPlayhead();
+    expect(S().selectedId).toBe('c1');
+    expect(S().selectedTrackId).toBeNull();
+  });
+});
