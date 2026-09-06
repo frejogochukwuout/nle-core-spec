@@ -213,6 +213,29 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* R22 #83 — the insert-mode hover preview motion (timeline_edit_modes
+   reference's own timing: fadeIn 0.3s ease-in-out + a gentle 4px slide;
+   "some gentle fading in/out animated style ... not all the sudden"). The
+   layer mounts when the preview arms and the animation runs once per arm. */
+.insert-preview-anim {
+  animation: insert-preview-in 0.3s ease-in-out both;
+}
+@keyframes insert-preview-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .insert-preview-anim {
+    animation: none;
+  }
+}
 [data-tip-top]::after { top: auto; bottom: calc(100% + 7px); transform: translateX(-50%) translateY(2px); }
 
 /* range inputs — mock grammar */

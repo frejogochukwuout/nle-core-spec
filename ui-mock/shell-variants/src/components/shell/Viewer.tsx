@@ -20,6 +20,7 @@ import { snapToFrame, tc } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
 import { SourceEditBar } from './SourceEditBar';
 import { GradedViewerCanvas } from './GradedViewerCanvas';
+import { SourceRangeBar } from './SourceRangeBar';
 
 /* multi-track law (R14): scan ALL tracks of the kind, topmost wins — the
    single-find version hid clips on a second Video/Text track (addTrack makes
@@ -425,22 +426,26 @@ export function Viewer({ duration }: { duration: number }) {
         </div>
       </div>
 
-      {/* scrub-row — 12px (spec 18 §3.1). SOURCE mode (th_mto3504c): the
-          poster has no timeline to scrub — the row renders a STATIC
-          full-range band (no slider role, no pointer seeking); honest, no
-          fake scrubbing of a jpg. */}
+      {/* scrub-row — SOURCE mode (R22 #84/#85): the in/out TRIM RANGE bar
+          (dual handles + the range band — one clamped view-state write per
+          drag step; the trimmed range rides the insert planner). Stills (no
+          duration) keep the honest static band (th_mto3504c). The program
+          mode keeps the timeline scrub row below. */}
       {sourceMode ? (
-        <div
-          className="relative flex shrink-0 items-center border-t border-hairline px-2"
-          style={{ height: 12, minHeight: 12 }}
-          data-testid="shell-viewer-scrub"
-          aria-label="Source duration (static preview)"
-        >
-          <div className="relative h-full w-full">
-            <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 rounded-sm bg-[var(--border-soft)]" />
-            <div className="absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 rounded-sm" style={{ background: 'var(--accent-selection)', opacity: 0.35 }} />
+        sourceMediaId ? (
+          <SourceRangeBar mediaId={sourceMediaId} />
+        ) : (
+          <div
+            className="relative flex shrink-0 items-center border-t border-hairline px-2"
+            style={{ height: 14, minHeight: 14 }}
+            data-testid="shell-viewer-scrub"
+            aria-label="Source duration (static preview)"
+          >
+            <div className="relative h-full w-full">
+              <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 rounded-sm bg-[var(--border-soft)]" />
+            </div>
           </div>
-        </div>
+        )
       ) : (
       <div
         ref={scrubRef}
@@ -514,8 +519,48 @@ export function Viewer({ duration }: { duration: number }) {
           <div className="flex min-w-0 flex-1 items-center">
             <SourceEditBar />
           </div>
+          {/* R22 #84/#85: the trim-edit controls — set in/out at the range
+              head/tail + clear; the playhead-position variants are honest
+              mocks of the Resolve grammar (the source poster has no
+              playhead — the buttons clamp to the current range ends). */}
+          {sourceMediaId && sourceDur != null && (
+            <div role="group" aria-label="Source trim controls" className="flex shrink-0 items-center gap-1" data-testid="shell-source-trim-controls">
+              <button
+                type="button"
+                className="icon-btn !h-[20px] !w-[22px] !text-[13px] !font-bold"
+                data-tip="Trim in — set the range start (drag the IN handle for fine trim)"
+                aria-label="Set source in point"
+                data-testid="shell-source-trim-in"
+                onClick={() => useUi.getState().setSourceRangeIn(sourceMediaId, useUi.getState().sourceRanges[sourceMediaId]?.in ?? 0)}
+              >
+                <span aria-hidden>[</span>
+              </button>
+              <button
+                type="button"
+                className="icon-btn !h-[20px] !w-[22px] !text-[13px] !font-bold"
+                data-tip="Trim out — set the range end (drag the OUT handle for fine trim)"
+                aria-label="Set source out point"
+                data-testid="shell-source-trim-out"
+                onClick={() => useUi.getState().setSourceRangeOut(sourceMediaId, useUi.getState().sourceRanges[sourceMediaId]?.out ?? sourceDur)}
+              >
+                <span aria-hidden>]</span>
+              </button>
+              <button
+                type="button"
+                className="icon-btn !h-[20px] !w-[20px] !text-[12px] !font-bold"
+                data-tip="Clear the trim range — the full source inserts again"
+                aria-label="Clear source trim range"
+                data-testid="shell-source-trim-clear"
+                onClick={() => useUi.getState().clearSourceRange(sourceMediaId)}
+              >
+                <span aria-hidden>×</span>
+              </button>
+            </div>
+          )}
           <span className="mono shrink-0 text-[11px] text-tmuted" data-testid="shell-viewer-source-duration">
-            Source duration {sourceDur !== null ? tc(sourceDur) : '— still image'}
+            {sourceMediaId && sourceDur != null && useUi.getState().sourceRanges[sourceMediaId]
+              ? `Range ${tc(useUi.getState().sourceRanges[sourceMediaId]!.in)}–${tc(useUi.getState().sourceRanges[sourceMediaId]!.out)} · ${tc(useUi.getState().sourceRanges[sourceMediaId]!.out - useUi.getState().sourceRanges[sourceMediaId]!.in)} of ${tc(sourceDur)}`
+              : `Source duration ${sourceDur !== null ? tc(sourceDur) : '— still image'}`}
           </span>
           <div className="flex flex-1 items-center justify-end" />
         </div>

@@ -1371,3 +1371,39 @@ port), not what any env currently runs.
    step-by-step) — the mock now demonstrably runs the engine's real math
    on canvas, which is the whole point of "be very real in your ui
    implementation".
+
+## R22 (the finality round) — meta-learnings
+
+84. **The spec-posture inversion has a mechanical form.** "Mainly what needs to be done" is
+    implementable as a three-part §0 (BASE pinned / GAP with owner+phase+acceptance /
+    ACCEPTANCE & TEST PLAN) inserted as the spec's first section — the entry point changes,
+    the contract bodies stay (they ARE the acceptance form). Sub-agent waves with a strict
+    template + a pre-built evidence pack (exact pins + phase vocabulary + the rules) did 16
+    specs with ZERO normative damage (verified by diff in the integration review). The
+    template's discipline that mattered: BASE rows cite pin+suite+count, never narrate; GAP
+    rows without a phase tag fail the battery.
+85. **Gates must not cite artifacts scheduled later than the gate** (the circularity the
+    plan review caught): if C1's exit gate consumes a law inventory, the inventory is a
+    PRE-C1 deliverable. Audit every gate for "does the artifact it checks exist yet, and
+    whose phase builds it?" — the answer orders the plan.
+86. **Consumer pins vs HEAD pins are different check classes.** A repo's HEAD SHA and the
+    SHA its consumers pin diverge (nle-ui HEAD `dba8d52`, app pin `752991d`; WDC HEAD
+    `fe05d85`, pin `5570321`). A battery that checks one class against the other fails
+    permanently or passes vacuously — check both, separately, and say which is which in
+    every pin table.
+87. **Parallel-stream rounds absorb mid-round directives by re-fetching before every
+    push.** This round absorbed a full sibling drag-machinery retirement (R22 `7286122`)
+    mid-edit: the rebase preserved the spec work; the drag-law citations were then
+    RE-DERIVED from the sibling's updated OT-SEAMS rather than from my earlier reading.
+    The law: when a sibling commits in your citation domain, re-read the source doc before
+    re-asserting any claim about it.
+88. **Estimates in a decision doc must be superseded IN the doc** (the integration review's
+    finding): folding review amendments into the downstream spec while leaving the ruling
+    doc's own tables at the pre-review numbers creates a canon-vs-record contradiction —
+    future rounds cite the ruling doc. Every amendment that changes a number must touch
+    BOTH the plan and the ruling record, or the record carries a supersession marker inline.
+89. **The honest-posture register.** When a round's mandate is only structurally met (the
+    §0s inverted; the bodies still carry round-history narrative), REGISTER the residue
+    with an owner and a trigger (compression rides each spec's next substantive amendment)
+    instead of silently claiming completeness — the integration reviewer's test for
+    "absolutely final" is exactly this honesty.

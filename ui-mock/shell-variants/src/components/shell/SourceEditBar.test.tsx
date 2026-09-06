@@ -243,105 +243,31 @@ describe('SourceEditBar — hover-placement preview (C48, ≥150ms dwell, fake t
 
 /* ---- P2-3 (R20-W6FIX): the kebab overflow menu's APG keyboard law ---- */
 
-describe('SourceEditBar — kebab overflow menu (P2-3: APG menu keyboard roving)', () => {
-  /** jsdom never lays out (clientWidth 0 = unknown = stays EXPANDED) —
-   *  force a REAL narrow measure on the prototype so the collapse fires. */
-  const narrowBoot = () => {
-    const cw = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(320);
-    const utils = renderShell(<SourceEditBar />, { patch: { ...SOURCE } });
-    return { utils, cw };
-  };
-  const menuItems = () =>
-    Array.from(screen.getByTestId('shell-source-edit-overflow-menu').querySelectorAll<HTMLElement>('[role="menuitem"]'));
-
-  it('collapsed bar: the 5 secondary modes live ONLY in the kebab menu; open focuses the FIRST item', () => {
-    vi.useFakeTimers();
-    const { cw } = narrowBoot();
-    try {
-      expect(screen.queryByTestId('shell-source-edit-replace')).toBeNull(); // not inline
-      const kebab = screen.getByTestId('shell-source-edit-overflow');
-      expect(kebab).toHaveAttribute('aria-haspopup', 'menu');
-      expect(kebab).toHaveAttribute('aria-expanded', 'false');
-      fireEvent.click(kebab);
-      const menu = screen.getByTestId('shell-source-edit-overflow-menu');
-      expect(menu).toHaveAttribute('role', 'menu');
-      expect(kebab).toHaveAttribute('aria-expanded', 'true');
-      const items = menuItems();
-      expect(items).toHaveLength(5);
-      // APG: all items tabIndex -1 (focus is programmatic)
-      expect(items.every((i) => i.tabIndex === -1)).toBe(true);
-      // focus lands on the FIRST item on open
-      expect(items[0]).toHaveFocus();
-      // Escape closes + returns focus to the kebab (the invoking control)
-      fireEvent.keyDown(window, { key: 'Escape' });
-      expect(screen.queryByTestId('shell-source-edit-overflow-menu')).toBeNull();
-      expect(kebab).toHaveFocus();
-    } finally {
-      cw.mockRestore();
-      vi.useRealTimers();
+describe('SourceEditBar — the mode-button set (#83: always inline, no overflow)', () => {
+  /* R22 #83: the kebab overflow is RETIRED — all 7 mode buttons are always
+     inline (the reviewer saw only two: "you only showed two buttons here").
+     The bar WRAPS at narrow widths instead of hiding modes. */
+  it('R22 #83: ALL SEVEN mode buttons are always visible inline — no kebab, no overflow menu', () => {
+    boot();
+    const labels = ['Insert', 'Overwrite', 'Replace', 'Append at End', 'Ripple Overwrite', 'Place on Top', 'Fit to Fill'];
+    for (const label of labels) {
+      expect(screen.getByRole('button', { name: new RegExp('^' + label) })).toBeInTheDocument();
     }
+    expect(screen.queryByTestId('shell-source-edit-overflow')).toBeNull();
+    expect(screen.queryByTestId('shell-source-edit-overflow-menu')).toBeNull();
+    // the bar wraps at narrow widths (the flex-wrap law)
+    expect(screen.getByTestId('shell-source-edit-bar').className).toContain('flex-wrap');
   });
 
-  it('↑/↓ move focus among the items (wrapping); Home/End jump the ends', () => {
-    vi.useFakeTimers();
-    const { cw } = narrowBoot();
-    try {
-      const kebab = screen.getByTestId('shell-source-edit-overflow');
-      fireEvent.click(kebab);
-      const items = menuItems();
-      expect(items[0]).toHaveFocus();
-      fireEvent.keyDown(items[0]!, { key: 'ArrowDown' });
-      expect(items[1]).toHaveFocus();
-      fireEvent.keyDown(items[1]!, { key: 'End' });
-      expect(items[4]).toHaveFocus();
-      fireEvent.keyDown(items[4]!, { key: 'ArrowDown' });
-      expect(items[0]).toHaveFocus(); // wraps ↓
-      fireEvent.keyDown(items[0]!, { key: 'ArrowUp' });
-      expect(items[4]).toHaveFocus(); // wraps ↑
-      fireEvent.keyDown(items[4]!, { key: 'Home' });
-      expect(items[0]).toHaveFocus();
-      // the horizontal toolbar rover never hijacks mid-menu (stopPropagation)
-      fireEvent.keyDown(items[0]!, { key: 'ArrowRight' });
-      expect(items[0]).toHaveFocus();
-      fireEvent.keyDown(items[0]!, { key: 'ArrowLeft' });
-      expect(items[0]).toHaveFocus();
-    } finally {
-      cw.mockRestore();
-      vi.useRealTimers();
-    }
-  });
-
-  it('activating an item commits the edit AND returns focus to the kebab (never a stranded node)', () => {
-    vi.useFakeTimers();
-    const { cw } = narrowBoot();
-    try {
-      const kebab = screen.getByTestId('shell-source-edit-overflow');
-      fireEvent.click(kebab);
-      const items = menuItems();
-      // items[1] = Append at End — commits a real doc change
-      fireEvent.click(items[1]!);
-      expect(screen.queryByTestId('shell-source-edit-overflow-menu')).toBeNull();
-      expect(kebab).toHaveFocus();
-      expect(S().toasts.at(-1)).toMatchObject({ kind: 'success', title: 'Appended drone_launch.mp4' });
-      expect(mainEls().at(-1)!.mediaId).toBe('m-03');
-    } finally {
-      cw.mockRestore();
-      vi.useRealTimers();
-    }
-  });
-
-  it('outside pointerdown closes the menu (pointer parity for the close law)', () => {
-    vi.useFakeTimers();
-    const { cw, utils } = narrowBoot();
-    try {
-      fireEvent.click(screen.getByTestId('shell-source-edit-overflow'));
-      expect(screen.getByTestId('shell-source-edit-overflow-menu')).toBeInTheDocument();
-      fireEvent.pointerDown(document.body);
-      expect(screen.queryByTestId('shell-source-edit-overflow-menu')).toBeNull();
-      expect(utils).toBeDefined();
-    } finally {
-      cw.mockRestore();
-      vi.useRealTimers();
+  it('R22 #83: the 7-button arrow cycle covers every mode in DOM order (no hidden stops)', () => {
+    boot();
+    const order = ['Insert', 'Overwrite', 'Replace', 'Append at End', 'Ripple Overwrite', 'Place on Top', 'Fit to Fill'];
+    const first = screen.getByRole('button', { name: /^Insert/ });
+    first.focus();
+    for (let i = 1; i <= 7; i++) {
+      fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+      const expectName = order[i % 7];
+      expect((document.activeElement as HTMLElement).getAttribute('aria-label')?.startsWith(expectName)).toBe(true);
     }
   });
 });

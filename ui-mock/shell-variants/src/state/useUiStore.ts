@@ -553,6 +553,16 @@ interface UiState {
      request — the spec's triggers are the clip menu + source-card play). */
   viewerMode: 'program' | 'source';
   sourceMediaId: string | null;
+  /* R22 #84/#85: the SOURCE viewer's per-media in/out trim range (seconds
+   *  into the media; absent key = full media). VIEW STATE — never inside a
+   *  withHistory snapshot (the same law as the loop marks); keyed per
+   *  mediaId so switching sources keeps each trim. */
+  sourceRanges: Record<string, { in: number; out: number } | null>;
+  /** R22 #84/#85: set/clear the source's in/out range (clamped to [0, dur]
+   *  with in < out; a 0-length range refuses — the honest guard). */
+  setSourceRangeIn: (mediaId: string, t: number) => void;
+  setSourceRangeOut: (mediaId: string, t: number) => void;
+  clearSourceRange: (mediaId: string) => void;
   /* R20-W2 (DESIGN-R20 D2 / C48 hover-placement preview): the store holds
      THE MODE, never a plan object (REV-B P2-4 — a stored plan goes stale
      and fresh-object identity traps zustand-v5 selectors). The plan is
@@ -838,6 +848,7 @@ export const useUi = create<UiState>((set, get) => ({
   viewerMode: 'program',
   sourceMediaId: null,
   hoverInsertPreview: null, // R20-W2: view-state, never snapshotted
+  sourceRanges: {}, // R22 #84/#85: per-media source trim ranges (view state)
   toasts: [],
   saveAttempt: 0,
   simulateSaveFail: false,
@@ -1069,6 +1080,26 @@ export const useUi = create<UiState>((set, get) => ({
      preview — program mode is the output view and never previews inserts
      (the guard is the law, the clearing is the side-effect). */
   exitSourcePreview: () => set({ viewerMode: 'program', sourceMediaId: null, hoverInsertPreview: null }),
+  /* R22 #84/#85: the source trim-range setters — clamp to the media's
+   * duration; in < out always (an inverted/equal range refuses by keeping
+   * the previous edge — the honest guard, no silent snap). */
+  setSourceRangeIn: (mediaId, t) => set((s) => {
+    const dur = mediaById(mediaId)?.duration;
+    const cur = s.sourceRanges[mediaId] ?? { in: 0, out: dur ?? 0 };
+    const v = Math.max(0, Math.min(t, cur.out - 1 / 24));
+    return { sourceRanges: { ...s.sourceRanges, [mediaId]: { in: v, out: cur.out } } };
+  }),
+  setSourceRangeOut: (mediaId, t) => set((s) => {
+    const dur = mediaById(mediaId)?.duration;
+    const cur = s.sourceRanges[mediaId] ?? { in: 0, out: dur ?? 0 };
+    const v = Math.min(dur ?? t, Math.max(t, cur.in + 1 / 24));
+    return { sourceRanges: { ...s.sourceRanges, [mediaId]: { in: cur.in, out: v } } };
+  }),
+  clearSourceRange: (mediaId) => set((s) => {
+    const next = { ...s.sourceRanges };
+    delete next[mediaId];
+    return { sourceRanges: next };
+  }),
   /* R20-W2: view-state arm/disarm for the hover-placement preview — plain
      set, deliberately OUTSIDE any withHistory call (hovering can never mint
      an undo entry; the snapshot slice stays scenes/activeSceneId/lockAll/
@@ -1094,6 +1125,9 @@ export const useUi = create<UiState>((set, get) => ({
       selection: s.selection,
       ...(opts?.time !== undefined ? { time: opts.time } : {}),
       ...(opts?.targetTrackId !== undefined ? { targetTrackId: opts.targetTrackId } : {}),
+      /* R22 #84/#85: the SOURCE viewer's trimmed range rides the plan —
+       * the placed clip references sourceStart + the range length. */
+      ...(s.sourceRanges?.[mediaId] ? { sourceRange: { start: s.sourceRanges[mediaId]!.in, end: s.sourceRanges[mediaId]!.out } } : {}),
     };
     const plan = planInsertMedia(s.scenes, s.activeSceneId, mediaId, mode, ctx, nextId);
     get().applyInsertPlan(plan);

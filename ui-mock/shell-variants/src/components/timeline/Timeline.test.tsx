@@ -1127,6 +1127,12 @@ describe('R20-W6FIX P2-1: placeOnTop minted-track ghost renders at the INSERT li
     expect(store().hoverInsertPreview).toEqual({ mediaId: 'm-08', mode: 'placeOnTop' });
   });
 
+  it('R22 #83: the ARMED preview layer carries the fade+slide animation class (0.3s ease-in-out; reduced-motion honored in app.css)', () => {
+    boot({ hoverInsertPreview: { mediaId: 'm-01', mode: 'insert' } });
+    const layer = screen.getByTestId('insert-preview-layer');
+    expect(layer.className).toContain('insert-preview-anim');
+  });
+
   it('an unlocked overlay stays the placeOnTop target (no mint, no insert line)', () => {
     boot({ playhead: 2, hoverInsertPreview: { mediaId: 'm-08', mode: 'placeOnTop' } });
     const ghost = screen.getByTestId('insert-preview-ghost');
