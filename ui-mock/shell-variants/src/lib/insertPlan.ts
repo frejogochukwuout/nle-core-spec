@@ -127,6 +127,25 @@ export interface InsertPlanContext {
   time?: number;
   /** explicit lane target (pool drop path — validated for compatibility). */
   targetTrackId?: string;
+  /** R22 #84/#85 — the SOURCE viewer's trimmed in/out range (seconds into
+   *  the source media). ABSENT = the full media (today's behavior — the
+   *  backward-compat default, pinned). When present: placed duration =
+   *  end−start (clamped to the media's remaining tail + the 30s cap) and
+   *  sourceStart = start (the placed clip references the trimmed-in
+   *  offset); fitToFill retimes the RANGE length. */
+  sourceRange?: { start: number; end: number };
+}
+
+/* R22 #84: the range-aware placement duration + source offset. The clamps
+   mirror the old Math.min(m.duration ?? 4, 30) law exactly when no range. */
+function sourceDurOf(m: { duration: number | null }, ctx: InsertPlanContext): number {
+  if (!ctx.sourceRange) return Math.min(m.duration ?? 4, 30);
+  const len = ctx.sourceRange.end - ctx.sourceRange.start;
+  const tail = (m.duration ?? 4) - ctx.sourceRange.start;
+  return Math.max(FRAME, Math.min(len, tail, 30));
+}
+function sourceStartOf(ctx: InsertPlanContext): number {
+  return ctx.sourceRange ? Math.max(0, ctx.sourceRange.start) : 0;
 }
 
 /* ---- private deep clone (mirrors useUiStore's cloneEl/clone discipline:
@@ -301,7 +320,7 @@ export function planInsertMedia(
     /* shading BEFORE any mutation — the covered regions are the PRE-op
        doc state (the replaced clip + any downstream content the longer
        replacement covers); computing after would see the trimmed doc. */
-    const dur = Math.min(m.duration ?? 4, 30);
+    const dur = sourceDurOf(m, ctx);
     geometry.overwriteSpans = coveredSpans(t, start, dur);
     t.elements = t.elements.filter((e) => e.id !== target.el.id);
     ops.push({ op: 'removeElement', trackId: t.id, id: target.el.id });
@@ -309,7 +328,7 @@ export function planInsertMedia(
        replacement now covers are trimmed/removed too (the naive version
        left overlaps on the doc — caught while writing the R19 tests). */
     planOverwriteSpans(t, start, dur, ops, idFactory);
-    const el: ElementJSON = { id: idFactory('el-'), type, trackId: t.id, name: m.name, startTime: start, duration: dur, sourceStart: 0, mediaId, speed: 1, opacity: 1 };
+    const el: ElementJSON = { id: idFactory('el-'), type, trackId: t.id, name: m.name, startTime: start, duration: dur, sourceStart: sourceStartOf(ctx), mediaId, speed: 1, opacity: 1 };
     t.elements.push(el);
     ops.push({ op: 'insertElement', trackId: t.id, element: el });
     geometry.ghost = ghostOf(t, start, dur);
@@ -323,7 +342,12 @@ export function planInsertMedia(
   /* ---- fitToFill: needs a >1-frame loop range; rate-clamped honest refusal ---- */
   if (mode === 'fitToFill') {
     const span = ctx.loop.end - ctx.loop.start;
-    const srcDur = m.duration ?? 0;
+    /* R22 #84: the retimed length is the RANGE (end−start), not the whole
+       media — "trim the range of source ... apply to source for the
+       timeline insertion operation" (#84/#85). */
+    const srcDur = ctx.sourceRange
+      ? ctx.sourceRange.end - ctx.sourceRange.start
+      : m.duration ?? 0;
     if (span <= FRAME || srcDur <= 0) {
       return { ...base, reason: { kind: 'info', title: 'Fit to Fill', detail: 'set an In/Out range (I / O) with duration, and use a media asset with known duration — fit-to-fill retimes the source into the range' } };
     }
@@ -345,7 +369,7 @@ export function planInsertMedia(
     const at = snapToFrame(ctx.loop.start);
     geometry.overwriteSpans = coveredSpans(t, at, span); // pre-mutation shading
     planOverwriteSpans(t, at, span, ops, idFactory);
-    const el: ElementJSON = { id: idFactory('el-'), type, trackId: t.id, name: m.name, startTime: at, duration: snapToFrame(span), sourceStart: 0, mediaId, speed: rate, opacity: 1 };
+    const el: ElementJSON = { id: idFactory('el-'), type, trackId: t.id, name: m.name, startTime: at, duration: snapToFrame(span), sourceStart: sourceStartOf(ctx), mediaId, speed: rate, opacity: 1 };
     t.elements.push(el);
     ops.push({ op: 'insertElement', trackId: t.id, element: el });
     geometry.ghost = ghostOf(t, at, snapToFrame(span), rate);
@@ -384,7 +408,7 @@ export function planInsertMedia(
     return { ...base, reason: { kind: 'error', title: 'Edit action', detail: `no unlocked ${laneWord(type)} lane for ${m.name} (locked lanes refuse placement — spec 06)` } };
   }
 
-  const dur = Math.min(m.duration ?? 4, 30);
+  const dur = sourceDurOf(m, ctx);
   let time: number;
   if (mode === 'append') {
     time = track.elements.reduce((end, e) => Math.max(end, e.startTime + e.duration), 0);
@@ -462,7 +486,7 @@ export function planInsertMedia(
 
   const el: ElementJSON = {
     id: idFactory('el-'), type, trackId: track.id, name: m.name,
-    startTime: time, duration: dur, sourceStart: 0, mediaId,
+    startTime: time, duration: dur, sourceStart: sourceStartOf(ctx), mediaId,
     speed: 1, opacity: 1,
   };
   track.elements.push(el);
