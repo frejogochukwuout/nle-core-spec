@@ -82,24 +82,25 @@ export default function App() {
           </>
         )}
       </div>
-      {timelineMinimized ? (
-        /* R18j (thread #13): minimized = the compact strip sizes itself —
-            no row splitter (nothing to resize), tlH survives for restore */
-        <Timeline />
-      ) : (
-        <>
-          <Splitter
-            orientation="horizontal"
-            value={tlH}
-            min={TL_H.min}
-            max={TL_H.max}
-            initial={TL_H.initial}
-            onChange={setTlH}
-            label="Timeline height"
-          />
-          <Timeline style={{ height: tlH }} />
-        </>
+      {/* R2-a P3-a (round 3): the splitter slot goes EMPTY when minimized
+          instead of reordering the children — the old ternary moved
+          Timeline between sibling fiber slots, REMOUNTING it across the
+          minimize boundary so every ref/state reset (and no
+          component-scoped scroll stash could ever survive). `null` holds
+          the slot: ONE Timeline instance renders both modes via its own
+          internal branch, tlH survives in App for the exact restore. */}
+      {timelineMinimized ? null : (
+        <Splitter
+          orientation="horizontal"
+          value={tlH}
+          min={TL_H.min}
+          max={TL_H.max}
+          initial={TL_H.initial}
+          onChange={setTlH}
+          label="Timeline height"
+        />
       )}
+      <Timeline style={timelineMinimized ? undefined : { height: tlH }} />
       <ToastRegion />
     </div>
   );

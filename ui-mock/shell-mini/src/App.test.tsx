@@ -661,3 +661,38 @@ describe('R2: error toasts announce as alerts (R1-b P3-9)', () => {
     expect(screen.getByTestId('mini-toast')).toHaveAttribute('role', 'status');
   });
 });
+
+describe('R2-a round 3: the single-slot Timeline (App level)', () => {
+  it('the minimize/expand roundtrip preserves the timeline scroll — the App ternary no longer remounts', () => {
+    // jsdom clamps programmatic scrollLeft — intercept reads AND writes
+    const proto = [HTMLElement.prototype, Element.prototype].find((p) =>
+      Object.getOwnPropertyDescriptor(p, 'scrollLeft'),
+    )!;
+    const desc = Object.getOwnPropertyDescriptor(proto, 'scrollLeft')!;
+    const sets: number[] = [];
+    const state = { val: 0 };
+    Object.defineProperty(proto, 'scrollLeft', {
+      configurable: true,
+      get: () => state.val,
+      set: (v: number) => {
+        sets.push(Math.round(v * 100) / 100);
+        state.val = v;
+      },
+    });
+    try {
+      renderApp();
+      const full = screen.getByTestId('mini-timeline-scroll');
+      state.val = 300; // the user pans to 300
+      fireEvent.scroll(full); // the continuous stash records (300+46)/48
+      fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+      expect(screen.getByTestId('mini-timeline-min')).toBeInTheDocument();
+      // the strip's expand returns to the EXACT pan: (336+10) − 46 = 300
+      // (a remount would reset the stash and restore 0)
+      fireEvent.click(screen.getByTestId('mini-btn-timeline-expand'));
+      expect(sets[sets.length - 1]).toBe(300);
+      expect(sets).toContain(336);
+    } finally {
+      Object.defineProperty(proto, 'scrollLeft', desc);
+    }
+  });
+});

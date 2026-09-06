@@ -10,7 +10,7 @@ set + DOM anatomy).
 The build contract is [`docs/DESIGN-mvp.md`](docs/DESIGN-mvp.md) (v2.1
 FINAL — design-audit + code-review rounds folded). `../shell-variants/`
 remains the full spec-18 study; this app is the deliberately small sibling:
-~28 source files vs 100+, 351 tests vs 596, 13 stories vs 83 (PR69 refresh).
+~28 source files vs 100+, 358 tests vs 596, 13 stories vs 83 (PR69 refresh; R2-a round 3: +7 nets).
 
 ## Run it
 
@@ -19,7 +19,7 @@ npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-
 npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
                     #   run via `python3 scripts/dev3000.py` double-fork daemon so it
                     #   survives the per-toolcall process reaping — plain nohup/setsid die)
-npm test            # vitest — 7 files / 351 tests (jsdom)
+npm test            # vitest — 7 files / 358 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # the FULL dev server on :3000 (run via `python3

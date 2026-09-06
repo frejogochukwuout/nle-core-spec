@@ -6,7 +6,7 @@
    origin is x=0, so clientX maps DIRECTLY to time via pps (deterministic:
    default zoom 48pps). */
 
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { Timeline } from './Timeline';
@@ -1256,5 +1256,159 @@ describe('R2: reset + ruler extent re-publish (R1-b P2-3/P2-4)', () => {
     expect(S().rulerEnd).toBeCloseTo(12.5, 5); // re-published (doc joined the deps; act flushed the effect)
     setStore(() => S().setPlayhead(10));
     expect(S().playhead).toBe(10); // the old bug: clamped at 8
+  });
+});
+
+/* ---- R2-a round 3: the review-fix regressions pinned ----------------
+   P2-1 (ruler release dropped edge.stop), P2-2 (every resize re-anchored
+   the scroll), P3-a (the stash cleanup raced the ref re-attach; the App
+   ternary remounted the Timeline), P3-b (scrub surfaces had no unmount
+   sweep), P3-c (keyboard trim bypassed the pending-window lock). */
+
+/** jsdom clamps programmatic scrollLeft to 0 — intercept reads AND
+ *  writes on the prototype so the stash + restore law is observable. */
+const interceptScrollLeft = () => {
+  const proto = [HTMLElement.prototype, Element.prototype].find((p) =>
+    Object.getOwnPropertyDescriptor(p, 'scrollLeft'),
+  )!;
+  const desc = Object.getOwnPropertyDescriptor(proto, 'scrollLeft')!;
+  const sets: number[] = [];
+  const state = { val: 0 };
+  Object.defineProperty(proto, 'scrollLeft', {
+    configurable: true,
+    get: () => state.val,
+    set: (v: number) => {
+      sets.push(Math.round(v * 100) / 100);
+      state.val = v;
+    },
+  });
+  return { sets, state, restore: () => Object.defineProperty(proto, 'scrollLeft', desc) };
+};
+
+describe('R2-a round 3 — scroll preservation (P2-2/P3-a)', () => {
+  it('the minimize/expand roundtrip restores the leftmost visible time exactly (300 → 336 → 300)', () => {
+    const io = interceptScrollLeft();
+    try {
+      render(<Timeline />);
+      const full = screen.getByTestId('mini-timeline-scroll');
+      // the user pans to scrollLeft 300 — the CONTINUOUS stash records
+      // the origin-corrected time: (300 + RENDER_ORIGIN 46)/48
+      io.state.val = 300;
+      fireEvent.scroll(full);
+      fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+      // min origin 10: the swap-restore lands (300+46) − 10 = 336
+      expect(io.sets).toContain(336);
+      // no min-mode scroll event re-seeds the stash (jsdom fires none on
+      // assignment) — the expand restore returns to the exact origin time
+      fireEvent.click(screen.getByTestId('mini-btn-timeline-expand'));
+      expect(io.sets[io.sets.length - 1]).toBe(300);
+      // the single-slot law: the mount-restore (stash 0 → 0) is the ONLY
+      // extra write; a remount would have reset the stash and restored 0
+      expect(io.sets).toEqual([0, 336, 300]);
+    } finally {
+      io.restore();
+    }
+  });
+
+  it('a window resize never re-anchors the scroll (the R21c law snapped 500 → 0)', () => {
+    const io = interceptScrollLeft();
+    try {
+      render(<Timeline />);
+      const full = screen.getByTestId('mini-timeline-scroll');
+      io.state.val = 500;
+      fireEvent.scroll(full);
+      const writes = io.sets.length;
+      // jsdom has no ResizeObserver → the fallback listener path runs
+      fireEvent(window, new Event('resize'));
+      expect(io.sets.slice(writes)).toEqual([]); // measure only re-ports width
+      expect(io.state.val).toBe(500); // the pan survives the resize
+    } finally {
+      io.restore();
+    }
+  });
+});
+
+describe('R2-a round 3 — ruler release stops the edge loop (P2-1)', () => {
+  it('pointerup kills the auto-scroll — the timeline stops gliding after release', () => {
+    // jsdom clamps programmatic scrollLeft — intercept so the loop's
+    // writes stick and the stall guard never fires
+    const io = interceptScrollLeft();
+    // manual rAF queue: frames advance ONLY when driven
+    let queue: FrameRequestCallback[] = [];
+    let rafId = 0;
+    const tickFrames = (n: number) =>
+      act(() => {
+        for (let i = 0; i < n; i++) {
+          const q = queue;
+          queue = [];
+          q.forEach((cb) => cb(performance.now()));
+        }
+      });
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(((cb: FrameRequestCallback) => {
+      queue.push(cb);
+      return ++rafId;
+    }) as typeof window.requestAnimationFrame);
+    try {
+      render(<Timeline />);
+      const scroll = screen.getByTestId('mini-timeline-scroll') as HTMLElement;
+      // jsdom measures 0 — give the loop a real viewport to push against
+      Object.defineProperty(scroll, 'clientWidth', { configurable: true, get: () => 800 });
+      scroll.getBoundingClientRect = () =>
+        ({ left: 0, right: 800, width: 800, top: 0, bottom: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+      const ruler = screen.getByTestId('mini-ruler');
+      // pointerdown + move parked 10px inside the right edge (dir = 1)
+      fireEvent.pointerDown(ruler, { button: 0, pointerId: 21, clientX: 790 });
+      fireEvent.pointerMove(ruler, { pointerId: 21, clientX: 790, buttons: 1 });
+      tickFrames(3); // 3 driven frames → scrollLeft 12px/frame = 36
+      expect(io.state.val).toBe(36);
+      // RELEASE: the old law kept the loop gliding + re-seeking; the new
+      // release path runs edge.stop first
+      fireEvent.pointerUp(ruler, { pointerId: 21, clientX: 790 });
+      tickFrames(6);
+      expect(io.state.val).toBe(36); // frozen at the release spot
+    } finally {
+      rafSpy.mockRestore();
+      io.restore();
+    }
+  });
+});
+
+describe('R2-a round 3 — surface swaps + the pending window (P3-b/P3-c)', () => {
+  it('a minimize flip mid-scrub closes the pending window (no dead keys after the swap)', () => {
+    render(<Timeline />);
+    fireEvent.pointerDown(screen.getByTestId('mini-ruler'), {
+      button: 0,
+      pointerId: 22,
+      clientX: 120,
+    });
+    expect(S().gesturePending).toBe(true);
+    // the surface swap unmounts the scrubbing RulerScrub with no pointerup
+    fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+    expect(S().gesturePending).toBe(false); // the unmount sweep closed it
+    // the keys are live again: a commit goes through
+    setStore(() => S().trimClip('c1', 'end', 3));
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(3);
+    expect(S().past).toHaveLength(1);
+  });
+
+  it('the keyboard trim is inert while a scrub holds the pending window, live after release', () => {
+    render(<Timeline />);
+    setStore(() => S().select('c1')); // tabIndex only when selected
+    const handle = screen.getByTestId('mini-trim-end-c1');
+    fireEvent.pointerDown(screen.getByTestId('mini-ruler'), {
+      button: 0,
+      pointerId: 23,
+      clientX: 200,
+    });
+    // the old law: the arrows stepped the doc mid-scrub (a history entry
+    // minted while the pointer held the window)
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(3.5);
+    expect(S().past).toHaveLength(0);
+    // release, then the same key steps the edge
+    fireEvent.pointerUp(screen.getByTestId('mini-ruler'), { pointerId: 23 });
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(4);
+    expect(S().past).toHaveLength(1);
   });
 });
