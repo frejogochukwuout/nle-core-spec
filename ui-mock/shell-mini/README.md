@@ -394,6 +394,18 @@ Run it at boot or any time; safe twice.
    browser gesture used to leave the surface armed for hover-scrub).
    Timeline gesture surfaces carry touch-action:none (the splitter and
    viewer bar already did).
+38. **The pending window is a shared boolean, and the scrub-surface
+   unmount sweeps are unconditional** (R3-a F1, P3): a layout flip
+   mid-ScrubBar-scrub (Space/Enter on a pre-focused native button —
+   the yield fires natively even under the lock — or multi-touch)
+   unmounts the timeline's full-mode scrub surfaces, whose sweeps
+   close a window owned by the still-live Viewer bar: one mutating
+   key commits mid-gesture. Self-healing (the bar's own release
+   closes nothing further; next gesture is clean), no corruption.
+   Fix shape when wanted: owner-token windows in the store or
+   ClipItem-C9's local session-open-ref shape (Timeline.tsx ~442).
+   The multi-touch early-close note (R2-a observation) is the same
+   family.
 
 ## The topbar is a downstream customization point (R18j, thread #17)
 
