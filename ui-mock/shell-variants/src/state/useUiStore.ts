@@ -451,6 +451,13 @@ interface UiState {
   mediaW: number;
   inspectorW: number;
   mainBodyH: number;
+  /** R22-D8: the user has DRAGGED the mainbody HSplitter (their height wins
+   *  and persists across page flips; otherwise the color page defaults to
+   *  55% and others 40% — the viewer-first law, issue #77). */
+  mainBodyUserSet: boolean;
+  /** R22-D2: the user has dragged the inspector VSplitter (their width wins;
+   *  otherwise the color page defaults to the reference's 420px inspector). */
+  inspectorWUserSet: boolean;
   cheatOpen: boolean;
   scenes: SceneJSON[];
   mediaSelection: string[];    // multi-select per spec 18 §4.2
@@ -508,8 +515,22 @@ interface UiState {
      The console view-state below is NEVER snapshotted (mockMixer view-state
      law). */
   mockGrades: Record<string, MockGrade>;
-  /** active ColorConsole tab (C51). */
-  colorConsoleTab: 'primaries' | 'curves' | 'qualifier';
+  /** Active ColorInspector tab (C51; R22 rename from colorConsoleTab — the
+   *  grading surface moved from the scrapped ColorConsole into the right
+   *  rail's ColorInspector per DESIGN-R22 D2). */
+  colorInspectorTab: 'primaries' | 'curves' | 'qualifier';
+  /** R22-D3: the scopes console state under the viewer — 'off' = NOT rendered
+   *  (the mixer's collapsed law, the default per issue #77 "shouldn't always
+   *  be there"); 'collapsed' = the 26px header row; 'row' = one 130px band;
+   *  'grid' = the reference's 2×2 quadrant. View state, never snapshotted. */
+  colorScopesState: 'off' | 'collapsed' | 'row' | 'grid';
+  /** R22-D3: the last VISUAL mode the scopes dock showed (row/grid) — the
+   *  Toolbar2 toggle restores it when re-opening from 'off'. */
+  colorScopesLastVisual: 'row' | 'grid';
+  /** R22-D4: the node-graph console dock in the timeline area (the
+   *  mixer-console mechanism; default OFF — "require a separate view ...
+   *  toggled just like mixer console", issue #78). */
+  colorNodesDock: boolean;
   /** Clip ⇄ Timeline grade-target toggle (C51); 'clip' resolves to selection[0]. */
   colorGradeTarget: 'clip' | 'timeline';
   /** Qualifier matte-preview overlay switch (C54 preview half — W4c renders
@@ -639,7 +660,12 @@ interface UiState {
   /* R20-W4b grade sidecar + console view-state (C50/C51). */
   setGrade: (id: string, patch: GradePatch) => void;
   resetGrade: (id: string) => void;
-  setColorConsoleTab: (tab: UiState['colorConsoleTab']) => void;
+  setColorInspectorTab: (tab: UiState['colorInspectorTab']) => void;
+  /** R22-D3: sets the scopes console state (dedicated setter — togglePanel is
+   *  boolean-keyed and cannot carry the tri-state). */
+  setColorScopesState: (state: UiState['colorScopesState']) => void;
+  /** R22-D4: toggles the node-graph console dock. */
+  toggleColorNodesDock: () => void;
   setColorGradeTarget: (t: UiState['colorGradeTarget']) => void;
   setQualifierPreviewOn: (v: boolean) => void;
   setQualifierPickerOn: (v: boolean) => void;
@@ -796,7 +822,9 @@ export const useUi = create<UiState>((set, get) => ({
   masterVolume: 0.78,
   mediaW: 280,
   inspectorW: 340,
-  mainBodyH: 0, // 0 = auto (40% of viewport per spec 18 §3.2)
+  mainBodyH: 0, // 0 = auto (page-aware: 40% viewport; 55% on color, R22-D8)
+  mainBodyUserSet: false,
+  inspectorWUserSet: false,
   cheatOpen: false,
   scenes: clone(project.scenes),
   mediaSelection: ['m-02'],
@@ -830,7 +858,10 @@ export const useUi = create<UiState>((set, get) => ({
      console view-state defaults: Primaries tab, Clip target, no matte
      preview, Primary node selected (C56 default binding). */
   mockGrades: {},
-  colorConsoleTab: 'primaries',
+  colorInspectorTab: 'primaries',
+  colorScopesState: 'off', // R22-D3: default OFF (#77 "shouldn't always be there")
+  colorScopesLastVisual: 'grid',
+  colorNodesDock: false,
   colorGradeTarget: 'clip',
   qualifierPreviewOn: false,
   qualifierPickerOn: false,
@@ -1234,8 +1265,8 @@ export const useUi = create<UiState>((set, get) => ({
   toggleMasterMute: () => set((s) => ({ masterMuted: !s.masterMuted })),
   setMasterVolume: (v) => set({ masterVolume: clamp(v, 0, 1) }),
   setMediaW: (w) => set({ mediaW: clamp(w, 200, 480) }),
-  setInspectorW: (w) => set({ inspectorW: clamp(w, 280, 560) }),
-  setMainBodyH: (h) => set({ mainBodyH: h <= 0 ? 0 : clamp(h, 320, 900) }), // 0 = auto (40% of viewport, spec 18 §3.2)
+  setInspectorW: (w) => set({ inspectorW: clamp(w, 280, 560), inspectorWUserSet: true }),
+  setMainBodyH: (h) => set({ mainBodyH: h <= 0 ? 0 : clamp(h, 320, 900), mainBodyUserSet: true }), // 0 = auto (page-aware default, R22-D8; spec 18 §3.2)
   setCheatOpen: (v) => set({ cheatOpen: v }),
   setMediaSelection: (ids) => set({ mediaSelection: ids }),
   toggleMediaSelection: (id, additive) => set((s) => {
@@ -1373,7 +1404,12 @@ export const useUi = create<UiState>((set, get) => ({
     set({ mockGrades: next });
     return scenes;
   }),
-  setColorConsoleTab: (tab) => set({ colorConsoleTab: tab }),
+  setColorInspectorTab: (tab) => set({ colorInspectorTab: tab }),
+  setColorScopesState: (state) => set((s) => ({
+    colorScopesState: state,
+    ...(state === 'row' || state === 'grid' ? { colorScopesLastVisual: state } : {}),
+  })),
+  toggleColorNodesDock: () => set((s) => ({ colorNodesDock: !s.colorNodesDock })),
   setColorGradeTarget: (t) => set({ colorGradeTarget: t }),
   setQualifierPreviewOn: (v) => set({ qualifierPreviewOn: v }),
   setQualifierPickerOn: (v) => set({ qualifierPickerOn: v }),

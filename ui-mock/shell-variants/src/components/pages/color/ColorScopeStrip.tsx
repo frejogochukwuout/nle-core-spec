@@ -14,7 +14,7 @@
    The R19 seeded-trace dock stays deleted (C53 supersedes). */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Activity } from 'lucide-react';
+import { Activity, ChevronsDownUp, ChevronsUpDown, LayoutGrid, Rows3 } from 'lucide-react';
 import { waveformColumns, parade, vectorscopePoints, histogram } from '../../../lib/color';
 import { useUi, resolveGradeTargetId, gradeOf, TIMELINE_GRADE_KEY, type MockGrade } from '../../../state/useUiStore';
 import { getGradedFrame, subscribeGradedFrame, type GradedFrame } from './gradedFrameBus';
@@ -62,7 +62,11 @@ const PANELS: { kind: ScopeKind; label: string; a11y: string }[] = [
 export const SCOPE_THROTTLE_MS = 100;
 
 export function ColorScopeStrip() {
-  const [collapsed, setCollapsed] = useState(false);
+  /* R22-D3: the dock state is STORE-driven (panels-style view state —
+     survives unmounts, the Toolbar2 toggle + this header share it). */
+  const mode = useUi((s) => s.colorScopesState);
+  const setMode = useUi((s) => s.setColorScopesState);
+  const collapsed = mode === 'collapsed';
   const src = useScopeSource(); // the store half stays live (status line)
   const [frame, setFrame] = useState<GradedFrame | null>(() => getGradedFrame());
 
@@ -97,7 +101,7 @@ export function ColorScopeStrip() {
   /* redraw at the 10fps throttle: a frame arriving inside the window is
      deferred (latest-wins), the timer is cleared on every new frame */
   useEffect(() => {
-    if (!frame || collapsed) return;
+    if (!frame || mode === 'collapsed') return;
     const elapsed = performance.now() - lastDrawRef.current;
     if (elapsed >= SCOPE_THROTTLE_MS) {
       lastDrawRef.current = performance.now();
@@ -109,30 +113,75 @@ export function ColorScopeStrip() {
       drawNow();
     }, SCOPE_THROTTLE_MS - elapsed);
     return () => window.clearTimeout(t);
-  }, [frame, collapsed, drawNow]);
+  }, [frame, mode, drawNow]);
+
+  /* the quadrant grid (grid mode) vs the one-row band (row mode) — the same
+     four canvases, different layout; grid gets the taller budget (D3:
+     max(240px, 45% of the mainbody) — the 200px-cap arithmetic died with v1) */
+  const gridMode = mode === 'grid';
+  const rowMode = mode === 'row';
+
+  /* 'off' = NOT rendered at all (the mixer's collapsed law — the AppShell
+     gates too; solo mounts see the same law so a story/test never shows a
+     ghost dock). */
+  if (mode === 'off') return null;
 
   return (
     <div data-testid="shell-color-scopes" className="flex min-h-0 shrink-0 flex-col" style={{ background: 'var(--bg-shell)' }}>
+      {/* the dock header — the reference's window-bar anatomy (title +
+          layout toggles + minimize), 26px shell-bar height */}
       <div className="flex h-[26px] shrink-0 items-center gap-1 border-b border-hairline px-2">
         <button
           type="button"
-          aria-label={collapsed ? 'Expand scopes' : 'Collapse scopes'}
+          aria-label={collapsed ? 'Expand scopes' : 'Minimize scopes'}
           aria-expanded={!collapsed}
           aria-controls="shell-color-scopes-grid"
           data-testid="shell-color-scopes-collapse"
           className="icon-btn"
-          onClick={() => setCollapsed((v) => !v)}
+          onClick={() => setMode(collapsed ? useUi.getState().colorScopesLastVisual : 'collapsed')}
         >
-          <Activity size={14} />
+          {collapsed ? <ChevronsUpDown size={14} /> : <ChevronsDownUp size={14} />}
         </button>
+        <Activity size={12} aria-hidden className="text-tmuted" />
         <span className="px-1 text-[11px] font-medium text-tprimary">Scopes</span>
         <span data-testid="shell-color-scopes-status" className="mono ml-auto text-[10px] text-tfaint">
           {frame ? `${frame.width}×${frame.height} · 10 fps` : 'standby — no graded frame'}
           {src.qualifierPreviewOn ? ' · matte preview on' : ''}
         </span>
+        {/* layout toggles — the reference window-bar's grid/rows icons */}
+        <button
+          type="button"
+          aria-label="Scopes layout: single row"
+          aria-pressed={rowMode}
+          data-testid="shell-color-scopes-layout-row"
+          className="icon-btn"
+          disabled={collapsed}
+          onClick={() => setMode('row')}
+        >
+          <Rows3 size={12} />
+        </button>
+        <button
+          type="button"
+          aria-label="Scopes layout: 2×2 grid"
+          aria-pressed={gridMode}
+          data-testid="shell-color-scopes-layout-grid"
+          className="icon-btn"
+          disabled={collapsed}
+          onClick={() => setMode('grid')}
+        >
+          <LayoutGrid size={12} />
+        </button>
       </div>
       {!collapsed && (
-        <div id="shell-color-scopes-grid" data-testid="shell-color-scopes-grid" className="grid min-h-[120px] shrink-0 grid-cols-2 gap-[2px]" style={{ background: '#000' }}>
+        <div
+          id="shell-color-scopes-grid"
+          data-testid="shell-color-scopes-grid"
+          className={`grid shrink-0 gap-[2px] ${gridMode ? 'grid-cols-2' : 'grid-cols-4'}`}
+          style={{
+            background: '#000',
+            height: gridMode ? 'max(240px, 45%)' : 130,
+          }}
+        >
           {PANELS.map((p) => (
             <div key={p.kind} data-testid={`shell-color-scope-${p.kind}`} className="relative min-h-[56px] overflow-hidden rounded-[2px]" style={{ background: 'var(--scope-bg)' }}>
               <span aria-hidden className="mono absolute left-1 top-0.5 z-10 text-[9px] font-semibold uppercase tracking-[0.08em] text-white/55">

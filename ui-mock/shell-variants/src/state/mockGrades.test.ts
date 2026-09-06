@@ -15,7 +15,7 @@ import { DEFAULT_CURVE } from '../components/pages/color/curveMath';
 const S = () => useUi.getState();
 
 const resetColorSlice = () => useUi.setState({
-  mockGrades: {}, past: [], future: [], colorConsoleTab: 'primaries',
+  mockGrades: {}, past: [], future: [], colorInspectorTab: 'primaries',
   colorGradeTarget: 'clip', qualifierPreviewOn: false, selectedColorNodeId: 'primary',
   selection: ['el-2'],
 });
@@ -28,7 +28,7 @@ describe('mockGrades sidecar (C50) — boot + read model', () => {
   it('boots EMPTY: absent key = identity grade (gradeOf default), console view-state defaults', () => {
     expect(S().mockGrades).toEqual({});
     expect(gradeOf(S(), 'el-2')).toEqual({ ...DEFAULT_GRADE });
-    expect(S().colorConsoleTab).toBe('primaries');
+    expect(S().colorInspectorTab).toBe('primaries');
     expect(S().colorGradeTarget).toBe('clip');
     expect(S().qualifierPreviewOn).toBe(false);
     expect(S().selectedColorNodeId).toBe('primary');
@@ -172,11 +172,11 @@ describe('undo/redo round-trip (the snapshot EXTENSION, C50)', () => {
 
 describe('console view-state never mints history', () => {
   it('tab / target / qualifierPreview / node selection are plain set()', () => {
-    act(() => { S().setColorConsoleTab('curves'); });
+    act(() => { S().setColorInspectorTab('curves'); });
     act(() => { S().setColorGradeTarget('timeline'); });
     act(() => { S().setQualifierPreviewOn(true); });
     act(() => { S().setColorNode('secondary'); });
-    expect(S().colorConsoleTab).toBe('curves');
+    expect(S().colorInspectorTab).toBe('curves');
     expect(S().colorGradeTarget).toBe('timeline');
     expect(S().qualifierPreviewOn).toBe(true);
     expect(S().selectedColorNodeId).toBe('secondary');

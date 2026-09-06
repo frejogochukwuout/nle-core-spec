@@ -1,5 +1,9 @@
 /* LeftDock — R19 th_mtoyt5fv ("use the same area as bin"): the left mediaW
    slot becomes ONE surface instead of two side-by-side strips.
+   R22-D1/D7 (DESIGN-R22): the COLOR page keeps the media pool here — tabs
+   [Pool | Stills]; the Stills tab is the color-grading-asset surface
+   (issue #82: "under Color Grading view for color grading assets"). The
+   node graph NEVER docks here (it is the NodeGraphDock console, #77/#78).
    Routing law (reads the store only — the AppShell mounts <LeftDock/> in
    the mediaW slot; the orchestrator wires that in Wave III):
      - page 'audio'            → SoundLibrary (the pre-existing audio-focus
@@ -15,10 +19,11 @@
    III this becomes the single home. */
 
 import { useRef, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ImageIcon } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { MediaPool } from './MediaPool';
 import { SoundLibrary } from '../mixer/SoundLibrary';
+import { StillsPanel } from '../pages/color/StillsPanel';
 
 /* ---------- effects library (compact mock of the Effects toggle §4.1) —
    verbatim copy from AppShell.tsx; contract frozen) ---------- */
@@ -90,7 +95,58 @@ function EffectsPanel() {
 
 /* ---------- the dock ---------- */
 
-type LeftDockTab = 'pool' | 'effects';
+type LeftDockTab = 'pool' | 'effects' | 'stills';
+
+/* the COLOR page's tab row — Pool | Stills (the color assets, R22-D7). */
+function ColorTabs({ tab, setTab, tabRefs, onTabsKeyDown }: {
+  tab: LeftDockTab;
+  setTab: (t: LeftDockTab) => void;
+  tabRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
+  onTabsKeyDown: (e: React.KeyboardEvent) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Left dock"
+      className="flex shrink-0 items-stretch border-b border-hairline"
+      onKeyDown={onTabsKeyDown}
+    >
+      <button
+        type="button"
+        role="tab"
+        id="leftdock-tab-pool"
+        aria-selected={tab === 'pool'}
+        aria-controls="leftdock-panel-pool"
+        tabIndex={tab === 'pool' ? 0 : -1}
+        data-testid="shell-leftdock-tab-pool"
+        ref={(el) => { tabRefs.current[0] = el; }}
+        onClick={() => setTab('pool')}
+        className={`flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] font-medium transition-colors ${
+          tab === 'pool' ? 'border-b-2 border-[var(--accent-selection)] text-tprimary' : 'border-b-2 border-transparent text-tmuted hover:text-tprimary'
+        }`}
+      >
+        Media Pool
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="leftdock-tab-stills"
+        aria-selected={tab === 'stills'}
+        aria-controls="leftdock-panel-stills"
+        tabIndex={tab === 'stills' ? 0 : -1}
+        data-testid="shell-leftdock-tab-stills"
+        ref={(el) => { tabRefs.current[1] = el; }}
+        onClick={() => setTab('stills')}
+        className={`flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] font-medium transition-colors ${
+          tab === 'stills' ? 'border-b-2 border-[var(--accent-selection)] text-tprimary' : 'border-b-2 border-transparent text-tmuted hover:text-tprimary'
+        }`}
+      >
+        <ImageIcon size={11} strokeWidth={1.7} aria-hidden="true" />
+        Stills
+      </button>
+    </div>
+  );
+}
 
 export function LeftDock() {
   const page = useUi((s) => s.page);
@@ -104,24 +160,53 @@ export function LeftDock() {
 
   const poolOn = panels.mediaPool;
   const fxOn = panels.effects;
-  if (!poolOn && !fxOn) return null; // parent hides the slot; nothing to dock
-
-  const bothOn = poolOn && fxOn;
-  /* single-on collapses to that panel regardless of tab history — the tab
-     state only arbitrates when BOTH are on */
-  const activePanel: 'pool' | 'effects' = bothOn ? tab : poolOn ? 'pool' : 'effects';
+  const colorPage = page === 'color';
 
   /* ARIA tabs pattern (roving tabindex): one tab stop, ←/→ switch tabs
-     (wrapping); aria-selected carries the active panel */
+     (wrapping); aria-selected carries the active panel. Page-aware second
+     tab: stills on color (R22-D7), effects elsewhere. */
   const onTabsKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
-      const next = tab === 'pool' ? 'effects' : 'pool';
+      const second: LeftDockTab = colorPage ? 'stills' : 'effects';
+      const next = tab === 'pool' ? second : 'pool';
       setTab(next);
       const idx = next === 'pool' ? 0 : 1;
       tabRefs.current[idx]?.focus();
     }
   };
+
+  /* R22-D7: on the COLOR page the second tab is STILLS (the color assets,
+     issue #82) and it is ALWAYS present beside the pool — the mediaPool
+     toggle gates the whole dock (the user's #77 law: the pool STAYS). On
+     other pages the single-on collapse law is unchanged (pool, else
+     effects); effects assets move to the Effect view (issue #82) when it
+     lands. */
+  if (colorPage) {
+    if (!poolOn) return null; // parent hides the slot; nothing to dock
+    return (
+      <div data-testid="shell-leftdock" className="flex h-full w-full min-h-0 min-w-0 flex-col bg-shell">
+        <ColorTabs tab={tab} setTab={setTab} tabRefs={tabRefs} onTabsKeyDown={onTabsKeyDown} />
+        <div className="min-h-0 flex-1">
+          {tab === 'stills' ? (
+            <div id="leftdock-panel-stills" role="tabpanel" aria-labelledby="leftdock-tab-stills" className="h-full min-h-0">
+              <StillsPanel />
+            </div>
+          ) : (
+            <div id="leftdock-panel-pool" role="tabpanel" aria-labelledby="leftdock-tab-pool" className="h-full min-h-0">
+              <MediaPool />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (!poolOn && !fxOn) return null; // parent hides the slot; nothing to dock
+
+  const bothOn = poolOn && fxOn;
+  /* single-on collapses to that panel regardless of tab history — the tab
+     state only arbitrates when BOTH are on */
+  const activePanel: LeftDockTab = bothOn ? tab : poolOn ? 'pool' : 'effects';
 
   return (
     <div data-testid="shell-leftdock" className="flex h-full w-full min-h-0 min-w-0 flex-col bg-shell">
@@ -175,6 +260,10 @@ export function LeftDock() {
         {activePanel === 'effects' ? (
           <div id="leftdock-panel-effects" role="tabpanel" aria-labelledby="leftdock-tab-effects" className="h-full min-h-0">
             <EffectsPanel />
+          </div>
+        ) : activePanel === 'stills' ? (
+          <div id="leftdock-panel-stills" role="tabpanel" aria-labelledby="leftdock-tab-stills" className="h-full min-h-0">
+            <StillsPanel />
           </div>
         ) : (
           <div id="leftdock-panel-pool" role="tabpanel" aria-labelledby={bothOn ? 'leftdock-tab-pool' : undefined} className="h-full min-h-0">
