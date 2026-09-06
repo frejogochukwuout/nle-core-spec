@@ -193,14 +193,25 @@ body {
   padding: 3px 8px;
   font-size: 11px;
   white-space: nowrap;
-  opacity: 0;
   pointer-events: none;
-  transition: opacity var(--motion-fast) ease;
   z-index: 90;
+  /* R22 #71 (the phantom scroll gap): the tooltip used to sit in the layout
+     at opacity 0 — an ALWAYS-LAID-OUT absolutely-positioned box extends the
+     ancestor scroll region (visibility:hidden does NOT remove it in
+     Chromium; only display:none does — measured 230→172). Default hidden;
+     the hover/focus rule flips display + runs the fade keyframe (the old
+     opacity transition is dead with display flipping — the animation
+     carries the fade + the 500ms dwell). */
+  display: none;
 }
-[data-tip]:hover::after {
-  opacity: 1;
-  transition-delay: 500ms;
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  display: block;
+  animation: tip-fade-in 0.12s ease 0.45s both;
+}
+@keyframes tip-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 [data-tip-top]::after { top: auto; bottom: calc(100% + 7px); transform: translateX(-50%) translateY(2px); }
 

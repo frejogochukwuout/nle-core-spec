@@ -15,6 +15,7 @@
    pre/post tap point moved here from the strip (the reference strip has
    no sends surface — R19-B1 report note). */
 
+import { useState } from 'react';
 import { Volume2, Music2, Waves, AudioLines, Trash2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { mediaById, type ElementJSON } from '../../lib/mockData';
@@ -27,6 +28,64 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <div className="flex items-center gap-2 py-[3px]">
       <span className="w-[52px] shrink-0 text-[11px] text-tmuted">{label}</span>
       <div className="flex min-w-0 flex-1 items-center gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+/* R22 #81: per-insert param rows — honest view-state mocks (gap C60). One
+   state per trackId+kind so switching slots keeps the edits. */
+const INSERT_PARAM_DEFAULTS: Record<string, { key: string; label: string; min: number; max: number; step: number; fmt: (v: number) => string; init: number }[]> = {
+  EQ: [
+    { key: 'low', label: 'Low', min: -12, max: 12, step: 0.5, fmt: (v) => v.toFixed(1) + ' dB', init: 0 },
+    { key: 'mid', label: 'Mid', min: -12, max: 12, step: 0.5, fmt: (v) => v.toFixed(1) + ' dB', init: 0 },
+    { key: 'high', label: 'High', min: -12, max: 12, step: 0.5, fmt: (v) => v.toFixed(1) + ' dB', init: 0 },
+  ],
+  Comp: [
+    { key: 'thresh', label: 'Thresh', min: -60, max: 0, step: 1, fmt: (v) => v + ' dB', init: -24 },
+    { key: 'ratio', label: 'Ratio', min: 1, max: 20, step: 0.5, fmt: (v) => v.toFixed(1) + ':1', init: 4 },
+    { key: 'attack', label: 'Attack', min: 0, max: 100, step: 1, fmt: (v) => v + ' ms', init: 10 },
+  ],
+  Gate: [
+    { key: 'thresh', label: 'Thresh', min: -80, max: 0, step: 1, fmt: (v) => v + ' dB', init: -50 },
+    { key: 'release', label: 'Release', min: 5, max: 500, step: 5, fmt: (v) => v + ' ms', init: 100 },
+  ],
+  'De-esser': [
+    { key: 'amount', label: 'Amount', min: 0, max: 100, step: 1, fmt: (v) => v + '%', init: 35 },
+    { key: 'freq', label: 'Freq', min: 2000, max: 9000, step: 100, fmt: (v) => (v / 1000).toFixed(1) + ' kHz', init: 5500 },
+  ],
+};
+
+const insertParamsStore: Record<string, Record<string, number>> = {};
+
+function InsertParams({ trackId, kind, badge }: { trackId: string; kind: string; badge: string }) {
+  const defs = INSERT_PARAM_DEFAULTS[kind];
+  const [params, setParams] = useState<Record<string, number>>(() => {
+    const base: Record<string, number> = {};
+    defs.forEach((d) => { base[d.key] = d.init; });
+    return { ...base, ...insertParamsStore[`${trackId}:${kind}`] };
+  });
+  const set = (key: string, v: number) => {
+    setParams((p) => ({ ...p, [key]: v }));
+    insertParamsStore[`${trackId}:${kind}`] = { ...insertParamsStore[`${trackId}:${kind}`], [key]: v };
+  };
+  return (
+    <div className="mb-1 flex flex-col gap-[2px] pl-1" data-testid={`channel-insert-params-${badge}-${kind}`}>
+      {defs.map((d) => (
+        <div key={d.key} className="flex items-center gap-2">
+          <span className="w-[52px] shrink-0 pl-2 text-[10px] text-tfaint">{d.label}</span>
+          <input
+            type="range"
+            min={d.min}
+            max={d.max}
+            step={d.step}
+            value={params[d.key]}
+            onChange={(e) => set(d.key, +(e.target as HTMLInputElement).value)}
+            aria-label={`${kind} ${d.label} for ${badge}`}
+            className="h-[9px] min-w-0 flex-1"
+          />
+          <span className="mono w-[52px] shrink-0 text-right text-[10px] text-tmuted">{d.fmt(params[d.key])}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -152,15 +211,36 @@ export function ChannelEditor() {
                   <span className="w-[52px] shrink-0 text-[11px] text-tmuted">Pan</span>
                   <PanKnob pan={strip.pan} onChange={(pan) => setMixerTrack(track.id, { pan })} ariaLabel={`${track.name} pan`} />
                 </div>
-                {([1, 2] as const).map((slot) => (
-                  <Row key={slot} label={`Ins ${slot}`}>
-                    <select aria-label={`Insert slot ${slot}`} className="field min-w-0 flex-1 cursor-pointer px-1 py-0 text-[10px]"
-                      value={strip.inserts[slot - 1] ?? ''} onChange={(e) => setMixerTrack(track.id, { inserts: slot === 1 ? [e.target.value || null, strip.inserts[1]] : [strip.inserts[0], e.target.value || null] })}>
-                      <option value="">—</option>
-                      <option value="EQ">EQ</option><option value="Comp">Comp</option><option value="Gate">Gate</option><option value="De-esser">De-esser</option>
-                    </select>
-                  </Row>
-                ))}
+                {/* R22 (#81 + #72: "where do the EQ / FX slots go then? we
+                    should have inspector surface these at the very least" /
+                    "perhaps FX / EQ stuff can fall under here?"): the insert
+                    slots + their PARAM rows live HERE — the strips stay lean
+                    length-aligned chrome. Params are honest view-state mocks
+                    (gap C60: the G-slice has no insert params; the engine EQ
+                    seam lands later) — they persist per track+kind while the
+                    editor is mounted and are never snapshotted. */}
+                <div className="mt-1 flex flex-col rounded-[var(--radius)] border border-hairline bg-inset px-2 py-1.5" data-testid={`channel-inserts-${track.badge}`}>
+                  <div className="mb-0.5 flex items-center gap-1.5">
+                    <AudioLines size={11} className="text-[var(--type-audio)]" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-tmuted">EQ / FX inserts</span>
+                    <span className="ml-auto text-[9px] text-tfaint" data-tip="Insert params are view-state mocks (gap C60) — the G-slice has no param fields; the engine EQ seam lands with the engine round">params: mock</span>
+                  </div>
+                  {([1, 2] as const).map((slot) => {
+                    const kind = strip.inserts[slot - 1];
+                    return (
+                      <div key={slot} className="flex flex-col">
+                        <Row label={`Ins ${slot}`}>
+                          <select aria-label={`Insert slot ${slot}`} className="field min-w-0 flex-1 cursor-pointer px-1 py-0 text-[10px]"
+                            value={kind ?? ''} onChange={(e) => setMixerTrack(track.id, { inserts: slot === 1 ? [e.target.value || null, strip.inserts[1]] : [strip.inserts[0], e.target.value || null] })}>
+                            <option value="">—</option>
+                            <option value="EQ">EQ</option><option value="Comp">Comp</option><option value="Gate">Gate</option><option value="De-esser">De-esser</option>
+                          </select>
+                        </Row>
+                        {kind && <InsertParams trackId={track.id} kind={kind} badge={track.badge} />}
+                      </div>
+                    );
+                  })}
+                </div>
                 <Row label="Bus">
                   <select aria-label="Output bus" className="field min-w-0 flex-1 cursor-pointer px-1 py-0 text-[10px]"
                     value={strip.outputBus} onChange={(e) => setMixerTrack(track.id, { outputBus: +e.target.value as 0 | 1 | 2 })}>

@@ -336,8 +336,8 @@ function FullDock() {
           right region always carries the return/master bank cleanly, never
           dead space and never scrolled away under the channel row (fixes
           th_mto63f99) */}
-      <AuxStrip bus="a1" tier={tier} narrow={narrow} />
-      <AuxStrip bus="a2" tier={tier} narrow={narrow} />
+      <AuxStrip bus="a1" tier={tier} narrow={narrow} stripH={dockH ?? undefined} />
+      <AuxStrip bus="a2" tier={tier} narrow={narrow} stripH={dockH ?? undefined} />
       <MasterStrip tier={tier} narrow={narrow} stripH={dockH ?? undefined} />
     </div>
   );
