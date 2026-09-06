@@ -59,11 +59,11 @@ is gone (see §1.3).
 | **Programmatic move** | reject (CONFLICT) + toast |
 
 Registered: the two drag paths intentionally differ — a NEW asset should not
-rearrange the timeline (conservative placement), while REARRANGING resolves
-conflicts the way OT resolves them (the escape), not by pushing neighbors
-(the R19 insert-push improvisation — retired after the user's live verdict
-that the mid-gesture neighbor teleportation was "extremely buggy almost
-comical").
+rearrange the timeline (conservative placement), while REARRANGING clamps
+the mover between its neighbors (the R18k clamp law — restored by the
+user's P0 revert and kept whole through R22; the R19 insert-push and the
+R20 escape/verdict laws are both retired as "making things worse" in the
+user's live verdict).
 
 ## 3. The swap path (mockup → library)
 
@@ -73,16 +73,17 @@ comical").
    split windowing). The mock's `commit` history becomes the OT snapshot
    transaction batch.
 2. **Gesture engine stays.** `ClipItem`'s session (threshold, capture,
-   snapshot previews, auto-scroll, commit-at-up) is the VIEW layer OT's
-   controllers occupy — the seams (what the gesture resolves to) are the
-   commands above.
+   live previews, auto-scroll) is the VIEW layer OT's controllers occupy —
+   the seams (what the gesture resolves to) are the commands above
+   (R22: commit-at-UP is retired with the machinery — the UP seals the
+   last previewed move, the R18k law).
 3. **The window model stays.** Track binding + lock is the mini's embedding
    contribution (host-injected); OT's SceneTracks arrives behind it via
    `setTracks()` (the render seam, spec 19 §2.4) — the mini's `doc` becomes
-   a projection of the bound window. The R20 escape (mint + rebind) is
-   ALREADY the shape of OT's `moveElements({moves, createTracks})` — the
-   drop commit renames 1:1 to that command (the minted track becomes a
-   `createTracks` entry).
+   a projection of the bound window. (The R20 escape's mint + rebind was
+   the retired drop law; if a future USER-REQUESTED retry wants OT's
+   `moveElements({moves, createTracks})` shape, the minted track would
+   become a `createTracks` entry — recorded here as the seam map only.)
 4. **Time base.** The mini's seconds+0.5 grid converts at the boundary
    (×120000 ticks; the grid becomes the fps quantizer's rounding step —
    the frame-snap law turns on when real media carries fps).
@@ -90,9 +91,10 @@ comical").
 ## 4. Registered deviations (README cross-ref)
 
 The living deviation register is the mini README; this file carries the SEAM
-reasoning. The load-bearing deviations after R20: same-track gap hunt on
+reasoning. The load-bearing deviations after R22: same-track gap hunt on
 pool drops (§1.5), implicit in-point-0 element model (§1.6), single-subject
-selection (§1.11), the bound-window track model (§1.13 — with the R20
-windowed escape as its drag rendering). The R19 insert-push deviation is
-RETIRED (removed from the register — it was a redesign masquerading as a
-seam delta; the R20 law follows OT's actual escape semantics).
+selection (§1.11), the bound-window track model (§1.13 — with the R18k
+clamp law as its drag rendering). The R19 insert-push and R20 escape/verdict
+deviations are RETIRED (removed from the register — redesigns masquerading
+as seam deltas; the user's P0 verdict plus the R22 machinery retirement
+settled the drag on the R18k clamp law).

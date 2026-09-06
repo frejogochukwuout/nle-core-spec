@@ -3,19 +3,19 @@
    Laws baked in:
    - commit(mutator) wraps every doc change: snapshot → past, clear future,
      ONE entry per committed gesture (nudge = one entry per click).
-   - drag session (R20 — the OT-faithful law): beginDrag snapshots the doc
-     (no history), preview* mutates ONLY the mover in the live doc
-     (neighbors NEVER move mid-gesture — OT renders the drag from a view,
-     never the doc), endDrag resolves the drop at the UP:
-     free span → commit (ONE history entry); conflicting span + unlocked →
-     the OT escape through the window (existing same-kind track preferred,
-     else a minted one; ONE atomic set: mint + move + rebind + history);
-     conflicting + trackBindingLocked → restore the snapshot, NO history
-     entry (OT's {ok:false, code:'CONFLICT'} refusal). cancelDrag restores
-     it (Esc / pointercancel).
+   - drag session (the R18k clamp law — restored by the user's P0 revert
+     2026-09-06 and kept whole through the R22 retirement 2026-09-07):
+     beginDrag snapshots the doc (no history), preview* mutates ONLY the
+     mover in the live doc (the mover CLAMPS between its same-track
+     neighbors — neighbors never move, overlap never renders), endDrag
+     seals the previewed state with ONE plain history entry if anything
+     changed. cancelDrag restores the snapshot (Esc / pointercancel).
    - interaction lock: while dragActive, ONLY Esc is honored — commit(),
-     every command action, selection changes, zoom/snap/playhead writes are
-     all gated (review fix #4: the keyboard layer is only half the surface).
+     every command action, selection changes, zoom/snap writes are all
+     gated (review fix #4: the keyboard layer is only half the surface).
+     (R22: the playhead tick is NOT gated — playback writes the playhead
+     mid-gesture by the R18k live-magnet law; the setPlayhead pointer-scrub
+     gate stays.)
    - selection validation after every history op / commit.
    - no-op guard: an action that changes nothing pushes NO history entry.
    - split law (review fix #6): the SELECTED clip is the split target; the
@@ -809,11 +809,10 @@ export const useMini = create<MiniState>((set, get) => {
       /* R19 (OT seam — the timeline.move wire law): REJECT on conflict,
        * never clamp. A programmatic move must land the span free of
        * same-track siblings or refuse with an honest toast (the mini's
-       * rendering of {ok:false, code:'CONFLICT'}). The GESTURE path
-       * resolves conflicts via the OT drop law instead (previewMove+
-       * endDrag: free commit / escape / refuse) — that's the UX law;
-       * THIS is the seam law. Negative newStart is rejected (OT
-       * requireNonNegativeTicks). */
+       * rendering of {ok:false, code:'CONFLICT'}). The GESTURE path is the
+       * R18k clamp law (previewMove clamps between neighbors; the preview
+       * is the commit) — that's the UX law; THIS is the seam law.
+       * Negative newStart is rejected (OT requireNonNegativeTicks). */
       const state = get();
       if (state.dragActive) return; // guard BEFORE the toast — no mid-gesture spam
       const clip = findClip(state.doc, id);

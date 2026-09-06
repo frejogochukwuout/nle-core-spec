@@ -48,11 +48,11 @@ of behavior, one design language, no variant machinery.
 | Zustand 5 (single store) | ✅ | small state; store-reset contract transfers |
 | lucide-react | ✅ | icon parity with sibling |
 | clsx | ✅ | cheap, used heavily in sibling |
-| Storybook 10.6 (react-vite) + a11y + docs addons | ✅ (minus annotakit) | "overall setup should be similar (incl storybook)" |
-| `storybook-annotakit` | ❌ skipped | vendored TS-source addon + prebuild + .env + GH-mirror; pure review-workflow weight. Deliberate deviation; wiring later = vendored dir + 3 config lines. |
+| Storybook 10.6 (react-vite) + a11y + docs addons | ✅ | "overall setup should be similar (incl storybook)" |
+| `storybook-annotakit` | ✅ (R18b, superseded) | vendored TS-source addon + prebuild + .env + GH-mirror — LIVE since R18b (the pin-comment review surface; this D2 row's original "skipped" reading is superseded) |
 | Vitest 5 + RTL + jsdom, co-located tests | ✅ (small suite) | same conventions, fewer cases |
 | `.npmrc legacy-peer-deps=true` | ✅ | proven resolution on this exact dep set |
-| `base: '/mini/'` | ❌ (sibling: /mockup/) | own preview namespace |
+| `base: '/mini/'` | ✅ (sibling: /mockup/) | own preview namespace |
 
 ## D3 — Feature cut-list (the whole MVP surface)
 
@@ -259,8 +259,11 @@ useMini = {
 
 - Lives at `ui-mock/shell-mini/` (own package.json, independent install;
   Node floor `^20.19 || >=22.12`).
-- `.gitignore`: node_modules, dist, storybook-static, *.log (no .env needed —
-  no annotakit; if wired later, TRACK .env per the user's GIT-ISM-DISK law).
+- `.gitignore`: node_modules, dist, storybook-static, *.log + **.env is
+  GITIGNORED by design** (the shipped law since R18b: the annotakit token
+  lives in the untracked `.env`, NEVER in a tracked config or argv — see
+  README + the vendor's env.ts; this D11 note's original "TRACK .env"
+  reading is superseded).
 - README: run/test/storybook commands, IN/OUT feature ledger, deviations
   register (annotakit skip, white playhead, no-frames, fixed layout,
   read-only inspector, DnD cut + deferred drop-outline, loop playback,
