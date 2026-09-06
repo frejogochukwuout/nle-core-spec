@@ -80,10 +80,8 @@ describe('SourceRangeBar (R22 #84/#85)', () => {
 });
 
 describe('the W4 seam — the trimmed range rides the insert planner (#84/#85)', () => {
-  const idFactory: InsertIdFactory = (() => {
-    let n = 0;
-    return (prefix: string) => `${prefix}test-${++n}`;
-  }) as InsertIdFactory;
+  let idCounter = 0;
+  const idFactory: InsertIdFactory = (prefix: string) => `${prefix}test-${++idCounter}`;
 
   it('a planned insert with sourceRange places dur = out−in and sourceStart = in', () => {
     const s = useUi.getState();

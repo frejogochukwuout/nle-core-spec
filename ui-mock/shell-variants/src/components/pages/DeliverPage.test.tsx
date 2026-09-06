@@ -17,6 +17,13 @@ import { useUi } from '../../state/useUiStore';
 
 const S = () => useUi.getState();
 
+/** R22 W5: the queue lives in the CENTER only while queued/running (or the
+ *  toggle is on) — the default center is the video preview (#88). */
+const openQueue = async (user?: ReturnType<typeof userEvent.setup>) => {
+  const toggle = screen.getByTestId('shell-deliver-queue-toggle');
+  if (user) await user.click(toggle); else toggle.click();
+};
+
 describe('DeliverPage (spec 18 §4.8 export rail)', () => {
   it('renders the deliver region root with the project metadata row (§4.1)', () => {
     const { container } = render(<DeliverPage />);
@@ -40,10 +47,10 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
      container layout (left queue + presets / center summary / right
      settings); preset tiles carry the th_mto38qzp breathing-room chrome
      (2-col wrapping grid, taller tiles) */
-  it('renders the three full-view regions (queue / summary / settings) with layout classes', () => {
+  it('R22 W5 (#88/#89): the three regions — presets LEFT, the VIDEO PREVIEW center by default, the inspector RIGHT', () => {
     const { container } = render(<DeliverPage />);
     expect(screen.getByTestId('shell-deliver-queue')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-deliver-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-preview')).toBeInTheDocument();
     expect(screen.getByTestId('shell-deliver-settings')).toBeInTheDocument();
     // region minimums: left 260px, right 300px (the center flexes)
     expect(screen.getByTestId('shell-deliver-queue')).toHaveClass('min-w-[260px]');
@@ -52,9 +59,22 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     const grid = container.querySelector('.grid-cols-2');
     expect(grid).toBeInTheDocument();
     expect(grid!.querySelector('[data-testid="shell-deliver-preset-fcpxml"]')).toHaveClass('min-h-[78px]');
-    // presets + the job queue share the LEFT region
-    expect(screen.getByTestId('shell-deliver-queue').contains(screen.getByTestId('shell-deliver-preset-master'))).toBe(true);
-    expect(screen.getByTestId('shell-deliver-queue').contains(screen.getAllByTestId('shell-deliver-job')[0])).toBe(true);
+    // #88: the program viewer mounts in the center (the real preview)
+    expect(screen.getByTestId('shell-viewer')).toBeInTheDocument();
+    // the jobs are NOT rendered while idle (they live in the queue view)
+    expect(screen.queryByTestId('shell-deliver-job')).toBeNull();
+  });
+
+  it('R22 W5 (#89): the queue toggle swaps the center preview for the queue view', async () => {
+    const user = userEvent.setup();
+    render(<DeliverPage />);
+    await openQueue(user);
+    expect(screen.queryByTestId('shell-deliver-preview')).toBeNull();
+    expect(screen.getAllByTestId('shell-deliver-job')).toHaveLength(4);
+    expect(screen.getByTestId('shell-deliver-queue-toggle')).toHaveAttribute('aria-pressed', 'true');
+    // back to the preview
+    await user.click(screen.getByTestId('shell-deliver-queue-toggle'));
+    expect(screen.getByTestId('shell-deliver-preview')).toBeInTheDocument();
   });
 
   /* th_mto37ba3: the RANGE block reads the STORE loop (spec 16 §3.4 —
@@ -72,8 +92,10 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(within(select).getByRole('option', { name: /00:00:05:00 – 00:00:20:00/ })).toBeInTheDocument();
   });
 
-  it('center summary shows the active timeline name and the right region owns the settings selects', () => {
+  it('center summary shows the active timeline name and the right region owns the settings selects', async () => {
+    const user = userEvent.setup();
     render(<DeliverPage />);
+    await openQueue(user);
     expect(screen.getByText('Rough Cut v3')).toBeInTheDocument(); // active scene = the export target
     // format select mirrors preset state (fcpxml default)
     expect((screen.getByLabelText('Export format') as HTMLSelectElement).value).toBe('fcpxml');
@@ -84,10 +106,10 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect((screen.getByLabelText('Export codec') as HTMLSelectElement)).toBeEnabled();
     // the format select and the preset tiles are the SAME choice
     expect(screen.getByTestId('shell-deliver-btn-export-fcpxml')).toHaveTextContent('Export Master · H.264');
-    // summary follows the format + codec once a master is chosen
-    expect(screen.getByTestId('shell-deliver-summary').textContent).toContain('Codec');
+    // the export summary (now in the right inspector, #88) follows the format + codec
+    expect(screen.getByTestId('shell-deliver-settings').textContent).toContain('Codec');
     fireEvent.change(screen.getByLabelText('Export codec'), { target: { value: 'prores' } });
-    expect(screen.getByTestId('shell-deliver-summary').textContent).toContain('ProRes 422');
+    expect(screen.getByTestId('shell-deliver-settings').textContent).toContain('ProRes 422');
   });
 
   it('clicking a preset updates the export CTA label (local state, §4.8)', async () => {
@@ -115,22 +137,21 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(screen.getByLabelText('Bundle media with FCPXML')).toBeChecked();
   });
 
-  it('renders the job queue: 1 failed + 2 done + 1 running with progress and retry (§4.2/§6.4)', () => {
+  it('renders the job queue: 1 failed + 3 done rows with Reveal/Retry (§4.2/§6.4; R22: no running row by default — the preview owns the center)', async () => {
+    const user = userEvent.setup();
     render(<DeliverPage />);
+    await openQueue(user);
     const jobs = screen.getAllByTestId('shell-deliver-job');
     expect(jobs).toHaveLength(4);
     // failed row (§4.2 error state, R14): danger status chip + Retry action
     expect(screen.getByText('Beach Doc — v2 master.mp4')).toBeInTheDocument();
     expect(screen.getByText('Failed')).toBeInTheDocument();
-    // done rows: names + "2m ago" stamps + Reveal-file actions
+    // done rows: names + time stamps + Reveal-file actions
     expect(screen.getByText('Beach Doc — v3 master.mp4')).toBeInTheDocument();
     expect(screen.getByText('Beach Doc — v3.fcpxml')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Reveal file' })).toHaveLength(2);
-    // running row: percentage readout + Retry action (error-UX affordance)
-    expect(screen.getByText('Interview selects master.mp4')).toBeInTheDocument();
-    expect(screen.getByText('38%')).toBeInTheDocument();
-    // failed + running rows both expose Retry
-    expect(screen.getAllByRole('button', { name: 'Retry job' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Reveal file' })).toHaveLength(3);
+    // the failed row alone exposes Retry (no running row by default)
+    expect(screen.getAllByRole('button', { name: 'Retry job' })).toHaveLength(1);
   });
 
   it('preset CTA carries the accent-selection pair styling (AA per accent: gold 9.1 / ember 6.0 / violet 5.05)', () => {
@@ -175,13 +196,14 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(screen.getAllByTestId('shell-deliver-job-bundle')).toHaveLength(1); // only the first row
   });
 
-  it('§4.2 empty state: empty active scene swaps the queue + honestly disables the CTA', () => {
+  it('§4.2 empty state: empty active scene swaps the queue + honestly disables the CTA', async () => {
     // sc-1 with every lane emptied — direct setState (no command churn)
     const sc = S().scenes.find((s) => s.id === 'sc-1')!;
     useUi.setState({
       scenes: [{ ...sc, tracks: sc.tracks.map((t) => ({ ...t, elements: [] })) }],
     });
     render(<DeliverPage />);
+    await openQueue();
     expect(screen.getByTestId('shell-deliver-state-empty'))
       .toHaveTextContent('Timeline is empty — nothing to export');
     expect(screen.queryByTestId('shell-deliver-job')).toBeNull();
@@ -196,6 +218,7 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
   it('§4.2 error state: the failed row\'s Retry fires the existing honest toast', async () => {
     const user = userEvent.setup();
     render(<DeliverPage />);
+    await openQueue(user);
     const failedRow = screen.getByText('Beach Doc — v2 master.mp4').closest('[data-testid="shell-deliver-job"]')!;
     await user.click(within(failedRow as HTMLElement).getByRole('button', { name: 'Retry job' }));
     expect(S().toasts[0]).toMatchObject({
@@ -208,11 +231,13 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
   it('Reveal and Retry per-job buttons push honest info toasts (R13 fix)', async () => {
     const user = userEvent.setup();
     render(<DeliverPage />);
+    await openQueue(user);
     await user.click(screen.getAllByRole('button', { name: 'Reveal file' })[0]);
     expect(S().toasts[0]).toMatchObject({ kind: 'info', title: 'Reveal file' });
     expect(S().toasts[0].detail).toBe('render queue is mock — no file was written');
-    await user.click(screen.getAllByRole('button', { name: 'Retry job' })[1]); // the running row's retry
-    expect(S().toasts[1]).toMatchObject({ kind: 'info', title: 'Retry Interview selects master.mp4' });
+    // R22: the failed row is the ONLY retry (no running row by default)
+    await user.click(screen.getAllByRole('button', { name: 'Retry job' })[0]);
+    expect(S().toasts[1]).toMatchObject({ kind: 'info', title: 'Retry Beach Doc — v2 master.mp4' });
     expect(S().toasts[1].detail).toBe('render queue is mock — no encode runs');
   });
 });
