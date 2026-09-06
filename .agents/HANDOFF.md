@@ -485,3 +485,49 @@ StripMeter, fader scale, TrackHeader micro-meters, 83 stories).
 - **New surfaces**: `Track.muted` (doc state) + `toggleTrackMute` +
   inspector mute button (`mini-track-mute`) + head M chip
   (`mini-track-mute-chip-*`) + lane `is-muted` dim; topbar is 40px.
+
+---
+
+## R20 (2026-09-06, shell-variants env — chat 4deec8a5) — mixer rebuild + insert modes + real color + type-driven inspector
+
+- **State**: HEAD db16322 (waves W0-W6). 16/16 annotakit threads resolved
+  with fix notes (GH mirror auto-closed). Gates: tsc clean, **1334/1334**
+  tests (944→1334), vite build green, **102→107 stories**. Live-verified:
+  W6VIS pass (21 screenshots, zero console errors, mixer = "highly faithful
+  spatial match" per VLM + DOM cross-check vs audio_mixer.html).
+- **What landed**: W0 fix-first (B1 dock-width circular-% killer — strips
+  were INVISIBLE; markers free-floating root cause = unlayered
+  `[data-tip]{position:relative}` beating Tailwind's layered `.absolute`
+  — moved to @layer base + appLayers.test.ts; zoom 1.25×). W1 mixer rebuilt
+  to the reference anatomy (uniform 86px, scale|fader|meter, 10-row stack,
+  dB gridlines, MIXER_TIER {560,420,340,280} w/ T3 per-channel scroll,
+  meters state = full-height 24px columns, B9 taper agreement). W2 insert
+  modes (planInsertMedia/applyInsertPlan pure engine + SourceEditBar in the
+  source transport + hover-placement preview + audio type-wins routing +
+  frozen lanes; EditOverlay REMOVED from the program monitor). W3 inspector
+  type-driven no-tall-tabs (selection domains selectedTrackId/
+  selectedEffectId, TrackSheet, EffectEditor, entity chip, empty =
+  active-track fallback; inspectorTab surface deleted). W4 color REAL:
+  spec-08 §4.2 14-step math (src/lib/color/*), mockGrades sidecar w/
+  withHistory extension, ColorConsole in the timeline area ([Primaries|
+  Curves|Qualifier] tabs + Clip⇄Timeline target), canvas viewer pipeline
+  (≤960×540, rAF-coalesced), REAL scopes (waveform/parade/vectorscope),
+  qualifier HSL keying + matte + eyedropper. W5 timeline cluster (loop
+  brackets 12×27, text thin bars, per-track height overrides, fade
+  transition objects, pool mode filter). W6 adversarial review (W2
+  conditional → fixed: +58 tests incl. insertPlan.test 37 + SourceEditBar
+  16; placeOnTop ghost insert-line; aria-pressed; kebab APG roving;
+  retarget same-kind law) + live VIS pass.
+- **Design/contract trail**: docs/DESIGN-R20.md (v2, both review rounds
+  folded) + docs/r20/{mixer-contract,insert-modes,color-layout,
+  timeline-cluster}.md (A1-A4 research). Ledger §I = C45-C58 appended to
+  SPEC-REVISION-CANDIDATES.md (C53 supersedes C43).
+- **Live surface**: runtime copy re-synced; sb3000.py daemon serving;
+  public URL verified (forged-Host probe + real URL 200).
+- **Next session's likely queue**: user reaction on the mixer fidelity +
+  the color console; C57 track-FX home, C56 node binding, C58 full project
+  tabs, per-type transition glyphs (all registered); possibly VLM-polish
+  items from W6VIS (master routing rows, dB label contrast).
+- **Gotchas minted**: see SKILL.md R20 section (the Task-tool deadline
+  pattern, the drop-event clientX trap, the story-measurement law
+  re-confirmation).

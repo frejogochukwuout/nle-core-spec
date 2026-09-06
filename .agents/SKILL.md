@@ -1319,3 +1319,55 @@ port), not what any env currently runs.
     POST-DIRECTIVE endorsements that constrain the revert scope; when both
     readings are defensible, register the divergence for the user instead
     of re-litigating unilaterally.
+
+## R20 meta-learnings (shell-variants — mixer/insert-modes/color/inspector round)
+
+1. **The Task-tool context deadline is a REPORT deadline, not a work
+   deadline.** Three implementation agents (W1/W2/W4a-d style tasks)
+   each completed ~90-100% of a large wave and hit "context deadline
+   exceeded" ONLY on their final message. The work + files were intact;
+   only the report was lost. Countermeasures that WORK: (a) instruct
+   agents to append the worklog entry BEFORE the final full-suite gate
+   (W4a onwards — zero lost documentation), (b) ask for a <25-line final
+   message, (c) the orchestrator independently re-runs gates (tsc + full
+   suite + build) before committing — cheap and catches the ~5% tail of
+   unfinished work (W1 stories + W2's three failing tests were the only
+   tail; both fixed in minutes).
+2. **The jsdom drop-event trap has a precise shape**: RTL's fireEvent.drop
+   falls back to a plain Event (no DragEvent ctor) and SILENTLY DROPS the
+   `clientX`/`altKey` init props → the handler computes NaN → the pure
+   planner receives a NaN time → a silent no-displacement (tests still
+   pass on fixture-satisfied assertions!). The reliable channel:
+   `createEvent.drop(el, {dataTransfer})` + `Object.defineProperty(ev,
+   'clientX', {value})` — and the PRODUCTION code needs the
+   `Number.isFinite` guard (fallback to playhead semantics) so a bad
+   event can never mint NaN geometry. Both landed + pinned.
+3. **A test can pass on a FIXTURE element while the feature silently
+   no-ops** (W2's insert test: "m-06 at 0+30" matched the PRE-EXISTING
+   el-6). Disambiguate with identity (`e.id !== 'el-6'`) or count
+   assertions, and prefer assertions that could ONLY pass via the new
+   path (history length, displaced startTime).
+4. **CSS cascade regressions are invisible to jsdom by construction**
+   (vitest css:false) — the free-floating-markers bug (unlayered
+   `[data-tip]{position:relative}` outranking layered `.absolute`)
+   shipped through 944 green tests. The honest net: source-text
+   assertions (readFileSync on app.css, regex on @layer placement) +
+   live computed-position probes (agent-browser, `getComputedStyle`) —
+   both landed in W0. `?raw` imports are ALSO stubbed by css:false.
+5. **Storybook measurement law (confirmed again, cheaper form)**:
+   `iframe.html?id=<story>&viewMode=story` gives the TRUE viewport at
+   the browser size (1440×894); the `?path=/story/...&nav=false&
+   panel=false` form loses its params on reload and the canvas lies at
+   ~472px — every vertical measurement through it is garbage.
+6. **Design-review folding works as a pair**: ONE UX-truth reviewer +
+   ONE feasibility/spec reviewer in parallel, then a single amendment
+   pass folding both (REV-A caught tier arithmetic + overreach; REV-B
+   caught the ⌘M spec-16 collision, the selector-identity trap, the
+   state-home contradiction, wave-order swap). Cost: ~2 agent runs; it
+   removed every P1 before any implementation started.
+7. **Research→contract→design→implement→audit keeps the honest seams**:
+   the color wave wired the mock to spec 08 §4.2's EXACT 14-step order
+   and §11.3 graticule (the adversarial reviewer verified the port
+   step-by-step) — the mock now demonstrably runs the engine's real math
+   on canvas, which is the whole point of "be very real in your ui
+   implementation".

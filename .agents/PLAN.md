@@ -234,3 +234,15 @@ as the span moved). OT never mutates the doc during a drag at all.
 **Standing for the next round:** the sibling's R20 is active in
 shell-variants (their queue: 3 reviewer threads + their mixer/pages work);
 annotakit vendor upgrade to v0.5.2 still deferred to a quiet window.
+
+## R20 — shell-variants: mixer rebuild + insert modes + real color + type-driven inspector (COMPLETE 2026-09-06)
+
+Scope: 16 open threads (GH #53-#68) + user directives (mixer "deep review/
+re-implement", timeline_edit_modes (2).html integration w/ OT seam check,
+color "very broken → real", inspector no-tab). All landed W0-W6:
+944→1334 tests, 107 stories, 16/16 resolved, VLM-verified.
+Carry-forwards (registered, not silent): C45-C58 ledger §I (edit-function
+OT seams, source-transport cluster, audio routing, hover preview, grade
+sidecar, console layout, CPU preview, real scopes, qualifier, curves,
+node binding, track-height/FX, project tabs); W6VIS LOW polish items;
+per-type transition glyphs; the retarget same-kind law is contract-letter.
