@@ -139,9 +139,13 @@ interface Doc    { tracks: Track[]; media: Media[]; clips: Clip[]; }
 - 2 fixed tracks. Clip = whole media placement; trimming changes the placed
   duration only, clamped by media duration (D7).
 
-**Seed document (deterministic, on-grid):** V1 = 3 video/image clips
-back-to-back spanning 12.5s (`0→4.5`, `4.5→9`, `9→12.5`); A1 = 1 audio clip
-`1.5→8.5`; 4 media assets with hues. contentEnd = 12.5s.
+**Seed document (deterministic, on-grid — v2, see the audit record):** V1 =
+3 video/image clips spanning 12.5s WITH 0.5s slack gaps
+(`0→3.5`, `4.5→8`, `9→12.5`); A1 = 1 audio clip `1.5→8.5`; 8 media assets
+with hues. contentEnd = 12.5s. (PR69 C50: this paragraph was the stale
+pre-v2 draft — the shipped seed AND this doc's own v2.1 audit record
+disagreed with it; a reader implementing from D5 alone built the
+degenerate back-to-back seed the audit explicitly rejected.)
 
 ## D6 — Store shape (Zustand, one file)
 

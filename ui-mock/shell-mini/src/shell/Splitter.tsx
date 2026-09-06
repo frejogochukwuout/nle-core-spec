@@ -93,6 +93,9 @@ export function Splitter({ orientation, value, min, max, initial, onChange, labe
       aria-orientation={orientation === 'vertical' ? 'vertical' : 'horizontal'}
       aria-label={label}
       aria-valuenow={Math.round(value)}
+      /* PR69 C10: units — "260" alone is meaningless to a screen reader;
+       * the splitters size PIXELS, and that's what the announcement says. */
+      aria-valuetext={`${Math.round(value)} pixels`}
       aria-valuemin={min}
       aria-valuemax={max}
       tabIndex={0}

@@ -317,14 +317,16 @@ describe('cutHeadAtPlayhead / cutTailAtPlayhead', () => {
     expect(c2).toMatchObject({ start: 4.5, duration: 1 });
   });
 
-  it('no selection → topmost clip under the playhead (split-law parity)', () => {
+  it('no selection → the bound VIDEO lane wins over audio (PR69 C4/C52: NLE topmost = track order)', () => {
     S().setPlayhead(2); // inside c1 [0,3.5] (V1) and c4 [1.5,8.5] (A1)
     S().cutTailAtPlayhead();
-    // topmost = latest start = c4
-    const c4 = S().doc.clips.find((c) => c.id === 'c4')!;
-    expect(c4.duration).toBe(0.5);
+    // the bound video lane outranks the later-starting audio clip — the
+    // old law picked c4 (latest start across ALL tracks), which split an
+    // audio clip an NLE-trained user never expected
     const c1 = S().doc.clips.find((c) => c.id === 'c1')!;
-    expect(c1.duration).toBe(3.5); // untouched
+    expect(c1.duration).toBe(2); // trimmed at the quantized playhead 2.0
+    const c4 = S().doc.clips.find((c) => c.id === 'c4')!;
+    expect(c4.duration).toBe(7); // untouched
   });
 
   it('playhead outside the selected clip → honest toast, no doc change', () => {
@@ -1070,5 +1072,136 @@ describe('R19 zoom ladder (9 steps)', () => {
     expect(S().zoomStep).toBe(8);
     S().setZoomStep(-5);
     expect(S().zoomStep).toBe(0);
+  });
+});
+
+/* ---- PR69 (review round): the flagged laws, pinned ---- */
+
+describe('PR69 C15: append never lands below the tail', () => {
+  it('an off-grid raw trim end does not let the append overlap it', () => {
+    // snap is OFF by default → raw pointer trims commit off-grid ends
+    // (the documented normal path). c3 [9,12.5] → end-trim to 12.2.
+    S().trimClip('c3', 'end', 12.2);
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.duration).toBeCloseTo(3.2, 9);
+    // appending any media must start at/after 12.2 — quantize(12.2) = 12.0
+    // (round-to-nearest) would OVERLAP c3's tail and void neighborBounds.
+    S().addClipFromMedia('m-drone');
+    const appended = S().doc.clips.find((c) => c.mediaId === 'm-drone' && c.start >= 12);
+    expect(appended).toBeDefined();
+    expect(appended!.start).toBeGreaterThanOrEqual(12.2);
+    const overlap = S().doc.clips.some(
+      (a, i, all) =>
+        a.trackId === 'V1' &&
+        all.some((b, j) => j !== i && b.trackId === 'V1' && a.start < b.start + b.duration - 1e-9 && a.start + a.duration > b.start + 1e-9),
+    );
+    expect(overlap).toBe(false); // the no-overlap invariant survives
+  });
+
+  it('an on-grid tail appends exactly at the tail (unchanged law)', () => {
+    S().addClipFromMedia('m-drone');
+    const v1 = S().doc.clips.filter((c) => c.trackId === 'V1');
+    expect(v1.at(-1)).toMatchObject({ start: 12.5, mediaId: 'm-drone' });
+  });
+});
+
+describe('PR69 C19: the interaction lock finally covers tick', () => {
+  it('tick freezes the playhead while dragActive (the magnet field is static mid-gesture)', () => {
+    useMini.setState({ playhead: 3, playing: true });
+    S().beginDrag();
+    S().tick(0.5);
+    expect(S().playhead).toBe(3); // was 3.5 — the rAF writer bypassed the lock
+    S().endDrag();
+    S().tick(0.5);
+    expect(S().playhead).toBe(3.5); // playback resumes the frame after the session
+  });
+});
+
+describe('PR69 C52/C4: split/cut fallbacks live in the BOUND world', () => {
+  it('video-only bound to V2 never splits the unbound V1 (the phantom-undo case)', () => {
+    useMini.setState({
+      doc: multiTrackDoc(),
+      trackMode: 'video',
+      boundVideoTrack: 'V2',
+      selectedId: null,
+    });
+    const before = S().doc;
+    // t=7: inside V1 c2 [4.5,8) but in the V2 GAP (c5 ends 6.5, c6 at 8) —
+    // the unbound V1 clip is the ONLY candidate the old fallback could hit
+    useMini.setState({ playhead: 7 });
+    S().splitAtPlayhead();
+    expect(S().doc).toEqual(before); // no invisible mutation, no history
+    expect(S().past).toHaveLength(0);
+    expect(S().toast?.text).toContain('Nothing under the playhead');
+  });
+
+  it('video-only bound to V2 splits the VISIBLE V2 clip (not the unbound V1)', () => {
+    useMini.setState({
+      doc: multiTrackDoc(),
+      trackMode: 'video',
+      boundVideoTrack: 'V2',
+      selectedId: null,
+    });
+    // t=10: inside BOTH V1 c3 [9,12.5] (unbound) and V2 c6 [8,12) (bound)
+    useMini.setState({ playhead: 10 });
+    S().splitAtPlayhead();
+    const v2 = S().doc.clips.filter((c) => c.trackId === 'V2');
+    expect(v2).toHaveLength(3); // c5 + c6 split at 10 → two products
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.duration).toBe(3.5); // the UNBOUND V1 clip: untouched
+    expect(S().past).toHaveLength(1);
+  });
+
+  it('paired mode: the bound VIDEO lane outranks the later-starting audio clip', () => {
+    // seed: playhead 2 is inside c1 (V1, start 0) and c4 (A1, start 1.5) —
+    // the old sort picked c4 (latest start); NLE topmost = track order
+    useMini.setState({ playhead: 2, selectedId: null });
+    S().splitAtPlayhead();
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(2);
+    expect(S().doc.clips.find((c) => c.id === 'c4')!.duration).toBe(7);
+  });
+});
+
+describe('PR69 C48: split keeps the LEFT half selected (both paths)', () => {
+  it('selected-clip split: selection follows the left product', () => {
+    S().select('c2'); // [4.5,8)
+    useMini.setState({ playhead: 6 });
+    S().splitAtPlayhead();
+    expect(S().doc.clips).toHaveLength(5);
+    expect(S().selectedId).toBe('c2'); // the left half keeps the id
+    // and the keyboard surface has its target: Del removes the left half
+    S().deleteSelected();
+    expect(S().doc.clips.find((c) => c.id === 'c2')).toBeUndefined();
+  });
+
+  it('fallback split: the never-selected target becomes selected', () => {
+    useMini.setState({ playhead: 2, selectedId: null });
+    S().splitAtPlayhead();
+    expect(S().doc.clips).toHaveLength(5);
+    expect(S().selectedId).toBe('c1'); // the split product the user is editing
+    S().deleteSelected(); // keyboard ops keep their target
+    expect(S().doc.clips).toHaveLength(4);
+  });
+});
+
+describe('PR69 C53: the pending-gesture window', () => {
+  it('opens at pointerdown and closes at end (sub-threshold included)', () => {
+    expect(S().gesturePending).toBe(false);
+    S().beginPendingGesture();
+    expect(S().gesturePending).toBe(true);
+    S().endPendingGesture();
+    expect(S().gesturePending).toBe(false);
+  });
+
+  it('an ACTIVE drag supersedes the pending window (one owner)', () => {
+    S().beginDrag();
+    S().beginPendingGesture(); // a second pointerdown mid-drag: rejected
+    expect(S().gesturePending).toBe(false);
+    S().endDrag();
+  });
+
+  it('endDrag/cancelDrag sweep the flag too (direct-API belt)', () => {
+    S().beginPendingGesture();
+    S().beginDrag();
+    S().endDrag();
+    expect(S().gesturePending).toBe(false);
   });
 });

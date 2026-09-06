@@ -147,8 +147,16 @@
 
 /* R18i (shell thread #11): the pool head IS the type filter — a compact
    segmented control (All / Video / Image / Audio). Same visual language
-   as the timeline toolbar's is-active chips. */
+   as the timeline toolbar's is-active chips. PR69 C26: the group wraps
+   ONLY the tabs now (the collapse button left the labeled group). */
 .mini-pool__tabs {
+  gap: 2px;
+}
+
+.mini-pool__tabgroup {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 2px;
 }
 

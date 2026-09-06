@@ -298,13 +298,17 @@ function jsonStore(storePath) {
     await fs.promises.rename(tmp, storePath);
   };
   const mutate = (fn) => {
-    queue = queue.then(async () => {
+    const next = queue.then(async () => {
       await load();
       const out = await fn();
       await persist();
       return out;
     });
-    return queue;
+    queue = next.then(
+      () => void 0,
+      () => void 0
+    );
+    return next;
   };
   const loadRead = async () => {
     if (!loaded) await load();
@@ -807,12 +811,20 @@ var GH_SENTINEL = "<!-- annotakit -->";
 function ghApiBase() {
   return process.env.ANNOTAKIT_GH_API || DEFAULT_API;
 }
+function sameOriginAsApiBase(candidate) {
+  try {
+    return new URL(candidate).origin === new URL(ghApiBase()).origin;
+  } catch {
+    return false;
+  }
+}
 function missingTokenMessage(configPath) {
   return [
     "no GitHub token found. Fix with ONE of:",
     '  a) echo "ANNOTAKIT_GH_TOKEN=<your PAT>" >> .env   (dev server auto-loads it)',
     "  b) ANNOTAKIT_GH_TOKEN=<your PAT> bun run storybook  (env var at start)",
-    `  c) {"ghToken": "<your PAT>"} in ${configPath}`,
+    // PR69 C38: the config-file route is gone — a tracked config is one
+    // commit away from leaking the PAT (CWE-312)
     "then RESTART storybook dev (.env is read once at boot).",
     "No token? The review loop still works 100% locally: REST + markdown digests on this server (see /annotakit/api/export)."
   ].join("\n");
@@ -844,7 +856,10 @@ function retryAfterMs(res) {
   const reset = res.headers.get("x-ratelimit-reset");
   if (reset) {
     const n = Number.parseInt(reset, 10);
-    if (Number.isFinite(n) && n > 0) return Math.min((n - Math.floor(Date.now() / 1e3)) * 1e3, 9e5);
+    if (Number.isFinite(n) && n > 0) {
+      const ms = (n - Math.floor(Date.now() / 1e3)) * 1e3;
+      if (ms > 0) return Math.min(ms, 9e5);
+    }
   }
   return void 0;
 }
@@ -919,7 +934,7 @@ async function ghJsonPaged(token, pathname, maxPages = 5) {
     out.push(...data);
     const link = res.headers.get("link") ?? "";
     const next = link.match(/<([^>]+)>;\s*rel="next"/);
-    url = next ? next[1] : null;
+    url = next && sameOriginAsApiBase(next[1]) ? next[1] : null;
   }
   return out;
 }
@@ -980,7 +995,7 @@ function createGhSync(opts) {
   let lastStalledSweep = Date.now();
   const configured = () => {
     const t = token();
-    if (!t) return { error: missingTokenMessage(configPath) };
+    if (!t) return { error: missingTokenMessage() };
     if (!repo) return { error: missingRepoMessage(configPath) };
     return { token: t, repo };
   };
@@ -1596,14 +1611,13 @@ function createAutoSync(opts) {
     if (!repo) return null;
     const token = ghToken();
     const url = `https://github.com/${repo}.git`;
-    const args = token ? [
-      "-c",
-      `http.https://github.com/.extraheader=AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
-      "fetch",
-      url,
-      `+refs/heads/${branch}:${REMOTE_CACHE_REF}`
-    ] : ["fetch", url, `+refs/heads/${branch}:${REMOTE_CACHE_REF}`];
-    const f = await gitAsync(root, args, timeoutMs);
+    const authEnv = token ? {
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
+      GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`
+    } : void 0;
+    const args = ["fetch", url, `+refs/heads/${branch}:${REMOTE_CACHE_REF}`];
+    const f = await gitAsync(root, args, timeoutMs, authEnv ? { env: authEnv } : void 0);
     const head = await gitAsync(root, ["rev-parse", "--verify", "--quiet", REMOTE_CACHE_REF], 5e3);
     if (head.ok && SHA_RE.test(head.out.trim())) return head.out.trim();
     if (!f.ok) {
@@ -1658,15 +1672,13 @@ function createAutoSync(opts) {
     const token = ghToken();
     const url = `https://github.com/${repo}.git`;
     const refspec = `${sha}:refs/heads/${branch}`;
-    const args = token ? [
-      "-c",
-      `http.https://github.com/.extraheader=AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
-      "push",
-      "--no-verify",
-      url,
-      refspec
-    ] : ["push", "--no-verify", url, refspec];
-    return gitAsync(root, args, timeoutMs);
+    const authEnv = token ? {
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
+      GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`
+    } : void 0;
+    const args = ["push", "--no-verify", url, refspec];
+    return gitAsync(root, args, timeoutMs, authEnv ? { env: authEnv } : void 0);
   };
   const readRemoteDoc = async (commitSha) => {
     let sha = commitSha;
@@ -2007,7 +2019,7 @@ function bootstrap(configDir, port) {
   }
   if (configToken) {
     bootWarnings.push(
-      isPathTracked(root, `${configDir}/${CONFIG_FILE}`) ? `ghToken in ${CONFIG_FILE} is git-TRACKED \u2014 the PAT is already in history on the next commit. Move it to a gitignored .env (ANNOTAKIT_GH_TOKEN).` : `ghToken in ${CONFIG_FILE} is deprecated (config files travel with the repo) \u2014 prefer .env ANNOTAKIT_GH_TOKEN.`
+      isPathTracked(root, `${configDir}/${CONFIG_FILE}`) ? `ghToken in ${CONFIG_FILE} is git-TRACKED and is NO LONGER READ (PR69 hardening) \u2014 move it to a gitignored .env as ANNOTAKIT_GH_TOKEN and delete it from the config file.` : `ghToken in ${CONFIG_FILE} is no longer read (config files travel with the repo) \u2014 set ANNOTAKIT_GH_TOKEN in .env instead.`
     );
   }
   for (const w of bootWarnings) console.warn(`[storybook-annotakit] \u26A0 ${w}`);
@@ -2029,7 +2041,8 @@ function bootstrap(configDir, port) {
   const ghsync = createGhSync({
     store,
     repo,
-    token: () => ghToken() ?? configToken,
+    token: () => ghToken(),
+    // PR69 C38: config ghToken is never read — env only
     configPath: `${configDir}/${CONFIG_FILE}`,
     enabled: ghAuto,
     pollSec,
@@ -2117,6 +2130,23 @@ function enforceApiAccess(req, res) {
   });
   return false;
 }
+function isLoopbackOrigin(origin) {
+  try {
+    const host = new URL(origin).hostname;
+    return /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])$/.test(host);
+  } catch {
+    return false;
+  }
+}
+function rejectForeignMutations(req, res) {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return false;
+  const origin = req.headers.origin;
+  if (!origin || isLoopbackOrigin(origin)) return false;
+  sendJson(res, 403, {
+    error: `cross-origin mutations are not allowed (Origin: ${String(origin).slice(0, 120)})`
+  });
+  return true;
+}
 function applyCors(req, res, methods = "GET,POST,PATCH,DELETE,OPTIONS") {
   const origin = req.headers.origin;
   if (!origin) return;
@@ -2145,6 +2175,12 @@ function sendJson(res, status, body) {
 }
 function readBody(req) {
   return new Promise((resolve, reject) => {
+    const ct = String(req.headers["content-type"] ?? "").toLowerCase();
+    if (!ct.startsWith("application/json")) {
+      reject(Object.assign(new Error("content-type must be application/json"), { status: 415 }));
+      req.destroy();
+      return;
+    }
     const chunks = [];
     let size = 0;
     req.on("data", (c) => {
@@ -2201,6 +2237,8 @@ function stableCommentId(author, body, createdAt) {
 function normalizeComment(c) {
   if (!c.author?.trim()) c.author = "anonymous";
   if (!c.createdAt) c.createdAt = nowIso();
+  delete c.ghId;
+  delete c.source;
   c.id = stableCommentId(c.author, c.body, c.createdAt);
   return c;
 }
@@ -2589,6 +2627,7 @@ function createMiddleware(configDir) {
         res.end();
         return;
       }
+      if (rejectForeignMutations(req, res)) return;
       if (!enforceApiAccess(req, res)) return;
       handleApi(req, res, url, configDir, origin).then(
         (handled) => {

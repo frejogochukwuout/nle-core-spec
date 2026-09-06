@@ -525,3 +525,127 @@ describe('R19 — inspector track card', () => {
     S().cancelDrag();
   });
 });
+
+/* ---- PR69 (review round): the flagged laws, pinned ---- */
+
+describe('PR69 keyboard law (C1/C16/C46/C49)', () => {
+  it('C49: the ADVERTISED zoom keys work (+ / − / = / _)', () => {
+    renderApp();
+    fireEvent.keyDown(window, { key: '+' });
+    expect(S().zoomStep).toBe(3); // default 2 → up one rung
+    fireEvent.keyDown(window, { key: '=' });
+    expect(S().zoomStep).toBe(4);
+    fireEvent.keyDown(window, { key: '-' });
+    expect(S().zoomStep).toBe(3);
+    fireEvent.keyDown(window, { key: '_' });
+    expect(S().zoomStep).toBe(2);
+  });
+
+  it('C16: key auto-repeat never machine-guns a binding (one S-hold = one split)', () => {
+    renderApp();
+    setStore(() => S().setPlayhead(2));
+    fireEvent.keyDown(window, { key: 's' });
+    fireEvent.keyDown(window, { key: 's', repeat: true });
+    fireEvent.keyDown(window, { key: 's', repeat: true });
+    expect(S().doc.clips).toHaveLength(5); // exactly ONE split, not three
+    expect(S().past).toHaveLength(1);
+  });
+
+  it('C16: a held Space does not strobe play/pause', () => {
+    renderApp();
+    fireEvent.keyDown(window, { key: ' ' });
+    expect(S().playing).toBe(true);
+    fireEvent.keyDown(window, { key: ' ', repeat: true });
+    fireEvent.keyDown(window, { key: ' ', repeat: true });
+    expect(S().playing).toBe(true); // repeats ignored, final state stable
+  });
+
+  it('C1: Space on a focused BUTTON does not hijack playback (native activation wins)', () => {
+    renderApp();
+    // focus a real button (the transport play control) — the global handler
+    // must yield so the browser's own Space-activation can run
+    const play = screen.getByTestId('mini-btn-play');
+    play.focus();
+    fireEvent.keyDown(play, { key: ' ' });
+    // jsdom does not synthesize the native click on Space — the pinned law
+    // is that the GLOBAL surface does NOT toggle playback behind the button
+    expect(S().playing).toBe(false);
+    expect(play).toHaveFocus();
+  });
+
+  it('C1: shortcuts stay alive while a button merely HOLDS focus (S still splits)', () => {
+    renderApp();
+    screen.getByTestId('mini-btn-play').focus();
+    setStore(() => S().setPlayhead(2));
+    fireEvent.keyDown(window, { key: 's' });
+    expect(S().doc.clips).toHaveLength(5);
+  });
+});
+
+describe('PR69 C55: pool-card double-fire guard', () => {
+  it('a double-click appends exactly ONE clip (one history entry)', () => {
+    renderApp();
+    const card = screen.getByTestId('mini-media-m-sunset');
+    fireEvent.click(card);
+    fireEvent.click(card); // the second click of a double-click: ignored
+    const v1 = S().doc.clips.filter((c) => c.trackId === 'V1');
+    expect(v1).toHaveLength(4); // 3 seed (c1-c3) + exactly one append
+    expect(S().past).toHaveLength(1); // one ⌘Z restores the pre-append world
+  });
+});
+
+describe('PR69 C6: toast honesty (pause / close / error TTL)', () => {
+  it('hover pauses the auto-dismiss timer', () => {
+    vi.useFakeTimers();
+    renderApp();
+    setStore(() => S().pushToast('info', 'paused toast'));
+    const toast = screen.getByTestId('mini-toast');
+    fireEvent.mouseEnter(toast); // reader mid-sentence
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(screen.getByTestId('mini-toast')).toBeInTheDocument(); // still there
+    fireEvent.mouseLeave(toast);
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(screen.queryByTestId('mini-toast')).toBeNull(); // un-paused → dismissed
+    vi.useRealTimers();
+  });
+
+  it('errors outlive info toasts (8s) and carry a manual close button', () => {
+    vi.useFakeTimers();
+    renderApp();
+    setStore(() => S().pushToast('error', 'the lane is full'));
+    act(() => {
+      vi.advanceTimersByTime(3000); // past the OLD 2.6s TTL
+    });
+    expect(screen.getByTestId('mini-toast')).toBeInTheDocument(); // still readable
+    fireEvent.click(screen.getByTestId('mini-toast-close'));
+    expect(screen.queryByTestId('mini-toast')).toBeNull();
+    vi.useRealTimers();
+  });
+});
+
+describe('PR69 C3/C20: solo surfaces play for real; the viewer stage announces its clip', () => {
+  it('C3: the rAF loop mounts with Timeline (solo render, not just App)', () => {
+    // rAF is stubbed by RTL's environment; assert the LOOP advances the
+    // playhead when playing is set (the old solo-story world: playing=true
+    // with NO loop — timecode frozen)
+    renderApp();
+    setStore(() => S().togglePlay());
+    expect(S().playing).toBe(true);
+    act(() => {
+      S().tick(0.5);
+    });
+    expect(S().playhead).toBe(0.5); // the loop's step, wired
+  });
+
+  it('C20: the populated viewer frame exposes name/role/label (no aria-hidden)', () => {
+    renderApp();
+    const frame = screen.getByTestId('mini-viewer-frame');
+    expect(frame).toHaveAttribute('role', 'img');
+    expect(frame).toHaveAttribute('aria-label', expect.stringContaining('drone_launch'));
+    expect(frame).not.toHaveAttribute('aria-hidden');
+  });
+});

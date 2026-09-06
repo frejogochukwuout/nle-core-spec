@@ -315,12 +315,19 @@ export function insertionAt(
     ? sorted[sorted.length - 1].start + sorted[sorted.length - 1].duration
     : want;
   // candidate starts, in preference order: the requested spot, every
-  // inter-clip gap start after it, then the lane tail
+  // inter-clip gap that can still host the clip, then the lane tail.
+  // PR69 C18: the gap filter is widened to `s > want - duration` — the
+  // old `s > want` skipped the very gap the drop landed IN (its start is
+  // at/below want), so a blocked exact spot jumped the lane tail while
+  // 4.5s of open lane sat under the pointer (drop at 5 with a 4s clip
+  // into a=[0,3.5] b=[8,12] landed at 12 instead of the [3.5,8) gap).
+  // The per-candidate free-check (1e-9 tolerance) stays the gate, so a
+  // too-narrow gap is still passed over.
   const gapStarts: number[] = [];
   for (let i = 0; i + 1 < sorted.length; i += 1) {
     gapStarts.push(sorted[i].start + sorted[i].duration);
   }
-  const candidates = [want, ...gapStarts.filter((s) => s > want), Math.max(want, tail)];
+  const candidates = [want, ...gapStarts.filter((s) => s > want - duration), Math.max(want, tail)];
   for (const start of candidates) {
     const end = start + duration;
     const free = sorted.every((c) => c.start + c.duration <= start + 1e-9 || c.start >= end - 1e-9);

@@ -218,6 +218,11 @@ export interface MiniState {
   setTrackBindingLocked: (locked: boolean) => void;
   selectedId: string | null;
   dragActive: boolean; // interaction lock (audit M2)
+  /** PR69 C53: a pointer gesture is OPEN but under the 5px activation
+   * threshold — the mutating keyboard surface must already be dead
+   * (⌘Z under a held pointer, live-proven); only Esc stays live. Set at
+   * pointerdown, cleared at pointerup/cancel/unmount. */
+  gesturePending: boolean;
   toast: ToastMsg | null;
   past: HistoryEntry[];
   future: HistoryEntry[];
@@ -253,7 +258,11 @@ export interface MiniState {
   pushToast: (kind: ToastMsg['kind'], text: string) => void;
   dismissToast: () => void;
 
-  /* drag session (M2): begin → preview* → end|cancel */
+  /* drag session (M2): pending → begin → preview* → end|cancel.
+   * beginPendingGesture/endPendingGesture bracket the WHOLE pointer
+   * session (before the 5px threshold engages the dragActive lock). */
+  beginPendingGesture: () => void;
+  endPendingGesture: () => void;
   beginDrag: () => void;
   endDrag: () => void;
   cancelDrag: () => void;
@@ -370,6 +379,7 @@ export const useMini = create<MiniState>((set, get) => {
     dragMoverId: null,
     dropEscape: null,
     dragActive: false,
+    gesturePending: false,
     toast: null,
     past: [],
     future: [],
@@ -530,6 +540,12 @@ export const useMini = create<MiniState>((set, get) => {
       const state = get();
       const { playing, playhead, doc } = state;
       if (!playing) return;
+      /* PR69 C19: the interaction lock's ONE playhead-writer bypass — the
+       * rAF loop kept advancing the playhead mid-gesture (the magnet field
+       * is supposed to be frozen while a drag runs; the playhead is its
+       * first target). Playback resumes on the next frame after the
+       * session ends; the wrap law is untouched. */
+      if (get().dragActive) return;
       // R18k: playback content = the bound tracks' clips (same world the
       // ruler and viewer show)
       const end = contentEnd(
@@ -697,6 +713,18 @@ export const useMini = create<MiniState>((set, get) => {
 
     /* ---- drag session ------------------------------------------------ */
 
+    /* PR69 C53: the pending window — pointerdown to pointerup/cancel,
+     * INCLUDING the sub-threshold phase (before beginDrag's lock
+     * engages). Cheap set()s; the window is short-lived. */
+    beginPendingGesture: () => {
+      if (get().dragActive) return; // an ACTIVE gesture already owns the lock
+      set({ gesturePending: true });
+    },
+    endPendingGesture: () => {
+      if (!get().gesturePending) return;
+      set({ gesturePending: false });
+    },
+
     beginDrag: () => {
       const state = get();
       if (state.dragActive) return;
@@ -737,6 +765,7 @@ export const useMini = create<MiniState>((set, get) => {
         set({
           doc: pristine,
           dragActive: false,
+          gesturePending: false,
           dragSnapshot: null,
           dragMoverId: null,
           dropEscape: null,
@@ -780,6 +809,7 @@ export const useMini = create<MiniState>((set, get) => {
             doc: { ...pristine, tracks, clips },
             ...rebinding,
             dragActive: false,
+            gesturePending: false,
             dragSnapshot: null,
             dragMoverId: null,
             dropEscape: null,
@@ -802,6 +832,7 @@ export const useMini = create<MiniState>((set, get) => {
       const past = changed ? [...state.past, entry].slice(-MAX_HISTORY) : state.past;
       set({
         dragActive: false,
+        gesturePending: false,
         dragSnapshot: null,
         dragMoverId: null,
         dropEscape: null,
@@ -817,6 +848,7 @@ export const useMini = create<MiniState>((set, get) => {
       set({
         doc: state.dragSnapshot,
         dragActive: false,
+        gesturePending: false,
         dragSnapshot: null,
         dragMoverId: null,
         dropEscape: null,
@@ -1051,10 +1083,23 @@ export const useMini = create<MiniState>((set, get) => {
         const clip = findClip(state.doc, state.selectedId);
         if (clip && splitPoint(state.playhead, clip) !== null) target = state.selectedId;
       } else {
-        // topmost (last-starting) clip under the playhead, any track
-        const under = state.doc.clips
+        /* PR69 C52/C4: the fallback lives in the BOUND world — the same
+         * clips the ruler/viewer/playback render. A video-only window
+         * bound to V2 must never split an unbound, unrendered V1 clip
+         * (the live-proven phantom-undo case). Preference order within
+         * the visible world: the bound VIDEO lane outranks audio (an
+         * NLE's "topmost" is track order, not latest start); within one
+         * track, the latest start still wins (the old law). */
+        const world = boundClips(
+          state.doc,
+          state.trackMode,
+          state.boundVideoTrack,
+          state.boundAudioTrack,
+        );
+        const rank = (c: Clip) => (c.trackId === state.boundVideoTrack ? 0 : 1);
+        const under = world
           .filter((c) => splitPoint(state.playhead, c) !== null)
-          .sort((a, b) => b.start - a.start);
+          .sort((a, b) => rank(a) - rank(b) || b.start - a.start);
         target = under[0]?.id ?? null;
       }
       if (!target) {
@@ -1191,7 +1236,13 @@ export const useMini = create<MiniState>((set, get) => {
           id: mintClipId(),
           trackId,
           mediaId,
-          start: quantize(end),
+          /* PR69 C15: NEVER below the tail. quantize() rounds to NEAREST —
+           * an off-grid raw trim end (the documented normal path when snap
+           * is off) could round DOWN and land the append overlapping the
+           * last clip's tail, voiding the whole no-overlap clamp system
+           * (neighborBounds would see no valid prev sibling). Same law as
+           * insertionAt's raw-tail fallback candidate. */
+          start: Math.max(end, quantize(end)),
           duration: media.duration,
         });
       });
@@ -1290,7 +1341,17 @@ export const useMini = create<MiniState>((set, get) => {
 /** Shared target resolution for the cut styles (R18e): the SELECTED clip
  *  when the playhead is inside it, else the topmost clip under the
  *  playhead (split law parity — review fix #6). */
-function cutTarget(state: { selectedId: string | null; doc: Doc; playhead: number }): string | null {
+/* PR69 C52: the cut fallback runs over the BOUND world (same law as
+ * splitAtPlayhead's fallback — never mutate an unrendered track) with
+ * the same video-track-first preference (C4). */
+function cutTarget(state: {
+  selectedId: string | null;
+  doc: Doc;
+  playhead: number;
+  trackMode: 'paired' | 'video';
+  boundVideoTrack: string;
+  boundAudioTrack: string;
+}): string | null {
   if (state.selectedId) {
     const clip = findClip(state.doc, state.selectedId);
     if (clip && state.playhead >= clip.start && state.playhead < clip.start + clip.duration) {
@@ -1298,8 +1359,10 @@ function cutTarget(state: { selectedId: string | null; doc: Doc; playhead: numbe
     }
     return null; // a selection exists but the playhead is elsewhere — honest
   }
-  const under = state.doc.clips
+  const world = boundClips(state.doc, state.trackMode, state.boundVideoTrack, state.boundAudioTrack);
+  const rank = (c: Clip) => (c.trackId === state.boundVideoTrack ? 0 : 1);
+  const under = world
     .filter((c) => state.playhead >= c.start && state.playhead < c.start + c.duration)
-    .sort((a, b) => b.start - a.start);
+    .sort((a, b) => rank(a) - rank(b) || b.start - a.start);
   return under[0]?.id ?? null;
 }

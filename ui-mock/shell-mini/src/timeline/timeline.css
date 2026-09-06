@@ -170,6 +170,43 @@
   box-shadow: rgba(255, 255, 255, 0.22) 0 0 0 2px;
 }
 
+/* PR69 C25: the Firefox counterparts — appearance:none stripped the
+   native control while only -webkit-* pseudos were styled, so Firefox
+   rendered an invisible slider (no track, no thumb, no fill).
+   ::-moz-range-progress paints the active fill natively (no CSS
+   variable needed); the track mirrors the webkit gradient. */
+.qc-toolbar__slider::-moz-range-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--canvas-quick-cut-slider-active) 0%,
+    var(--canvas-quick-cut-slider-active) var(--qc-slider-pct, 50%),
+    rgba(255, 255, 255, 0.18) var(--qc-slider-pct, 50%),
+    rgba(255, 255, 255, 0.18) 100%
+  );
+}
+
+.qc-toolbar__slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--canvas-quick-cut-slider-active);
+}
+
+.qc-toolbar__slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--canvas-quick-cut-slider-active);
+  box-shadow: none;
+}
+
+.qc-toolbar__slider:focus-visible::-moz-range-thumb {
+  box-shadow: rgba(255, 255, 255, 0.22) 0 0 0 2px;
+}
+
 /* ---- shared horizontal scroll wrapper (mini deviation, D7) --- */
 
 /* R18f (review P1-1): the height chain — qc-timeline (flex column, height
@@ -519,6 +556,14 @@
   min-width: 0;
 }
 
+.qc-track-select select option {
+  /* PR69 C21: option parity — browsers that ignore per-option UA theming
+   * (and the pre-color-scheme world) get the same dark surface the
+   * aspect select already hardcodes. */
+  background: #16181a;
+  color: var(--canvas-editor-text-default);
+}
+
 .qc-track-select select {
   appearance: none;
   -webkit-appearance: none;
@@ -824,7 +869,13 @@
   z-index: 2;
   top: 0;
   bottom: 0;
-  width: 14px;
+  /* PR69 C11: 14px was under the 24px WCAG 2.5.8 minimum on the shell's
+   * most precision-critical gesture — 20px + the clip-edge overlap + the
+   * keyboard alternative (trim buttons, ±0.5s) bring it into the
+   * "target-enhancement" tier. At 24pps a MIN_DUR clip's two opposing
+   * zones still overlap each other (12px clip) — registered constraint,
+   * unchanged. */
+  width: 20px;
   padding: 0;
   border: none;
   box-sizing: border-box;
@@ -1007,7 +1058,11 @@
 .qc-ruler--min .qc-ruler__label {
   top: 4px;
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.4);
+  /* PR69 C23: 0.4 alpha measured ≈3.8:1 on the panel surface — under
+   * the 4.5:1 required for sub-18px text. The expanded ruler's 0.52
+   * (≈5.6:1) passes; the compact strip keeps its quieter look via the
+   * 9px size + hidden ticks, not via failing contrast. */
+  color: var(--canvas-editor-text-muted);
 }
 
 .qc-ruler--min .qc-ruler__tick {

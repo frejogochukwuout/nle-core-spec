@@ -121,7 +121,7 @@ The previous kit's JSON was "extremely verbose" and the markdown "too cluttered"
 | What | Where |
 |---|---|
 | default GitHub repo | `.storybook/annotakit.config.json` → `{"ghRepo":"owner/name"}` (or `ANNOTAKIT_GH_REPO`, or git-remote/package.json autodetect) |
-| GitHub token | env `ANNOTAKIT_GH_TOKEN` (or `ghToken` in config) |
+| GitHub token | env `ANNOTAKIT_GH_TOKEN` only — a `ghToken` key in config is no longer read (config files travel with the repo; the engine warns if it finds one) |
 | mirror on/off | env `ANNOTAKIT_GH_AUTO=0` or config `{"ghAuto":false}` (default: on; off = local mode) |
 | poll interval | env `ANNOTAKIT_GH_POLL=<sec>` or config `{"ghPoll":60}` (0 = pull on POST /sync only) |
 | GHE / custom API | env `ANNOTAKIT_GH_API=<base url>` |

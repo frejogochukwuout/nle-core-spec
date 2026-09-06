@@ -5,7 +5,7 @@ import {
   renderStaticDigest,
   resetStaticStoreForTests,
   staticScope
-} from "./chunk-QIWATIG4.mjs";
+} from "./chunk-UIQ2NK77.mjs";
 export {
   getStaticStore,
   newThreadId,

@@ -322,13 +322,23 @@ function ReviewPanel(): React.ReactElement {
   };
 
   const download = (text: string, filename: string): void => {
+    /* PR69 C39: anchor is appended + revocation deferred — the old code
+     * revoked the blob URL in the same task as click(), which can cancel
+     * the download before the browser starts reading the blob (Chrome +
+     * Firefox race, documented), and Firefox requires the anchor in the
+     * DOM for programmatic download clicks. */
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(url);
+    }, 0);
   };
 
   /** Force reconcile — idempotent by design: never creates duplicate issues. */
@@ -490,8 +500,8 @@ function ReviewPanel(): React.ReactElement {
         <div style={{ padding: '12px 4px', fontSize: 12, color: theme.textMutedColor }}>
           {threads.length === 0
             ? scope === 'story'
-              ? <>No threads for this story. Press <b>C</b> in the canvas and click an element — or <b>R</b> to drag a region. Everything saves automatically to the dev-server store.</>
-              : <>No threads yet. Press <b>C</b> in the canvas and click an element.</>
+              ? <>No threads for this story. Press <b>⌥C</b> in the canvas and click an element — or <b>⌥R</b> to drag a region. Everything saves automatically to the dev-server store.</>
+              : <>No threads yet. Press <b>⌥C</b> in the canvas and click an element.</>
             : <>All threads resolved 🎉 — switch the filter to “all” to see them.</>}
         </div>
       )}

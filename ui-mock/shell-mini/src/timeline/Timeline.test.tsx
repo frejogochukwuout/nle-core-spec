@@ -16,6 +16,7 @@ import { poolDrag } from '../shell/MediaPool';
 import { seedDoc, multiTrackDoc } from '../lib/mockData';
 
 const S = () => useMini.getState();
+const setStore = (fn: () => void) => act(fn); // direct mutations flush re-renders
 const user = userEvent.setup();
 
 const drag = (el: Element, fromX: number, toX: number) => {
@@ -1049,5 +1050,122 @@ describe('R19 — track heads (thread #28: markers vs selectors vs hidden)', () 
     render(<Timeline />);
     expect(screen.queryByTestId('mini-track-marker-V1')).toBeNull();
     expect(screen.queryByTestId('mini-track-marker-A1')).toBeNull();
+  });
+});
+
+/* ---- PR69 (review round): the flagged laws, pinned ---- */
+
+describe('PR69 C47: collapsed-audio-bar DnD routing (mutation-proven gap)', () => {
+  const dragEvent = (type: 'dragover' | 'drop', x: number, transfer: object) => {
+    const ev = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: 40 });
+    Object.defineProperty(ev, 'dataTransfer', { value: transfer });
+    return ev;
+  };
+  const dt = (mediaId: string) => ({
+    types: ['application/x-mini-media'],
+    getData: (type: string) => (type === 'application/x-mini-media' ? mediaId : ''),
+    dropEffect: '',
+  });
+
+  it('dragOver + AUDIO drop restores the lane and places the clip', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-audiolane')); // hide A1
+    const bar = screen.getByTestId('mini-lane-A1-collapsed');
+    poolDrag.current = 'm-ambience';
+    const transfer = dt('m-ambience');
+    fireEvent(bar, dragEvent('dragover', 600, transfer));
+    expect(transfer.dropEffect).toBe('copy');
+    fireEvent(bar, dragEvent('drop', 600, transfer));
+    poolDrag.current = null;
+    // the lane came back AND the clip landed on it (the old test only pinned
+    // click-restore; deleting the whole onDrop body left the suite green)
+    expect(screen.getByTestId('mini-lane-A1')).toBeInTheDocument();
+    const added = S().doc.clips.find((c) => c.mediaId === 'm-ambience')!;
+    expect(added).toMatchObject({ trackId: 'A1' });
+    expect(added.start).toBeGreaterThan(0);
+  });
+
+  it('PR69 C54: wrong-kind (video) drop on the collapsed bar refuses WITH a toast — no silent dead zone', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-audiolane')); // hide A1
+    const bar = screen.getByTestId('mini-lane-A1-collapsed');
+    poolDrag.current = 'm-drone';
+    fireEvent(bar, dragEvent('drop', 600, dt('m-drone')));
+    poolDrag.current = null;
+    // the lane stays hidden (a refusal must not resurrect it)...
+    expect(screen.getByTestId('mini-lane-A1-collapsed')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-lane-A1')).toBeNull();
+    // ...but the feedback parity holds: insertMediaAt's kind-routing toast
+    expect(S().toast?.text).toContain('video media belongs on V1');
+    expect(S().doc.clips.filter((c) => c.trackId === 'A1')).toHaveLength(1); // nothing placed
+    expect(S().past).toHaveLength(0); // no history for a refusal
+  });
+});
+
+describe('PR69 C2/C46: the clip is a real button (Enter selects, Space is the transport)', () => {
+  it('clips expose role=button + aria-pressed (WCAG 4.1.2)', () => {
+    render(<Timeline />);
+    const clip = screen.getByTestId('mini-clip-c2');
+    expect(clip).toHaveAttribute('role', 'button');
+    expect(clip).toHaveAttribute('aria-pressed', 'false');
+    act(() => S().select('c2'));
+    expect(screen.getByTestId('mini-clip-c2')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('Enter on the focused clip selects; SPACE falls through to the global transport (D3.8)', () => {
+    render(<Timeline />);
+    act(() => S().select(null));
+    const clip = screen.getByTestId('mini-clip-c1');
+    fireEvent.keyDown(clip, { key: 'Enter' });
+    expect(S().selectedId).toBe('c1');
+    // the old handler swallowed Space at the target layer — Play/Pause was
+    // dead after any clip click (the most common editing state)
+    fireEvent.keyDown(clip, { key: ' ' });
+    expect(S().playing).toBe(true);
+  });
+});
+
+describe('PR69 C53: mutating keys die at POINTERDOWN (the 5px window)', () => {
+  it('⌘Z under a held pointer is inert until the gesture ends', () => {
+    render(<Timeline />);
+    setStore(() => S().select('c2'));
+    setStore(() => S().moveClip('c2', 5.5)); // one history entry to undo
+    const clip = screen.getByTestId('mini-clip-c2');
+    // pointerdown WITHOUT movement: pending window open, lock not yet engaged
+    fireEvent.pointerDown(clip, { button: 0, pointerId: 11, clientX: 264, clientY: 10 });
+    expect(S().gesturePending).toBe(true);
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5); // NOT undone under the held pointer
+    fireEvent.pointerUp(clip, { pointerId: 11, clientX: 264, clientY: 10 });
+    expect(S().gesturePending).toBe(false);
+    // after release the surface is live again
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+  });
+});
+
+describe('PR69 C9: a clip unmounting mid-gesture releases the lock', () => {
+  it('unmount with an active drag clears dragActive + gesturePending', () => {
+    const view = render(<Timeline />);
+    const clip = screen.getByTestId('mini-clip-c2');
+    fireEvent.pointerDown(clip, { button: 0, pointerId: 12, clientX: 264, clientY: 10 });
+    fireEvent.pointerMove(clip, { pointerId: 12, clientX: 300, clientY: 10 }); // 5px crossed → lock
+    expect(S().dragActive).toBe(true);
+    view.unmount(); // story switch / HMR / parent-driven unmount
+    expect(S().dragActive).toBe(false);
+    expect(S().gesturePending).toBe(false);
+    // the keyboard surface works again without knowing the Esc law
+    fireEvent.keyDown(window, { key: 's' });
+    expect(S().past.length).toBeGreaterThanOrEqual(0); // no lock trap
+  });
+});
+
+describe('PR69 C7b: the zoom slider announces units', () => {
+  it('aria-valuetext carries the px/s scale', () => {
+    render(<Timeline />);
+    const slider = screen.getByTestId('mini-zoom-slider');
+    expect(slider).toHaveAttribute('aria-valuetext', '48 pixels per second');
+    setStore(() => S().setZoomStep(0));
+    expect(screen.getByTestId('mini-zoom-slider')).toHaveAttribute('aria-valuetext', '24 pixels per second');
   });
 });

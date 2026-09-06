@@ -72,6 +72,12 @@ function MediaCard({ media }: { media: Media }) {
    *  get the affordance, not just pointer users). */
   const [previewT, setPreviewT] = useState<number | null>(null);
   const previewTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  /* PR69 C55: double-fire guard — a double-click delivers TWO click
+   * events → two appends + two history entries behind ONE toast (the
+   * single-slot replacement), leaving a phantom clip after a single ⌘Z.
+   * The second click inside the 300ms window is ignored (the first
+   * append is the correct outcome of both intents). */
+  const lastAppendAt = useRef(0);
 
   const stopPreview = () => {
     if (previewTimer.current !== null) {
@@ -117,7 +123,12 @@ function MediaCard({ media }: { media: Media }) {
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onClick={() => addClipFromMedia(media.id)}
+      onClick={() => {
+        const now = Date.now();
+        if (now - lastAppendAt.current < 300) return; // PR69 C55
+        lastAppendAt.current = now;
+        addClipFromMedia(media.id);
+      }}
       onMouseEnter={startPreview}
       onMouseLeave={stopPreview}
       onFocus={startPreview}
@@ -219,19 +230,26 @@ export function MediaPool() {
           </button>
         </div>
       ) : (
-        <div className="mini-panel__head mini-pool__tabs" role="group" aria-label="Filter media by type">
-          {POOL_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`mini-pool__tab${tab === t.id ? ' is-active' : ''}`}
-              aria-pressed={tab === t.id}
-              onClick={() => setTab(t.id)}
-              data-testid={`mini-pool-tab-${t.id}`}
-            >
-              {t.label}
-            </button>
-          ))}
+        /* PR69 C26: the filter GROUP wraps ONLY the type tabs — the
+         * collapse button used to live inside role="group" labeled
+         * "Filter media by type", so AT users heard a layout action
+         * announced as one more filter. The head is a plain flex row; the
+         * aria-pressed tabs are already self-describing. */
+        <div className="mini-panel__head mini-pool__tabs">
+          <div className="mini-pool__tabgroup" role="group" aria-label="Filter media by type">
+            {POOL_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={`mini-pool__tab${tab === t.id ? ' is-active' : ''}`}
+                aria-pressed={tab === t.id}
+                onClick={() => setTab(t.id)}
+                data-testid={`mini-pool-tab-${t.id}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             className="mini-pool__collapse"

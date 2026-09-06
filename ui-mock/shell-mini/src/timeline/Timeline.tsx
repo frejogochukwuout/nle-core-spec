@@ -36,7 +36,7 @@
    pool→timeline DnD drop zones (#13 polish wave / v0.2 deferral closed),
    playhead Enter no-op (#11). */
 
-import { useRef, useState, useEffect, type CSSProperties, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, useMemo } from 'react';
+import { useRef, useState, useEffect, useLayoutEffect, memo, type CSSProperties, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, useMemo } from 'react';
 import {
   Undo2,
   Redo2,
@@ -58,6 +58,7 @@ import {
 import { TrimStartIcon, TrimEndIcon, SplitIcon } from '../lib/icons';
 import { useMini, visibleTracks, boundClips } from '../state/useMini';
 import { useKeys } from '../hooks/useKeys';
+import { usePlayhead } from '../hooks/usePlayhead';
 import {
   clipsOfTrack,
   contentEnd,
@@ -280,6 +281,10 @@ export function ToolsRow() {
           max={PPS_STEPS.length - 1}
           step={1}
           aria-label="Timeline zoom"
+          /* PR69 C7b: announce units — the raw step number ("2") is
+           * meaningless non-visually; the px/s scale is the zoom's
+           * actual semantics. */
+          aria-valuetext={`${PPS_STEPS[zoomStep]} pixels per second`}
           value={zoomStep}
           onChange={(e) => setZoomStep(Number(e.target.value))}
           style={{ ['--qc-slider-pct' as string]: `${(zoomStep / (PPS_STEPS.length - 1)) * 100}%` }}
@@ -386,8 +391,14 @@ interface ClipProps {
 }
 
 /* exported for the solo Clip story (R18k storybook restructure — the
-   clip-anatomy review surface at natural size, no panel chrome) */
-export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact, originPx = RENDER_ORIGIN_PX, onTrimGhost }: ClipProps) {
+   clip-anatomy review surface at natural size, no panel chrome).
+   PR69 C56: memoized — the playhead tick no longer re-renders the whole
+   clip tree (Lane passes a per-track memoized target map; the playhead
+   magnet target is read live inside the gesture, where it is frozen).
+   PR69 C2: role="button" + aria-pressed — the clip finally exposes
+   name/role/value (WCAG 4.1.2); Enter activates (select), Space routes
+   to the global transport law (C46 — registered deviation). */
+export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact, originPx = RENDER_ORIGIN_PX, onTrimGhost }: ClipProps) {
   const select = useMini((s) => s.select);
   const beginDrag = useMini((s) => s.beginDrag);
   const endDrag = useMini((s) => s.endDrag);
@@ -427,6 +438,24 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
    *  shade is gone; it returns ONLY as this affordance). */
   const [trimmingEdge, setTrimmingEdge] = useState<'start' | 'end' | null>(null);
 
+  /* PR69 C9: unmount mid-gesture (story switch, HMR, parent-driven
+   * unmount) must release the interaction lock + pending window —
+   * otherwise every mutating key stays dead except Esc, with no visible
+   * cause. The 5px pre-activation case only needs the pending flag
+   * dropped (no lock was taken yet). */
+  useEffect(
+    () => () => {
+      const gs = g.current;
+      if (!gs.kind) return;
+      stopAutoScroll();
+      if (gs.active) cancelDrag();
+      useMini.getState().endPendingGesture();
+      g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0, snapStart: 0, snapEnd: 0 };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs + stable store actions only
+    [],
+  );
+
   const timeAt = (clientX: number, el: HTMLElement): number => {
     const content = el.closest('[data-qc-scroll-content]') as HTMLElement | null;
     const origin = (content ? content.getBoundingClientRect().left : 0) + originPx;
@@ -440,6 +469,10 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
     if (e.button !== 0) return;
     if (useMini.getState().dragActive) return; // one gesture at a time (fix #4)
     select(clip.id); // select-on-pointerdown (before the lock can engage)
+    /* PR69 C53: the pending window opens at POINTERDOWN — the mutating
+     * keyboard surface dies here, not 5px later (⌘Z under a held
+     * pointer was live-proven). Cleared at finish/unmount. */
+    useMini.getState().beginPendingGesture();
     // R19: the clip owns this pointerdown — the lane's empty-area track
     // select (thread #26) must not fire through the bubbling phase
     e.stopPropagation();
@@ -481,6 +514,12 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
     const content = gs.contentEl;
     const origin = (content ? content.getBoundingClientRect().left : 0) + originPx;
     const t = pxToTime(clientX - origin, pps);
+    /* PR69 C56: the playhead magnet target is read LIVE (getState, no
+     * subscription) and prepended to the frozen neighbor edges — since
+     * C19 the tick loop freezes while dragActive, so the field is exactly
+     * as static as it was when Lane threaded the prop down, without the
+     * per-tick re-render of the whole clip tree. */
+    const targets = [useMini.getState().playhead, ...snapTargets];
     if (gs.kind === 'move') {
       const raw = t - gs.grabOffset;
       /* R19: BOTH edges magnet (OT snapGroupEdges parity — the left edge
@@ -490,11 +529,11 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
        * OT drag VIEW (the mover renders above its lane); the verdict
        * chip tells the user what the UP will do, and a snap-induced
        * conflict flows through the same drop law (review P1-4). */
-      const m = snapOn ? magnetMove(raw, pps, clip.duration, snapTargets) : null;
+      const m = snapOn ? magnetMove(raw, pps, clip.duration, targets) : null;
       onSnapGuide(m ? m.guide : null);
       previewMove(clip.id, m ? m.start : raw);
     } else if (gs.kind === 'trim-start') {
-      const magnet = snapOn ? magnetTarget(t, pps, snapTargets) : null;
+      const magnet = snapOn ? magnetTarget(t, pps, targets) : null;
       onSnapGuide(magnet);
       previewTrim(clip.id, 'start', magnet !== null ? magnet : t);
       /* R19 (thread #51): the ghost signal fires only on an OUTWARD
@@ -502,7 +541,7 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
        *  extent; inward trims and no-room bounds never ghost. */
       onTrimGhost?.(t < gs.snapStart - 1e-9 ? { id: clip.id, edge: 'start' } : null);
     } else {
-      const magnet = snapOn ? magnetTarget(t, pps, snapTargets) : null;
+      const magnet = snapOn ? magnetTarget(t, pps, targets) : null;
       onSnapGuide(magnet);
       previewTrim(clip.id, 'end', magnet !== null ? magnet : t);
       onTrimGhost?.(t > gs.snapEnd + 1e-9 ? { id: clip.id, edge: 'end' } : null);
@@ -603,6 +642,7 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
     onTrimGhost?.(null); // the ghost leaves with the gesture (R19)
     setDragging(false);
     setTrimmingEdge(null); // R18k: the trim-mode shade leaves with the gesture
+    useMini.getState().endPendingGesture(); // PR69 C53: the window closes with the gesture
     g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0, snapStart: 0, snapEnd: 0 };
   };
 
@@ -648,14 +688,18 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
       style={style}
       data-testid={`mini-clip-${clip.id}`}
       data-clip-id={clip.id}
+      role="button"
+      aria-pressed={selected}
       aria-label={`Clip ${media?.name ?? clip.id}`}
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          // select from the keyboard; stopPropagation beats the window-level
-          // Space=play listener (target handlers run before window bubble)
+        /* PR69 C46: Enter activates (select) — ARIA button parity. SPACE
+         * deliberately falls through to the window-level transport law
+         * (D3.8): the old Space-branch swallowed it at the target layer,
+         * so Play/Pause went dead after any clip click (the most common
+         * editing state). Registered as a deviation in README (#37). */
+        if (e.key === 'Enter') {
           e.preventDefault();
-          e.stopPropagation();
           select(clip.id);
         }
       }}
@@ -757,7 +801,7 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
       />
     </div>
   );
-}
+});
 
 /* ---------- R18k (thread #3): the track-head column ----------------
  * The lane heads live in the FIXED head column (never over a clip —
@@ -853,45 +897,18 @@ interface DropPreview {
   widthPx: number;
 }
 
-function Lane({
-  track,
-  pps,
-  snapOn,
-  playhead,
-  filmstripOn,
-  onSnapGuide,
-}: {
-  track: Track;
-  pps: number;
-  snapOn: boolean;
-  playhead: number;
-  filmstripOn: boolean;
-  onSnapGuide: (t: number | null) => void;
-}) {
+/** PR69 C13: ONE pool→lane DnD engine. Lane and MinLane carried ~70
+ *  line-identical twins (dragover ghost placement, dragLeave containment
+ *  guard, drop→insertMediaAt) differing only in originPx — a shared hook
+ *  keeps the two surfaces from drifting (the R18k origin split 46-vs-10
+ *  is exactly the kind of constant that silently diverges). Returns the
+ *  ghost-preview state + the three handlers, spread straight onto the
+ *  lane surface. */
+function useLaneDnd({ track, pps, originPx }: { track: Track; pps: number; originPx: number }) {
   const doc = useMini((s) => s.doc);
-  const selectedId = useMini((s) => s.selectedId);
-  const audioLaneVisible = useMini((s) => s.audioLaneVisible);
   const insertMediaAt = useMini((s) => s.insertMediaAt);
-  const toggleAudioLane = useMini((s) => s.toggleAudioLane);
-  /* R19: the magnet field is FROZEN at gesture start — while a gesture
-   * runs, targets come from the PRE-DRAG SNAPSHOT (a gesture never
-   * magnetizes to positions it created; also fixes the latent ripple-trim
-   * ratchet where pushed followers fed their own new edges back as
-   * magnets). R20: the push affordance subscription is GONE — the
-   * mover's own verdict chip (store dropEscape, read in ClipItem)
-   * replaces the followers' is-pushed tint. */
-  const dragActive = useMini((s) => s.dragActive);
-  const dragSnapshot = useMini((s) => s.dragSnapshot);
-  const rippleOn = useMini((s) => s.rippleOn);
-  const selectTrack = useMini((s) => s.selectTrack);
-  const clips = clipsOfTrack(doc, track.id);
-  const magnetClips = dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips;
   const [drop, setDrop] = useState<DropPreview | null>(null);
-  /* R19 (thread #51): the trim-ghost signal — which clip is trimming
-   * which edge OUTWARD. The ghost rect is derived (bound ↔ live edge) so
-   * it shrinks as the trim extends; the lane paints it OUTSIDE the clip
-   * (the clip body clips its own overflow). */
-  const [trimGhost, setTrimGhost] = useState<{ id: string; edge: 'start' | 'end' } | null>(null);
+  const clips = clipsOfTrack(doc, track.id);
 
   /** pool drag hover: candidate placement ghost (R18e) */
   const onDragOver = (e: ReactDragEvent<HTMLElement>) => {
@@ -909,7 +926,7 @@ function Lane({
       return;
     }
     const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
-    const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
+    const origin = (content ? content.getBoundingClientRect().left : 0) + originPx;
     const t = pxToTime(e.clientX - origin, pps);
     const place = insertionAt(clips, media.duration, t);
     if (!place) {
@@ -941,10 +958,82 @@ function Lane({
     setDrop(null);
     if (!media) return;
     const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
-    const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
+    const origin = (content ? content.getBoundingClientRect().left : 0) + originPx;
     const t = pxToTime(e.clientX - origin, pps);
     insertMediaAt(media.id, track.id, t);
   };
+
+  return { drop, onDragOver, onDragLeave, onDrop, clips };
+}
+
+/** PR69 C56: stable empty target array for clips with no neighbors. */
+const EMPTY_TARGETS: number[] = [];
+
+/* PR69 C56: per-clip magnet targets (neighbor edges, self excluded),
+ * memoized per track so the array identities — and therefore every
+ * memoized ClipItem below — stay stable across unrelated re-renders.
+ * The playhead target joins INSIDE the gesture (applyGesture, read live
+ * and frozen by the tick lock). */
+function useTargetsById(magnetClips: Clip[]): Map<string, number[]> {
+  return useMemo(() => {
+    const m = new Map<string, number[]>();
+    for (const c of magnetClips) {
+      const arr: number[] = [];
+      for (const o of magnetClips) {
+        if (o.id === c.id) continue;
+        arr.push(o.start, o.start + o.duration);
+      }
+      m.set(c.id, arr);
+    }
+    return m;
+  }, [magnetClips]);
+}
+
+function Lane({
+  track,
+  pps,
+  snapOn,
+  filmstripOn,
+  onSnapGuide,
+}: {
+  track: Track;
+  pps: number;
+  snapOn: boolean;
+  filmstripOn: boolean;
+  onSnapGuide: (t: number | null) => void;
+}) {
+  const doc = useMini((s) => s.doc);
+  const selectedId = useMini((s) => s.selectedId);
+  const audioLaneVisible = useMini((s) => s.audioLaneVisible);
+  const toggleAudioLane = useMini((s) => s.toggleAudioLane);
+  /* R19: the magnet field is FROZEN at gesture start — while a gesture
+   * runs, targets come from the PRE-DRAG SNAPSHOT (a gesture never
+   * magnetizes to positions it created; also fixes the latent ripple-trim
+   * ratchet where pushed followers fed their own new edges back as
+   * magnets). R20: the push affordance subscription is GONE — the
+   * mover's own verdict chip (store dropEscape, read in ClipItem)
+   * replaces the followers' is-pushed tint. */
+  const dragActive = useMini((s) => s.dragActive);
+  const dragSnapshot = useMini((s) => s.dragSnapshot);
+  const rippleOn = useMini((s) => s.rippleOn);
+  const selectTrack = useMini((s) => s.selectTrack);
+  /* the collapsed-audio-bar branch validates + places directly (PR69 C54) */
+  const insertMediaAt = useMini((s) => s.insertMediaAt);
+  /* PR69 C13: the shared DnD engine (was ~70 duplicated lines twin'd
+   * with MinLane) + PR69 C56: no playhead prop — the tick loop must not
+   * re-render the lane at all. */
+  const { drop, onDragOver, onDragLeave, onDrop, clips } = useLaneDnd({
+    track,
+    pps,
+    originPx: RENDER_ORIGIN_PX,
+  });
+  const magnetClips = dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips;
+  const targetsById = useTargetsById(magnetClips);
+  /* R19 (thread #51): the trim-ghost signal — which clip is trimming
+   * which edge OUTWARD. The ghost rect is derived (bound ↔ live edge) so
+   * it shrinks as the trim extends; the lane paints it OUTSIDE the clip
+   * (the clip body clips its own overflow). */
+  const [trimGhost, setTrimGhost] = useState<{ id: string; edge: 'start' | 'end' } | null>(null);
 
   if (track.kind === 'audio' && !audioLaneVisible) {
     // R18f (review P2-3): a collapsed placeholder instead of vanishing —
@@ -969,11 +1058,20 @@ function Lane({
           const mediaId = e.dataTransfer.getData(POOL_DRAG_TYPE) || poolDrag.current;
           if (!mediaId) return;
           const media = doc.media.find((m) => m.id === mediaId);
-          if (!media || media.kind !== 'audio') return; // video on A1 stays a no-op
-          toggleAudioLane(); // restore the lane, then place
+          if (!media) return;
           const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
           const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
-          insertMediaAt(media.id, track.id, pxToTime(e.clientX - origin, pps));
+          const t = pxToTime(e.clientX - origin, pps);
+          if (media.kind !== 'audio') {
+            /* PR69 C54: wrong-kind drops get the SAME honest refusal the
+             * visible lanes give — insertMediaAt re-validates kind routing
+             * and toasts ('video media belongs on V1.'). The lane itself
+             * stays hidden: a refusal must not resurrect it. */
+            insertMediaAt(media.id, track.id, t);
+            return;
+          }
+          toggleAudioLane(); // restore the lane, then place
+          insertMediaAt(media.id, track.id, t);
         }}
         data-testid={`mini-lane-${track.id}-collapsed`}
         title={`Audio lane hidden — click to show (${track.label})`}
@@ -1028,29 +1126,22 @@ function Lane({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      {clips.map((c) => {
-        // magnet targets (fix #2): same-track neighbors (never self) + playhead.
-        // R19: from the FROZEN snapshot clips while a gesture runs
-        const targets: number[] = [playhead];
-        for (const other of magnetClips) {
-          if (other.id === c.id) continue;
-          targets.push(other.start, other.start + other.duration);
-        }
-        return (
-          <ClipItem
-            key={c.id}
-            clip={c}
-            media={doc.media.find((m) => m.id === c.mediaId)}
-            pps={pps}
-            snapOn={snapOn}
-            selected={selectedId === c.id}
-            filmstripOn={filmstripOn}
-            snapTargets={targets}
-            onSnapGuide={onSnapGuide}
-            onTrimGhost={setTrimGhost}
-          />
-        );
-      })}
+      {clips.map((c) => (
+        /* PR69 C56: stable per-clip target arrays (memoized above); the
+         * playhead target joins inside the gesture, read live. */
+        <ClipItem
+          key={c.id}
+          clip={c}
+          media={doc.media.find((m) => m.id === c.mediaId)}
+          pps={pps}
+          snapOn={snapOn}
+          selected={selectedId === c.id}
+          filmstripOn={filmstripOn}
+          snapTargets={targetsById.get(c.id) ?? EMPTY_TARGETS}
+          onSnapGuide={onSnapGuide}
+          onTrimGhost={setTrimGhost}
+        />
+      ))}
       {ghostRect && (
         <div
           className="qc-trim-ghost"
@@ -1083,70 +1174,29 @@ function MinLane({
   track,
   pps,
   snapOn,
-  playhead,
   onSnapGuide,
 }: {
   track: Track;
   pps: number;
   snapOn: boolean;
-  playhead: number;
   onSnapGuide: (t: number | null) => void;
 }) {
   const doc = useMini((s) => s.doc);
   const selectedId = useMini((s) => s.selectedId);
-  const insertMediaAt = useMini((s) => s.insertMediaAt);
   /* R19: the same frozen-magnet law as the full lanes — the strip runs
    * the identical gesture engine (R20: same drop law + verdict chip
-   * too; ClipItem reads dropEscape from the store directly). */
+   * too; ClipItem reads dropEscape from the store directly).
+   * PR69 C13: the shared DnD engine (originPx is the ONLY difference
+   * from the full lanes — 10, no head rail). */
   const dragActive = useMini((s) => s.dragActive);
   const dragSnapshot = useMini((s) => s.dragSnapshot);
-  const clips = clipsOfTrack(doc, track.id);
+  const { drop, onDragOver, onDragLeave, onDrop, clips } = useLaneDnd({
+    track,
+    pps,
+    originPx: MIN_ORIGIN_PX,
+  });
   const magnetClips = dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips;
-  const [drop, setDrop] = useState<DropPreview | null>(null);
-
-  const onDragOver = (e: ReactDragEvent<HTMLElement>) => {
-    if (!e.dataTransfer.types.includes(POOL_DRAG_TYPE)) return;
-    e.preventDefault();
-    const mediaId = poolDrag.current;
-    const media = mediaId ? doc.media.find((m) => m.id === mediaId) : undefined;
-    const compatible = media ? isDroppable(track.kind, media.kind) : true;
-    e.dataTransfer.dropEffect = compatible ? 'copy' : 'none';
-    if (!media || !compatible) {
-      setDrop((prev) => (prev === null ? prev : null));
-      return;
-    }
-    const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
-    const origin = (content ? content.getBoundingClientRect().left : 0) + MIN_ORIGIN_PX; // R18k: the strip has no head rail
-    const t = pxToTime(e.clientX - origin, pps);
-    const place = insertionAt(clips, media.duration, t);
-    if (!place) {
-      setDrop((prev) => (prev === null ? prev : null));
-      return;
-    }
-    const next = { startPx: timeToPx(place.start, pps), widthPx: timeToPx(media.duration, pps) };
-    setDrop((prev) =>
-      prev && prev.startPx === next.startPx && prev.widthPx === next.widthPx ? prev : next,
-    );
-  };
-
-  const onDragLeave = (e: ReactDragEvent<HTMLElement>) => {
-    if (!e.dataTransfer.types.includes(POOL_DRAG_TYPE)) return;
-    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-    setDrop(null);
-  };
-
-  const onDrop = (e: ReactDragEvent<HTMLElement>) => {
-    if (!e.dataTransfer.types.includes(POOL_DRAG_TYPE)) return;
-    e.preventDefault();
-    const mediaId = e.dataTransfer.getData(POOL_DRAG_TYPE) || poolDrag.current;
-    const media = mediaId ? doc.media.find((m) => m.id === mediaId) : undefined;
-    setDrop(null);
-    if (!media) return;
-    const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
-    const origin = (content ? content.getBoundingClientRect().left : 0) + MIN_ORIGIN_PX;
-    const t = pxToTime(e.clientX - origin, pps);
-    insertMediaAt(media.id, track.id, t);
-  };
+  const targetsById = useTargetsById(magnetClips);
 
   return (
     <div
@@ -1158,29 +1208,22 @@ function MinLane({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      {clips.map((c) => {
-        // R19: frozen snapshot targets while a gesture runs
-        const targets: number[] = [playhead];
-        for (const other of magnetClips) {
-          if (other.id === c.id) continue;
-          targets.push(other.start, other.start + other.duration);
-        }
-        return (
-          <ClipItem
-            key={c.id}
-            clip={c}
-            media={doc.media.find((m) => m.id === c.mediaId)}
-            pps={pps}
-            snapOn={snapOn}
-            selected={selectedId === c.id}
-            filmstripOn={false}
-            snapTargets={targets}
-            onSnapGuide={onSnapGuide}
-            compact
-            originPx={MIN_ORIGIN_PX}
-          />
-        );
-      })}
+      {clips.map((c) => (
+        // PR69 C56: stable per-clip target arrays (memoized above)
+        <ClipItem
+          key={c.id}
+          clip={c}
+          media={doc.media.find((m) => m.id === c.mediaId)}
+          pps={pps}
+          snapOn={snapOn}
+          selected={selectedId === c.id}
+          filmstripOn={false}
+          snapTargets={targetsById.get(c.id) ?? EMPTY_TARGETS}
+          onSnapGuide={onSnapGuide}
+          compact
+          originPx={MIN_ORIGIN_PX}
+        />
+      ))}
       {drop && (
         <div
           className="qc-drop-outline qc-drop-outline--min"
@@ -1213,11 +1256,16 @@ function Playhead({
   const x = timeToPx(playhead, pps);
   const atStart = playhead < 0.5;
   const atEnd = playhead > endTime - 0.5;
+  /* PR69 C8: the playhead-handle drag gets the same edge auto-scroll the
+   * clip gestures have had since R18i — a handle dragged to the viewport
+   * edge keeps scrolling + following instead of going blind. */
+  const edge = useEdgeAutoScroll();
+  const contentRef = useRef<HTMLElement | null>(null);
 
-  const scrubFrom = (e: ReactPointerEvent<HTMLElement>) => {
-    const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
+  const applyScrub = (clientX: number) => {
+    const content = contentRef.current;
     const origin = (content ? content.getBoundingClientRect().left : 0) + originPx;
-    setPlayhead(pxToTime(e.clientX - origin, pps));
+    setPlayhead(pxToTime(clientX - origin, pps));
   };
 
   return (
@@ -1238,10 +1286,19 @@ function Playhead({
           } catch {
             /* untrusted pointer — scrub proceeds without capture */
           }
+          contentRef.current = e.currentTarget.closest(
+            '[data-qc-scroll-content]',
+          ) as HTMLElement | null;
+          edge.setSession(applyScrub, contentRef.current);
+          edge.note(e.clientX);
           setDragging(true);
         }}
         onPointerMove={(e) => {
-          if (dragging) scrubFrom(e);
+          if (dragging) {
+            edge.note(e.clientX);
+            applyScrub(e.clientX);
+            edge.maybeStart();
+          }
         }}
         onPointerUp={(e) => {
           try {
@@ -1249,8 +1306,10 @@ function Playhead({
           } catch {
             /* jsdom-safe */
           }
+          edge.stop();
           setDragging(false);
         }}
+        onPointerCancel={edge.stop}
         onKeyDown={(e) => {
           // keyboard scrub (review fix #7: focusable must be operable)
           if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -1281,10 +1340,130 @@ function Playhead({
 const EDGE_PX = 48;
 const SCROLL_SPEED_PX = 12; // per frame ≈ 720px/s at 60fps
 
+/** PR69 C8: the R18i edge auto-scroll law, shared by the SCRUB surfaces
+ *  (ruler + playhead handle) — the same loop ClipItem's maybeAutoScroll
+ *  runs for clip gestures. The session is set at pointerdown; `note`
+ *  tracks the pointer; `maybeStart` spins the rAF loop only while the
+ *  pointer parks within EDGE_PX of the scroll viewport (jsdom-safe: a
+ *  zero-width scroll element never starts); the stall bound (12 frames
+ *  without scroll progress) terminates at the content edge. */
+function useEdgeAutoScroll() {
+  const rafRef = useRef<number | null>(null);
+  const lastXRef = useRef(0);
+  const activeRef = useRef(false);
+  const applyRef = useRef<(clientX: number) => void>(() => {});
+  const contentRef = useRef<HTMLElement | null>(null);
+
+  const setSession = (apply: (clientX: number) => void, contentEl: HTMLElement | null) => {
+    applyRef.current = apply;
+    contentRef.current = contentEl;
+  };
+  const note = (clientX: number) => {
+    lastXRef.current = clientX;
+  };
+  const stop = () => {
+    activeRef.current = false;
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  };
+  const maybeStart = () => {
+    const scroll = contentRef.current?.closest('.qc-scroll') as HTMLElement | null;
+    if (!scroll || scroll.clientWidth <= 0 || rafRef.current !== null) return;
+    const vr = scroll.getBoundingClientRect();
+    if (vr.width <= 0) return; // jsdom / unmeasured
+    const dir =
+      lastXRef.current > vr.right - EDGE_PX ? 1 : lastXRef.current < vr.left + EDGE_PX ? -1 : 0;
+    if (dir === 0) return;
+    activeRef.current = true;
+    let stalls = 0;
+    const step = () => {
+      const sc = contentRef.current?.closest('.qc-scroll') as HTMLElement | null;
+      if (!sc || !activeRef.current) {
+        rafRef.current = null;
+        return;
+      }
+      const rect = sc.getBoundingClientRect();
+      const d =
+        lastXRef.current > rect.right - EDGE_PX ? 1 : lastXRef.current < rect.left + EDGE_PX ? -1 : 0;
+      const before = sc.scrollLeft;
+      if (d !== 0) sc.scrollLeft = before + d * SCROLL_SPEED_PX;
+      applyRef.current(lastXRef.current); // content moved under the stationary pointer
+      stalls = sc.scrollLeft !== before ? 0 : stalls + 1;
+      if (d !== 0 && stalls < 12) rafRef.current = requestAnimationFrame(step);
+      else rafRef.current = null;
+    };
+    rafRef.current = requestAnimationFrame(step);
+  };
+  useEffect(() => stop, []); // the loop never outlives its surface
+  return { setSession, note, maybeStart, stop };
+}
+
+/* PR69 C13+C8: ONE ruler scrub surface — the full ruler and the compact
+ * strip's ruler were line-identical twins; now one component carries the
+ * pointer-scrub law (unquantized, lock-gated) + the edge auto-scroll. */
+function RulerScrub({
+  pps,
+  endTime,
+  compact,
+  setPlayhead,
+}: {
+  pps: number;
+  endTime: number;
+  compact?: boolean;
+  setPlayhead: (t: number) => void;
+}) {
+  const elRef = useRef<HTMLDivElement | null>(null);
+  const edge = useEdgeAutoScroll();
+  const apply = (clientX: number) => {
+    const rect = elRef.current?.getBoundingClientRect();
+    setPlayhead(pxToTime(clientX - (rect ? rect.left : 0), pps));
+  };
+  return (
+    <div
+      ref={elRef}
+      className={`qc-ruler__content${compact ? ' qc-ruler__content--min' : ''}`}
+      data-testid="mini-ruler"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        if (useMini.getState().dragActive) return; // lock (fix #4)
+        // R20: capture guarded for untrusted pointers
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch {
+          /* untrusted pointer — scrub proceeds without capture */
+        }
+        edge.setSession(
+          apply,
+          e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null,
+        );
+        edge.note(e.clientX);
+        apply(e.clientX);
+      }}
+      onPointerMove={(e) => {
+        if (e.buttons === 1 && !useMini.getState().dragActive) {
+          edge.note(e.clientX);
+          apply(e.clientX);
+          edge.maybeStart();
+        }
+      }}
+      onPointerUp={edge.stop}
+      onPointerCancel={edge.stop}
+    >
+      <RulerMarks pps={pps} endTime={endTime} compact={compact} />
+    </div>
+  );
+}
+
 export function Timeline({ style }: { style?: CSSProperties }) {
   const doc = useMini((s) => s.doc);
   const zoomStep = useMini((s) => s.zoomStep);
-  const playhead = useMini((s) => s.playhead);
+  /* PR69 C56: Timeline NO LONGER subscribes to the playhead — the rAF
+   * tick re-rendered the ENTIRE clip tree (Lanes → every ClipItem, each
+   * with a freshly-built snapTargets array) ~60x/s during playback;
+   * only the Playhead overlay + pill actually need the tick, and both
+   * subscribe directly. */
   const snapOn = useMini((s) => s.snapOn);
   const filmstripOn = useMini((s) => s.filmstripOn);
   const setPlayhead = useMini((s) => s.setPlayhead);
@@ -1338,13 +1517,25 @@ export function Timeline({ style }: { style?: CSSProperties }) {
   // solo Timeline stories get the advertised shortcuts (S/[/]/Del/⌘Z…);
   // App renders Timeline, so the hook still mounts exactly once.
   useKeys();
+  /* PR69 C3: the rAF playback loop mounts here (was App-only — every
+   * solo story's Play button flipped the icon while the timecode stood
+   * frozen, live-proven). The hook is a mount-safe SINGLETON (Viewer
+   * mounts it too), so the full app still runs exactly ONE loop while
+   * every solo surface plays for real. */
+  usePlayhead();
   /** R18e: the engaged magnet target while a gesture runs (snap guide) */
   const [snapGuide, setSnapGuide] = useState<number | null>(null);
   const pps = ppsFor(zoomStep);
   const step = labelStepFor(pps);
+  /* PR69 C24: the extent's origin is MODE-AWARE — the minimized strip's
+   * t=0 sits at MIN_ORIGIN_PX (10, no head rail), so the compact ruler's
+   * extent (and setRulerEnd's scrub clamp) was 36px/pps short of the
+   * painted surface (live-measured 1274 vs 1310 scrollWidth). The
+   * ResizeObserver effect already re-measures on the mode switch. */
+  const extentOriginPx = timelineMinimized ? MIN_ORIGIN_PX : RENDER_ORIGIN_PX;
   // one label of runway past the viewport so the rightmost visible label
   // is never cut by the scroll edge
-  const viewportTime = viewportW > 0 ? (viewportW - RENDER_ORIGIN_PX) / pps + step : 0;
+  const viewportTime = viewportW > 0 ? (viewportW - extentOriginPx) / pps + step : 0;
   // R18k: ruler extent follows the BOUND clips — clips on unbound project
   // tracks are not this window's content
   const endTime = Math.max(contentEnd(boundClips(doc, trackMode, boundVideoTrack, boundAudioTrack)), 8, viewportTime);
@@ -1377,6 +1568,23 @@ export function Timeline({ style }: { style?: CSSProperties }) {
   useEffect(() => {
     setRulerEnd(endTime);
   }, [endTime, setRulerEnd]);
+
+  /* PR69 C7a: zoom is ANCHORED AT THE PLAYHEAD — the old law kept
+   * scrollLeft fixed, so zooming in at high pps walked the playhead and
+   * content off-viewport (every reference NLE anchors zoom at the
+   * playhead or viewport center). useLayoutEffect beats paint; the
+   * playhead is read via getState (no subscription — C56). Initial
+   * mount is a no-op (prev === next). */
+  const prevZoomStep = useRef(zoomStep);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const prev = prevZoomStep.current;
+    prevZoomStep.current = zoomStep;
+    if (!el || prev === zoomStep) return;
+    const t = useMini.getState().playhead;
+    const anchorPx = t * ppsFor(prev) - el.scrollLeft; // playhead offset in the viewport BEFORE
+    el.scrollLeft = Math.max(0, t * ppsFor(zoomStep) - anchorPx);
+  }, [zoomStep]);
 
   /* ---- R18j (thread #13): the minimized strip ----------------------
    * Toolbar hidden, ruler slimmed (every-other label), V/A pills in one
@@ -1415,30 +1623,9 @@ export function Timeline({ style }: { style?: CSSProperties }) {
             >
               <div className="qc-ruler qc-ruler--min">
                 <div className="qc-ruler__inner">
-                  <div
-                    className="qc-ruler__content qc-ruler__content--min"
-                    data-testid="mini-ruler"
-                    onPointerDown={(e) => {
-                      if (e.button !== 0) return;
-                      if (useMini.getState().dragActive) return; // lock (fix #4)
-                      // R20: capture guarded for untrusted pointers
-                      try {
-                        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                      } catch {
-                        /* untrusted pointer — scrub proceeds without capture */
-                      }
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setPlayhead(pxToTime(e.clientX - rect.left, pps));
-                    }}
-                    onPointerMove={(e) => {
-                      if (e.buttons === 1 && !useMini.getState().dragActive) {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setPlayhead(pxToTime(e.clientX - rect.left, pps));
-                      }
-                    }}
-                  >
-                    <RulerMarks pps={pps} endTime={endTime} compact />
-                  </div>
+                  {/* PR69 C13/C8: the shared scrub surface (was a twin of
+                      the full ruler block, now with edge auto-scroll) */}
+                  <RulerScrub pps={pps} endTime={endTime} compact setPlayhead={setPlayhead} />
                 </div>
               </div>
               {lanes
@@ -1455,7 +1642,6 @@ export function Timeline({ style }: { style?: CSSProperties }) {
                     track={track}
                     pps={pps}
                     snapOn={snapOn}
-                    playhead={playhead}
                     onSnapGuide={setSnapGuide}
                   />
                 ))}
@@ -1503,30 +1689,10 @@ export function Timeline({ style }: { style?: CSSProperties }) {
           >
             <div className="qc-ruler">
               <div className="qc-ruler__inner">
-                <div
-                  className="qc-ruler__content"
-                  data-testid="mini-ruler"
-                  onPointerDown={(e) => {
-                    if (e.button !== 0) return;
-                    if (useMini.getState().dragActive) return; // lock (fix #4)
-                    // R20: capture guarded for untrusted pointers
-                    try {
-                      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                    } catch {
-                      /* untrusted pointer — scrub proceeds without capture */
-                    }
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setPlayhead(pxToTime(e.clientX - rect.left, pps));
-                  }}
-                  onPointerMove={(e) => {
-                    if (e.buttons === 1 && !useMini.getState().dragActive) {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setPlayhead(pxToTime(e.clientX - rect.left, pps));
-                    }
-                  }}
-                >
-                  <RulerMarks pps={pps} endTime={endTime} />
-                </div>
+                {/* PR69 C13/C8: the shared scrub surface (one law, edge
+                    auto-scroll included — was duplicated line-for-line in
+                    the minimized branch) */}
+                <RulerScrub pps={pps} endTime={endTime} setPlayhead={setPlayhead} />
               </div>
             </div>
             <div className="qc-stage">
@@ -1535,7 +1701,7 @@ export function Timeline({ style }: { style?: CSSProperties }) {
                     heads live HERE (sticky, never over a clip), row-
                     aligned with their lanes (36px, 22px when the audio
                     lane is collapsed). */}
-                <div className="qc-track-heads" aria-label="Track heads">
+                <div className="qc-track-heads" role="group" aria-label="Track heads">
                   {lanes.map((track) => (
                     <TrackHead
                       key={track.id}
@@ -1551,7 +1717,6 @@ export function Timeline({ style }: { style?: CSSProperties }) {
                       track={track}
                       pps={pps}
                       snapOn={snapOn}
-                      playhead={playhead}
                       filmstripOn={filmstripOn}
                       onSnapGuide={setSnapGuide}
                     />

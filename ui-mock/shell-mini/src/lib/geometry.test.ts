@@ -439,6 +439,22 @@ describe('insertionAt (DnD placement)', () => {
   it('quantizes the requested time and clamps below 0', () => {
     expect(insertionAt([], 2, -3.2)).toEqual({ start: 0, exact: true });
   });
+
+  it('PR69 C18: a drop whose spot is blocked lands in the gap it fell INTO, not the tail', () => {
+    // a=[0,3.5], b=[8,12]: want 5 + 4 duration is blocked by b; the
+    // containing gap [3.5,8) hosts it at the gap START (the old filter
+    // skipped the gap and jumped to the tail 12.0 with 4.5s of open lane
+    // under the pointer)
+    const lane = [
+      { id: 'a', trackId: 'V1', mediaId: 'm', start: 0, duration: 3.5 },
+      { id: 'b', trackId: 'V1', mediaId: 'm', start: 8, duration: 4 },
+    ];
+    expect(insertionAt(lane, 4, 5)).toEqual({ start: 3.5, exact: false });
+    // dropping a 4s clip at t=3.4 was ALWAYS gap behavior — unchanged
+    expect(insertionAt(lane, 4, 3.4)).toEqual({ start: 3.5, exact: true });
+    // a too-narrow gap is still passed over (the free-check stays the gate)
+    expect(insertionAt(lane, 4.9, 5)).toEqual({ start: 12, exact: false });
+  });
 });
 
 /* ---- R18e: ripple shift ---- */

@@ -37,8 +37,8 @@
     "typescript": "^5.9.0"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsup",
     "typecheck": "tsc --noEmit",
-    "prepare": "tsup || true"
+    "prepare": "tsup"
   }
 }

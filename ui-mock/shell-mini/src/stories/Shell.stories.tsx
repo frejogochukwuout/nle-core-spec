@@ -85,7 +85,11 @@ interface LayoutArgs {
 
 export const LayoutStates: StoryObj<LayoutArgs> = {
   name: 'App — layout states',
-  args: { poolCollapsed: false, inspectorCollapsed: false, timelineMinimized: false, viewerMax: false },
+  /* PR69 C14: open on the most complex COMPOSED state (viewerMax = both
+   * rails + the minimized strip) — a story named "layout states" that
+   * rendered the default layout made the sidebar the only place the
+   * states existed. Every combination stays reachable from the controls. */
+  args: { poolCollapsed: false, inspectorCollapsed: false, timelineMinimized: false, viewerMax: true },
   argTypes: {
     poolCollapsed: { control: 'boolean', description: 'left rail (30px vertical label)' },
     inspectorCollapsed: { control: 'boolean', description: 'right rail' },

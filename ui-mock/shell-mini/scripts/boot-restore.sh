@@ -33,7 +33,7 @@ exec >>"$LOG" 2>&1
 echo "=== boot-restore $(date -Is) ==="
 
 # 0. Already up? Probe the STORYBOOK INDEX (asset-chain proof, not bare HTML).
-if curl -s -m 3 -o /dev/null http://127.0.0.1:3000/index.json; then
+if curl -fsS -m 3 -o /dev/null http://127.0.0.1:3000/index.json; then
   echo ":3000 storybook index answering — nothing to do"
   exit 0
 fi
@@ -81,10 +81,10 @@ fi
 echo "launching sb3000.py (must-succeed)"
 python3 scripts/sb3000.py
 for i in $(seq 1 24); do
-  if curl -s -m 3 -o /dev/null http://127.0.0.1:3000/index.json; then break; fi
+  if curl -fsS -m 3 -o /dev/null http://127.0.0.1:3000/index.json; then break; fi
   sleep 5
 done
-if curl -s -m 3 -o /dev/null http://127.0.0.1:3000/index.json; then
+if curl -fsS -m 3 -o /dev/null http://127.0.0.1:3000/index.json; then
   echo "STORYBOOK RESTORED — :3000 serving the public review surface"
 else
   echo "FATAL — storybook not answering on :3000 (check sb.log in shell-mini)"

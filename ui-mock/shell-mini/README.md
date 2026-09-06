@@ -10,7 +10,7 @@ set + DOM anatomy).
 The build contract is [`docs/DESIGN-mvp.md`](docs/DESIGN-mvp.md) (v2.1
 FINAL — design-audit + code-review rounds folded). `../shell-variants/`
 remains the full spec-18 study; this app is the deliberately small sibling:
-~14 source files vs 100+, 93 tests vs 596, 30 stories vs 83.
+~28 source files vs 100+, 354 tests vs 596, 13 stories vs 83 (PR69 refresh).
 
 ## Run it
 
@@ -19,7 +19,7 @@ npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-
 npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
                     #   run via `python3 scripts/dev3000.py` double-fork daemon so it
                     #   survives the per-toolcall process reaping — plain nohup/setsid die)
-npm test            # vitest — 4 files / 93 tests (jsdom)
+npm test            # vitest — 7 files / 354 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # the FULL dev server on :3000 (run via `python3
@@ -348,6 +348,31 @@ Run it at boot or any time; safe twice.
 27. **Nudge refuses instead of parking** (R19): nudging into a neighbor
    is refused with a toast (was: silent clamp-park). Precise edits get
    honest refusal — the drag path owns the rearrange affordance.
+28. **Space yields to the focused native control** (PR69 C1): the global
+   Space=play/pause listener does not preventDefault when a real
+   button/a holds focus — native Space-activation wins there; the global
+   law applies everywhere else. Key auto-repeat is ignored (C16).
+29. **Clip = ARIA button, Enter-activated** (PR69 C2/C46): clips carry
+   role=button + aria-pressed=selected; ENTER selects, SPACE deliberately
+   falls through to the global transport law (D3.8) rather than
+   activating — an ARIA-button exception, registered here.
+30. **Split/cut fallbacks are bound-world + video-first** (PR69
+   C52/C4): the no-selection fallback runs over boundClips (never
+   mutates an unrendered track) and prefers the bound VIDEO lane over
+   later-starting audio (NLE "topmost" = track order, not latest start).
+31. **The playback loop mounts in Timeline** (PR69 C3): usePlayhead
+   moved from App to Timeline (next to useKeys) so solo panel stories
+   play for real; exactly one loop exists in every layout.
+32. **Zoom anchors at the playhead** (PR69 C7a): zoom changes keep the
+   playhead at its viewport offset (was: scrollLeft fixed — content
+   walked off-viewport at high pps).
+33. **Trim zones 20px** (PR69 C11, was 14px): under WCAG 2.5.8's 24px
+   minimum, mitigated by the clip-edge overlap + keyboard trim (±0.5s)
+   and pinned at 20px; at 24pps a MIN_DUR clip's opposing zones still
+   overlap each other (standing constraint, now documented).
+34. **Key-repeat ignored on the whole keyboard surface** (PR69 C16):
+   rapid-fire ⌘Z was never a registered feature; a held S committed
+   double splits (live-proven) — all bindings are single-shot now.
 
 ## The topbar is a downstream customization point (R18j, thread #17)
 

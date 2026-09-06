@@ -20,12 +20,18 @@
 import { useRef, useState } from 'react';
 import { Play, Pause, Maximize2, Minimize2 } from 'lucide-react';
 import { useMini, VIEWER_ASPECTS, aspectEntry, boundClips } from '../state/useMini';
+import { usePlayhead } from '../hooks/usePlayhead';
 import { fmtTimecode } from '../lib/timecode';
 import { thumbGradientFor } from '../lib/filmstrip';
 import { contentEnd, RUNWAY_FLOOR_S } from '../lib/geometry';
 import { ToStartIcon, ClipHeadIcon } from '../lib/icons';
 
 export function Viewer() {
+  /* PR69 C3: the playback loop mounts HERE too (singleton — Timeline
+   * mounts it as well; the hook guarantees ONE rAF loop per document),
+   * so the SOLO viewer-panel story plays for real instead of flipping
+   * the icon over a frozen timecode. */
+  usePlayhead();
   const playhead = useMini((s) => s.playhead);
   const playing = useMini((s) => s.playing);
   const doc = useMini((s) => s.doc);
@@ -82,7 +88,16 @@ export function Viewer() {
         {media ? (
           <div
             className="mini-viewer__frame"
-            aria-hidden="true"
+            /* PR69 C20: the populated stage announces itself — the frame
+             * was aria-hidden with no text alternative, so a screen-reader
+             * user got MORE information from the EMPTY state ("No clip
+             * under the playhead") than from the populated one. The clip
+             * under the playhead is the viewer's single most important
+             * piece of state; role="img" + label mirrors the empty
+             * state's honesty. (The gradient itself stays decorative —
+             * the LABEL carries the content.) */
+            role="img"
+            aria-label={`${media.name} — under the playhead`}
             style={{
               background: thumbGradientFor(media),
               aspectRatio: ar.css,
