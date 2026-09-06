@@ -119,6 +119,47 @@ check("13.15 C7 worklist survives (W-ops-tagged)", lambda: ("§13.15" in specs[1
 check("single-file canon (no .refined.md files)", lambda: (
     not [f for f in os.listdir(REPO) if f.endswith(".refined.md")], "canon"))
 
+
+# === G. BLIND-SPOT CHECKS (integration-review round additions) ==================
+PHASE_VOCAB = ["C0", "C1", "C2", "C3", "C4", "W-ops", "W-media", "W-n5", "W-audio", "W-project",
+               "W-color", "S-engine", "S-ot", "S-wdc", "S-package", "S-app", "S-spec",
+               "R-fcpxml", "R-polish", "R-engine-p2", "R-cloud", "pre-C1", "pre-C4"]
+def gap_rows(t):
+    """Extract the GAP bullet rows from a spec's §0 block."""
+    m = re.search(r"\*\*GAP \(the work.*?:\*\*\s*\n(.*?)(?:\*\*ACCEPTANCE|\*\*BASE \(accepted)", t, re.S)
+    if not m:
+        return []
+    return [l for l in m.group(1).split("\n") if l.strip().startswith("-")]
+
+def ok_placement(n):
+    t = specs[n]
+    i0 = t.find("## 0. FORWARD INVENTORY")
+    if i0 < 0: return False
+    before = t[:i0]
+    return not re.search(r"^## \d", before, re.M)
+
+bad_rows = []
+for n in DOMAIN:
+    rows = gap_rows(specs[n])
+    if not rows and n not in (11, 13):
+        bad_rows.append(f"{n:02d}:no-gap-rows")
+        continue
+    NONWORK = ["REGISTERED; keep as pointer", "Register: spec 14", "No-gap ruling"]
+    for r in rows:
+        if not any(p in r for p in PHASE_VOCAB) and not any(k in r for k in NONWORK):
+            bad_rows.append(f"{n:02d}:no-phase")
+            break
+check("every GAP row carries a phase tag (structural)", lambda: (not bad_rows, ",".join(bad_rows[:5]) or "clean"))
+check("§0 is the first H2 section in every domain spec", lambda: (all(ok_placement(n) for n in DOMAIN), "placement"))
+check("no pre-retirement 358-count in live gate text (18/14/ARCH)", lambda: (
+    "358" not in specs[18] and "358" not in specs[14] and "358 tests" not in arch, "retired count absent"))
+check("count consistency: engine 356 in 17+19+00; OT 459 in 17+19+00", lambda: (
+    all("356" in x for x in [specs[17], specs[19], s00]) and all("459" in x for x in [specs[17], specs[19], s00]), "counts"))
+check("consumer-pin classes: 3420b5f + ea10c42 present in 14/19", lambda: (
+    "3420b5f" in specs[14] and "ea10c42" in specs[14] and "ea10c42" in specs[19], "consumer classes"))
+check("REVIEW-R22 transcripts exist in audits/", lambda: (
+    os.path.exists(os.path.join(REPO, "audits/REVIEW-R22-ARCH.md")) and os.path.exists(os.path.join(REPO, "audits/REVIEW-R22-PLAN.md")), "reviews"))
+
 # === REPORT ====================================================================
 fails = [r for r in results if not r[1]]
 print(f"\nbattery_r22: {len(results) - len(fails)}/{len(results)} PASS")

@@ -18,7 +18,7 @@
 
 **GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
 - **M2** — SoundTouch offline pitch, sidechain helper, PDC coordination, automation shapes. app+WDC+engine; W-audio (acceptance: offline parity pins ≤ −60 dBFS + the realtime-vs-offline null rig).
-- **Mixer G-surface FULL wiring** — inserts/sends/aux real (today: `bridgeSceneSettings` materializes unity faders + solo only, §7's honest gap). app+engine; W-audio (acceptance: mixer params audible-parity offline pins).
+- **Mixer G-surface FULL wiring** — inserts/sends/aux real (today: `bridgeSceneSettings` materializes unity faders + solo only, §7's honest gap). app+engine; W-audio (acceptance: offline parity pins (max deviation ≤ −60 dBFS any channel)).
 - **N2b keyframed volume** — engine design round queued. Engine; W-audio (acceptance: per-segment gain automation + mixdown parity pins).
 - Register: spec 14 §4.3 — the worklist; acceptance lives here.
 

@@ -12,7 +12,13 @@
 
 **BASE (accepted, pinned 2026-09-07):** the canon hierarchy (§2); the four-domain reference map with every asset pinned + gated (§3, re-baselined this round); the insight ledger (§5, 33 rows — the never-drop law); the C-series corrective deltas (§6, live until each lands). All gates re-run R22: engine 356 / OT 459 / WDC 740 / nle-ui 640 / app 83 / mini 333 / variants 1334.
 
-**GAP (the work — owner + phase per spec 14):** C7 rename → W-ops; the engine's OT vendor pin bump (`3420b5f` → current) → S-engine pin-lockset (never ahead of the app); FCPXML zero-refs → R-fcpxml (app greenfield); the projector parity corpus (the N1 family's formal S4 suite) → S-engine; §3.5/§3.6 mock retirement → post-C4/post-walk (port-then-swap); the §9 watch list's open residuals → rolling.
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- C7 rename → W-ops at end (acceptance: spec 15 §13.15 rows ALIGNED).
+- The engine's OT vendor pin bump (`3420b5f` → current) → S-engine pin-lockset (never ahead of the app; acceptance: the lockset assertion green at the new pin).
+- FCPXML zero-refs → R-fcpxml (app greenfield; acceptance: the phase-entry parser choice + the deliver e2e).
+- The projector parity corpus (the N1 family's formal S4 suite) → S-engine (acceptance: parity green on the corpus).
+- §3.5/§3.6 mock retirement → post-C4/post-walk (port-then-swap; acceptance: the crawl/walk parity gates).
+- The §9 watch list's open residuals → S-spec rolling (acceptance: each re-baselined at its next round).
 
 **ACCEPTANCE & TEST PLAN:** every §3 asset row carries its pin + suite + count (the regression role); every GAP row above carries its spec-14 phase (the forward gate); the battery's stale-pin check (HEAD-pins AND consumer-pins, both classes separately) enforces the pin world.
 
