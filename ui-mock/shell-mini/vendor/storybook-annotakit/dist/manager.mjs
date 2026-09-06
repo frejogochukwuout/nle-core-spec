@@ -5,11 +5,11 @@ import {
   UI_COMMAND,
   UI_STATE,
   probeMode
-} from "./chunk-4TMC73XV.mjs";
+} from "./chunk-S3RVNNKM.mjs";
 import {
   getStaticStore,
   renderStaticDigest
-} from "./chunk-QIWATIG4.mjs";
+} from "./chunk-UIQ2NK77.mjs";
 
 // src/manager/index.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -248,8 +248,13 @@ function ReviewPanel() {
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
+    a.style.display = "none";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(url);
+    }, 0);
   };
   const syncNow = async () => {
     setSyncing(true);
@@ -315,7 +320,7 @@ function ReviewPanel() {
     /* @__PURE__ */ React.createElement(SyncIcon, { width: 11, height: 11 }),
     " ",
     syncing ? "syncing\u2026" : "Sync now"
-  )), sync?.lastError && /* @__PURE__ */ React.createElement("div", { style: { padding: "4px 8px", borderRadius: 6, background: `${theme.colorNegative}18`, color: theme.colorNegative, whiteSpace: "pre-wrap" } }, "last sync error: ", sync.lastError), sync?.note && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: theme.textMutedColor, whiteSpace: "pre-wrap" } }, sync.note), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: theme.textMutedColor } }, health?.agentSurfaces?.github ? /* @__PURE__ */ React.createElement(React.Fragment, null, "repo: ", /* @__PURE__ */ React.createElement("b", null, health.gh?.repo), " \xB7 durability: ", health.agentSurfaces.durability, " \xB7 store: ", health.gh?.autoSync) : health?.agentSurfaces ? /* @__PURE__ */ React.createElement(React.Fragment, null, "local mode \u2014 reviews live here (REST + digests); GitHub mirror: ", health.agentSurfaces.githubReason ?? "off", health.agentSurfaces.durability ? ` \xB7 durability: ${health.agentSurfaces.durability}` : "") : "set ANNOTAKIT_GH_TOKEN in .env (auto-loaded) \xB7 repo auto-detected from git remote"), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: theme.textMutedColor } }, "Every thread mirrors to exactly ONE issue \u2014 status (open/resolved), replies and fix evidence sync both ways automatically. \u201CSync now\u201D only reconciles; it never creates a duplicate issue.")), error && /* @__PURE__ */ React.createElement("div", { style: { margin: "6px 0", padding: "5px 8px", fontSize: 11, borderRadius: 6, background: `${theme.colorNegative}22`, color: theme.colorNegative, whiteSpace: "pre-wrap" } }, error), notice && /* @__PURE__ */ React.createElement("div", { style: { margin: "6px 0", padding: "5px 8px", fontSize: 11, borderRadius: 6, background: `${theme.colorPositive}22`, color: theme.colorPositive } }, notice), shown.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { padding: "12px 4px", fontSize: 12, color: theme.textMutedColor } }, threads.length === 0 ? scope === "story" ? /* @__PURE__ */ React.createElement(React.Fragment, null, "No threads for this story. Press ", /* @__PURE__ */ React.createElement("b", null, "C"), " in the canvas and click an element \u2014 or ", /* @__PURE__ */ React.createElement("b", null, "R"), " to drag a region. Everything saves automatically to the dev-server store.") : /* @__PURE__ */ React.createElement(React.Fragment, null, "No threads yet. Press ", /* @__PURE__ */ React.createElement("b", null, "C"), " in the canvas and click an element.") : /* @__PURE__ */ React.createElement(React.Fragment, null, "All threads resolved \u{1F389} \u2014 switch the filter to \u201Call\u201D to see them.")), shown.map((t) => {
+  )), sync?.lastError && /* @__PURE__ */ React.createElement("div", { style: { padding: "4px 8px", borderRadius: 6, background: `${theme.colorNegative}18`, color: theme.colorNegative, whiteSpace: "pre-wrap" } }, "last sync error: ", sync.lastError), sync?.note && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: theme.textMutedColor, whiteSpace: "pre-wrap" } }, sync.note), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: theme.textMutedColor } }, health?.agentSurfaces?.github ? /* @__PURE__ */ React.createElement(React.Fragment, null, "repo: ", /* @__PURE__ */ React.createElement("b", null, health.gh?.repo), " \xB7 durability: ", health.agentSurfaces.durability, " \xB7 store: ", health.gh?.autoSync) : health?.agentSurfaces ? /* @__PURE__ */ React.createElement(React.Fragment, null, "local mode \u2014 reviews live here (REST + digests); GitHub mirror: ", health.agentSurfaces.githubReason ?? "off", health.agentSurfaces.durability ? ` \xB7 durability: ${health.agentSurfaces.durability}` : "") : "set ANNOTAKIT_GH_TOKEN in .env (auto-loaded) \xB7 repo auto-detected from git remote"), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: theme.textMutedColor } }, "Every thread mirrors to exactly ONE issue \u2014 status (open/resolved), replies and fix evidence sync both ways automatically. \u201CSync now\u201D only reconciles; it never creates a duplicate issue.")), error && /* @__PURE__ */ React.createElement("div", { style: { margin: "6px 0", padding: "5px 8px", fontSize: 11, borderRadius: 6, background: `${theme.colorNegative}22`, color: theme.colorNegative, whiteSpace: "pre-wrap" } }, error), notice && /* @__PURE__ */ React.createElement("div", { style: { margin: "6px 0", padding: "5px 8px", fontSize: 11, borderRadius: 6, background: `${theme.colorPositive}22`, color: theme.colorPositive } }, notice), shown.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { padding: "12px 4px", fontSize: 12, color: theme.textMutedColor } }, threads.length === 0 ? scope === "story" ? /* @__PURE__ */ React.createElement(React.Fragment, null, "No threads for this story. Press ", /* @__PURE__ */ React.createElement("b", null, "\u2325C"), " in the canvas and click an element \u2014 or ", /* @__PURE__ */ React.createElement("b", null, "\u2325R"), " to drag a region. Everything saves automatically to the dev-server store.") : /* @__PURE__ */ React.createElement(React.Fragment, null, "No threads yet. Press ", /* @__PURE__ */ React.createElement("b", null, "\u2325C"), " in the canvas and click an element.") : /* @__PURE__ */ React.createElement(React.Fragment, null, "All threads resolved \u{1F389} \u2014 switch the filter to \u201Call\u201D to see them.")), shown.map((t) => {
     const active = t.id === activeThread;
     return /* @__PURE__ */ React.createElement(
       "div",

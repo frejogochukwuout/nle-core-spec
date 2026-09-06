@@ -87,3 +87,52 @@ export function SplitIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+/* R19 (thread #53): transport seek glyphs — the same purpose-drawn
+   family grammar, now for the viewer transport. The NLE transport
+   metaphor (standard player grammar, kept unambiguous):
+   - a tall bar    = the boundary being seeked to (timeline start / a clip head)
+   - a triangle    = the direction of travel (left = backward)
+   - solid fill    = an actionable jump (matches the trim family's solid
+                     "kept" blocks)
+
+   ToStartIcon:  bar + DOUBLE triangle (⏮ — back to the beginning).
+   ClipHeadIcon: bar + SINGLE triangle (|◀ — back to the current clip's
+                 head; repeated taps walk back edit by edit). */
+
+export function ToStartIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      {/* the start boundary (t=0) */}
+      <path d="M4.5 5v14" strokeWidth="1.75" strokeLinecap="round" />
+      {/* double triangle — rewind to the start */}
+      <path d="M19 6.5 10.5 12 19 17.5z" fill="currentColor" stroke="none" />
+      <path d="M10.5 6.5 4.5 12l6 5.5z" fill="currentColor" stroke="none" opacity="0.7" />
+    </svg>
+  );
+}
+
+export function ClipHeadIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      {/* the clip-head boundary */}
+      <path d="M4.5 5v14" strokeWidth="1.75" strokeLinecap="round" />
+      {/* single triangle — back one edit point */}
+      <path d="M18.5 6.5 8.5 12l10 5.5z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}

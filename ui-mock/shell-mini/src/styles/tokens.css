@@ -9,6 +9,11 @@
    ============================================================ */
 
 :root {
+  /* PR69 C21: the shell is dark-only — declaring the scheme keeps
+   * native form surfaces (select dropdown popups, scrollbars, autofill)
+   * from falling back to UA-light styling inside an all-dark UI. */
+  color-scheme: dark;
+
   /* page / surfaces */
   --canvas-bg-primary: #0d0d0d;
   --canvas-bg-secondary: #1d1f22;
@@ -58,10 +63,10 @@
   --canvas-quick-cut-selection: #d0d0d0;
   --canvas-quick-cut-slider-active: rgba(255, 255, 255, 0.72);
   --canvas-quick-cut-snap-guide: #8f8f8f;
-  --canvas-quick-cut-drop-outline: #38bdf8; /* carried; deferred to v0.2 DnD */
+  --canvas-quick-cut-drop-outline: #38bdf8; /* live since R18e pool→timeline DnD (PR69 C51 — the stale "deferred to v0.2" comment contradicted the live .qc-drop-outline consumer and README #2) */
   --canvas-quick-cut-text-label: rgba(229, 229, 229, 1);
   --canvas-quick-cut-item-surface: rgba(255, 255, 255, 0.025);
-  --canvas-quick-cut-audio-label-surface: rgba(20, 20, 20, 0.72);
+  --canvas-quick-cut-audio-label-surface: rgba(20, 20, 20, 0.9); /* PR69 C12: 0.72 let waveform bars read through the chip as stray "-- " glyphs ahead of the label */
   --canvas-quick-cut-audio-waveform: rgba(255, 255, 255, 0.52);
 
   /* geometry — RH-verbatim values kept below in comments for provenance.
@@ -112,8 +117,11 @@
   /* R18j (thread #17): slimmed 56 → 36 — the bar is chrome-only since the
      transport moved into the viewer (R18g), so it no longer earns a tall
      strip; downstream hosts will restyle this bar anyway (customization
-     point, see Topbar.tsx note) */
-  --mini-topbar-h: 36px;
+     point, see Topbar.tsx note).
+     R20 (thread #30 follow-up, "now they are too thin be slightly
+     taller"): 36 → 40 — the calibration between the old 56 and the R18j
+     36; still a dense chrome strip, comfortable for the 14px logo. */
+  --mini-topbar-h: 40px;
   /* R18j (threads #13/#14): the collapsed panel rail width (pool left /
      inspector right — vertical label + expand button) */
   --mini-rail-w: 30px;

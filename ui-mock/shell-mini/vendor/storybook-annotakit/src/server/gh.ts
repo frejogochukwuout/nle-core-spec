@@ -42,12 +42,27 @@ export function ghApiBase(): string {
   return process.env.ANNOTAKIT_GH_API || DEFAULT_API;
 }
 
+/** PR69 C29/C41: the origin every pagination URL must match before the
+ *  bearer token is attached — a Link rel="next" pointing at another
+ *  host would otherwise exfiltrate the PAT to it (SSRF/CWE-918 class;
+ *  with ANNOTAKIT_GH_API configurable, a proxy injecting the header is
+ *  in scope). Unparseable or cross-origin next-links STOP pagination
+ *  (data already fetched is kept — same behavior as maxPages). */
+function sameOriginAsApiBase(candidate: string): boolean {
+  try {
+    return new URL(candidate).origin === new URL(ghApiBase()).origin;
+  } catch {
+    return false;
+  }
+}
+
 export function missingTokenMessage(configPath: string): string {
   return [
     'no GitHub token found. Fix with ONE of:',
     '  a) echo "ANNOTAKIT_GH_TOKEN=<your PAT>" >> .env   (dev server auto-loads it)',
     '  b) ANNOTAKIT_GH_TOKEN=<your PAT> bun run storybook  (env var at start)',
-    `  c) {"ghToken": "<your PAT>"} in ${configPath}`,
+    // PR69 C38: the config-file route is gone — a tracked config is one
+    // commit away from leaking the PAT (CWE-312)
     'then RESTART storybook dev (.env is read once at boot).',
     'No token? The review loop still works 100% locally: REST + markdown digests on this server (see /annotakit/api/export).',
   ].join('\n');
@@ -87,7 +102,15 @@ function retryAfterMs(res: Response): number | undefined {
   const reset = res.headers.get('x-ratelimit-reset');
   if (reset) {
     const n = Number.parseInt(reset, 10);
-    if (Number.isFinite(n) && n > 0) return Math.min((n - Math.floor(Date.now() / 1000)) * 1000, 900_000);
+    /* PR69 C40: the header is an ABSOLUTE epoch second — stale headers or
+     * clock skew made (now − reset) NEGATIVE, and a truthy negative
+     * retryMs disabled the backoff entirely ("retrying in ~-3s" and the
+     * engine hammering a rate-limited endpoint). Clamp: only future
+     * resets produce a wait. */
+    if (Number.isFinite(n) && n > 0) {
+      const ms = (n - Math.floor(Date.now() / 1000)) * 1000;
+      if (ms > 0) return Math.min(ms, 900_000);
+    }
   }
   return undefined;
 }
@@ -179,7 +202,10 @@ async function ghJsonPaged<T>(
     out.push(...data);
     const link: string = res.headers.get('link') ?? '';
     const next: RegExpMatchArray | null = link.match(/<([^>]+)>;\s*rel="next"/);
-    url = next ? (next[1] as string) : null;
+    /* PR69 C29/C41: follow the next-link ONLY when it is same-origin with
+     * the configured API base — the bearer token rides every paged fetch,
+     * so a foreign next-link must never receive it. */
+    url = next && sameOriginAsApiBase(next[1]) ? (next[1] as string) : null;
   }
   return out;
 }

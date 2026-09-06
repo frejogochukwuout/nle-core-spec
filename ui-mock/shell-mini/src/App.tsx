@@ -6,7 +6,6 @@ import { Inspector } from './shell/Inspector';
 import { ToastRegion } from './shell/ToastRegion';
 import { Splitter } from './shell/Splitter';
 import { Timeline } from './timeline/Timeline';
-import { usePlayhead } from './hooks/usePlayhead';
 import { useMini } from './state/useMini';
 
 /* Layout metrics (R18d splitters — feedback #13): the pool/inspector widths
@@ -20,8 +19,9 @@ const INSP_W = { initial: 240, min: 180, max: 400 };
 const TL_H = { initial: 190, min: 186, max: 440 }; // R18f wave-2: 186 = natural content height + slack so the playhead line reaches the last lane bottom
 
 export default function App() {
-  usePlayhead(); // useKeys lives in Timeline (R18f review P1-4 — solo
-  // Timeline stories need the advertised shortcuts too)
+  /* PR69 C3: usePlayhead moved INTO Timeline (next to useKeys) — the
+   * solo Timeline/Panel stories get a real playback loop, and the full
+   * app still mounts exactly one (Timeline renders in every layout). */
   const [poolW, setPoolW] = useState(POOL_W.initial);
   const [inspW, setInspW] = useState(INSP_W.initial);
   const [tlH, setTlH] = useState(TL_H.initial);

@@ -253,11 +253,22 @@ export function createAutoSync(opts: {
     if (!repo) return null;
     const token = ghToken();
     const url = `https://github.com/${repo}.git`;
-    const args = token
-      ? ['-c', `http.https://github.com/.extraheader=AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
-         'fetch', url, `+refs/heads/${branch}:${REMOTE_CACHE_REF}`]
-      : ['fetch', url, `+refs/heads/${branch}:${REMOTE_CACHE_REF}`];
-    const f = await gitAsync(root, args, timeoutMs);
+    /* PR69 C31/C43: the auth config rides git's ENV config
+     * (GIT_CONFIG_COUNT/KEY/VALUE — git ≥2.31), never argv. The old
+     * `-c http…extraheader=AUTHORIZATION: basic <b64>` put the base64
+     * PAT in the process ARGV, readable from /proc/<pid>/cmdline by any
+     * local user for the whole duration of the git call; redact() only
+     * scrubbed captured OUTPUT. gitAsync merges opts.env over
+     * process.env, so PATH & friends survive. */
+    const authEnv = token
+      ? {
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+          GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+        }
+      : undefined;
+    const args = ['fetch', url, `+refs/heads/${branch}:${REMOTE_CACHE_REF}`];
+    const f = await gitAsync(root, args, timeoutMs, authEnv ? { env: authEnv } : undefined);
     const head = await gitAsync(root, ['rev-parse', '--verify', '--quiet', REMOTE_CACHE_REF], 5000);
     if (head.ok && SHA_RE.test(head.out.trim())) return head.out.trim();
     if (!f.ok) {
@@ -318,11 +329,17 @@ export function createAutoSync(opts: {
     const token = ghToken();
     const url = `https://github.com/${repo}.git`;
     const refspec = `${sha}:refs/heads/${branch}`;
-    const args = token
-      ? ['-c', `http.https://github.com/.extraheader=AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
-         'push', '--no-verify', url, refspec]
-      : ['push', '--no-verify', url, refspec];
-    return gitAsync(root, args, timeoutMs);
+    /* PR69 C31/C43: env-route auth, same as fetchRemote — argv stays
+     * token-free. */
+    const authEnv = token
+      ? {
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+          GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+        }
+      : undefined;
+    const args = ['push', '--no-verify', url, refspec];
+    return gitAsync(root, args, timeoutMs, authEnv ? { env: authEnv } : undefined);
   };
 
   /** Read the remote db blob at a commit → validated StoreFileDoc (A13:

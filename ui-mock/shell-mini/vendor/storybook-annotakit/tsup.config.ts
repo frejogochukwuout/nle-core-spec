@@ -42,7 +42,12 @@ export default [
     format: ['cjs'],
     platform: 'node',
     target: 'node20',
-    clean: true,
+    // PR69 C33/C45: clean:false — tsup runs array configs via Promise.all
+    // into the SAME dist/; a clean on this build could delete the browser
+    // bundle's freshly-written manager.mjs/preview.mjs/staticStore.mjs and
+    // break the next `storybook dev` (preset loads dist/manager.mjs). The
+    // serial pre-build rm (package.json "build") owns cleaning instead.
+    clean: false,
     outExtension: () => ({ js: '.cjs' }),
     dts: false,
     splitting: false,

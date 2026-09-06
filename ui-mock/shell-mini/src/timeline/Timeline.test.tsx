@@ -16,6 +16,7 @@ import { poolDrag } from '../shell/MediaPool';
 import { seedDoc, multiTrackDoc } from '../lib/mockData';
 
 const S = () => useMini.getState();
+const setStore = (fn: () => void) => act(fn); // direct mutations flush re-renders
 const user = userEvent.setup();
 
 const drag = (el: Element, fromX: number, toX: number) => {
@@ -67,11 +68,20 @@ describe('drag-move (48pps default zoom)', () => {
     expect(S().past).toHaveLength(1); // one entry per gesture
   });
 
-  it('clamps against the next neighbor', () => {
+  it('R21 (user P0 revert): dragging toward the next neighbor CLAMPS — c2 parks at c3\u2019s edge, nothing else moves', () => {
     render(<Timeline />);
     const c2 = screen.getByTestId('mini-clip-c2');
-    drag(c2, 216, 216 + 300); // way right: clamps to nextStart - duration = 9 - 3.5 = 5.5
+    drag(c2, 216, 216 + 300); // raw start = 4.5 + 6.25 = 10.75
+    // the R18k clamp law restored: c2 [10.75, 14.25) would hit c3 [9,12.5)
+    // → clampMove parks the mover at nextStart - duration = 9 - 3.5 = 5.5;
+    // no escape, no minted track, no rebind, neighbors frozen
     expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V1');
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // frozen
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0);
+    expect(S().doc.tracks.map((t) => t.id)).toEqual(['V1', 'A1']);
+    expect(S().boundVideoTrack).toBe('V1'); // no window follow
+    expect(S().past).toHaveLength(1);
   });
 
   it('sub-threshold wobble: no drag, no history', () => {
@@ -618,8 +628,12 @@ describe('R18j minimized timeline (thread #13)', () => {
     render(<Timeline />);
     fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
     const c2 = screen.getByTestId('mini-clip-c2'); // 4.5→8, grab offset honored
-    drag(c2, 250, 300); // 5px threshold crossed → active drag → +50px = +1s
+    drag(c2, 250, 300); // 5px threshold crossed → active drag → +50px ≈ +1.04s
+    // R21 (user P0 revert): raw = 4.5 + 50/48 = 5.5417; span end 9.0417
+    // would overlap c3@9 → the clamp parks the mover at 9 − 3.5 = 5.5
     expect(S().doc.clips.find((x) => x.id === 'c2')!.start).toBe(5.5);
+    expect(S().doc.clips.find((x) => x.id === 'c2')!.trackId).toBe('V1');
+    expect(S().doc.clips.find((x) => x.id === 'c3')!.start).toBe(9); // NEVER pushed
     expect(S().past).toHaveLength(1); // exactly one entry for the gesture
   });
 
@@ -841,5 +855,311 @@ describe('R18k trim-mode edge shade (panel thread #1)', () => {
     const clip = screen.getByTestId('mini-clip-c2');
     drag(clip, 250, 300);
     expect(clip.className).not.toContain('is-trimming');
+  });
+});
+
+/* ---- R19: drag insert affordances, ghost edges, track selection ---- */
+
+describe('R20 — commit at the UP position (review P2-11)', () => {
+  it('a fast flick commits the UP spot, not the last pointermove', () => {
+    render(<Timeline />);
+    const c2 = screen.getByTestId('mini-clip-c2');
+    // activate the gesture with a small move, then RELEASE at +96px with
+    // NO intermediate move there — the old code would commit the small move
+    fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 216, clientY: 10 });
+    fireEvent.pointerMove(c2, { pointerId: 7, clientX: 222, clientY: 10 });
+    fireEvent.pointerUp(c2, { pointerId: 7, clientX: 216 + 96, clientY: 10 });
+    // raw at the up position = 4.5 + (312−216)/48 = 6.5 → span [6.5,10)
+    // hits c3@9 → the R18k clamp parks the mover at 9 − 3.5 = 5.5 (R21
+    // user P0 revert: no escape, no minted track)
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V1');
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // never moved
+  });
+});
+
+describe('R21 (user P0 revert) — neighbors NEVER move mid-gesture (the law every round agreed on), the mover CLAMPS', () => {
+  it('dragging c2 across c3: c3/c1 hold their snapshot positions; the mover clamps at the neighbor edge', () => {
+    render(<Timeline />);
+    const c2 = screen.getByTestId('mini-clip-c2');
+    fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 216, clientY: 10 });
+    fireEvent.pointerMove(c2, { pointerId: 7, clientX: 222, clientY: 10 }); // activate
+    // sweep right across c3's span — the R19 law teleported c3 here
+    for (const x of [300, 400, 500, 516, 400, 300]) {
+      fireEvent.pointerMove(c2, { pointerId: 7, clientX: x, clientY: 10 });
+      expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // FROZEN
+      expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0); // FROZEN
+      // the mover itself clamps at c3's edge — never overlaps, never escapes
+      expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+    }
+    // release mid-sweep: the clamped position commits; neighbors frozen
+    fireEvent.pointerUp(c2, { pointerId: 7, clientX: 516, clientY: 10 });
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V1');
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9);
+  });
+
+  it('R21 (user P0 revert): the locked window no longer refuses — the clamp law has no conflicts', () => {
+    render(<Timeline />);
+    act(() => {
+      useMini.setState({ trackBindingLocked: true });
+    });
+    const c3 = screen.getByTestId('mini-clip-c3');
+    fireEvent.pointerDown(c3, { button: 0, pointerId: 7, clientX: 432, clientY: 10 });
+    fireEvent.pointerMove(c3, { pointerId: 7, clientX: 438, clientY: 10 }); // activate
+    fireEvent.pointerMove(c3, { pointerId: 7, clientX: 150, clientY: 10 }); // onto c1
+    // the mover clamps at c2's tail (8) — the preview IS the commit
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(8);
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0);
+    fireEvent.pointerUp(c3, { pointerId: 7, clientX: 150, clientY: 10 });
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(8);
+    expect(S().past).toHaveLength(1); // plain commit — no refusal path exists
+  });
+});
+
+describe('R20 — untrusted pointer capture never kills a gesture (live-caught bug)', () => {
+  it('a THROWING setPointerCapture is swallowed; the drag still runs and commits', () => {
+    render(<Timeline />);
+    const c2 = screen.getByTestId('mini-clip-c2');
+    const proto = HTMLElement.prototype as unknown as {
+      setPointerCapture: (id: number) => void;
+    };
+    const original = proto.setPointerCapture;
+    proto.setPointerCapture = () => {
+      throw new DOMException('Invalid pointer id', 'NotFoundError');
+    };
+    try {
+      expect(() => {
+        fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 216, clientY: 10 });
+        fireEvent.pointerMove(c2, { pointerId: 7, clientX: 222, clientY: 10 });
+      }).not.toThrow();
+      expect(S().dragActive).toBe(true); // the session engaged despite the throw
+      fireEvent.pointerUp(c2, { pointerId: 7, clientX: 216 + 48, clientY: 10 });
+      expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+      expect(S().past).toHaveLength(1);
+    } finally {
+      proto.setPointerCapture = original;
+    }
+  });
+});
+
+describe('R19 — trim ghost edges (thread #51)', () => {
+  const trim = (el: Element, fromX: number, toX: number) => {
+    fireEvent.pointerDown(el, { button: 0, pointerId: 7, clientX: fromX, clientY: 10 });
+    fireEvent.pointerMove(el, { pointerId: 7, clientX: fromX + 6, clientY: 10 }); // activate
+    fireEvent.pointerMove(el, { pointerId: 7, clientX: toX, clientY: 10 });
+  };
+
+  it('OUTWARD end-trim paints the ghost; it leaves with the gesture', () => {
+    render(<Timeline />);
+    // c1 [0,3.5) media 4.5s — the end can reach 4.5 (min(neighbor 4.5, source 4.5))
+    trim(screen.getByTestId('mini-trim-end-c1'), 162, 202); // t≈(202−46)/48 = 3.25 → outward? no: 3.25 < 3.5!
+    // use a clearly outward target: x=250 → t = (250−46)/48 = 4.25 > 3.5
+    fireEvent.pointerMove(screen.getByTestId('mini-trim-end-c1'), { pointerId: 7, clientX: 250, clientY: 10 });
+    expect(screen.getByTestId('mini-trim-ghost-c1')).toBeInTheDocument();
+    fireEvent.pointerUp(screen.getByTestId('mini-trim-end-c1'), { pointerId: 7, clientX: 250, clientY: 10 });
+    expect(screen.queryByTestId('mini-trim-ghost-c1')).toBeNull();
+  });
+
+  it('INWARD end-trim never ghosts', () => {
+    render(<Timeline />);
+    trim(screen.getByTestId('mini-trim-end-c1'), 250, 180); // inward from 3.5 toward 2.8
+    expect(screen.queryByTestId('mini-trim-ghost-c1')).toBeNull();
+    fireEvent.pointerUp(screen.getByTestId('mini-trim-end-c1'), { pointerId: 7, clientX: 180, clientY: 10 });
+  });
+
+  it('at max (no room): no ghost even outward', () => {
+    render(<Timeline />);
+    // c1 is already at its media max? c1 [0,3.5) with media 4.5 has room. Use c3:
+    // c3 [9,12.5) media m-title 3.5s → end bound = 9+3.5 = 12.5 = current end → no room
+    trim(screen.getByTestId('mini-trim-end-c3'), 574, 620);
+    expect(screen.queryByTestId('mini-trim-ghost-c3')).toBeNull();
+    fireEvent.pointerUp(screen.getByTestId('mini-trim-end-c3'), { pointerId: 7, clientX: 620, clientY: 10 });
+  });
+
+  it('ripple ON suppresses the START-edge ghost (frozen-left law)', () => {
+    render(<Timeline />);
+    S().toggleRipple();
+    // c2 [4.5,8): start handle pulled outward-left → under ripple the left edge freezes
+    trim(screen.getByTestId('mini-trim-start-c2'), 250, 130); // t < 4.5 → outward request
+    expect(screen.queryByTestId('mini-trim-ghost-c2')).toBeNull();
+    fireEvent.pointerUp(screen.getByTestId('mini-trim-start-c2'), { pointerId: 7, clientX: 130, clientY: 10 });
+    S().toggleRipple();
+  });
+});
+
+describe('R19 — lane empty-area track selection (thread #26)', () => {
+  it('pointerdown on the empty lane surface selects the track', () => {
+    render(<Timeline />);
+    const lane = screen.getByTestId('mini-lane-V1');
+    fireEvent.pointerDown(lane, { button: 0, clientX: 400, clientY: 10 });
+    expect(S().selectedTrackId).toBe('V1');
+    expect(S().selectedId).toBeNull();
+  });
+
+  it('pointerdown on a CLIP does not select the track (bubbling stopped)', () => {
+    render(<Timeline />);
+    fireEvent.pointerDown(screen.getByTestId('mini-clip-c2'), { button: 0, clientX: 220, clientY: 10 });
+    expect(S().selectedId).toBe('c2');
+    expect(S().selectedTrackId).toBeNull();
+    fireEvent.pointerUp(screen.getByTestId('mini-clip-c2'), { pointerId: 1, clientX: 220, clientY: 10 });
+  });
+
+  it('the track selection replaces a clip selection (one inspector subject)', () => {
+    render(<Timeline />);
+    S().select('c2');
+    fireEvent.pointerDown(screen.getByTestId('mini-lane-V1'), { button: 0, clientX: 400, clientY: 10 });
+    expect(S().selectedTrackId).toBe('V1');
+    expect(S().selectedId).toBeNull();
+  });
+});
+
+describe('R19 — track heads (thread #28: markers vs selectors vs hidden)', () => {
+  it('single-pair project: V1/A1 marker badges render and select the track', () => {
+    render(<Timeline />);
+    const marker = screen.getByTestId('mini-track-marker-V1');
+    expect(marker).toHaveTextContent('V1');
+    expect(screen.getByTestId('mini-track-marker-A1')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-track-select-video')).toBeNull();
+    fireEvent.click(marker);
+    expect(S().selectedTrackId).toBe('V1');
+  });
+
+  it('multi-track project: selectors render, no marker badges', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    render(<Timeline />);
+    expect(screen.getByTestId('mini-track-select-video')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-track-marker-V1')).toBeNull();
+  });
+
+  it('LOCKED (embedded): neither marker nor selector — the head is hidden', () => {
+    useMini.setState({ doc: multiTrackDoc(), trackBindingLocked: true });
+    render(<Timeline />);
+    expect(screen.queryByTestId('mini-track-select-video')).toBeNull();
+    expect(screen.queryByTestId('mini-track-marker-V1')).toBeNull();
+  });
+
+  it('single-pair + LOCKED (the embedded default): no marker either', () => {
+    useMini.setState({ trackBindingLocked: true });
+    render(<Timeline />);
+    expect(screen.queryByTestId('mini-track-marker-V1')).toBeNull();
+    expect(screen.queryByTestId('mini-track-marker-A1')).toBeNull();
+  });
+});
+
+/* ---- PR69 (review round): the flagged laws, pinned ---- */
+
+describe('PR69 C47: collapsed-audio-bar DnD routing (mutation-proven gap)', () => {
+  const dragEvent = (type: 'dragover' | 'drop', x: number, transfer: object) => {
+    const ev = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: 40 });
+    Object.defineProperty(ev, 'dataTransfer', { value: transfer });
+    return ev;
+  };
+  const dt = (mediaId: string) => ({
+    types: ['application/x-mini-media'],
+    getData: (type: string) => (type === 'application/x-mini-media' ? mediaId : ''),
+    dropEffect: '',
+  });
+
+  it('dragOver + AUDIO drop restores the lane and places the clip', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-audiolane')); // hide A1
+    const bar = screen.getByTestId('mini-lane-A1-collapsed');
+    poolDrag.current = 'm-ambience';
+    const transfer = dt('m-ambience');
+    fireEvent(bar, dragEvent('dragover', 600, transfer));
+    expect(transfer.dropEffect).toBe('copy');
+    fireEvent(bar, dragEvent('drop', 600, transfer));
+    poolDrag.current = null;
+    // the lane came back AND the clip landed on it (the old test only pinned
+    // click-restore; deleting the whole onDrop body left the suite green)
+    expect(screen.getByTestId('mini-lane-A1')).toBeInTheDocument();
+    const added = S().doc.clips.find((c) => c.mediaId === 'm-ambience')!;
+    expect(added).toMatchObject({ trackId: 'A1' });
+    expect(added.start).toBeGreaterThan(0);
+  });
+
+  it('PR69 C54: wrong-kind (video) drop on the collapsed bar refuses WITH a toast — no silent dead zone', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-audiolane')); // hide A1
+    const bar = screen.getByTestId('mini-lane-A1-collapsed');
+    poolDrag.current = 'm-drone';
+    fireEvent(bar, dragEvent('drop', 600, dt('m-drone')));
+    poolDrag.current = null;
+    // the lane stays hidden (a refusal must not resurrect it)...
+    expect(screen.getByTestId('mini-lane-A1-collapsed')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-lane-A1')).toBeNull();
+    // ...but the feedback parity holds: insertMediaAt's kind-routing toast
+    expect(S().toast?.text).toContain('video media belongs on V1');
+    expect(S().doc.clips.filter((c) => c.trackId === 'A1')).toHaveLength(1); // nothing placed
+    expect(S().past).toHaveLength(0); // no history for a refusal
+  });
+});
+
+describe('PR69 C2/C46: the clip is a real button (Enter selects, Space is the transport)', () => {
+  it('clips expose role=button + aria-pressed (WCAG 4.1.2)', () => {
+    render(<Timeline />);
+    const clip = screen.getByTestId('mini-clip-c2');
+    expect(clip).toHaveAttribute('role', 'button');
+    expect(clip).toHaveAttribute('aria-pressed', 'false');
+    act(() => S().select('c2'));
+    expect(screen.getByTestId('mini-clip-c2')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('Enter on the focused clip selects; SPACE falls through to the global transport (D3.8)', () => {
+    render(<Timeline />);
+    act(() => S().select(null));
+    const clip = screen.getByTestId('mini-clip-c1');
+    fireEvent.keyDown(clip, { key: 'Enter' });
+    expect(S().selectedId).toBe('c1');
+    // the old handler swallowed Space at the target layer — Play/Pause was
+    // dead after any clip click (the most common editing state)
+    fireEvent.keyDown(clip, { key: ' ' });
+    expect(S().playing).toBe(true);
+  });
+});
+
+describe('PR69 C53: mutating keys die at POINTERDOWN (the 5px window)', () => {
+  it('⌘Z under a held pointer is inert until the gesture ends', () => {
+    render(<Timeline />);
+    setStore(() => S().select('c2'));
+    setStore(() => S().moveClip('c2', 5.5)); // one history entry to undo
+    const clip = screen.getByTestId('mini-clip-c2');
+    // pointerdown WITHOUT movement: pending window open, lock not yet engaged
+    fireEvent.pointerDown(clip, { button: 0, pointerId: 11, clientX: 264, clientY: 10 });
+    expect(S().gesturePending).toBe(true);
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5); // NOT undone under the held pointer
+    fireEvent.pointerUp(clip, { pointerId: 11, clientX: 264, clientY: 10 });
+    expect(S().gesturePending).toBe(false);
+    // after release the surface is live again
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+  });
+});
+
+describe('PR69 C9: a clip unmounting mid-gesture releases the lock', () => {
+  it('unmount with an active drag clears dragActive + gesturePending', () => {
+    const view = render(<Timeline />);
+    const clip = screen.getByTestId('mini-clip-c2');
+    fireEvent.pointerDown(clip, { button: 0, pointerId: 12, clientX: 264, clientY: 10 });
+    fireEvent.pointerMove(clip, { pointerId: 12, clientX: 300, clientY: 10 }); // 5px crossed → lock
+    expect(S().dragActive).toBe(true);
+    view.unmount(); // story switch / HMR / parent-driven unmount
+    expect(S().dragActive).toBe(false);
+    expect(S().gesturePending).toBe(false);
+    // the keyboard surface works again without knowing the Esc law
+    fireEvent.keyDown(window, { key: 's' });
+    expect(S().past.length).toBeGreaterThanOrEqual(0); // no lock trap
+  });
+});
+
+describe('PR69 C7b: the zoom slider announces units', () => {
+  it('aria-valuetext carries the px/s scale', () => {
+    render(<Timeline />);
+    const slider = screen.getByTestId('mini-zoom-slider');
+    expect(slider).toHaveAttribute('aria-valuetext', '48 pixels per second');
+    setStore(() => S().setZoomStep(0));
+    expect(screen.getByTestId('mini-zoom-slider')).toHaveAttribute('aria-valuetext', '24 pixels per second');
   });
 });

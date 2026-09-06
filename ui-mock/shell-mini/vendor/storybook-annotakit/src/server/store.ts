@@ -422,13 +422,24 @@ function jsonStore(storePath: string): Store {
   };
 
   const mutate = <T>(fn: () => Promise<T> | T): Promise<T> => {
-    queue = queue.then(async () => {
+    /* PR69 C30/C42: the queue must stay ALIVE through failures — the old
+     * `queue = queue.then(...)` reassigned the chain to whatever that
+     * mutation's promise settled to, so ONE failed load/fn/persist
+     * (transient EACCES/ENOSPC) permanently wedged every later write for
+     * the process lifetime (each chained onto a rejected promise). The
+     * chain advances from a settled-noop; the CALLER still sees its own
+     * mutation's rejection. Same shape ghsync.ts run() already used. */
+    const next = queue.then(async () => {
       await load();
       const out = await fn();
       await persist();
       return out;
     });
-    return queue as Promise<T>;
+    queue = next.then(
+      () => undefined,
+      () => undefined,
+    ); // keep the chain alive through failures
+    return next as Promise<T>;
   };
 
   const loadRead = async (): Promise<void> => {

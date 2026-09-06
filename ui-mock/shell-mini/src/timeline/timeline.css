@@ -22,6 +22,12 @@
     rgba(255, 255, 255, 0.024) 0 1px inset;
   overflow: hidden;
   z-index: 1;
+  /* R20 (thread th_mtpf59ol): drag/scrub gestures across the timeline
+     selected body text (ruler + tools + lanes + min strip) — the whole
+     panel is a gesture surface, not a text surface. user-select does not
+     gate pointer events, so area-selection stays possible later. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* tools row — 42px, right-aligned controls (RH-verbatim) */
@@ -161,6 +167,43 @@
 }
 
 .qc-toolbar__slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: rgba(255, 255, 255, 0.22) 0 0 0 2px;
+}
+
+/* PR69 C25: the Firefox counterparts — appearance:none stripped the
+   native control while only -webkit-* pseudos were styled, so Firefox
+   rendered an invisible slider (no track, no thumb, no fill).
+   ::-moz-range-progress paints the active fill natively (no CSS
+   variable needed); the track mirrors the webkit gradient. */
+.qc-toolbar__slider::-moz-range-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--canvas-quick-cut-slider-active) 0%,
+    var(--canvas-quick-cut-slider-active) var(--qc-slider-pct, 50%),
+    rgba(255, 255, 255, 0.18) var(--qc-slider-pct, 50%),
+    rgba(255, 255, 255, 0.18) 100%
+  );
+}
+
+.qc-toolbar__slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--canvas-quick-cut-slider-active);
+}
+
+.qc-toolbar__slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--canvas-quick-cut-slider-active);
+  box-shadow: none;
+}
+
+.qc-toolbar__slider:focus-visible::-moz-range-thumb {
   box-shadow: rgba(255, 255, 255, 0.22) 0 0 0 2px;
 }
 
@@ -326,10 +369,17 @@
   pointer-events: auto;
 }
 
-/* time label pill + triangle (RH-verbatim, hover/drag reveal) */
+/* time label pill + triangle (RH-verbatim, hover/drag reveal).
+   R20 (thread th_mtpf397v): the pill lives INSIDE the ruler band in ALL
+   modes — structural, no mode fork. Was top:-31px (poking 12px ABOVE the
+   ruler top, fine under the tools row in full mode, CROPPED in video-only
+   where the ruler is the panel's first row). The button's top:19px +
+   top:-17px = overlay y 2–22: fully inside the 34px ruler, above the line
+   start; the triangle follows at the pill's bottom edge. The handle dot
+   (y15) passes under the pill while it shows — the pill IS the readout. */
 .qc-ruler__playhead::after {
   position: absolute;
-  top: -31px;
+  top: -17px;
   left: 50%;
   min-width: 38px;
   height: 20px;
@@ -353,7 +403,7 @@
 
 .qc-ruler__playhead::before {
   position: absolute;
-  top: -12px;
+  top: 3px;
   left: 50%;
   width: 0;
   height: 0;
@@ -439,7 +489,10 @@
   box-sizing: border-box;
   background: rgba(255, 255, 255, 0.075);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-  border-radius: var(--canvas-editor-radius-control);
+  /* R19 (thread #50): the head-chip corner law — rounded on the OUTER
+     (left) side, FLAT on the side touching the track (right). The chip
+     reads as an extension of its lane, not a floating pill. */
+  border-radius: 6px 0 0 6px;
 }
 
 .qc-track-head--collapsed {
@@ -503,6 +556,14 @@
   min-width: 0;
 }
 
+.qc-track-select select option {
+  /* PR69 C21: option parity — browsers that ignore per-option UA theming
+   * (and the pre-color-scheme world) get the same dark surface the
+   * aspect select already hardcodes. */
+  background: #16181a;
+  color: var(--canvas-editor-text-default);
+}
+
 .qc-track-select select {
   appearance: none;
   -webkit-appearance: none;
@@ -532,6 +593,92 @@
   outline: rgba(255, 255, 255, 0.62) solid 2px;
   outline-offset: 1px;
 }
+
+/* R19 (thread #28): the single-pair marker badge — the lane's identity
+   chip (V1/A1), styled as the select's sibling (same surface grammar).
+   A real button: click selects the track for inspection (thread #26). */
+.qc-track-marker {
+  flex: 1 1 auto;
+  height: 18px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: var(--canvas-quick-cut-audio-label-surface);
+  color: var(--canvas-editor-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+/* R20 (thread #29 — wave 8): the mute STATE chip — rides the head next to
+   the identity (selector/marker); a real button (click = unmute). The
+   red-family tint matches the refuse affordance / toast error text. */
+.qc-track-mute-chip {
+  flex: 0 0 auto;
+  height: 18px;
+  width: 20px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid rgba(255, 157, 157, 0.4);
+  border-radius: 4px;
+  background: rgba(255, 157, 157, 0.12);
+  color: #ff9d9d;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.qc-track-mute-chip:hover {
+  background: rgba(255, 157, 157, 0.22);
+}
+
+/* the muted LANE: content dims to half presence (the pro convention); the
+   lane keeps its geometry + interactivity (mute is edit state, not a
+   lock — clips stay selectable/draggable). Same law in the min strip. */
+.qc-track-row__content.is-muted {
+  opacity: 0.5;
+}
+
+.qc-min-lane.is-muted {
+  opacity: 0.55;
+}
+
+.qc-track-marker:hover {
+  color: var(--canvas-editor-text-default);
+  background: rgba(20, 20, 20, 0.9);
+}
+
+.qc-track-marker.is-selected {
+  color: var(--canvas-quick-cut-accent);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(242, 242, 242, 0.4);
+}
+
+.qc-track-marker:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
+/* R19 (thread #51): the trim ghost — the dotted extent of how much
+   further the trimmed edge can reach (outward only; hidden at max/no
+   room). Painted by the LANE at the clip's inset band — the clip body
+   clips its own overflow, so the ghost cannot live inside it. Pure
+   decoration (aria-hidden). */
+.qc-trim-ghost {
+  position: absolute;
+  z-index: 1;
+  top: var(--canvas-editor-clip-inset);
+  bottom: var(--canvas-editor-clip-inset);
+  border: 1px dashed rgba(242, 242, 242, 0.4);
+  border-radius: var(--mini-radius-clip);
+  background: rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+}
+
 
 /* ---- clips (RH-verbatim anatomy + gradient bodies) ---------- */
 
@@ -670,7 +817,13 @@
   z-index: 2;
   top: 0;
   bottom: 0;
-  width: 14px;
+  /* PR69 C11: 14px was under the 24px WCAG 2.5.8 minimum on the shell's
+   * most precision-critical gesture — 20px + the clip-edge overlap + the
+   * keyboard alternative (trim buttons, ±0.5s) bring it into the
+   * "target-enhancement" tier. At 24pps a MIN_DUR clip's two opposing
+   * zones still overlap each other (12px clip) — registered constraint,
+   * unchanged. */
+  width: 20px;
   padding: 0;
   border: none;
   box-sizing: border-box;
@@ -728,8 +881,12 @@
 
 /* ---- drag ghost shading (preview state) --------------------- */
 
+/* R20: the mover renders ABOVE its lane (OT's drag view — overlap is
+   allowed visually while the doc stays frozen); the verdict ring +
+   chip carry the drop meaning. */
 .qc-track-item.is-dragging {
   opacity: 0.85;
+  z-index: 5;
 }
 
 /* ---- snap guide (R18e: ported sibling T5 pattern, feedback deferral
@@ -793,11 +950,18 @@
   display: flex;
   align-items: stretch;
   border-top: 1px solid var(--mini-panel-head-rule);
+  /* R19 (thread #48): the toggle-slot law — this padding MUST equal
+     .qc-timeline__tools' padding-left, so the minimize/expand button
+     occupies the SAME x-range in both modes (the reviewer's "button
+     position doesn't change much, feel more like a toggling"). */
+  padding-left: 10px;
 }
 
 .qc-min__expand {
   flex: 0 0 auto;
-  width: 30px;
+  /* R19 (thread #48): the toolbar icon's width — same slot geometry as
+     the expanded minimize button. */
+  width: var(--canvas-editor-action-size);
   border: none;
   background: transparent;
   color: var(--canvas-editor-text-muted);
@@ -842,7 +1006,11 @@
 .qc-ruler--min .qc-ruler__label {
   top: 4px;
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.4);
+  /* PR69 C23: 0.4 alpha measured ≈3.8:1 on the panel surface — under
+   * the 4.5:1 required for sub-18px text. The expanded ruler's 0.52
+   * (≈5.6:1) passes; the compact strip keeps its quieter look via the
+   * 9px size + hidden ticks, not via failing contrast. */
+  color: var(--canvas-editor-text-muted);
 }
 
 .qc-ruler--min .qc-ruler__tick {

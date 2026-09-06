@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import App from './App';
 import { useMini } from './state/useMini';
+import { ppsFor } from './lib/geometry';
 
 const S = () => useMini.getState();
 
@@ -108,9 +109,11 @@ describe('keyboard on the real shell', () => {
 
   it('0 resets zoom to the default step (48pps)', () => {
     renderApp();
-    setStore(() => S().setZoomStep(4));
+    setStore(() => S().setZoomStep(6));
     fireEvent.keyDown(window, { key: '0' });
-    expect(S().zoomStep).toBe(1);
+    // R19: the 9-step ladder renumbered the default to step 2 (still 48pps)
+    expect(S().zoomStep).toBe(2);
+    expect(ppsFor(S().zoomStep)).toBe(48);
   });
 
   it('⌘⇧Z redoes on the real shell', () => {
@@ -385,5 +388,264 @@ describe('R18j panel collapse + viewer max + aspect (threads #13/#14/#19)', () =
     expect(screen.queryByText('Source length')).not.toBeInTheDocument();
     setStore(() => S().select('c1')); // drone video — source length back
     expect(screen.getByText('Source length')).toBeInTheDocument();
+  });
+});
+
+/* ---- R19: the viewer scrub bar + seek controls (thread #53) ---- */
+
+describe('R19 — viewer scrub bar (thread #53)', () => {
+  it('renders with slider semantics + the runway-floored extent', () => {
+    renderApp();
+    const bar = screen.getByTestId('mini-viewer-scrub');
+    expect(bar).toHaveAttribute('role', 'slider');
+    expect(bar).toHaveAttribute('aria-label', 'Scrub playhead');
+    // seed contentEnd 12.5 ≥ the 8s runway floor → extent = 12.5
+    expect(bar).toHaveAttribute('aria-valuemax', '12.5');
+    expect(bar).toHaveAttribute('aria-valuemin', '0');
+    expect(screen.getByTestId('mini-btn-seek-start')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-btn-seek-cliphead')).toBeInTheDocument();
+  });
+
+  it('the extent floors at 8s for an empty world (the runway law)', () => {
+    setStore(() =>
+      useMini.setState({ doc: { tracks: S().doc.tracks, media: S().doc.media, clips: [] } }),
+    );
+    renderApp();
+    expect(screen.getByTestId('mini-viewer-scrub')).toHaveAttribute('aria-valuemax', '8');
+  });
+
+  it('keyboard scrub: arrows nudge 0.5s, Home/End jump (aria clamps at extent)', async () => {
+    renderApp();
+    setStore(() => S().setPlayhead(3));
+    const bar = screen.getByTestId('mini-viewer-scrub');
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+    expect(S().playhead).toBe(3.5);
+    fireEvent.keyDown(bar, { key: 'ArrowLeft' });
+    expect(S().playhead).toBe(3);
+    fireEvent.keyDown(bar, { key: 'Home' });
+    expect(S().playhead).toBe(0);
+    fireEvent.keyDown(bar, { key: 'End' });
+    expect(S().playhead).toBe(12.5); // rulerEnd is 12.5 in jsdom (the effect ran)
+  });
+
+  it('to-start seeks 0; clip-head seeks the under-playhead head then walks back', () => {
+    renderApp();
+    setStore(() => S().setPlayhead(5)); // inside c2 [4.5,8)
+    fireEvent.click(screen.getByTestId('mini-btn-seek-cliphead'));
+    expect(S().playhead).toBe(4.5);
+    fireEvent.click(screen.getByTestId('mini-btn-seek-cliphead')); // at the head → previous edit
+    expect(S().playhead).toBe(0);
+    fireEvent.click(screen.getByTestId('mini-btn-seek-cliphead')); // at 0 → stays at the floor
+    expect(S().playhead).toBe(0);
+    setStore(() => S().setPlayhead(7));
+    fireEvent.click(screen.getByTestId('mini-btn-seek-start'));
+    expect(S().playhead).toBe(0);
+  });
+
+  it('the playhead tick pins full when a ruler scrub parks past the content end', () => {
+    renderApp();
+    setStore(() => S().setPlayhead(12.5)); // at the extent edge
+    const bar = screen.getByTestId('mini-viewer-scrub');
+    expect(bar).toHaveAttribute('aria-valuenow', '12.5');
+  });
+});
+
+/* ---- R19: rail whole-click (threads #24/#25) — the button fills the rail ---- */
+
+describe('R19 — rails expand on whole-surface click', () => {
+  it('the collapsed pool rail is a single button element (whole surface)', () => {
+    setStore(() => S().setPoolCollapsed(true));
+    renderApp();
+    const rail = screen.getByTestId('mini-btn-pool-expand');
+    // the rail button is the panel's only child and stretches (CSS flex law)
+    expect(rail).toHaveTextContent('Media');
+    fireEvent.click(rail);
+    expect(S().poolCollapsed).toBe(false);
+    expect(screen.getByTestId('mini-pool')).toBeInTheDocument();
+  });
+
+  it('the collapsed inspector rail expands the same way', () => {
+    setStore(() => S().setInspectorCollapsed(true));
+    renderApp();
+    const rail = screen.getByTestId('mini-btn-inspector-expand');
+    fireEvent.click(rail);
+    expect(S().inspectorCollapsed).toBe(false);
+  });
+});
+
+/* ---- R19: the inspector's track card (thread #47) ---- */
+
+describe('R19 — inspector track card', () => {
+  it('lane selection shows the track card with honest facts', () => {
+    renderApp();
+    setStore(() => S().selectTrack('V1'));
+    const card = screen.getByTestId('mini-inspector-track');
+    expect(card).toHaveTextContent('V1 lane');
+    expect(card).toHaveTextContent('video');
+    expect(screen.getByTestId('mini-inspector-track-count')).toHaveTextContent('3');
+    // pointerdown on a clip swaps the subject back (mutual exclusion —
+    // clips select on pointerdown, the gesture engine's own law)
+    fireEvent.pointerDown(screen.getByTestId('mini-clip-c2'), { button: 0 });
+    fireEvent.pointerUp(screen.getByTestId('mini-clip-c2'), { pointerId: 1 });
+    expect(screen.queryByTestId('mini-inspector-track')).toBeNull();
+    expect(screen.getByTestId('mini-inspector-name')).toHaveTextContent('beach_wide.mp4');
+  });
+
+  /* R20 (thread #29 — wave 8): the named basic control — mute. */
+  it('the MUTE control toggles doc state: one entry, lane dims, head chip, undo restores', () => {
+    renderApp();
+    setStore(() => S().selectTrack('A1'));
+    const btn = screen.getByTestId('mini-track-mute');
+    expect(btn).toHaveTextContent('Mute');
+    expect(screen.getByTestId('mini-lane-A1')).not.toHaveClass('is-muted');
+    fireEvent.click(btn);
+    expect(S().doc.tracks.find((t) => t.id === 'A1')!.muted).toBe(true);
+    expect(S().past).toHaveLength(1); // doc state — one history entry
+    expect(screen.getByTestId('mini-track-mute')).toHaveTextContent('Unmute');
+    expect(screen.getByTestId('mini-lane-A1')).toHaveClass('is-muted'); // the lane dims
+    expect(screen.getByTestId('mini-track-mute-chip-A1')).toBeInTheDocument(); // the head M chip
+    // the chip unmutes from the timeline surface (a real button, not a badge)
+    fireEvent.click(screen.getByTestId('mini-track-mute-chip-A1'));
+    expect(S().doc.tracks.find((t) => t.id === 'A1')!.muted).toBe(false); // unmuted (saved as false — round-trip shape)
+    expect(screen.queryByTestId('mini-track-mute-chip-A1')).toBeNull();
+    // undo restores the pre-toggle doc exactly (mute is history, not view)
+    fireEvent.click(screen.getByTestId('mini-track-mute'));
+    setStore(() => S().undo());
+    expect(S().doc.tracks.find((t) => t.id === 'A1')!.muted).toBeFalsy(); // the pre-toggle doc restored
+    expect(screen.getByTestId('mini-lane-A1')).not.toHaveClass('is-muted');
+  });
+
+  it('mute is suppressed mid-gesture (the interaction lock family)', () => {
+    renderApp();
+    setStore(() => S().selectTrack('A1'));
+    S().beginDrag();
+    fireEvent.click(screen.getByTestId('mini-track-mute'));
+    expect(S().doc.tracks.find((t) => t.id === 'A1')!.muted).toBeFalsy();
+    expect(S().past).toHaveLength(0);
+    S().cancelDrag();
+  });
+});
+
+/* ---- PR69 (review round): the flagged laws, pinned ---- */
+
+describe('PR69 keyboard law (C1/C16/C46/C49)', () => {
+  it('C49: the ADVERTISED zoom keys work (+ / − / = / _)', () => {
+    renderApp();
+    fireEvent.keyDown(window, { key: '+' });
+    expect(S().zoomStep).toBe(3); // default 2 → up one rung
+    fireEvent.keyDown(window, { key: '=' });
+    expect(S().zoomStep).toBe(4);
+    fireEvent.keyDown(window, { key: '-' });
+    expect(S().zoomStep).toBe(3);
+    fireEvent.keyDown(window, { key: '_' });
+    expect(S().zoomStep).toBe(2);
+  });
+
+  it('C16: key auto-repeat never machine-guns a binding (one S-hold = one split)', () => {
+    renderApp();
+    setStore(() => S().setPlayhead(2));
+    fireEvent.keyDown(window, { key: 's' });
+    fireEvent.keyDown(window, { key: 's', repeat: true });
+    fireEvent.keyDown(window, { key: 's', repeat: true });
+    expect(S().doc.clips).toHaveLength(5); // exactly ONE split, not three
+    expect(S().past).toHaveLength(1);
+  });
+
+  it('C16: a held Space does not strobe play/pause', () => {
+    renderApp();
+    fireEvent.keyDown(window, { key: ' ' });
+    expect(S().playing).toBe(true);
+    fireEvent.keyDown(window, { key: ' ', repeat: true });
+    fireEvent.keyDown(window, { key: ' ', repeat: true });
+    expect(S().playing).toBe(true); // repeats ignored, final state stable
+  });
+
+  it('C1: Space on a focused BUTTON does not hijack playback (native activation wins)', () => {
+    renderApp();
+    // focus a real button (the transport play control) — the global handler
+    // must yield so the browser's own Space-activation can run
+    const play = screen.getByTestId('mini-btn-play');
+    play.focus();
+    fireEvent.keyDown(play, { key: ' ' });
+    // jsdom does not synthesize the native click on Space — the pinned law
+    // is that the GLOBAL surface does NOT toggle playback behind the button
+    expect(S().playing).toBe(false);
+    expect(play).toHaveFocus();
+  });
+
+  it('C1: shortcuts stay alive while a button merely HOLDS focus (S still splits)', () => {
+    renderApp();
+    screen.getByTestId('mini-btn-play').focus();
+    setStore(() => S().setPlayhead(2));
+    fireEvent.keyDown(window, { key: 's' });
+    expect(S().doc.clips).toHaveLength(5);
+  });
+});
+
+describe('PR69 C55: pool-card double-fire guard', () => {
+  it('a double-click appends exactly ONE clip (one history entry)', () => {
+    renderApp();
+    const card = screen.getByTestId('mini-media-m-sunset');
+    fireEvent.click(card);
+    fireEvent.click(card); // the second click of a double-click: ignored
+    const v1 = S().doc.clips.filter((c) => c.trackId === 'V1');
+    expect(v1).toHaveLength(4); // 3 seed (c1-c3) + exactly one append
+    expect(S().past).toHaveLength(1); // one ⌘Z restores the pre-append world
+  });
+});
+
+describe('PR69 C6: toast honesty (pause / close / error TTL)', () => {
+  it('hover pauses the auto-dismiss timer', () => {
+    vi.useFakeTimers();
+    renderApp();
+    setStore(() => S().pushToast('info', 'paused toast'));
+    const toast = screen.getByTestId('mini-toast');
+    fireEvent.mouseEnter(toast); // reader mid-sentence
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(screen.getByTestId('mini-toast')).toBeInTheDocument(); // still there
+    fireEvent.mouseLeave(toast);
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(screen.queryByTestId('mini-toast')).toBeNull(); // un-paused → dismissed
+    vi.useRealTimers();
+  });
+
+  it('errors outlive info toasts (8s) and carry a manual close button', () => {
+    vi.useFakeTimers();
+    renderApp();
+    setStore(() => S().pushToast('error', 'the lane is full'));
+    act(() => {
+      vi.advanceTimersByTime(3000); // past the OLD 2.6s TTL
+    });
+    expect(screen.getByTestId('mini-toast')).toBeInTheDocument(); // still readable
+    fireEvent.click(screen.getByTestId('mini-toast-close'));
+    expect(screen.queryByTestId('mini-toast')).toBeNull();
+    vi.useRealTimers();
+  });
+});
+
+describe('PR69 C3/C20: solo surfaces play for real; the viewer stage announces its clip', () => {
+  it('C3: the rAF loop mounts with Timeline (solo render, not just App)', () => {
+    // rAF is stubbed by RTL's environment; assert the LOOP advances the
+    // playhead when playing is set (the old solo-story world: playing=true
+    // with NO loop — timecode frozen)
+    renderApp();
+    setStore(() => S().togglePlay());
+    expect(S().playing).toBe(true);
+    act(() => {
+      S().tick(0.5);
+    });
+    expect(S().playhead).toBe(0.5); // the loop's step, wired
+  });
+
+  it('C20: the populated viewer frame exposes name/role/label (no aria-hidden)', () => {
+    renderApp();
+    const frame = screen.getByTestId('mini-viewer-frame');
+    expect(frame).toHaveAttribute('role', 'img');
+    expect(frame).toHaveAttribute('aria-label', expect.stringContaining('drone_launch'));
+    expect(frame).not.toHaveAttribute('aria-hidden');
   });
 });

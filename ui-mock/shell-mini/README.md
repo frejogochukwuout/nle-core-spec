@@ -10,7 +10,7 @@ set + DOM anatomy).
 The build contract is [`docs/DESIGN-mvp.md`](docs/DESIGN-mvp.md) (v2.1
 FINAL — design-audit + code-review rounds folded). `../shell-variants/`
 remains the full spec-18 study; this app is the deliberately small sibling:
-~14 source files vs 100+, 93 tests vs 596, 30 stories vs 83.
+~28 source files vs 100+, 343 tests vs 596, 13 stories vs 83 (PR69 refresh).
 
 ## Run it
 
@@ -19,7 +19,7 @@ npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-
 npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
                     #   run via `python3 scripts/dev3000.py` double-fork daemon so it
                     #   survives the per-toolcall process reaping — plain nohup/setsid die)
-npm test            # vitest — 4 files / 93 tests (jsdom)
+npm test            # vitest — 7 files / 343 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # the FULL dev server on :3000 (run via `python3
@@ -77,10 +77,55 @@ Run it at boot or any time; safe twice.
 
 - **Timeline** (the RH quick-cut port): tools row (undo/redo · split S ·
   cut-head [ · cut-tail ] · delete · snap · ripple · filmstrip · audio-eye
-  · 5-step zoom, hairline group dividers), 34px ruler with whole-second
+  · 9-step zoom (R19, thread #52), hairline group dividers), 34px ruler with whole-second
   labels + minor tick band, white playhead with hover/drag time pill,
-  2 lanes (V1+A1, 36px base, badges) that FLEX-TALL when the timeline is
+  2 lanes (V1+A1, 36px base, markers) that FLEX-TALL when the timeline is
   resized.
+- **R20 drag law — the OT-faithful pass** (`docs/OT-SEAMS.md` §1.1–1.3,
+  `.agents/design/r20-drag-ot-law.md`): clips drag FREELY across the lane
+  and NOTHING ELSE MOVES mid-gesture (OT's drag view — the R19
+  insert-push law teleported neighbors per pointermove and is RETIRED);
+  overlap is allowed visually, the mover rendering above its lane with the
+  live drop verdict (amber dashed ring + `→ V2` chip while the drop will
+  escape; red ring + `no room · locked` chip while it will refuse). At the
+  UP: free span → plain commit (one history entry); conflicting span → OT's
+  escape THROUGH the window — an existing free same-kind track hosts the
+  drop when one fits, else a MINTED track (V/A series), and the window
+  REBINDS to follow the clip (undo restores doc AND binding — history
+  entries are binding-aware); `trackBindingLocked` → REFUSE (doc restored,
+  no history, honest toast — the mini's CONFLICT). Free spans land at the
+  PREVIEW-rendered position (magnet included, commit at the UP); Esc
+  restores the pre-drag doc; both clip edges magnet (OT snapGroupEdges
+  parity, nearest-wins) and a snap-induced conflict flows through the same
+  drop law; the magnet field freezes at gesture start. All six
+  `setPointerCapture` sites guarded (untrusted pointers throw NotFoundError
+  — live-caught). Programmatic `moveClip` keeps the OT wire law: overlap ⇒
+  REFUSE + honest toast (nudge routes it too).
+- **R19 trim ghosts** (thread #51): while trimming OUTWARD, the dotted
+  ghost edge shows how much further the clip can extend (the
+  source/neighbor bound — "how far you can go before you max out the
+  source"); inward trims and maxed bounds never ghost; ripple start-trim
+  suppresses it (frozen-left law).
+- **R19 viewer scrub bar + seek controls** (thread #53 + the scrubbing
+  item): the transport's second row is a full-width scrub bar (progress
+  fill + playhead tick, its center exactly under the centered play
+  button — measured 0px); drag/click scrubs; the focusable slider carries
+  ←/→ 0.5s + Home/End; the left transport slot gains to-start (⏮) and
+  to-current-clip-head (|◀, repeated taps walk back edit by edit) —
+  purpose-drawn glyphs in the trim/split family grammar.
+- **R19 track selection + inspector track card** (thread #26): the lane's
+  empty surface and the head badge select the TRACK — the inspector's
+  second subject (name, kind, clip count, total content, bound role);
+  clip vs track selection are mutually exclusive (one subject at a time)
+  and heal with the same survive-iff-visible law as clips.
+- **R19 track heads** (thread #28): single-pair projects show V1/A1
+  MARKER badges (click = select the track); multi-track projects keep the
+  binding selector; a LOCKED (embedded) host hides the head entirely.
+  Head chips are rounded on the outer side, flat where they touch the
+  track (thread #50).
+- **R19 rails** (threads #24/#25): the collapsed pool/inspector rails are
+  whole-surface buttons (flex-fill the rail height — the lower area was
+  dead to clicks).
 - **Ripple edit** (R18e, feedback #16): toggle in the toolbar; delete and
   trim close the gap — same-track followers shift left/right with the
   edit. Committed + preview paths are snapshot-relative (idempotent, no
@@ -276,6 +321,64 @@ Run it at boot or any time; safe twice.
    shade returns ONLY while trimming: hovering an edge drag zone
    (:has()) or actively dragging it (is-trimming-* from the gesture
    engine) shades exactly that edge, alongside the 2px accent line.
+22. **Windowed drag escape** (R20) — **REVERTED by the user's P0
+   directive 2026-09-06** ("the last two rounds of drag changes made
+   things worse"): the drag is back to the R18k NEIGHBOR-CLAMPED law
+   (the mover clamps between same-track neighbors, the preview is the
+   commit, one plain history entry; no insert-push, no escape/minted
+   tracks, no verdict chips, no rebind). The one surviving law from
+   those rounds: neighbors NEVER move during a gesture. See #35.
+23. **9-step zoom ladder** (R19, thread #52): [24, 36, 48, 72, 96, 144,
+   192, 288, 384] — the five R18 anchors preserved with a new rung
+   between each (×1.5); default step 2 (48pps unchanged).
+24. **Same-track gap hunt on pool drops** (R19, OT-SEAMS §1.5): OT's
+   `firstAvailable` insert never hunts same-track gaps; the mini's
+   `insertionAt` does (exact → next gap → tail) — a mock affordance.
+25. **Implicit in-point-0 element model** (R19, OT-SEAMS §1.6): the mini's
+   clip is a full window over its source (media.duration = extent); OT
+   elements carry trimStart/trimEnd/sourceDuration. Conversion at swap:
+   `{trimStart: 0, trimEnd: sourceDuration − duration}`.
+26. **Head law revised** (R19, thread #28): single-pair unlocked shows
+   V1/A1 markers (supersedes the R18k "invisible when single-pair"
+   reading — the newer thread asked for the marker back); locked hides
+   the head; corner law rounded-outer/flat-track-side (thread #50).
+27. **Nudge refuses instead of parking** (R19): nudging into a neighbor
+   is refused with a toast (was: silent clamp-park). Precise edits get
+   honest refusal — the drag path owns the rearrange affordance.
+28. **Space yields to the focused native control** (PR69 C1): the global
+   Space=play/pause listener does not preventDefault when a real
+   button/a holds focus — native Space-activation wins there; the global
+   law applies everywhere else. Key auto-repeat is ignored (C16).
+29. **Clip = ARIA button, Enter-activated** (PR69 C2/C46): clips carry
+   role=button + aria-pressed=selected; ENTER selects, SPACE deliberately
+   falls through to the global transport law (D3.8) rather than
+   activating — an ARIA-button exception, registered here.
+30. **Split/cut fallbacks are bound-world + video-first** (PR69
+   C52/C4): the no-selection fallback runs over boundClips (never
+   mutates an unrendered track) and prefers the bound VIDEO lane over
+   later-starting audio (NLE "topmost" = track order, not latest start).
+31. **The playback loop mounts in Timeline** (PR69 C3): usePlayhead
+   moved from App to Timeline (next to useKeys) so solo panel stories
+   play for real; exactly one loop exists in every layout.
+32. **Zoom anchors at the playhead** (PR69 C7a): zoom changes keep the
+   playhead at its viewport offset (was: scrollLeft fixed — content
+   walked off-viewport at high pps).
+33. **Trim zones 20px** (PR69 C11, was 14px): under WCAG 2.5.8's 24px
+   minimum, mitigated by the clip-edge overlap + keyboard trim (±0.5s)
+   and pinned at 20px; at 24pps a MIN_DUR clip's opposing zones still
+   overlap each other (standing constraint, now documented).
+34. **Key-repeat ignored on the whole keyboard surface** (PR69 C16):
+   rapid-fire ⌘Z was never a registered feature; a held S committed
+   double splits (live-proven) — all bindings are single-shot now.
+35. **Drag law = R18k clamp (user P0 revert, 2026-09-06)**: rounds R19
+   (free drag + insert-push) and R20 (OT-faithful escape/verdict) are
+   RETIRED — the user judged both "making things worse". The mover
+   clamps between its same-track neighbors; overlap never renders;
+   history entries are plain docs again; the escape's binding-aware
+   undo, mintTrackId, dropEscape/dragMoverId session fields, and the
+   verdict-chip CSS are deleted. The gesture ENGINE improvements stay
+   (capture guards, edge auto-scroll, commit-at-UP, pending-gesture
+   keyboard lock, unmount cleanup, frozen magnet field).
 
 ## The topbar is a downstream customization point (R18j, thread #17)
 

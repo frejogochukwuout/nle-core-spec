@@ -239,16 +239,22 @@ function getStaticStore() {
         for (const cb of listeners) cb();
         return Promise.resolve(thread);
       },
-      patch(next) {
+      /* PR69 C44: async so a missing thread REJECTS instead of throwing
+       * synchronously — the dev-mode client's identical methods are async,
+       * so `.catch()` handlers behave the same in both modes (a sync throw
+       * escapes `store.patch(t).catch(handle)` entirely). The reachable
+       * case: the `storage` listener can swap `threads` under a pending
+       * composer. */
+      async patch(next) {
         const idx = threads.findIndex((t) => t.id === next.id);
         if (idx === -1) throw new Error(`annotakit(static): no thread ${next.id}`);
         const merged = { ...threads[idx], ...next, updatedAt: nowIso() };
         threads[idx] = merged;
         persist();
         for (const cb of listeners) cb();
-        return Promise.resolve(merged);
+        return merged;
       },
-      addComment(threadId, body, author) {
+      async addComment(threadId, body, author) {
         const idx = threads.findIndex((t) => t.id === threadId);
         if (idx === -1) throw new Error(`annotakit(static): no thread ${threadId}`);
         const comment = { id: newCommentId(), author, body, createdAt: nowIso() };
@@ -256,7 +262,7 @@ function getStaticStore() {
         threads[idx] = updated;
         persist();
         for (const cb of listeners) cb();
-        return Promise.resolve(updated);
+        return updated;
       },
       deleteThread(threadId) {
         threads = threads.filter((t) => t.id !== threadId);

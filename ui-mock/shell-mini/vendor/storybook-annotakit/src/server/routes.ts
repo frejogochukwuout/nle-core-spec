@@ -136,6 +136,11 @@ function bootstrap(configDir: string, port?: number): Runtime {
     onRestored: (reason) => broadcast({ reason }),
   });
   const repoSource = configRepo ? `${CONFIG_FILE} ghRepo` : envRepo ? 'ANNOTAKIT_GH_REPO env' : detected.source;
+  /* PR69 C38: ghToken in annotakit.config.json is NO LONGER READ — the
+   * config file is git-tracked-by-design, so a token there is one commit
+   * away from history (CWE-312). The engine warns when it finds one and
+   * points at the .env route; only ANNOTAKIT_GH_TOKEN supplies the
+   * credential now. */
   const configToken = typeof config.ghToken === 'string' ? config.ghToken : undefined;
 
   /* boot hygiene (dogfood #3/#9) — collected, logged once, surfaced in /health */
@@ -158,11 +163,13 @@ function bootstrap(configDir: string, port?: number): Runtime {
   }
   // #9b: ghToken inside annotakit.config.json — that file is documented as
   // git-tracked-by-design; a PAT there is a commit away from leaking.
+  // PR69 C38: the value is now IGNORED entirely (was env ?? configToken);
+  // the warning tells the operator to move it.
   if (configToken) {
     bootWarnings.push(
       isPathTracked(root, `${configDir}/${CONFIG_FILE}`)
-        ? `ghToken in ${CONFIG_FILE} is git-TRACKED — the PAT is already in history on the next commit. Move it to a gitignored .env (ANNOTAKIT_GH_TOKEN).`
-        : `ghToken in ${CONFIG_FILE} is deprecated (config files travel with the repo) — prefer .env ANNOTAKIT_GH_TOKEN.`,
+        ? `ghToken in ${CONFIG_FILE} is git-TRACKED and is NO LONGER READ (PR69 hardening) — move it to a gitignored .env as ANNOTAKIT_GH_TOKEN and delete it from the config file.`
+        : `ghToken in ${CONFIG_FILE} is no longer read (config files travel with the repo) — set ANNOTAKIT_GH_TOKEN in .env instead.`,
     );
   }
   for (const w of bootWarnings) console.warn(`[storybook-annotakit] ⚠ ${w}`);
@@ -188,7 +195,7 @@ function bootstrap(configDir: string, port?: number): Runtime {
   const ghsync = createGhSync({
     store,
     repo,
-    token: () => ghToken() ?? configToken,
+    token: () => ghToken(), // PR69 C38: config ghToken is never read — env only
     configPath: `${configDir}/${CONFIG_FILE}`,
     enabled: ghAuto,
     pollSec,
@@ -305,6 +312,36 @@ function enforceApiAccess(req: IncomingMessage, res: ServerResponse): boolean {
 
 /* --------------------------------- helpers ----------------------------------- */
 
+/** PR69 C28 helpers: reads were blocked by CORS, MUTATIONS were not — a
+ *  simple cross-origin POST (no preflight: text/plain content-type) still
+ *  EXECUTED the route; the missing ACAO only hid the response from the
+ *  foreign page. rejectForeignMutations refuses them at the door, and
+ *  readBody now requires a JSON content-type so a text/plain
+ *  simple-request body never reaches the parser. */
+function isLoopbackOrigin(origin: string): boolean {
+  try {
+    const host = new URL(origin).hostname;
+    return /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])$/.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/** A non-GET/HEAD request carrying a FOREIGN Origin header is a
+ *  cross-site drive-by mutation attempt (same-origin requests carry the
+ *  dev server's own loopback origin; no-Origin clients like curl are the
+ *  local operator). 403 before handleApi. Returns true when the response
+ *  was sent. */
+function rejectForeignMutations(req: IncomingMessage, res: ServerResponse): boolean {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return false;
+  const origin = req.headers.origin;
+  if (!origin || isLoopbackOrigin(origin)) return false;
+  sendJson(res, 403, {
+    error: `cross-origin mutations are not allowed (Origin: ${String(origin).slice(0, 120)})`,
+  });
+  return true;
+}
+
 /**
  * CORS: browser access is limited to loopback origins (the developer's own
  * local tooling). Same-origin (manager/preview) needs no header at all; a
@@ -341,6 +378,17 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 
 function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
+    /* PR69 C28: require a JSON content-type — a "simple request" body
+     * (text/plain / urlencoded) is exactly the no-preflight cross-site
+     * mutation vector; every kit client (manager + preview fetch) sends
+     * application/json. curl --data without -H defaults to urlencoded and
+     * is refused the same way. */
+    const ct = String(req.headers['content-type'] ?? '').toLowerCase();
+    if (!ct.startsWith('application/json')) {
+      reject(Object.assign(new Error('content-type must be application/json'), { status: 415 }));
+      req.destroy();
+      return;
+    }
     const chunks: Buffer[] = [];
     let size = 0;
     req.on('data', (c: Buffer) => {
@@ -415,6 +463,15 @@ function stableCommentId(author: string, body: string, createdAt: string): strin
 function normalizeComment(c: Comment): Comment {
   if (!c.author?.trim()) c.author = 'anonymous';
   if (!c.createdAt) c.createdAt = nowIso();
+  /* PR69 C32: ghId/source are SERVER-OWNED mirror fields — a client body
+   * carrying them (POST /threads or its documented idempotent replay)
+   * could forge `comments: [{author, body, ghId: "123", source:
+   * "github"}]`; ghsync then SKIPS those comments in the push direction
+   * (a genuine local reply silently never mirrors) and forged ghIds
+   * pollute the union-merge keys. PATCH already preserves its own copy;
+   * creation now strips both. */
+  delete (c as Partial<Comment>).ghId;
+  delete (c as Partial<Comment>).source;
   c.id = stableCommentId(c.author, c.body, c.createdAt);
   return c;
 }
@@ -907,6 +964,10 @@ export function createMiddleware(configDir: string): (req: IncomingMessage, res:
         res.end();
         return;
       }
+      // PR69 C28: cross-origin MUTATIONS die here — withholding ACAO only
+      // blinded the READER; the route itself still executed for a foreign
+      // origin (live-proven: a text/plain POST reached validateThreadInput)
+      if (rejectForeignMutations(req, res)) return;
       // access gate (dogfood #7): loopback free; network peers need a key
       if (!enforceApiAccess(req, res)) return;
       handleApi(req, res, url, configDir, origin).then(

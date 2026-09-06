@@ -18,6 +18,12 @@ export interface Track {
   id: string;
   kind: TrackKind;
   label: string; // "V1" | "A1"
+  /** R20 (thread #29 — wave 8): per-track edit-state MUTE flag. Unmuted by
+   *  default (optional so every existing Track literal stays valid). The
+   *  mini has no audio engine — this is the SAVED edit state + the visual
+   *  law (the lane dims, the head carries an M chip); audible rendering is
+   *  the nle-engine audio seam's job at swap time. */
+  muted?: boolean;
 }
 
 export interface Clip {
@@ -117,3 +123,4 @@ export function mintClipId(): string {
 export function __resetClipIds(): void {
   clipSeq = 0;
 }
+

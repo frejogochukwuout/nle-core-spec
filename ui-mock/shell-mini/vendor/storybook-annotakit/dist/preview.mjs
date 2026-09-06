@@ -7,11 +7,11 @@ import {
   UI_COMMAND,
   UI_STATE,
   probeMode
-} from "./chunk-4TMC73XV.mjs";
+} from "./chunk-S3RVNNKM.mjs";
 import {
   elementSummary,
   getStaticStore
-} from "./chunk-QIWATIG4.mjs";
+} from "./chunk-UIQ2NK77.mjs";
 
 // src/preview/index.ts
 import React2 from "react";
@@ -20,7 +20,7 @@ import React2 from "react";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { addons } from "storybook/preview-api";
 
-// ../../node_modules/@medv/finder/finder.js
+// node_modules/@medv/finder/finder.js
 var acceptedAttrNames = /* @__PURE__ */ new Set(["role", "name", "aria-label", "rel", "href"]);
 function attr(name, value) {
   let nameIsOk = acceptedAttrNames.has(name);

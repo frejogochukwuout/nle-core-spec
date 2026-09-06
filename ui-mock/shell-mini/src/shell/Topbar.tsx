@@ -1,7 +1,9 @@
 /* Topbar — floating panel strip: project name · Export CTA (honest toast,
    D3.9/m6). R18g (thread #25): the transport (play pill + timecode) moved
    down into the Viewer below the video, centered like RH — the topbar is
-   chrome-only now. R18j (thread #17): slimmed to a dense 36px strip.
+   chrome-only now. R18j (thread #17): slimmed to a dense strip.
+   R20 (thread #30 follow-up): 36 → 40px — the user's "slightly taller"
+   calibration between the R18j 36 and the pre-slim 56.
 
    ⚠ DOWNSTREAM CUSTOMIZATION POINT (thread #17) — project-context note,
    mirrored in README.md + .agents/HANDOFF.md:

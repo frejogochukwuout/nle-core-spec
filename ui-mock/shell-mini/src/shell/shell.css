@@ -94,6 +94,12 @@
   align-items: center;
   gap: 10px;
   width: 100%;
+  /* R19 (threads #24/#25): fill the WHOLE vertical surface — the panel
+   * is column-flex and the old auto-height child left the rail's lower
+   * area dead to clicks ("can click on whole to uncollapse"). The
+   * icon+label stays centered as the rail grows. */
+  flex: 1 1 auto;
+  justify-content: center;
   padding: 10px 0;
   border: none;
   background: transparent;
@@ -141,8 +147,16 @@
 
 /* R18i (shell thread #11): the pool head IS the type filter — a compact
    segmented control (All / Video / Image / Audio). Same visual language
-   as the timeline toolbar's is-active chips. */
+   as the timeline toolbar's is-active chips. PR69 C26: the group wraps
+   ONLY the tabs now (the collapse button left the labeled group). */
 .mini-pool__tabs {
+  gap: 2px;
+}
+
+.mini-pool__tabgroup {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 2px;
 }
 
@@ -749,4 +763,153 @@
 .mini-inspector__empty-hint {
   color: var(--canvas-text-tertiary);
   font-size: 10px;
+}
+
+/* ---------- R19 (thread #53): the viewer scrub row ------------------- */
+
+/* the left transport slot's seek cluster (⏮ |◀ + timecode) */
+.mini-viewer__seek {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mini-viewer__seekbtn {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: var(--canvas-editor-radius-button);
+  background: transparent;
+  color: var(--canvas-editor-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mini-viewer__seekbtn:hover {
+  background: var(--canvas-editor-control-hover);
+  color: var(--canvas-editor-text-default);
+}
+
+.mini-viewer__seekbtn:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: -2px;
+}
+
+/* the scrub bar — full-width second transport row; its CENTER sits
+   directly under the centered play button (the reviewer's
+   "centerly aligned"). Extent = max(contentEnd(bound world), 8) — the
+   ruler's runway floor family (RUNWAY_FLOOR_S in geometry.ts). */
+.mini-viewer__scrub {
+  position: relative;
+  flex: 0 0 auto;
+  height: 16px;
+  margin: 0 var(--canvas-editor-space-lg) var(--canvas-editor-space-sm);
+  cursor: pointer;
+  touch-action: none; /* the pointer drag owns the gesture */
+  border-radius: 8px;
+}
+
+.mini-viewer__scrub:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 3px;
+}
+
+.mini-viewer__scrub-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.mini-viewer__scrub-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: rgba(242, 242, 242, 0.45); /* the playhead accent, dimmed for the track fill */
+}
+
+.mini-viewer__scrub.is-dragging .mini-viewer__scrub-fill {
+  background: rgba(242, 242, 242, 0.65);
+}
+
+.mini-viewer__scrub-head {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--canvas-quick-cut-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.mini-viewer__scrub.is-dragging .mini-viewer__scrub-head {
+  box-shadow: 0 0 0 3px rgba(242, 242, 242, 0.18), 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* R19 (thread #47): the track-card hint — quiet guidance at the card's
+   foot (mirrors the empty-state hint grammar). */
+.mini-inspector__track-hint {
+  margin: 8px 0 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--canvas-editor-text-muted);
+}
+
+/* R20 (thread #29 — wave 8): the track card's mute control — the named
+   "most basic control". Grammar = the nudge family (border-top separator,
+   same muted surface). is-muted swaps to the red refuse family. */
+.mini-inspector__track-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  border-top: 1px solid rgba(0, 0, 0, 0.14);
+  margin-top: var(--canvas-editor-space-md);
+  padding-top: var(--canvas-editor-space-md);
+}
+
+.mini-inspector__mute {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--canvas-editor-radius-control);
+  background: var(--canvas-editor-control-surface);
+  color: var(--canvas-editor-text-default);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.mini-inspector__mute:hover {
+  background: var(--canvas-editor-control-hover);
+}
+
+.mini-inspector__mute.is-muted {
+  border-color: rgba(255, 157, 157, 0.4);
+  background: rgba(255, 157, 157, 0.12);
+  color: #ff9d9d;
+}
+
+/* purpose-drawn seek glyphs sized like the transport's lucide pair
+   (they take no size prop — CSS owns their box) */
+.mini-viewer__seekbtn svg {
+  width: 16px;
+  height: 16px;
 }

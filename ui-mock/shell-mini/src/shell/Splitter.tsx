@@ -49,7 +49,13 @@ export function Splitter({ orientation, value, min, max, initial, onChange, labe
       startPos: isRow ? e.clientY : e.clientX,
       startSize: value,
     };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // R20: capture guarded for untrusted pointers (jsdom/synthetic dispatch
+    // throw NotFoundError from an inactive pointer — Viewer parity)
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* untrusted pointer — the resize gesture proceeds without capture */
+    }
     setActive(true);
   };
 
@@ -87,6 +93,9 @@ export function Splitter({ orientation, value, min, max, initial, onChange, labe
       aria-orientation={orientation === 'vertical' ? 'vertical' : 'horizontal'}
       aria-label={label}
       aria-valuenow={Math.round(value)}
+      /* PR69 C10: units — "260" alone is meaningless to a screen reader;
+       * the splitters size PIXELS, and that's what the announcement says. */
+      aria-valuetext={`${Math.round(value)} pixels`}
       aria-valuemin={min}
       aria-valuemax={max}
       tabIndex={0}
