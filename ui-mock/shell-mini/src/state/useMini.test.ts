@@ -1148,4 +1148,12 @@ describe('R6 (R5-b P2-1): post-edit selection keeps the XOR law (one inspector s
     expect(S().selectedId).toBe('c1');
     expect(S().selectedTrackId).toBeNull();
   });
+
+  it('cut-TAIL with a TRACK selected selects the clip AND yields the track card (the third site, symmetric)', () => {
+    S().selectTrack('V1');
+    useMini.setState({ playhead: 6, selectedId: null }); // inside c2 [4.5,8)
+    S().cutTailAtPlayhead();
+    expect(S().selectedId).toBe('c2');
+    expect(S().selectedTrackId).toBeNull();
+  });
 });

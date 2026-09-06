@@ -131,7 +131,7 @@ export interface MiniState {
   doc: Doc;
   playhead: number; // unquantized seconds (D5)
   playing: boolean;
-  zoomStep: number; // 0-4 (D7)
+  zoomStep: number; // 0-8, the 9-step ladder (D7 + deviation #23)
   /** snap OFF by default (R18e, feedback #10 — the magnet surprised the
    *  reviewer on first drag; turning it on is now a deliberate act) */
   snapOn: boolean;

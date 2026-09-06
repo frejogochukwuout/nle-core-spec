@@ -629,9 +629,10 @@ describe('PR69 C6: toast honesty (pause / close / error TTL)', () => {
 
 describe('PR69 C3/C20: solo surfaces play for real; the viewer stage announces its clip', () => {
   it('C3: the rAF loop mounts with Timeline (solo render, not just App)', () => {
-    // rAF is stubbed by RTL's environment; assert the LOOP advances the
-    // playhead when playing is set (the old solo-story world: playing=true
-    // with NO loop — timecode frozen)
+    // rAF is not driven here — tick() is called manually (jsdom ships a
+    // native rAF; the wired-loop net below drives the real one); assert the
+    // LOOP advances the playhead when playing is set (the old solo-story
+    // world: playing=true with NO loop — timecode frozen)
     renderApp();
     setStore(() => S().togglePlay());
     expect(S().playing).toBe(true);

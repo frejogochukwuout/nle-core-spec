@@ -1598,7 +1598,7 @@ export function Timeline({ style }: { style?: CSSProperties }) {
                 className="qc-snap-guide"
                 aria-hidden="true"
                 // R18f (review P2-1): + RENDER_ORIGIN_PX — the guide shares the
-                // px coordinate law with clips/playhead (content-left + 10)
+                // px coordinate law with clips/playhead (content-left + origin)
                 style={{ left: RENDER_ORIGIN_PX + timeToPx(snapGuide, pps) }}
                 data-testid="mini-snap-guide"
               />
