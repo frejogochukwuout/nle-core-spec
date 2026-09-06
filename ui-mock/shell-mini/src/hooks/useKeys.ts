@@ -1,10 +1,9 @@
 /* Keyboard surface (D3.8, audit m4): Space, S, [ ], Del, ⌘Z/⌘⇧Z, ±, 0, Esc.
    Esc priority: cancel active drag FIRST, else deselect.
-   While dragActive OR gesturePending, ONLY Esc is honored (audit M2
-   interaction lock; PR69 C53 extends it to the sub-threshold window —
-   ⌘Z firing under a held pointer was live-proven). Form-control targets
-   (typing in a field, opening a select) are skipped so the surface stays
-   honest — R18k (review P2-4): SELECT joins the skip list; a focused track
+   While dragActive, ONLY Esc is honored (audit M2 interaction lock) —
+   every other key returns early. Form-control targets (typing in a
+   field, opening a select) are skipped so the surface stays honest —
+   R18k (review P2-4): SELECT joins the skip list; a focused track
    binding / aspect dropdown must keep its own keys (Space opens it,
    typing letters finds options) instead of firing global split/zoom.
    R18e: [ / ] = cut head / cut tail at playhead (RH 裁剪开始/裁剪结束).
@@ -14,7 +13,10 @@
    registered feature.
    PR69 C1: Space yields to the focused NATIVE control (button/a) — the
    global preventDefault was suppressing the browser's Space-activation
-   of every button in the shell (live-proven on Split at playhead). */
+   of every button in the shell (live-proven on Split at playhead).
+   R22: the gesturePending sub-threshold window is RETIRED with the
+   pending-gesture machinery — the lock family is dragActive only, the
+   R18k law. */
 
 import { useEffect } from 'react';
 import { useMini } from '../state/useMini';
@@ -41,18 +43,11 @@ export function useKeys() {
 
       if (e.key === 'Escape') {
         if (s.dragActive) s.cancelDrag(); // drag-cancel outranks deselect (m4)
-        /* R1-a#5: a PENDING gesture (sub-threshold, lock not yet engaged)
-         * also owns Esc — the old fall-through deselected the clip under
-         * the pointer while the gesture was still opening. Nothing is
-         * cancelable yet (no doc state exists); the pointerup closes the
-         * window. Swallow the key so the deselect can't fire mid-gesture. */
-        else if (s.gesturePending) {
-          /* pending — the pointerup resolves it */
-        } else s.select(null);
+        else s.select(null);
         e.preventDefault();
         return;
       }
-      if (s.dragActive || s.gesturePending) return; // interaction lock: nothing else mid-gesture (M2) — incl. the sub-threshold window (PR69 C53)
+      if (s.dragActive) return; // interaction lock: nothing else mid-drag (M2)
 
       const meta = e.metaKey || e.ctrlKey;
 

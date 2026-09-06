@@ -663,23 +663,6 @@
   outline-offset: 1px;
 }
 
-/* R19 (thread #51): the trim ghost — the dotted extent of how much
-   further the trimmed edge can reach (outward only; hidden at max/no
-   room). Painted by the LANE at the clip's inset band — the clip body
-   clips its own overflow, so the ghost cannot live inside it. Pure
-   decoration (aria-hidden). */
-.qc-trim-ghost {
-  position: absolute;
-  z-index: 1;
-  top: var(--canvas-editor-clip-inset);
-  bottom: var(--canvas-editor-clip-inset);
-  border: 1px dashed rgba(242, 242, 242, 0.4);
-  border-radius: var(--mini-radius-clip);
-  background: rgba(255, 255, 255, 0.05);
-  pointer-events: none;
-}
-
-
 /* R1-b P2-5: touch-action — the pointer surfaces must OWN the gesture.
  * Without it, a touch drag on a clip/ruler/handle is stolen by the
  * scroll pan (pointermove stops, pointercancel fires, the gesture

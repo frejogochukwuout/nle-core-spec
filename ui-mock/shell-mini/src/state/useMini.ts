@@ -197,11 +197,6 @@ export interface MiniState {
   setTrackBindingLocked: (locked: boolean) => void;
   selectedId: string | null;
   dragActive: boolean; // interaction lock (audit M2)
-  /** PR69 C53: a pointer gesture is OPEN but under the 5px activation
-   * threshold — the mutating keyboard surface must already be dead
-   * (⌘Z under a held pointer, live-proven); only Esc stays live. Set at
-   * pointerdown, cleared at pointerup/cancel/unmount. */
-  gesturePending: boolean;
   toast: ToastMsg | null;
   past: HistoryEntry[];
   future: HistoryEntry[];
@@ -231,11 +226,7 @@ export interface MiniState {
   pushToast: (kind: ToastMsg['kind'], text: string) => void;
   dismissToast: () => void;
 
-  /* drag session (M2): pending → begin → preview* → end|cancel.
-   * beginPendingGesture/endPendingGesture bracket the WHOLE pointer
-   * session (before the 5px threshold engages the dragActive lock). */
-  beginPendingGesture: () => void;
-  endPendingGesture: () => void;
+  /* drag session (M2): begin → preview* → end|cancel. */
   beginDrag: () => void;
   endDrag: () => void;
   cancelDrag: () => void;
@@ -286,12 +277,7 @@ export const useMini = create<MiniState>((set, get) => {
    * change inside a commit. */
   const commit = (mutate: (doc: Doc) => Doc | void): boolean => {
     const state = get();
-    /* R2-a P3-c (round 3): the PENDING window counts too — the keyboard
-     * trim activation (and the arrows) reached commit while a scrub held
-     * the window open, stepping the doc + minting history entries
-     * mid-gesture. With this gate the whole commit family obeys the same
-     * law the useKeys mutations already do (they die at POINTERDOWN). */
-    if (state.dragActive || state.gesturePending) return false; // interaction lock: no commits mid-gesture
+    if (state.dragActive) return false; // interaction lock: no commits mid-drag
     const draft: Doc = {
       tracks: state.doc.tracks,
       media: state.doc.media,
@@ -351,7 +337,6 @@ export const useMini = create<MiniState>((set, get) => {
     selectedId: null,
     selectedTrackId: null,
     dragActive: false,
-    gesturePending: false,
     toast: null,
     past: [],
     future: [],
@@ -502,16 +487,6 @@ export const useMini = create<MiniState>((set, get) => {
       const state = get();
       const { playing, playhead, doc } = state;
       if (!playing) return;
-      /* PR69 C19: the interaction lock's ONE playhead-writer bypass — the
-       * rAF loop kept advancing the playhead mid-gesture (the magnet field
-       * is supposed to be frozen while a drag runs; the playhead is its
-       * first target). Playback resumes on the next frame after the
-       * session ends; the wrap law is untouched.
-       * R1-b P3-8: the SCRUB surfaces open the pending window too — an
-       * in-flight user scrub and the rAF loop were fighting over the
-       * playhead (wrap-teleport mid-scrub); playback pauses its writes
-       * for the duration. */
-      if (get().dragActive || get().gesturePending) return;
       // R18k: playback content = the bound tracks' clips (same world the
       // ruler and viewer show)
       const end = contentEnd(
@@ -679,18 +654,6 @@ export const useMini = create<MiniState>((set, get) => {
 
     /* ---- drag session ------------------------------------------------ */
 
-    /* PR69 C53: the pending window — pointerdown to pointerup/cancel,
-     * INCLUDING the sub-threshold phase (before beginDrag's lock
-     * engages). Cheap set()s; the window is short-lived. */
-    beginPendingGesture: () => {
-      if (get().dragActive) return; // an ACTIVE gesture already owns the lock
-      set({ gesturePending: true });
-    },
-    endPendingGesture: () => {
-      if (!get().gesturePending) return;
-      set({ gesturePending: false });
-    },
-
     beginDrag: () => {
       const state = get();
       if (state.dragActive) return;
@@ -714,7 +677,6 @@ export const useMini = create<MiniState>((set, get) => {
       const past = changed ? [...state.past, pristine].slice(-MAX_HISTORY) : state.past;
       set({
         dragActive: false,
-        gesturePending: false,
         dragSnapshot: null,
         past,
         future: changed ? [] : state.future,
@@ -728,7 +690,6 @@ export const useMini = create<MiniState>((set, get) => {
       set({
         doc: state.dragSnapshot,
         dragActive: false,
-        gesturePending: false,
         dragSnapshot: null,
       });
       get()._validateSelection();
@@ -1183,10 +1144,6 @@ export const useMini = create<MiniState>((set, get) => {
         selectedId: null,
         selectedTrackId: null,
         dragActive: false,
-        /* R1-b P2-3: the one state-surface field reset missed — a host
-         * reset mid-pending left every mutating key dead (useKeys gates
-         * on it) with no in-app sweeper left to clear it. */
-        gesturePending: false,
         toast: null,
         past: [],
         future: [],

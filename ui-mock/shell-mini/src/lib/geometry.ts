@@ -105,36 +105,6 @@ export function clampMove(newStart: number, duration: number, prevEnd: number, n
   return Math.min(Math.max(newStart, lo), hi);
 }
 
-/** TRIM ghost bounds (R19, thread #51): how much further the trimmed edge
- *  can extend (the source/neighbor bound the drag clamps to). Null when
- *  there is no room (already maxed) or — for the START edge under ripple —
- *  when the law freezes the left edge (ripple start-trim grows the clip
- *  rightward; a leftward ghost would lie). end bound: ripple ignores the
- *  neighbor (followers push) → source extent only; else min(neighbor,
- *  source). start bound: max(prevEnd, end − media.duration) — the
- *  implicit in-point-0 model (deviation from OT's trimStart field,
- *  registered in docs/OT-SEAMS.md). */
-export function trimGhostBound(
-  doc: Doc,
-  clip: Clip,
-  edge: 'start' | 'end',
-  rippleOn: boolean,
-  media: Media | undefined,
-): number | null {
-  const { prevEnd, nextStart } = neighborBounds(doc, clip);
-  if (edge === 'end') {
-    const bound = rippleOn
-      ? clip.start + (media?.duration ?? Infinity)
-      : Math.min(nextStart, clip.start + (media?.duration ?? Infinity));
-    const room = bound - (clip.start + clip.duration);
-    return room > 1e-9 ? bound : null;
-  }
-  if (rippleOn) return null; // frozen-left law — no honest leftward ghost
-  const bound = Math.max(prevEnd, clip.start + clip.duration - (media?.duration ?? Infinity));
-  const room = clip.start - bound;
-  return room > 1e-9 ? bound : null;
-}
-
 /** TRIM laws (audit M1 + review fix: media bound on BOTH edges):
  *  start-trim: start' ∈ [max(prevEnd, end − media.duration), end − MIN_DUR]
  *  end-trim:   end'   ∈ [start + MIN_DUR, min(nextStart, start + media.duration)] */
@@ -202,36 +172,6 @@ export function magnetTarget(t: number, pps: number, targets: number[]): number 
     }
   }
   return best;
-}
-
-/** MOVE magnet (R19, OT snapGroupEdges parity): BOTH edges of the moving
- *  clip are candidates — the LEFT edge magnets to a target (start = τ) and
- *  the RIGHT edge magnets to a target (start = τ − dur). Nearest pixel
- *  wins; ties → the LEFT edge (deterministic; a butt-joint either side of
- *  the same edit point can't flip-flop). Returns the snapped start + the
- *  guide position (the engaged edge's target), or null when nothing is in
- *  range (caller keeps the raw pointer time — smooth). */
-export function magnetMove(
-  raw: number,
-  pps: number,
-  dur: number,
-  targets: number[],
-): { start: number; guide: number } | null {
-  let best: { start: number; guide: number; px: number } | null = null;
-  for (const target of targets) {
-    const leftPx = Math.abs(target - raw) * pps;
-    if (leftPx <= SNAP_PX && (!best || leftPx < best.px)) {
-      best = { start: target, guide: target, px: leftPx };
-    }
-    const rightEdge = raw + dur;
-    const rightPx = Math.abs(target - rightEdge) * pps;
-    if (rightPx <= SNAP_PX && (!best || rightPx < best.px)) {
-      // strict <: a later right-edge candidate never displaces an
-      // equal-distance left-edge win (ties → left edge)
-      best = { start: target - dur, guide: target, px: rightPx };
-    }
-  }
-  return best ? { start: best.start, guide: best.guide } : null;
 }
 
 /** The ONE snap law (component-facing): with snap ON the magnet commits

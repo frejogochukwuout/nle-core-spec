@@ -7,8 +7,6 @@ import {
   DEFAULT_ZOOM_STEP,
   wouldOverlap,
   clampMove,
-  trimGhostBound,
-  magnetMove,
   clampPlayhead,
   clampTrimEnd,
   clampTrimStart,
@@ -163,63 +161,9 @@ describe('clampMove (R18k law restored — the mover clamps between neighbors)',
   });
 });
 
-describe('trimGhostBound (R19, thread #51 — the ghost extent law)', () => {
-  const doc: Doc = seedDoc();
-  const media = (id: string): Media | undefined => doc.media.find((m) => m.id === id);
-
-  it('end edge: min(nextStart, source) — the seed c2 end-ghost is the 1s gap', () => {
-    const c2 = doc.clips.find((c) => c.id === 'c2')!; // [4.5,8), media 4.5s
-    expect(trimGhostBound(doc, c2, 'end', false, media('m-beach'))).toBe(9); // neighbor c3@9 < source 9
-  });
-  it('end edge under RIPPLE: source only (followers push, neighbor ignored)', () => {
-    const c2 = doc.clips.find((c) => c.id === 'c2')!;
-    expect(trimGhostBound(doc, c2, 'end', true, media('m-beach'))).toBe(4.5 + 4.5); // 9 = start+source
-  });
-  it('end edge at max (source == end): null — no ghost when nothing remains', () => {
-    const at = (c: Clip) => ({ ...c, duration: 4.5, start: 4.5 }); // c2 maxed: [4.5,9)
-    const c2max = at(doc.clips.find((c) => c.id === 'c2')!);
-    const d2 = { ...doc, clips: [c2max, ...doc.clips.filter((c) => c.id !== 'c2')] };
-    expect(trimGhostBound(d2, c2max, 'end', true, media('m-beach'))).toBeNull();
-  });
-  it('start edge: max(prevEnd, end − source) — c2 can reach back to 3.5', () => {
-    const c2 = doc.clips.find((c) => c.id === 'c2')!; // end 8, source 4.5 → 8−4.5=3.5 = prevEnd
-    expect(trimGhostBound(doc, c2, 'start', false, media('m-beach'))).toBe(3.5);
-  });
-  it('start edge under RIPPLE: null — frozen-left (a leftward ghost would lie)', () => {
-    const c2 = doc.clips.find((c) => c.id === 'c2')!;
-    expect(trimGhostBound(doc, c2, 'start', true, media('m-beach'))).toBeNull();
-  });
-  it('start edge at max: null', () => {
-    const c1 = doc.clips.find((c) => c.id === 'c1')!; // [0,3.5) media 4.5: lo = max(0, 3.5−4.5)=0 = start
-    expect(trimGhostBound(doc, c1, 'start', false, media('m-drone'))).toBeNull();
-  });
-});
-
-describe('magnetMove (R19 — BOTH edges, nearest wins, ties → left)', () => {
-  it('left edge magnets: start = target', () => {
-    const m = magnetMove(2.03, 96, 2, [2]);
-    expect(m).toEqual({ start: 2, guide: 2 });
-  });
-  it('RIGHT edge magnets: start = target − dur (butt-join from the right)', () => {
-    // raw 3.5, dur 2 → right edge 5.5 magnets to 5.5: start 3.5→3.5? use raw 3.4:
-    const m = magnetMove(3.4, 96, 2, [5.5]);
-    expect(m).toEqual({ start: 3.5, guide: 5.5 });
-  });
-  it('nearest wins when both edges have candidates', () => {
-    // left edge 2.05 vs target 2 (4.8px); right edge 5.5 vs target 5.4 (9.6px) → left
-    const m = magnetMove(2.05, 96, 3.45, [2, 5.4]);
-    expect(m).toEqual({ start: 2, guide: 2 });
-  });
-  it('ties → the LEFT edge (deterministic)', () => {
-    // raw 2.125 dur 2: left candidate 2 (exactly 12px); right edge 4.125,
-    // candidate 4.25 (also exactly 12px) — the strict < keeps the LEFT win
-    const m = magnetMove(2.125, 96, 2, [2, 4.25]);
-    expect(m!.start).toBe(2);
-  });
-  it('no candidate in range → null (smooth raw drag)', () => {
-    expect(magnetMove(2.4, 96, 2, [10])).toBeNull();
-  });
-});
+/* R22 (user directive 2026-09-07): trimGhostBound and magnetMove are
+   RETIRED with the trim-ghost affordance and the both-edges magnet law
+   (the R18k single-edge law is back — magnetTarget/resolveSnap below). */
 
 describe('magnetTarget (R19: nearest, not first-in-array)', () => {
   it('picks the NEAREST target inside 12px when two are in range', () => {
