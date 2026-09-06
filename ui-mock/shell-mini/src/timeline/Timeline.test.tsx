@@ -477,11 +477,11 @@ describe('R18e pool→timeline DnD (feedback #13 / v0.2 deferral closed)', () =>
     render(<Timeline />);
     const lane = screen.getByTestId('mini-lane-A1');
     poolDrag.current = 'm-ambience';
-    // c4 [1.5, 8.5]; want = quantize((600-10)/48) = 12.5 → A1 tail free
+    // c4 [1.5, 8.5]; want = quantize((600−46)/48) = 11.5 → A1 tail free
     fireEvent(lane, dragEvent('drop', 600, dt('m-ambience')));
     poolDrag.current = null;
     const added = S().doc.clips.find((c) => c.mediaId === 'm-ambience')!;
-    expect(added).toMatchObject({ trackId: 'A1', duration: 6 });
+    expect(added).toMatchObject({ trackId: 'A1', duration: 6, start: 11.5 });
   });
 });
 
@@ -1113,7 +1113,7 @@ describe('PR69 C2/C46: the clip is a real button (Enter selects, Space is the tr
 });
 
 describe('PR69 C9: a clip unmounting mid-gesture releases the lock', () => {
-  it('unmount with an active drag clears dragActive', () => {
+  it('unmount with an active drag clears dragActive and the surface heals on remount', () => {
     const view = render(<Timeline />);
     const clip = screen.getByTestId('mini-clip-c2');
     fireEvent.pointerDown(clip, { button: 0, pointerId: 12, clientX: 264, clientY: 10 });
@@ -1121,9 +1121,12 @@ describe('PR69 C9: a clip unmounting mid-gesture releases the lock', () => {
     expect(S().dragActive).toBe(true);
     view.unmount(); // story switch / HMR / parent-driven unmount
     expect(S().dragActive).toBe(false);
-    // the keyboard surface works again without knowing the Esc law
+    // the keyboard surface works again after the swap: a FRESH mount gets
+    // its useKeys listener back and a real edit commits (no lock trap)
+    render(<Timeline />);
+    setStore(() => useMini.setState({ playhead: 2, selectedId: null }));
     fireEvent.keyDown(window, { key: 's' });
-    expect(S().past.length).toBeGreaterThanOrEqual(0); // no lock trap
+    expect(S().doc.clips).toHaveLength(5); // c1 split — the surface is live
   });
 });
 

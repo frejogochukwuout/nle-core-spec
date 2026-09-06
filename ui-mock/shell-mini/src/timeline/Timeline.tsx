@@ -4,8 +4,10 @@
    fixed above it.
 
    Coordinate law (review fix #1/#3): ALL time↔px math positions in px
-   from the shared RENDER ORIGIN — the scroll content's left + 10px.
-   Ruler marks are px-positioned (left: t*pps), NOT %.
+   from the shared RENDER ORIGIN — the scroll content's left +
+   RENDER_ORIGIN_PX (46, after the fixed head rail; the compact strip
+   uses MIN_ORIGIN_PX 10 — no rail). Ruler marks are px-positioned
+   (left: t*pps), NOT %.
 
    Gesture law (review fix #4): one gesture at a time — startGesture
    bails while another drag is active and tracks its own pointerId;

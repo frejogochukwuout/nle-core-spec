@@ -11,7 +11,7 @@ import { MediaPool } from '../shell/MediaPool';
 import { Viewer } from '../shell/Viewer';
 import { Inspector } from '../shell/Inspector';
 import { ToastRegion } from '../shell/ToastRegion';
-import { useMini, VIEWER_ASPECTS, type ViewerAspect } from '../state/useMini';
+import { VIEWER_ASPECTS, type ViewerAspect } from '../state/useMini';
 import { seedDoc } from '../lib/mockData';
 import { StoreArgs, selectionFor, type Patch } from './storyKit';
 
