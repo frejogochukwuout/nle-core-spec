@@ -1,7 +1,7 @@
 # 16 — Keyboard Shortcuts: Comprehensive Interaction Spec
 
 **Stream:** Keyboard interaction layer (UI → engine command bus)
-**Status:** v1.1 (Round 15 amendment pass — A1/A6/N8/N11/N12/N15 resolutions + C2-extension registration per `.agents/SPEC-REVISION-CANDIDATES.md`, ARCH-R15 §4; original v1.0 authored under task TEST-03)
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the app's landed key surface @ `e662759` 83/83 + the mini's editing keys are the BASE; the gap is the C22 long tail + C1/W-ops surfaces); v1.1 (Round 15 amendment pass — A1/A6/N8/N11/N12/N15 resolutions + C2-extension registration per `.agents/SPEC-REVISION-CANDIDATES.md`, ARCH-R15 §4; original v1.0 authored under task TEST-03)
 **Primary teacher:** FCP/Premiere/DaVinci Resolve muscle-memory conventions + FreeCut `config/hotkeys.ts` + OpenCut-classic `OC-Actions/definitions.ts`
 **Consumers:** UI keyboard handler (`src/ui/keyboard/`), test harness (`tests/e2e/keyboard.spec.ts`), cheat-sheet modal (`src/ui/cheat-sheet/`)
 **Predecessor:** `05-timeline.md` §19 (unified shortcut table — ~50 actions)
@@ -9,7 +9,23 @@
 
 ---
 
-## 0. What This Spec Adds (TL;DR)
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- nle-test-app @ `e662759` — 83/83, tsc 0. The app's landed key surface: JKL/split/delete/home per the OT Wave B migration.
+- The mini's editing keys — `ui-mock/shell-mini` (333 tests) + the law register `ui-mock/shell-mini/docs/OT-SEAMS.md`.
+- C22 ledger state: ~54 of ~178 rows implemented; the ledger lives in `.agents/SPEC-REVISION-CANDIDATES.md` §C + the mocks.
+
+**GAP (the work — owner + phase per spec 14; the register is spec 14 §4.1):**
+- Keymap long tail (R-polish; acceptance: the C22 ledger closed row-by-row + spec 17 facet rows).
+- The crawl's editing keyboard surface + undo/redo exposure — MiniShell owns the editing keys (C1; acceptance: the mini's key laws re-expressed as app-side tests, the LAW-NET-INVENTORY corpus).
+- W-ops keymap surfaces for the new op families (W-ops; acceptance: keymap rows + nle-ui sync).
+
+**ACCEPTANCE & TEST PLAN:** §9 (Test Verification) + Appendix A (the flat registry for enumeration) are this spec's battery; BASE acceptance = the cited suites at the cited pins (app 83; mini 333) — the regression role. GAP acceptance is per-row above; facet rows in spec 17 §13A.
+
+---
+
+## 0A. What This Spec Adds (TL;DR)
 
 | Area | Before (spec 05 §19) | After (this spec) |
 |---|---|---|

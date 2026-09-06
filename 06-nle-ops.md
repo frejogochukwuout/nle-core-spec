@@ -1,13 +1,28 @@
 # 06 — NLE Operations: Cut / Split / Trim / Ripple / Roll / Slip / Slide / Move / Lock / Snap (REFINED)
 
 **Stream:** NLE operation logic (pure functions over timeline state)
-**Status:** Refined (SCOUT-06). Every claim tagged with file:line evidence. Round-8 amendments: §5.2A trim-shape layer mapping + NOOP code, §5.4 ripple modeling notes + OT as executable reference, §5.9 intra-batch overlap guard, §10.4 engine re-baseline @ 8ac91d9 (all citations re-verified, P0.6 fixed), §10.5 opencut-timeline op-coverage. Round-9 amendments: the Decision-11.3 "division of labor" is superseded by **Decision 12.3 — one algorithm home (opencut-timeline's ops layer) with the engine's FreeCut-side families port-scheduled into it** (§10.4/§10.5 notes updated); engine counts re-baselined @ 624a76b (202/202).
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: OT @ `05584d8` 459/459 is the accepted ops BASE; the gap is the W-ops op-family ports); Refined (SCOUT-06). Every claim tagged with file:line evidence. Round-8 amendments: §5.2A trim-shape layer mapping + NOOP code, §5.4 ripple modeling notes + OT as executable reference, §5.9 intra-batch overlap guard, §10.4 engine re-baseline @ 8ac91d9 (all citations re-verified, P0.6 fixed), §10.5 opencut-timeline op-coverage. Round-9 amendments: the Decision-11.3 "division of labor" is superseded by **Decision 12.3 — one algorithm home (opencut-timeline's ops layer) with the engine's FreeCut-side families port-scheduled into it** (§10.4/§10.5 notes updated); engine counts re-baselined @ 624a76b (202/202).
 **Primary teacher:** FreeCut `stores/actions/edit/*` (algorithm-level reference) + OpenCut-classic `ripple/` + `retime/` + `commands/` + `timeline/placement/` + `timeline/group-move/` + `timeline/group-resize/` (architecture-level reference)
 **Spec file:** `06-nle-ops.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 
 ---
 
-## 0. What Changed vs. Seed Spec (TL;DR)
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- opencut-timeline (OT) @ `05584d8` — 459/459 (329 in-page + 130 real-mouse across 14 phases), tsc 0. The ops engine of this spec: split/trim/move/ripple/delete with the S-round semantics (S2 track lock; S3 transitionOut null=DELETE key law + split left-drops; D-S5 typed ElementParams).
+- nle-engine @ `f68ab8c` — 356/356 vitest, tsc 0. The algorithm sources for the port families (timeline.ts slip/slide/roll/rateStretch algorithms awaiting port per Decision 12.3).
+- Spec-internal registers: §5.5–§5.14 (the op-family detailed specs) + §10.4/§10.5 (the re-baseline tables) — pointed below, not duplicated.
+
+**GAP (the work — owner + phase per spec 14; registers: §5.5–§5.14 + §10.4/§10.5 here, plus spec 14 §4.1 — pointed, not duplicated):**
+- The op-family ports, W-ops wave 1 (slip/slide/roll/rateStretch) + wave 2 (retime/freezeFrame/rangeRemoval), tests carried from nle-engine (acceptance: carried engine tests green in OT + pin bump).
+- Error-envelope refinement (W-ops; spec 15 §6.3 amendment first — acceptance: the ~24-code table + OT follows).
+
+**ACCEPTANCE & TEST PLAN:** §8 (Invariant Tests) is this spec's battery; BASE acceptance = the cited suites at the cited pins (OT 459; engine 356) — the regression role. GAP acceptance is per-row above; facet rows in spec 17 §13A.
+
+---
+
+## 0A. What Changed vs. Seed Spec (TL;DR)
 
 | Area | Seed spec assumed | Actual code (REFINED) | Source |
 |---|---|---|---|

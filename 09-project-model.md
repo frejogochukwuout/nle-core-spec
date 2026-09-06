@@ -1,13 +1,29 @@
 # 09 — Project Model: Schema, Persistence, Migrations (Refined)
 
 **Stream:** Project data model & persistence
-**Status:** Refined by sub-agent scout (SCOUT-09) — open questions answered with source code references. **Round-15 amendments (§3.1 + new §3.1A + §7.2):** N1 inline `ElementJSON` container, A2 unified per-scene `Marker` (Bookmark absorbed), A3 `TrackJSON.volume` removed, A4 mute/solo S-authored/G-projected, A5 no V on audio tracks, B1 `linkedTo`+`syncLock`, B2 `pan`/`preservePitch`/volume unit, N3 `MediaRecord.importedAt`, multi-scene app-level ruling — per `.agents/SPEC-REVISION-CANDIDATES.md` (A/B/N series) and `audits/ARCH-R15-assembly-and-path.md` §2.4
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the R15-amended schema is landed and consumed (OT+app pins); persistence + the multi-scene slice are W-project app work); Refined by sub-agent scout (SCOUT-09) — open questions answered with source code references. **Round-15 amendments (§3.1 + new §3.1A + §7.2):** N1 inline `ElementJSON` container, A2 unified per-scene `Marker` (Bookmark absorbed), A3 `TrackJSON.volume` removed, A4 mute/solo S-authored/G-projected, A5 no V on audio tracks, B1 `linkedTo`+`syncLock`, B2 `pan`/`preservePitch`/volume unit, N3 `MediaRecord.importedAt`, multi-scene app-level ruling — per `.agents/SPEC-REVISION-CANDIDATES.md` (A/B/N series) and `audits/ARCH-R15-assembly-and-path.md` §2.4
 **Primary teacher:** OpenCut-classic types + our own storage layer (override OpenCut's IndexedDB)
 **Spec file:** `09-project-model.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 
 ---
 
-## 0. Refined-Spec Notes (new section by scout)
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- The R15 amendment set — landed in THIS spec as the "(Round 15 amendment)" markers (§3.1/§3.1A/§7.2): marker unification (A2, per-scene `Marker`), track-gain home (A3 → the G layer), mute/solo S-authored/G-projected (A4), `linkedTo`+`syncLock` (B1), `pan`/`preservePitch` (B2). No suite of its own — the schema IS the contract; the consumers below are its regression form.
+- opencut-timeline (OT) @ `05584d8` — 459/459 (329 in-page + 130 real-mouse), tsc 0: the SceneTracks model this spec's `SceneTracksJSON` mirrors (D12: one `TimelineCore` per scene — the single-scene editing SSOT).
+- nle-test-app @ `e662759` — 83/83, tsc 0: the app's scene wiring (sceneBridge) — the ARCH-R15 §2.4 multi-scene-app-level ruling executing app-side.
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- ProjectJSON persistence (owner: nle-test-app, phase W-project): the app-side save/load layer of §4–§6 (acceptance: project round-trip vs per-scene OT `toJSON`/`fromJSON` + the scene suite green).
+- Multi-scene app slice: `scenes[]` ownership + scene wire ops + the cross-scene-undo law + history budget (owner: nle-test-app, phase W-project) (acceptance: the same scene suite green).
+- No-gap ruling, stated so it stops being asked: per-scene OT stays SINGLE-SCENE by design (D12) — scene-level concerns live app-side per §3.1A; nothing to build in OT.
+
+**ACCEPTANCE & TEST PLAN:** §9 (intent list) + the executable `## Testing` section (schema/round-trip/migration/autosave tiers + the 3 kimdogyeom gating regressions); spec 17 §13A matrix rows "Schema validation" / "Project round-trip (JSON ↔ OPFS)" / "Migration framework"; battery posture: the OT + app suites at the pins above stay green (the regression role).
+
+---
+
+## 0A. Refined-Spec Notes (new section by scout)
 
 This file extends the seed `09-project-model.md`. Sections 1–7 are re-stated verbatim with light inline annotations. Section 8 (Open Questions) is fully rewritten with concrete source-code answers. Sections 9–13 are new:
 - **§10 Code References** — every file read by the scout, with one-line summary.
