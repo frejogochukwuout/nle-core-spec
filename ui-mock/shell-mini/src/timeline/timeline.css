@@ -680,6 +680,18 @@
 }
 
 
+/* R1-b P2-5: touch-action — the pointer surfaces must OWN the gesture.
+ * Without it, a touch drag on a clip/ruler/handle is stolen by the
+ * scroll pan (pointermove stops, pointercancel fires, the gesture
+ * cancels). The splitter (app.css) and the viewer scrub bar (shell.css)
+ * already carry this law; the timeline's own surfaces now do too. */
+.qc-ruler__content,
+.qc-ruler__playhead,
+.qc-track-item,
+.qc-track-item__trim {
+  touch-action: none;
+}
+
 /* ---- clips (RH-verbatim anatomy + gradient bodies) ---------- */
 
 .qc-track-item {

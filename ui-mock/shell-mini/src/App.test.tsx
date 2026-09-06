@@ -649,3 +649,15 @@ describe('PR69 C3/C20: solo surfaces play for real; the viewer stage announces i
     expect(frame).not.toHaveAttribute('aria-hidden');
   });
 });
+
+/* ---- R2 (opus review round 1): the remaining pins ---- */
+
+describe('R2: error toasts announce as alerts (R1-b P3-9)', () => {
+  it('an error toast carries role=alert; info toasts stay polite status', () => {
+    renderApp();
+    setStore(() => S().pushToast('error', 'no room'));
+    expect(screen.getByTestId('mini-toast')).toHaveAttribute('role', 'alert');
+    setStore(() => S().pushToast('info', 'added'));
+    expect(screen.getByTestId('mini-toast')).toHaveAttribute('role', 'status');
+  });
+});

@@ -501,8 +501,12 @@ export const useMini = create<MiniState>((set, get) => {
        * rAF loop kept advancing the playhead mid-gesture (the magnet field
        * is supposed to be frozen while a drag runs; the playhead is its
        * first target). Playback resumes on the next frame after the
-       * session ends; the wrap law is untouched. */
-      if (get().dragActive) return;
+       * session ends; the wrap law is untouched.
+       * R1-b P3-8: the SCRUB surfaces open the pending window too — an
+       * in-flight user scrub and the rAF loop were fighting over the
+       * playhead (wrap-teleport mid-scrub); playback pauses its writes
+       * for the duration. */
+      if (get().dragActive || get().gesturePending) return;
       // R18k: playback content = the bound tracks' clips (same world the
       // ruler and viewer show)
       const end = contentEnd(
@@ -1174,6 +1178,10 @@ export const useMini = create<MiniState>((set, get) => {
         selectedId: null,
         selectedTrackId: null,
         dragActive: false,
+        /* R1-b P2-3: the one state-surface field reset missed — a host
+         * reset mid-pending left every mutating key dead (useKeys gates
+         * on it) with no in-app sweeper left to clear it. */
+        gesturePending: false,
         toast: null,
         past: [],
         future: [],

@@ -58,12 +58,14 @@ describe('selection', () => {
 });
 
 describe('drag-move (48pps default zoom)', () => {
-  it('moves the clip with grab-offset anchoring + grid quantize', async () => {
+  it('moves the clip with grab-offset anchoring (raw pointer time, snap-off)', async () => {
     render(<Timeline />);
     const c2 = screen.getByTestId('mini-clip-c2'); // start 4.5s → x=216
     drag(c2, 216 + 40, 216 + 40 + 48); // grab at 5.33s; move +1s
     // grabOffset = (256/48) - 4.5 = 0.833; pointer t = 304/48 = 6.333;
-    // raw start = 6.333 - 0.833 = 5.5 → grid → 5.5
+    // raw start = 6.333 - 0.833 = 5.5 (on-grid by COINCIDENCE — the
+    // off-grid 5.125 tests below pin that NO beat-quantize runs; R1-b#11:
+    // this test's old name claimed "grid quantize", a law retired in R18i)
     expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
     expect(S().past).toHaveLength(1); // one entry per gesture
   });
@@ -1161,5 +1163,98 @@ describe('PR69 C7b: the zoom slider announces units', () => {
     expect(slider).toHaveAttribute('aria-valuetext', '48 pixels per second');
     setStore(() => S().setZoomStep(0));
     expect(screen.getByTestId('mini-zoom-slider')).toHaveAttribute('aria-valuetext', '24 pixels per second');
+  });
+});
+
+
+/* ---- R2 (opus review round 1): the P2 fixes, pinned ---- */
+
+describe('R2: pointercancel never leaves a scrub gesture stuck (R1-b P2-1/P2-2)', () => {
+  it('playhead handle: cancel releases dragging — hover moves do NOT scrub', () => {
+    render(<Timeline />);
+    const ph = screen.getByTestId('mini-playhead');
+    fireEvent.pointerDown(ph, { button: 0, pointerId: 9, clientX: 46, clientY: 20 });
+    fireEvent.pointerMove(ph, { pointerId: 9, clientX: 282, clientY: 20 });
+    expect(S().playhead).toBeCloseTo((282 - 46) / 48, 5);
+    // a browser gesture interrupts the touch/pen scrub
+    fireEvent.pointerCancel(ph, { pointerId: 9, clientX: 282, clientY: 20 });
+    // hover moves with NO button held must be inert now (the old bug:
+    // dragging stayed true and the playhead followed the hover)
+    fireEvent.pointerMove(ph, { pointerId: 9, buttons: 0, clientX: 500, clientY: 20 });
+    expect(S().playhead).toBeCloseTo((282 - 46) / 48, 5); // unchanged
+    expect(S().gesturePending).toBe(false); // the window closed too
+  });
+
+  it('viewer scrub bar: cancel releases dragging — hover moves do NOT seek', () => {
+    render(<App />);
+    const bar = screen.getByTestId('mini-viewer-scrub');
+    fireEvent.pointerDown(bar, { button: 0, pointerId: 4, clientX: 100, clientY: 20 });
+    fireEvent.pointerCancel(bar, { pointerId: 4, clientX: 100, clientY: 20 });
+    fireEvent.pointerMove(bar, { pointerId: 4, buttons: 0, clientX: 400, clientY: 20 });
+    expect(S().playhead).toBe(0); // jsdom rect 0 → the hover seek would move it if armed
+    expect(S().gesturePending).toBe(false);
+  });
+});
+
+describe('R2: scrub surfaces share the gesture lock family (R1-b P3-8)', () => {
+  it('a ruler scrub opens the pending window — mutating keys + tick freeze', () => {
+    render(<Timeline />);
+    const ruler = screen.getByTestId('mini-ruler');
+    fireEvent.pointerDown(ruler, { button: 0, pointerId: 3, clientX: 244, clientY: 20 });
+    expect(S().gesturePending).toBe(true);
+    fireEvent.keyDown(window, { key: 'z', metaKey: true }); // ⌘Z mid-scrub: inert
+    expect(S().past).toHaveLength(0);
+    useMini.setState({ playing: true, playhead: 2 });
+    S().tick(0.5); // tick freezes while the user's hand owns the playhead
+    expect(S().playhead).toBe(2);
+    fireEvent.pointerUp(ruler, { pointerId: 3, clientX: 244, clientY: 20 });
+    expect(S().gesturePending).toBe(false);
+    S().tick(0.5); // playback resumes the frame after
+    expect(S().playhead).toBe(2.5);
+  });
+});
+
+describe('R2: Esc during the pending window (R1-a #5)', () => {
+  it('Esc mid-pending does NOT deselect the clip under the pointer', () => {
+    render(<Timeline />);
+    setStore(() => S().select('c2'));
+    const clip = screen.getByTestId('mini-clip-c2');
+    fireEvent.pointerDown(clip, { button: 0, pointerId: 21, clientX: 264, clientY: 10 });
+    expect(S().gesturePending).toBe(true);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(S().selectedId).toBe('c2'); // the old fall-through deselected mid-gesture
+    fireEvent.pointerUp(clip, { pointerId: 21, clientX: 264, clientY: 10 });
+  });
+});
+
+describe('R2: trim handles are keyboard-activatable (R1-a #4)', () => {
+  it('Space on the focused trim handle steps the edge (was a dead key after the C1 yield)', () => {
+    render(<Timeline />);
+    setStore(() => S().select('c1')); // tabIndex only when selected
+    const handle = screen.getByTestId('mini-trim-end-c1');
+    // keyboard-activation clicks carry detail 0 (browsers) — RTL's
+    // fireEvent.click defaults to detail 0 too
+    fireEvent.click(handle);
+    // c1 [0,3.5] media 4.5s: end +0.5 = 4.0 (within the media + neighbor bound)
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(4);
+    expect(S().past).toHaveLength(1);
+  });
+});
+
+describe('R2: reset + ruler extent re-publish (R1-b P2-3/P2-4)', () => {
+  it('reset sweeps gesturePending (the keyboard law never stays dead)', () => {
+    render(<Timeline />);
+    S().beginPendingGesture();
+    S().reset();
+    expect(S().gesturePending).toBe(false);
+  });
+
+  it('a same-extent reset re-publishes the ruler extent — scrubs reach the painted surface', () => {
+    render(<Timeline />);
+    expect(S().rulerEnd).toBeCloseTo(12.5, 5); // published on mount
+    setStore(() => S().reset()); // reset floors rulerEnd to 8; the doc is extent-identical
+    expect(S().rulerEnd).toBeCloseTo(12.5, 5); // re-published (doc joined the deps; act flushed the effect)
+    setStore(() => S().setPlayhead(10));
+    expect(S().playhead).toBe(10); // the old bug: clamped at 8
   });
 });

@@ -731,6 +731,14 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
         onPointerMove={onPointerMove}
         onPointerUp={(e) => finishGesture(e, false)}
         onPointerCancel={(e) => finishGesture(e, true)}
+        /* R1-a#4: keyboard activation — Space/Enter on the focused handle
+         * fire a synthetic click with detail 0 (pointer clicks carry
+         * detail >= 1 and are already handled by the gesture engine, so
+         * they're ignored here). Before this, the C1 Space yield made
+         * the focused handle a dead key. */
+        onClick={(e) => {
+          if (e.detail === 0) keyTrim('start', 1);
+        }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowLeft') {
             e.preventDefault();
@@ -759,6 +767,10 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
         onPointerMove={onPointerMove}
         onPointerUp={(e) => finishGesture(e, false)}
         onPointerCancel={(e) => finishGesture(e, true)}
+        /* R1-a#4: keyboard activation — see the start handle. */
+        onClick={(e) => {
+          if (e.detail === 0) keyTrim('end', 1);
+        }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowLeft') {
             e.preventDefault();
@@ -878,7 +890,12 @@ function useLaneDnd({ track, pps, originPx }: { track: Track; pps: number; origi
   const doc = useMini((s) => s.doc);
   const insertMediaAt = useMini((s) => s.insertMediaAt);
   const [drop, setDrop] = useState<DropPreview | null>(null);
-  const clips = clipsOfTrack(doc, track.id);
+  /* R1-a#1/R1-b P3-6: MEMOIZED — clipsOfTrack allocates a fresh array per
+   * render, and this array is the upstream dep of the per-clip target
+   * map: an unstable identity defeated every memo(ClipItem) (measured:
+   * a selection change re-rendered 3/3 clips). [doc, track.id] are the
+   * real inputs — the doc identity only changes on real mutations. */
+  const clips = useMemo(() => clipsOfTrack(doc, track.id), [doc, track.id]);
 
   /** pool drag hover: candidate placement ghost (R18e) */
   const onDragOver = (e: ReactDragEvent<HTMLElement>) => {
@@ -996,7 +1013,13 @@ function Lane({
     pps,
     originPx: RENDER_ORIGIN_PX,
   });
-  const magnetClips = dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips;
+  /* R1-a#1: memoized — the snapshot-derived array feeds useTargetsById's
+   * useMemo; a fresh allocation per render defeated the memo (and with it
+   * every memo(ClipItem)). Identity flips only on real doc/snapshot changes. */
+  const magnetClips = useMemo(
+    () => (dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips),
+    [dragActive, dragSnapshot, clips, track.id],
+  );
   const targetsById = useTargetsById(magnetClips);
   /* R19 (thread #51): the trim-ghost signal — which clip is trimming
    * which edge OUTWARD. The ghost rect is derived (bound ↔ live edge) so
@@ -1163,7 +1186,13 @@ function MinLane({
     pps,
     originPx: MIN_ORIGIN_PX,
   });
-  const magnetClips = dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips;
+  /* R1-a#1: memoized — the snapshot-derived array feeds useTargetsById's
+   * useMemo; a fresh allocation per render defeated the memo (and with it
+   * every memo(ClipItem)). Identity flips only on real doc/snapshot changes. */
+  const magnetClips = useMemo(
+    () => (dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips),
+    [dragActive, dragSnapshot, clips, track.id],
+  );
   const targetsById = useTargetsById(magnetClips);
 
   return (
@@ -1220,6 +1249,12 @@ function Playhead({
 }) {
   const playhead = useMini((s) => s.playhead);
   const setPlayhead = useMini((s) => s.setPlayhead);
+  /* R1-b P2-1/R2: scrub surfaces open the PENDING window too — mutating
+   * keys die mid-scrub (an ⌘Z under an open pointer gesture is the exact
+   * relayout-mid-gesture trap), and tick freezes so playback and the
+   * user's hand stop fighting over the playhead (R1-b P3-8). */
+  const beginPendingGesture = useMini((s) => s.beginPendingGesture);
+  const endPendingGesture = useMini((s) => s.endPendingGesture);
   const [dragging, setDragging] = useState(false);
   const x = timeToPx(playhead, pps);
   const atStart = playhead < 0.5;
@@ -1259,6 +1294,7 @@ function Playhead({
           ) as HTMLElement | null;
           edge.setSession(applyScrub, contentRef.current);
           edge.note(e.clientX);
+          beginPendingGesture();
           setDragging(true);
         }}
         onPointerMove={(e) => {
@@ -1275,9 +1311,23 @@ function Playhead({
             /* jsdom-safe */
           }
           edge.stop();
+          endPendingGesture();
           setDragging(false);
         }}
-        onPointerCancel={edge.stop}
+        /* R1-a#2/R1-b P2-1: pointercancel runs the FULL release path — the
+         * old handler only stopped the auto-scroll, leaving `dragging`
+         * true so later HOVER moves kept scrubbing with no button held
+         * (touch/pen scrubs interrupted by a browser gesture hit this). */
+        onPointerCancel={(e) => {
+          try {
+            (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+          } catch {
+            /* jsdom-safe */
+          }
+          edge.stop();
+          endPendingGesture();
+          setDragging(false);
+        }}
         onKeyDown={(e) => {
           // keyboard scrub (review fix #7: focusable must be operable)
           if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -1384,6 +1434,10 @@ function RulerScrub({
 }) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const edge = useEdgeAutoScroll();
+  /* R1-b P2-1/R2: the pending window opens with the scrub (mutating keys
+   * die; tick freezes — see Playhead) and closes on ANY exit path. */
+  const beginPendingGesture = useMini((s) => s.beginPendingGesture);
+  const endPendingGesture = useMini((s) => s.endPendingGesture);
   const apply = (clientX: number) => {
     const rect = elRef.current?.getBoundingClientRect();
     setPlayhead(pxToTime(clientX - (rect ? rect.left : 0), pps));
@@ -1407,6 +1461,7 @@ function RulerScrub({
           e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null,
         );
         edge.note(e.clientX);
+        beginPendingGesture();
         apply(e.clientX);
       }}
       onPointerMove={(e) => {
@@ -1416,8 +1471,8 @@ function RulerScrub({
           edge.maybeStart();
         }
       }}
-      onPointerUp={edge.stop}
-      onPointerCancel={edge.stop}
+      onPointerUp={endPendingGesture}
+      onPointerCancel={endPendingGesture}
     >
       <RulerMarks pps={pps} endTime={endTime} compact={compact} />
     </div>
@@ -1509,6 +1564,21 @@ export function Timeline({ style }: { style?: CSSProperties }) {
   const endTime = Math.max(contentEnd(boundClips(doc, trackMode, boundVideoTrack, boundAudioTrack)), 8, viewportTime);
   const width = timeToPx(endTime, pps);
 
+  /* R1-b P3-10: the minimize/expand swap mounts a NEW .qc-scroll at
+   * scrollLeft 0. Preserve the LEFTMOST VISIBLE TIME across the swap:
+   * recorded on the outgoing element (origin-corrected), restored on the
+   * incoming one (origin-adjusted). jsdom measures 0 — the restore is a
+   * no-op there. */
+  const scrollTimeRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      const el = scrollRef.current;
+      if (el && el.clientWidth > 0) {
+        scrollTimeRef.current = pxToTime(el.scrollLeft + extentOriginPx, pps);
+      }
+    };
+  }, [timelineMinimized, pps, extentOriginPx]);
+
   /* viewport measurement (ResizeObserver when available, resize listener
    *  as the jsdom/old-browser fallback). R18j: deps include the minimized
    *  flag — the mode switch swaps the .qc-scroll element, so the observer
@@ -1519,6 +1589,9 @@ export function Timeline({ style }: { style?: CSSProperties }) {
     const measure = () => {
       const w = el.clientWidth;
       setViewportW((prev) => (Math.abs(prev - w) > 1 ? w : prev));
+      // R1-b P3-10: re-anchor the fresh scroll element to the last
+      // visible time (origin-adjusted; pps from THIS render)
+      if (w > 0) el.scrollLeft = Math.max(0, timeToPx(scrollTimeRef.current, pps) - extentOriginPx);
     };
     measure();
     if (typeof ResizeObserver !== 'undefined') {
@@ -1532,10 +1605,14 @@ export function Timeline({ style }: { style?: CSSProperties }) {
 
   /* R18i: publish the ruler extent — setPlayhead clamps to it, so the
    *  playhead scrubs the full visible ruler surface (the reported bug:
-   *  dragging over the last shown timestamp pinned at contentEnd) */
+   *  dragging over the last shown timestamp pinned at contentEnd).
+   *  R1-b P2-4: `doc` joins the deps — reset() rewrites rulerEnd to the
+   *  floor, and a same-extent doc swap would otherwise leave the stale
+   *  floor clamping scrubs 4.5s short of the painted surface
+   *  (setRulerEnd's churn guard keeps this a no-op for equal values). */
   useEffect(() => {
     setRulerEnd(endTime);
-  }, [endTime, setRulerEnd]);
+  }, [endTime, doc, setRulerEnd]);
 
   /* PR69 C7a: zoom is ANCHORED AT THE PLAYHEAD — the old law kept
    * scrollLeft fixed, so zooming in at high pps walked the playhead and

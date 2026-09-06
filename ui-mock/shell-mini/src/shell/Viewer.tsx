@@ -199,6 +199,11 @@ export function Viewer() {
 function ScrubBar({ extent }: { extent: number }) {
   const playhead = useMini((s) => s.playhead);
   const setPlayhead = useMini((s) => s.setPlayhead);
+  /* R1-b P2-2/R2: the pending window opens with the scrub (mutating keys
+   * die; tick freezes — the scrub surfaces now share the clip gestures'
+   * lock family). */
+  const beginPendingGesture = useMini((s) => s.beginPendingGesture);
+  const endPendingGesture = useMini((s) => s.endPendingGesture);
   const [dragging, setDragging] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const frac = extent > 0 ? Math.min(playhead / extent, 1) : 0;
@@ -231,6 +236,7 @@ function ScrubBar({ extent }: { extent: number }) {
           /* untrusted/synthetic pointers (tests) have no active capture
              target — the drag still works, capture is an enhancement */
         }
+        beginPendingGesture();
         setDragging(true);
         setPlayhead(timeAt(e.clientX));
       }}
@@ -243,6 +249,20 @@ function ScrubBar({ extent }: { extent: number }) {
         } catch {
           /* jsdom-safe */
         }
+        endPendingGesture();
+        setDragging(false);
+      }}
+      /* R1-b P2-2: pointercancel runs the FULL release path — the bar had
+       * no cancel handler at all, so a touch/pen scrub interrupted by a
+       * browser gesture left `dragging` true and later HOVER moves kept
+       * seeking with no button held. */
+      onPointerCancel={(e) => {
+        try {
+          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {
+          /* jsdom-safe */
+        }
+        endPendingGesture();
         setDragging(false);
       }}
       onKeyDown={(e) => {

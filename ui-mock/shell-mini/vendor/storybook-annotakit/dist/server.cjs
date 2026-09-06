@@ -2107,11 +2107,23 @@ function isLoopbackPeer(req) {
   return false;
 }
 var warnedNonLoopback = false;
+function safeDecodeURIComponent(v) {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
 function enforceApiAccess(req, res) {
   const key = process.env.ANNOTAKIT_API_KEY;
   if (key) {
     const provided = req.headers["x-annotakit-key"];
-    const ok = provided === key || Array.isArray(provided) && provided.includes(key);
+    const safeEqual = (a, b) => {
+      const da = crypto.createHash("sha256").update(a).digest();
+      const db = crypto.createHash("sha256").update(b).digest();
+      return crypto.timingSafeEqual(da, db);
+    };
+    const ok = typeof provided === "string" && safeEqual(provided, key) || Array.isArray(provided) && provided.some((p) => safeEqual(p, key));
     if (!ok) {
       sendJson(res, 401, { error: "x-annotakit-key header required (ANNOTAKIT_API_KEY is set on this server)" });
       return false;
@@ -2352,7 +2364,8 @@ async function handleApi(req, res, url, configDir, origin) {
   }
   if (p === `${API_BASE}/health` && (method === "GET" || method === "HEAD")) {
     const ghSync = await rt.ghsync.status();
-    const hasToken = Boolean(ghToken() || typeof rt.config.ghToken === "string" && rt.config.ghToken);
+    const configTokenIgnored = typeof rt.config.ghToken === "string" && rt.config.ghToken ? true : void 0;
+    const hasToken = Boolean(ghToken());
     const surfaces = {
       rest: true,
       digests: ["md", "json"],
@@ -2375,6 +2388,7 @@ async function handleApi(req, res, url, configDir, origin) {
       gh: {
         repo: rt.repo,
         hasToken,
+        configTokenIgnored,
         label: rt.label,
         ...rt.scope ? { scope: rt.scope.source } : {},
         autoSync: rt.sync.describe(),
@@ -2422,7 +2436,7 @@ async function handleApi(req, res, url, configDir, origin) {
   }
   const threadMatch = p.match(new RegExp(`^${API_BASE}/threads/([^/]+)(/comments)?$`));
   if (threadMatch) {
-    const id = decodeURIComponent(threadMatch[1] ?? "");
+    const id = safeDecodeURIComponent(threadMatch[1] ?? "");
     const isComments = Boolean(threadMatch[2]);
     if (method === "DELETE" && !isComments) {
       const prev = await store.getThread(id);
@@ -2498,7 +2512,7 @@ async function handleApi(req, res, url, configDir, origin) {
   }
   const snapMatch = p.match(new RegExp(`^${API_BASE}/threads/([^/]+)/snapshot$`));
   if (snapMatch) {
-    const id = decodeURIComponent(snapMatch[1] ?? "");
+    const id = safeDecodeURIComponent(snapMatch[1] ?? "");
     if (method === "PUT" || method === "POST") {
       const thread = await store.getThread(id);
       if (!thread) return notFound(res), true;

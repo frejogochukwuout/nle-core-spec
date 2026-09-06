@@ -12,7 +12,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { getStore, migrateLegacyStore, nowIso, readConfig, type Store } from './store';
 import { renderDigest } from './digest';
 import { createGhSync, type GhSync } from './ghsync';
@@ -283,6 +283,16 @@ function isLoopbackPeer(req: IncomingMessage): boolean {
 
 let warnedNonLoopback = false;
 
+/** R1-b P3-12: malformed percent-escapes in route ids must 404/400, not
+ *  500 — decodeURIComponent throws URIError on bad input. */
+function safeDecodeURIComponent(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v; // the raw string simply won't match any stored thread id
+  }
+}
+
 /** Gate: loopback peers always pass (no config); non-loopback peers need
  *  ANNOTAKIT_API_KEY set AND a matching x-annotakit-key header. Returns an
  *  error RESPONSE already sent, or null when the request may proceed. */
@@ -290,7 +300,17 @@ function enforceApiAccess(req: IncomingMessage, res: ServerResponse): boolean {
   const key = process.env.ANNOTAKIT_API_KEY;
   if (key) {
     const provided = req.headers['x-annotakit-key'];
-    const ok = provided === key || (Array.isArray(provided) && provided.includes(key));
+    /* R1-b P3-12: constant-time compare — a LAN peer could timing-sift a
+     * straight === on the shared secret. Digest both sides (equal length)
+     * and compare those; content mismatch still rejects. */
+    const safeEqual = (a: string, b: string): boolean => {
+      const da = createHash('sha256').update(a).digest();
+      const db = createHash('sha256').update(b).digest();
+      return timingSafeEqual(da, db);
+    };
+    const ok =
+      (typeof provided === 'string' && safeEqual(provided, key)) ||
+      (Array.isArray(provided) && provided.some((p) => safeEqual(p, key)));
     if (!ok) {
       sendJson(res, 401, { error: 'x-annotakit-key header required (ANNOTAKIT_API_KEY is set on this server)' });
       return false;
@@ -614,7 +634,12 @@ async function handleApi(
   /* health ---------------------------------------------------------------- */
   if (p === `${API_BASE}/health` && (method === 'GET' || method === 'HEAD')) {
     const ghSync = await rt.ghsync.status();
-    const hasToken = Boolean(ghToken() || (typeof rt.config.ghToken === 'string' && rt.config.ghToken));
+    /* R1-a#6: aligned with the PR69 C38 ignore-law — a config-only token
+     * is NOT a usable credential anymore, so hasToken reflects the env
+     * token only; configTokenIgnored surfaces the misconfiguration. */
+    const configTokenIgnored =
+      typeof rt.config.ghToken === 'string' && rt.config.ghToken ? true : undefined;
+    const hasToken = Boolean(ghToken());
     const surfaces: AgentSurfaces = {
       rest: true,
       digests: ['md', 'json'],
@@ -639,6 +664,7 @@ async function handleApi(
       gh: {
         repo: rt.repo,
         hasToken,
+        configTokenIgnored,
         label: rt.label,
         ...(rt.scope ? { scope: rt.scope.source } : {}),
         autoSync: rt.sync.describe(),
@@ -694,7 +720,7 @@ async function handleApi(
 
   const threadMatch = p.match(new RegExp(`^${API_BASE}/threads/([^/]+)(/comments)?$`));
   if (threadMatch) {
-    const id = decodeURIComponent(threadMatch[1] ?? '');
+    const id = safeDecodeURIComponent(threadMatch[1] ?? '');
     const isComments = Boolean(threadMatch[2]);
 
     if (method === 'DELETE' && !isComments) {
@@ -793,7 +819,7 @@ async function handleApi(
    * it, zero deps) + optionally a human-viewable render via ?format=html) ---- */
   const snapMatch = p.match(new RegExp(`^${API_BASE}/threads/([^/]+)/snapshot$`));
   if (snapMatch) {
-    const id = decodeURIComponent(snapMatch[1] ?? '');
+    const id = safeDecodeURIComponent(snapMatch[1] ?? '');
 
     if (method === 'PUT' || method === 'POST') {
       const thread = await store.getThread(id);
