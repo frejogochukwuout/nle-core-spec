@@ -161,6 +161,42 @@ tests can target the same surface.
 
 ## Known spec deviations (intentional, for reaction)
 
+- **R20-W4c (the timeline-grade law):** the mockGrades `'timeline'` key is a
+  POST-CLIP pass applied to every program frame as a SECOND full
+  GradeParams application in sequence AFTER the clip's record
+  (color-layout §3.6's "grade stack per frame: [clipGrade] →
+  [timelineGrade], each a full application in sequence") — NOT a params
+  merge and NOT first-found-wins. Spec 08 defines no timeline-grade
+  concept at all (the key is mock-only, C50); the sequential law is the
+  documented mock model, implemented in
+  components/pages/color/gradedFrame.ts (`buildGradeStack` +
+  `gradeLinearFrame`) and pinned by tests (both passes vs. the merged
+  record produce different bytes). Gap note: a spec-side ruling on
+  clip-vs-timeline composition belongs in the ledger (C50 follow-up).
+- **R20-W4c (the curve seam):** W4a's `gradeLinearImage` (lib/color,
+  read-only) has no curves field — spec 08 §5 keeps curves as a separate
+  256-entry LUT baked at edit time. The W4c viewer composes the LUT
+  itself: `gradedFrame.bakeLinearCurveLut` (W4b's evaluateCurve reused)
+  applies the baked LUT in the pixel loop right after each §4.2 pass,
+  indexed by the encoded code value of the current linear value
+  (color-layout §3.4). A single no-curve pass is byte-identical to
+  gradeLinearImage (pinned by test).
+- **R20-W4c (viewer surface):** on the color page the program/source image
+  surface is the graded `<canvas>` (GradedViewerCanvas: decode → ≤960×540
+  working res → linear → [clip → timeline] stack + curve LUT + qualifier →
+  encode, rAF-coalesced re-grades, spec 08 §12 cache strategy). It uses
+  `object-contain` where the non-color program `<img>` uses `object-cover`
+  (the colorist sees the whole frame; the eyedropper's contain mapping is
+  exact) — ~1.6% letterbox difference on the 1344×768 stills, registered.
+  Source-preview on the color page renders the RAW asset (empty stack —
+  color-layout §3.6's "source = un-graded asset" divergence note). The
+  `<img>` stays the surface on every non-color page (60+ Viewer tests pin
+  that boundary).
+- **R20-W4c (scopes):** the scope strip draws the 64×64 density grid from
+  W4a's `vectorscopePoints` (one rect per cell, density alpha + 'lighter')
+  rather than 10k individual points — same data seam, no overdraw
+  saturation; the waveform/parade run-length-merge consecutive levels with
+  equal quantized alpha. 10fps throttle per spec 08 §11.4.
 - **R20-W4b:** the color page's timeline area is the ColorConsole (gap C51,
   18 §4.8 color-mode composition): frozen lane strip — ruler 22px, video
   lanes a UNIFORM 24px (overlay+caption included; color-layout §2.3's 18px

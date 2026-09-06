@@ -2,15 +2,16 @@
    D3): the grading surface is now the TIMELINE-AREA ColorConsole (AppShell
    swaps <Timeline/> for it on the color page — see ColorConsole.tsx); the
    right rail carries the clip-level color sections (ColorInspectorRail, the
-   W3 inspector grammar); the left dock keeps the node graph; the scope
-   strip under the viewer is the W4c placeholder (ColorScopeStrip).
+   W3 inspector grammar); the left dock keeps the node graph; since R20-W4c
+   the viewer is the graded <canvas> and the scope strip under it draws real
+   traces from the published graded frame (GradedViewerCanvas +
+   ColorScopeStrip + the gradedFrameBus seam).
    This module is the composition's one-import line (re-exports) + a thin
    standalone wrapper for stories.
 
    Gap ledger: C50 (grade sidecar) + C51 (console layout) live here;
-   C52/C53 (viewer canvas + real scopes) = W4c; C54 qualifier keying is
-   REAL in the math (W4a) with the viewer overlay = W4c; C55 curves panel
-   (this wave); C56 node binding (this wave). */
+   C52 (viewer canvas) + C53 (real scopes) + C54 (qualifier overlay +
+   eyedropper) = W4c, real; C55 curves (W4b); C56 node binding (W4b). */
 
 export { ColorConsole } from './color/ColorConsole';
 export { ColorInspectorRail } from './color/ColorInspectorRail';
