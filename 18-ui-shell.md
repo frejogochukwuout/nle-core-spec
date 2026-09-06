@@ -1,8 +1,8 @@
 # 18 — UI Shell: Application Layout, Panels & Interaction Contracts (DaVinci-derived, simplified)
 
 **Stream:** UI shell / application chrome
-**Status:** v1.2 (Round 15 amendment pass — A1/A5/B2/B4/N2/N3/N4/N5/N6/N7/N9/N10/N12-class resolutions + testid census + annotakit-for-app charter, per `.agents/SPEC-REVISION-CANDIDATES.md` + ARCH-R15 §4; v1.1 Round 8 — cloudcut UX-spec integration: per-panel state rows, context menus §4.9, pointer/cursor grammar §5A, error & notification UX §6.4, visual-language deepening §9, a11y floor §11, UX-scope code references §13; ours-wins policy applied to all 25 contradictions, SCOUT-R8-C §3)
-**Date:** 2026-09-02 (v1.0 Round 7)
+**Status:** v1.3 (Round 19 amendment: §16 designates ui-mock/shell-mini the first shippable MVP — OT-seam-tracked ops, embedding contract, R18e→R19 iterated feature inventory folded per explicit user directive; v1.2 Round 15 amendment pass — A1/A5/B2/B4/N2/N3/N4/N5/N6/N7/N9/N10/N12-class resolutions + testid census + annotakit-for-app charter, per `.agents/SPEC-REVISION-CANDIDATES.md` + ARCH-R15 §4; v1.1 Round 8 — cloudcut UX-spec integration: per-panel state rows, context menus §4.9, pointer/cursor grammar §5A, error & notification UX §6.4, visual-language deepening §9, a11y floor §11, UX-scope code references §13; ours-wins policy applied to all 25 contradictions, SCOUT-R8-C §3)
+**Date:** 2026-09-02 (v1.0 Round 7; v1.3 2026-09-06)
 **Spec file:** `18-ui-shell.md`
 **Consumers:** Implementation team (UI layer), spec 05 (timeline internals), spec 16 (keyboard bindings), spec 15 (command dispatch), spec 17 (Tier 3 UI tests)
 **UX source material:** cloudcut-nle `ux-spec` branch v1.3.5 (28 files — the prior iteration's app-layer UX spec; integrated Round 8 per the ours-wins contradiction policy; the cloudcut-nle main branch is the UX/app-scope reference codebase, §13)
@@ -11,7 +11,7 @@
 
 ## 0. TL;DR
 
-This spec defines the application shell — the layout regions, panel inventory, and interaction contracts of the editor UI. It is derived from the DaVinci Resolve layout clone committed at `ui-mock/davinci_resolve_ui_mock.html`, **deliberately simplified** to match our much smaller scope: the menu bar is removed, the inspector is reduced from 6 tabs to 4, and the 7-page dock collapses to 3 pages (Edit / Color / Deliver). Every panel is a thin `EngineCommand` generator over the spec 15 wire protocol — no panel calls a manager method directly, and no panel holds engine state. The timeline area's internals (component hierarchy, virtualization, drag state machines) are owned by spec 05; this spec owns everything that *surrounds* them. **v1.1** integrates the cloudcut UX-spec's applicable material (per-panel state rows, the five context menus, the pointer/cursor grammar, error & notification UX, visual-language depth, the a11y floor, perf budgets) under the ours-wins contradiction policy — every rejection is registered, not silently dropped.
+This spec defines the application shell — the layout regions, panel inventory, and interaction contracts of the editor UI. It is derived from the DaVinci Resolve layout clone committed at `ui-mock/davinci_resolve_ui_mock.html`, **deliberately simplified** to match our much smaller scope: the menu bar is removed, the inspector is reduced from 6 tabs to 4, and the 7-page dock collapses to 3 pages (Edit / Color / Deliver). Every panel is a thin `EngineCommand` generator over the spec 15 wire protocol — no panel calls a manager method directly, and no panel holds engine state. The timeline area's internals (component hierarchy, virtualization, drag state machines) are owned by spec 05; this spec owns everything that *surrounds* them. **v1.1** integrates the cloudcut UX-spec's applicable material (per-panel state rows, the five context menus, the pointer/cursor grammar, error & notification UX, visual-language depth, the a11y floor, perf budgets) under the ours-wins contradiction policy — every rejection is registered, not silently dropped. **v1.3 (R19)** adds §16: shell-mini is designated the first shippable MVP — the minimal complete editing surface with OT-seam-tracked timeline logic and an embedding contract — landing before the full shell.
 
 ---
 
@@ -461,6 +461,7 @@ npx playwright test tests/ui/shell && npx vitest run tests/unit/shell-selectors
 | OpenCut-classic timeline (in-shell region) | spec 05 §16 inventory | The timeline-area internals this shell frames |
 | FreeCut per-element op UI | spec 05 §18 inventory | Trim/stretch/fade handle components consumed by §5's contracts |
 | **nle-engine** | — | **No shell code exists** (engine has no React UI beyond its test harness page) — the shell is greenfield |
+| **shell-mini (first MVP, R19)** | `ui-mock/shell-mini/` (this repo) | The §16 MVP: compact shell + timeline whose ops track the OT seam map (`docs/OT-SEAMS.md`); deviations register in its README; 302 vitest + live annotakit review surface |
 | **opencut-timeline** | `src/lib/timeline/controllers/` + `view/` | The interaction-controller + view-math reference for the timeline region's drag/zoom/ruler behavior behind §4.7 (spec 05 §16.5) — components pending its W4 |
 
 > Reconciliation policy: `19-code-references.md` (canon hierarchy; cloudcut-nle = UX/app-scope tier-3 reference like nle-engine is for the engine side).
@@ -488,3 +489,78 @@ npx playwright test tests/ui/shell && npx vitest run tests/unit/shell-selectors
 ---
 
 **End of `18-ui-shell.md`.** Next: `19-code-references.md`.
+
+## 16. shell-mini — the first shippable MVP (R19 amendment)
+
+**Status:** v1.3 amendment (Round 19, user directive). This section promotes
+`ui-mock/shell-mini` from "a design mock" to **the first MVP of the NLE app**
+— the minimal-but-complete editing surface that ships BEFORE the full shell
+(§3-§15) and is designed from the start to EMBED into host workflows.
+
+### 16.1 Positioning
+
+The full shell (this spec's §3-§15) is the desktop-class target. shell-mini
+is the same product's minimal cut: every ESSENTIAL NLE operation is live
+(see 16.2), the chrome is a compact three-region layout (pool · viewer +
+transport · timeline, plus inspector), and the whole surface tracks the
+opencut-timeline seam map (`ui-mock/shell-mini/docs/OT-SEAMS.md`) so the
+mock's timeline logic is a projection of the editing-domain engine, not an
+improvisation. When the real library lands, the ops rename, they do not
+redesign (OT-SEAMS §3, the swap path).
+
+shell-mini is additionally the EMBEDDING vehicle: the app is a **window
+onto a project** (track binding: one bound video + one audio lane, or a
+single video lane in video-only mode), with a host-injected binding lock —
+an embedded environment pins the pair and the chrome reduces accordingly
+(hidden track heads, no selector). The topbar is the documented downstream
+customization point (exit/parent/export handshakes live in the host).
+
+### 16.2 The MVP surface (iterated R18e → R19 through the live review loop)
+
+- **Timeline**: 9-step zoom ladder; ruler scrub + playhead drag; ripple edit
+  (delete/trim follower laws, snapshot-idempotent previews); RH cut styles
+  `[`/`]` at the playhead; split `S`; snap = edit-point magnet (pro-NLE
+  convention) with both-edge magnet + frozen gesture field; trim-as-edge
+  (14px zones, 2px accent affordance, trim-mode shade) + **ghost edges**
+  (outward trims show the dotted source/neighbor extent); filmstrip ↔
+  color-block bodies; real waveforms; pool→timeline DnD (gap-fit law).
+- **R19 drag law** (the one-lane-street fix): free drag across the lane;
+  conflicting drops INSERT (push the conflicting tail — Premiere
+  insert-edit geometry); commit at the UP position; programmatic moves
+  follow the OT wire law (overlap ⇒ refuse + toast).
+- **Track binding window** (16.1): marker badges / binding selectors /
+  hidden-when-locked head law; empty-lane + head click select the track
+  (the inspector's track card).
+- **Viewer + transport**: RH grammar ([tc | play | aspect] under the
+  stage); **the scrub bar row** (full-width, center-aligned with the play
+  button; drag/click + keyboard slider semantics) and seek controls
+  (to-start; to-current-clip-head with edit-point walk-back).
+- **Layout states**: pool/inspector collapse to whole-surface 30px rails;
+  timeline minimizes to a live pill strip; viewer-max composes all three
+  with exact-layout restore.
+- **Cross-cutting**: undo/redo (snapshot family), keyboard surface
+  (S/[/]/Del/±/0/Home/Space/Esc with the form-control skip law), honest
+  toasts at every refusal, WCAG-aware focus/aria on interactive surfaces.
+
+### 16.3 Contract relationship
+
+1. **Canon hierarchy unchanged**: where shell-mini and this spec disagree,
+   this spec wins and the delta is REGISTERED — the live deviation
+   register is `ui-mock/shell-mini/README.md` §"What's OUT" (27 entries
+   through R19), the seam reasoning is `docs/OT-SEAMS.md`. The mock does
+   not amend this section silently; the R19 round folded the wave
+   feedback into this section by explicit user directive.
+2. **Interaction contracts (§5)**: the mini's ops are the §5 table's
+   minimal subset, shaped to the OT command surface (OT-SEAMS §1); when
+   the wire protocol's editing subset ships, the mini's store actions
+   become command emitters.
+3. **Testing (§12 / spec 17 Tier 3)**: the mini carries 302 vitest tests
+   (the `mini-*` `data-testid` grammar per §10) + the live annotakit
+   pin-comment review surface; its gates (tsc, vitest, vite build,
+   storybook build) run on every change.
+4. **The full shell (§3-§15)** remains the design of record for the
+   desktop-class app; the mini's compact chrome is a REGISTERED scope cut,
+   not a competing design. Panel vocabulary (pool/inspector/viewer/
+   timeline) is shared so the mini grows INTO the full shell rather than
+   beside it.
+

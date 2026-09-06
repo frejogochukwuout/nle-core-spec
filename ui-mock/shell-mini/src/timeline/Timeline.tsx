@@ -17,7 +17,18 @@
    the toggle is the MAGNET ONLY — the pro-NLE convention (Premiere /
    Resolve / FCP / Avid snap to edit points + playhead, never a time
    grid); the 0.5s beat-quantize left the snap path, so a snap-on drag
-   is smooth except where it magnet-jumps to an edit point.
+   is smooth except where it magnet-jumps to an edit point. R19: BOTH
+   edges of the moving clip magnet (OT snapGroupEdges parity — nearest
+   wins, ties → left) and the magnet field is FROZEN at gesture start
+   (targets from the pre-drag snapshot: a gesture never magnetizes to
+   positions it created).
+
+   R19 drag law (docs/OT-SEAMS.md): the clip follows the pointer FREELY
+   across the lane (the one-lane neighbor clamp is gone); a conflicting
+   drop INSERTS — the conflicting tail pushes right (Premiere insert-
+   edit geometry; the single-pair window's stand-in for OT's new-track
+   escape). R19 (thread #51): trim gestures draw the GHOST edge — the
+   dotted extent of how much further the edge can reach (outward only).
 
    R18e additions: RH cut styles (cut head / cut tail at playhead —
    feedback #7), ripple toggle (#16), filmstrip↔color-block toggle
@@ -53,10 +64,12 @@ import {
   insertionAt,
   labelStepFor,
   magnetTarget,
+  magnetMove,
   ppsFor,
-  resolveSnap,
+  PPS_STEPS,
   timeToPx,
   pxToTime,
+  trimGhostBound,
 } from '../lib/geometry';
 import { fmtRulerLabel, fmtTimecode } from '../lib/timecode';
 import { filmstripFor } from '../lib/filmstrip';
@@ -264,12 +277,12 @@ export function ToolsRow() {
           className="qc-toolbar__slider"
           type="range"
           min={0}
-          max={4}
+          max={PPS_STEPS.length - 1}
           step={1}
           aria-label="Timeline zoom"
           value={zoomStep}
           onChange={(e) => setZoomStep(Number(e.target.value))}
-          style={{ ['--qc-slider-pct' as string]: `${(zoomStep / 4) * 100}%` }}
+          style={{ ['--qc-slider-pct' as string]: `${(zoomStep / (PPS_STEPS.length - 1)) * 100}%` }}
           data-testid="mini-zoom-slider"
         />
         <button
@@ -277,7 +290,7 @@ export function ToolsRow() {
           className="qc-toolbar__mini-icon"
           aria-label="Zoom in"
           title="Zoom in (+)"
-          disabled={zoomStep === 4}
+          disabled={zoomStep === PPS_STEPS.length - 1}
           onClick={() => setZoomStep(zoomStep + 1)}
           data-testid="mini-btn-zoomin"
         >
@@ -366,11 +379,18 @@ interface ClipProps {
    *  (46, after the fixed head rail) vs the compact strip (10, no rail).
    *  The gesture math is origin-relative; the default matches full lanes. */
   originPx?: number;
+  /** R19: this clip is one of the followers the live insert-preview is
+   *  pushing (soft tint affordance — the drag law made visible). */
+  pushed?: boolean;
+  /** R19 (thread #51): the clip reports its outward trim (the ghost-edge
+   *  signal) — the LANE paints the ghost (the clip body clips overflow,
+   *  and the ghost extends beyond the clip's own box). */
+  onTrimGhost?: (ghost: { id: string; edge: 'start' | 'end' } | null) => void;
 }
 
 /* exported for the solo Clip story (R18k storybook restructure — the
    clip-anatomy review surface at natural size, no panel chrome) */
-export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact, originPx = RENDER_ORIGIN_PX }: ClipProps) {
+export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact, originPx = RENDER_ORIGIN_PX, pushed, onTrimGhost }: ClipProps) {
   const select = useMini((s) => s.select);
   const beginDrag = useMini((s) => s.beginDrag);
   const endDrag = useMini((s) => s.endDrag);
@@ -383,7 +403,10 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
 
   /* gesture session (component-held; the store holds the doc snapshot).
    *  R18i adds contentEl + lastX: the edge auto-scroll loop re-applies the
-   *  gesture against the LIVE content rect while the timeline scrolls. */
+   *  gesture against the LIVE content rect while the timeline scrolls.
+   *  R19 adds snapStart/snapEnd: the RESTING edges at pointerdown — the
+   *  ghost's outward test compares the request against them (a trim that
+   *  moves the edge away from the resting position is outward). */
   const g = useRef<{
     kind: 'move' | 'trim-start' | 'trim-end' | null;
     pointerId: number | null; // this gesture owns exactly one pointer (fix #4)
@@ -393,7 +416,9 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
     id: string;
     contentEl: HTMLElement | null; // the shared scroll content (origin law)
     lastX: number; // latest pointer clientX (auto-scroll reads it each frame)
-  }>({ kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0 });
+    snapStart: number; // resting clip.start at pointerdown (R19 ghost law)
+    snapEnd: number; // resting clip end at pointerdown (R19 ghost law)
+  }>({ kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0, snapStart: 0, snapEnd: 0 });
   const autoScrollRaf = useRef<number | null>(null);
   /** R18k (panel thread #1): WHICH edge is being trimmed while the
    *  gesture runs — drives the trim-mode edge shade (the standing filmstrip
@@ -413,6 +438,9 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
     if (e.button !== 0) return;
     if (useMini.getState().dragActive) return; // one gesture at a time (fix #4)
     select(clip.id); // select-on-pointerdown (before the lock can engage)
+    // R19: the clip owns this pointerdown — the lane's empty-area track
+    // select (thread #26) must not fire through the bubbling phase
+    e.stopPropagation();
     g.current = {
       kind,
       pointerId: e.pointerId,
@@ -424,6 +452,8 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
         '[data-qc-scroll-content]',
       ) as HTMLElement | null,
       lastX: e.clientX,
+      snapStart: clip.start,
+      snapEnd: clip.start + clip.duration,
     };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
@@ -439,15 +469,27 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
     const t = pxToTime(clientX - origin, pps);
     if (gs.kind === 'move') {
       const raw = t - gs.grabOffset;
-      // R18e: report the engaged magnet (guide paints at the TARGET)
-      onSnapGuide(snapOn ? magnetTarget(raw, pps, snapTargets) : null);
-      previewMove(clip.id, resolveSnap(raw, snapOn, pps, snapTargets));
+      /* R19: BOTH edges magnet (OT snapGroupEdges parity — the left edge
+       * AND the right edge of the moving clip are candidates; nearest
+       * wins, ties → left). The guide paints at the engaged edge's
+       * target. The span itself stays free — the store's previewMove
+       * resolves any conflict via insert-push. */
+      const m = snapOn ? magnetMove(raw, pps, clip.duration, snapTargets) : null;
+      onSnapGuide(m ? m.guide : null);
+      previewMove(clip.id, m ? m.start : raw);
     } else if (gs.kind === 'trim-start') {
-      onSnapGuide(snapOn ? magnetTarget(t, pps, snapTargets) : null);
-      previewTrim(clip.id, 'start', resolveSnap(t, snapOn, pps, snapTargets));
+      const magnet = snapOn ? magnetTarget(t, pps, snapTargets) : null;
+      onSnapGuide(magnet);
+      previewTrim(clip.id, 'start', magnet !== null ? magnet : t);
+      /* R19 (thread #51): the ghost signal fires only on an OUTWARD
+       *  request (left of the resting start) — the lane paints the dotted
+       *  extent; inward trims and no-room bounds never ghost. */
+      onTrimGhost?.(t < gs.snapStart - 1e-9 ? { id: clip.id, edge: 'start' } : null);
     } else {
-      onSnapGuide(snapOn ? magnetTarget(t, pps, snapTargets) : null);
-      previewTrim(clip.id, 'end', resolveSnap(t, snapOn, pps, snapTargets));
+      const magnet = snapOn ? magnetTarget(t, pps, snapTargets) : null;
+      onSnapGuide(magnet);
+      previewTrim(clip.id, 'end', magnet !== null ? magnet : t);
+      onTrimGhost?.(t > gs.snapEnd + 1e-9 ? { id: clip.id, edge: 'end' } : null);
     }
   };
 
@@ -527,14 +569,25 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
     } catch {
       /* pointer already released (jsdom-safe) */
     }
-    onSnapGuide(null); // guide clears with the gesture (R18e)
+    /* R19: the clears run AFTER the commit-at-up application — the
+     * applyGesture call below re-reports the guide/ghost signals (it is
+     * the same shared gesture applier), so clearing first would be undone
+     * immediately. */
     if (gs.active) {
       if (canceled) cancelDrag(); // Esc / pointercancel
-      else endDrag(); // ONE history entry per committed gesture
+      else {
+        /* R19 (review P2-11): commit at the UP position — a fast flick
+         * would otherwise land the LAST pointermove spot, not the drop
+         * spot (OT resolves at the up coordinates). */
+        applyGesture(e.clientX);
+        endDrag(); // ONE history entry per committed gesture
+      }
     }
+    onSnapGuide(null); // guide clears with the gesture (R18e)
+    onTrimGhost?.(null); // the ghost leaves with the gesture (R19)
     setDragging(false);
     setTrimmingEdge(null); // R18k: the trim-mode shade leaves with the gesture
-    g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0 };
+    g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0, snapStart: 0, snapEnd: 0 };
   };
 
   /** keyboard trim on the handles (review fix #7: no inert controls) */
@@ -561,7 +614,7 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
 
   return (
     <div
-      className={`qc-track-item${compact ? ' qc-track-item--pill' : ''}${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${trimmingEdge ? ` is-trimming-${trimmingEdge}` : ''}`}
+      className={`qc-track-item${compact ? ' qc-track-item--pill' : ''}${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${trimmingEdge ? ` is-trimming-${trimmingEdge}` : ''}${pushed ? ' is-pushed' : ''}`}
       style={style}
       data-testid={`mini-clip-${clip.id}`}
       data-clip-id={clip.id}
@@ -666,16 +719,15 @@ export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snap
 }
 
 /* ---------- R18k (thread #3): the track-head column ----------------
- * The plain "V1"/"A1" labels are GONE — the reviewer's law: the head is
- * either a SELECTABLE dropdown (which project track this lane binds to)
- * or completely invisible. The select lives in the FIXED head column
- * (never over a clip — review P1-1). Visible only when BOTH: the project
- * offers a real choice (2+ tracks of this kind) AND the host hasn't
- * pinned the pair (trackBindingLocked — an injected environment has no
- * numbered track name to show). A single-track project shows an empty
- * head cell (thread #21: the "V1" label on the only lane is noise). The
- * cell itself always renders — the column must stay row-aligned with
- * its lane (36px, or 22px when the audio lane is collapsed). */
+ * The lane heads live in the FIXED head column (never over a clip —
+ * review P1-1; the column must stay row-aligned with its lane: 36px,
+ * or 22px when the audio lane is collapsed). R19 (thread #28) revised
+ * the head law: a SELECTOR dropdown when the project offers a real
+ * choice (2+ tracks of this kind, unlocked); a V1/A1 MARKER badge on
+ * single-pair projects (click = select the track for inspection);
+ * NOTHING when the host pinned the pair (trackBindingLocked — an
+ * injected environment has no numbered track name to show). The cell
+ * itself always renders — row alignment with the lane. */
 
 function TrackHead({ track, collapsed }: { track: Track; collapsed: boolean }) {
   const doc = useMini((s) => s.doc);
@@ -684,8 +736,18 @@ function TrackHead({ track, collapsed }: { track: Track; collapsed: boolean }) {
   const boundAudio = useMini((s) => s.boundAudioTrack);
   const setBoundVideo = useMini((s) => s.setBoundVideoTrack);
   const setBoundAudio = useMini((s) => s.setBoundAudioTrack);
+  const selectTrack = useMini((s) => s.selectTrack);
+  const selectedTrackId = useMini((s) => s.selectedTrackId);
   const candidates = doc.tracks.filter((t) => t.kind === track.kind);
   const showSelect = !locked && !collapsed && candidates.length >= 2;
+  /* R19 (thread #28) — the head law, revised: multi-track + unlocked →
+   * SELECTOR (the rebind affordance); single-pair + unlocked → the lane
+   * MARKER (V1/A1 — the reviewer's "why no trackhead marker?"); LOCKED
+   * (embedded/bound) → nothing at all ("if this is considered binded
+   * then just hide the trackhead"). The marker is a real button — it
+   * selects the track for inspection (thread #26). This supersedes the
+   * R18k "invisible when single-pair" reading. */
+  const showMarker = !locked && !collapsed && candidates.length < 2;
   const bound = track.kind === 'video' ? boundVideo : boundAudio;
   const onChange = track.kind === 'video' ? setBoundVideo : setBoundAudio;
   return (
@@ -708,6 +770,19 @@ function TrackHead({ track, collapsed }: { track: Track; collapsed: boolean }) {
             ))}
           </select>
         </div>
+      )}
+      {showMarker && (
+        <button
+          type="button"
+          className={`qc-track-marker${selectedTrackId === track.id ? ' is-selected' : ''}`}
+          onClick={() => selectTrack(track.id)}
+          aria-pressed={selectedTrackId === track.id}
+          aria-label={`Select ${track.label} lane`}
+          title={`Select the ${track.label} lane — inspect its properties`}
+          data-testid={`mini-track-marker-${track.id}`}
+        >
+          {track.label}
+        </button>
       )}
     </div>
   );
@@ -740,8 +815,24 @@ function Lane({
   const audioLaneVisible = useMini((s) => s.audioLaneVisible);
   const insertMediaAt = useMini((s) => s.insertMediaAt);
   const toggleAudioLane = useMini((s) => s.toggleAudioLane);
+  /* R19: the magnet field is FROZEN at gesture start — while a gesture
+   * runs, targets come from the PRE-DRAG SNAPSHOT (a gesture never
+   * magnetizes to positions it created; also fixes the latent ripple-trim
+   * ratchet where pushed followers fed their own new edges back as
+   * magnets). Plus the push + ghost affordance subscriptions. */
+  const dragActive = useMini((s) => s.dragActive);
+  const dragSnapshot = useMini((s) => s.dragSnapshot);
+  const pushedIds = useMini((s) => s.pushedIds);
+  const rippleOn = useMini((s) => s.rippleOn);
+  const selectTrack = useMini((s) => s.selectTrack);
   const clips = clipsOfTrack(doc, track.id);
+  const magnetClips = dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips;
   const [drop, setDrop] = useState<DropPreview | null>(null);
+  /* R19 (thread #51): the trim-ghost signal — which clip is trimming
+   * which edge OUTWARD. The ghost rect is derived (bound ↔ live edge) so
+   * it shrinks as the trim extends; the lane paints it OUTSIDE the clip
+   * (the clip body clips its own overflow). */
+  const [trimGhost, setTrimGhost] = useState<{ id: string; edge: 'start' | 'end' } | null>(null);
 
   /** pool drag hover: candidate placement ghost (R18e) */
   const onDragOver = (e: ReactDragEvent<HTMLElement>) => {
@@ -837,6 +928,26 @@ function Lane({
 
   const dropping = drop !== null;
 
+  /* R19 (thread #51): the ghost rect — from the LIVE edge to the bound
+   * (media/neighbor extent the drag clamps to). Under ripple ON the
+   * start edge is suppressed (frozen-left law) and the end bound ignores
+   * the neighbor (followers push) — trimGhostBound encodes both. */
+  let ghostRect: { left: number; width: number } | null = null;
+  if (trimGhost) {
+    const c = clips.find((x) => x.id === trimGhost.id);
+    if (c) {
+      const m = doc.media.find((x) => x.id === c.mediaId);
+      const bound = trimGhostBound(doc, c, trimGhost.edge, rippleOn, m);
+      if (bound !== null) {
+        const liveEdge = trimGhost.edge === 'start' ? c.start : c.start + c.duration;
+        ghostRect =
+          trimGhost.edge === 'start'
+            ? { left: timeToPx(bound, pps), width: timeToPx(liveEdge - bound, pps) }
+            : { left: timeToPx(liveEdge, pps), width: timeToPx(bound - liveEdge, pps) };
+      }
+    }
+  }
+
   return (
     <div
       className={`qc-track-row__content${dropping ? ' is-drop-target' : ''}`}
@@ -844,14 +955,25 @@ function Lane({
       aria-label={`${track.kind === 'audio' ? 'Audio' : 'Video'} track ${track.label}`}
       data-testid={`mini-lane-${track.id}`}
       data-track-kind={track.kind}
+      onPointerDown={(e) => {
+        /* R19 (thread #26): a click on the lane's EMPTY surface selects
+         * the track (the inspector shows its card) — the same call the
+         * head badge makes, without opening any selector. A clip's own
+         * pointerdown stops propagation, so this only fires on empty
+         * area (or the clip's body — which never bubbles here). */
+        if (e.button !== 0) return;
+        if ((e.target as HTMLElement).closest('.qc-track-item')) return;
+        selectTrack(track.id);
+      }}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
       {clips.map((c) => {
-        // magnet targets (fix #2): same-track neighbors (never self) + playhead
+        // magnet targets (fix #2): same-track neighbors (never self) + playhead.
+        // R19: from the FROZEN snapshot clips while a gesture runs
         const targets: number[] = [playhead];
-        for (const other of clips) {
+        for (const other of magnetClips) {
           if (other.id === c.id) continue;
           targets.push(other.start, other.start + other.duration);
         }
@@ -866,9 +988,19 @@ function Lane({
             filmstripOn={filmstripOn}
             snapTargets={targets}
             onSnapGuide={onSnapGuide}
+            pushed={pushedIds.includes(c.id)}
+            onTrimGhost={setTrimGhost}
           />
         );
       })}
+      {ghostRect && (
+        <div
+          className="qc-trim-ghost"
+          aria-hidden="true"
+          style={{ left: ghostRect.left, width: Math.max(ghostRect.width, 2) }}
+          data-testid={trimGhost ? `mini-trim-ghost-${trimGhost.id}` : undefined}
+        />
+      )}
       {drop && (
         <div
           className="qc-drop-outline"
@@ -905,7 +1037,13 @@ function MinLane({
   const doc = useMini((s) => s.doc);
   const selectedId = useMini((s) => s.selectedId);
   const insertMediaAt = useMini((s) => s.insertMediaAt);
+  /* R19: the same frozen-magnet + push laws as the full lanes — the
+   * strip runs the identical gesture engine. */
+  const dragActive = useMini((s) => s.dragActive);
+  const dragSnapshot = useMini((s) => s.dragSnapshot);
+  const pushedIds = useMini((s) => s.pushedIds);
   const clips = clipsOfTrack(doc, track.id);
+  const magnetClips = dragActive && dragSnapshot ? clipsOfTrack(dragSnapshot, track.id) : clips;
   const [drop, setDrop] = useState<DropPreview | null>(null);
 
   const onDragOver = (e: ReactDragEvent<HTMLElement>) => {
@@ -963,8 +1101,9 @@ function MinLane({
       onDrop={onDrop}
     >
       {clips.map((c) => {
+        // R19: frozen snapshot targets while a gesture runs
         const targets: number[] = [playhead];
-        for (const other of clips) {
+        for (const other of magnetClips) {
           if (other.id === c.id) continue;
           targets.push(other.start, other.start + other.duration);
         }
@@ -979,6 +1118,7 @@ function MinLane({
             filmstripOn={false}
             snapTargets={targets}
             onSnapGuide={onSnapGuide}
+            pushed={pushedIds.includes(c.id)}
             compact
             originPx={MIN_ORIGIN_PX}
           />

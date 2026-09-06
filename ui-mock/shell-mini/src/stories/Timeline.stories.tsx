@@ -56,7 +56,7 @@ const CLIP_MEDIA: Record<ClipArgs['media'], string> = {
 
 export const Clip: StoryObj<ClipArgs> = {
   name: 'Clip — anatomy & states',
-  args: { media: 'video', selected: false, filmstripOn: true, compact: false, zoomStep: 1 },
+  args: { media: 'video', selected: false, filmstripOn: true, compact: false, zoomStep: 2 },
   argTypes: {
     media: { control: 'inline-radio', options: ['video', 'image', 'audio'] },
     selected: { control: 'boolean' },
@@ -235,7 +235,7 @@ function panelPatch(args: PanelArgs): Patch {
 export const PanelDefault: StoryObj<PanelArgs> = {
   name: 'Panel — default (state controls)',
   args: {
-    zoomStep: 1,
+    zoomStep: 2,
     playhead: 5.25,
     selection: 'none',
     snapOn: false,
@@ -260,7 +260,7 @@ export const PanelDefault: StoryObj<PanelArgs> = {
 export const PanelEmptyLanes: StoryObj<PanelArgs> = {
   name: 'Panel — empty lanes',
   args: {
-    zoomStep: 1,
+    zoomStep: 2,
     playhead: 0,
     selection: 'none',
     snapOn: false,

@@ -31,8 +31,12 @@ import {
   MAX_HISTORY,
   MIN_DUR,
   DEFAULT_ZOOM_STEP,
+  PPS_STEPS,
   neighborBounds,
-  clampMove,
+  wouldOverlap,
+  insertPlacement,
+  insertPushedIds,
+  clipsOfTrack,
   clampTrimStart,
   clampTrimEnd,
   splitPoint,
@@ -231,10 +235,23 @@ export interface MiniState {
   insertMediaAt: (mediaId: string, trackId: string, t: number) => void;
   nudge: (id: string, delta: number) => void;
   reset: () => void;
+  /* R19 (thread #47): track selection — the inspector's second subject.
+   * Mutually exclusive with clip selection (ONE subject at a time). */
+  selectedTrackId: string | null;
+  selectTrack: (id: string | null) => void;
+  /** R19 (thread #53): seek to the head of the under-playhead clip (the
+   *  bound VIDEO world — the viewer's world); taps at a clip head walk
+   *  back edit by edit. */
+  seekToClipHead: () => void;
+  /** R19: the follower ids the live insert-preview is pushing (affordance
+   *  state for is-pushed; recomputed every previewMove event, cleared at
+   *  drag end). */
+  pushedIds: string[];
 }
 
 function clampZoom(step: number): number {
-  return Math.min(Math.max(Math.round(step), 0), 4);
+  // R19: the ladder length is the single source of truth (was hardcoded 4)
+  return Math.min(Math.max(Math.round(step), 0), PPS_STEPS.length - 1);
 }
 
 const findMedia = (doc: Doc, id: string): Media | undefined => doc.media.find((m) => m.id === id);
@@ -295,6 +312,8 @@ export const useMini = create<MiniState>((set, get) => {
     boundAudioTrack: TRACK_AUDIO,
     trackBindingLocked: false,
     selectedId: null,
+    selectedTrackId: null,
+    pushedIds: [],
     dragActive: false,
     toast: null,
     past: [],
@@ -302,8 +321,18 @@ export const useMini = create<MiniState>((set, get) => {
     dragSnapshot: null,
 
     _validateSelection: () => {
-      const { selectedId, doc } = get();
+      const { selectedId, selectedTrackId, doc, trackMode, boundVideoTrack, boundAudioTrack } = get();
       if (selectedId && !findClip(doc, selectedId)) set({ selectedId: null });
+      /* R19: the track selection heals the same survive-iff-visible law —
+       * a doc swap (undo/redo/story control) can strand it on a track that
+       * no longer exists or left the bound world. (The collapsed audio
+       * lane is still "visible" here — the head badge keeps selecting it.) */
+      if (selectedTrackId) {
+        const vis = visibleTracks(doc, trackMode, boundVideoTrack, boundAudioTrack).some(
+          (t) => t.id === selectedTrackId,
+        );
+        if (!vis) set({ selectedTrackId: null });
+      }
     },
 
     _commit: commit,
@@ -335,7 +364,46 @@ export const useMini = create<MiniState>((set, get) => {
     select: (id) => {
       if (get().dragActive) return; // interaction lock
       if (id && !findClip(get().doc, id)) return;
-      set({ selectedId: id });
+      // R19: clip selection REPLACES track selection — one inspector subject
+      set({ selectedId: id, selectedTrackId: null });
+    },
+
+    selectTrack: (id) => {
+      if (get().dragActive) return; // same lock as select (lane head-click is a pointerdown)
+      if (id && !get().doc.tracks.some((t) => t.id === id)) return;
+      // R19 (thread #47): the lane's empty surface + the head badge select
+      // the TRACK (the inspector shows its card); replaces clip selection
+      set({ selectedTrackId: id, selectedId: null });
+    },
+
+    seekToClipHead: () => {
+      const state = get();
+      if (state.dragActive) return;
+      const world = boundClips(state.doc, state.trackMode, state.boundVideoTrack, state.boundAudioTrack)
+        .filter((c) => {
+          const m = findMedia(state.doc, c.mediaId);
+          return m && m.kind !== 'audio';
+        })
+        .sort((a, b) => a.start - b.start);
+      let target: number;
+      const under = world.find(
+        (c) => state.playhead >= c.start - 1e-9 && state.playhead < c.start + c.duration,
+      );
+      if (under) {
+        if (Math.abs(state.playhead - under.start) > 1e-9) {
+          target = under.start; // the head of the clip under the playhead
+        } else {
+          // sitting exactly ON a head → step to the previous edit point
+          // (repeated taps walk back clip by clip — the pro-NLE behavior)
+          const idx = world.indexOf(under);
+          target = idx > 0 ? world[idx - 1].start : 0;
+        }
+      } else {
+        // in a gap (or past the tail): the most recent head before the playhead
+        const prev = [...world].reverse().find((c) => c.start < state.playhead - 1e-9);
+        target = prev ? prev.start : 0;
+      }
+      get().setPlayhead(target);
     },
 
     setPlayhead: (t) => {
@@ -477,6 +545,11 @@ export const useMini = create<MiniState>((set, get) => {
       set({
         trackMode: mode,
         selectedId: selClip && visibleIds.has(selClip.trackId) ? sel : null,
+        // R19: track selection survives iff the track stays visible (the
+        // same unified law — a TrackInspector about an invisible track is
+        // the same trap the clip law was written against)
+        selectedTrackId:
+          state.selectedTrackId && visibleIds.has(state.selectedTrackId) ? state.selectedTrackId : null,
       });
     },
 
@@ -495,6 +568,8 @@ export const useMini = create<MiniState>((set, get) => {
       set({
         boundVideoTrack: trackId,
         selectedId: selClip && visibleIds.has(selClip.trackId) ? sel : null,
+        selectedTrackId:
+          state.selectedTrackId && visibleIds.has(state.selectedTrackId) ? state.selectedTrackId : null,
       });
     },
 
@@ -513,6 +588,8 @@ export const useMini = create<MiniState>((set, get) => {
       set({
         boundAudioTrack: trackId,
         selectedId: selClip && visibleIds.has(selClip.trackId) ? sel : null,
+        selectedTrackId:
+          state.selectedTrackId && visibleIds.has(state.selectedTrackId) ? state.selectedTrackId : null,
       });
     },
 
@@ -542,33 +619,37 @@ export const useMini = create<MiniState>((set, get) => {
       const pristine = state.dragSnapshot;
       const changed = docChanged(pristine, state.doc);
       const past = changed ? [...state.past, pristine].slice(-MAX_HISTORY) : state.past;
-      set({ dragActive: false, dragSnapshot: null, past, future: changed ? [] : state.future });
+      set({ dragActive: false, dragSnapshot: null, past, future: changed ? [] : state.future, pushedIds: [] });
       get()._validateSelection();
     },
 
     cancelDrag: () => {
       const state = get();
       if (!state.dragActive || !state.dragSnapshot) return;
-      set({ doc: state.dragSnapshot, dragActive: false, dragSnapshot: null });
+      set({ doc: state.dragSnapshot, dragActive: false, dragSnapshot: null, pushedIds: [] });
       get()._validateSelection();
     },
 
     previewMove: (id, newStart) => {
+      /* R19 — the drag-drop law (see docs/OT-SEAMS.md). FREE drag: the
+       * clip follows the pointer across the whole lane (the one-lane
+       * clamp is gone). Computed from the PRE-DRAG SNAPSHOT every event
+       * (idempotent — the same discipline as the ripple preview):
+       *   span [R, R+dur) free of same-track siblings → plain move;
+       *   conflicting → insertPlacement pushes the conflicting tail
+       *   right (Premiere insert-edit geometry; the single-pair window's
+       *   stand-in for OT's new-track escape). The component resolves
+       *   the magnet BEFORE calling (magnetMove — both edges, frozen
+       *   snapshot targets). */
       const state = get();
       if (!state.dragActive) return; // previews only exist inside a session
-      const clip = findClip(state.doc, id);
-      if (!clip) return;
-      const { prevEnd, nextStart } = neighborBounds(state.doc, clip);
-      // the component already applied resolveSnap (magnet+grid); clamps only
+      if (!state.dragSnapshot) return;
+      const snapClip = findClip(state.dragSnapshot, id);
+      if (!snapClip) return;
+      const r = Math.max(0, newStart);
       set({
-        doc: {
-          ...state.doc,
-          clips: state.doc.clips.map((c) =>
-            c.id === id
-              ? { ...c, start: clampMove(newStart, c.duration, prevEnd, nextStart) }
-              : c,
-          ),
-        },
+        doc: { ...state.doc, clips: insertPlacement(state.dragSnapshot.clips, id, r, snapClip.duration) },
+        pushedIds: insertPushedIds(state.dragSnapshot.clips, id, r, snapClip.duration),
       });
     },
 
@@ -658,14 +739,33 @@ export const useMini = create<MiniState>((set, get) => {
     /* ---- doc actions -------------------------------------------------- */
 
     moveClip: (id, newStart) => {
+      /* R19 (OT seam — the timeline.move wire law): REJECT on conflict,
+       * never clamp. A programmatic move must land the span free of
+       * same-track siblings or refuse with an honest toast (the mini's
+       * rendering of {ok:false, code:'CONFLICT'}). The GESTURE path
+       * resolves conflicts via insert-push instead (previewMove+
+       * endDrag) — that's the UX law; THIS is the seam law. Negative
+       * newStart is rejected (OT requireNonNegativeTicks). */
       const state = get();
+      if (state.dragActive) return; // guard BEFORE the toast — no mid-gesture spam
       const clip = findClip(state.doc, id);
       if (!clip) return;
-      const { prevEnd, nextStart } = neighborBounds(state.doc, clip);
+      if (!Number.isFinite(newStart) || newStart < 0) {
+        get().pushToast('error', 'Move refused — the start must be at or after 0.');
+        return;
+      }
+      const trackClips = clipsOfTrack(state.doc, clip.trackId);
+      if (wouldOverlap(trackClips, newStart, clip.duration, id)) {
+        get().pushToast(
+          'error',
+          `No room at ${newStart.toFixed(1)}s — the ${clip.duration}s clip would overlap its neighbor.`,
+        );
+        return;
+      }
       commit((doc) => {
         const c = doc.clips.find((x) => x.id === id);
         if (!c) return;
-        c.start = clampMove(newStart, c.duration, prevEnd, nextStart);
+        c.start = newStart;
       });
     },
 
@@ -924,15 +1024,14 @@ export const useMini = create<MiniState>((set, get) => {
     },
 
     nudge: (id, delta) => {
+      // R19: nudge routes the moveClip law — nudging into a neighbor is
+      // REFUSED with a toast (was: silent clamp-park, the same one-lane
+      // street the drag overhaul removes). Precise edits deserve honest
+      // refusal, not silent parking.
       const state = get();
       const clip = findClip(state.doc, id);
       if (!clip) return;
-      const { prevEnd, nextStart } = neighborBounds(state.doc, clip);
-      commit((doc) => {
-        const c = doc.clips.find((x) => x.id === id);
-        if (!c) return;
-        c.start = clampMove(c.start + delta, c.duration, prevEnd, nextStart);
-      });
+      get().moveClip(id, clip.start + delta);
     },
 
     reset: () => {
@@ -956,6 +1055,8 @@ export const useMini = create<MiniState>((set, get) => {
         boundAudioTrack: TRACK_AUDIO,
         trackBindingLocked: false,
         selectedId: null,
+        selectedTrackId: null,
+        pushedIds: [],
         dragActive: false,
         toast: null,
         past: [],

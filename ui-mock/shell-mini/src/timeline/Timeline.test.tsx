@@ -67,11 +67,15 @@ describe('drag-move (48pps default zoom)', () => {
     expect(S().past).toHaveLength(1); // one entry per gesture
   });
 
-  it('clamps against the next neighbor', () => {
+  it('R19: dragging over the next neighbor INSERTS — the tail pushes (one-lane street gone)', () => {
     render(<Timeline />);
     const c2 = screen.getByTestId('mini-clip-c2');
-    drag(c2, 216, 216 + 300); // way right: clamps to nextStart - duration = 9 - 3.5 = 5.5
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+    drag(c2, 216, 216 + 300); // raw start = 4.5 + 6.25 = 10.75
+    // span [10.75, 14.25) conflicts c3 [9,12.5) → c3 pushes right:
+    // delta = 5.25 → quantized shift 5.5 → c3 = max(14.25, 9+5.5) = 14.5
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(10.75);
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(14.5);
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0); // before the block — untouched
   });
 
   it('sub-threshold wobble: no drag, no history', () => {
@@ -618,8 +622,11 @@ describe('R18j minimized timeline (thread #13)', () => {
     render(<Timeline />);
     fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
     const c2 = screen.getByTestId('mini-clip-c2'); // 4.5→8, grab offset honored
-    drag(c2, 250, 300); // 5px threshold crossed → active drag → +50px = +1s
-    expect(S().doc.clips.find((x) => x.id === 'c2')!.start).toBe(5.5);
+    drag(c2, 250, 300); // 5px threshold crossed → active drag → +50px ≈ +1.04s
+    // R19: raw = 4.5 + 50/48 = 5.5417; span end 9.0417 overlaps c3@9 by
+    // 0.0417 → insert: c3 floored onto 9.0417 (sub-grid delta, ALWAYS-floor)
+    expect(S().doc.clips.find((x) => x.id === 'c2')!.start).toBeCloseTo(5.5417, 3);
+    expect(S().doc.clips.find((x) => x.id === 'c3')!.start).toBeCloseTo(9.0417, 3);
     expect(S().past).toHaveLength(1); // exactly one entry for the gesture
   });
 
@@ -841,5 +848,144 @@ describe('R18k trim-mode edge shade (panel thread #1)', () => {
     const clip = screen.getByTestId('mini-clip-c2');
     drag(clip, 250, 300);
     expect(clip.className).not.toContain('is-trimming');
+  });
+});
+
+/* ---- R19: drag insert affordances, ghost edges, track selection ---- */
+
+describe('R19 — commit at the UP position (review P2-11)', () => {
+  it('a fast flick commits the UP spot, not the last pointermove', () => {
+    render(<Timeline />);
+    const c2 = screen.getByTestId('mini-clip-c2');
+    // activate the gesture with a small move, then RELEASE at +96px with
+    // NO intermediate move there — the old code would commit the small move
+    fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 216, clientY: 10 });
+    fireEvent.pointerMove(c2, { pointerId: 7, clientX: 222, clientY: 10 });
+    fireEvent.pointerUp(c2, { pointerId: 7, clientX: 216 + 96, clientY: 10 });
+    // raw at the up position = 4.5 + (312−222)/48 = 6.375? No: grabOffset anchored at
+    // 216 → raw = 4.5 + (312−216)/48 = 6.5 → span [6.5,10) conflicts c3@9 →
+    // insert: c3 floored onto 10
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(6.5);
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(10);
+  });
+});
+
+describe('R19 — is-pushed affordance (the insert preview made visible)', () => {
+  it('followers being pushed carry is-pushed during the gesture; cleared after', () => {
+    render(<Timeline />);
+    const c2 = screen.getByTestId('mini-clip-c2');
+    fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 216, clientY: 10 });
+    fireEvent.pointerMove(c2, { pointerId: 7, clientX: 222, clientY: 10 }); // activate
+    fireEvent.pointerMove(c2, { pointerId: 7, clientX: 216 + 300, clientY: 10 }); // over c3
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(14.5); // live insert preview
+    expect(screen.getByTestId('mini-clip-c3')).toHaveClass('is-pushed');
+    expect(screen.getByTestId('mini-clip-c1')).not.toHaveClass('is-pushed'); // before the block
+    fireEvent.pointerUp(c2, { pointerId: 7, clientX: 216 + 300, clientY: 10 });
+    expect(screen.getByTestId('mini-clip-c3')).not.toHaveClass('is-pushed');
+    expect(S().pushedIds).toEqual([]);
+  });
+});
+
+describe('R19 — trim ghost edges (thread #51)', () => {
+  const trim = (el: Element, fromX: number, toX: number) => {
+    fireEvent.pointerDown(el, { button: 0, pointerId: 7, clientX: fromX, clientY: 10 });
+    fireEvent.pointerMove(el, { pointerId: 7, clientX: fromX + 6, clientY: 10 }); // activate
+    fireEvent.pointerMove(el, { pointerId: 7, clientX: toX, clientY: 10 });
+  };
+
+  it('OUTWARD end-trim paints the ghost; it leaves with the gesture', () => {
+    render(<Timeline />);
+    // c1 [0,3.5) media 4.5s — the end can reach 4.5 (min(neighbor 4.5, source 4.5))
+    trim(screen.getByTestId('mini-trim-end-c1'), 162, 202); // t≈(202−46)/48 = 3.25 → outward? no: 3.25 < 3.5!
+    // use a clearly outward target: x=250 → t = (250−46)/48 = 4.25 > 3.5
+    fireEvent.pointerMove(screen.getByTestId('mini-trim-end-c1'), { pointerId: 7, clientX: 250, clientY: 10 });
+    expect(screen.getByTestId('mini-trim-ghost-c1')).toBeInTheDocument();
+    fireEvent.pointerUp(screen.getByTestId('mini-trim-end-c1'), { pointerId: 7, clientX: 250, clientY: 10 });
+    expect(screen.queryByTestId('mini-trim-ghost-c1')).toBeNull();
+  });
+
+  it('INWARD end-trim never ghosts', () => {
+    render(<Timeline />);
+    trim(screen.getByTestId('mini-trim-end-c1'), 250, 180); // inward from 3.5 toward 2.8
+    expect(screen.queryByTestId('mini-trim-ghost-c1')).toBeNull();
+    fireEvent.pointerUp(screen.getByTestId('mini-trim-end-c1'), { pointerId: 7, clientX: 180, clientY: 10 });
+  });
+
+  it('at max (no room): no ghost even outward', () => {
+    render(<Timeline />);
+    // c1 is already at its media max? c1 [0,3.5) with media 4.5 has room. Use c3:
+    // c3 [9,12.5) media m-title 3.5s → end bound = 9+3.5 = 12.5 = current end → no room
+    trim(screen.getByTestId('mini-trim-end-c3'), 574, 620);
+    expect(screen.queryByTestId('mini-trim-ghost-c3')).toBeNull();
+    fireEvent.pointerUp(screen.getByTestId('mini-trim-end-c3'), { pointerId: 7, clientX: 620, clientY: 10 });
+  });
+
+  it('ripple ON suppresses the START-edge ghost (frozen-left law)', () => {
+    render(<Timeline />);
+    S().toggleRipple();
+    // c2 [4.5,8): start handle pulled outward-left → under ripple the left edge freezes
+    trim(screen.getByTestId('mini-trim-start-c2'), 250, 130); // t < 4.5 → outward request
+    expect(screen.queryByTestId('mini-trim-ghost-c2')).toBeNull();
+    fireEvent.pointerUp(screen.getByTestId('mini-trim-start-c2'), { pointerId: 7, clientX: 130, clientY: 10 });
+    S().toggleRipple();
+  });
+});
+
+describe('R19 — lane empty-area track selection (thread #26)', () => {
+  it('pointerdown on the empty lane surface selects the track', () => {
+    render(<Timeline />);
+    const lane = screen.getByTestId('mini-lane-V1');
+    fireEvent.pointerDown(lane, { button: 0, clientX: 400, clientY: 10 });
+    expect(S().selectedTrackId).toBe('V1');
+    expect(S().selectedId).toBeNull();
+  });
+
+  it('pointerdown on a CLIP does not select the track (bubbling stopped)', () => {
+    render(<Timeline />);
+    fireEvent.pointerDown(screen.getByTestId('mini-clip-c2'), { button: 0, clientX: 220, clientY: 10 });
+    expect(S().selectedId).toBe('c2');
+    expect(S().selectedTrackId).toBeNull();
+    fireEvent.pointerUp(screen.getByTestId('mini-clip-c2'), { pointerId: 1, clientX: 220, clientY: 10 });
+  });
+
+  it('the track selection replaces a clip selection (one inspector subject)', () => {
+    render(<Timeline />);
+    S().select('c2');
+    fireEvent.pointerDown(screen.getByTestId('mini-lane-V1'), { button: 0, clientX: 400, clientY: 10 });
+    expect(S().selectedTrackId).toBe('V1');
+    expect(S().selectedId).toBeNull();
+  });
+});
+
+describe('R19 — track heads (thread #28: markers vs selectors vs hidden)', () => {
+  it('single-pair project: V1/A1 marker badges render and select the track', () => {
+    render(<Timeline />);
+    const marker = screen.getByTestId('mini-track-marker-V1');
+    expect(marker).toHaveTextContent('V1');
+    expect(screen.getByTestId('mini-track-marker-A1')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-track-select-video')).toBeNull();
+    fireEvent.click(marker);
+    expect(S().selectedTrackId).toBe('V1');
+  });
+
+  it('multi-track project: selectors render, no marker badges', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    render(<Timeline />);
+    expect(screen.getByTestId('mini-track-select-video')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-track-marker-V1')).toBeNull();
+  });
+
+  it('LOCKED (embedded): neither marker nor selector — the head is hidden', () => {
+    useMini.setState({ doc: multiTrackDoc(), trackBindingLocked: true });
+    render(<Timeline />);
+    expect(screen.queryByTestId('mini-track-select-video')).toBeNull();
+    expect(screen.queryByTestId('mini-track-marker-V1')).toBeNull();
+  });
+
+  it('single-pair + LOCKED (the embedded default): no marker either', () => {
+    useMini.setState({ trackBindingLocked: true });
+    render(<Timeline />);
+    expect(screen.queryByTestId('mini-track-marker-V1')).toBeNull();
+    expect(screen.queryByTestId('mini-track-marker-A1')).toBeNull();
   });
 });

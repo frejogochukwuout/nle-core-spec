@@ -77,10 +77,45 @@ Run it at boot or any time; safe twice.
 
 - **Timeline** (the RH quick-cut port): tools row (undo/redo · split S ·
   cut-head [ · cut-tail ] · delete · snap · ripple · filmstrip · audio-eye
-  · 5-step zoom, hairline group dividers), 34px ruler with whole-second
+  · 9-step zoom (R19, thread #52), hairline group dividers), 34px ruler with whole-second
   labels + minor tick band, white playhead with hover/drag time pill,
-  2 lanes (V1+A1, 36px base, badges) that FLEX-TALL when the timeline is
+  2 lanes (V1+A1, 36px base, markers) that FLEX-TALL when the timeline is
   resized.
+- **R19 drag law** (the R19 deep pass + `docs/OT-SEAMS.md`): clips drag
+  FREELY across the lane (the one-lane neighbor clamp is GONE); a
+  conflicting drop INSERTS — the conflicting tail pushes right (Premiere
+  insert-edit geometry, floor law, tail spacing preserved, followers
+  tinted `is-pushed` live during the drag); free spans land at the pointer
+  (commit at the UP position); Esc restores the pre-drag doc; both clip
+  edges magnet (OT snapGroupEdges parity, nearest-wins); the magnet field
+  freezes at gesture start (a gesture never magnetizes to positions it
+  created). Programmatic `moveClip` follows the OT wire law instead:
+  overlap ⇒ REFUSE + honest toast (nudge routes it too).
+- **R19 trim ghosts** (thread #51): while trimming OUTWARD, the dotted
+  ghost edge shows how much further the clip can extend (the
+  source/neighbor bound — "how far you can go before you max out the
+  source"); inward trims and maxed bounds never ghost; ripple start-trim
+  suppresses it (frozen-left law).
+- **R19 viewer scrub bar + seek controls** (thread #53 + the scrubbing
+  item): the transport's second row is a full-width scrub bar (progress
+  fill + playhead tick, its center exactly under the centered play
+  button — measured 0px); drag/click scrubs; the focusable slider carries
+  ←/→ 0.5s + Home/End; the left transport slot gains to-start (⏮) and
+  to-current-clip-head (|◀, repeated taps walk back edit by edit) —
+  purpose-drawn glyphs in the trim/split family grammar.
+- **R19 track selection + inspector track card** (thread #26): the lane's
+  empty surface and the head badge select the TRACK — the inspector's
+  second subject (name, kind, clip count, total content, bound role);
+  clip vs track selection are mutually exclusive (one subject at a time)
+  and heal with the same survive-iff-visible law as clips.
+- **R19 track heads** (thread #28): single-pair projects show V1/A1
+  MARKER badges (click = select the track); multi-track projects keep the
+  binding selector; a LOCKED (embedded) host hides the head entirely.
+  Head chips are rounded on the outer side, flat where they touch the
+  track (thread #50).
+- **R19 rails** (threads #24/#25): the collapsed pool/inspector rails are
+  whole-surface buttons (flex-fill the rail height — the lower area was
+  dead to clicks).
 - **Ripple edit** (R18e, feedback #16): toggle in the toolbar; delete and
   trim close the gap — same-track followers shift left/right with the
   edit. Committed + preview paths are snapshot-relative (idempotent, no
@@ -276,6 +311,30 @@ Run it at boot or any time; safe twice.
    shade returns ONLY while trimming: hovering an edge drag zone
    (:has()) or actively dragging it (is-trimming-* from the gesture
    engine) shades exactly that edge, alongside the 2px accent line.
+22. **Insert-push move conflicts** (R19, `docs/OT-SEAMS.md` §1.3): OT's
+   move law is overlap-REJECT with a new-track escape; the mini's
+   single-pair window has no track escape, and reject-by-default kept
+   reordering impossible (the user's one-lane-street complaint). The
+   gesture's conflict law is INSERT-PUSH (Premiere insert-edit); the OT
+   wire law survives verbatim in the programmatic `moveClip` (refuse +
+   toast). No split-at-insert (whole-clip relocation).
+23. **9-step zoom ladder** (R19, thread #52): [24, 36, 48, 72, 96, 144,
+   192, 288, 384] — the five R18 anchors preserved with a new rung
+   between each (×1.5); default step 2 (48pps unchanged).
+24. **Same-track gap hunt on pool drops** (R19, OT-SEAMS §1.5): OT's
+   `firstAvailable` insert never hunts same-track gaps; the mini's
+   `insertionAt` does (exact → next gap → tail) — a mock affordance.
+25. **Implicit in-point-0 element model** (R19, OT-SEAMS §1.6): the mini's
+   clip is a full window over its source (media.duration = extent); OT
+   elements carry trimStart/trimEnd/sourceDuration. Conversion at swap:
+   `{trimStart: 0, trimEnd: sourceDuration − duration}`.
+26. **Head law revised** (R19, thread #28): single-pair unlocked shows
+   V1/A1 markers (supersedes the R18k "invisible when single-pair"
+   reading — the newer thread asked for the marker back); locked hides
+   the head; corner law rounded-outer/flat-track-side (thread #50).
+27. **Nudge refuses instead of parking** (R19): nudging into a neighbor
+   is refused with a toast (was: silent clamp-park). Precise edits get
+   honest refusal — the drag path owns the rearrange affordance.
 
 ## The topbar is a downstream customization point (R18j, thread #17)
 

@@ -52,7 +52,7 @@ describe('history (commit laws)', () => {
     expect(S().selectedId).toBeNull(); // stays cleared — no dangling id
   });
 
-  it('nudge = one history entry per click, neighbor-clamped (m10)', () => {
+  it('nudge = one history entry per click; conflicting nudge REFUSES (R19)', () => {
     S().select('c2');
     S().nudge('c2', 0.5);
     expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5);
@@ -60,9 +60,19 @@ describe('history (commit laws)', () => {
     S().nudge('c2', -0.5);
     S().nudge('c2', -0.5);
     expect(S().past).toHaveLength(3); // one per click, no coalescing in v0.1
-    // clamp: c1 ends 3.5 — nudging c2 below 3.5 impossible
+    // R19: the nudge routes the moveClip REJECT law — nudging into a
+    // neighbor refuses with a toast (was: silent clamp-park, the same
+    // one-lane street the drag overhaul removes). c2 at 4 is free; a
+    // nudge to 2.5 would overlap c1 → refused.
+    S().nudge('c2', -1.5);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4); // unchanged
+    expect(S().past).toHaveLength(3); // refusal = no history entry
+    expect(S().toast?.kind).toBe('error');
+    expect(S().toast?.text).toContain('No room');
+    // negative target: refused too (OT requireNonNegativeTicks)
     S().nudge('c2', -5);
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(3.5);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4);
+    expect(S().toast?.text).toContain('at or after 0');
   });
 });
 
@@ -246,8 +256,10 @@ describe('history cap + undo/redo honesty (review gaps)', () => {
 describe('trimClip end-trim respects media duration (audit M1)', () => {
   it('caps the end at start + media.duration even with room to the right', () => {
     S().select('c1'); // media m-drone duration 4.5; c1 0→3.5, next c2 at 4.5
-    // first move c2 away to open room
-    S().moveClip('c2', 6);
+    // first move c2 away to open room (R19: 5.5 is a free span — c2 ends
+    // at 9 exactly where c3 begins; the old clamped move to 6 would now
+    // be REFUSED as an overlap with c3)
+    S().moveClip('c2', 5.5);
     S().trimClip('c1', 'end', 10);
     expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(4.5); // media cap
     expect(S().past).toHaveLength(2);
@@ -741,5 +753,202 @@ describe('R18k track binding + video-only mode', () => {
     expect(S().boundVideoTrack).toBe('V1');
     expect(S().boundAudioTrack).toBe('A1');
     expect(S().trackBindingLocked).toBe(false);
+  });
+});
+
+/* ---- R19: moveClip reject law (the OT timeline.move seam) ---- */
+
+describe('R19 moveClip (overlap-REJECT, the OT wire law)', () => {
+  it('commits a free move; one history entry', () => {
+    S().select('c2');
+    S().moveClip('c2', 5.5); // [5.5,9) touches c3 at 9 — free
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+    expect(S().past).toHaveLength(1);
+  });
+
+  it('REFUSES an overlapping move: toast, no doc change, no history', () => {
+    S().select('c2');
+    S().moveClip('c2', 2); // [2,5.5) overlaps c1 [0,3.5)
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+    expect(S().past).toHaveLength(0);
+    expect(S().toast?.kind).toBe('error');
+    expect(S().toast?.text).toContain('No room at 2.0s');
+  });
+
+  it('REFUSES a negative start (OT requireNonNegativeTicks)', () => {
+    S().select('c2');
+    S().moveClip('c2', -1);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+    expect(S().toast?.text).toContain('at or after 0');
+  });
+
+  it('silent while a drag session owns the lock (guard precedes the toast)', () => {
+    S().beginDrag();
+    S().moveClip('c2', 2); // suppressed mid-drag — no toast spam
+    expect(S().toast).toBeNull();
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5);
+    S().cancelDrag();
+  });
+});
+
+/* ---- R19: previewMove — free drag + insert-push (the one-lane fix) ---- */
+
+describe('R19 previewMove (free + insert, from the snapshot)', () => {
+  it('free span: plain move, idempotent across repeated events', () => {
+    S().beginDrag();
+    S().previewMove('c2', 5.5); // [5.5,9) ends exactly at c3's start — touching, not overlapping
+    S().previewMove('c2', 5.5);
+    S().previewMove('c2', 5.5);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // nobody moved
+    expect(S().pushedIds).toEqual([]);
+    S().endDrag();
+    expect(S().past).toHaveLength(1);
+  });
+
+  it('conflicting span: insert-push — the tail shifts, floor law holds', () => {
+    S().beginDrag();
+    S().previewMove('c3', 2); // [2,5.5) → c1 → 5.5, c2 → 10
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(2);
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(5.5);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(10);
+    expect(S().pushedIds).toEqual(['c1', 'c2']);
+    // idempotent: the same event twice must not double-shift
+    S().previewMove('c3', 2);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(10);
+    // moving further re-resolves from the SNAPSHOT (no accumulation)
+    S().previewMove('c3', 3);
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(3);
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(6.5);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(11);
+    S().endDrag();
+    expect(S().past).toHaveLength(1); // ONE entry for the whole gesture
+    S().undo();
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.5); // pristine restored
+  });
+
+  it('cancelDrag restores the snapshot after an insert preview', () => {
+    S().beginDrag();
+    S().previewMove('c3', 2);
+    S().cancelDrag();
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9);
+    expect(S().pushedIds).toEqual([]);
+  });
+
+  it('pushedIds clear at endDrag (the affordance leaves with the gesture)', () => {
+    S().beginDrag();
+    S().previewMove('c3', 2);
+    expect(S().pushedIds.length).toBeGreaterThan(0);
+    S().endDrag();
+    expect(S().pushedIds).toEqual([]);
+  });
+
+  it('the audio lane never moves for a video insert (cross-track law)', () => {
+    S().beginDrag();
+    S().previewMove('c3', 0.5); // span covers c4's A1 range
+    expect(S().doc.clips.find((c) => c.id === 'c4')!.start).toBe(1.5);
+    expect(S().pushedIds).not.toContain('c4');
+    S().cancelDrag();
+  });
+});
+
+/* ---- R19: track selection (thread #47) ---- */
+
+describe('R19 track selection', () => {
+  it('selectTrack sets the subject; clip select replaces it (mutual exclusion)', () => {
+    S().selectTrack('V1');
+    expect(S().selectedTrackId).toBe('V1');
+    expect(S().selectedId).toBeNull();
+    S().select('c2');
+    expect(S().selectedId).toBe('c2');
+    expect(S().selectedTrackId).toBeNull();
+    S().selectTrack('A1');
+    expect(S().selectedTrackId).toBe('A1');
+    expect(S().selectedId).toBeNull();
+  });
+
+  it('unknown track ids are refused', () => {
+    S().selectTrack('nope');
+    expect(S().selectedTrackId).toBeNull();
+  });
+
+  it('heals on rebind: A2 selected, audio rebinds to A1 → selection clears', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    S().setBoundAudioTrack('A2');
+    S().selectTrack('A2');
+    expect(S().selectedTrackId).toBe('A2');
+    S().setBoundAudioTrack('A1');
+    expect(S().selectedTrackId).toBeNull();
+  });
+
+  it('heals on mode switch to video-only (A1 selection leaves the world)', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    S().selectTrack('A1');
+    S().setTrackMode('video');
+    expect(S().selectedTrackId).toBeNull();
+  });
+
+  it('reset() clears the track selection', () => {
+    S().selectTrack('V1');
+    S().reset();
+    expect(S().selectedTrackId).toBeNull();
+  });
+
+  it('_validateSelection heals a doc swap that strands the track (undo)', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    S().selectTrack('V2');
+    S().select('c5'); // V2 clip → history entry via a move? select has no history; use nudge
+    useMini.setState({ past: [seedDoc()] });
+    S().undo(); // doc back to the single-pair seed (no V2)
+    expect(S().selectedTrackId).toBeNull();
+  });
+});
+
+/* ---- R19: seekToClipHead (thread #53) ---- */
+
+describe('R19 seekToClipHead (edit-point walk-back)', () => {
+  it('seeks the head of the clip under the playhead', () => {
+    useMini.setState({ playhead: 5 }); // inside c2 [4.5,8)
+    S().seekToClipHead();
+    expect(S().playhead).toBe(4.5);
+  });
+
+  it('sitting exactly ON a head steps to the previous edit point', () => {
+    useMini.setState({ playhead: 4.5 });
+    S().seekToClipHead();
+    expect(S().playhead).toBe(0); // c1's head
+    useMini.setState({ playhead: 0 });
+    S().seekToClipHead();
+    expect(S().playhead).toBe(0); // walks to the floor
+  });
+
+  it('in a gap: the most recent head before the playhead', () => {
+    useMini.setState({ playhead: 4 }); // gap between c1 end 3.5 and c2 start 4.5
+    S().seekToClipHead();
+    expect(S().playhead).toBe(0);
+  });
+
+  it('empty video world: seeks 0', () => {
+    useMini.setState({ doc: { tracks: seedDoc().tracks, media: seedDoc().media, clips: [] } });
+    useMini.setState({ playhead: 3 });
+    S().seekToClipHead();
+    expect(S().playhead).toBe(0);
+  });
+
+  it('skips audio-only clips (the viewer world)', () => {
+    useMini.setState({ playhead: 2 }); // inside c4 [1.5,8.5) on A1 — not the video world
+    S().seekToClipHead();
+    expect(S().playhead).toBe(0); // falls to the most recent VIDEO head
+  });
+});
+
+/* ---- R19: zoom ladder ---- */
+
+describe('R19 zoom ladder (9 steps)', () => {
+  it('clamps at the ladder top (index 8) and floor (0)', () => {
+    S().setZoomStep(99);
+    expect(S().zoomStep).toBe(8);
+    S().setZoomStep(-5);
+    expect(S().zoomStep).toBe(0);
   });
 });

@@ -28,6 +28,11 @@ export function Inspector() {
   const clip = selectedId ? doc.clips.find((c) => c.id === selectedId) : undefined;
   const media = clip ? doc.media.find((m) => m.id === clip.mediaId) : undefined;
   const track = clip ? doc.tracks.find((t) => t.id === clip.trackId) : undefined;
+  /* R19 (thread #47): the track card — the inspector's SECOND subject.
+   * Selected via the lane's empty surface or the head badge (the same
+   * law both ways). Fallback order: clip → track → empty. */
+  const selectedTrackId = useMini((s) => s.selectedTrackId);
+  const selTrack = selectedTrackId ? doc.tracks.find((t) => t.id === selectedTrackId) : undefined;
   const canNudge = (delta: number): boolean => {
     if (!clip) return false;
     const { prevEnd, nextStart } = neighborBounds(doc, clip);
@@ -136,11 +141,50 @@ export function Inspector() {
             </div>
           </div>
         </div>
+      ) : selTrack ? (
+        /* R19 (thread #47): the TRACK card — track-specific facts. Honest
+         * scope: the mini's track model has no per-track mute/gain state
+         * (the audio lane's visibility toggle is VIEW state, toolbar-
+         * owned) — the card reports what the model actually holds. */
+        <div className="mini-inspector__body" data-testid="mini-inspector-track">
+          <div className="mini-inspector__name">{selTrack.label} lane</div>
+          <dl className="mini-inspector__facts">
+            <div>
+              <dt>Kind</dt>
+              <dd>{selTrack.kind}</dd>
+            </div>
+            <div>
+              <dt>Clips</dt>
+              <dd className="mini-mono" data-testid="mini-inspector-track-count">
+                {doc.clips.filter((c) => c.trackId === selTrack.id).length}
+              </dd>
+            </div>
+            <div>
+              <dt>Total content</dt>
+              <dd className="mini-mono">
+                {fmtTimecode(
+                  doc.clips
+                    .filter((c) => c.trackId === selTrack.id)
+                    .reduce((sum, c) => sum + c.duration, 0),
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Bound role</dt>
+              <dd>{selTrack.kind === 'video' ? 'video lane' : 'audio lane'}</dd>
+            </div>
+          </dl>
+          <p className="mini-inspector__track-hint">
+            {selTrack.kind === 'audio'
+              ? 'Audio lane visibility is the toolbar eye toggle.'
+              : 'Rebind the lane from its track head (multi-track projects).'}
+          </p>
+        </div>
       ) : (
         <div className="mini-inspector__empty" data-testid="mini-inspector-empty">
           <MousePointerClick className="mini-inspector__empty-icon" size={22} strokeWidth={1.5} aria-hidden="true" />
-          <span>Select a clip to see its facts.</span>
-          <span className="mini-inspector__empty-hint">Click any clip on the timeline.</span>
+          <span>Select a clip or a track to see its facts.</span>
+          <span className="mini-inspector__empty-hint">Click a clip, a lane, or a track head.</span>
         </div>
       )}
     </aside>

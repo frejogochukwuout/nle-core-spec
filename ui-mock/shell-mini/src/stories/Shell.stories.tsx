@@ -44,7 +44,7 @@ interface DefaultArgs {
 
 export const Default: StoryObj<DefaultArgs> = {
   name: 'App — default (seed)',
-  args: { zoomStep: 1, playhead: 5.5, selection: 'none', snapOn: false, project: 'seed' },
+  args: { zoomStep: 2, playhead: 5.5, selection: 'none', snapOn: false, project: 'seed' },
   argTypes: {
     zoomStep: {
       control: 'radio',

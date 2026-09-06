@@ -439,7 +439,10 @@
   box-sizing: border-box;
   background: rgba(255, 255, 255, 0.075);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-  border-radius: var(--canvas-editor-radius-control);
+  /* R19 (thread #50): the head-chip corner law — rounded on the OUTER
+     (left) side, FLAT on the side touching the track (right). The chip
+     reads as an extension of its lane, not a floating pill. */
+  border-radius: 6px 0 0 6px;
 }
 
 .qc-track-head--collapsed {
@@ -531,6 +534,63 @@
 .qc-track-select select:focus-visible {
   outline: rgba(255, 255, 255, 0.62) solid 2px;
   outline-offset: 1px;
+}
+
+/* R19 (thread #28): the single-pair marker badge — the lane's identity
+   chip (V1/A1), styled as the select's sibling (same surface grammar).
+   A real button: click selects the track for inspection (thread #26). */
+.qc-track-marker {
+  flex: 1 1 auto;
+  height: 18px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: var(--canvas-quick-cut-audio-label-surface);
+  color: var(--canvas-editor-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.qc-track-marker:hover {
+  color: var(--canvas-editor-text-default);
+  background: rgba(20, 20, 20, 0.9);
+}
+
+.qc-track-marker.is-selected {
+  color: var(--canvas-quick-cut-accent);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(242, 242, 242, 0.4);
+}
+
+.qc-track-marker:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
+/* R19 (thread #51): the trim ghost — the dotted extent of how much
+   further the trimmed edge can reach (outward only; hidden at max/no
+   room). Painted by the LANE at the clip's inset band — the clip body
+   clips its own overflow, so the ghost cannot live inside it. Pure
+   decoration (aria-hidden). */
+.qc-trim-ghost {
+  position: absolute;
+  z-index: 1;
+  top: var(--canvas-editor-clip-inset);
+  bottom: var(--canvas-editor-clip-inset);
+  border: 1px dashed rgba(242, 242, 242, 0.4);
+  border-radius: var(--mini-radius-clip);
+  background: rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+}
+
+/* R19: the insert-preview push affordance — followers the live drag is
+   pushing get the DnD-drop-outline family's sky hairline so the insert
+   result reads WHILE dragging (the WYSIWYG of the insert law). */
+.qc-track-item.is-pushed {
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.45);
 }
 
 /* ---- clips (RH-verbatim anatomy + gradient bodies) ---------- */
@@ -793,11 +853,18 @@
   display: flex;
   align-items: stretch;
   border-top: 1px solid var(--mini-panel-head-rule);
+  /* R19 (thread #48): the toggle-slot law — this padding MUST equal
+     .qc-timeline__tools' padding-left, so the minimize/expand button
+     occupies the SAME x-range in both modes (the reviewer's "button
+     position doesn't change much, feel more like a toggling"). */
+  padding-left: 10px;
 }
 
 .qc-min__expand {
   flex: 0 0 auto;
-  width: 30px;
+  /* R19 (thread #48): the toolbar icon's width — same slot geometry as
+     the expanded minimize button. */
+  width: var(--canvas-editor-action-size);
   border: none;
   background: transparent;
   color: var(--canvas-editor-text-muted);

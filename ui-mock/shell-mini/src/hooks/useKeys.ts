@@ -10,6 +10,7 @@
 
 import { useEffect } from 'react';
 import { useMini } from '../state/useMini';
+import { DEFAULT_ZOOM_STEP } from '../lib/geometry';
 
 export function useKeys() {
   useEffect(() => {
@@ -84,7 +85,15 @@ export function useKeys() {
           break;
         case '0':
           e.preventDefault();
-          s.setZoomStep(1); // 0 = default zoom (48pps), D7
+          // R19: default is the ladder constant (was hardcoded 1 — off by
+          // one rung after the 9-step ladder renumber)
+          s.setZoomStep(DEFAULT_ZOOM_STEP);
+          break;
+        case 'Home':
+          // R19 (thread #53): Home seeks to the beginning — the keyboard
+          // twin of the viewer's to-start button
+          e.preventDefault();
+          s.setPlayhead(0);
           break;
         default:
           break;

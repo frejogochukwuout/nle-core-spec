@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import App from './App';
 import { useMini } from './state/useMini';
+import { ppsFor } from './lib/geometry';
 
 const S = () => useMini.getState();
 
@@ -108,9 +109,11 @@ describe('keyboard on the real shell', () => {
 
   it('0 resets zoom to the default step (48pps)', () => {
     renderApp();
-    setStore(() => S().setZoomStep(4));
+    setStore(() => S().setZoomStep(6));
     fireEvent.keyDown(window, { key: '0' });
-    expect(S().zoomStep).toBe(1);
+    // R19: the 9-step ladder renumbered the default to step 2 (still 48pps)
+    expect(S().zoomStep).toBe(2);
+    expect(ppsFor(S().zoomStep)).toBe(48);
   });
 
   it('⌘⇧Z redoes on the real shell', () => {
@@ -385,5 +388,106 @@ describe('R18j panel collapse + viewer max + aspect (threads #13/#14/#19)', () =
     expect(screen.queryByText('Source length')).not.toBeInTheDocument();
     setStore(() => S().select('c1')); // drone video — source length back
     expect(screen.getByText('Source length')).toBeInTheDocument();
+  });
+});
+
+/* ---- R19: the viewer scrub bar + seek controls (thread #53) ---- */
+
+describe('R19 — viewer scrub bar (thread #53)', () => {
+  it('renders with slider semantics + the runway-floored extent', () => {
+    renderApp();
+    const bar = screen.getByTestId('mini-viewer-scrub');
+    expect(bar).toHaveAttribute('role', 'slider');
+    expect(bar).toHaveAttribute('aria-label', 'Scrub playhead');
+    // seed contentEnd 12.5 ≥ the 8s runway floor → extent = 12.5
+    expect(bar).toHaveAttribute('aria-valuemax', '12.5');
+    expect(bar).toHaveAttribute('aria-valuemin', '0');
+    expect(screen.getByTestId('mini-btn-seek-start')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-btn-seek-cliphead')).toBeInTheDocument();
+  });
+
+  it('the extent floors at 8s for an empty world (the runway law)', () => {
+    setStore(() =>
+      useMini.setState({ doc: { tracks: S().doc.tracks, media: S().doc.media, clips: [] } }),
+    );
+    renderApp();
+    expect(screen.getByTestId('mini-viewer-scrub')).toHaveAttribute('aria-valuemax', '8');
+  });
+
+  it('keyboard scrub: arrows nudge 0.5s, Home/End jump (aria clamps at extent)', async () => {
+    renderApp();
+    setStore(() => S().setPlayhead(3));
+    const bar = screen.getByTestId('mini-viewer-scrub');
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+    expect(S().playhead).toBe(3.5);
+    fireEvent.keyDown(bar, { key: 'ArrowLeft' });
+    expect(S().playhead).toBe(3);
+    fireEvent.keyDown(bar, { key: 'Home' });
+    expect(S().playhead).toBe(0);
+    fireEvent.keyDown(bar, { key: 'End' });
+    expect(S().playhead).toBe(12.5); // rulerEnd is 12.5 in jsdom (the effect ran)
+  });
+
+  it('to-start seeks 0; clip-head seeks the under-playhead head then walks back', () => {
+    renderApp();
+    setStore(() => S().setPlayhead(5)); // inside c2 [4.5,8)
+    fireEvent.click(screen.getByTestId('mini-btn-seek-cliphead'));
+    expect(S().playhead).toBe(4.5);
+    fireEvent.click(screen.getByTestId('mini-btn-seek-cliphead')); // at the head → previous edit
+    expect(S().playhead).toBe(0);
+    fireEvent.click(screen.getByTestId('mini-btn-seek-cliphead')); // at 0 → stays at the floor
+    expect(S().playhead).toBe(0);
+    setStore(() => S().setPlayhead(7));
+    fireEvent.click(screen.getByTestId('mini-btn-seek-start'));
+    expect(S().playhead).toBe(0);
+  });
+
+  it('the playhead tick pins full when a ruler scrub parks past the content end', () => {
+    renderApp();
+    setStore(() => S().setPlayhead(12.5)); // at the extent edge
+    const bar = screen.getByTestId('mini-viewer-scrub');
+    expect(bar).toHaveAttribute('aria-valuenow', '12.5');
+  });
+});
+
+/* ---- R19: rail whole-click (threads #24/#25) — the button fills the rail ---- */
+
+describe('R19 — rails expand on whole-surface click', () => {
+  it('the collapsed pool rail is a single button element (whole surface)', () => {
+    setStore(() => S().setPoolCollapsed(true));
+    renderApp();
+    const rail = screen.getByTestId('mini-btn-pool-expand');
+    // the rail button is the panel's only child and stretches (CSS flex law)
+    expect(rail).toHaveTextContent('Media');
+    fireEvent.click(rail);
+    expect(S().poolCollapsed).toBe(false);
+    expect(screen.getByTestId('mini-pool')).toBeInTheDocument();
+  });
+
+  it('the collapsed inspector rail expands the same way', () => {
+    setStore(() => S().setInspectorCollapsed(true));
+    renderApp();
+    const rail = screen.getByTestId('mini-btn-inspector-expand');
+    fireEvent.click(rail);
+    expect(S().inspectorCollapsed).toBe(false);
+  });
+});
+
+/* ---- R19: the inspector's track card (thread #47) ---- */
+
+describe('R19 — inspector track card', () => {
+  it('lane selection shows the track card with honest facts', () => {
+    renderApp();
+    setStore(() => S().selectTrack('V1'));
+    const card = screen.getByTestId('mini-inspector-track');
+    expect(card).toHaveTextContent('V1 lane');
+    expect(card).toHaveTextContent('video');
+    expect(screen.getByTestId('mini-inspector-track-count')).toHaveTextContent('3');
+    // pointerdown on a clip swaps the subject back (mutual exclusion —
+    // clips select on pointerdown, the gesture engine's own law)
+    fireEvent.pointerDown(screen.getByTestId('mini-clip-c2'), { button: 0 });
+    fireEvent.pointerUp(screen.getByTestId('mini-clip-c2'), { pointerId: 1 });
+    expect(screen.queryByTestId('mini-inspector-track')).toBeNull();
+    expect(screen.getByTestId('mini-inspector-name')).toHaveTextContent('beach_wide.mp4');
   });
 });

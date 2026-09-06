@@ -4,7 +4,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   PPS_STEPS,
-  clampMove,
+  DEFAULT_ZOOM_STEP,
+  wouldOverlap,
+  insertPlacement,
+  insertPushedIds,
+  trimGhostBound,
+  magnetMove,
   clampPlayhead,
   clampTrimEnd,
   clampTrimStart,
@@ -21,7 +26,7 @@ import {
   timeToPx,
   pxToTime,
 } from './geometry';
-import { seedDoc, type Clip } from './mockData';
+import { seedDoc, type Clip, type Doc, type Media } from './mockData';
 
 const clip = (over: Partial<Clip>): Clip => ({
   id: 'x',
@@ -32,14 +37,22 @@ const clip = (over: Partial<Clip>): Clip => ({
   ...over,
 });
 
-describe('zoom ladder', () => {
-  it('exposes 5 steps (RH slider parity)', () => {
-    expect(PPS_STEPS).toHaveLength(5);
+describe('zoom ladder (R19, thread #52: 9 steps, anchors preserved)', () => {
+  it('exposes 9 steps — double the granularity of the 5-step ladder', () => {
+    expect(PPS_STEPS).toHaveLength(9);
+  });
+  it('preserves every R18 anchor (24/48/96/192/384)', () => {
+    for (const anchor of [24, 48, 96, 192, 384]) {
+      expect(PPS_STEPS).toContain(anchor);
+    }
+  });
+  it('default step 2 is still 48pps (the R18 default survives the renumber)', () => {
+    expect(PPS_STEPS[DEFAULT_ZOOM_STEP]).toBe(48);
   });
   it('maps steps to pps, clamping out-of-range', () => {
     expect(ppsFor(0)).toBe(24);
-    expect(ppsFor(1)).toBe(48);
-    expect(ppsFor(4)).toBe(384);
+    expect(ppsFor(2)).toBe(48);
+    expect(ppsFor(8)).toBe(384);
     expect(ppsFor(99)).toBe(384);
     expect(ppsFor(-3)).toBe(24);
   });
@@ -107,14 +120,177 @@ describe('neighborBounds', () => {
   });
 });
 
-describe('move clamp', () => {
-  it('clamps between prevEnd and nextStart - duration', () => {
-    expect(clampMove(3, 2, 4, 10)).toBe(4);
-    expect(clampMove(9, 2, 4, 10)).toBe(8);
-    expect(clampMove(5, 2, 4, 10)).toBe(5);
+describe('wouldOverlap (R19 — the OT wire validation law)', () => {
+  const clips = [
+    { id: 'a', trackId: 'V1', mediaId: 'm', start: 0, duration: 3.5 },
+    { id: 'b', trackId: 'V1', mediaId: 'm', start: 4.5, duration: 3.5 },
+  ];
+  it('true when the span collides with a sibling', () => {
+    expect(wouldOverlap(clips, 3.5, 1.5)).toBe(true); // [3.5,5) hits b@4.5
+    expect(wouldOverlap(clips, 2, 4)).toBe(true); // [2,6) hits a and b
   });
-  it('parks at neighbor end in the degenerate no-room case', () => {
-    expect(clampMove(5, 4, 4, 5)).toBe(4);
+  it('false for a free span (touching edges do NOT overlap)', () => {
+    expect(wouldOverlap(clips, 3.5, 1)).toBe(false); // [3.5,4.5) exactly the gap
+    expect(wouldOverlap(clips, 8, 2)).toBe(false); // tail
+  });
+  it('excludes the moving clip itself', () => {
+    expect(wouldOverlap(clips, 0, 3.5, 'a')).toBe(false);
+    expect(wouldOverlap(clips, 3, 3, 'a')).toBe(true); // [3,6) hits b@4.5, a excluded
+  });
+});
+
+/* ---- R19: the insert placement (drag-drop conflict law) ---- */
+
+describe('insertPlacement (Premiere insert-edit geometry)', () => {
+  // the seed V1 lane: c1 [0,3.5) c2 [4.5,8) c3 [9,12.5)
+  const seed = () => seedDoc().clips.filter((c) => c.trackId === 'V1');
+
+  it('free span: plain move — self relocates, nobody shifts', () => {
+    const out = insertPlacement(seed(), 'c1', 13, 3.5); // [13,16.5) past c3's end — free
+    expect(out.find((c) => c.id === 'c1')!.start).toBe(13);
+    expect(out.find((c) => c.id === 'c2')!.start).toBe(4.5); // untouched
+    expect(out.find((c) => c.id === 'c3')!.start).toBe(9);
+    expect(insertPushedIds(seed(), 'c1', 13, 3.5)).toEqual([]);
+  });
+
+  it('drag LEFT in front of a clip: the tail pushes right (the one-lane fix)', () => {
+    // c3 (dur 3.5) dropped at 2 → conflicts c1 [0,3.5) and c2 [4.5,8)
+    // first = c1; delta = 5.5 − 0 = 5.5; c1 → 5.5, c2 → 10
+    const out = insertPlacement(seed(), 'c3', 2, 3.5);
+    expect(out.find((c) => c.id === 'c3')!.start).toBe(2);
+    expect(out.find((c) => c.id === 'c1')!.start).toBe(5.5);
+    expect(out.find((c) => c.id === 'c2')!.start).toBe(10);
+    expect(insertPushedIds(seed(), 'c3', 2, 3.5)).toEqual(['c1', 'c2']);
+  });
+
+  it('drag RIGHT over the next clip: only the conflicting tail shifts', () => {
+    // c1 (dur 3.5) dropped at 9.5 → conflicts c3 [9,12.5); first = c3,
+    // delta = 13 − 9 = 4; c3 → 13. c2 (before the block) untouched.
+    const out = insertPlacement(seed(), 'c1', 9.5, 3.5);
+    expect(out.find((c) => c.id === 'c1')!.start).toBe(9.5);
+    expect(out.find((c) => c.id === 'c2')!.start).toBe(4.5);
+    expect(out.find((c) => c.id === 'c3')!.start).toBe(13);
+  });
+
+  it('SUB-GRID delta still clears the first follower (the R19 review P1)', () => {
+    // c1 dragged to R=1.1 → span [1.1,4.6) conflicts c2@4.5 by 0.1s.
+    // quantize(0.1)=0 — the old rippleShiftAfter identity would commit
+    // the overlap; insertPlacement's ALWAYS-floor must clear it.
+    const out = insertPlacement(seed(), 'c1', 1.1, 3.5);
+    expect(out.find((c) => c.id === 'c1')!.start).toBe(1.1);
+    expect(out.find((c) => c.id === 'c2')!.start).toBeGreaterThanOrEqual(1.1 + 3.5);
+    // and c2 clears with at most the 0.25s floor adjustment
+    expect(out.find((c) => c.id === 'c2')!.start).toBeLessThanOrEqual(4.5 + 0.25);
+  });
+
+  it('R=0 with a sibling at 0: prepend pushes it to the inserted tail', () => {
+    const out = insertPlacement(seed(), 'c2', 0, 3.5);
+    expect(out.find((c) => c.id === 'c2')!.start).toBe(0);
+    expect(out.find((c) => c.id === 'c1')!.start).toBe(3.5);
+  });
+
+  it('negative R clamps to 0', () => {
+    const out = insertPlacement(seed(), 'c3', -2, 3.5);
+    expect(out.find((c) => c.id === 'c3')!.start).toBe(0);
+  });
+
+  it('the committed lane never contains overlaps (invariant sweep)', () => {
+    const clips = seed();
+    for (const r of [0, 0.7, 1.1, 2.3, 4.6, 5.5, 8.9, 10, 12.4, 20]) {
+      for (const id of ['c1', 'c2', 'c3']) {
+        const out = insertPlacement(clips, id, r, 3.5).sort((a, b) => a.start - b.start);
+        for (let i = 0; i + 1 < out.length; i += 1) {
+          expect(out[i].start + out[i].duration).toBeLessThanOrEqual(out[i + 1].start + 1e-9);
+        }
+      }
+    }
+  });
+
+  it('self is never a follower (snapshot identity — no double-shift)', () => {
+    const out = insertPlacement(seed(), 'c2', 2, 3.5);
+    expect(out.find((c) => c.id === 'c2')!.start).toBe(2); // landed exactly at R
+  });
+
+  it('CROSS-TRACK law: audio clips under the span are never conflicts (the full-doc form)', () => {
+    // the full seed doc includes c4 on A1 [1.5,8.5) — a video-span insert
+    // must treat ONLY V1 siblings as conflicts (caught live by the
+    // drag-session store test; the V1-filtered sweep above masks it)
+    const full = seedDoc().clips;
+    const out = insertPlacement(full, 'c3', 2, 3.5);
+    expect(out.find((c) => c.id === 'c3')!.start).toBe(2);
+    expect(out.find((c) => c.id === 'c1')!.start).toBe(5.5);
+    expect(out.find((c) => c.id === 'c2')!.start).toBe(10);
+    expect(out.find((c) => c.id === 'c4')!.start).toBe(1.5); // A1 untouched
+    expect(insertPushedIds(full, 'c3', 2, 3.5)).toEqual(['c1', 'c2']);
+  });
+});
+
+describe('trimGhostBound (R19, thread #51 — the ghost extent law)', () => {
+  const doc: Doc = seedDoc();
+  const media = (id: string): Media | undefined => doc.media.find((m) => m.id === id);
+
+  it('end edge: min(nextStart, source) — the seed c2 end-ghost is the 1s gap', () => {
+    const c2 = doc.clips.find((c) => c.id === 'c2')!; // [4.5,8), media 4.5s
+    expect(trimGhostBound(doc, c2, 'end', false, media('m-beach'))).toBe(9); // neighbor c3@9 < source 9
+  });
+  it('end edge under RIPPLE: source only (followers push, neighbor ignored)', () => {
+    const c2 = doc.clips.find((c) => c.id === 'c2')!;
+    expect(trimGhostBound(doc, c2, 'end', true, media('m-beach'))).toBe(4.5 + 4.5); // 9 = start+source
+  });
+  it('end edge at max (source == end): null — no ghost when nothing remains', () => {
+    const at = (c: Clip) => ({ ...c, duration: 4.5, start: 4.5 }); // c2 maxed: [4.5,9)
+    const c2max = at(doc.clips.find((c) => c.id === 'c2')!);
+    const d2 = { ...doc, clips: [c2max, ...doc.clips.filter((c) => c.id !== 'c2')] };
+    expect(trimGhostBound(d2, c2max, 'end', true, media('m-beach'))).toBeNull();
+  });
+  it('start edge: max(prevEnd, end − source) — c2 can reach back to 3.5', () => {
+    const c2 = doc.clips.find((c) => c.id === 'c2')!; // end 8, source 4.5 → 8−4.5=3.5 = prevEnd
+    expect(trimGhostBound(doc, c2, 'start', false, media('m-beach'))).toBe(3.5);
+  });
+  it('start edge under RIPPLE: null — frozen-left (a leftward ghost would lie)', () => {
+    const c2 = doc.clips.find((c) => c.id === 'c2')!;
+    expect(trimGhostBound(doc, c2, 'start', true, media('m-beach'))).toBeNull();
+  });
+  it('start edge at max: null', () => {
+    const c1 = doc.clips.find((c) => c.id === 'c1')!; // [0,3.5) media 4.5: lo = max(0, 3.5−4.5)=0 = start
+    expect(trimGhostBound(doc, c1, 'start', false, media('m-drone'))).toBeNull();
+  });
+});
+
+describe('magnetMove (R19 — BOTH edges, nearest wins, ties → left)', () => {
+  it('left edge magnets: start = target', () => {
+    const m = magnetMove(2.03, 96, 2, [2]);
+    expect(m).toEqual({ start: 2, guide: 2 });
+  });
+  it('RIGHT edge magnets: start = target − dur (butt-join from the right)', () => {
+    // raw 3.5, dur 2 → right edge 5.5 magnets to 5.5: start 3.5→3.5? use raw 3.4:
+    const m = magnetMove(3.4, 96, 2, [5.5]);
+    expect(m).toEqual({ start: 3.5, guide: 5.5 });
+  });
+  it('nearest wins when both edges have candidates', () => {
+    // left edge 2.05 vs target 2 (4.8px); right edge 5.5 vs target 5.4 (9.6px) → left
+    const m = magnetMove(2.05, 96, 3.45, [2, 5.4]);
+    expect(m).toEqual({ start: 2, guide: 2 });
+  });
+  it('ties → the LEFT edge (deterministic)', () => {
+    // raw 2.125 dur 2: left candidate 2 (exactly 12px); right edge 4.125,
+    // candidate 4.25 (also exactly 12px) — the strict < keeps the LEFT win
+    const m = magnetMove(2.125, 96, 2, [2, 4.25]);
+    expect(m!.start).toBe(2);
+  });
+  it('no candidate in range → null (smooth raw drag)', () => {
+    expect(magnetMove(2.4, 96, 2, [10])).toBeNull();
+  });
+});
+
+describe('magnetTarget (R19: nearest, not first-in-array)', () => {
+  it('picks the NEAREST target inside 12px when two are in range', () => {
+    // at 96pps: 2.0 is 19.2px from 2.2 — too far. Use 48pps: 2.2→2.0 = 9.6px, 2.2→2.3 = 4.8px → nearest is 2.3
+    expect(magnetTarget(2.2, 48, [2.3, 2.0])).toBe(2.3);
+  });
+  it('still inclusive at exactly 12px', () => {
+    expect(magnetTarget(2.125, 96, [2])).toBe(2);
+    expect(magnetTarget(2.13, 96, [2])).toBeNull();
   });
 });
 

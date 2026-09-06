@@ -9,19 +9,29 @@
    frame always fits AND always keeps its ratio). R18j (thread #19): the
    head's max button toggles the composed full-screen mode — pool +
    inspector collapse to rails, the timeline MINIMIZES (never hides), the
-   viewer takes the freed space. */
+   viewer takes the freed space. R19 (thread #53 + the scrubbing item):
+   the transport's left slot gains the seek controls (to-start + to the
+   current clip's head — purpose-drawn glyphs), and a full-width SCRUB
+   BAR joins as the transport's second row — the bar's CENTER sits
+   directly under the centered play button (the reviewer's
+   "centerly aligned" reading), drag/click scrubs the playhead, and the
+   focusable slider surface carries ←/→/Home/End. */
 
+import { useRef, useState } from 'react';
 import { Play, Pause, Maximize2, Minimize2 } from 'lucide-react';
 import { useMini, VIEWER_ASPECTS, aspectEntry, boundClips } from '../state/useMini';
 import { fmtTimecode } from '../lib/timecode';
 import { thumbGradientFor } from '../lib/filmstrip';
-import { contentEnd } from '../lib/geometry';
+import { contentEnd, RUNWAY_FLOOR_S } from '../lib/geometry';
+import { ToStartIcon, ClipHeadIcon } from '../lib/icons';
 
 export function Viewer() {
   const playhead = useMini((s) => s.playhead);
   const playing = useMini((s) => s.playing);
   const doc = useMini((s) => s.doc);
   const togglePlay = useMini((s) => s.togglePlay);
+  const setPlayhead = useMini((s) => s.setPlayhead);
+  const seekToClipHead = useMini((s) => s.seekToClipHead);
   const viewerMax = useMini((s) => s.viewerMax);
   const toggleViewerMax = useMini((s) => s.toggleViewerMax);
   const viewerAspect = useMini((s) => s.viewerAspect);
@@ -94,11 +104,36 @@ export function Viewer() {
         )}
       </div>
       <div className="mini-viewer__transport" data-testid="mini-viewer-transport">
-        <span className="mini-mono mini-viewer__tcgroup" data-testid="mini-tc">
-          <span className="mini-viewer__tc-cur">{fmtTimecode(playhead)}</span>
-          <span className="mini-viewer__tc-sep">{' / '}</span>
-          <span className="mini-viewer__tc-total">{fmtTimecode(end)}</span>
-        </span>
+        {/* R19 (thread #53): the seek controls join the LEFT transport slot
+            (before the timecode): to-start (⏮, Home) + to the current clip's
+            head (|◀, walks back edit by edit). */}
+        <div className="mini-viewer__seek">
+          <button
+            type="button"
+            className="mini-viewer__seekbtn"
+            aria-label="Back to the beginning"
+            title="Back to the beginning (Home)"
+            onClick={() => setPlayhead(0)}
+            data-testid="mini-btn-seek-start"
+          >
+            <ToStartIcon />
+          </button>
+          <button
+            type="button"
+            className="mini-viewer__seekbtn"
+            aria-label="Back to the head of the current clip"
+            title="Back to the head of the current clip — repeated taps walk back edit by edit"
+            onClick={seekToClipHead}
+            data-testid="mini-btn-seek-cliphead"
+          >
+            <ClipHeadIcon />
+          </button>
+          <span className="mini-mono mini-viewer__tcgroup" data-testid="mini-tc">
+            <span className="mini-viewer__tc-cur">{fmtTimecode(playhead)}</span>
+            <span className="mini-viewer__tc-sep">{' / '}</span>
+            <span className="mini-viewer__tc-total">{fmtTimecode(end)}</span>
+          </span>
+        </div>
         <button
           type="button"
           className="mini-viewer__playbtn"
@@ -129,6 +164,99 @@ export function Viewer() {
           </select>
         </label>
       </div>
+      {/* R19: the scrub bar — full-width under the transport row; its CENTER
+          sits directly below the centered play button. Extent law:
+          max(contentEnd(bound world), RUNWAY_FLOOR_S) — the ruler's runway
+          floor family, always ≤ rulerEnd, so the bar never fights the
+          store's scrub clamp; the tick pins full when a ruler scrub parks
+          past the content end. */}
+      <ScrubBar extent={Math.max(end, RUNWAY_FLOOR_S)} />
     </section>
+  );
+}
+
+/* ---------- R19 (thread #53): the scrub bar -------------------------
+ * The viewer-side scrubbing surface: progress fill + playhead tick,
+ * drag/click to seek, focusable role=slider (←/→ 0.5s, Home/End). The
+ * bar's own pointer session does NOT engage the clip interaction lock
+ * (same view-level law as the ruler scrub — setPlayhead's drag gate
+ * keeps an in-flight clip gesture the only doc-touching gesture). */
+function ScrubBar({ extent }: { extent: number }) {
+  const playhead = useMini((s) => s.playhead);
+  const setPlayhead = useMini((s) => s.setPlayhead);
+  const [dragging, setDragging] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+  const frac = extent > 0 ? Math.min(playhead / extent, 1) : 0;
+
+  const timeAt = (clientX: number): number => {
+    const rect = barRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return playhead; // jsdom / unmeasured
+    const f = (clientX - rect.left) / rect.width;
+    return Math.max(0, Math.min(1, f)) * extent;
+  };
+
+  return (
+    <div
+      ref={barRef}
+      className={`mini-viewer__scrub${dragging ? ' is-dragging' : ''}`}
+      role="slider"
+      tabIndex={0}
+      aria-label="Scrub playhead"
+      aria-valuemin={0}
+      aria-valuemax={Math.round(extent * 100) / 100}
+      aria-valuenow={Math.round(Math.min(playhead, extent) * 100) / 100}
+      aria-valuetext={`${fmtTimecode(playhead)} of ${fmtTimecode(extent)}`}
+      title="Drag to scrub — click to seek (←/→ when focused, Home/End)"
+      data-testid="mini-viewer-scrub"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch {
+          /* untrusted/synthetic pointers (tests) have no active capture
+             target — the drag still works, capture is an enhancement */
+        }
+        setDragging(true);
+        setPlayhead(timeAt(e.clientX));
+      }}
+      onPointerMove={(e) => {
+        if (dragging) setPlayhead(timeAt(e.clientX));
+      }}
+      onPointerUp={(e) => {
+        try {
+          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {
+          /* jsdom-safe */
+        }
+        setDragging(false);
+      }}
+      onKeyDown={(e) => {
+        // keyboard scrub — stopPropagation keeps the window-level useKeys
+        // surface quiet while the bar owns the keys (target handlers run
+        // before the window bubble listener)
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          e.stopPropagation();
+          setPlayhead(useMini.getState().playhead + (e.key === 'ArrowLeft' ? -0.5 : 0.5));
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          e.stopPropagation();
+          setPlayhead(0);
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          e.stopPropagation();
+          setPlayhead(extent);
+        }
+      }}
+    >
+      <div className="mini-viewer__scrub-track" aria-hidden="true">
+        <div className="mini-viewer__scrub-fill" style={{ width: `${frac * 100}%` }} />
+      </div>
+      <div
+        className={`mini-viewer__scrub-head${dragging ? ' is-dragging' : ''}`}
+        style={{ left: `${frac * 100}%` }}
+        aria-hidden="true"
+      />
+    </div>
   );
 }
