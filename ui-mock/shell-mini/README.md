@@ -10,7 +10,7 @@ set + DOM anatomy).
 The build contract is [`docs/DESIGN-mvp.md`](docs/DESIGN-mvp.md) (v2.1
 FINAL — design-audit + code-review rounds folded). `../shell-variants/`
 remains the full spec-18 study; this app is the deliberately small sibling:
-~28 source files vs 100+, 343 tests vs 596, 13 stories vs 83 (PR69 refresh).
+~28 source files vs 100+, 351 tests vs 596, 13 stories vs 83 (PR69 refresh).
 
 ## Run it
 
@@ -19,7 +19,7 @@ npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-
 npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
                     #   run via `python3 scripts/dev3000.py` double-fork daemon so it
                     #   survives the per-toolcall process reaping — plain nohup/setsid die)
-npm test            # vitest — 7 files / 343 tests (jsdom)
+npm test            # vitest — 7 files / 351 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # the FULL dev server on :3000 (run via `python3
@@ -379,6 +379,21 @@ Run it at boot or any time; safe twice.
    verdict-chip CSS are deleted. The gesture ENGINE improvements stay
    (capture guards, edge auto-scroll, commit-at-UP, pending-gesture
    keyboard lock, unmount cleanup, frozen magnet field).
+36. **Clip root nests the trim-zone buttons** (R1-b review): the clip is
+   role="button" (C2) with two real <button> trim handles inside —
+   ARIA discourages interactive descendants of a button. Registered
+   rather than restructured: the handles need real button semantics
+   (focus/keyboard), the clip needs a role with a value; the pragmatic
+   composition is a documented deviation. Keyboard: Enter selects the
+   clip, Tab reaches the handles, arrows trim, Space steps the handle.
+37. **Scrub surfaces share the gesture lock family** (R2): ruler/playhead-
+   handle/scrub-bar pointer sessions open the pending-gesture window
+   (mutating keys die, tick freezes — playback pauses its playhead
+   writes while the user's hand owns the playhead) and run the FULL
+   release path on pointercancel (a touch scrub interrupted by a
+   browser gesture used to leave the surface armed for hover-scrub).
+   Timeline gesture surfaces carry touch-action:none (the splitter and
+   viewer bar already did).
 
 ## The topbar is a downstream customization point (R18j, thread #17)
 

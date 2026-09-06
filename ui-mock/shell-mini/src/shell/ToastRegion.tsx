@@ -30,7 +30,10 @@ export function ToastRegion() {
   return (
     <div
       className={`mini-toast${toast.kind === 'error' ? ' is-error' : ''}`}
-      role="status"
+      /* R1-b P3-9: errors need ATTENTION — the polite status live region
+       * could be missed; WCAG convention is role=alert for errors,
+       * status stays for informational toasts. */
+      role={toast.kind === 'error' ? 'alert' : 'status'}
       data-testid="mini-toast"
       key={toast.seq}
       /* PR69 C6: pause-on-hover/focus — the timer effect re-arms on the

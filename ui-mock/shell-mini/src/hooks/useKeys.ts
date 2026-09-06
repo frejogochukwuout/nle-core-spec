@@ -41,7 +41,14 @@ export function useKeys() {
 
       if (e.key === 'Escape') {
         if (s.dragActive) s.cancelDrag(); // drag-cancel outranks deselect (m4)
-        else s.select(null);
+        /* R1-a#5: a PENDING gesture (sub-threshold, lock not yet engaged)
+         * also owns Esc — the old fall-through deselected the clip under
+         * the pointer while the gesture was still opening. Nothing is
+         * cancelable yet (no doc state exists); the pointerup closes the
+         * window. Swallow the key so the deselect can't fire mid-gesture. */
+        else if (s.gesturePending) {
+          /* pending — the pointerup resolves it */
+        } else s.select(null);
         e.preventDefault();
         return;
       }

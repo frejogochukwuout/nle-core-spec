@@ -216,6 +216,10 @@ export interface HealthInfo {
   gh?: {
     repo: string | null;
     hasToken: boolean;
+    /** R1-a#6: present when a config-file ghToken was found AND ignored
+     *  (PR69 C38 law — env-only credentials); the mirror runs token-less
+     *  until the operator moves it to ANNOTAKIT_GH_TOKEN. */
+    configTokenIgnored?: boolean;
     /** Workstream label issues are filed under ('annotakit' default). */
     label?: string;
     /** Workstream scope regex source — when set, this engine mirrors only
