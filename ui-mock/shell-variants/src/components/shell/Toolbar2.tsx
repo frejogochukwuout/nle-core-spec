@@ -1,16 +1,18 @@
 /* toolbar2 — spec 18 §4.1: panel toggles left, project title center,
-   inspector/fullscreen/quick-export right. Mock's Index/Sound Library/
-   Mixer/Metadata dropped per §8 chrome-removal ledger. */
+   inspector right. Mock's Index/Sound Library/Mixer/Metadata dropped per §8
+   chrome-removal ledger. R19: mac traffic-light dots removed (th_mtoyslr9) —
+   the mock runs in a browser page, not an OS window, so the faux window
+   chrome read as decoration-only clutter; fullscreen toggle removed
+   (th_mtoyu8bl, gap C38) — see the removal note below. */
 
 import { useRef, useState } from 'react';
-import { PanelLeft, Sparkles, SlidersHorizontal, Maximize2 } from 'lucide-react';
+import { PanelLeft, Sparkles, SlidersHorizontal } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { project } from '../../lib/mockData';
 
 export function Toolbar2() {
   const panels = useUi((s) => s.panels);
   const togglePanel = useUi((s) => s.togglePanel);
-  const pushToast = useUi((s) => s.pushToast);
 
   /* roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern): exactly ONE
      button is a tab stop; ←/→ move focus between buttons in DOM order
@@ -38,7 +40,7 @@ export function Toolbar2() {
     else if (e.key === 'End') { e.preventDefault(); focusRover(n - 1); }
   };
   /* per-button roving props (spread in DOM order: pool=0, effects=1,
-     inspector=2, fullscreen=3); onFocus keeps the tab stop synced with
+     inspector=2); onFocus keeps the tab stop synced with
      real focus so clicks/mouse users don't fight the arrow model */
   const roverProps = (i: number) => ({
     ref: (el: HTMLButtonElement | null) => { btnRefs.current[i] = el; },
@@ -55,13 +57,9 @@ export function Toolbar2() {
       className="flex items-center gap-2 border-b border-hairline bg-shell px-2.5"
       style={{ height: 'var(--bar-h)', minHeight: 'var(--bar-h)' }}
     >
-      <div className="flex items-center gap-1.5 pr-1" aria-hidden="true">
-        <span className="h-[11px] w-[11px] rounded-full bg-[#fd5f4d]" />
-        <span className="h-[11px] w-[11px] rounded-full bg-[#fdbb2e]" />
-        <span className="h-[11px] w-[11px] rounded-full bg-[#28c83f]" />
-      </div>
-
-      <div className="vsep" />
+      {/* th_mtoyslr9: the mac traffic-light dots are GONE — the mock is a web
+          page, not an OS window; faux window chrome answered nothing and read
+          as removable decoration (reviewer: "remove these"). */}
 
       <button
         {...roverProps(0)}
@@ -102,17 +100,10 @@ export function Toolbar2() {
         <SlidersHorizontal size={14} strokeWidth={1.8} />
         <span>Inspector</span>
       </button>
-      <button
-        {...roverProps(3)}
-        className="icon-btn"
-        data-tip="Toggle fullscreen viewer"
-        aria-label="Toggle fullscreen viewer"
-        /* honest mock: the v2 fullscreen viewer surface isn't built — the
-           control answers with the §8.5 deferral toast instead of silence */
-        onClick={() => pushToast({ kind: 'info', title: 'Fullscreen viewer', detail: 'v2 surface (spec 18 §8.5) — not built in the mock' })}
-      >
-        <Maximize2 size={13} strokeWidth={1.6} />
-      </button>
+      {/* th_mtoyu8bl (gap C38): the fullscreen-viewer toggle button was REMOVED
+          — the v2 fullscreen surface (spec 18 §8.5) is not built and a control
+          that only ever answered with a deferral toast read as an unclear
+          affordance. Honest removal per reviewer; re-add WITH the v2 surface. */}
     </div>
   );
 }

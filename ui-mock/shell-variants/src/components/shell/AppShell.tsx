@@ -7,11 +7,10 @@
    export panel) — all at the same resizable inspectorW. */
 
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Sparkles } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { Toolbar2 } from './Toolbar2';
 import { MixerDock } from '../mixer/MixerDock';
-import { MediaPool } from './MediaPool';
+import { LeftDock } from './LeftDock';
 import { Viewer } from './Viewer';
 import { Inspector } from './Inspector';
 import { StatusStrip } from './StatusStrip';
@@ -19,79 +18,15 @@ import { AppDock } from './AppDock';
 import { TimelineToolbar } from '../timeline/TimelineToolbar';
 import { SceneTabs } from '../timeline/SceneTabs';
 import { Timeline } from '../timeline/Timeline';
-import { ColorPage } from '../pages/ColorPage';
+import { ColorRailPanel, ColorNodeGraph, ColorScopesDock } from '../pages/ColorPage';
 import { DeliverPage } from '../pages/DeliverPage';
 import { ChannelEditor } from '../mixer/ChannelEditor';
-import { SoundLibrary } from '../mixer/SoundLibrary';
-import { sceneDuration } from '../../lib/mockData';
+import { MarkerInspector } from '../panels/MarkerInspector';
+import { CaptionInspector } from '../panels/CaptionInspector';
+import { sceneDuration, findElement } from '../../lib/mockData';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import { ToastRegion } from './ToastRegion';
 import { ConfirmProvider, useConfirm } from './ConfirmDialog';
-
-/* ---------- effects library (compact mock of the Effects toggle §4.1) ---------- */
-const EFFECTS = [
-  { name: 'Gaussian Blur', cat: 'Blur' },
-  { name: 'Motion Blur', cat: 'Blur' },
-  { name: 'Vignette', cat: 'Stylize' },
-  { name: 'Glow', cat: 'Stylize' },
-  { name: 'Chromatic Aberration', cat: 'Stylize' },
-  { name: 'Cross Dissolve', cat: 'Transition' },
-  { name: 'Dip to Black', cat: 'Transition' },
-  { name: 'Wipe Left', cat: 'Transition' },
-];
-
-/* drag-to-clip payload contract (spec 15 §5.4 drag-to-lane spirit): the
-   timeline Clip drop target consumes this exact MIME type + JSON shape and
-   applies the effect through addEffectToElement. FIXED CONTRACT — do not
-   change the type string or the payload keys. */
-const EFFECT_DRAG_TYPE = 'application/x-nle-effect';
-const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-
-function EffectsPanel() {
-  const pushToast = useUi((s) => s.pushToast);
-  return (
-    <div data-testid="shell-effects" className="flex h-full min-h-0 w-[220px] shrink-0 flex-col bg-shell">
-      <div className="flex items-center gap-2 border-b border-hairline px-2.5 py-1.5">
-        <Sparkles size={12} className="text-accent" />
-        <span className="text-[11px] font-semibold text-tprimary">Effects</span>
-      </div>
-      <div className="scroll-y min-h-0 flex-1 p-1.5">
-        {['Blur', 'Stylize', 'Transition'].map((cat) => (
-          <div key={cat} className="mb-2">
-            <div className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-tfaint">{cat}</div>
-            {EFFECTS.filter((e) => e.cat === cat).map((e) => (
-              /* dual route (R14 no-op fix): DnD rows are the REAL apply path
-                 (drag → Clip drop target → addEffectToElement), while click is
-                 the honest fallback for users who can't complete a drag — a
-                 toast explains where the apply + param UI actually live. A
-                 button element keeps the fallback keyboard-operable. */
-              <button
-                key={e.name}
-                type="button"
-                draggable
-                onDragStart={(ev) => {
-                  ev.dataTransfer.setData(EFFECT_DRAG_TYPE, JSON.stringify({ name: e.name, cat: e.cat }));
-                  ev.dataTransfer.effectAllowed = 'copy';
-                  ev.dataTransfer.dropEffect = 'copy';
-                }}
-                onClick={() => pushToast({
-                  kind: 'info',
-                  title: `Add ${e.name}`,
-                  detail: 'drag the row onto a timeline clip to apply (mock drag-to-clip, spec 15 §5.4); the Inspector Effects tab carries the param UI',
-                })}
-                data-testid={`shell-effects-row-${slug(e.name)}`}
-                aria-label={`Effect ${e.name}`}
-                className="w-full cursor-grab rounded-[var(--radius)] border border-transparent px-2 py-1.5 text-left text-[11px] text-tmuted hover:border-soft hover:bg-[var(--hover-overlay)] hover:text-tprimary active:cursor-grabbing"
-              >
-                {e.name}
-              </button>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /* ---------- splitters (§3.2: 6px visual line, 12px hit target, dbl-click resets) ---------- */
 const SPLIT_HIT = 12; // §3.2: 12px interactive hit; visual line is the 6px --split-visual token
@@ -210,6 +145,8 @@ function AppShellInner() {
   const setMainBodyH = useUi((s) => s.setMainBodyH);
   const scenes = useUi((s) => s.scenes);
   const activeSceneId = useUi((s) => s.activeSceneId);
+  const selectedMarkerId = useUi((s) => s.selectedMarkerId);
+  const selection = useUi((s) => s.selection);
   const mixerVisible = useUi((s) => s.mixerState !== 'collapsed');
   const scene = scenes.find((s) => s.id === activeSceneId) ?? scenes[0];
   const duration = sceneDuration(scene);
@@ -272,10 +209,17 @@ function AppShellInner() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  /* R19 rail routing: a selected marker swaps the rail for the embedded
+     MarkerInspector (the reference's marker DIALOG as a panel — user
+     directive); a single caption-track selection swaps for the
+     CaptionInspector. Both clear the other selection domain in the store. */
+  const captionSelected = selection.length === 1
+    && findElement(scenes, selection[0])?.track.kind === 'caption';
   const rightPanel: ReactNode =
-    page === 'color' ? <ColorPage />
-    : page === 'deliver' ? <DeliverPage />
+    page === 'color' ? <ColorRailPanel />
     : page === 'audio' ? <ChannelEditor />
+    : selectedMarkerId ? <MarkerInspector />
+    : captionSelected ? <CaptionInspector />
     : <Inspector />;
 
   return (
@@ -288,33 +232,52 @@ function AppShellInner() {
         <Toolbar2 />
       </div>
 
-      {/* ---- main body ---- */}
+      {/* ---- main body ----
+          R19: the Deliver page repurposes the WHOLE mainbody as the export
+          surface (th_mto37ba3): left queue / center summary+range / right
+          settings live inside DeliverPage's own 3-region layout; the timeline
+          stays live below with the loop in/out as the export range. */}
       <div
         className="mainbody flex shrink-0 overflow-hidden"
         style={{ height: mainBodyH || '40%', minHeight: 320 }}
       >
-        {panels.mediaPool && (
-          <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
-            {page === 'audio' ? <SoundLibrary /> : <MediaPool />}
+        {page === 'deliver' ? (
+          <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 flex-1">
+            <DeliverPage />
           </div>
-        )}
-        {panels.mediaPool && (
-          <VSplitter onDrag={(dx) => setMediaW(dx === 0 ? 280 : useUi.getState().mediaW + dx)} />
-        )}
-        {panels.effects && <EffectsPanel />}
+        ) : (
+          <>
+            {/* R19: one LeftDock surface (th_mtoyt5fv "use the same area as
+                bin") — Pool|Effects tabs in the mediaW slot; on the color page
+                the slot carries the node graph (reference composition). */}
+            {(panels.mediaPool || panels.effects) && (
+              <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
+                {page === 'color' ? <ColorNodeGraph /> : <LeftDock />}
+              </div>
+            )}
+            {(panels.mediaPool || panels.effects) && (
+              <VSplitter onDrag={(dx) => setMediaW(dx === 0 ? 280 : useUi.getState().mediaW + dx)} />
+            )}
 
-        <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region panel-shadow flex min-h-0 min-w-0 flex-1">
-          <Viewer duration={duration} />
-        </div>
+            <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region panel-shadow flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1">
+                <Viewer duration={duration} />
+              </div>
+              {/* R19 color composition: the scopes dock under the viewer
+                  (reference 2×2; collapsible via its own header chevron) */}
+              {page === 'color' && <ColorScopesDock />}
+            </div>
 
-        {/* right-docked panel: dragging the seam LEFT (dx<0) widens it */}
-        {panels.inspector && (
-          <VSplitter onDrag={(dx) => setInspectorW(dx === 0 ? 340 : useUi.getState().inspectorW - dx)} />
-        )}
-        {panels.inspector && (
-          <div ref={(el) => { regionsRef.current[3] = el; }} tabIndex={-1} className="shell-region panel-shadow z-10 flex h-full min-h-0 shrink-0" style={{ width: inspectorW }}>
-            {rightPanel}
-          </div>
+            {/* right-docked panel: dragging the seam LEFT (dx<0) widens it */}
+            {panels.inspector && (
+              <VSplitter onDrag={(dx) => setInspectorW(dx === 0 ? 340 : useUi.getState().inspectorW - dx)} />
+            )}
+            {panels.inspector && (
+              <div ref={(el) => { regionsRef.current[3] = el; }} tabIndex={-1} className="shell-region panel-shadow z-10 flex h-full min-h-0 shrink-0" style={{ width: inspectorW }}>
+                {rightPanel}
+              </div>
+            )}
+          </>
         )}
       </div>
 

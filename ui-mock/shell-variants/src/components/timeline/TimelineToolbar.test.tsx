@@ -53,7 +53,7 @@ describe('TimelineToolbar', () => {
   it('the marker button adds a marker at the playhead (spec 16 M key)', () => {
     boot({});
     fireEvent.click(screen.getByRole('button', { name: 'Add marker' }));
-    expect(scene1().markers).toHaveLength(5);
+    expect(scene1().markers).toHaveLength(6);
     expect(scene1().markers.at(-1)!.time).toBe(16);
   });
 

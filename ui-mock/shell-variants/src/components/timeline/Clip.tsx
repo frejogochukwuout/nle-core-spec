@@ -36,8 +36,23 @@ import {
   stretchDeltaBounds,
 } from '../../lib/trimLaws';
 import { getWaveform } from '../../lib/waveform';
+import { MARKER_COLORS } from './Ruler';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { useConfirm, type ConfirmFn } from '../shell/ConfirmDialog';
+
+/* fixes th_mto2ytyo-adjacent (caption lane, gap C34) — the parchment chip
+   color from the reference Sub-lane (#c1b59c, timeline-marker-transcript
+   §2.5). Local constant: tokens.css is B4-owned this wave (appends only),
+   so the timeline keeps its own single source — the lane tint (Timeline.tsx)
+   and the CC badge (TrackHeader.tsx) import it from here. */
+export const CAPTION_PARCHMENT = '#c1b59c';
+
+/* fixes th_mto2xtgc — the timeline Clip's waveform attack/decay ramp (opt-in
+   lib/waveform option): 8% of the bars on each end rise/fall linearly, so an
+   audio clip reads as program audio with a quiet head + tail instead of a
+   flat wall. Exported for the Clip.test determinism assertion (same value,
+   single source). */
+export const CLIP_WAVEFORM_RAMP = 0.08;
 
 /* R15-A5: pointer capture is BEST-EFFORT — synthetic / inactive pointer ids
    (Storybook play functions, browser automation) throw NotFoundError on
@@ -207,7 +222,21 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
     { id: 'cut', label: 'Cut', shortcut: '⌘X', disabled: true, tip: 'mock: no clipboard — Delete + ⌘D instead' },
     { id: 'copy', label: 'Copy', shortcut: '⌘C', disabled: true, tip: 'mock: no clipboard — ⌘D duplicates in place' },
     { id: 'paste', label: 'Paste', shortcut: '⌘V', disabled: true, tip: 'mock: no clipboard (timeline toolbar carries the same disabled row)' },
-    { id: 'open-in-viewer', label: 'Open in viewer', sep: true, onSelect: () => useUi.getState().pushToast({ kind: 'info', title: 'Open in viewer', detail: `mock: v1.1 source preview is the §4.3 plain-<video> fallback (not built here; dual viewer = §8.5 v2) — dbl-click a pool card reveals instead (§4.2) — ${el.name}` }) },
+    { id: 'open-in-viewer', label: 'Open in viewer', sep: true, onSelect: () => {
+      /* fixes th_mto3504c (part: source trigger) — spec 18 §4.3 v1.1: the
+         clip menu flips the viewer into source-preview mode when the clip
+         has an ONLINE media asset; text/offline clips keep the honest toast. */
+      const media = el.mediaId ? mediaById(el.mediaId) : undefined;
+      if (el.mediaId && media && !media.offline) {
+        useUi.getState().enterSourcePreview(el.mediaId);
+      } else {
+        useUi.getState().pushToast({
+          kind: 'info',
+          title: 'Open in viewer',
+          detail: `${el.mediaId ? 'asset is offline — no source to preview' : 'text clips have no source media'} (spec 18 §4.3 v1.1) — ${el.name}`,
+        });
+      }
+    } },
     { id: 'split', label: 'Split at playhead', shortcut: '⌘B', onSelect: () => {
       const t = useUi.getState().playhead;
       // fan-out; real shell sends ONE batched split command (spec 15 §7)
@@ -221,6 +250,20 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
       // default crossfade (spec 09 TransitionJSON) per selected clip
       targets.forEach((id) => useUi.getState().setTransition(id, {}));
     } },
+    /* R19 clip markers (gap C33): add-at-playhead (clamped into the clip by
+       the store; outside the clip span the clip's mid stands in) + one
+       remove row per existing marker — both through the undoable ops. */
+    { id: 'add-clip-marker', label: 'Add clip marker here', onSelect: () => {
+      const s = useUi.getState();
+      const ph = s.playhead;
+      const inside = ph >= el.startTime && ph < el.startTime + el.duration;
+      s.addClipMarker(el.id, inside ? ph - el.startTime : el.duration / 2);
+    } },
+    ...(el.markers ?? []).map((cm) => ({
+      id: `remove-clip-marker-${cm.id}`,
+      label: `Remove marker “${cm.label}”`,
+      onSelect: () => useUi.getState().removeClipMarker(el.id, cm.id),
+    })),
     { id: 'rename', label: 'Rename', disabled: true, tip: 'mock: name edits live in the Inspector (Properties →)' },
     { id: 'reveal', label: 'Reveal in Media Pool', disabled: !el.mediaId, tip: el.mediaId ? `selects ${el.mediaId} in the pool` : 'text clips have no media asset', onSelect: () => {
       if (!el.mediaId) return;
@@ -772,6 +815,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
 
   const fadeLeftW = (el.audioFadeIn ?? 0) * pxPerSec;
   const fadeRightW = (el.audioFadeOut ?? 0) * pxPerSec;
+  const bodyH = laneHeight - 4;  // the clip box is inset 2px top/bottom in the lane
 
   const clipLabel = (color: string, align: 'left' | 'center' = 'left') => (
     <span
@@ -785,7 +829,24 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
 
   /* ---------- clip body by mode/type ---------- */
   let body: React.ReactNode;
-  if (clipStyle === 'blocks') {
+  if (track.kind === 'caption') {
+    /* fixes th_mto2ytyo-adjacent (caption lane, gap C34) — CAPTION CHIPS, not
+       generic text clips (timeline-marker-transcript §2.5): 24px parchment
+       chips, black 11px truncated body text (el.text ?? el.name), 2px radius,
+       centered in the 32px lane; the clip-box keeps the standard selection
+       ring + gesture grammar. Click selects (→ CaptionInspector routing). */
+    body = (
+      <div className="flex h-full w-full flex-col justify-center overflow-hidden">
+        <div
+          data-testid={`caption-chip-${el.id}`}
+          className="mx-[2px] flex h-[24px] shrink-0 items-center overflow-hidden rounded-[2px] border px-2"
+          style={{ background: CAPTION_PARCHMENT, borderColor: 'rgba(0,0,0,0.7)' }}
+        >
+          <span className="truncate text-[11px] font-medium" style={{ color: '#000' }}>{el.text ?? el.name}</span>
+        </div>
+      </div>
+    );
+  } else if (clipStyle === 'blocks') {
     body = (
       <div
         className="flex h-full items-center overflow-hidden px-1.5"
@@ -798,26 +859,71 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       </div>
     );
   } else if (isAudio) {
-    const bars = getWaveform(el.id, Math.max(8, Math.floor(geo.width / 4)), { amplitude: 1 });
+    /* fixes th_mto2xtgc + th_mto2y86w — symmetric envelope around a VISIBLE
+       centerline, deterministic per MEDIA (FNV-1a seed = mediaId — two clips
+       of the same asset share the waveform) + attack/decay ramps at the clip
+       head/tail (CLIP_WAVEFORM_RAMP, body waves + ramps), heights vary, min
+       bar 1px. ROOT CAUSE of the empty-waveform pin (el-6): the old %-based
+       bar width `100/bars.length − 0.4` goes NEGATIVE once bars.length > 250
+       (el-6 at default zoom = 345 bars → every rect had a negative width →
+       SVG renders nothing). Bars are now laid out in user-space px with
+       Math.max(1, …) so every audio clip renders ≥1 visible bar. */
+    const barCount = Math.max(1, Math.min(600, Math.floor(geo.width / 4)));
+    const bars = getWaveform(el.mediaId ?? el.id, barCount, { ramp: CLIP_WAVEFORM_RAMP });
     const h = laneHeight - 12;
+    const mid = h / 2;
+    const cell = geo.width / bars.length;
     body = (
       <div className="relative h-full w-full" style={{ background: 'linear-gradient(to bottom, var(--clip-audio-a), var(--clip-audio-b))' }}>
-        <svg className="absolute inset-x-0 bottom-[2px]" width="100%" height={h} preserveAspectRatio="none" aria-hidden="true">
-          {bars.map((b, i) => (
-            <rect key={i} x={`${i * (100 / bars.length)}%`} y={h / 2 - b.max * (h / 2)} width={`${100 / bars.length - 0.4}%`} height={Math.max(1, (b.max + b.min) * (h / 2) * 0.5)} fill="var(--waveform)" opacity={0.9} />
-          ))}
+        <svg className="absolute inset-x-0 bottom-[2px]" width="100%" height={h} preserveAspectRatio="none" aria-hidden="true" data-testid={`clip-waveform-${el.id}`}>
+          {/* visible centerline — the envelope is symmetric around it */}
+          <line x1="0" y1={mid} x2="100%" y2={mid} stroke="var(--waveform)" strokeWidth="0.75" opacity={0.55} />
+          {bars.map((b, i) => {
+            const half = Math.max(0.5, ((b.max + b.min) / 2) * (h / 2));
+            return (
+              <rect
+                key={i}
+                x={i * cell}
+                y={mid - half}
+                width={Math.max(1, cell - 0.6)}
+                height={Math.max(1, half * 2)}
+                fill="var(--waveform)"
+                opacity={0.9}
+              />
+            );
+          })}
         </svg>
-        {/* fade ramps — white lines + handle dots + soft fill (spec 05 §14.10) */}
+        {/* fade ramps (spec 05 §14.10) — fixes th_mto2ph3i: BOTH curves were
+            REVERSED (the thread pinned the fade-in, but the fade-out line had
+            the same mirror bug). Fade-IN RISES bottom-left (zero at clip start)
+            → top-right (full at fade end); fade-OUT FALLS top-left (full at
+            fade start) → bottom-right (zero at clip end) — the overlay is
+            right-anchored, so its LEFT edge is the fade start and its RIGHT
+            edge is the clip END: the line must run (1, 0) → (fadeRightW−2,
+            bodyH) in the overlay's own frame (SVG y=0 is TOP). The soft fill
+            polygon shades the INAUDIBLE region (black 25%) — the wedge ABOVE
+            the envelope line, thickest on the QUIET side (clip start for a
+            fade-in, clip end for a fade-out), vanishing where the signal
+            reaches full amplitude. Handle dots ride the line's FULL-amplitude
+            end (the top end of each ramp). */}
         {fadeLeftW > 6 && (
-          <svg className="pointer-events-none absolute inset-y-0 left-0" width={fadeLeftW} height="100%" aria-hidden="true">
-            <line x1="1" y1="0" x2={fadeLeftW - 1} y2="100%" stroke="var(--fade-line)" strokeWidth="2" />
-            <circle cx="3" cy="3" r="2.6" fill="var(--fade-line)" stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
+          <svg className="pointer-events-none absolute inset-y-0 left-0" width={fadeLeftW} height={bodyH} aria-hidden="true">
+            {/* th_mto2ph3i fade-in: rises (1, bodyH) → (fadeLeftW−1, 0) — zero
+                at clip start, full at fade end; the inaudible wedge (above the
+                line) hugs the clip's START edge */}
+            <polygon points={`1,0 1,${bodyH} ${fadeLeftW - 1},0`} fill="rgba(0,0,0,0.25)" />
+            <line x1="1" y1={bodyH} x2={fadeLeftW - 1} y2="0" stroke="var(--fade-line)" strokeWidth="2" />
+            <circle cx={fadeLeftW - 2} cy="3" r="2.6" fill="var(--fade-line)" stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
           </svg>
         )}
         {fadeRightW > 6 && (
-          <svg className="pointer-events-none absolute inset-y-0 right-0" width={fadeRightW} height="100%" aria-hidden="true">
-            <line x1={fadeRightW - 2} y1="0" x2="1" y2="100%" stroke="var(--fade-line)" strokeWidth="2" />
-            <circle cx={fadeRightW - 4} cy="3" r="2.6" fill="var(--fade-line)" stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
+          <svg className="pointer-events-none absolute inset-y-0 right-0" width={fadeRightW} height={bodyH} aria-hidden="true">
+            {/* th_mto2ph3i fade-out: falls (1,0) → (fadeRightW−2, bodyH) —
+                full at the fade start, zero at the clip end; the inaudible
+                wedge (above the line) hugs the clip's END edge */}
+            <polygon points={`1,0 ${fadeRightW - 2},0 ${fadeRightW - 2},${bodyH}`} fill="rgba(0,0,0,0.25)" />
+            <line x1="1" y1="0" x2={fadeRightW - 2} y2={bodyH} stroke="var(--fade-line)" strokeWidth="2" />
+            <circle cx="3" cy="3" r="2.6" fill="var(--fade-line)" stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
           </svg>
         )}
         {clipLabel('var(--clip-audio-label)')}
@@ -843,7 +949,14 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
             style={{
               height: stripH,
               backgroundImage: `url(${media.thumbnail})`,
-              backgroundSize: '80px 100%',
+              /* fixes th_mto334ar — filmstrip aspect ratio: COVER PER CELL.
+                 A plain `80px 100%` stretched every cell to 4:3 (16:9 thumbs
+                 squashed). The cell width is now strip height × the media
+                 aspect (MediaRecord width/height, 16:9 fallback), so each
+                 repeated tile covers its cell EXACTLY at the source ratio —
+                 no stretching, repeat-x keeps the sequential-frames strip
+                 grammar (cover semantics, computed per cell). */
+              backgroundSize: `${Math.round(stripH * (media.width && media.height ? media.width / media.height : 16 / 9))}px 100%`,
               backgroundRepeat: 'repeat-x',
               filter: media.offline ? 'grayscale(1) opacity(0.35)' : 'none',
             }}
@@ -1048,6 +1161,25 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
         </>
       )}
 
+      {/* fixes th_mto32fa6 — selected-clip TRIM AFFORDANCE: a selected AND
+          hovered clip shades its trim edge zones (6px gradient from the
+          selection accent at 55% → transparent, inset) so the 8px
+          left/right handle zones READ as draggable, not just cursor-change.
+          pointer-events-none: the real handles below stay the hit targets
+          (z 4 — above the body, below the drag/ghost layers). */}
+      {!locked && selected && hover && (
+        <div data-testid={`clip-trim-afford-${el.id}`} aria-hidden="true" className="pointer-events-none absolute inset-0 z-[4]">
+          <div
+            className="absolute inset-y-0 left-0"
+            style={{ width: 6, background: 'linear-gradient(to right, color-mix(in srgb, var(--accent-selection) 55%, transparent), transparent)' }}
+          />
+          <div
+            className="absolute inset-y-0 right-0"
+            style={{ width: 6, background: 'linear-gradient(to left, color-mix(in srgb, var(--accent-selection) 55%, transparent), transparent)' }}
+          />
+        </div>
+      )}
+
       {/* linked A/V badge (spec 05 §12.3) */}
       {el.linkedTo && (
         <span
@@ -1063,6 +1195,28 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       {el.effects?.some((f) => f.enabled) && (
         <span className="mono absolute left-1 top-1 rounded-sm bg-black/55 px-1 text-[11px] font-bold text-white">F</span>
       )}
+
+      {/* ---- R19 clip markers (gap C33, timeline-cluster §1.6/§5.1): small
+           shield pins pinned INSIDE the clip box (bottom-2px, left =
+           offset·pps, 8px, marker color), tooltip via data-tip. NO
+           stopPropagation + no own click handler: clicks bubble to the clip
+           box's onClick → the clip gets selected (the marker's inspector is
+           the clip/Marker panel, not a separate selection domain). ---- */}
+      {el.markers?.map((cm) => (
+        <span
+          key={cm.id}
+          data-testid={`clip-marker-${cm.id}`}
+          data-tip={`${cm.label} · ${tc(el.startTime + cm.offset)}`}
+          data-tip-top
+          aria-label={`Clip marker ${cm.label}`}
+          className="absolute bottom-[2px] z-[3]"
+          style={{ left: cm.offset * pxPerSec - 4 }}
+        >
+          <svg width="8" height="10" viewBox="0 0 10 13" aria-hidden="true" className="block">
+            <path d="M0 0h10v7.2L5 12.2 0 7.2V0z" fill={MARKER_COLORS[cm.color]} stroke="rgba(0,0,0,0.45)" strokeWidth="0.5" />
+          </svg>
+        </span>
+      ))}
     </div>
     {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
     </>

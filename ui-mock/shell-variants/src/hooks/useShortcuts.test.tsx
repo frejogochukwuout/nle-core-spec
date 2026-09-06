@@ -243,7 +243,7 @@ describe('clip + selection keys', () => {
     press({ key: 'a', metaKey: true });
     expect(S().selection).toEqual(['el-5']); // tracks[0] = overlay
     press({ key: 'a', metaKey: true, shiftKey: true });
-    expect(S().selection).toHaveLength(7); // all elements in sc-1
+    expect(S().selection).toHaveLength(12); // all elements in sc-1 (7 + 5 captions, R19)
   });
 
   it('⌘A respects the focused track', () => {
@@ -332,9 +332,9 @@ describe('marker keys', () => {
   it('M adds a marker at the playhead; ⇧M deletes it', () => {
     press({ key: 'm' });
     const markers = S().scenes.find((sc) => sc.id === 'sc-1')!.markers;
-    expect(markers).toHaveLength(5); // 4 fixtures + 1
+    expect(markers).toHaveLength(6); // 5 fixtures + 1
     press({ key: 'm', shiftKey: true });
-    expect(S().scenes.find((sc) => sc.id === 'sc-1')!.markers).toHaveLength(4);
+    expect(S().scenes.find((sc) => sc.id === 'sc-1')!.markers).toHaveLength(5);
   });
 
   it('⌥⇧M adds a marker with the cycled palette color (e.code-stable under alt)', () => {
@@ -464,9 +464,9 @@ describe('R14: zoom key family (spec 16 §3.8)', () => {
 });
 
 describe('R14: marker navigation (spec 16 §3.1 ⌘⇧←/→)', () => {
-  it('jumps to the next / previous marker time (fixture: 0, 8.5, 15.5, 24)', () => {
+  it('jumps to the next / previous marker time (fixture: 0, 8.5, 15.5, 17, 24)', () => {
     press({ key: 'ArrowRight', ctrlKey: true, shiftKey: true });
-    expect(S().playhead).toBe(24); // from 16 → next marker
+    expect(S().playhead).toBe(17); // from 16 → next marker (R19 range marker head @ 17)
     press({ key: 'ArrowLeft', ctrlKey: true, shiftKey: true });
     expect(S().playhead).toBe(15.5); // nearest previous
   });

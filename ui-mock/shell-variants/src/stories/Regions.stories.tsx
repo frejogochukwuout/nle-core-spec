@@ -7,8 +7,10 @@
    Store paths since R12 W4: the in-canvas-overlays eye toggle AND the
    safe-area guides are store-level UI prefs (viewerOverlays /
    viewerSafeGuides, spec 18 §4.3 "UI pref" + §6.2 view-state home) — both are
-   directly bootable below. Only zoom remains component-local; its 50% story
-   drives the toolbar select via a play step (native-setter technique). */
+   directly bootable below. Only zoom remains component-local; its 2× story
+   drives the toolbar select via a play step (native-setter technique).
+   R19 adds: viewerMode 'source' previews (th_mto3504c) + the caption-overlay
+   story — all store-bootable. */
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Viewer } from '../components/shell/Viewer';
@@ -51,7 +53,9 @@ export const ViewerDefault: StoryObj = {
  *  The eye toggle is store state (viewerOverlays); the composited text
  *  overlay and the name/TC chips must all disappear here. Mock approximation
  *  (registered, PLAN item 23): the mock hides overlays whenever the active
- *  tool ≠ select, not only while a drag is running (Viewer.tsx). */
+ *  tool ≠ select, not only while a drag is running (Viewer.tsx). NOTE R19:
+ *  the EditOverlay dock rail renders on the frame's right edge in every
+ *  program-mode story — B5 fills the stub; the empty rail is the mount. */
 export const ViewerOverlaysHidden: StoryObj = {
   name: 'Viewer — in-canvas overlays hidden (blade tool)',
   parameters: { layout: 'padded' },
@@ -66,10 +70,41 @@ export const ViewerSafeGuides: StoryObj = {
   render: () => <ViewerPanel patch={{ viewerSafeGuides: true }} />,
 };
 
-/** Zoom 50% (play step drives the toolbar select — the only control surface):
- *  the frame letterboxes at half width inside the overflow-auto monitor. */
-export const ViewerZoom50: StoryObj = {
-  name: 'Viewer — zoom 50 %',
+/** R19 th_mto3504c — SOURCE PREVIEW MODE (spec 18 §4.3 v1.1): the monitor is
+ *  dual-purpose; booting viewerMode 'source' + sourceMediaId swaps the chrome
+ *  to the exit control + asset name + SOURCE chip, letterboxes the asset
+ *  poster (object-contain) with the spec caption, and replaces the transport
+ *  cluster with the static source duration TC (no fake playback of a jpg).
+ *  In the shell this is entered by selecting exactly one pool card (C39). */
+export const ViewerSourcePreview: StoryObj = {
+  name: 'Viewer — source preview mode',
+  parameters: { layout: 'padded' },
+  render: () => <ViewerPanel patch={{ viewerMode: 'source', sourceMediaId: 'm-01' }} />,
+};
+
+/** R19 — audio source preview: no poster to letterbox, so the deterministic
+ *  waveform (the pool's audio-thumb grammar) stands in; static duration TC. */
+export const ViewerSourceAudio: StoryObj = {
+  name: 'Viewer — source preview (audio waveform)',
+  parameters: { layout: 'padded' },
+  render: () => <ViewerPanel patch={{ viewerMode: 'source', sourceMediaId: 'm-06' }} />,
+};
+
+/** R19 — caption overlay: playhead 5 s sits inside cap-1 [100/24, 135/24) —
+ *  the bottom-anchored black/75 chip with the caption body renders over the
+ *  program frame (bilingual second line lands with real FR-track data). */
+export const ViewerCaptionOverlay: StoryObj = {
+  name: 'Viewer — caption overlay at playhead',
+  parameters: { layout: 'padded' },
+  render: () => <ViewerPanel patch={{ playhead: 5 }} />,
+};
+
+/** Zoom 2× (play step drives the toolbar select — the only control surface):
+ *  the frame letterboxes at twice the fit width inside the overflow-auto
+ *  monitor. (R19: the ladder is Fit/1.5×/2×/4× — the old 50 % story drove a
+ *  rung that no longer exists; this one drives a real rung.) */
+export const ViewerZoom2x: StoryObj = {
+  name: 'Viewer — zoom 2×',
   parameters: { layout: 'padded' },
   play: async ({ canvasElement }) => {
     const select = canvasElement?.querySelector<HTMLSelectElement>('select[aria-label="Viewer zoom"]');
@@ -77,7 +112,7 @@ export const ViewerZoom50: StoryObj = {
     // native setter bypasses React's value tracker so the change event lands
     const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
     if (!setter) return;
-    setter.call(select, '50%');
+    setter.call(select, '2×');
     select.dispatchEvent(new Event('input', { bubbles: true }));
     select.dispatchEvent(new Event('change', { bubbles: true }));
   },

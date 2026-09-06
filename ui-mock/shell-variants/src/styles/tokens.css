@@ -291,3 +291,36 @@
 [data-accent="gold"]   { --accent-selection: var(--accent-gold); }
 [data-accent="ember"]  { --accent-selection: var(--accent-ember); }
 [data-accent="violet"] { --accent-selection: var(--accent-violet); }
+
+/* ============================================================
+   R19-B4 COLOR GRADING SURFACES (appended — DO NOT edit above)
+   Source: color-cluster.md §5.3 token strategy — the four color
+   reference mocks (wheels / qualifier / node graph / scopes).
+   Deliberately theme-stable (root only, like --meter-well / --bg-frame):
+   scopes + node graph are CONTENT/data chrome, not skin chrome; the
+   scopes gold is intentionally OFF the --accent-* ramp (accent = state
+   only, spec 18 §9) so scope labels can never read as UI state.
+   ============================================================ */
+:root {
+  /* scopes (2×2 dock under the viewer) */
+  --scope-bg: #0d0d0d;          /* quadrant panel — near-black, data display */
+  --scope-text: #c29d38;        /* gold axis labels — DATA chrome, ≠ --accent-gold */
+  --scope-grid: #3a2e12;        /* gold-tinted graticule lines */
+  --scope-grid-dim: #261f0d;    /* dimmer graticule circle */
+
+  /* node graph (left dock on the color page) */
+  --nodegraph-bg: #24252a;      /* workspace bg */
+  --nodegraph-grid: #2f3036;    /* 64px grid lines */
+  --node-bg: #292a2f;           /* node card body */
+  --node-footer: #2a2b30;       /* node footer strip */
+  --node-border: #151619;       /* node card seam */
+  --node-edge: #8e8e8e;         /* connection lines (straight 2px) */
+  --port-green: #4cd964;        /* video-stream ports + progress badge stream */
+  --port-blue: #34aadc;         /* key/aux stream ports + connected-clip badge */
+
+  /* color wheels (rail tab 1) */
+  --wheel-ring-track: #161619;  /* outer ring track circle */
+  --wheel-ring-arc: #d4d4d4;    /* ring value arc (dasharray) + matte handle */
+  --wheel-hub: #e8e8e8;         /* ring thumb dot */
+  --wheel-border: #0a0a0c;      /* wheel disc 1.5px border */
+}

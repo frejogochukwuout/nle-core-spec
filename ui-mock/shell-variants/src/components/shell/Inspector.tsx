@@ -29,18 +29,35 @@
      the button renders disabled with an explanatory tooltip.
    - Tab visibility: hidden-not-disabled (§4.4) — Video for visual
      (video/image/text), Audio for audio-bearing (video/audio), Effects
-     always, Transition when the element has one or a cut follows. */
+     always, Transition when the element has one or a cut follows.
 
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
+   R19 (B5) additions:
+   - Empty selection → ACTIVE-TRACK fallback sheet (thread th_mto5fdf6):
+     research (R19): Resolve/Premiere clear the inspector on empty
+     selection; track-level inspection is the Fairlight precedent — the
+     reviewer's active-track instinct is the better default. Track toggles
+     are REAL (toggleTrackCmd); audio tracks surface the mockMixer strip
+     (fader/pan/inserts/outputBus via setMixerTrack, role label).
+   - Audio tab gains the audio_editor_ui reference sections: Clip Volume
+     (dB), Clip Pan, Clip Pitch, Clip Equalizer — all REAL store writes
+     (el.volume/pan/pitchSemitones/pitchCents/eq, gap C35: engine round is
+     the boundary). Groups gained collapse carets + per-group resets
+     (inspectorpanel.tsx §4 absorption — caret rotates 0→90°, 0.1s).
+   - NumberField/ParamRow/Group/LiveText are EXPORTED: the R19 rail panels
+     (MarkerInspector/CaptionInspector) reuse the exact same field
+     contracts instead of forking them. */
+
+import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import {
-  ArrowLeftRight, AudioWaveform, ChevronDown, ChevronUp, FlipHorizontal, FlipVertical,
+  ArrowLeftRight, AudioWaveform, ChevronDown, ChevronRight, ChevronUp, FlipHorizontal, FlipVertical,
   History, MoreHorizontal, Plus, Sparkles, Video, X,
 } from 'lucide-react';
-import { useUi, type InspectorTab } from '../../state/useUiStore';
+import { activeTrackOf, useUi, type InspectorTab } from '../../state/useUiStore';
 import {
-  EFFECT_DEFS, TRANSITION_PRESENTATIONS, findElement, mediaById,
-  type EffectJSON, type ElementJSON, type TransitionJSON, type TransitionPresentation,
+  EFFECT_DEFS, TRANSITION_PRESENTATIONS, findElement, mediaById, sceneDuration,
+  type EffectJSON, type ElementJSON, type SceneJSON, type TrackJSON, type TransitionJSON, type TransitionPresentation,
 } from '../../lib/mockData';
+import { ROLE_LABEL, type MixerTrackSettings, type Role } from '../../state/mockMixer';
 import { clamp, parseTc, tc } from '../../lib/timecode';
 
 /* ---- shared bits ------------------------------------------------------ */
@@ -57,9 +74,27 @@ const audioBearing = (e: ElementJSON) => e.type === 'audio' || e.type === 'video
 
 /* spec 09 defaults — drive per-group Reset + §5A double-click reset */
 const DEFAULT_MT = { x: 960, y: 540, scale: 100, rot: 0 }; // canvas-center, unflipped
-const DEFAULT_MA = { gainDb: 0, pan: 0 };
 type MockTransform = typeof DEFAULT_MT;
-type MockAudio = typeof DEFAULT_MA;
+
+/* ---- R19 audio-tab dB↔linear maps (audio_editor_ui reference) ----------
+   The reference's Clip Volume is dB (−24..+12); spec 09's ElementJSON.volume
+   is a LINEAR gain multiplier (nominal 0..1, unity 1.0 = 0 dB). Display uses
+   the standard 20·log10 law; edits write 10^(dB/20). The +dB region of the
+   reference range therefore writes above-unity gain — the model field is a
+   plain number, so the write is real (undoable) and honest; the engine round
+   is the boundary (gap C35). Values at/below −24 dB clamp to the floor
+   (1e-5 linear ≈ −100 dB — silence in practice, slider floor display). */
+const VOL_DB_MIN = -24;
+const VOL_DB_MAX = 12;
+const volToDb = (v: number) => Math.max(VOL_DB_MIN, v > 1e-5 ? 20 * Math.log10(v) : VOL_DB_MIN);
+const dbToVol = (db: number) => 10 ** (db / 20);
+
+/* R19 EQ display: 4 fixed bands, ±24 dB (62/250/1K/4K/16K corners — mockData) */
+const EQ_ZERO: [number, number, number, number] = [0, 0, 0, 0];
+const EQ_BAND_HZ = ['62', '250', '1K', '4K', '16K'] as const;
+const eqOf = (e: ElementJSON): [number, number, number, number] => e.eq ?? EQ_ZERO;
+const withBand = (eq: [number, number, number, number], i: number, v: number): [number, number, number, number] =>
+  [eq[0], eq[1], eq[2], eq[3]].map((x, bi) => (bi === i ? v : x)) as [number, number, number, number];
 
 /* nominal effect-param defaults — mockData's EFFECT_DEFS carries no default
    column (the spec 07 registry does); these seed display + new additions */
@@ -92,9 +127,9 @@ function commonOf<T>(vals: T[]): { mixed: boolean; value: T } {
 
 /* ---- NumberField: the §4.4 field contract ----------------------------- */
 
-function NumberField({
+export function NumberField({
   value, min, max, unit = '', decimals = 0, timeField = false, blank = false,
-  placeholder, resetTo, ariaLabel, onCommit,
+  placeholder, resetTo, ariaLabel, tcDisplay = false, testId, onCommit,
 }: {
   value: number;
   min: number;
@@ -103,15 +138,20 @@ function NumberField({
   decimals?: number;
   /** parse through the shared TC parser (time-based fields) */
   timeField?: boolean;
+  /** R19: TC-formatted DISPLAY (00:00:08:12) — parsing is unchanged (the
+      one shared parseTc grammar); the R19 marker/caption panels show SMPTE */
+  tcDisplay?: boolean;
   /** mixed multi-select: render empty until the user types (then it writes all) */
   blank?: boolean;
   placeholder?: string;
   /** spec 09 default for the §5A double-click reset */
   resetTo?: number;
   ariaLabel: string;
+  /** R19: the rail panels' data-testid hook (shell-marker/caption-inspector-*) */
+  testId?: string;
   onCommit: (v: number) => void;
 }) {
-  const fmt = (v: number) => `${v.toFixed(decimals)}${unit}`;
+  const fmt = (v: number) => (tcDisplay ? tc(v) : `${v.toFixed(decimals)}${unit}`);
   const [text, setText] = useState(() => (blank ? '' : fmt(value)));
   const [error, setError] = useState<string | null>(null);
   const focused = useRef(false);
@@ -143,7 +183,11 @@ function NumberField({
     if (v === null || !Number.isFinite(v)) {
       return { v: null, err: timeField ? 'Invalid — HH:MM:SS:FF, SS.s or Nf' : 'Not a number' };
     }
-    if (v < min || v > max) return { v: null, err: `Range ${min}…${max}${unit}` };
+    if (v < min || v > max) {
+      return { v: null, err: tcDisplay
+        ? `Range ${tc(min)}…${tc(max)}`
+        : `Range ${min}…${max}${unit}` };
+    }
     return { v, err: null };
   };
 
@@ -192,6 +236,7 @@ function NumberField({
         value={text}
         placeholder={placeholder}
         aria-label={ariaLabel}
+        data-testid={testId}
         aria-invalid={error !== null}
         title={timeField ? 'Accepts TC (HH:MM:SS:FF), seconds (SS.s) or frames (123f) — spec 18 §4.4' : undefined}
         onChange={(e) => onChange(e.target.value)}
@@ -231,9 +276,78 @@ function NumberField({
   );
 }
 
+/* ---- LiveText: the §4.4 commit contract for free-text fields (R19) ------
+   Same 50ms settle as NumberField: one store write per settle, never per
+   keystroke; Enter/blur settle immediately; Escape reverts to the committed
+   value. Used by the marker (name/notes/keyword) + caption (text) panels. */
+
+export function LiveText({
+  value, onCommit, ariaLabel, textarea = false, className = '', placeholder, testId,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  ariaLabel: string;
+  textarea?: boolean;
+  className?: string;
+  placeholder?: string;
+  testId?: string;
+}) {
+  const [text, setText] = useState(value);
+  const valueRef = useRef(value);
+  const focused = useRef(false);
+  const timer = useRef<number | null>(null);
+  const commitRef = useRef(onCommit);
+  useEffect(() => { commitRef.current = onCommit; });
+  useEffect(() => {
+    valueRef.current = value;
+    // resync on external change (undo, marker swap, Add New) while not editing
+    if (!focused.current) setText(value);
+  }, [value]);
+  useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
+
+  const clearTimer = () => {
+    if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null; }
+  };
+  const settle = () => {
+    clearTimer();
+    if (text !== valueRef.current) commitRef.current(text);
+  };
+  const onChange = (raw: string) => {
+    setText(raw);
+    clearTimer();
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      if (focused.current) commitRef.current(raw);
+    }, 50);
+  };
+
+  const shared = {
+    value: text,
+    placeholder,
+    'aria-label': ariaLabel,
+    'data-testid': testId,
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(e.target.value),
+    onFocus: () => { focused.current = true; },
+    onBlur: () => { focused.current = false; settle(); },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !textarea) {
+        e.preventDefault();
+        settle();
+      } else if (e.key === 'Escape') {
+        clearTimer();
+        setText(valueRef.current);
+      }
+    },
+    className: `field min-w-0 ${className}`,
+  };
+  return textarea
+    ? <textarea {...shared} rows={3} />
+    : <input type="text" {...shared} />;
+}
+
 /* ---- ParamRow: label + slider (commit-on-release) + NumberField ------- */
 
-function ParamRow({
+export function ParamRow({
   label, value, mixed = false, min, max, step = 1, unit = '', decimals = 0,
   timeField = false, resetTo, title, onCommit,
 }: {
@@ -295,13 +409,39 @@ function ParamRow({
   );
 }
 
-/* ---- group shell with per-group reset (§4.4) --------------------------- */
+/* ---- group shell with per-group reset (§4.4) ---------------------------
+   R19 (inspectorpanel.tsx §4 absorption): collapsible groups add a caret
+   that rotates 0→90° over 0.1s; body stays in the DOM (hidden attr) so
+   aria-controls keeps pointing at a real region. Default stays OPEN. */
 
-function Group({ title, children, onReset }: { title: string; children: ReactNode; onReset?: () => void }) {
+export function Group({
+  title, children, onReset, collapsible = false,
+}: { title: string; children: ReactNode; onReset?: () => void; collapsible?: boolean }) {
+  const [open, setOpen] = useState(true);
+  const bodyId = useId();
   return (
     <div className="border-b border-hairline px-3 py-2.5">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">{title}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          {collapsible && (
+            <button
+              type="button"
+              className="flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-tmuted hover:text-tprimary"
+              aria-expanded={open}
+              aria-controls={bodyId}
+              aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
+              data-testid={`shell-inspector-group-${title.toLowerCase().replace(/\s+/g, '-')}-caret`}
+              onClick={() => setOpen((o) => !o)}
+            >
+              <ChevronRight
+                size={10}
+                strokeWidth={1.8}
+                className={`transition-transform duration-100 ${open ? 'rotate-90' : ''}`}
+              />
+            </button>
+          )}
+          <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">{title}</span>
+        </div>
         {onReset && (
           <button
             type="button"
@@ -314,7 +454,7 @@ function Group({ title, children, onReset }: { title: string; children: ReactNod
           </button>
         )}
       </div>
-      <div className="flex flex-col gap-1.5">{children}</div>
+      <div id={bodyId} hidden={!open} className="flex flex-col gap-1.5">{children}</div>
     </div>
   );
 }
@@ -371,6 +511,150 @@ function SourceCard({ el }: { el: ElementJSON }) {
       </div>
     </div>
   );
+}
+
+/* ---- R19 active-track fallback sheet (th_mto5fdf6) -----------------------
+   research (R19): Resolve/Premiere clear the inspector on empty selection;
+   track-level inspection is the Fairlight precedent — the reviewer's
+   active-track instinct is the better default. Track derivation rides the
+   store helper activeTrackOf (↑/↓ focused track → playhead's topmost visual
+   track → first main → first track), so the rail is never dead. */
+
+const TRACK_KIND_LABEL: Record<TrackJSON['kind'], string> = {
+  overlay: 'Overlay', main: 'Main', audio: 'Audio', caption: 'Caption',
+};
+
+/* local default for audio tracks the mixer sidecar hasn't seeded (added after
+   boot, before enterAudioFocus) — setMixerTrack merges the same shape in the
+   store, so a first write from here lands on a full record */
+const FALLBACK_STRIP: MixerTrackSettings = { fader: -6, pan: 0, inserts: [null, null], auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0 };
+
+const TRACK_TOGGLES: { field: 'muted' | 'solo' | 'locked' | 'visible'; label: string }[] = [
+  { field: 'muted', label: 'Mute' },
+  { field: 'solo', label: 'Solo' },
+  { field: 'locked', label: 'Lock' },
+  { field: 'visible', label: 'Visible' },
+];
+
+function TrackSheet({ scene, track }: { scene: SceneJSON; track: TrackJSON }) {
+  const toggleTrackCmd = useUi((s) => s.toggleTrackCmd);
+  const mixer = useUi((s) => s.mixer);
+  const setMixerTrack = useUi((s) => s.setMixerTrack);
+
+  const isAudio = track.kind === 'audio';
+  const strip = mixer.tracks[track.id] ?? FALLBACK_STRIP;
+  const role = mixer.roles[track.id] as Role | undefined;
+
+  const setInsert = (slot: 0 | 1, v: string | null) =>
+    setMixerTrack(track.id, { inserts: slot === 0 ? [v, strip.inserts[1]] : [strip.inserts[0], v] });
+
+  /* gap C44: active-track fallback — spec 18 §4.4 ruling for the seal */
+  return (
+    <div data-testid="shell-inspector-state-track" className="flex flex-col">
+      {/* hint row — the reviewer's route back to clip fields */}
+      <div className="flex items-center gap-2 border-b border-hairline bg-inset px-3 py-1.5" data-testid="shell-inspector-track-hint">
+        <span className="text-[11px] text-tmuted">Select a clip to edit clip parameters</span>
+      </div>
+
+      <Group title="Track">
+        <div className="flex items-center gap-2">
+          <span className="w-[86px] shrink-0 text-[11px] text-tmuted">Kind</span>
+          <span className="text-[11px] text-tprimary">{TRACK_KIND_LABEL[track.kind]}</span>
+          <span className="mono ml-auto text-[11px] text-tmuted">{track.elements.length} clips</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* REAL toggles: toggleTrackCmd is withHistory — these are the same
+              commands the track headers issue, not display state */}
+          {TRACK_TOGGLES.map(({ field, label }) => (
+            <button
+              key={field}
+              type="button"
+              className="mini-btn"
+              aria-pressed={track[field]}
+              aria-label={`Toggle ${label.toLowerCase()} on track ${track.badge}`}
+              data-testid={`shell-inspector-track-${field}`}
+              data-tip={`${label} — real toggleTrackCmd write (undoable)`}
+              onClick={() => toggleTrackCmd(scene.id, track.id, field)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Group>
+
+      {isAudio && (
+        <Group title="Mixer">
+          {/* role label — mockMixer client-side tag (spec 09 has no role field) */}
+          {role && (
+            <div className="flex items-center gap-2">
+              <span className="w-[86px] shrink-0 text-[11px] text-tmuted">Role</span>
+              <span className="insp-badge">{ROLE_LABEL[role]}</span>
+            </div>
+          )}
+          <ParamRow
+            label="Fader"
+            value={strip.fader}
+            min={-60}
+            max={6}
+            step={0.5}
+            unit=" dB"
+            decimals={1}
+            resetTo={0}
+            title="Track fader (G-layer strip, spec 20 §4.2) — real setMixerTrack write"
+            onCommit={(v) => setMixerTrack(track.id, { fader: v })}
+          />
+          <ParamRow
+            label="Pan"
+            value={strip.pan}
+            min={-100}
+            max={100}
+            resetTo={0}
+            title="Track pan: −100 = full left · +100 = full right — real setMixerTrack write"
+            onCommit={(v) => setMixerTrack(track.id, { pan: v })}
+          />
+          {([0, 1] as const).map((slot) => (
+            <div key={slot} className="flex items-center gap-2">
+              <span className="w-[86px] shrink-0 text-[11px] text-tmuted">Insert {slot + 1}</span>
+              <select
+                className="field min-w-0 flex-1 cursor-pointer"
+                aria-label={`Insert slot ${slot + 1} on track ${track.badge}`}
+                data-testid={`shell-inspector-track-insert-${slot + 1}`}
+                value={strip.inserts[slot] ?? ''}
+                onChange={(e) => setInsert(slot, e.target.value || null)}
+              >
+                <option value="">—</option>
+                <option value="EQ">EQ</option>
+                <option value="Comp">Comp</option>
+                <option value="Gate">Gate</option>
+                <option value="De-esser">De-esser</option>
+              </select>
+            </div>
+          ))}
+          <div className="flex items-center gap-2">
+            <span className="w-[86px] shrink-0 text-[11px] text-tmuted">Output</span>
+            <select
+              className="field min-w-0 flex-1 cursor-pointer"
+              aria-label={`Output bus on track ${track.badge}`}
+              data-testid="shell-inspector-track-output"
+              value={strip.outputBus}
+              onChange={(e) => setMixerTrack(track.id, { outputBus: Number(e.target.value) as 0 | 1 | 2 })}
+            >
+              <option value={0}>Master</option>
+              <option value={1}>A1 {mixer.buses.a1.name}</option>
+              <option value={2}>A2 {mixer.buses.a2.name}</option>
+            </select>
+          </div>
+        </Group>
+      )}
+    </div>
+  );
+}
+
+/* header law: "Track — {badge} {name}" (deduped when badge === name — every
+   scene-1 lane is badge-eponymous: V1/A1/…); lives in the caller so the panel
+   header + the sheet agree without prop drilling the title */
+export function trackSheetTitle(track: TrackJSON): string {
+  return track.badge === track.name ? `Track — ${track.badge}` : `Track — ${track.badge} ${track.name}`;
 }
 
 /* ---- Effects tab (single selection) ------------------------------------ */
@@ -647,23 +931,84 @@ function TransitionTab({ els, nextEl }: { els: ElementJSON[]; nextEl: ElementJSO
   );
 }
 
+/* ---- R19 Clip Equalizer: 4 vertical band sliders (audio_editor_ui ref) ---
+   Vertical orientation via writing-mode (the modern CSS range idiom). Band
+   edits preserve the OTHER bands per element — a multi-select commit writes
+   only the touched band on every selected clip (the honest per-element
+   fan-out; the real shell coalesces, spec 15 §7). */
+
+function EqBand({ els, i }: { els: ElementJSON[]; i: number }) {
+  const setElementField = useUi((s) => s.setElementField);
+  const [drag, setDrag] = useState<number | null>(null);
+  const committed = commonOf(els.map((e) => eqOf(e)[i]));
+  const shown = drag ?? committed.value;
+  /* reference axis law: 5 corner labels (62/250/1K/4K/16K) over 4 editable
+     points — band i spans corner i → i+1 */
+  const range = `${EQ_BAND_HZ[i]}–${EQ_BAND_HZ[i + 1]}`;
+  /** write ONLY band i, preserving each element's other bands */
+  const writeBand = (v: number) => els.forEach((e) => setElementField(e.id, { eq: withBand(eqOf(e), i, clamp(Math.round(v), -24, 24)) }));
+  return (
+    <div className="flex w-[48px] shrink-0 flex-col items-center gap-1" data-testid={`shell-inspector-eq-band-${i + 1}`}>
+      <span className="insp-badge" data-testid={`shell-inspector-eq-value-${i + 1}`}>
+        {shown > 0 ? '+' : ''}{Math.round(shown)}
+      </span>
+      {committed.mixed ? (
+        /* §4.4 mixed multi-select: values differ — slider hides, reset writes all */
+        <span className="chip-mixed" data-testid="chip-mixed-values">Mixed</span>
+      ) : (
+        <input
+          type="range"
+          min={-24}
+          max={24}
+          step={1}
+          value={shown}
+          aria-label={`Clip equalizer band ${i + 1} (${range} Hz) gain`}
+          data-testid={`shell-inspector-eq-slider-${i + 1}`}
+          /* vertical slider — writing-mode per the CSS range spec; jsdom
+             ignores it, browsers render the reference's vertical bands */
+          style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
+          className="h-[88px]"
+          onChange={(e) => setDrag(Number(e.target.value))}
+          onPointerUp={() => { if (drag !== null) { writeBand(drag); setDrag(null); } }}
+          onPointerCancel={() => setDrag(null)}
+          onKeyUp={() => { if (drag !== null) { writeBand(drag); setDrag(null); } }}
+          onDoubleClick={() => { setDrag(null); writeBand(0); }}
+        />
+      )}
+      <button
+        type="button"
+        className="mini-btn"
+        aria-label={`Reset EQ band ${i + 1} (${range})`}
+        data-testid={`shell-inspector-eq-reset-${i + 1}`}
+        data-tip="Reset this band to 0 dB (all selected clips)"
+        onClick={() => { setDrag(null); writeBand(0); }}
+      >
+        0
+      </button>
+    </div>
+  );
+}
+
 /* ---- the panel ----------------------------------------------------------- */
 
 export function Inspector() {
   const selection = useUi((s) => s.selection);
   const scenes = useUi((s) => s.scenes);
+  const activeSceneId = useUi((s) => s.activeSceneId);
+  const focusedTrackId = useUi((s) => s.focusedTrackId);
+  const playhead = useUi((s) => s.playhead);
   const tab = useUi((s) => s.inspectorTab);
   const setTab = useUi((s) => s.setInspectorTab);
   const setElementField = useUi((s) => s.setElementField);
   const pushToast = useUi((s) => s.pushToast);
 
   /* mock-only model extensions (see header): transform position/scale/
-     rotation + flips, gain-dB/pan, preserve-pitch. Keyed by element id —
-     survive tab switches and selection changes, reset on reload. The real
-     shell persists these to spec 09 via updateElements. */
+     rotation + flips, preserve-pitch. Keyed by element id — survive tab
+     switches and selection changes, reset on reload. The real shell persists
+     these to spec 09 via updateElements. (R19: the former mock-local
+     gain/pan pair moved to REAL el.volume/pan/eq fields — see the audio tab.) */
   const [mockT, setMockT] = useState<Record<string, MockTransform>>({});
   const [flips, setFlips] = useState<ReadonlySet<string>>(() => new Set()); // `${id}:h` | `${id}:v`
-  const [mockA, setMockA] = useState<Record<string, MockAudio>>({});
   const [pitch, setPitch] = useState<Record<string, boolean>>({});
 
   const found = selection
@@ -673,6 +1018,12 @@ export function Inspector() {
   const multi = els.length > 1;
   const single = els.length === 1 ? els[0] : null;
   const nextEl = found.length === 1 ? nextOnTrack(found[0].track.elements, found[0].element) : null;
+
+  /* th_mto5fdf6: the empty-selection fallback track (derivation law lives in
+     the store helper — focused ↑/↓ track, playhead's topmost visual track,
+     first main, first track) */
+  const scene = scenes.find((x) => x.id === activeSceneId) ?? scenes[0];
+  const fallbackTrack = els.length === 0 && scene ? activeTrackOf(scene, focusedTrackId, playhead) : null;
 
   /** fan-out write — mock: one write per element; real shell = one coalesced
       updateElements batch (spec 15 §7 / spec 06 §4.6) */
@@ -686,15 +1037,9 @@ export function Inspector() {
   }
 
   const mtOf = (id: string): MockTransform => mockT[id] ?? DEFAULT_MT;
-  const maOf = (id: string): MockAudio => mockA[id] ?? DEFAULT_MA;
   const setMockTAll = (patch: Partial<MockTransform>) => setMockT((prev) => {
     const next = { ...prev };
     for (const e of els) next[e.id] = { ...(prev[e.id] ?? DEFAULT_MT), ...patch };
-    return next;
-  });
-  const setMockAAll = (patch: Partial<MockAudio>) => setMockA((prev) => {
-    const next = { ...prev };
-    for (const e of els) next[e.id] = { ...(prev[e.id] ?? DEFAULT_MA), ...patch };
     return next;
   });
   const flipAll = (axis: 'h' | 'v') => {
@@ -730,11 +1075,6 @@ export function Inspector() {
     setFieldAll({ speed: 1 });
     setPitch((prev) => { const n = { ...prev }; for (const e of els) delete n[e.id]; return n; });
   };
-  const resetLevels = () => setMockA((prev) => {
-    const n = { ...prev };
-    for (const e of els) delete n[e.id];
-    return n;
-  });
   const resetFades = () => setFieldAll({ audioFadeIn: 0, audioFadeOut: 0 });
 
   const allVideo = els.length > 0 && els.every((e) => e.type === 'video');
@@ -783,11 +1123,11 @@ export function Inspector() {
         </button>
       </div>
 
-      {/* header */}
+      {/* header — empty selection titles the ACTIVE TRACK sheet (th_mto5fdf6) */}
       <div className="flex items-center border-b border-hairline px-3" style={{ height: 30, minHeight: 30 }}>
         <span className="truncate text-[12.5px] font-semibold text-tprimary">
           {els.length === 0
-            ? 'Nothing to inspect'
+            ? (fallbackTrack ? trackSheetTitle(fallbackTrack) : 'Nothing to inspect')
             : multi
               ? `${els.length} clips selected`
               : single?.name}
@@ -827,9 +1167,13 @@ export function Inspector() {
       {/* content — keyed by selection so fields resync on selection change */}
       <div id={`insp-${activeTab}`} role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="scroll-y min-h-0 flex-1">
         {els.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-[13px] text-tmuted" data-testid="shell-inspector-state-empty">
-            Nothing to inspect
-          </div>
+          /* ACTIVE-TRACK fallback: the tab strip stays (Video active, no clip
+             fields) — th_mto5fdf6 */
+          scene && fallbackTrack ? <TrackSheet scene={scene} track={fallbackTrack} /> : (
+            <div className="flex h-full items-center justify-center text-[13px] text-tmuted" data-testid="shell-inspector-state-empty">
+              Nothing to inspect
+            </div>
+          )
         ) : (
           <div key={els.map((e) => e.id).join('·')} className="flex flex-col">
             {/* ---- Video tab: transform + speed (visual elements) ---- */}
@@ -936,33 +1280,76 @@ export function Inspector() {
               </>
             )}
 
-            {/* ---- Audio tab: levels + fades (audio-bearing) ---- */}
+            {/* ---- Audio tab: the audio_editor_ui reference sections + fades ----
+                All four clip sections are REAL store writes (el.volume/pan/
+                pitchSemitones/pitchCents/eq — gap C35: the engine round is the
+                boundary; the former mock-local gain/pan pair is gone). */}
             {activeTab === 'audio' && (
               <>
                 {!multi && single?.mediaId && <SourceCard el={single} />}
-                {/* gain-dB/pan: ElementJSON has no dB/pan fields (spec 03 §9
-                    maps them onto the audio graph) — mock-local, honest */}
-                <Group title="Levels" onReset={resetLevels}>
+                <Group title="Clip Volume" collapsible onReset={() => setFieldAll({ volume: 1 })}>
+                  {/* dB display + dB→linear write (see volToDb/dbToVol header
+                      comment: spec 09 volume is a linear multiplier) */}
                   <ParamRow
-                    label="Gain"
-                    {...agg((e) => maOf(e.id).gainDb)}
-                    min={-48}
-                    max={12}
+                    label="Volume"
+                    {...agg((e) => volToDb(e.volume ?? 1))}
+                    min={VOL_DB_MIN}
+                    max={VOL_DB_MAX}
                     step={0.5}
                     unit=" dB"
                     decimals={1}
-                    resetTo={DEFAULT_MA.gainDb}
-                    onCommit={(v) => setMockAAll({ gainDb: v })}
+                    resetTo={0}
+                    title="Clip volume in dB (reference range −24..+12) — writes the linear ElementJSON.volume"
+                    onCommit={(v) => setFieldAll({ volume: dbToVol(v) })}
                   />
+                </Group>
+                <Group title="Clip Pan" collapsible onReset={() => setFieldAll({ pan: 0 })}>
                   <ParamRow
                     label="Pan"
-                    {...agg((e) => maOf(e.id).pan)}
+                    {...agg((e) => e.pan ?? 0)}
+                    min={-1}
+                    max={1}
+                    step={0.05}
+                    decimals={2}
+                    resetTo={0}
+                    title="Clip pan: −1 = full left · +1 = full right (per-clip, gap C35)"
+                    onCommit={(v) => setFieldAll({ pan: clamp(v, -1, 1) })}
+                  />
+                </Group>
+                <Group title="Clip Pitch" collapsible onReset={() => setFieldAll({ pitchSemitones: 0, pitchCents: 0 })}>
+                  <ParamRow
+                    label="Semi Tones"
+                    {...agg((e) => e.pitchSemitones ?? 0)}
+                    min={-12}
+                    max={12}
+                    resetTo={0}
+                    title="Pitch shift in semitones (per-clip, gap C35)"
+                    onCommit={(v) => setFieldAll({ pitchSemitones: clamp(Math.round(v), -12, 12) })}
+                  />
+                  <ParamRow
+                    label="Cents"
+                    {...agg((e) => e.pitchCents ?? 0)}
                     min={-100}
                     max={100}
-                    resetTo={DEFAULT_MA.pan}
-                    onCommit={(v) => setMockAAll({ pan: v })}
-                    title="Pan: -100 = full left · +100 = full right"
+                    resetTo={0}
+                    title="Pitch fine-tune in cents (per-clip, gap C35)"
+                    onCommit={(v) => setFieldAll({ pitchCents: clamp(Math.round(v), -100, 100) })}
                   />
+                </Group>
+                <Group title="Clip Equalizer" collapsible onReset={() => setFieldAll({ eq: [0, 0, 0, 0] })}>
+                  {/* 4 vertical band sliders — the reference's EQ graph
+                      condensed to the honest editable bands */}
+                  <div className="flex items-start justify-between px-1 pt-1" data-testid="shell-inspector-eq">
+                    {[0, 1, 2, 3].map((i) => <EqBand key={i} els={els} i={i} />)}
+                  </div>
+                  {/* frequency axis — 5 corner labels over the 4 points
+                      (62 / 250 / 1K / 4K / 16K, the reference's justify-between axis) */}
+                  <div className="flex justify-between px-1 pt-0.5" aria-hidden="true">
+                    {EQ_BAND_HZ.map((hz) => <span key={hz} className="mono text-[10px] text-tmuted">{hz}</span>)}
+                  </div>
+                  <p className="text-[10px] leading-[1.4] text-tfaint">
+                    Bands 62–250 · 250–1K · 1K–4K · 4K–16K Hz, ±24 dB — per-band reset + double-click; master Reset zeroes all four.
+                  </p>
                 </Group>
                 <Group title="Fades" onReset={resetFades}>
                   <ParamRow

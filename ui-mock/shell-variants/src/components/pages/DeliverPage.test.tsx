@@ -1,13 +1,16 @@
-/* DeliverPage — spec 18 §4.8 / specs 10-11 export rail. Presets are local
+/* DeliverPage — spec 18 §4.8 / specs 10-11 export surface. R19 th_mto37ba3:
+   the page is now a FULL-VIEW 3-region export surface (queue+presets /
+   summary incl. the store-driven range / render settings). Presets are local
    React state; the toast queue lives in the store. These tests pin the
-   three preset buttons, the preset→CTA label coupling, the render-settings
-   block, the job queue (done rows + one running row with progress + retry,
-   §6.4 error UX), and the honest-mock export behavior (R13: CTA + Reveal/
-   Retry push info toasts — no encode ever runs — and the CTA appends a
-   static queued job row). */
+   three regions, the preset→CTA label coupling, the store-loop-driven
+   range block + select options, the render-settings block, the job queue
+   (done rows + one running row with progress + retry, §6.4 error UX), and
+   the honest-mock export behavior (R13: CTA + Reveal/Retry push info
+   toasts — no encode ever runs — and the CTA appends a static queued job
+   row). */
 
 import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DeliverPage } from './DeliverPage';
 import { useUi } from '../../state/useUiStore';
@@ -33,6 +36,60 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(screen.getByTestId('shell-deliver-btn-export-fcpxml')).toHaveTextContent('Export FCPXML 1.10');
   });
 
+  /* th_mto37ba3: the full-view surface — three regions, fill-whatever-
+     container layout (left queue + presets / center summary / right
+     settings); preset tiles carry the th_mto38qzp breathing-room chrome
+     (2-col wrapping grid, taller tiles) */
+  it('renders the three full-view regions (queue / summary / settings) with layout classes', () => {
+    const { container } = render(<DeliverPage />);
+    expect(screen.getByTestId('shell-deliver-queue')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-settings')).toBeInTheDocument();
+    // region minimums: left 260px, right 300px (the center flexes)
+    expect(screen.getByTestId('shell-deliver-queue')).toHaveClass('min-w-[260px]');
+    expect(screen.getByTestId('shell-deliver-settings')).toHaveClass('min-w-[300px]');
+    // th_mto38qzp: the preset grid is 2-col + tiles have a min-height floor
+    const grid = container.querySelector('.grid-cols-2');
+    expect(grid).toBeInTheDocument();
+    expect(grid!.querySelector('[data-testid="shell-deliver-preset-fcpxml"]')).toHaveClass('min-h-[78px]');
+    // presets + the job queue share the LEFT region
+    expect(screen.getByTestId('shell-deliver-queue').contains(screen.getByTestId('shell-deliver-preset-master'))).toBe(true);
+    expect(screen.getByTestId('shell-deliver-queue').contains(screen.getAllByTestId('shell-deliver-job')[0])).toBe(true);
+  });
+
+  /* th_mto37ba3: the RANGE block reads the STORE loop (spec 16 §3.4 —
+     timeline I/O marks are the deliver range), not a hardcoded string */
+  it('the range summary mirrors the store loop in/out TCs and follows a loop change', () => {
+    render(<DeliverPage />);
+    const rangeBlock = screen.getByTestId('shell-deliver-range');
+    expect(rangeBlock).toHaveTextContent('00:00:02:00 → 00:00:28:00'); // boot loop {2, 28}
+    expect(screen.getByText('In → Out range selection')).toBeInTheDocument();
+    expect(screen.getByText(/set I\/O on the timeline/)).toBeInTheDocument();
+    // moving the timeline I/O moves the deliver readout + the select option
+    act(() => { useUi.setState({ loop: { start: 5, end: 20 } }); });
+    expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:05:00 → 00:00:20:00');
+    const select = screen.getByLabelText('Export range') as HTMLSelectElement;
+    expect(within(select).getByRole('option', { name: /00:00:05:00 – 00:00:20:00/ })).toBeInTheDocument();
+  });
+
+  it('center summary shows the active timeline name and the right region owns the settings selects', () => {
+    render(<DeliverPage />);
+    expect(screen.getByText('Rough Cut v3')).toBeInTheDocument(); // active scene = the export target
+    // format select mirrors preset state (fcpxml default)
+    expect((screen.getByLabelText('Export format') as HTMLSelectElement).value).toBe('fcpxml');
+    // codec only applies to the video master — honestly disabled otherwise
+    const codec = screen.getByLabelText('Export codec') as HTMLSelectElement;
+    expect(codec).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Export format'), { target: { value: 'master' } });
+    expect((screen.getByLabelText('Export codec') as HTMLSelectElement)).toBeEnabled();
+    // the format select and the preset tiles are the SAME choice
+    expect(screen.getByTestId('shell-deliver-btn-export-fcpxml')).toHaveTextContent('Export Master · H.264');
+    // summary follows the format + codec once a master is chosen
+    expect(screen.getByTestId('shell-deliver-summary').textContent).toContain('Codec');
+    fireEvent.change(screen.getByLabelText('Export codec'), { target: { value: 'prores' } });
+    expect(screen.getByTestId('shell-deliver-summary').textContent).toContain('ProRes 422');
+  });
+
   it('clicking a preset updates the export CTA label (local state, §4.8)', async () => {
     const user = userEvent.setup();
     render(<DeliverPage />);
@@ -51,7 +108,10 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(within(range).getByRole('option', { name: /Full timeline/ })).toBeInTheDocument();
     const res = screen.getByLabelText('Export resolution') as HTMLSelectElement;
     expect(within(res).getAllByRole('option')).toHaveLength(2);
-    expect(screen.getByText('~/Downloads/beach-doc/')).toBeInTheDocument();
+    /* th_mto37ba3 (full-view redesign): the destination readout now lives in
+       BOTH the center summary and the right settings field — one string, two
+       honest mirrors; assert both instead of the old single rail copy */
+    expect(screen.getAllByText('~/Downloads/beach-doc/')).toHaveLength(2);
     expect(screen.getByLabelText('Bundle media with FCPXML')).toBeChecked();
   });
 

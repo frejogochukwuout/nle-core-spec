@@ -78,10 +78,10 @@ describe('SceneTabs', () => {
 
   it('closing a scene WITH clips confirms first; confirm deletes (spec 18 §6.4 destructive confirm)', () => {
     boot({});
-    fireEvent.click(screen.getByRole('button', { name: 'Close scene Rough Cut v3' })); // 7 clips
+    fireEvent.click(screen.getByRole('button', { name: 'Close scene Rough Cut v3' })); // 12 clips (7 + 5 captions)
     expect(screen.getByTestId('shell-confirm')).toBeInTheDocument();
     expect(screen.getByText('Delete scene Rough Cut v3?')).toBeInTheDocument();
-    expect(screen.getByText(/7 clips will be lost/)).toBeInTheDocument();
+    expect(screen.getByText(/12 clips will be lost/)).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('shell-confirm-confirm'));
     expect(store().scenes.map((s) => s.id)).toEqual(['sc-2']);
     expect(store().activeSceneId).toBe('sc-2'); // fell back to the previous scene

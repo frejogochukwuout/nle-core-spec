@@ -121,29 +121,55 @@ describe('MixerDock', () => {
     expect(screen.getByTestId('mixer-strip-A1').className).toContain('ring-1');
   });
 
-  it('master strip: accent-tinted fader cap + accent-gradient base bar + readout row (A4)', () => {
+  it('master strip: accent top bar + accent fader cap + headroom readout (A4/R19-B1)', () => {
     boot({ mixerState: 'full' });
     const master = screen.getByTestId('mixer-strip-master');
     const thumb = master.querySelector('[data-testid="fader-thumb"]') as HTMLElement;
     expect(thumb.style.background).toContain('var(--fader-cap-accent-1)'); // accent pair, flat
     expect(thumb.style.background).toContain('var(--fader-cap-accent-2)');
     expect(thumb.style.background).not.toContain('var(--fader-thumb-1)'); // NOT the neutral pair
-    const bar = screen.getByTestId('mixer-basebar-master');
+    const bar = screen.getByTestId('mixer-topbar-master');
     expect(bar.style.background).toContain('var(--fader-cap-accent-1)');
     expect(bar.style.background).toContain('var(--fader-cap-accent-2)');
-    expect(bar.className).toContain('h-1');
+    expect(bar.className).toContain('h-[3px]'); // 3px TOP bar (R19-B1 replaces the h-1 bottom bar)
     const row = screen.getByTestId('mixer-readout-master');
     expect(row.className).toContain('mono');
-    expect(within(row).getByText('-8.5 dB')).toBeInTheDocument(); // 0.78 volume → −8.5 dB
+    expect(within(row).getByText('-8.5')).toBeInTheDocument(); // 0.78 volume → −8.5 dB, no unit
+  });
+
+  it('master anatomy (reference M1): M-only RSM, no pan box, 2 add chips, no input row (R19-B1)', () => {
+    boot({ mixerState: 'full' });
+    const master = screen.getByTestId('mixer-strip-master');
+    expect(within(master).getByRole('button', { name: 'Master mute' })).toBeInTheDocument();
+    expect(within(master).queryByRole('slider', { name: /pan/i })).toBeNull(); // no pan box
+    expect(within(master).queryByTestId('strip-input')).toBeNull(); // hidden spacer, not a visible row
+    expect(within(master).getAllByTestId('fx-add')).toHaveLength(2); // no master insert model → honest adds
+    expect(within(master).queryAllByTestId('fx-chip')).toHaveLength(0);
+    expect(within(master).getByTestId('strip-graphs')).toBeInTheDocument(); // master keeps the thumbnails
+  });
+
+  it('the dock\'s right edge carries the aux/master bank: channels scroll, aux+master pin outside (th_mto63f99)', () => {
+    boot({ mixerState: 'full' });
+    const dock = screen.getByTestId('mixer-dock-full');
+    const children = Array.from(dock.children);
+    // [header | channel scroll region | aux a1 | aux a2 | master]
+    expect(children).toHaveLength(5);
+    expect(dock.lastElementChild).toHaveAttribute('data-testid', 'mixer-strip-master');
+    expect(children[3]).toHaveAttribute('data-testid', 'mixer-strip-aux-a2');
+    const scroll = children[1] as HTMLElement;
+    expect(scroll.className).toContain('overflow-x-auto'); // channels own the overflow
+    expect(within(scroll).getByTestId('mixer-strip-A1')).toBeInTheDocument();
+    expect(within(scroll).getByTestId('mixer-strip-A2')).toBeInTheDocument();
+    expect(within(scroll).queryByTestId('mixer-strip-master')).toBeNull(); // master never scrolls away
   });
 
   it('master readout −∞ guard: volume 0 (or mute) reads −∞, not −60.0 (A3)', () => {
     boot({ mixerState: 'full', masterVolume: 0 });
     const row = screen.getByTestId('mixer-readout-master');
     // at the volume floor BOTH the fader dB and the peak read −∞ (the guard),
-    // and the fake "-60.0 dB" never renders
+    // and the fake "-60.0" never renders
     expect(within(row).getAllByText('−∞')).toHaveLength(2);
-    expect(within(row).queryByText('-60.0 dB')).toBeNull();
+    expect(within(row).queryByText('-60.0')).toBeNull();
   });
 
   it('master readout follows the live engine peak (one key with bridge/toolbar views)', () => {

@@ -148,13 +148,16 @@ describe('mixer dock (design doc v2.2 §4 — side by side with the lanes)', () 
 });
 
 describe('page switching via the AppDock (spec 18 §4.8)', () => {
-  it('Edit → Color swaps the right rail: ColorPage in, Inspector out (same rail width)', async () => {
+  it('Edit → Color swaps the rail to the grading panel + node graph dock + scopes (R19 composition)', async () => {
     const user = userEvent.setup();
     renderAppShell();
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
     await user.click(screen.getByTestId('shell-dock-page-color'));
     expect(store().page).toBe('color');
-    expect(screen.getByTestId('shell-color')).toBeInTheDocument();
+    // rail = the wheels/qualifier tabs; left dock = the node graph; scopes under the viewer
+    expect(screen.getByTestId('shell-color-rail')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-nodegraph')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Color' })).toHaveAttribute('aria-current', 'page');
   });
@@ -215,12 +218,16 @@ describe('inspector tab bar + toolbar panel toggles', () => {
     expect(screen.getByTestId('shell-mediapool')).toBeInTheDocument();
   });
 
-  it('toolbar Effects toggle mounts the Effects library region (§4.1 mock)', async () => {
+  it('toolbar Effects toggle: the LeftDock tabs appear and the Effects tab carries the library (R19 th_mtoyt5fv — same area as the bin)', async () => {
     const user = userEvent.setup();
     renderAppShell();
     expect(screen.queryByTestId('shell-effects')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('shell-toolbar-btn-effects'));
     expect(store().panels.effects).toBe(true);
+    // both panels on → the dock is tabbed; the POOL tab is active by default
+    expect(screen.getByTestId('shell-leftdock-tab-pool')).toHaveAttribute('aria-selected', 'true');
+    await user.click(screen.getByTestId('shell-leftdock-tab-effects'));
+    expect(screen.getByTestId('shell-leftdock-tab-effects')).toHaveAttribute('aria-selected', 'true');
     const effects = screen.getByTestId('shell-effects');
     expect(within(effects).getByText('Gaussian Blur')).toBeInTheDocument();
     expect(within(effects).getByText('Cross Dissolve')).toBeInTheDocument();
@@ -230,6 +237,7 @@ describe('inspector tab bar + toolbar panel toggles', () => {
     const user = userEvent.setup();
     renderAppShell();
     await user.click(screen.getByTestId('shell-toolbar-btn-effects'));
+    await user.click(screen.getByTestId('shell-leftdock-tab-effects'));
     const row = screen.getByTestId('shell-effects-row-gaussian-blur');
     expect(row).toHaveAttribute('draggable', 'true');
     // jsdom has no DataTransfer — a recording stub pins the contract payload
@@ -247,6 +255,7 @@ describe('inspector tab bar + toolbar panel toggles', () => {
     const user = userEvent.setup();
     renderAppShell();
     await user.click(screen.getByTestId('shell-toolbar-btn-effects'));
+    await user.click(screen.getByTestId('shell-leftdock-tab-effects'));
     await user.click(screen.getByTestId('shell-effects-row-vignette'));
     expect(store().toasts.at(-1)).toMatchObject({
       kind: 'info',
@@ -457,5 +466,28 @@ describe('splitter keyboard resize (R14 — the keyStep implementation finally p
     expect(store().mediaW).toBe(280);
     fireEvent.keyDown(sep, { key: 'ArrowRight' });
     expect(store().mediaW).toBe(288);
+  });
+});
+
+describe('R19 rail routing: marker / caption selection swaps the inspector (AppShell seam)', () => {
+  it('a selected marker swaps the rail for the embedded MarkerInspector; Done returns to the clip inspector', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ selection: [], selectedMarkerId: 'mk-2' });
+    expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('shell-marker-inspector-done'));
+    expect(store().selectedMarkerId).toBe(null);
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
+  });
+
+  it('a single caption-track selection swaps the rail for the CaptionInspector; clip selection returns', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ selection: ['cap-3'] });
+    expect(screen.getByTestId('shell-caption-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
+    // selecting a VIDEO clip clears the caption rail via the store's selection-domain swap
+    await user.click(screen.getByTestId('clip-el-1'));
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-caption-inspector')).not.toBeInTheDocument();
   });
 });

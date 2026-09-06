@@ -4,7 +4,16 @@
    MM:SS / H:MM:SS at second boundaries and `Xf` between, ticks virtualized
    to the visible window + buffer. Still: click-to-seek, in/out + loop
    shading with BRACKETS, markers (spec 16 §3.7 palette). 44px zone in
-   readout mode (labels + tick strip), 22px slim. */
+   readout mode (labels + tick strip), 22px slim.
+   R19 markers v2 (th_mto2ytyo): the ruler is split into TWO bands — (top)
+   the tick + timecode band, (bottom) a DEDICATED MARKER BAND (~10-14px,
+   inset background + top hairline separator) where point pins (shields,
+   10×13) and RANGE markers (translucent fill + 2px rails + shield end caps,
+   timeline-marker-only.html §1.3/§1.4) live. Markers never visually enter
+   lane territory. Pins are CLICKABLE (selectMarker — the inspector rail
+   swaps to MarkerInspector) and keyboard-operable (Enter).
+   R19 th_mto2ook8: in/out brackets clamp into [0, contentW−13] and mirror
+   their fan glyph when clamped so they stay fully visible + point inward. */
 
 import { useEffect, useRef, useState } from 'react';
 import { useUi } from '../../state/useUiStore';
@@ -16,12 +25,61 @@ import { getRulerConfig, shouldShowLabel, formatRulerLabel, getRulerWindow, tick
 import type { Marker, SceneJSON } from '../../lib/mockData';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 
-const MARKER_COLORS: Record<Marker['color'], string> = {
+/* shared marker-color map — Clip.tsx renders clip markers with the same
+   8-token palette (single source, no cycle: Clip imports this module). */
+export const MARKER_COLORS: Record<Marker['color'], string> = {
   red: 'var(--mk-red)', orange: 'var(--mk-orange)', yellow: 'var(--mk-yellow)', green: 'var(--mk-green)',
   blue: 'var(--mk-blue)', purple: 'var(--mk-purple)', pink: 'var(--mk-pink)', gray: 'var(--mk-gray)',
 };
 
 const MARKER_COLOR_ORDER: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
+
+/* shield pin path (spec 05-family): flat-bottom pennant, 10×13 viewBox —
+   shared by the ruler point pins, the range end caps, and the clip markers
+   (Clip.tsx renders the same path scaled to 8×10). */
+const SHIELD_PATH = 'M0 0h10v7.2L5 12.2 0 7.2V0z';
+
+/* fixes th_mto2ytyo — DEDICATED MARKER BAND geometry: bottom strip of the
+   ruler zone, separated from the tick/label band by a hairline. Readout
+   mode gets 14px (full 10×13 pins); slim mode 10px (pins scaled 8×10 — the
+   same shield shape, no lane overflow). */
+const markerBandHeight = (readout: boolean) => (readout ? 14 : 10);
+
+/* §4.9 "Go to Marker ›" — REAL now (was honest-disabled): a custom menu row
+   that expands an inline marker list (label + timecode); picking a row sets
+   the playhead. The row owns its activation + menu.close() (custom-row
+   contract); the toggle is aria-expanded so the submenu reads as such. */
+function MarkerNavRow({ markers, onGo }: { markers: Marker[]; onGo: (t: number) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex w-full flex-col">
+      <button
+        type="button"
+        role="menuitem"
+        aria-expanded={open}
+        data-testid="shell-menu-ruler-goto-marker"
+        className="menu-item"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="min-w-0 flex-1 truncate text-left">Go to Marker</span>
+        <span className="menu-sc mono" aria-hidden="true">{open ? '⌃' : '›'}</span>
+      </button>
+      {open && markers.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          role="menuitem"
+          data-testid={`shell-menu-ruler-goto-${m.id}`}
+          className="menu-item pl-6"
+          onClick={() => onGo(m.time)}
+        >
+          <span className="min-w-0 flex-1 truncate text-left">{m.label}</span>
+          <span className="menu-sc mono">{tc(m.time)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /* §4.9 marker-color palette — ONE shared builder (R14 no-op sweep: the
    TimelineToolbar marker-color button rendered this same dot row as a dead
@@ -68,12 +126,22 @@ export function markerColorItems(
 export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: { scene: SceneJSON; duration: number; pxPerSec: number; playhead: number; contentW: number; view: { scrollLeft: number; viewportW: number } }) {
   const headerStyle = useHeaderStyle();
   const zoneH = headerStyle === 'readout' ? 44 : 22;
+  /* R19 markers v2 band geometry (th_mto2ytyo) */
+  const readout = headerStyle === 'readout';
+  const bandH = markerBandHeight(readout);
+  const bandTop = zoneH - bandH; // ticks/labels/brackets live above this line
+  const pinW = readout ? 10 : 8;  // slim scales the same shield shape
+  const pinH = readout ? 13 : 10;
   const setPlayhead = useUi((s) => s.setPlayhead);
   const loop = useUi((s) => s.loop);
   const loopEnabled = useUi((s) => s.loopEnabled);
   const addMarker = useUi((s) => s.addMarker);
   const clearInOut = useUi((s) => s.clearInOut);
   const setLoopEnabled = useUi((s) => s.setLoopEnabled);
+  /* R19 marker v2: pin/range selection routes the inspector rail (the
+     store's selectMarker clears the clip selection — one selection domain). */
+  const selectMarker = useUi((s) => s.selectMarker);
+  const selectedMarkerId = useUi((s) => s.selectedMarkerId);
   const menu = useContextMenu(); // §4.9 ruler menu
   const ref = useRef<HTMLDivElement>(null);
   /* gesture-origin gate: only the ruler's OWN press may seek — a drag that
@@ -168,11 +236,18 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
     },
   });
 
-  /* §4.9 ruler menu — marker at playhead, in/out clearing, loop toggle, and
-     the shared 8-color marker palette row (markerColorItems above). */
+  /* §4.9 ruler menu — marker at playhead, REAL Go-to-Marker submenu (R19:
+     was an honest-disabled stub), in/out clearing, loop toggle, and the
+     shared 8-color marker palette row (markerColorItems above). */
   const buildMenuItems = (): MenuItem[] => [
     { id: 'add-marker', label: 'Add marker at playhead', onSelect: () => addMarker(playhead) },
-    { id: 'goto-marker', label: 'Go to Marker ›', disabled: true, tip: 'mock: marker navigation list not built' },
+    scene.markers.length === 0
+      ? { id: 'goto-marker', label: 'Go to Marker ›', disabled: true, tip: 'mock: this scene has no markers yet' }
+      : {
+          id: 'goto-marker',
+          label: 'Go to Marker',
+          custom: <MarkerNavRow markers={scene.markers} onGo={(t) => { menu.close(); setPlayhead(t); }} />,
+        },
     { id: 'clear-markers', label: 'Clear Markers in View', disabled: true, tip: 'mock: view-range tracking not built (⇧M deletes at playhead)' },
     { id: 'mark-in', label: 'Mark In', shortcut: 'I', onSelect: () => useUi.getState().markIn() },
     { id: 'mark-out', label: 'Mark Out', shortcut: 'O', onSelect: () => useUi.getState().markOut() },
@@ -222,6 +297,19 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
 
   const bandLeft = snapPxToDeviceGrid(loop.start * pxPerSec);
   const bandW = Math.max(2, snapPxToDeviceGrid((loop.end - loop.start) * pxPerSec));
+
+  /* fixes th_mto2ook8 — bracket clamp + mirror: the fan glyphs clipped at
+     the content edges when the loop started/ended at the runway bounds.
+     Clamp the 13px-wide bracket boxes into [0, contentW−13]; when the clamp
+     bit, mirror the fan (scaleX(−1)) so it stays fully visible AND points
+     inward toward the loop region. */
+  const BRACKET_W = 13;
+  const inBracketX = Math.max(0, Math.min(bandLeft - 2, Math.max(0, contentW - BRACKET_W)));
+  const inClamped = bandLeft - 2 < 0;
+  const outBracketX = Math.max(0, Math.min(bandLeft + bandW - 7, Math.max(0, contentW - BRACKET_W)));
+  const outClamped = bandLeft + bandW - 7 > Math.max(0, contentW - BRACKET_W);
+  const bracketTop = readout ? 14 : 1;
+  const bracketH = bandTop - bracketTop - 1;
 
   return (
     <div
@@ -297,14 +385,30 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
       onLostPointerCapture={() => { seeking.current = false; scrubMoves.current = 0; edgeScrollRef.current?.stop(); }}
       onPointerLeave={() => setHoverT(null)}
     >
-      {/* ticks — virtualized CapCut-tier window (major = on the label grid) */}
+      {/* fixes th_mto2ytyo — DEDICATED MARKER BAND: inset background + top
+          hairline separator, the full content width. Point pins + range
+          markers render INSIDE it — markers never visually enter lane
+          territory. Z-order (documented): band bg = z-auto (first child,
+          paints below everything); ticks = un-z'd, later in DOM order so
+          they paint over the band's tint; loop band = z-auto; pins/ranges
+          z 6; brackets z 7 (the interactive edges win the hit test); the
+          playhead lives on the TIMELINE's z 100 line, above the whole ruler. */}
+      <div
+        data-testid="ruler-marker-band"
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-hairline"
+        style={{ height: bandH, background: 'color-mix(in srgb, var(--bg-inset) 70%, var(--bg-shell))' }}
+      />
+
+      {/* ticks — virtualized CapCut-tier window (major = on the label grid);
+          anchored to the MARKER BAND's top hairline (R19 band split) */}
       {ticks.map((t) => {
         const major = isMajor(t);
         return (
           <div
             key={t}
-            className="absolute bottom-0 w-px"
-            style={{ left: snapPxToDeviceGrid(t * pxPerSec), height: major ? tickH : tickH * 0.55, background: 'var(--text-faint)', opacity: major ? 0.9 : 0.45 }}
+            className="absolute w-px"
+            style={{ left: snapPxToDeviceGrid(t * pxPerSec), bottom: bandH, height: major ? tickH : tickH * 0.55, background: 'var(--text-faint)', opacity: major ? 0.9 : 0.45 }}
             data-testid={major ? 'ruler-tick-major' : 'ruler-tick-minor'}
           />
         );
@@ -328,7 +432,8 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
         className="absolute bottom-0 top-0"
         style={{ left: bandLeft, width: bandW, background: 'var(--accent-selection)', opacity: loopEnabled ? 0.24 : 0.13 }}
       />
-      {/* in bracket — interactive loop edge (R14: draggable + keyboard) */}
+      {/* in bracket — interactive loop edge (R14: draggable + keyboard;
+          R19 th_mto2ook8: clamped + mirrored at the left content edge) */}
       <div
         {...bracketHandlers('in')}
         role="slider"
@@ -339,14 +444,16 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
         aria-valuetext={tc(loop.start)}
         tabIndex={0}
         data-testid="shell-ruler-bracket-in"
+        data-mirrored={inClamped || undefined}
         className="pointer-events-auto absolute z-[7] flex cursor-ew-resize items-center"
-        style={{ left: bandLeft - 2, top: headerStyle === 'readout' ? 16 : 3, width: 13, height: zoneH - (headerStyle === 'readout' ? 18 : 5) }}
+        style={{ left: inBracketX, top: bracketTop, width: BRACKET_W, height: bracketH }}
       >
-        <svg className="pointer-events-none" width="9" height={zoneH - (headerStyle === 'readout' ? 18 : 5)} aria-hidden="true">
+        <svg className="pointer-events-none" width="9" height={bracketH} aria-hidden="true" style={inClamped ? { transform: 'scaleX(-1)' } : undefined}>
           <path d={`M7 0 L1 ${zoneH / 4} M7 0 L1 0 M7 0 L1 ${zoneH / 2.6}`} stroke="var(--accent-selection)" strokeWidth="1.6" fill="none" />
         </svg>
       </div>
-      {/* out bracket — interactive loop edge (R14: draggable + keyboard) */}
+      {/* out bracket — interactive loop edge (R14: draggable + keyboard;
+          R19 th_mto2ook8: clamped + mirrored at the right content edge) */}
       <div
         {...bracketHandlers('out')}
         role="slider"
@@ -357,35 +464,111 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
         aria-valuetext={tc(loop.end)}
         tabIndex={0}
         data-testid="shell-ruler-bracket-out"
+        data-mirrored={outClamped || undefined}
         className="pointer-events-auto absolute z-[7] flex cursor-ew-resize items-center"
-        style={{ left: bandLeft + bandW - 7, top: headerStyle === 'readout' ? 16 : 3, width: 13, height: zoneH - (headerStyle === 'readout' ? 18 : 5) }}
+        style={{ left: outBracketX, top: bracketTop, width: BRACKET_W, height: bracketH }}
       >
-        <svg className="pointer-events-none" width="9" height={zoneH - (headerStyle === 'readout' ? 18 : 5)} aria-hidden="true">
+        <svg className="pointer-events-none" width="9" height={bracketH} aria-hidden="true" style={outClamped ? { transform: 'scaleX(-1)' } : undefined}>
           <path d={`M2 0 L8 ${zoneH / 4} M2 0 L8 0 M2 0 L8 ${zoneH / 2.6}`} stroke="var(--accent-selection)" strokeWidth="1.6" fill="none" />
         </svg>
       </div>
 
-      {/* markers — larger pins, always-visible labels at readout zoom */}
-      {scene.markers.map((m) => (
-        <div
+      {/* ---- R19 markers v2 (th_mto2ytyo): POINT pins — clickable shield
+           buttons INSIDE the marker band (10×13 readout / 8×10 slim).
+           pointerdown stopPropagation: pressing a pin must not scrub the
+           playhead; click/Enter select the marker (inspector rail swap).
+           Selected pin gets the accent ring (file-2 selected language). ---- */}
+      {scene.markers.filter((m) => !m.duration || m.duration <= 0).map((m) => (
+        <button
           key={m.id}
+          type="button"
           data-tip={`${m.label} · ${tc(m.time)}`}
           data-tip-top
-          className="absolute z-[6]"
-          style={{ left: snapPxToDeviceGrid(m.time * pxPerSec) - 5, top: headerStyle === 'readout' ? 22 : 5 }}
+          data-testid={`ruler-marker-${m.id}`}
           aria-label={`Marker ${m.label}`}
+          className="absolute z-[6] block cursor-pointer border-0 bg-transparent p-0"
+          style={{
+            left: snapPxToDeviceGrid(m.time * pxPerSec) - pinW / 2,
+            top: bandTop + (bandH - pinH) / 2,
+            width: pinW,
+            height: pinH,
+            outline: selectedMarkerId === m.id ? '1px solid var(--accent-selection)' : undefined,
+            outlineOffset: 0,
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); selectMarker(m.id); }}
+          onKeyDown={(e) => {
+            /* a11y: explicit Enter/Space activation (button semantics — jsdom
+               does not synthesize the click; the ruler root must not see it) */
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              selectMarker(m.id);
+            }
+          }}
         >
-          <svg width="10" height="13" viewBox="0 0 10 13" aria-hidden="true">
-            <path d="M0 0h10v7.2L5 12.2 0 7.2V0z" fill={MARKER_COLORS[m.color]} stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
+          <svg width={pinW} height={pinH} viewBox="0 0 10 13" aria-hidden="true" className="block">
+            <path d={SHIELD_PATH} fill={MARKER_COLORS[m.color]} stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
           </svg>
-        </div>
+        </button>
       ))}
 
-      {/* hover TC readout */}
+      {/* ---- R19 markers v2: RANGE markers — a span band inside the marker
+           band (timeline-marker-only.html §1.4): translucent fill (20%) +
+           2px solid top/bottom rails + full-opacity shield end caps at both
+           ends. Click selects the marker (same selectMarker routing).
+           R19-TODO(orchestrator): range end-drag (the loop-bracket drag
+           grammar cloned onto the caps) — v2 polish, deliberately NOT in this
+           round; the band is click-select only. ---- */}
+      {scene.markers.filter((m): m is Marker & { duration: number } => !!m.duration && m.duration > 0).map((m) => {
+        const left = snapPxToDeviceGrid(m.time * pxPerSec);
+        const w = Math.max(BRACKET_W, snapPxToDeviceGrid(m.duration * pxPerSec));
+        return (
+          <button
+            key={m.id}
+            type="button"
+            role="button"
+            data-tip={`${m.label} · ${tc(m.time)}–${tc(m.time + m.duration!)}`}
+            data-tip-top
+            data-testid={`ruler-range-${m.id}`}
+            aria-label={`Marker ${m.label} (range)`}
+            className="absolute z-[6] cursor-pointer border-0 bg-transparent p-0"
+            style={{
+              left,
+              top: bandTop + 1,
+              width: w,
+              height: bandH - 2,
+              outline: selectedMarkerId === m.id ? '1px solid var(--accent-selection)' : undefined,
+              outlineOffset: 0,
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); selectMarker(m.id); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                selectMarker(m.id);
+              }
+            }}
+          >
+            <span className="absolute" aria-hidden="true" style={{ left: 2, right: 2, top: 2, bottom: 2, background: `color-mix(in srgb, ${MARKER_COLORS[m.color]} 20%, transparent)` }} />
+            <span className="absolute" aria-hidden="true" style={{ left: 2, right: 2, top: 0, height: 2, background: MARKER_COLORS[m.color] }} />
+            <span className="absolute" aria-hidden="true" style={{ left: 2, right: 2, bottom: 0, height: 2, background: MARKER_COLORS[m.color] }} />
+            <svg className="absolute" width={pinW} height={pinH} viewBox="0 0 10 13" aria-hidden="true" style={{ left: -pinW / 2 + 2, top: (bandH - 2 - pinH) / 2 }}>
+              <path d={SHIELD_PATH} fill={MARKER_COLORS[m.color]} stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
+            </svg>
+            <svg className="absolute" width={pinW} height={pinH} viewBox="0 0 10 13" aria-hidden="true" style={{ right: -pinW / 2 + 2, top: (bandH - 2 - pinH) / 2 }}>
+              <path d={SHIELD_PATH} fill={MARKER_COLORS[m.color]} stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
+            </svg>
+          </button>
+        );
+      })}
+
+      {/* hover TC readout (kept above the tick band, clear of the marker band) */}
       {hoverT !== null && (
         <span
           className="mono pointer-events-none absolute rounded-sm border border-strong bg-inset px-1 text-[11px] text-tmuted"
-          style={{ left: Math.min(hoverT * pxPerSec + 8, contentW - 76), top: headerStyle === 'readout' ? 24 : 4 }}
+          style={{ left: Math.min(hoverT * pxPerSec + 8, contentW - 76), top: readout ? 16 : 1 }}
         >
           {tc(hoverT)}
         </span>

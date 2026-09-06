@@ -8,7 +8,7 @@
    keyboard-completeness fields. */
 
 import { create } from 'zustand';
-import { project, sceneDuration, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation } from '../lib/mockData';
+import { project, sceneDuration, mediaById, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation, type ElementType } from '../lib/mockData';
 import { clamp, snapToFrame } from '../lib/timecode';
 import { PPS_MIN as MIN_PPS, PPS_MAX as MAX_PPS } from '../lib/pixel';
 import { trackAcceptsElement, spansOverlap, zeroAnchorShift, dragRejectionToast, type GroupMoveFail } from '../lib/timelinePlacement';
@@ -38,6 +38,12 @@ export type Page = 'edit' | 'color' | 'audio' | 'deliver';
 export type InspectorTab = 'video' | 'audio' | 'effects' | 'transition';
 export type ToastKind = 'info' | 'success' | 'error' | 'persist';
 export type MixerDockState = 'collapsed' | 'bridge' | 'full';
+/* R19 edit-overlay ops (nle_edit_workflow reference): the 7 Resolve edit
+   functions. insert/overwrite/append/placeOnTop/rippleOverwrite are REAL
+   placement (timelinePlacement laws); replace needs a selected element;
+   fitToFill needs a loop range — honest toasts otherwise (gap note in the
+   EditOverlay component). */
+export type InsertMediaMode = 'insert' | 'overwrite' | 'append' | 'placeOnTop' | 'rippleOverwrite' | 'replace' | 'fitToFill';
 
 export interface Toast {
   id: number;
@@ -55,6 +61,10 @@ const cloneEl = (e: ElementJSON): ElementJSON => ({
   ...e,
   ...(e.effects ? { effects: e.effects.map((f) => ({ ...f, ...(f.params ? { params: { ...f.params } } : {}) })) } : {}),
   ...(e.transitionOut ? { transitionOut: { ...e.transitionOut } } : {}),
+  /* R19: nested marker arrays + eq tuple clone too — undo round-trips
+     marker/eq edits (the R11 lesson extended to the new fields). */
+  ...(e.markers ? { markers: e.markers.map((m) => ({ ...m })) } : {}),
+  ...(e.eq ? { eq: [...e.eq] as ElementJSON['eq'] } : {}),
 });
 const clone = (scenes: SceneJSON[]): SceneJSON[] => scenes.map((s) => ({ ...s, tracks: s.tracks.map((t) => ({ ...t, elements: t.elements.map(cloneEl) })), markers: s.markers.map((m) => ({ ...m })) }));
 
@@ -366,6 +376,14 @@ interface UiState {
      GLOBAL, a noted deviation; view state, not doc. */
   trackHeightPref: 'compact' | 'normal' | 'tall' | null;
 
+  /* ---- R19: marker v2 / captions / source-preview view state ---- */
+  selectedMarkerId: string | null; // marker inspector routing (rail swap)
+  /* spec 18 §4.3 v1.1 source-preview: program canvas ↔ raw-asset preview.
+     R19 deviation (C39): pool-card selection ALSO enters the mode (reviewer
+     request — the spec's triggers are the clip menu + source-card play). */
+  viewerMode: 'program' | 'source';
+  sourceMediaId: string | null;
+
   // actions
   setPage: (p: Page) => void;
   setActiveScene: (id: string) => void;
@@ -390,6 +408,16 @@ interface UiState {
   clearLoopOut: () => void;
   clearInOut: () => void;
   addMarker: (time: number, color?: Marker['color']) => void;
+  /* ---- R19 marker v2 / captions / source-preview / edit-overlay ---- */
+  selectMarker: (id: string | null) => void;
+  updateMarker: (id: string, patch: Partial<Marker>) => void;
+  removeMarker: (id: string) => void;
+  addClipMarker: (elementId: string, offset: number, color?: Marker['color']) => void;
+  removeClipMarker: (elementId: string, markerId: string) => void;
+  addCaption: (prevId: string) => void;
+  enterSourcePreview: (mediaId: string) => void;
+  exitSourcePreview: () => void;
+  insertMediaAt: (mediaId: string, mode: InsertMediaMode, opts?: { time?: number }) => void;
   setSelection: (ids: string[]) => void;
   selectElement: (id: string, additive: boolean) => void;
   selectTrackElements: (trackId: string, additive: boolean) => void;
@@ -530,6 +558,59 @@ function withHistory(set: (partial: any) => void, get: () => UiState, mutate: (s
    on `strip.inserts[0]` — caught by the code review wave. */
 const DEFAULT_MIXER_TRACK: MixerTrackSettings = { fader: -6, pan: 0, inserts: [null, null], auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0 };
 
+/* R19: overwrite-span resolution — the shared trim engine for the Resolve
+   edit functions (overwrite / ripple-overwrite / replace's placement).
+   Mutates the track's element list IN PLACE on the cloned scene:
+   fully-covered spans are removed, head/tail straddles are trimmed, a
+   middle-covered straddle splits into left + right halves (clip markers ride
+   the half that contains their offset). Returns the DISPLACED seconds (the
+   media the new clip replaced) — ripple-overwrite's delta = dur − displaced. */
+function applyOverwriteSpans(track: TrackJSON, time: number, dur: number): number {
+  let displaced = 0;
+  const overlaps = track.elements.filter((e) => spansOverlap({ startTime: time, duration: dur }, e));
+  for (const e of overlaps) {
+    const eStart = e.startTime, eEnd = e.startTime + e.duration;
+    if (eStart >= time - 1e-9 && eEnd <= time + dur + 1e-9) {
+      // fully covered → removed
+      track.elements = track.elements.filter((x) => x.id !== e.id);
+      displaced += e.duration;
+    } else if (eStart >= time - 1e-9) {
+      // covered from the left → trim the head
+      const cut = time + dur - eStart;
+      e.startTime = time + dur;
+      e.duration -= cut;
+      if (e.sourceStart !== undefined) e.sourceStart += cut;
+      if (e.markers) e.markers = e.markers.filter((cm) => cm.offset >= cut).map((cm) => ({ ...cm, offset: cm.offset - cut }));
+      displaced += cut;
+    } else if (eEnd <= time + dur + 1e-9) {
+      // covered from the right → trim the tail
+      displaced += eEnd - time;
+      e.duration = time - eStart;
+      if (e.markers) e.markers = e.markers.filter((cm) => cm.offset <= e.duration);
+    } else {
+      // straddle: the new clip covers the MIDDLE → split into left + right
+      // (split law: right built from the pre-mutation shape keeps transitionOut,
+      // severs linkedTo; left loses transitionOut — R19-REV P2)
+      const rightDur = eEnd - (time + dur);
+      const leftDur = time - eStart;
+      displaced += dur;
+      if (rightDur >= 1 / 24 - 1e-9) {
+        track.elements.push({
+          ...e, id: nextId(`${e.id}-b`),
+          startTime: time + dur,
+          duration: rightDur,
+          ...(e.sourceStart !== undefined ? { sourceStart: e.sourceStart + (time + dur - eStart) } : {}),
+          markers: e.markers ? e.markers.filter((cm) => cm.offset >= leftDur + dur).map((cm) => ({ ...cm, offset: cm.offset - (leftDur + dur) })) : undefined,
+        });
+        delete track.elements[track.elements.length - 1].linkedTo;
+      }
+      e.duration = leftDur;
+      delete e.transitionOut;
+    }
+  }
+  return displaced;
+}
+
 let toastSeq = 1;
 /* monotonic id suffix — Date.now() alone collides on same-millisecond creates
    (two rapid markers → identical ids → broken React keys + removal hits both;
@@ -571,6 +652,9 @@ export const useUi = create<UiState>((set, get) => ({
   mediaSelection: ['m-02'],
   mediaDrag: null,
   focusedTrackId: null,
+  selectedMarkerId: null,
+  viewerMode: 'program',
+  sourceMediaId: null,
   toasts: [],
   saveAttempt: 0,
   simulateSaveFail: false,
@@ -690,7 +774,273 @@ export const useUi = create<UiState>((set, get) => ({
     sc.markers.push({ id: nextId('mk-'), time: snapToFrame(time), label: 'Marker', color: color ?? colors[sc.markers.length % 8] });
     return scenes;
   }),
-  setSelection: (ids) => set({ selection: ids }),
+
+  /* ---- R19 marker v2 / captions / source-preview / edit-overlay ---- */
+
+  selectMarker: (id) => set((s) => ({
+    selectedMarkerId: id,
+    /* mutual exclusivity (one selection domain at a time): picking a marker
+       clears the clip selection so the inspector rail swaps domains cleanly */
+    ...(id ? { selection: [] } : {}),
+  })),
+  updateMarker: (id, patch) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId)!;
+    const m = sc.markers.find((x) => x.id === id);
+    if (!m) return; // unknown marker — true no-op
+    const dur = sceneDuration(sc) || 30;
+    if (patch.time !== undefined) m.time = Math.max(0, Math.min(snapToFrame(patch.time), dur));
+    if (patch.duration !== undefined) {
+      // range law: >= 1 frame, end clamped to scene duration; undefined/neg → point
+      m.duration = patch.duration === null ? undefined : Math.max(1 / 24, Math.min(snapToFrame(patch.duration), dur - m.time));
+    }
+    if (patch.label !== undefined) m.label = patch.label;
+    if (patch.notes !== undefined) m.notes = patch.notes;
+    if (patch.keyword !== undefined) m.keyword = patch.keyword;
+    if (patch.color !== undefined) m.color = patch.color;
+    return scenes;
+  }),
+  removeMarker: (id) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId)!;
+    const before = sc.markers.length;
+    sc.markers = sc.markers.filter((m) => m.id !== id);
+    if (sc.markers.length === before) return;
+    if (s.selectedMarkerId === id) set({ selectedMarkerId: null });
+    return scenes;
+  }),
+  addClipMarker: (elementId, offset, color) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const hit = findEl(scenes, elementId);
+    if (!hit) return;
+    const { el } = hit;
+    el.markers = el.markers ? [...el.markers] : [];
+    const colors: Marker['color'][] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
+    el.markers.push({
+      id: nextId('cm-'),
+      offset: Math.max(0, Math.min(snapToFrame(offset), Math.max(0, el.duration - 1 / 24))),
+      label: 'Clip marker',
+      color: color ?? colors[el.markers.length % 8],
+    });
+    return scenes;
+  }),
+  removeClipMarker: (elementId, markerId) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, elementId);
+    if (!hit || !hit.el.markers) return;
+    const before = hit.el.markers.length;
+    hit.el.markers = hit.el.markers.filter((m) => m.id !== markerId);
+    if (hit.el.markers.length === before) return;
+    if (hit.el.markers.length === 0) delete hit.el.markers;
+    return scenes;
+  }),
+  addCaption: (prevId) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const hit = findEl(scenes, prevId);
+    if (!hit || hit.track.kind !== 'caption') return;
+    const { track, el } = hit;
+    // first free slot at/after the previous caption's end (frame-snapped)
+    let start = snapToFrame(el.startTime + el.duration);
+    const sorted = [...track.elements].sort((a, b) => a.startTime - b.startTime);
+    for (const e of sorted) {
+      if (e.startTime + e.duration <= start + 1e-9) continue;
+      if (e.startTime < start + 1.5 - 1e-9) { start = snapToFrame(e.startTime + e.duration); }
+      else break;
+    }
+    const n = track.elements.length + 1;
+    track.elements.push({
+      id: nextId('cap-'), type: 'text', trackId: track.id, name: `Sub ${n}`,
+      startTime: start, duration: 1.5, text: 'New caption',
+    });
+    return scenes;
+  }),
+  enterSourcePreview: (mediaId) => set({ viewerMode: 'source', sourceMediaId: mediaId }),
+  exitSourcePreview: () => set({ viewerMode: 'program', sourceMediaId: null }),
+
+  /* ---- R19 insertMediaAt: the 7 Resolve edit functions (nle_edit_workflow
+     reference), real placement against the same laws the drag/trim gestures
+     use (timelinePlacement + frame-snap + half-open spans). ONE history entry
+     per op. Modes that lack their inputs degrade to honest toasts (replace:
+     no selection; fitToFill: no loop range) — never a silent no-op. */
+  insertMediaAt: (mediaId, mode, opts) => {
+    const s0 = get();
+    const m = mediaById(mediaId);
+    if (!m) {
+      s0.pushToast({ kind: 'error', title: 'Edit action', detail: `unknown media ${mediaId}` });
+      return;
+    }
+    const sc0 = s0.scenes.find((x) => x.id === s0.activeSceneId);
+    if (!sc0) return;
+    const type: ElementType = m.type === 'audio' ? 'audio' : m.type === 'image' ? 'image' : 'video';
+
+    // ---- replace: needs a selected element on a compatible track ----
+    if (mode === 'replace') {
+      const sel = s0.selection.map((id) => findEl(s0.scenes, id)).filter(Boolean) as { el: ElementJSON; track: TrackJSON }[];
+      const target = sel.find((h) => trackAcceptsElement(h.track.kind, type) && !h.track.locked);
+      if (!target) {
+        s0.pushToast({ kind: 'info', title: 'Replace', detail: 'select a clip on a compatible track first (replace swaps the selected clip for this media — Resolve edit-function semantics)' });
+        return;
+      }
+      const start = target.el.startTime;
+      withHistory(set, get, (scenes) => {
+        const sc = scenes.find((x) => x.id === s0.activeSceneId)!;
+        const t = sc.tracks.find((x) => x.id === target.track.id)!;
+        t.elements = t.elements.filter((e) => e.id !== target.el.id);
+        const dur = Math.min(m.duration ?? 4, 30);
+        /* replace = remove + OVERWRITE-place: downstream neighbors the longer
+           replacement now covers are trimmed/removed too (the naive version
+           left overlaps on the doc — caught while writing the R19 tests). */
+        applyOverwriteSpans(t, start, dur);
+        t.elements.push({ id: nextId('el-'), type, trackId: t.id, name: m.name, startTime: start, duration: dur, sourceStart: 0, mediaId, speed: 1, opacity: 1 });
+        t.elements.sort((a, b) => a.startTime - b.startTime);
+        return scenes;
+      });
+      s0.pushToast({ kind: 'success', title: `Replaced with ${m.name}`, detail: 'replace: selected clip removed, media placed at its start (spec 06 edit functions)' });
+      return;
+    }
+
+    // ---- fitToFill: needs a >1-frame loop range; rate-clamped honest refusal ----
+    if (mode === 'fitToFill') {
+      const span = s0.loop.end - s0.loop.start;
+      const srcDur = m.duration ?? 0;
+      if (span <= 1 / 24 || srcDur <= 0) {
+        s0.pushToast({ kind: 'info', title: 'Fit to Fill', detail: 'set an In/Out range (I / O) with duration, and use a media asset with known duration — fit-to-fill retimes the source into the range' });
+        return;
+      }
+      const rate = clamp(srcDur / span, RATE_MIN, RATE_MAX);
+      if (Math.abs(rate - srcDur / span) > 1e-6) {
+        s0.pushToast({ kind: 'error', title: 'Fit to Fill', detail: `source ${srcDur.toFixed(1)}s cannot fill ${span.toFixed(1)}s within the rate clamp [${RATE_MIN}, ${RATE_MAX}] — refusing rather than silently mis-fitting` });
+        return;
+      }
+      /* ONE history entry: place directly at the loop start with duration =
+         span and speed = rate (the earlier re-then-search version could pick
+         a SAME-MEDIA sibling element — el-4 also uses m-05 — caught by the
+         R19 test wave). Overwrite-trims ride applyOverwriteSpans. */
+      withHistory(set, get, (scenes) => {
+        const sc = scenes.find((x) => x.id === s0.activeSceneId)!;
+        const wantKind: TrackJSON['kind'] = type === 'audio' ? 'audio' : type === 'image' ? 'overlay' : 'main';
+        const t = sc.tracks.find((x) => x.kind === wantKind && !x.locked);
+        if (!t) return;
+        const at = snapToFrame(s0.loop.start);
+        applyOverwriteSpans(t, at, span);
+        t.elements.push({ id: nextId('el-'), type, trackId: t.id, name: m.name, startTime: at, duration: snapToFrame(span), sourceStart: 0, mediaId, speed: rate, opacity: 1 });
+        t.elements.sort((a, b) => a.startTime - b.startTime);
+        return scenes;
+      });
+      // P2 (R19-REV): the no-op guard — withHistory returning undefined (every
+      // compatible lane locked) must NOT hear the success toast
+      if (get().scenes === s0.scenes) {
+        s0.pushToast({ kind: 'error', title: 'Fit to Fill', detail: `no unlocked ${type === 'audio' ? 'audio' : 'video'} lane for ${m.name} (locked lanes refuse placement — spec 06)` });
+        return;
+      }
+      s0.pushToast({ kind: 'success', title: `Fit to fill ${m.name}`, detail: `retimed ${srcDur.toFixed(1)}s source into the ${span.toFixed(1)}s In/Out range at ${rate.toFixed(3)}× (rate-clamped laws, spec 06 §5.8)` });
+      return;
+    }
+
+    // ---- shared placement for insert/overwrite/append/placeOnTop/rippleOverwrite ----
+    withHistory(set, get, (scenes) => {
+      const s = get();
+      const sc = scenes.find((x) => x.id === s.activeSceneId)!;
+      let track: TrackJSON | undefined;
+      if (mode === 'placeOnTop' && type !== 'audio') {
+        // P2 (R19-REV): place-on-top is a VISUAL-lane concept; audio has no
+        // "top" — audio media falls through to its own kind routing below
+        track = [...sc.tracks].reverse().find((t) => t.kind === 'overlay' && !t.locked);
+        if (!track) {
+          // create one above the main track (the addTrack shape)
+          track = { id: nextId('t-overlay-'), kind: 'overlay', name: 'Text 2', badge: 'T2', muted: false, solo: false, locked: false, visible: true, elements: [] };
+          const mainIdx = sc.tracks.findIndex((t) => t.kind === 'main');
+          sc.tracks.splice(mainIdx < 0 ? 0 : mainIdx, 0, track);
+        }
+      } else {
+        const wantKind: TrackJSON['kind'] = type === 'audio' ? 'audio' : type === 'image' ? 'overlay' : 'main';
+        track = sc.tracks.find((t) => t.kind === wantKind && !t.locked);
+      }
+      if (!track) return; // no unlocked compatible lane — honest toast below
+
+      const dur = Math.min(m.duration ?? 4, 30);
+      let time: number;
+      if (mode === 'append') {
+        time = track.elements.reduce((end, e) => Math.max(end, e.startTime + e.duration), 0);
+      } else {
+        time = snapToFrame(Math.max(0, opts?.time ?? s.playhead));
+      }
+
+      const overlaps = track.elements.filter((e) => spansOverlap({ startTime: time, duration: dur }, e));
+
+      if (mode === 'insert' || (mode === 'placeOnTop' && overlaps.length > 0)) {
+        // ripple insert: split straddlers, push everything at/after `time` right
+        const pushedRight = new Set<string>(); // R19 test caught the double-shift: pushed right halves must NOT re-shift
+        for (const e of overlaps) {
+          if (e.startTime < time - 1e-9) {
+            // straddler → right half lands after the new clip; left half keeps
+            // the slot. SPLIT LAW (splitElement's settled shape, R19-REV P2):
+            // the right half is built from the PRE-mutation shape so it KEEPS
+            // transitionOut (the transition rides the tail) and SEVERS linkedTo
+            // (the audio partner never links to both halves — R14 law).
+            const rightDur = e.startTime + e.duration - time;
+            const leftDur = time - e.startTime;
+            if (rightDur >= 1 / 24 - 1e-9) {
+              const rightId = nextId(`${e.id}-b`);
+              pushedRight.add(rightId);
+              track.elements.push({
+                ...e, id: rightId,
+                startTime: time + dur,
+                duration: rightDur,
+                ...(e.sourceStart !== undefined ? { sourceStart: e.sourceStart + leftDur } : {}),
+                markers: e.markers ? e.markers.filter((cm) => cm.offset >= leftDur).map((cm) => ({ ...cm, offset: cm.offset - leftDur })) : undefined,
+              });
+              delete track.elements[track.elements.length - 1].linkedTo;
+            }
+            e.duration = leftDur;
+            delete e.transitionOut;
+          } else {
+            e.startTime += dur;
+          }
+        }
+        // non-overlapping later elements also shift right (the ripple half
+        // of the insert law; straddlers were split above, so they're excluded)
+        const later = track.elements.filter((e) => e.startTime > time + dur - 1e-9 && !pushedRight.has(e.id) && overlaps.every((o) => o.id !== e.id));
+        for (const e of later) e.startTime += dur;
+      } else if (mode === 'overwrite' || mode === 'rippleOverwrite') {
+        const displaced = applyOverwriteSpans(track, time, dur);
+        if (mode === 'rippleOverwrite') {
+          // close/open the gap: later content shifts by (inserted − displaced)
+          const delta = dur - displaced;
+          if (Math.abs(delta) >= 1 / 24) {
+            const later = track.elements.filter((e) => e.startTime >= time + dur - 1e-9);
+            for (const e of later) e.startTime = Math.max(time + dur, snapToFrame(e.startTime + delta));
+          }
+        }
+      }
+
+      track.elements.push({
+        id: nextId('el-'), type, trackId: track.id, name: m.name,
+        startTime: time, duration: dur, sourceStart: 0, mediaId,
+        speed: 1, opacity: 1,
+      });
+      track.elements.sort((a, b) => a.startTime - b.startTime);
+      set({ selection: [] });
+      return scenes;
+    });
+    const sAfter = get();
+    if (sAfter.scenes === s0.scenes) {
+      // withHistory no-op'd (no unlocked compatible lane)
+      s0.pushToast({ kind: 'error', title: 'Edit action', detail: `no unlocked ${type === 'audio' ? 'audio' : type === 'image' ? 'overlay' : 'video'} lane for ${m.name} (locked lanes refuse placement — spec 06)` });
+      return;
+    }
+    const modeLabel: Record<Exclude<InsertMediaMode, 'replace' | 'fitToFill'>, string> = {
+      insert: 'Inserted', overwrite: 'Overwrote', append: 'Appended',
+      placeOnTop: 'Placed on top', rippleOverwrite: 'Ripple-overwrote',
+    };
+    s0.pushToast({
+      kind: 'success',
+      title: `${modeLabel[mode as Exclude<InsertMediaMode, 'replace' | 'fitToFill'>]} ${m.name}`,
+      detail: 'real placement (frame-snap + half-open spans + ripple laws, spec 06 §5.9) — undoable as one step',
+    });
+  },
+
+
+  setSelection: (ids) => set({ selection: ids, selectedMarkerId: null }),
   selectElement: (id, additive) => set((s) => {
     // spec 05 §12.3 linked selection: "selecting one selects both" — the A/V
     // pair (el-2 ↔ el-7 in the fixture) enters/leaves the selection as a
@@ -706,10 +1056,10 @@ export const useUi = create<UiState>((set, get) => ({
       return other && other !== target ? [target, other] : [target];
     };
     const group = pairOf(id);
-    if (!additive) return { selection: group };
+    if (!additive) return { selection: group, selectedMarkerId: null };
     const groupSelected = group.every((x) => s.selection.includes(x));
     if (groupSelected) return { selection: s.selection.filter((x) => !group.includes(x)) };
-    return { selection: [...s.selection.filter((x) => !group.includes(x)), ...group] };
+    return { selection: [...s.selection.filter((x) => !group.includes(x)), ...group], selectedMarkerId: null };
   }),
   selectTrackElements: (trackId, additive) => set((s) => {
     const sc = s.scenes.find((x) => x.id === s.activeSceneId);
@@ -1363,11 +1713,11 @@ export const useUi = create<UiState>((set, get) => ({
     const sc = scenes.find((x) => x.id === s.activeSceneId)!;
     const sameKind = sc.tracks.filter((t) => t.kind === kind);
     const n = sameKind.length + 1;
-    const prefix = kind === 'audio' ? 'A' : kind === 'overlay' ? 'T' : 'V';
+    const prefix = kind === 'audio' ? 'A' : kind === 'overlay' ? 'T' : kind === 'caption' ? 'CC' : 'V';
     const track: TrackJSON = {
       id: nextId(`t-${kind}-`),
       kind,
-      name: kind === 'audio' ? `Audio ${n}` : kind === 'overlay' ? `Text ${n}` : `Video ${n}`,
+      name: kind === 'audio' ? `Audio ${n}` : kind === 'overlay' ? `Text ${n}` : kind === 'caption' ? `Captions ${n}` : `Video ${n}`,
       badge: `${prefix}${n}`,
       muted: false, solo: false, locked: false, visible: true,
       waveform: kind === 'audio' ? true : undefined,
@@ -1441,4 +1791,26 @@ export function trackHeights(kind: TrackJSON['kind'], clipStyle: 'filmstrip' | '
   if (kind === 'main') return 40;
   if (kind === 'audio') return 34;
   return 28;
+}
+
+/* R19: the inspector's empty-selection fallback track (thread th_mto5fdf6 —
+   research answer: Resolve/Premiere clear the inspector when nothing is
+   selected; track-level inspection is the Fairlight/mixer precedent and the
+   reviewer's instinct). Derivation law: the ↑/↓ focused track wins (spec 16
+   §3.6), then the topmost visual track bearing an element under the playhead,
+   then the first main track, then the first track — always SOME track, so the
+   inspector never renders a dead rail. */
+export function activeTrackOf(scene: SceneJSON, focusedTrackId: string | null, playhead: number): TrackJSON | null {
+  if (scene.tracks.length === 0) return null;
+  const focused = scene.tracks.find((t) => t.id === focusedTrackId);
+  if (focused) return focused;
+  const order: TrackJSON['kind'][] = ['overlay', 'main'];
+  for (const kind of order) {
+    const kindTracks = scene.tracks.filter((t) => t.kind === kind);
+    for (let i = kindTracks.length - 1; i >= 0; i--) {
+      const hit = kindTracks[i].elements.find((e) => playhead >= e.startTime && playhead < e.startTime + e.duration);
+      if (hit) return kindTracks[i];
+    }
+  }
+  return scene.tracks.find((t) => t.kind === 'main') ?? scene.tracks[0];
 }

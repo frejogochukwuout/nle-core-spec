@@ -5,7 +5,11 @@
 
 export type MediaType = 'video' | 'audio' | 'image';
 export type ElementType = 'video' | 'audio' | 'text' | 'image';
-export type TrackKind = 'overlay' | 'main' | 'audio';
+/* R19: 'caption' joins the kind union — a text-bearing lane that renders as
+   caption chips + drives the captions inspector (spec gap C34: 09's teacher
+   model has SubtitleSegmentItem as an ELEMENT type but no caption TRACK-kind
+   ruling; the mock extends the union, registered in the candidates ledger). */
+export type TrackKind = 'overlay' | 'main' | 'audio' | 'caption';
 
 export interface MediaRecord {
   id: string;
@@ -59,6 +63,17 @@ export interface ElementJSON {
   speed?: number;
   volume?: number;
   opacity?: number;
+  /* R19 per-clip audio params (gap C35: spec 20 scopes mixing PER-TRACK;
+  per-clip pan/pitch/EQ are display state in the mock — the inspector edits
+  them for real in the doc model, the engine round is the honest boundary). */
+  pan?: number;               // -1..1 (L..R)
+  pitchSemitones?: number;    // -12..12
+  pitchCents?: number;        // -100..100
+  eq?: [number, number, number, number]; // dB, 4 bands (62/250/1K/4K/16K corners)
+  /* R19 caption body (text elements on caption tracks; gap C34). */
+  text?: string;
+  /* R19 clip markers (gap C33). */
+  markers?: ClipMarker[];
   audioFadeIn?: number;
   audioFadeOut?: number;
   effects?: EffectJSON[];
@@ -76,6 +91,7 @@ export interface TrackJSON {
   locked: boolean;
   visible: boolean;
   waveform?: boolean;  // mock-level view pref (real home: UI store per spec 18 §4.7)
+  language?: string;   // R19 caption tracks (display-only tag)
   elements: ElementJSON[];
 }
 
@@ -84,6 +100,21 @@ export interface Marker {
   time: number;
   label: string;
   color: 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'gray';
+  /* R19 marker v2 (spec gap C33 — 05 §11.1/09 §3.1A candidates):
+     duration => RANGE marker (end = time + duration, >= 1 frame);
+     notes/keyword carry the marker-inspector fields (reference mock). */
+  duration?: number;
+  notes?: string;
+  keyword?: string;
+}
+
+/* R19 clip-level marker: offset is seconds from the element's startTime —
+  pinned inside the clip box, drags/edits ride the element (gap C33). */
+export interface ClipMarker {
+  id: string;
+  offset: number;
+  label: string;
+  color: Marker['color'];
 }
 
 export interface SceneJSON {
@@ -151,10 +182,15 @@ const scene1: SceneJSON = {
           sourceStart: 3.0, sourceDuration: 8.5, mediaId: 'm-02', speed: 1, opacity: 1,
           transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.75, alignment: 0.5 },
           linkedTo: 'el-7',
+          markers: [
+            { id: 'cm-1', offset: 2.0, label: 'Look up', color: 'green' },
+            { id: 'cm-2', offset: 5.5, label: 'Laugh', color: 'purple' },
+          ],
         },
         {
           id: 'el-3', type: 'video', trackId: 'tr-main', name: 'drone_launch', startTime: 17.0, duration: 7.0,
           sourceStart: 0, sourceDuration: 7.0, mediaId: 'm-03', speed: 1, opacity: 1,
+          markers: [{ id: 'cm-3', offset: 1.0, label: 'Launch', color: 'orange' }],
         },
         {
           id: 'el-4', type: 'video', trackId: 'tr-main', name: 'sunset_timelapse', startTime: 24.0, duration: 6.0,
@@ -169,6 +205,7 @@ const scene1: SceneJSON = {
         {
           id: 'el-6', type: 'audio', trackId: 'tr-audio-1', name: 'ocean_ambience', startTime: 0, duration: 30,
           sourceStart: 0, mediaId: 'm-06', volume: 0.35, audioFadeIn: 1.0, audioFadeOut: 2.0,
+          pan: -0.15, pitchSemitones: 0, pitchCents: 0, eq: [2, -1, 0, -2],
         },
       ],
     },
@@ -178,16 +215,31 @@ const scene1: SceneJSON = {
       elements: [
         {
           id: 'el-7', type: 'audio', trackId: 'tr-audio-2', name: 'interview_marina', startTime: 8.5, duration: 8.5,
-          sourceStart: 3.0, mediaId: 'm-07', volume: 0.8, linkedTo: 'el-2',
+          sourceStart: 3.0, mediaId: 'm-07', volume: 0.8, pan: 0.1, linkedTo: 'el-2',
         },
+      ],
+    },
+    {
+      /* R19 captions track (gap C34): text elements whose `text` is the
+         caption body; timings frame-clean @24 from the reference table
+         (project-relative). CPS is derived at render time (len / duration). */
+      id: 'tr-caption', kind: 'caption', name: 'Captions', badge: 'CC', language: 'en',
+      muted: false, solo: false, locked: false, visible: true,
+      elements: [
+        { id: 'cap-1', type: 'text', trackId: 'tr-caption', name: 'Sub 1', startTime: 100 / 24, duration: 35 / 24, text: 'We always visit this beach' },
+        { id: 'cap-2', type: 'text', trackId: 'tr-caption', name: 'Sub 2', startTime: 135 / 24, duration: 49 / 24, text: 'Nous venons tout le temps à la plage.' },
+        { id: 'cap-3', type: 'text', trackId: 'tr-caption', name: 'Sub 3', startTime: 193 / 24, duration: 44 / 24, text: 'Every year we spend a week here' },
+        { id: 'cap-4', type: 'text', trackId: 'tr-caption', name: 'Sub 4', startTime: 237 / 24, duration: 28 / 24, text: 'Swimming, surfing, enjoying the sunsets' },
+        { id: 'cap-5', type: 'text', trackId: 'tr-caption', name: 'Sub 5', startTime: 265 / 24, duration: 47 / 24, text: 'But this year was different' },
       ],
     },
   ],
   markers: [
     { id: 'mk-1', time: 0, label: 'Hook', color: 'red' },
     { id: 'mk-2', time: 8.5, label: 'Interview', color: 'blue' },
-    { id: 'mk-3', time: 15.5, label: 'Pull quote', color: 'yellow' },
+    { id: 'mk-3', time: 15.5, label: 'Pull quote', color: 'yellow', notes: 'Producer note: this song was used in previous reel.', keyword: 'music' },
     { id: 'mk-4', time: 24.0, label: 'Sunset', color: 'orange' },
+    { id: 'mk-5', time: 17.0, duration: 7.0, label: 'Drone sequence', color: 'purple', notes: 'Colour pass pending on the launch shot.' },
   ],
 };
 

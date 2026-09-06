@@ -4,9 +4,12 @@
    pointer-release-only detent, arc/indicator geometry, bubble), and
    StripMeter over the shared engine (R15-A2: dB-linear mapping, token
    palette, LED segments, peak line, mute/clip, engine lifecycle + reset).
-   R15-A3: fader CHROME assertions — thumb test hook + token gradients,
-   end caps + unity notch, the dB scale column at TRUE taper positions
-   (taper/keyboard/drag grammar tests above are UNCHANGED by design).
+   R19-B1: the fader's DISPLAY geometry moved to the reference taper —
+   piecewise map unit tests (anchors, round-trip, clamps, monotonicity),
+   6px groove / 22×36 thumb / 24px headroom / reference scale marks, and
+   drag math routed through the map (px→pos→dB, model-clamped −60..+6).
+   StripMeter: the fixed 14px column (th_mto617w1 — never w-full).
+   PanBox: the reference pan crosshair box with knob semantics.
    Drag math is exercised by mocking getBoundingClientRect where needed
    (jsdom reports 0×0); the knob drag grammar is clientY-relative so it needs
    no rect at all. */
@@ -14,13 +17,58 @@
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { Fader, PanKnob, StripMeter } from './MixerPrimitives';
-import { sliderToDb } from '../../state/mockMixer';
+import { Fader, PanKnob, PanBox, StripMeter, dbToPos, posToDb, dbHeadroomLabel, FADER_TAPER } from './MixerPrimitives';
 import { useUi } from '../../state/useUiStore';
 import { __reset, __setLevel, meterGetSnapshot } from '../../lib/meterEngine';
 
-const fakeRect = (height: number, width = 14): DOMRect =>
+const fakeRect = (height: number, width = 46): DOMRect =>
   ({ top: 0, left: 0, right: width, bottom: height, width, height, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+
+/* ---------- the piecewise display taper (R19-B1, th_mtoyq7jt) ---------- */
+describe('piecewise display taper (dbToPos / posToDb)', () => {
+  it('maps every reference anchor exactly (0dB@15%, −5@28 … −50@98%, +10 headroom, −60 floor)', () => {
+    for (const t of FADER_TAPER) {
+      expect(dbToPos(t.db)).toBe(t.pos);
+      expect(posToDb(t.pos)).toBe(t.db);
+    }
+  });
+
+  it('round-trips dB→pos→dB across the model range to float precision', () => {
+    for (let db = -60; db <= 6; db += 0.7) {
+      expect(posToDb(dbToPos(db))).toBeCloseTo(db, 10);
+    }
+    // and pos→dB→pos the other way
+    for (let p = 0; p <= 1; p += 0.031) {
+      expect(dbToPos(posToDb(p))).toBeCloseTo(p, 10);
+    }
+  });
+
+  it('is strictly monotonic (louder = higher up the travel)', () => {
+    let prev = -Infinity;
+    for (let db = 6; db >= -60; db -= 1.3) {
+      const pos = dbToPos(db);
+      expect(pos).toBeGreaterThan(prev);
+      prev = pos;
+    }
+  });
+
+  it('clamps outside the taper (display-only guard; the MODEL stays −60..+6)', () => {
+    expect(dbToPos(20)).toBe(0);
+    expect(dbToPos(-70)).toBe(1);
+    expect(posToDb(-0.5)).toBe(10);  // above the model max — view-layer only
+    expect(posToDb(2)).toBe(-60);
+    // +6 (model max) sits inside the +10 headroom at 6%
+    expect(dbToPos(6)).toBeCloseTo(0.06, 10);
+  });
+
+  it('dbHeadroomLabel: signed 1dp, NO unit, −∞ at the floor (reference "+0.3" format)', () => {
+    expect(dbHeadroomLabel(-6)).toBe('-6.0');
+    expect(dbHeadroomLabel(0)).toBe('0.0');
+    expect(dbHeadroomLabel(3.5)).toBe('+3.5');
+    expect(dbHeadroomLabel(-60)).toBe('−∞');
+    expect(dbHeadroomLabel(-100)).toBe('−∞');
+  });
+});
 
 describe('Fader', () => {
   it('is a labelled slider with dB range/value semantics (design doc §6)', () => {
@@ -30,7 +78,7 @@ describe('Fader', () => {
     expect(f).toHaveAttribute('aria-valuemax', '6');
     expect(f).toHaveAttribute('aria-valuenow', '-6');
     expect(f).toHaveAttribute('aria-valuetext', '-6.0 dB');
-    expect(screen.getByText('-6.0 dB')).toBeInTheDocument(); // readout above the track
+    expect(screen.getByText('-6.0')).toBeInTheDocument(); // headroom readout (no unit)
   });
 
   it('keyboard grammar: arrows ±1 dB, ⇧ fine ±0.2, Page ±6, Home −∞, End +6 (design doc §6)', () => {
@@ -61,57 +109,73 @@ describe('Fader', () => {
     expect(onChange).toHaveBeenCalledWith(0);
   });
 
-  it('pointer drag: jump-to-position then relative drag, clamped to the dB range', () => {
+  it('pointer drag routes through the piecewise map: jump-to-pos, relative drag, ⇧ fine, model clamp', () => {
     const onChange = vi.fn();
     render(<Fader db={-6} onChange={onChange} ariaLabel="Test fader" height={96} />);
     const f = screen.getByRole('slider', { name: 'Test fader' });
     f.getBoundingClientRect = () => fakeRect(96);
-    // jump-to-position: 24 px down a 96 px track → v = 0.75
+    // jump-to-position: 24px down a 96px column → pos 0.25 → the segment
+    // [0@15% .. −5@28%] → −3.846 dB (the OLD linear map said −10.5)
     fireEvent.pointerDown(f, { pointerId: 1, button: 0, clientY: 24 });
-    expect(onChange).toHaveBeenCalledWith(sliderToDb(0.75)); // −10.5
-    // drag up to the top: dy = +24 → −10.5 + 24/96×66 = +6 (clamped)
+    expect(onChange).toHaveBeenLastCalledWith(posToDb(0.25));
+    expect(onChange.mock.calls.at(-1)![0]).toBeCloseTo(-3.846, 2);
+    // drag 24px up → pos 0.5 → segment [−10@42% .. −15@55%] → −13.077 dB
     fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: 0 });
-    expect(onChange).toHaveBeenCalledWith(6);
-    // shift = fine: drag back down 72 px at ×0.25 sensitivity
+    expect(onChange.mock.calls.at(-1)![0]).toBeCloseTo(-13.077, 2);
+    // shift = fine: 72px down from the GRAB at ×0.25 sensitivity → pos 0.0625
+    // → +5.83 dB (deltas are relative to the grab, like the old grammar)
     fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: 96, shiftKey: true });
-    expect(onChange).toHaveBeenCalledWith(-22.875); // −10.5 − 12.375
+    expect(onChange.mock.calls.at(-1)![0]).toBeCloseTo(5.833, 2);
+    // drag far beyond the top → pos clamps to 1 → model floor −60
+    fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: -964 });
+    expect(onChange).toHaveBeenLastCalledWith(-60);
   });
 
-  it('the thumb position follows the controlled db value (dbToSlider taper) — pinned by the stable data-testid hook', () => {
+  it('the thumb position follows the controlled db value through the taper — pinned by the stable data-testid hook', () => {
     const { rerender } = render(<Fader db={0} onChange={() => {}} ariaLabel="Test fader" height={96} />);
     const f = screen.getByRole('slider', { name: 'Test fader' });
     const thumb = f.querySelector('[data-testid="fader-thumb"]') as HTMLElement | null;
     expect(thumb).not.toBeNull();
-    // jsdom serializes percentages at 4 decimals: 60/66 → 90.9091%
-    expect(thumb!.style.bottom).toContain('90.9091%');
+    // 0 dB sits at 15% from the TOP (the reference anchor); −60 at 100%
+    expect(thumb!.style.top).toBe('15%');
     rerender(<Fader db={-60} onChange={() => {}} ariaLabel="Test fader" height={96} />);
-    expect((f.querySelector('[data-testid="fader-thumb"]') as HTMLElement)!.style.bottom).toContain('0%');
+    expect((f.querySelector('[data-testid="fader-thumb"]') as HTMLElement)!.style.top).toBe('100%');
   });
 });
 
-describe('Fader A3 polish (R15-A3 — chrome only, grammar untouched)', () => {
-  it('thumb: A0 --fader-thumb-1/2 gradient; the accent prop swaps to the master --fader-cap-accent-1/2 pair (flat)', () => {
+describe('Fader R19-B1 reference geometry (th_mtoyq7jt / th_mto617w1)', () => {
+  it('groove is 6px inside a wide 46px hit column (reference §2.5)', () => {
+    const { container } = render(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" />);
+    const groove = container.querySelector('[data-testid="fader-groove"]') as HTMLElement;
+    expect(groove.className).toContain('w-[6px]');
+    const f = screen.getByRole('slider', { name: 'Test fader' });
+    expect(f.className).toContain('w-[46px]'); // the whole column is the drag target
+  });
+
+  it('thumb: 22×36 gradient with grip lines; the accent prop swaps to the master pair (flat)', () => {
     const { container, rerender } = render(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" />);
     const thumb = () => container.querySelector('[data-testid="fader-thumb"]') as HTMLElement;
+    expect(thumb().className).toContain('w-[22px]');
+    expect(thumb().className).toContain('h-[36px]');
     expect(thumb().style.background).toContain('var(--fader-thumb-1)');
     expect(thumb().style.background).toContain('var(--fader-thumb-2)');
+    expect(container.querySelector('[data-testid="fader-grip"]')).not.toBeNull();
     rerender(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" accent />);
     expect(thumb().style.background).toContain('var(--fader-cap-accent-1)');
     expect(thumb().style.background).toContain('var(--fader-cap-accent-2)');
   });
 
-  it('track chrome: end caps at both travel stops + the 0 dB unity notch at the taper-true position', () => {
+  it('track chrome: end caps at both travel stops + the 0 dB unity notch at the 15% anchor', () => {
     const { container } = render(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" />);
     expect(container.querySelector('[data-testid="fader-endcap-top"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="fader-endcap-bottom"]')).not.toBeNull();
     const notch = container.querySelector('[data-testid="fader-unity-notch"]') as HTMLElement;
-    expect(notch.className).toContain('h-[2px]'); // 2px notch, subtle fg/30
-    expect(notch.className).toContain('bg-tprimary/30');
-    // unity 0 dB sits at (0+60)/66 of the travel — the taper-true position
-    expect(notch.style.bottom).toContain('90.9091%');
+    expect(notch.className).toContain('h-[1px]'); // 1px, 2px past both groove sides
+    expect(notch.className).toContain('w-[10px]');
+    expect(notch.style.top).toBe('15%'); // 0 dB anchor, from the top
   });
 
-  it('dB scale column: opt-in, aria-hidden, 8px right-aligned labels at TRUE taper positions', () => {
+  it('dB scale column: opt-in, aria-hidden, 8px right-aligned labels at the reference piecewise positions', () => {
     const { container, rerender } = render(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" />);
     expect(container.querySelector('[data-testid="fader-scale"]')).toBeNull(); // plain faders stay lean
     rerender(<Fader db={-6} onChange={() => {}} ariaLabel="Test fader" scale />);
@@ -119,18 +183,33 @@ describe('Fader A3 polish (R15-A3 — chrome only, grammar untouched)', () => {
     expect(scale.getAttribute('aria-hidden')).toBe('true');
     expect(scale.className).toContain('text-[8px]');
     expect(scale.className).toContain('text-right');
+    expect(scale.className).toContain('w-[14px]'); // the 14px scale column (reference)
     const byText: Record<string, HTMLElement> = {};
     for (const el of Array.from(scale.querySelectorAll('span'))) byText[el.textContent!] = el as HTMLElement;
-    // taper is linear-in-dB: (db+60)/66 — every label lands on its exact dB
-    // position (jsdom keeps full float precision on bare percentages)
-    expect(byText['+6'].style.bottom).toBe('100%');
-    expect(byText['0'].style.bottom).toContain('90.909');
-    expect(byText['−6'].style.bottom).toContain('81.818');
-    expect(byText['−12'].style.bottom).toContain('72.727');
-    expect(byText['−24'].style.bottom).toContain('54.545');
-    expect(byText['−48'].style.bottom).toContain('18.181');
-    expect(byText['−∞'].style.bottom).toBe('0%');
-    expect(byText['0'].style.transform).toBe('translateY(50%)'); // each label centers on its position
+    // reference marks (§2.5): 0@15 · −5@28 · −10@42 · −15@55 · −20@68 · −30@80 · −40@90 · −50@98
+    const expected: [string, number][] = [
+      ['0', 15], ['−5', 28], ['−10', 42], ['−15', 55],
+      ['−20', 68], ['−30', 80], ['−40', 90], ['−50', 98],
+    ];
+    for (const [label, top] of expected) {
+      expect(byText[label]).toBeDefined();
+      expect(parseFloat(byText[label].style.top)).toBeCloseTo(top, 6);
+      expect(byText[label].style.transform).toBe('translateY(-50%)'); // centers on its position
+    }
+    // the old linear labels are gone
+    expect(byText['+6']).toBeUndefined();
+    expect(byText['−∞']).toBeUndefined();
+    expect(byText['−48']).toBeUndefined();
+  });
+
+  it('headroom strip: 24px, signed 1dp no unit, opt-out for strips that share one with the meter', () => {
+    const { container, rerender } = render(<Fader db={-12} onChange={() => {}} ariaLabel="Test fader" />);
+    const head = () => container.querySelector('[data-testid="fader-headroom"]') as HTMLElement | null;
+    expect(head()).not.toBeNull();
+    expect(head()!.className).toContain('h-[24px]');
+    expect(head()!.textContent).toBe('-12.0'); // no unit (th_mtoyq7jt)
+    rerender(<Fader db={-12} onChange={() => {}} ariaLabel="Test fader" headroom={false} />);
+    expect(head()).toBeNull(); // strips render the SHARED HeadroomReadout instead
   });
 });
 
@@ -286,12 +365,80 @@ describe('PanKnob (R15-A1 — DAW dial grammar)', () => {
   });
 });
 
+/* ---------- PanBox (R19-B1 — reference pan crosshair box) ---------- */
+describe('PanBox (reference §2.4 row 6 — knob semantics in the box look)', () => {
+  it('is a 48×48 labelled slider with C/L/R value text (knob semantics kept)', () => {
+    render(<PanBox pan={0} onChange={() => {}} ariaLabel="Test pan" />);
+    const b = screen.getByRole('slider', { name: 'Test pan' });
+    expect(b.className).toContain('w-[48px]');
+    expect(b.className).toContain('h-[48px]');
+    expect(b).toHaveAttribute('aria-valuemin', '-100');
+    expect(b).toHaveAttribute('aria-valuemax', '100');
+    expect(b).toHaveAttribute('aria-valuetext', 'C');
+    expect(screen.getByTitle(/Test pan: C/)).toBeInTheDocument(); // value via title (aria-hidden dot)
+  });
+
+  it('mono dot at left = 50 + pan/2 %, top 25% (reference geometry)', () => {
+    const { container, rerender } = render(<PanBox pan={0} onChange={() => {}} ariaLabel="Test pan" />);
+    const dot = () => container.querySelector('[data-testid="pan-dot"]') as HTMLElement;
+    expect(dot().style.left).toBe('50%');
+    rerender(<PanBox pan={50} onChange={() => {}} ariaLabel="Test pan" />);
+    expect(dot().style.left).toBe('75%');
+    rerender(<PanBox pan={-100} onChange={() => {}} ariaLabel="Test pan" />);
+    expect(dot().style.left).toBe('0%');
+  });
+
+  it('keyboard: arrows ±5, ⇧ fine ±1, double-click centers (same grammar as the knob)', () => {
+    const onChange = vi.fn();
+    render(<PanBox pan={0} onChange={onChange} ariaLabel="Test pan" />);
+    const b = screen.getByRole('slider', { name: 'Test pan' });
+    fireEvent.keyDown(b, { key: 'ArrowRight' });
+    expect(onChange).toHaveBeenCalledWith(5);
+    fireEvent.keyDown(b, { key: 'ArrowLeft', shiftKey: true });
+    expect(onChange).toHaveBeenCalledWith(-1);
+    fireEvent.doubleClick(b);
+    expect(onChange).toHaveBeenCalledWith(0);
+  });
+
+  it('horizontal drag: jump-to-position then relative, clamped (48px = ±100)', () => {
+    const onChange = vi.fn();
+    render(<PanBox pan={0} onChange={onChange} ariaLabel="Test pan" />);
+    const b = screen.getByRole('slider', { name: 'Test pan' });
+    b.getBoundingClientRect = () => fakeRect(48, 48);
+    // click at 12px of 48 → 25% → pan −50
+    fireEvent.pointerDown(b, { pointerId: 1, button: 0, clientX: 12, clientY: 24 });
+    expect(onChange).toHaveBeenLastCalledWith(-50);
+    // drag 24px right from the grab → +100 → clamped at +50... −50 + (24/48·200) = +50
+    fireEvent.pointerMove(b, { pointerId: 1, buttons: 1, clientX: 36, clientY: 24 });
+    expect(onChange).toHaveBeenLastCalledWith(50);
+    // far right → clamped to +100
+    fireEvent.pointerMove(b, { pointerId: 1, buttons: 1, clientX: 999, clientY: 24 });
+    expect(onChange).toHaveBeenLastCalledWith(100);
+  });
+});
+
 describe('StripMeter (R15-A2 — shared engine view)', () => {
   it('is aria-hidden with the dB exposed via title — never an aria-live region (design doc §4)', () => {
     render(<StripMeter trackId="t1" db={-6} label="A1" height={40} width={4} />);
     const meter = screen.getByTitle(/A1: -6\.0 dB/);
     expect(meter).toHaveAttribute('aria-hidden', 'true');
     expect(meter.querySelectorAll('[data-channel]')).toHaveLength(2); // stereo pair (l + r)
+  });
+
+  it('the meter column is a FIXED 14px default — never w-full (th_mto617w1)', () => {
+    const { container } = render(<StripMeter trackId="t1" db={-6} label="A1" />);
+    const meter = screen.getByTitle(/A1: -6\.0 dB/);
+    // default: 2×6.5px stereo bars + 1px gap = 14px total (reference §2.5)
+    expect(meter.style.width).toBe('14px');
+    const { rerender } = render(<StripMeter trackId="t2" db={-6} label="B1" fillHeight />);
+    const rail = screen.getByTitle(/B1: -6\.0 dB/);
+    // fillHeight fills the parent's HEIGHT only — the width stays fixed
+    expect(rail.style.width).toBe('14px');
+    expect(rail.className).toContain('h-full');
+    expect(rail.className).not.toContain('w-full'); // the squeeze bug, dead
+    rerender(<StripMeter trackId="t2" db={-6} label="B1" fillHeight width={17.5} />);
+    expect(screen.getByTitle(/B1: -6\.0 dB/).style.width).toBe('36px'); // bridge rail passes its own
+    expect(container).toBeDefined();
   });
 
   it('shows −∞ for a fully-cold fader', () => {

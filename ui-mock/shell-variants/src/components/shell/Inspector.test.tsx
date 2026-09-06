@@ -3,7 +3,10 @@
    invalid + role=alert + nothing dispatched, Enter settles immediately, Esc
    reverts, 50 ms-debounced live preview), the effects stack editor, the
    transition editor, quick-seek, group Reset, and mixed multi-select
-   aggregation (blank field writes ALL selected). Store-wiring only. */
+   aggregation (blank field writes ALL selected). Store-wiring only.
+   R19 (B5): the empty-selection ACTIVE-TRACK fallback (th_mto5fdf6) + the
+   audio_editor_ui sections (Clip Volume dB ↔ linear, Clip Pan, Clip Pitch,
+   Clip Equalizer) — all real store writes. */
 
 import { describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
@@ -26,16 +29,60 @@ function boot(patch: UiPatch) {
 describe('Inspector (spec 18 §4.4)', () => {
   /* ---- empty state + tab strip ---- */
 
-  it('empty selection → empty state + a Video-only tab strip', () => {
-    const { getByTestId, queryByTestId, getAllByText } = boot({ selection: [] });
-    expect(getByTestId('shell-inspector-state-empty')).toBeInTheDocument();
-    // header + empty-state both carry the label
-    expect(getAllByText('Nothing to inspect')).toHaveLength(2);
-    expect(getByTestId('shell-inspector-tab-video')).toBeInTheDocument();
+  it('empty selection → ACTIVE-TRACK fallback sheet + a Video-only tab strip (th_mto5fdf6)', () => {
+    const { getByTestId, queryByTestId, getByText } = boot({ selection: [] });
+    // playhead 16 lands inside el-2 (8.5–17) on tr-main → the main track is "active"
+    expect(getByTestId('shell-inspector-state-track')).toBeInTheDocument();
+    expect(getByText('Track — V1')).toBeInTheDocument(); // header titles the sheet
+    expect(getByTestId('shell-inspector-track-hint'))
+      .toHaveTextContent('Select a clip to edit clip parameters');
+    expect(screen.getByText('Main')).toBeInTheDocument(); // Kind row value
+    // the tab strip stays with the fallback — Video tab active, no clip fields
+    expect(getByTestId('shell-inspector-tab-video')).toHaveAttribute('aria-selected', 'true');
     // §4.4 hidden-not-disabled: absent tabs, not disabled tabs
     expect(queryByTestId('shell-inspector-tab-audio')).not.toBeInTheDocument();
     expect(queryByTestId('shell-inspector-tab-effects')).not.toBeInTheDocument();
     expect(queryByTestId('shell-inspector-tab-transition')).not.toBeInTheDocument();
+    // no clip fields render — the Transform group is gone
+    expect(screen.queryByRole('button', { name: 'Reset Transform' })).not.toBeInTheDocument();
+    // not an audio track → no mixer slice
+    expect(queryByTestId('shell-inspector-track-output')).not.toBeInTheDocument();
+  });
+
+  it('fallback toggles are REAL: toggleTrackCmd flips the track (undoable)', () => {
+    boot({ selection: [] }); // tr-main (playhead 16)
+    const mute = screen.getByTestId('shell-inspector-track-muted');
+    expect(mute).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(mute);
+    const track = () => S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-main')!;
+    expect(track().muted).toBe(true);
+    expect(mute).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByTestId('shell-inspector-track-locked'));
+    expect(track().locked).toBe(true);
+    // withHistory — one undo per toggle (lock was the last); act-wrapped so
+    // the store-driven re-render stays inside the test's act scope
+    act(() => { S().undo(); });
+    expect(track().locked).toBe(false);
+    expect(track().muted).toBe(true); // still flipped — separate history entry
+    act(() => { S().undo(); });
+    expect(track().muted).toBe(false);
+  });
+
+  it('fallback audio track shows the mixer slice: fader/pan/inserts/outputBus (setMixerTrack) + role label', () => {
+    boot({ selection: [], focusedTrackId: 'tr-audio-1' });
+    expect(screen.getByText('Track — A1')).toBeInTheDocument();
+    expect(screen.getByText('Dialogue')).toBeInTheDocument(); // mixer role tag
+    // fader: slider live preview + commit on release
+    const slider = screen.getByRole('slider', { name: 'Fader slider' });
+    expect(slider).toHaveValue('-3'); // createMixerScene seeds A1 at −3 dB
+    fireEvent.change(slider, { target: { value: '-12' } });
+    fireEvent.pointerUp(slider);
+    expect(S().mixer.tracks['tr-audio-1'].fader).toBe(-12);
+    // inserts + output bus are REAL setMixerTrack writes
+    fireEvent.change(screen.getByTestId('shell-inspector-track-insert-2'), { target: { value: 'Comp' } });
+    expect(S().mixer.tracks['tr-audio-1'].inserts).toEqual(['EQ', 'Comp']);
+    fireEvent.change(screen.getByTestId('shell-inspector-track-output'), { target: { value: '1' } });
+    expect(S().mixer.tracks['tr-audio-1'].outputBus).toBe(1);
   });
 
   it('single video clip: 4 tabs, clip-name header, quick-seek writes the playhead', () => {
@@ -315,5 +362,88 @@ describe('Inspector (spec 18 §4.4)', () => {
       title: 'More inspector actions',
       detail: 'the inspector surface is complete for the mock (spec 18 §4.4)',
     });
+  });
+
+  /* ---- R19 audio tab: audio_editor_ui sections (real store writes) ---- */
+
+  it('Clip Volume: linear model displays as dB; dB edits write 10^(dB/20) (el-6 volume 0.35 → −9.1 dB)', () => {
+    boot({ selection: ['el-6'], inspectorTab: 'audio' });
+    const field = screen.getByLabelText('Volume value');
+    expect(field).toHaveValue('-9.1 dB'); // 20·log10(0.35)
+    fireEvent.change(field, { target: { value: '0' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(el('el-6').volume).toBe(1); // 0 dB = unity
+    // the +dB region of the reference range writes above-unity linear gain
+    fireEvent.change(field, { target: { value: '12' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(el('el-6').volume).toBeCloseTo(10 ** (12 / 20), 5);
+    // group Reset restores unity through the same write path
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Clip Volume' }));
+    expect(el('el-6').volume).toBe(1);
+    expect(screen.getByLabelText('Volume value')).toHaveValue('0.0 dB');
+  });
+
+  it('Clip Pan: −1..1 writes el.pan (el-6 −0.15 → 0.5)', () => {
+    boot({ selection: ['el-6'], inspectorTab: 'audio' });
+    const field = screen.getByLabelText('Pan value');
+    expect(field).toHaveValue('-0.15');
+    fireEvent.change(field, { target: { value: '0.5' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(el('el-6').pan).toBe(0.5);
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Clip Pan' }));
+    expect(el('el-6').pan).toBe(0);
+  });
+
+  it('Clip Pitch: Semi Tones + Cents write el.pitchSemitones/pitchCents', () => {
+    boot({ selection: ['el-6'], inspectorTab: 'audio' });
+    fireEvent.change(screen.getByLabelText('Semi Tones value'), { target: { value: '3' } });
+    fireEvent.keyDown(screen.getByLabelText('Semi Tones value'), { key: 'Enter' });
+    expect(el('el-6').pitchSemitones).toBe(3);
+    fireEvent.change(screen.getByLabelText('Cents value'), { target: { value: '-40' } });
+    fireEvent.keyDown(screen.getByLabelText('Cents value'), { key: 'Enter' });
+    expect(el('el-6').pitchCents).toBe(-40);
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Clip Pitch' }));
+    expect(el('el-6').pitchSemitones).toBe(0);
+    expect(el('el-6').pitchCents).toBe(0);
+  });
+
+  it('Clip Equalizer: 4 bands ±24 dB — band write preserves the other bands; per-band + master reset', () => {
+    boot({ selection: ['el-6'], inspectorTab: 'audio' }); // eq [2, -1, 0, -2]
+    const b1 = screen.getByTestId('shell-inspector-eq-slider-1');
+    expect(b1).toHaveValue('2');
+    expect(screen.getByTestId('shell-inspector-eq-value-4')).toHaveTextContent('-2');
+    fireEvent.change(b1, { target: { value: '6' } });
+    expect(screen.getByTestId('shell-inspector-eq-value-1')).toHaveTextContent('+6'); // live preview
+    fireEvent.pointerUp(b1);
+    expect(el('el-6').eq).toEqual([6, -1, 0, -2]); // other bands preserved
+    // per-band reset zeroes ONLY band 1
+    fireEvent.click(screen.getByTestId('shell-inspector-eq-reset-1'));
+    expect(el('el-6').eq).toEqual([0, -1, 0, -2]);
+    // master reset zeroes the tuple
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Clip Equalizer' }));
+    expect(el('el-6').eq).toEqual([0, 0, 0, 0]);
+    // frequency labels 62 / 250 / 1K / 4K / 16K render under the bands
+    for (const hz of ['62', '250', '1K', '4K', '16K']) expect(screen.getByText(hz)).toBeInTheDocument();
+  });
+
+  it('EQ multi-select: mixed bands hide the sliders; a band reset writes ALL selected', () => {
+    // el-6 eq [2,-1,0,-2] vs el-2 (no eq → [0,0,0,0], unlocked main track) → mixed
+    boot({ selection: ['el-6', 'el-2'], inspectorTab: 'audio' });
+    expect(screen.getAllByTestId('chip-mixed-values').length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByTestId('shell-inspector-eq-slider-1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('shell-inspector-eq-reset-2'));
+    expect(el('el-6').eq).toEqual([2, 0, 0, -2]); // only band 2 written, bands 1/4 kept
+    expect(el('el-2').eq).toEqual([0, 0, 0, 0]); // fanned out to the whole selection
+  });
+
+  it('collapsible groups: the caret hides the section body (aria-expanded law)', () => {
+    boot({ selection: ['el-6'], inspectorTab: 'audio' });
+    const caret = screen.getByRole('button', { name: 'Collapse Clip Volume' });
+    expect(screen.getByLabelText('Volume value')).toBeVisible();
+    fireEvent.click(caret);
+    expect(caret).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByLabelText('Volume value')).not.toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Clip Volume' }));
+    expect(screen.getByLabelText('Volume value')).toBeVisible();
   });
 });

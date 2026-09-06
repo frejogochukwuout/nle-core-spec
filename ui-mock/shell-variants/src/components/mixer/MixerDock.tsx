@@ -10,12 +10,18 @@
      (one per audio track + 2 aux returns + master), filling the full
      height the timeline area gives the dock.
 
-   Because the dock shares the timeline area's height, strips get real
-   fader room (the old 176px row crammed them). Per-track M/S/L in the
-   bridge state is intentionally dropped — the rail is a glance-level
-   surface and the track headers carry the same store commands at the
-   same height. F6-region: the dock joins the focus cycle as the 7th
-   region (registered in AppShell). */
+   R19-B1: strips stretch h-full with terminal fader sections
+   (th_mto6496s) and the aux returns + master pin to the dock's RIGHT
+   edge, OUTSIDE the channel scroll region (th_mto63f99 — the right
+   region of the mixer block always carries the return/master bank
+   cleanly; channel strips scroll on their own when the row overflows,
+   never under the master). Compact mode recalibrated for the reference
+   strip anatomy (fixed rows ≈ 285px + min fader 124px).
+
+   Per-track M/S/L in the bridge state is intentionally dropped — the rail
+   is a glance-level surface and the track headers carry the same store
+   commands at the same height. F6-region: the dock joins the focus cycle
+   as the 7th region (registered in AppShell). */
 
 import { useEffect, useRef, useState } from 'react';
 import { AudioLines, ChevronsRight } from 'lucide-react';
@@ -54,6 +60,7 @@ function BridgeRail() {
                 trackId={t.id}
                 db={strip?.fader ?? -6}
                 duckAmount={mixer.ducking[t.id]?.amount ?? 0}
+                width={17.5}
                 fillHeight
                 label={t.name}
               />
@@ -98,13 +105,16 @@ function FullDock() {
   const [flashOn, setFlashOn] = useState(false);
 
   // compact when the timeline area gets short (main-body drag) — strips drop
-  // inserts/sends/ducking and slim down, the fader room survives
+  // the graphs/input rows and slim to 72px; the terminal fader survives.
+  // R19-B1 recalibration: the reference anatomy's fixed rows are ~285px
+  // (top bar 3 + header 24 + input 22 + rack/I 70 + graphs 66 + role 22 +
+  // RSM 24 + pan 56) + min fader 124 → compact below 380px total dock height
   const ref = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => setCompact(el.offsetHeight < 260));
+    const ro = new ResizeObserver(() => setCompact(el.offsetHeight < 380));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -120,7 +130,7 @@ function FullDock() {
   return (
     <div
       ref={ref}
-      className="flex h-full min-h-0 max-w-[60%] shrink-0 items-stretch overflow-x-auto border-l border-hairline bg-shell"
+      className="flex h-full min-h-0 max-w-[60%] shrink-0 items-stretch border-l border-hairline bg-shell"
       data-testid="mixer-dock-full"
       role="group"
       aria-label="Audio mixer"
@@ -144,18 +154,28 @@ function FullDock() {
         </span>
         <AudioLines size={11} strokeWidth={1.6} className="text-tfaint" aria-hidden="true" />
       </div>
-      {audio.map((t, i) => (
-        <ChannelStrip
-          key={t.id}
-          track={t}
-          sceneId={scene.id}
-          compact={compact}
-          focused={stripFocus === t.id}
-          flashing={flashOn && stripFocus === t.id}
-          index={i} /* A4: subtle alternating bg parity across the strip row */
-          onStripClick={() => setStripFocus(t.id)}
-        />
-      ))}
+      {/* channel strips — their own horizontal scroll region; strips stretch
+          the FULL dock height (h-full, terminal fader sections — fixes
+          th_mto6496s; the old fixed 110px centerpiece left the bottom half
+          of the dock's right region empty) */}
+      <div className="flex min-h-0 min-w-0 items-stretch overflow-x-auto">
+        {audio.map((t, i) => (
+          <ChannelStrip
+            key={t.id}
+            track={t}
+            sceneId={scene.id}
+            compact={compact}
+            focused={stripFocus === t.id}
+            flashing={flashOn && stripFocus === t.id}
+            index={i} /* A4: subtle alternating bg parity across the strip row */
+            onStripClick={() => setStripFocus(t.id)}
+          />
+        ))}
+      </div>
+      {/* aux returns + master PINNED to the dock's right edge — the dock's
+          right region always carries the return/master bank cleanly, never
+          dead space and never scrolled away under the channel row (fixes
+          th_mto63f99) */}
       <AuxStrip bus="a1" compact={compact} />
       <AuxStrip bus="a2" compact={compact} />
       <MasterStrip compact={compact} />

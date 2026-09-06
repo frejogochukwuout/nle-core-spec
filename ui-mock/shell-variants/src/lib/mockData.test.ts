@@ -59,9 +59,37 @@ describe('frame-clean discipline (24 fps)', () => {
 });
 
 describe('spec 18 §4.10 sample shape — scene 1 "Rough Cut v3"', () => {
-  it('has 4 tracks: overlay, main, audio, audio (locked A2)', () => {
-    expect(scene1.tracks.map((t) => t.kind)).toEqual(['overlay', 'main', 'audio', 'audio']);
+  it('has 5 tracks: overlay, main, audio, audio (locked A2), caption (R19)', () => {
+    expect(scene1.tracks.map((t) => t.kind)).toEqual(['overlay', 'main', 'audio', 'audio', 'caption']);
     expect(scene1.tracks.find((t) => t.id === 'tr-audio-2')!.locked).toBe(true);
+  });
+
+  it('R19: the caption track carries 5 text elements with frame-clean timings + bodies', () => {
+    const cc = scene1.tracks.find((t) => t.kind === 'caption')!;
+    expect(cc.badge).toBe('CC');
+    expect(cc.language).toBe('en');
+    expect(cc.elements).toHaveLength(5);
+    expect(cc.elements.map((e) => e.text)).toEqual([
+      'We always visit this beach',
+      'Nous venons tout le temps à la plage.',
+      'Every year we spend a week here',
+      'Swimming, surfing, enjoying the sunsets',
+      'But this year was different',
+    ]);
+    // frame-clean @24: t*24 is an integer for every caption edge
+    for (const e of cc.elements) {
+      expect(e.startTime * 24).toBeCloseTo(Math.round(e.startTime * 24), 6);
+      expect((e.startTime + e.duration) * 24).toBeCloseTo(Math.round((e.startTime + e.duration) * 24), 6);
+    }
+  });
+
+  it('R19: el-2/el-3 ship clip markers; el-6 ships per-clip audio params', () => {
+    const el2 = findElement(project.scenes, 'el-2')!.element;
+    expect(el2.markers).toHaveLength(2);
+    expect(el2.markers!.map((m) => m.id)).toEqual(['cm-1', 'cm-2']);
+    const el6 = findElement(project.scenes, 'el-6')!.element;
+    expect(el6.pan).toBe(-0.15);
+    expect(el6.eq).toEqual([2, -1, 0, -2]);
   });
 
   it('main track holds the 4 sample video clips end-to-end', () => {
@@ -92,8 +120,12 @@ describe('spec 18 §4.10 sample shape — scene 1 "Rough Cut v3"', () => {
     expect(findElement(project.scenes, 'el-6')!.element.duration).toBe(30);
   });
 
-  it('scene 1 has the 4 sample markers at 0 / 8.5 / 15.5 / 24', () => {
-    expect(scene1.markers.map((m) => m.time)).toEqual([0, 8.5, 15.5, 24.0]);
+  it('scene 1 has the 5 sample markers at 0 / 8.5 / 15.5 / 24 + the 17-24 range (R19)', () => {
+    expect(scene1.markers.map((m) => m.time)).toEqual([0, 8.5, 15.5, 24.0, 17.0]);
+    const range = scene1.markers.find((m) => m.id === 'mk-5')!;
+    expect(range.duration).toBe(7.0);
+    expect(range.notes).toContain('Colour pass');
+    expect(scene1.markers.find((m) => m.id === 'mk-3')!.keyword).toBe('music');
   });
 });
 

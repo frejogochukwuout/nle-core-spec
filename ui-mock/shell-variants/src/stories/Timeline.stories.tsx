@@ -3,7 +3,10 @@
    ruler with markers, the R15-T1 CapCut ruler tiers, and the R15-T5 snap
    indicator driven by a real (programmatic) clip drag. Timeline itself is
    fully store-driven (needs VariantProvider only — supplied by the global
-   decorator). */
+   decorator).
+   R19: markers v2 (point pins + range band in the ruler's dedicated marker
+   band), the caption lane (parchment chips + CC header), and the bounded
+   scroll runway are all visible in the Default story. */
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Timeline } from '../components/timeline/Timeline';
@@ -92,16 +95,27 @@ const audioEls: ElementJSON[] = [
 const lockedEls: ElementJSON[] = [
   { id: 'demo-locked', type: 'audio', trackId: 'demo-a2', name: 'interview_marina — locked track', startTime: 3, duration: 8, sourceStart: 0, mediaId: 'm-07', volume: 0.8 },
 ];
+const captionLane: TrackJSON = {
+  id: 'demo-cc', kind: 'caption', name: 'Captions', badge: 'CC', language: 'en',
+  muted: false, solo: false, locked: false, visible: true,
+  elements: [
+    { id: 'demo-cap-1', type: 'text', trackId: 'demo-cc', name: 'Sub 1', startTime: 1, duration: 3, text: 'We always visit this beach' },
+    { id: 'demo-cap-2', type: 'text', trackId: 'demo-cc', name: 'Sub 2', startTime: 4.5, duration: 3.5, text: 'Nous venons tout le temps à la plage.' },
+  ],
+};
+const captionEls = captionLane.elements;
 
 function Lane({ label, track, els, kind }: { label: string; track: TrackJSON; els: ElementJSON[]; kind: TrackJSON['kind'] }) {
   const pxPerSec = useUi((s) => s.pxPerSec);
-  const h = trackHeights(kind, 'filmstrip'); // this story previews the spec-05 canonical geometry
+  /* R19: caption lanes are 32px (Sub-lane); other kinds keep the spec-05
+     canonical geometry this story previews */
+  const h = kind === 'caption' ? 32 : trackHeights(kind, 'filmstrip');
   return (
     <div>
       <div className="mono mb-1 text-[11px] text-tmuted">{label}</div>
       <div
         className="relative w-full border-b border-hairline"
-        style={{ height: h, background: kind === 'main' ? 'var(--lane-video)' : kind === 'audio' ? 'var(--lane-audio)' : 'var(--lane-overlay)' }}
+        style={{ height: h, background: kind === 'main' ? 'var(--lane-video)' : kind === 'audio' ? 'var(--lane-audio)' : kind === 'caption' ? 'color-mix(in srgb, #c1b59c 10%, var(--lane-overlay))' : 'var(--lane-overlay)' }}
       >
         {els.map((el) => (
           <Clip key={el.id} el={el} track={track} pxPerSec={pxPerSec} laneHeight={h} snapTargets={SNAP_TARGETS} />
@@ -121,7 +135,8 @@ export const ClipStates: StoryObj = {
       <StoreBoot patch={{ selection: ['demo-sel'] }} />
       <div className="flex flex-col gap-4 p-4">
         <Lane label="V1 · main — selected, offline, F-badge, linked+50%" track={mainLane} els={videoEls} kind="main" />
-        <Lane label="A1 · audio — fade ramps" track={audioLane} els={audioEls} kind="audio" />
+        <Lane label="A1 · audio — fade ramps (symmetric envelope + fades)" track={audioLane} els={audioEls} kind="audio" />
+        <Lane label="CC · captions — parchment chips" track={captionLane} els={captionEls} kind="caption" />
         <Lane label="A2 · audio — locked track (stripes)" track={lockedAudioLane} els={lockedEls} kind="audio" />
       </div>
     </>
@@ -199,6 +214,29 @@ export const RulerTiers: StoryObj = {
         <TierRuler pps={46} caption="46 px/s — labels 3 s (MM:SS) · ticks 1 s" />
         <TierRuler pps={120} caption="120 px/s — labels 1 s · tick = label (no even divider ≥ 18 px)" />
         <TierRuler pps={240} caption="240 px/s — labels 15 frames (Xf between MM:SS seconds) · ticks 5 frames" />
+      </div>
+    </>
+  ),
+};
+
+/** R19 markers v2 + captions lane: zoomed-in timeline showing the ruler's
+ *  dedicated marker band (point pins + the mk-5 RANGE band with rails and
+ *  shield caps), the 32px caption lane with parchment chips, and clip
+ *  markers on el-2/el-3. Click a pin / range / chip to route the inspector
+ *  rail (marker → MarkerInspector, chip → CaptionInspector). */
+export const MarkersAndCaptions: StoryObj = {
+  name: 'Timeline — markers v2 + captions',
+  parameters: { layout: 'fullscreen' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ pxPerSec: 120 }} />
+      <div className="flex h-screen flex-col bg-app">
+        <div className="mono flex h-[40px] shrink-0 items-center px-3 text-[11px] text-tmuted">
+          ( ruler marker band: point pins + mk-5 range 17–24 s · caption lane: 5 parchment chips · clip markers on el-2/el-3 )
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Timeline />
+        </div>
       </div>
     </>
   ),

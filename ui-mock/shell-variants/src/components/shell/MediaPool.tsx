@@ -4,9 +4,14 @@
      thumbnail sequence), whole-body HTML5 drag-drop target with a
      dashed-accent overlay while files are over it, ⌘I hint (the global
      shortcut already lives in useShortcuts);
-   - clip grid/list: card anatomy = thumb, name, TC duration, V/A/I type
-     badge, resolution, fps badge when ≠ project fps; offline = red left
-     stripe + "Media offline" warning badge (§4.2 missing-asset state);
+   - clip grid/list: card anatomy = thumb, name, TC duration, TYPE ICON
+     badge (R19 th_mto2qzoh/th_mto2sako: Film/AudioLines/Image glyphs, the
+     standard NLE affordance, replaced the V/A/I letters), resolution, fps
+     badge when ≠ project fps; offline = red left stripe + "Media offline"
+     warning badge (§4.2 missing-asset state);
+   - hover-to-autoplay (R19 th_mto2s2nc, gap C42): dwelling ≥400 ms on a
+     card runs a subtle scrub preview — ken-burns pan on the poster, a
+     PREVIEW chip + a progress hairline. Ambient and toast-free.
    - sort: 4 modes × asc/desc direction toggle, persisted with the view
      pref under ONE localStorage key ("nle-mock-pool-prefs"); hydrated on
      mount only while the store still holds defaults (defensive);
@@ -31,8 +36,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Search, LayoutGrid, List, Upload, X, TriangleAlert, Clock3, Clapperboard,
-  ArrowUpNarrowWide, ArrowDownWideNarrow,
+  Search, LayoutGrid, List, Download, X, TriangleAlert, Clock3, Clapperboard,
+  ArrowUpNarrowWide, ArrowDownWideNarrow, Film, AudioLines, Image,
 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { project, type MediaRecord, type MediaType, type TrackKind } from '../../lib/mockData';
@@ -62,10 +67,25 @@ const OPFS_BOOT_MS = 900;                // first-mount skeleton — simulated O
 const SEARCH_DEBOUNCE_MS = 200;          // §4.2 search debounce
 const MENU_NAME = 'mediapool';           // testids: shell-menu-mediapool-<item>
 
-const typeBadge = (m: MediaRecord) =>
-  m.type === 'video' ? { t: 'V', cls: 'border-[var(--type-video)] text-[var(--type-video)]' }
-  : m.type === 'audio' ? { t: 'A', cls: 'border-[var(--type-audio)] text-[var(--type-audio)]' }
-  : { t: 'I', cls: 'border-[var(--type-overlay)] text-[var(--type-overlay)]' };
+/* th_mto2qzoh + th_mto2sako: the V/A/I LETTER badges became TYPE ICONS —
+   Film = video, AudioLines = audio, Image = still. Standard NLE affordance
+   (reviewer request); same boxed badge chrome + the same --type-* tokens,
+   and the label contract moves to role=img + aria-label so screen readers
+   still announce the type per card/row. */
+const TYPE_ICONS: Record<MediaType, { Icon: typeof Film; label: string; cls: string }> = {
+  video: { Icon: Film, label: 'Video', cls: 'border-[var(--type-video)] text-[var(--type-video)]' },
+  audio: { Icon: AudioLines, label: 'Audio', cls: 'border-[var(--type-audio)] text-[var(--type-audio)]' },
+  image: { Icon: Image, label: 'Image', cls: 'border-[var(--type-overlay)] text-[var(--type-overlay)]' },
+};
+
+function TypeIconBadge({ m }: { m: MediaRecord }) {
+  const { Icon, label, cls } = TYPE_ICONS[m.type];
+  return (
+    <span role="img" aria-label={label} title={label} className={`mono flex h-[17px] w-[18px] shrink-0 items-center justify-center rounded border ${cls}`}>
+      <Icon size={11} strokeWidth={2} aria-hidden="true" />
+    </span>
+  );
+}
 
 function cmpBy(sortBy: SortBy, a: MediaRecord, b: MediaRecord): number {
   switch (sortBy) {
@@ -76,7 +96,19 @@ function cmpBy(sortBy: SortBy, a: MediaRecord, b: MediaRecord): number {
   }
 }
 
-function Thumb({ m, small = false }: { m: MediaRecord; small?: boolean }) {
+/* ---- hover-to-autoplay scrub preview (th_mto2s2nc, gap C42) ----
+   Dwelling ≥ HOVER_DWELL_MS on a card starts an AMBIENT preview: a slow
+   ken-burns pan across the poster + a PREVIEW chip + a progress hairline
+   that sweeps the same 6 s window. Toast-free on purpose — the state is
+   ambient chrome, not an event the user must acknowledge.
+   HONEST MOCK (gap C42): a real implementation loads poster FRAMES from a
+   thumb-specific asset strip and scrubs them — NEVER the full-res source;
+   the mock has no poster-frame assets, so the pan/hairline stand in for the
+   scrub and say so in code here. */
+const HOVER_DWELL_MS = 400;
+const PREVIEW_SWEEP_S = 6; // pan + hairline window — one gentle sweep, no loop
+
+function Thumb({ m, small = false, preview = false }: { m: MediaRecord; small?: boolean; preview?: boolean }) {
   if (m.type === 'audio') {
     // deterministic mini-waveform as the audio "thumbnail"
     const bars = getWaveform(m.id, small ? 28 : 48, { amplitude: 0.9 });
@@ -106,7 +138,14 @@ function Thumb({ m, small = false }: { m: MediaRecord; small?: boolean }) {
       alt=""
       aria-hidden="true"
       className={`h-full w-full ${m.offline ? 'opacity-40 grayscale' : ''}`}
-      style={{ objectFit: 'cover' }}
+      style={{
+        objectFit: 'cover',
+        /* ken-burns sweep while previewing: object-position + a slight scale
+           drift over the same PREVIEW_SWEEP_S window the hairline runs */
+        objectPosition: preview ? '85% 50%' : '50% 50%',
+        transform: preview ? 'scale(1.06)' : 'scale(1)',
+        transition: preview ? `object-position ${PREVIEW_SWEEP_S}s linear, transform ${PREVIEW_SWEEP_S}s ease-out` : 'none',
+      }}
       loading="lazy"
     />
   );
@@ -126,7 +165,24 @@ interface ItemProps {
 /* §4.2 offline treatment: red left stripe (absolute, cascade-proof) +
    "Media offline" badge on the thumb */
 function MediaCard({ m, selected, active, onClick, onDoubleClick, onContextMenu, onDragStart, onDragEnd }: ItemProps) {
-  const badge = typeBadge(m);
+  /* hover-dwell preview state (th_mto2s2nc): the dwell timer starts on
+     mouseenter and cancels on leave — a quick pass (<400 ms) never arms it */
+  const [preview, setPreview] = useState(false);
+  const dwellRef = useRef<number | null>(null);
+  const startDwell = () => {
+    if (dwellRef.current !== null) return;
+    dwellRef.current = window.setTimeout(() => setPreview(true), HOVER_DWELL_MS);
+  };
+  const cancelDwell = () => {
+    if (dwellRef.current !== null) {
+      window.clearTimeout(dwellRef.current);
+      dwellRef.current = null;
+    }
+    setPreview(false); // leave = reset (snap back, no reverse theater)
+  };
+  useEffect(() => () => {
+    if (dwellRef.current !== null) window.clearTimeout(dwellRef.current);
+  }, []);
   return (
     <div
       id={`pool-opt-${m.id}`}
@@ -140,6 +196,8 @@ function MediaCard({ m, selected, active, onClick, onDoubleClick, onContextMenu,
       onContextMenu={onContextMenu}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onMouseEnter={startDwell}
+      onMouseLeave={cancelDwell}
       className={`group relative flex flex-col overflow-hidden rounded-[var(--radius)] border bg-inset text-left transition-colors ${
         selected
           ? 'border-accent shadow-[inset_0_0_0_1px_var(--accent-selection)]'
@@ -150,7 +208,7 @@ function MediaCard({ m, selected, active, onClick, onDoubleClick, onContextMenu,
     >
       {m.offline && <span className="pointer-events-none absolute bottom-0 left-0 top-0 z-10 w-[3px] bg-[var(--danger)]" aria-hidden="true" />}
       <div className="relative aspect-video w-full overflow-hidden border-b border-hairline">
-        <Thumb m={m} />
+        <Thumb m={m} preview={preview} />
         <span className="mono absolute bottom-1 right-1 rounded-sm bg-black/70 px-1 py-0.5 text-[11px] text-white">
           {m.duration !== null ? tc(m.duration) : 'STILL'}
         </span>
@@ -159,11 +217,29 @@ function MediaCard({ m, selected, active, onClick, onDoubleClick, onContextMenu,
             <TriangleAlert size={11} strokeWidth={1.6} /> Media offline
           </span>
         )}
+        {/* th_mto2s2nc ambient preview chrome: chip + progress hairline over
+            the same PREVIEW_SWEEP_S window the poster pans — no toast, this
+            is ambient state, not an event */}
+        {preview && (
+          <span
+            data-testid="shell-mediapool-preview-chip"
+            className="mono absolute right-1 top-1 rounded-sm bg-black/75 px-1 py-0.5 text-[10px] font-bold tracking-[0.08em] text-white"
+          >
+            PREVIEW
+          </span>
+        )}
+        {preview && (
+          <div
+            data-testid="shell-mediapool-preview-progress"
+            className="absolute bottom-0 left-0 h-[2px]"
+            style={{ width: '100%', background: 'var(--accent-selection)', transition: `width ${PREVIEW_SWEEP_S}s linear`, transitionProperty: 'width' }}
+          />
+        )}
       </div>
       <div className="flex flex-col gap-0.5 px-2 py-1.5">
         <span className="truncate text-[11px] text-tprimary">{m.name}</span>
         <span className="flex items-center gap-1.5 text-[11px] text-tmuted">
-          <span className={`mono rounded border px-1 font-bold ${badge.cls}`}>{badge.t}</span>
+          <TypeIconBadge m={m} />
           {m.width ? <span className="mono">{m.width}×{m.height}</span> : <span>audio</span>}
           {m.fps && m.fps !== project.settings.fps && <span className="mono rounded-sm border border-soft px-1 text-[11px] text-tmuted">{m.fps}p</span>}
         </span>
@@ -173,7 +249,6 @@ function MediaCard({ m, selected, active, onClick, onDoubleClick, onContextMenu,
 }
 
 function MediaRow({ m, selected, active, onClick, onDoubleClick, onContextMenu, onDragStart, onDragEnd }: ItemProps) {
-  const badge = typeBadge(m);
   return (
     <div
       id={`pool-opt-${m.id}`}
@@ -201,7 +276,7 @@ function MediaRow({ m, selected, active, onClick, onDoubleClick, onContextMenu, 
       </div>
       <span className="min-w-0 flex-1 truncate text-[11px] text-tprimary">{m.name}</span>
       {m.offline && <TriangleAlert size={11} strokeWidth={1.6} className="shrink-0 text-[var(--danger)]" aria-label="Media offline" />}
-      <span className={`mono shrink-0 rounded border px-1 text-[11px] font-bold ${badge.cls}`}>{badge.t}</span>
+      <TypeIconBadge m={m} />
       <span className="mono w-[74px] shrink-0 text-right text-[11px] text-tmuted">
         {m.duration !== null ? tc(m.duration) : '—'}
       </span>
@@ -226,6 +301,8 @@ export function MediaPool() {
   const setMediaDrag = useUi((s) => s.setMediaDrag);
   const pushToast = useUi((s) => s.pushToast);
   const loadSampleProject = useUi((s) => s.loadSampleProject);
+  const enterSourcePreview = useUi((s) => s.enterSourcePreview);
+  const exitSourcePreview = useUi((s) => s.exitSourcePreview);
 
   const menu = useContextMenu(); // §4.9 media-pool menu
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -334,6 +411,17 @@ export function MediaPool() {
     else pushToast({ kind: 'info', title: `"${m.name}" is not on ${activeScene.name}`, detail: 'reveal jumps to the first clip using this asset in the active scene (mock)' });
   };
 
+  /* th_mto3504c (spec 18 §4.3 v1.1 source preview + registered deviation
+     C39): pool SELECTION drives the viewer's source-preview mode — exactly
+     ONE selected card flips the monitor to that asset's poster; an empty OR
+     multi selection returns the monitor to program mode (no single asset to
+     show). Reveal/double-click deliberately does NOT enter the mode — one
+     gesture, one meaning (the B4 ruling: reveal = jump the playhead). */
+  const syncSourcePreview = (ids: string[]) => {
+    if (ids.length === 1) enterSourcePreview(ids[0]);
+    else exitSourcePreview();
+  };
+
   const onItemClick = (e: React.MouseEvent, m: MediaRecord) => {
     const additive = e.metaKey || e.ctrlKey;
     setActiveId(m.id);
@@ -344,15 +432,23 @@ export function MediaPool() {
       if (a === -1 || b === -1) {
         setMediaSelection([m.id]);
         setAnchorId(m.id);
+        syncSourcePreview([m.id]);
         return;
       }
       const [lo, hi] = a < b ? [a, b] : [b, a];
-      setMediaSelection(items.slice(lo, hi + 1).map((x) => x.id));
+      const rangeIds = items.slice(lo, hi + 1).map((x) => x.id);
+      setMediaSelection(rangeIds);
+      syncSourcePreview(rangeIds); // multi → back to program
       return;
     }
     setAnchorId(m.id); // anchor = last single-clicked item
-    if (additive) toggleMediaSelection(m.id, true);
-    else setMediaSelection([m.id]);
+    if (additive) {
+      toggleMediaSelection(m.id, true);
+      syncSourcePreview(useUi.getState().mediaSelection); // toggled state is the truth
+    } else {
+      setMediaSelection([m.id]);
+      syncSourcePreview([m.id]);
+    }
   };
 
   /* §4.9 media-pool menu — Reveal / Copy / Move to… / Remove */
@@ -381,7 +477,9 @@ export function MediaPool() {
             return;
           }
           setRemovedIds((ids) => (ids.includes(m.id) ? ids : [...ids, m.id]));
-          setMediaSelection(useUi.getState().mediaSelection.filter((x) => x !== m.id));
+          const remaining = useUi.getState().mediaSelection.filter((x) => x !== m.id);
+          setMediaSelection(remaining);
+          syncSourcePreview(remaining); // selection changed — preview follows
           pushToast({ kind: 'success', title: `Removed "${m.name}" (mock)`, detail: 'pool-only removal — the store has no removeMediaAsset action yet' });
         },
       },
@@ -483,6 +581,7 @@ export function MediaPool() {
         e.stopPropagation();
         setAnchorId(m.id);
         toggleMediaSelection(m.id, true);
+        syncSourcePreview(useUi.getState().mediaSelection); // keyboard = same selection law
         return;
       }
       default:
@@ -522,6 +621,9 @@ export function MediaPool() {
     <div data-testid="shell-mediapool" className="flex h-full w-full min-h-0 min-w-0 flex-col bg-shell">
       {/* header row — import + search + sort/dir + view (never wraps, §9) */}
       <div className="flex items-center gap-1 border-b border-hairline px-2 py-1.5">
+        {/* th_mto2t03u: the Import button now carries a proper IMPORT glyph
+            (Download — media flows INTO the project); the old Upload arrow
+            read as an export affordance. Same aria-label + mock toast. */}
         <button
           type="button"
           className="icon-btn !h-[22px] !w-[22px] shrink-0"
@@ -529,7 +631,7 @@ export function MediaPool() {
           aria-label="Import media"
           data-tip="Import media (⌘I)"
         >
-          <Upload size={13} strokeWidth={1.6} />
+          <Download size={13} strokeWidth={1.6} />
         </button>
         <div className="relative flex min-w-0 flex-1 items-center">
           <Search size={12} strokeWidth={1.6} className="absolute left-1.5 text-tfaint" aria-hidden="true" />
@@ -633,7 +735,7 @@ export function MediaPool() {
                 className="flex items-center gap-1.5 rounded-[var(--radius)] px-3 py-1.5 text-[11px] font-semibold"
                 style={{ background: 'var(--accent-selection)', color: 'var(--accent-contrast)' }}
               >
-                <Upload size={13} strokeWidth={1.6} aria-hidden="true" /> Import media
+                <Download size={13} strokeWidth={1.6} aria-hidden="true" /> Import media
                 <span className="mono opacity-70">⌘I</span>
               </button>
               <button type="button" onClick={loadSample} className="mini-btn">
@@ -663,7 +765,7 @@ export function MediaPool() {
         {/* dashed-accent import overlay while external files are over the body */}
         {fileOver && (
           <div className="pool-drop-overlay" aria-hidden="true">
-            <Upload size={14} strokeWidth={1.6} className="text-accent" />
+            <Download size={14} strokeWidth={1.6} className="text-accent" />
             <span className="text-[11px] font-semibold text-accent">Drop files to import</span>
           </div>
         )}

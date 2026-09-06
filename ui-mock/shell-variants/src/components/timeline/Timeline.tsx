@@ -31,7 +31,7 @@ import { createEdgeAutoScroll } from '../../lib/edgeScroll';
 import { zoomController, createWheelZoomAccumulator } from '../../lib/zoomController';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
-import { Clip, buildClipMenuItems, type ClipDragEvent, type ClipDragHost } from './Clip';
+import { Clip, buildClipMenuItems, CAPTION_PARCHMENT, type ClipDragEvent, type ClipDragHost } from './Clip';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { POOL_DRAG_TYPE, isDroppable } from '../shell/MediaPool';
 import { useConfirm } from '../shell/ConfirmDialog';
@@ -243,14 +243,29 @@ export function Timeline() {
      replaces (dur+4)·pps). Single source — the Ruler receives it as a prop
      (dedup: it recomputed its own (dur+4)·pps before). */
   const zoomMin = useUi((s) => s.zoomMinPps);
-  const contentW = dynamicContentWidth(duration, pxPerSec, viewportW || 900, zoomMin);
+  const vw = viewportW || 900;
+  /* fixes th_mto2zq0g — BOUNDED SCROLL RUNWAY: the canonical padding adds
+     up to 75% of the viewport of empty scrollable runway past the content
+     end ("keep scrolling into nothing"). Cap the runway at 25% of the
+     viewport — the zoomMinPps fit-25% convention — so scrolling STOPS just
+     past the content end, while the viewport floor keeps the lanes filling
+     the scroller at zoom-to-fit. The Ruler ticks + lane backgrounds still
+     paint the FULL contentW (only the trailing runway shrinks). Scroll law:
+     scrollMax = scrollWidth − clientWidth = contentW − viewport. */
+  const contentW = Math.max(
+    Math.min(dynamicContentWidth(duration, pxPerSec, vw, zoomMin), duration * pxPerSec + 0.25 * vw),
+    vw,
+  );
   const zoneH = variant.headerStyle === 'readout' ? 44 : 22;
   const colW = variant.headerStyle === 'readout' ? 160 : 112;
 
   const audioLaneBoost = useUi((s) => s.audioLaneBoost);
   const trackHeightPref = useUi((s) => s.trackHeightPref);
   const laneHeight = (kind: TrackJSON['kind']) => {
-    const base = trackHeights(kind, variant.clipStyle);
+    /* R19 caption lane (gap C34): 32px Sub-lane (reference §2.5 — the 24px
+       parchment chips + 4px insets); filmstrip/blocks kind heights apply to
+       every other kind. */
+    const base = kind === 'caption' ? 32 : trackHeights(kind, variant.clipStyle);
     /* spec 18 §4.9 Height pref (track-header menu): compact = 60% /
        tall = 140% of the kind-based auto height (normal = auto, the
        default), min 24px, rounded to px. B3 registration: the state-home
@@ -662,7 +677,11 @@ export function Timeline() {
   }, [playhead, playing, pxPerSec]);
 
   const laneBg = (kind: TrackJSON['kind']) =>
-    kind === 'main' ? 'var(--lane-video)' : kind === 'audio' ? 'var(--lane-audio)' : 'var(--lane-overlay)';
+    kind === 'main' ? 'var(--lane-video)'
+      : kind === 'audio' ? 'var(--lane-audio)'
+        : kind === 'caption'
+          ? `color-mix(in srgb, ${CAPTION_PARCHMENT} 10%, var(--lane-overlay))` /* R19: dedicated caption-lane tint (local constant — tokens.css is B4-owned) */
+          : 'var(--lane-overlay)';
 
   /* R15 T3 ghost chrome: the drag-preview ghost body per element type (the
      alt-ghost twin) + the conflict edge. */
@@ -881,28 +900,36 @@ export function Timeline() {
                   />
                 ))}
 
-                {/* transition markers — Resolve-style box straddling the cut */}
+                {/* transition markers — Resolve-style box straddling the cut.
+                    fixes th_mto31dyp: full-lane height minus a 4px inset, clean
+                    1px border, subtle VERTICAL gradient of --transition-mark
+                    (30% → 70% opacity), rounded 2px, centered slim crossfade
+                    glyph (two overlapping triangles), title/aria preserved.
+                    z 7: above clips (1/5), below drag ghosts (10) — see the
+                    R15 T9 z-order note at the playhead. */}
                 {track.elements.filter((e) => e.transitionOut).map((e) => {
                   const cut = (e.startTime + e.duration) * pxPerSec;
                   const w = e.transitionOut!.duration * pxPerSec;
                   return (
                     <div
                       key={`tr-${e.id}`}
-                      className="absolute top-[3px] z-[7] flex items-center justify-center overflow-hidden rounded-[2px]"
+                      className="absolute top-[2px] z-[7] flex items-center justify-center overflow-hidden rounded-[2px]"
                       style={{
                         left: cut - w / 2,
                         width: Math.max(w, 14),
-                        height: h - 8,
-                        background: 'linear-gradient(135deg, var(--transition-mark), color-mix(in srgb, var(--transition-mark) 45%, #000))',
+                        height: h - 4,
+                        background: 'linear-gradient(to bottom, color-mix(in srgb, var(--transition-mark) 30%, transparent), color-mix(in srgb, var(--transition-mark) 70%, transparent))',
                         border: '1px solid var(--transition-mark)',
-                        boxShadow: '0 0 0 1px rgba(0,0,0,0.35)',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
                       }}
                       title={`Crossfade · ${e.transitionOut!.presentation} · ${e.transitionOut!.duration}s`}
                       aria-label={`Crossfade transition, ${e.transitionOut!.duration} seconds`}
                       data-testid={`transition-${e.id}`}
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-                        <path d="M3 3 L11 11 M11 3 L3 11" stroke="white" strokeWidth="1.6" strokeLinecap="round" opacity="0.95" />
+                        {/* slim crossfade glyph: two overlapping triangles */}
+                        <path d="M3 3 L8.5 7 L3 11 Z" fill="white" opacity="0.92" />
+                        <path d="M11 3 L5.5 7 L11 11 Z" fill="white" opacity="0.92" />
                       </svg>
                     </div>
                   );

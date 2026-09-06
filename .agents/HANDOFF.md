@@ -382,3 +382,25 @@ StripMeter, fader scale, TrackHeader micro-meters, 83 stories).
 - The shell-variants' annotakit addon is NOT wired into shell-mini — do
   not assume pin-comment tooling works there (deliberate D2 cut, see
   DESIGN-mvp.md).
+
+## R19 (2026-09-06, shell-variants env) — feedback wave 3 + reference integration
+
+- **State**: HEAD lands R19 on `ui-mock/shell-variants/` (26/26 annotakit
+  threads fixed + resolved; the nine user-uploaded reference HTMLs integrated).
+  tsc clean, **944/944** tests, build green, **102 stories** (was 83).
+- **Live surface**: this env's public preview URL serves Storybook dev +
+  annotakit v0.5.0 on the NEW build (booted post-R19; kill→restore→public-200
+  cycle re-verified). Runtime copy re-synced from the repo; the live store
+  (`.git/annotakit/threads.db`) preserved — 46 threads.
+- **New seams for the next round**: insertMediaAt (7 Resolve edit ops, real
+  placement laws), marker v2 + captions model ops, source-preview mode,
+  LeftDock, color 3-region composition, inspector active-track fallback.
+  Gap ledger: `.agents/SPEC-REVISION-CANDIDATES.md` §H (C33-C44).
+- **Watch-outs minted this round**: (1) mint gap ids ONLY after reading the
+  candidates ledger — R19's design doc minted C29-C40 blind and collided with
+  R15's F.2 entries (66 comment citations swept by R19-REV); (2) Storybook
+  canvas height in agent-browser sessions defaults to ~478px with the addons
+  panel open — append `&nav=false&panel=false` to story URLs when measuring
+  layout, or every "not filling vertically" reading is a lie; (3) the eval-in
+  manager-vs-iframe trap — story DOM probes must go through
+  `document.getElementById('storybook-preview-iframe').contentDocument`.

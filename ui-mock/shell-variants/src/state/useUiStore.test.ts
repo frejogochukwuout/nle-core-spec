@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useActiveScene, trackHeights, useUi, mintTrackIds } from './useUiStore';
+import { useActiveScene, trackHeights, useUi, mintTrackIds, activeTrackOf } from './useUiStore';
 import { resolveGroupMove } from '../lib/timelinePlacement';
 import { project } from '../lib/mockData';
 
@@ -279,7 +279,7 @@ describe('track focus (spec 16 §3.6)', () => {
     act(() => { S().moveFocusedTrack(1); });
     expect(S().focusedTrackId).toBe('tr-overlay-1');
     act(() => { S().setFocusedTrack(null); S().moveFocusedTrack(-1); });
-    expect(S().focusedTrackId).toBe('tr-audio-2');
+    expect(S().focusedTrackId).toBe('tr-caption'); // R19: the caption lane is the bottom track now
   });
 
   it('moveFocusedTrack walks the stack and clamps at the ends', () => {
@@ -340,8 +340,8 @@ describe('markers', () => {
     const added = mk.find((m) => Math.abs(m.time - 20) < 0.01)!;
     expect(added).toBeDefined();
     expect(added.label).toBe('Marker');
-    // palette cursor = sc.markers.length % 8 BEFORE push (4) → colors[4] = 'blue'
-    expect(added.color).toBe('blue');
+    // palette cursor = sc.markers.length % 8 BEFORE push (5) → colors[5] = 'purple'
+    expect(added.color).toBe('purple');
   });
 
   it('addMarker with explicit color wins', () => {
@@ -354,7 +354,7 @@ describe('markers', () => {
     act(() => { S().setPlayhead(15.5); S().removeMarkersAt(15.5); });
     const times = S().scenes.find((sc) => sc.id === 'sc-1')!.markers.map((m) => m.time);
     expect(times).not.toContain(15.5);
-    expect(times).toEqual([0, 8.5, 24.0]);
+    expect(times).toEqual([0, 8.5, 24.0, 17.0]); // the 17-24 range marker survives (R19)
   });
 
   it('removeMarkersAt with nothing to remove is a true no-op (no history entry)', () => {
@@ -766,7 +766,7 @@ describe('addTrack', () => {
   it('inserts overlay tracks above main (spec 05 §12.1)', () => {
     act(() => { S().addTrack('overlay'); });
     const kinds = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.map((t) => t.kind);
-    expect(kinds).toEqual(['overlay', 'overlay', 'main', 'audio', 'audio']);
+    expect(kinds).toEqual(['overlay', 'overlay', 'main', 'audio', 'audio', 'caption']);
     const added = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks[1];
     expect(added.name).toBe('Text 2');
     expect(added.badge).toBe('T2');
@@ -775,7 +775,7 @@ describe('addTrack', () => {
   it('inserts main tracks directly below main', () => {
     act(() => { S().addTrack('main'); });
     const kinds = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.map((t) => t.kind);
-    expect(kinds).toEqual(['overlay', 'main', 'main', 'audio', 'audio']);
+    expect(kinds).toEqual(['overlay', 'main', 'main', 'audio', 'audio', 'caption']);
     expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks[2].badge).toBe('V2');
   });
 
@@ -872,12 +872,12 @@ describe('R13 review fixes', () => {
     expect(S().lockAll).toBe(false); // flag restored alongside the doc
     // doc restored to the fixture state: only tr-audio-2 is locked
     const tracks = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks;
-    expect(tracks.map((t) => t.locked)).toEqual([false, false, false, true]);
+    expect(tracks.map((t) => t.locked)).toEqual([false, false, false, true, false]);
     // and a fresh lock-all after the undo still works in the right direction
     act(() => { S().toggleLockAll(); });
     expect(S().lockAll).toBe(true);
     const fresh = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks; // re-fetch: history clones the doc
-    expect(fresh.map((t) => t.locked)).toEqual([true, true, true, true]);
+    expect(fresh.map((t) => t.locked)).toEqual([true, true, true, true, true]);
   });
 
   it('P2 fix: deleteElements is inert on locked tracks (spec 18 §4.5 / the pinned clip-guard)', () => {
@@ -1127,13 +1127,13 @@ describe('R14: trackHeightPref (spec 18 §4.9 Height rows)', () => {
 
 describe('R14: addTrack position routes (spec 18 §4.9 above/below)', () => {
   it('explicit above/below inserts at the ref track index, overriding the §12.1 default law', () => {
-    // sc-1 boot order: [T1, V1, A1, A2]
+    // sc-1 boot order: [T1, V1, A1, A2, CC]
     act(() => { S().addTrack('audio', 'above', 'tr-audio-1'); });
     expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.map((t) => t.badge))
-      .toEqual(['T1', 'V1', 'A3', 'A1', 'A2']); // A3 above A1 — NOT appended at the end
+      .toEqual(['T1', 'V1', 'A3', 'A1', 'A2', 'CC']); // A3 above A1 — NOT appended at the end
     act(() => { S().addTrack('audio', 'below', 'tr-audio-1'); });
     expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.map((t) => t.badge))
-      .toEqual(['T1', 'V1', 'A3', 'A1', 'A4', 'A2']); // A4 below A1, above A2
+      .toEqual(['T1', 'V1', 'A3', 'A1', 'A4', 'A2', 'CC']); // A4 below A1, above A2
     expect(S().past).toHaveLength(2); // each insert is its own undoable batch
   });
 
@@ -1146,7 +1146,7 @@ describe('R14: addTrack position routes (spec 18 §4.9 above/below)', () => {
   it('no position keeps the spec 05 §12.1 kind-ordering law (existing callers)', () => {
     act(() => { S().addTrack('overlay'); });
     expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.map((t) => t.kind))
-      .toEqual(['overlay', 'overlay', 'main', 'audio', 'audio']);
+      .toEqual(['overlay', 'overlay', 'main', 'audio', 'audio', 'caption']);
   });
 });
 
@@ -1775,5 +1775,186 @@ describe('R15 T4: stretchTrim (spec-06 §5.8 — speed compensates, rate clamp)'
     act(() => { S().stretchTrim('el-2', 'r', 2); }); // el-3 starts at el-2's end
     expect(el('el-2').duration).toBe(8.5); // clamped to a no-op
     expect(S().past.length).toBe(pastBefore);
+  });
+});
+
+/* ---------- R19: marker v2 / captions / source-preview / insertMediaAt ---------- */
+
+describe('R19: marker v2 (select / update / remove / clip markers)', () => {
+  it('selectMarker swaps the selection domain and clips clear it back', () => {
+    act(() => { S().selectMarker('mk-2'); });
+    expect(S().selectedMarkerId).toBe('mk-2');
+    expect(S().selection).toEqual([]);
+    act(() => { S().setSelection(['el-1']); });
+    expect(S().selectedMarkerId).toBe(null);
+  });
+
+  it('updateMarker patches fields with the range law, undo round-trips', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().updateMarker('mk-5', { time: 18.0, duration: 4.0, label: 'Drone pass', notes: 'n', keyword: 'k' }); });
+    const m = S().scenes.find((sc) => sc.id === 'sc-1')!.markers.find((x) => x.id === 'mk-5')!;
+    expect(m.time).toBe(18);
+    expect(m.duration).toBe(4);
+    expect(m.label).toBe('Drone pass');
+    // range law: duration clamps so time+duration ≤ scene duration (30)
+    act(() => { S().updateMarker('mk-5', { time: 29, duration: 5 }); });
+    const m2 = S().scenes.find((sc) => sc.id === 'sc-1')!.markers.find((x) => x.id === 'mk-5')!;
+    expect(m2.time).toBe(29);
+    expect(m2.duration).toBe(1); // 30 − 29
+    act(() => { S().undo(); act(() => { S().undo(); }); });
+    const m3 = S().scenes.find((sc) => sc.id === 'sc-1')!.markers.find((x) => x.id === 'mk-5')!;
+    expect(m3.time).toBe(17);
+    expect(m3.duration).toBe(7);
+    expect(S().past.length).toBe(pastBefore);
+  });
+
+  it('removeMarker deletes exactly one and clears the selection if it pointed there', () => {
+    act(() => { S().selectMarker('mk-1'); });
+    act(() => { S().removeMarker('mk-1'); });
+    expect(S().scenes.find((sc) => sc.id === 'sc-1')!.markers.map((m) => m.id)).not.toContain('mk-1');
+    expect(S().selectedMarkerId).toBe(null);
+  });
+
+  it('addClipMarker clamps the offset into the clip and clones for undo; removeClipMarker prunes', () => {
+    act(() => { S().addClipMarker('el-2', 99, 'pink'); }); // clamp → last frame
+    const el2 = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!;
+    expect(el2.markers).toHaveLength(3);
+    expect(el2.markers!.at(-1)!.offset).toBeCloseTo(el2.duration - 1 / 24, 6);
+    act(() => { S().undo(); });
+    expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.markers).toHaveLength(2);
+    act(() => { S().removeClipMarker('el-2', 'cm-1'); });
+    expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.markers!.map((m) => m.id)).toEqual(['cm-2']);
+  });
+});
+
+describe('R19: captions (addCaption gap-scan)', () => {
+  it('inserts a new caption at the first free slot after the reference, undoable', () => {
+    const pastBefore = S().past.length;
+    act(() => { S().addCaption('cap-1'); });
+    const cc = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.kind === 'caption')!;
+    expect(cc.elements).toHaveLength(6);
+    const added = cc.elements.at(-1)!;
+    // gap-scan: the 1.5s new caption can't fit before cap-3/4/5 (dense row) →
+    // first free slot is after cap-5's end (312/24 = 13.0)
+    expect(added.startTime).toBeCloseTo(13, 6);
+    expect(added.text).toBe('New caption');
+    expect(added.type).toBe('text');
+    act(() => { S().undo(); });
+    expect(S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.kind === 'caption')!.elements).toHaveLength(5);
+    expect(S().past.length).toBe(pastBefore);
+  });
+});
+
+describe('R19: source preview (spec 18 §4.3 v1.1 + C39 deviation)', () => {
+  it('enter/exit swaps the viewer mode and media id', () => {
+    act(() => { S().enterSourcePreview('m-03'); });
+    expect(S().viewerMode).toBe('source');
+    expect(S().sourceMediaId).toBe('m-03');
+    act(() => { S().exitSourcePreview(); });
+    expect(S().viewerMode).toBe('program');
+    expect(S().sourceMediaId).toBe(null);
+  });
+});
+
+describe('R19: insertMediaAt — the 7 Resolve edit functions (real placement)', () => {
+  const elsOn = (trackId: string) => S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === trackId)!.elements;
+
+  it('append lands at the track tail, one undo entry', () => {
+    act(() => { S().insertMediaAt('m-02', 'append'); });
+    // tr-main tail = 30 (el-4 ends 30)
+    const main = elsOn('tr-main');
+    expect(main.at(-1)!.startTime).toBe(30);
+    expect(main.at(-1)!.mediaId).toBe('m-02');
+    expect(S().past).toHaveLength(1);
+    act(() => { S().undo(); });
+    expect(elsOn('tr-main')).toHaveLength(4);
+    expect(S().past).toHaveLength(0);
+  });
+
+  it('insert splits the straddler and ripples later clips right', () => {
+    act(() => { S().setPlayhead(12); });
+    act(() => { S().insertMediaAt('m-03', 'insert'); }); // drone 18.6s → capped? no: 18.6 ≤ 30 → dur 18.6
+    const main = elsOn('tr-main');
+    // el-2 [8.5,17) straddles 12 → left half [8.5,12), right half [30.6, 35.6)
+    const el2 = main.find((e) => e.id === 'el-2')!;
+    expect(el2.duration).toBe(3.5);
+    const right = main.find((e) => e.id.startsWith('el-2-b'))!;
+    expect(right.startTime).toBeCloseTo(12 + 18.6, 6);
+    // el-3 [17,24) → shifted right by 18.6
+    expect(main.find((e) => e.id === 'el-3')!.startTime).toBeCloseTo(35.6, 6);
+    // the new clip sits at 12
+    expect(main.find((e) => e.mediaId === 'm-03' && e.startTime === 12)).toBeDefined();
+  });
+
+  it('overwrite removes fully-covered clips and trims straddlers', () => {
+    act(() => { S().setPlayhead(8.5); });
+    act(() => { S().insertMediaAt('m-05', 'overwrite'); }); // sunset 12.8s at 8.5 on main
+    const main = elsOn('tr-main');
+    // span [8.5, 21.3): el-2 [8.5,17) FULLY covered → removed
+    expect(main.find((e) => e.id === 'el-2')).toBeUndefined();
+    // el-3 [17,24) head-covered → start 21.3, dur 2.7, sourceStart shifted
+    const el3 = main.find((e) => e.id === 'el-3')!;
+    expect(el3.startTime).toBeCloseTo(8.5 + 12.8, 6);
+    expect(el3.duration).toBeCloseTo(24 - (8.5 + 12.8), 6);
+    // el-1 [0,8.5) half-open → untouched; el-4 [24,30) after the span → untouched
+    expect(main.find((e) => e.id === 'el-1')!.duration).toBe(8.5);
+    expect(main.find((e) => e.id === 'el-4')!.startTime).toBe(24);
+  });
+
+  it('placeOnTop creates an overlay track when none is compatible and inserts above main', () => {
+    act(() => { S().setPlayhead(2); });
+    act(() => { S().insertMediaAt('m-08', 'placeOnTop'); }); // image → overlay anyway; tr-overlay-1 exists → lands there
+    const ov = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-overlay-1')!;
+    expect(ov.elements.some((e) => e.mediaId === 'm-08' && e.startTime === 2)).toBe(true);
+  });
+
+  it('replace refuses honestly with no selection; swaps the selected clip with one', () => {
+    act(() => { S().setSelection([]); });
+    act(() => { S().insertMediaAt('m-02', 'replace'); });
+    expect(S().toasts.at(-1)!.title).toBe('Replace');
+    act(() => { S().setSelection(['el-1']); });
+    act(() => { S().insertMediaAt('m-03', 'replace'); });
+    const main = elsOn('tr-main');
+    expect(main.find((e) => e.id === 'el-1')).toBeUndefined();
+    expect(main.find((e) => e.mediaId === 'm-03' && e.startTime === 0)).toBeDefined();
+  });
+
+  it('fitToFill retimes the source into the loop span (rate-clamped honest refusal)', () => {
+    // loop fixture {2,28} → span 26; source m-05 12.8s → rate 12.8/26 ≈ 0.4923 (within clamp)
+    act(() => { S().insertMediaAt('m-05', 'fitToFill'); });
+    const main = elsOn('tr-main');
+    const fitted = main.find((e) => e.mediaId === 'm-05' && e.startTime === 2 && Math.abs(e.duration - 26) < 0.01);
+    expect(fitted).toBeDefined();
+    expect(fitted!.speed).toBeCloseTo(12.8 / 26, 4);
+  });
+
+  it('rippleOverwrite closes the gap when the displaced span exceeds the insert', () => {
+    // span [0,12.8): el-1 [0,8.5) removed (displaced 8.5) + el-2 [8.5,17)
+    // head-trimmed (displaced 4.3) → displaced 12.8 == dur → delta 0 → el-4 [24,30) stays
+    act(() => { S().setPlayhead(0); });
+    act(() => { S().insertMediaAt('m-05', 'rippleOverwrite'); });
+    const main = elsOn('tr-main');
+    expect(main.find((e) => e.id === 'el-1')).toBeUndefined();
+    expect(main.find((e) => e.id === 'el-2')!.startTime).toBeCloseTo(12.8, 6);
+    expect(main.find((e) => e.id === 'el-2')!.duration).toBeCloseTo(4.2, 6);
+    expect(main.find((e) => e.id === 'el-4')!.startTime).toBe(24); // delta 0 → no shift
+  });
+
+  it('audio media routes to the audio track (kind law)', () => {
+    act(() => { S().setPlayhead(4); });
+    act(() => { S().insertMediaAt('m-06', 'append'); });
+    const a1 = elsOn('tr-audio-1');
+    expect(a1.at(-1)!.mediaId).toBe('m-06');
+    expect(a1.at(-1)!.type).toBe('audio');
+  });
+});
+
+describe('R19: activeTrackOf (inspector empty-selection fallback)', () => {
+  it('derivation: focused track wins, then topmost visual under the playhead, then main', () => {
+    const sc = project.scenes[0];
+    expect(activeTrackOf(sc, 'tr-audio-1', 16)!.id).toBe('tr-audio-1'); // focused wins
+    expect(activeTrackOf(sc, null, 13)!.id).toBe('tr-main'); // el-2 covers 13 on main; el-5 ends at 12
+    expect(activeTrackOf(sc, null, 10.5)!.id).toBe('tr-overlay-1'); // el-5 [8.75,12) covers 10.5
+    expect(activeTrackOf(sc, null, 29.9)!.id).toBe('tr-main'); // past content → main fallback
   });
 });

@@ -401,3 +401,44 @@ favor; cursor-anchored zoom may be registered as a future preference flag.**
 | Scene-switch scrollLeft reset policy | Reset implemented (R15-F1); restore-to-edit-position not modeled (canonical has no equivalent either — view-state persistence is the shell's job) |
 | Preview batch-atomicity vs commit per-move drop (non-drag callers) | Drag seam is atomic; raw `moveElements` NON-atomic path documented in-code (locked/compatibility per-move drops) — registering the divergence for the engine contract |
 | Seek-click ≤500ms finalize | Implemented as a no-snap final re-seek; the 500ms time gate itself omitted (our ruler has no long-press semantics to disambiguate) — deviation comment in Ruler.tsx |
+
+## H. R19 reference-integration + feedback-wave-3 registrations (shell-variants round)
+
+Round R19 integrated nine user-uploaded reference mock HTMLs (audio editor/mixer, Resolve
+color wheels/qualifier/node-graph/scopes, timeline markers/captions/transcript, NLE edit
+workflow) + worked the 26-thread annotakit wave. Registering the mock's inventions so the
+seal can bless, replace, or promote them into the spec track. (Numbering note: R19's
+in-repo comments originally cited C29-C40 — those ids collided with ledger F.2's; the
+R19-REV review caught it and the whole tree was swept to C33-C44. Lesson minted as a
+SKILL meta-learning: check the ledger BEFORE minting gap ids in a design doc.)
+
+### H.1 New registrations (C33–C44)
+
+| # | Mock invention / gap | Spec clause touched | Where / status |
+|---|---|---|---|
+| C33 | **Marker v2 model** — `Marker.duration` (range markers, end = time+duration, ≥1 frame, clamped to scene), `notes`, `keyword` fields + per-clip markers (`ElementJSON.markers`: {id, offset, label, color}); ruler gains a dedicated MARKER BAND (distinct from tick band — pins never read as lane content), clickable pins → MarkerInspector rail swap, range = 20% fill + 2px rails + shield caps, "Go to Marker ›" real navigation | 05 §11.1, 09 §3.1A (point-marker-only today) | mockData.ts Marker/ElementJSON, useUiStore marker ops, Ruler.tsx, MarkerInspector.tsx — mock-real CRUD (undoable); spec ruling needed for range/clip markers |
+| C34 | **Captions track kind + body field** — `TrackKind 'caption'` + `TrackJSON.language` + `ElementJSON.text`; caption lane renders 24px parchment chips; CaptionInspector (embedded panel — the reference's DIALOG converted per user directive) with list table (#/In-Out/Caption/CPS-computed) + live editor + Add New/Prev/Next; viewer caption overlay chips under the playhead | 09 (teacher repo has SubtitleSegmentItem as an ELEMENT type; no caption TRACK-kind ruling; auto-transcript engine surface not modeled) | mockData.ts, Timeline/Clip caption lane, CaptionInspector.tsx, Viewer overlay — mock-real text/timing edits; gap: engine transcript/consolidation round |
+| C35 | **Per-clip audio params** — `pan` (−1..1), `pitchSemitones`/`pitchCents`, `eq` 4-band ±24 dB on ElementJSON; Inspector audio tab edits them for real (doc model, undoable) — the ENGINE consumes none (spec 20 scopes mixing per-track via MixerTrackSettings; per-clip pan/pitch/EQ have no G-surface home) | 20 §3-§4 (per-track only), 06 (varispeed is speed, not pitch) | mockData.ts, Inspector.tsx audio tab — display-state honesty comment at the site; engine round decides the field homes |
+| C36 | **Color node graph layout** — spec 18 §15.3 deferred the node graph to a seal question; the references now define it: left-dock graph (Master In → Primary → {Secondary ∥ Water mask} → Mixer → Tilt Shift → Lens Flare fx → Master Out), 106×86 cards, square/triangle ports, selection state, straight 2px edges; static topology + click-select only (drag/pan/zoom = gesture round) | 18 §15.3, 08 (node pipeline implied by the effect chain) | pages/color/ColorNodeGraph.tsx — upgrade §15.3 from "deferred" to the proposed 3-region color composition (graph left / viewer+scopes center / wheels+qualifier rail) |
+| C37 | **Deliver whole-view page** — the deliver page repurposes the ENTIRE mainbody (queue left / summary+range center / settings right) instead of the right-rail panel; the timeline stays live with loop in/out as the export range selection | 18 §8 deliver (single-panel today) | AppShell.tsx deliver routing, DeliverPage.tsx 3-region layout — layout amendment for the seal |
+| C38 | **Fullscreen-viewer toggle REMOVED** from toolbar2 per reviewer (th_mtoyu8bl: confusing in a browser, no clear strong use) — spec 18 §4.1's right cluster listed it; mock now: pool/effects/inspector only | 18 §4.1 | Toolbar2.tsx — spec text should drop the clause |
+| C39 | **Source-preview trigger widened** — spec 18 §4.3 v1.1 lists clip-menu + source-card-play triggers; the mock ALSO enters source mode on single pool-card SELECTION (reviewer th_mto3504c: "dual-purpose as asset preview") + exits on multi/empty; static poster + source TC (no fake playback) | 18 §4.3 (B4's one-gesture-one-meaning law kept: dbl-click stays reveal-only) | MediaPool.tsx, Viewer.tsx source mode — trigger-list amendment |
+| C40 | **Strip chrome beyond the G-surface** — input label row ("No Input"), record-arm R (display-only), insert-power "I" (display-only), + add-insert chips, EQ/dynamics sparkline thumbnails, 3px role-color TOP bar (F.2's bars moved bottom→top per reference); inserts stay 2 slots (model-scoped) | 20 §4.2 (no recordArm/input/inserts-power fields) | ChannelStrip.tsx — Fairlight-surface question for the seal |
+| C41 | **Meter palette** — reference is continuous green→yellow with 1px peak line; mock keeps OUR 3-zone + clip semantics at the reference's fixed 14px width | 20 (unpinned) | MixerPrimitives.tsx StripMeter — keep-ours decision, documented |
+| C42 | **Pool hover-to-autoplay** — ≥400ms dwell triggers a ken-burns object-position pan + PREVIEW chip + progress hairline (ambient, toast-free); real impl = poster frames from a thumb-specific asset, NEVER full-res | 18 §4.2, 03/09 (poster-frame decode surface) | MediaPool.tsx — engine round: poster-frame timeline |
+| C43 | **Scopes 2×2 embedded dock** — Parade/Waveform/Vectorscope/Histogram as a collapsible dock UNDER the viewer on the color page; deterministic seeded traces (scopes need the render readback — spec 08 §scope-accuracy pins 10-bit data the mock cannot produce) | 08 (scopes exist; layout 18), 04 | pages/color/ColorScopesDock.tsx — trace generation = engine round |
+| C44 | **Inspector empty-state → active-track fallback** — research (R19): Resolve/Premiere CLEAR the inspector on empty selection; track inspection is the Fairlight/mixer precedent. The mock derives an active track (focusedTrack → topmost-under-playhead → main) and shows a REAL track sheet (flags + mixer slice for audio) instead of a dead rail | 18 §4.4 (inspector is clip-scoped today) | Inspector.tsx via useUiStore.activeTrackOf — seal question: bless the fallback or keep the blank |
+
+### H.2 Real wiring delivered (no registration — the seams existed)
+
+- **insertMediaAt**: the 7 Resolve edit functions (insert/overwrite/append/placeOnTop/
+  rippleOverwrite/replace/fitToFill) — REAL placement against timelinePlacement laws
+  (frame-snap, half-open spans, split-with-transition/linkedTo laws, displaced-delta
+  ripple), one undoable history entry per op; replace/fitToFill degrade to honest
+  refusals when selection/range inputs are missing. The pool→timeline drop toast is now
+  backed by the same op family (EditOverlay buttons consume it).
+- **LeftDock** ("use the same area as bin", th_mtoyt5fv): pool+effects share the mediaW
+  slot as an ARIA tab pair — spec 18 §4.11's left-dock ruling refined (no side-by-side
+  strip).
+- Fader/scale/meter equal-height law + 86px strips + piecewise dB display taper (model
+  stays linear −60..+6; view-layer map), FX chip rack on real inserts.
