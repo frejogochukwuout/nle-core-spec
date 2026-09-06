@@ -84,6 +84,18 @@ export interface GhSyncOptions {
   origin: () => string;
   /** Called after engine-side store writes: broadcast + git store sync. */
   onEngineMutation: (thread: Thread, reason: EngineReason) => void;
+  /** Workstream label: issues are created with ['annotakit', label] and the
+   *  pull universe lists by it (default 'annotakit' = upstream behavior).
+   *  Lets ONE repo host several parallel review workstreams that stay
+   *  filterable (`label:shell-mini`) and pull-isolated. */
+  label?: string;
+  /** Workstream scope: when set, only threads whose origin key matches this
+   *  regex are mirrored (created / pulled / counted as stalled) by THIS
+   *  engine — the shared-store multi-instance case (two SB apps, one repo,
+   *  one threads.db): each engine owns exactly its own workstream's issues.
+   *  Mapped out-of-scope threads are still PUSHED (a mapping is a commitment
+   *  — local deltas must never be dropped), but never pulled. */
+  scope?: RegExp | null;
 }
 
 const RETRY_LIMIT = 4;
@@ -93,6 +105,20 @@ const STALLED_SWEEP_MS = 10 * 60_000;
 export function createGhSync(opts: GhSyncOptions): GhSync {
   const { store, repo, token, configPath } = opts;
   const intervalMs = opts.intervalMs ?? 700;
+  const label = opts.label && opts.label.trim() ? opts.label.trim() : 'annotakit';
+  const scope = opts.scope ?? null;
+
+  /* --------------------------- workstream scoping ---------------------------- */
+
+  /** Everything that identifies WHERE a thread was pinned: story id, the
+   *  pinned component's source file, the story URL. Deliberately excludes
+   * importPath (identical across co-located apps). Matched against the
+   * configured scope regex. */
+  function threadScopeKey(t: Thread): string {
+    return [t.story?.storyId ?? t.storyId ?? '', t.component?.source?.file ?? '', t.story?.url ?? ''].join(' ');
+  }
+
+  const inScope = (t: Thread): boolean => !scope || scope.test(threadScopeKey(t));
 
   /* ------------------------------ engine state ------------------------------ */
 
@@ -180,10 +206,19 @@ export function createGhSync(opts: GhSyncOptions): GhSync {
     if (cfg.error) throw Object.assign(new Error(cfg.error), { status: 400 });
     const t = await store.getThread(id);
     if (!t) return 'noop';
+    // workstream scope: unmapped + out-of-scope = another engine's queue (a
+    // sibling SB app sharing this store) — never mint issues for it here.
+    // Mapped threads always reconcile: a mapping is a commitment (deltas lost
+    // now are lost forever; the pull side stays scoped for API budget).
+    if (!t.gh && !inScope(t)) return 'noop';
     const { token: tk, repo: rp } = cfg as { token: string; repo: string };
 
     if (!t.gh) {
-      const created = await createIssue(tk, rp, { title: issueTitle(t), body: issueBody(t) });
+      const created = await createIssue(tk, rp, {
+        title: issueTitle(t),
+        body: issueBody(t),
+        labels: label === 'annotakit' ? ['annotakit'] : ['annotakit', label],
+      });
       // ORPHAN GUARD: the thread may have been deleted while createIssue was
       // in flight (1–3s). Persist the mapping atomically; if the thread is
       // gone, close the just-created issue immediately — no orphan mirrors.
@@ -313,6 +348,7 @@ export function createGhSync(opts: GhSyncOptions): GhSync {
     if (!opts.enabled || configured().error) return [];
     const threads = await store.listThreads();
     return threads.filter((t) => {
+      if (!inScope(t)) return false; // another engine's queue (scoped)
       if (queued.has(t.id) || inflight.has(t.id)) return false;
       const unmirrored = t.comments.some((c) => !c.ghId && c.source !== 'github');
       const stateDrift = t.gh ? t.gh.state !== (t.status === 'resolved' ? 'closed' : 'open') : true;
@@ -338,11 +374,14 @@ export function createGhSync(opts: GhSyncOptions): GhSync {
     const threads = await store.listThreads();
 
     // one listing per cycle (paged); per-thread comment fetches are gated by
-    // issue.updated_at — idle threads cost ZERO requests
-    const remote = new Map((await listLabeledIssues(tk, rp)).map((i) => [i.number, i]));
+    // issue.updated_at — idle threads cost ZERO requests. The listing is
+    // LABEL-scoped (the workstream filter); mapped threads missing from it
+    // fall back to getIssue below, so label changes never break a mapping.
+    const remote = new Map((await listLabeledIssues(tk, rp, label)).map((i) => [i.number, i]));
 
     for (const t of threads) {
       if (!t.gh) continue; // unmapped: push phase (syncAll) handles creation
+      if (!inScope(t)) continue; // scoped out: that workstream's engine pulls it
       if (queued.has(t.id) || inflight.has(t.id)) continue; // push pending — remote is stale
       const mir = t.gh; // narrowed (non-null) — closures below need the proof
       let issue = remote.get(mir.issue);
@@ -546,7 +585,7 @@ export function createGhSync(opts: GhSyncOptions): GhSync {
         ? 'auto-sync disabled (ghAuto:false / ANNOTAKIT_GH_AUTO=0) — POST /sync still reconciles on demand (when configured)'
         : mode === 'unconfigured'
           ? `local mode — reviews work fully on this server (REST + digests); to add the GitHub mirror: ${cfg.error ?? ''}`
-          : `1:1 issue mirror active — push on every mutation, pull every ${opts.pollSec}s (POST /sync = force reconcile, never duplicates)`;
+          : `1:1 issue mirror active — push on every mutation, pull every ${opts.pollSec}s (POST /sync = force reconcile, never duplicates)${label !== 'annotakit' ? `; workstream label "${label}"${scope ? ', scope ' + scope.source : ''}` : ''}`;
     const stalled = (await stalledThreads()).length;
     return {
       enabled: opts.enabled,
@@ -595,7 +634,7 @@ export function createGhSync(opts: GhSyncOptions): GhSync {
       pollTimer.unref?.();
     }
     console.warn(
-      `[storybook-annotakit] GH mirror: auto — every thread gets ONE issue; lifecycle (open/resolved, replies) syncs both ways${opts.pollSec > 0 ? `, pull every ${opts.pollSec}s` : ', pull on POST /sync'}`,
+      `[storybook-annotakit] GH mirror: auto — every thread gets ONE issue; lifecycle (open/resolved, replies) syncs both ways${opts.pollSec > 0 ? `, pull every ${opts.pollSec}s` : ', pull on POST /sync'}${label !== 'annotakit' ? `, workstream label "${label}"${scope ? ` (scope ${scope.source})` : ''}` : ''}`,
     );
     // initial backfill: unmapped threads get their issue; remote changes land
     void run(syncAllRaw).catch((err) => {

@@ -525,7 +525,7 @@ function elementSummary(ctx) {
   if (text) parts.push(` "${clip(text.replace(/\s+/g, " "), 48)}"`);
   return `<${parts.join("")}>`;
 }
-var ENV_KEYS = ["ANNOTAKIT_GH_TOKEN", "ANNOTAKIT_GH_API", "ANNOTAKIT_GH_AUTO", "ANNOTAKIT_GH_POLL", "ANNOTAKIT_GH_INTERVAL", "ANNOTAKIT_GH_REPO", "ANNOTAKIT_ENV_TRACKED_OK", "ANNOTAKIT_API_KEY"];
+var ENV_KEYS = ["ANNOTAKIT_GH_TOKEN", "ANNOTAKIT_GH_API", "ANNOTAKIT_GH_AUTO", "ANNOTAKIT_GH_POLL", "ANNOTAKIT_GH_INTERVAL", "ANNOTAKIT_GH_REPO", "ANNOTAKIT_GH_LABEL", "ANNOTAKIT_GH_SCOPE", "ANNOTAKIT_ENV_TRACKED_OK", "ANNOTAKIT_API_KEY"];
 function projectRoot(configDir) {
   const abs = path2__default.default.isAbsolute(configDir) ? configDir : path2__default.default.resolve(process.cwd(), configDir);
   return path2__default.default.dirname(abs);
@@ -582,6 +582,14 @@ function ghToken() {
 function ghRepoEnv() {
   const v = process.env.ANNOTAKIT_GH_REPO;
   return v && /^[^/\s]+\/[^/\s]+$/.test(v) ? v : null;
+}
+function ghLabelEnv() {
+  const v = process.env.ANNOTAKIT_GH_LABEL?.trim();
+  return v ? v : null;
+}
+function ghScopeEnv() {
+  const v = process.env.ANNOTAKIT_GH_SCOPE?.trim();
+  return v ? v : null;
 }
 var gitRootCache;
 function repoRelPath(p) {
@@ -950,6 +958,12 @@ var STALLED_SWEEP_MS = 10 * 6e4;
 function createGhSync(opts) {
   const { store, repo, token, configPath } = opts;
   const intervalMs = opts.intervalMs ?? 700;
+  const label = opts.label && opts.label.trim() ? opts.label.trim() : "annotakit";
+  const scope = opts.scope ?? null;
+  function threadScopeKey(t) {
+    return [t.story?.storyId ?? t.storyId ?? "", t.component?.source?.file ?? "", t.story?.url ?? ""].join(" ");
+  }
+  const inScope = (t) => !scope || scope.test(threadScopeKey(t));
   const queue = [];
   const queued = /* @__PURE__ */ new Set();
   const inflight = /* @__PURE__ */ new Set();
@@ -1012,9 +1026,14 @@ function createGhSync(opts) {
     if (cfg.error) throw Object.assign(new Error(cfg.error), { status: 400 });
     const t = await store.getThread(id);
     if (!t) return "noop";
+    if (!t.gh && !inScope(t)) return "noop";
     const { token: tk, repo: rp } = cfg;
     if (!t.gh) {
-      const created = await createIssue(tk, rp, { title: issueTitle(t), body: issueBody(t) });
+      const created = await createIssue(tk, rp, {
+        title: issueTitle(t),
+        body: issueBody(t),
+        labels: label === "annotakit" ? ["annotakit"] : ["annotakit", label]
+      });
       const still = await store.mutateThread(id, (cur) => {
         cur.gh = { issue: created.number, url: created.html_url, state: "open", syncedAt: nowIso() };
         for (const c of cur.comments) {
@@ -1121,6 +1140,7 @@ reopened in Storybook \u2014 thread #${t.number}.`;
     if (!opts.enabled || configured().error) return [];
     const threads = await store.listThreads();
     return threads.filter((t) => {
+      if (!inScope(t)) return false;
       if (queued.has(t.id) || inflight.has(t.id)) return false;
       const unmirrored = t.comments.some((c) => !c.ghId && c.source !== "github");
       const stateDrift = t.gh ? t.gh.state !== (t.status === "resolved" ? "closed" : "open") : true;
@@ -1136,9 +1156,10 @@ reopened in Storybook \u2014 thread #${t.number}.`;
     let pulled = 0;
     let closedTombstones = 0;
     const threads = await store.listThreads();
-    const remote = new Map((await listLabeledIssues(tk, rp)).map((i) => [i.number, i]));
+    const remote = new Map((await listLabeledIssues(tk, rp, label)).map((i) => [i.number, i]));
     for (const t of threads) {
       if (!t.gh) continue;
+      if (!inScope(t)) continue;
       if (queued.has(t.id) || inflight.has(t.id)) continue;
       const mir = t.gh;
       let issue = remote.get(mir.issue);
@@ -1301,7 +1322,7 @@ thread deleted in Storybook \u2014 closing.`);
     const list = await store.listThreads();
     const cfg = configured();
     const mode = !opts.enabled ? "off" : cfg.error ? "unconfigured" : "auto";
-    const note = mode === "off" ? "auto-sync disabled (ghAuto:false / ANNOTAKIT_GH_AUTO=0) \u2014 POST /sync still reconciles on demand (when configured)" : mode === "unconfigured" ? `local mode \u2014 reviews work fully on this server (REST + digests); to add the GitHub mirror: ${cfg.error ?? ""}` : `1:1 issue mirror active \u2014 push on every mutation, pull every ${opts.pollSec}s (POST /sync = force reconcile, never duplicates)`;
+    const note = mode === "off" ? "auto-sync disabled (ghAuto:false / ANNOTAKIT_GH_AUTO=0) \u2014 POST /sync still reconciles on demand (when configured)" : mode === "unconfigured" ? `local mode \u2014 reviews work fully on this server (REST + digests); to add the GitHub mirror: ${cfg.error ?? ""}` : `1:1 issue mirror active \u2014 push on every mutation, pull every ${opts.pollSec}s (POST /sync = force reconcile, never duplicates)${label !== "annotakit" ? `; workstream label "${label}"${scope ? ", scope " + scope.source : ""}` : ""}`;
     const stalled = (await stalledThreads()).length;
     return {
       enabled: opts.enabled,
@@ -1349,7 +1370,7 @@ thread deleted in Storybook \u2014 closing.`);
       pollTimer.unref?.();
     }
     console.warn(
-      `[storybook-annotakit] GH mirror: auto \u2014 every thread gets ONE issue; lifecycle (open/resolved, replies) syncs both ways${opts.pollSec > 0 ? `, pull every ${opts.pollSec}s` : ", pull on POST /sync"}`
+      `[storybook-annotakit] GH mirror: auto \u2014 every thread gets ONE issue; lifecycle (open/resolved, replies) syncs both ways${opts.pollSec > 0 ? `, pull every ${opts.pollSec}s` : ", pull on POST /sync"}${label !== "annotakit" ? `, workstream label "${label}"${scope ? ` (scope ${scope.source})` : ""}` : ""}`
     );
     void run(syncAllRaw).catch((err) => {
       lastError = err instanceof Error ? err.message : String(err);
@@ -1920,7 +1941,16 @@ var API_BASE = "/annotakit/api";
 var VERSION = "0.5.0";
 var BOOTED_AT = (/* @__PURE__ */ new Date()).toISOString();
 var CONFIG_FILE = "annotakit.config.json";
-var GH_LABEL = "annotakit";
+var GH_LABEL_DEFAULT = "annotakit";
+function compileScope(src) {
+  const s = typeof src === "string" ? src.trim() : "";
+  if (!s) return { re: null };
+  try {
+    return { re: new RegExp(s) };
+  } catch (err) {
+    return { re: null, error: err instanceof Error ? err.message : String(err) };
+  }
+}
 var emitToChannel = null;
 function setChannelEmitter(emit) {
   emitToChannel = emit;
@@ -1984,6 +2014,18 @@ function bootstrap(configDir, port) {
   const ghAuto = config.ghAuto !== false && !["0", "false", "off", "no"].includes(String(process.env.ANNOTAKIT_GH_AUTO ?? "").toLowerCase());
   const pollSec = nonNegNum(process.env.ANNOTAKIT_GH_POLL) ?? nonNegNum(config.ghPoll) ?? 60;
   const intervalMs = nonNegNum(process.env.ANNOTAKIT_GH_INTERVAL) ?? 700;
+  const configLabel = typeof config.ghLabel === "string" ? config.ghLabel.trim() : "";
+  const envLabel = ghLabelEnv();
+  const label = configLabel || envLabel || GH_LABEL_DEFAULT;
+  const labelSource = configLabel ? `${CONFIG_FILE} ghLabel` : envLabel ? "ANNOTAKIT_GH_LABEL env" : "default";
+  const configScopeSrc = typeof config.ghScope === "string" ? config.ghScope : null;
+  const envScopeSrc = ghScopeEnv();
+  const scopeSrc = configScopeSrc ?? envScopeSrc;
+  const scopeFrom = configScopeSrc ? `${CONFIG_FILE} ghScope` : envScopeSrc ? "ANNOTAKIT_GH_SCOPE env" : "";
+  const { re: scopeRe, error: scopeError } = compileScope(scopeSrc);
+  if (scopeError) {
+    bootWarnings.push(`ghScope regex "${scopeSrc}" is invalid (${scopeError}) \u2014 mirroring ALL threads (scope disabled). Fix the regex in ${CONFIG_FILE} or ANNOTAKIT_GH_SCOPE and restart.`);
+  }
   const ghsync = createGhSync({
     store,
     repo,
@@ -1992,15 +2034,22 @@ function bootstrap(configDir, port) {
     enabled: ghAuto,
     pollSec,
     intervalMs,
+    label,
+    scope: scopeRe,
     origin: () => runtime?.origin ?? "http://localhost:6006",
     onEngineMutation: (thread, reason) => {
       broadcast({ storyId: thread.storyId, threadId: thread.id, reason });
       sync.notify();
     }
   });
-  runtime = { store, sync, ghsync, config, root, configPath: `${configDir}/${CONFIG_FILE}`, repo, repoSource, origin: port ? `http://localhost:${port}` : "http://localhost:6006", started: true, bootWarnings };
+  runtime = { store, sync, ghsync, config, root, configPath: `${configDir}/${CONFIG_FILE}`, repo, repoSource, label, labelSource, scope: scopeRe, scopeSource: scopeFrom, origin: port ? `http://localhost:${port}` : "http://localhost:6006", started: true, bootWarnings };
   if (repo) {
     console.warn(`[storybook-annotakit] GitHub mirror target: ${repo} (${repoSource})`);
+    if (label !== GH_LABEL_DEFAULT || scopeRe) {
+      console.warn(
+        `[storybook-annotakit] workstream: label "${label}" (${labelSource})${scopeRe ? `, scope /${scopeRe.source}/ (${scopeFrom})` : " (no scope \u2014 mirroring every thread in the store)"}`
+      );
+    }
   } else {
     console.warn(
       `[storybook-annotakit] no GitHub repo configured \u2014 local mode: REST + digests work fully; POST /sync explains how to add the mirror (${CONFIG_FILE}, .env, or git remote)`
@@ -2270,7 +2319,8 @@ async function handleApi(req, res, url, configDir, origin) {
       rest: true,
       digests: ["md", "json"],
       github: ghSync.mode === "auto",
-      githubLabel: GH_LABEL,
+      githubLabel: rt.label,
+      ...rt.scope ? { githubScope: rt.scope.source } : {},
       ...ghSync.mode !== "auto" ? { githubReason: ghSync.mode === "off" ? "disabled (ANNOTAKIT_GH_AUTO=0 / ghAuto:false)" : !hasToken ? "no token" : "no repo" } : {},
       durability: rt.sync.durability()
     };
@@ -2287,6 +2337,8 @@ async function handleApi(req, res, url, configDir, origin) {
       gh: {
         repo: rt.repo,
         hasToken,
+        label: rt.label,
+        ...rt.scope ? { scope: rt.scope.source } : {},
         autoSync: rt.sync.describe(),
         ghSync
       },

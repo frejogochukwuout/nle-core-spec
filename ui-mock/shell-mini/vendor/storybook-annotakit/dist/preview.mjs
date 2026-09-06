@@ -20,7 +20,7 @@ import React2 from "react";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { addons } from "storybook/preview-api";
 
-// node_modules/@medv/finder/finder.js
+// ../../node_modules/@medv/finder/finder.js
 var acceptedAttrNames = /* @__PURE__ */ new Set(["role", "name", "aria-label", "rel", "href"]);
 function attr(name, value) {
   let nameIsOk = acceptedAttrNames.has(name);

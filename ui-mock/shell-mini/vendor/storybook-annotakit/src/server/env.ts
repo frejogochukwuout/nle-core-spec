@@ -15,7 +15,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 /** Keys we care about (we only fill UNSET vars — never override the shell). */
-const ENV_KEYS = ['ANNOTAKIT_GH_TOKEN', 'ANNOTAKIT_GH_API', 'ANNOTAKIT_GH_AUTO', 'ANNOTAKIT_GH_POLL', 'ANNOTAKIT_GH_INTERVAL', 'ANNOTAKIT_GH_REPO', 'ANNOTAKIT_ENV_TRACKED_OK', 'ANNOTAKIT_API_KEY'] as const;
+const ENV_KEYS = ['ANNOTAKIT_GH_TOKEN', 'ANNOTAKIT_GH_API', 'ANNOTAKIT_GH_AUTO', 'ANNOTAKIT_GH_POLL', 'ANNOTAKIT_GH_INTERVAL', 'ANNOTAKIT_GH_REPO', 'ANNOTAKIT_GH_LABEL', 'ANNOTAKIT_GH_SCOPE', 'ANNOTAKIT_ENV_TRACKED_OK', 'ANNOTAKIT_API_KEY'] as const;
 
 /** Resolve the consumer project root from a (possibly relative) configDir. */
 export function projectRoot(configDir: string): string {
@@ -94,6 +94,22 @@ export function ghToken(): string | undefined {
 export function ghRepoEnv(): string | null {
   const v = process.env.ANNOTAKIT_GH_REPO;
   return v && /^[^/\s]+\/[^/\s]+$/.test(v) ? v : null;
+}
+
+/** Workstream label from env (beats the 'annotakit' default, loses to config).
+ *  Validated loosely: trimmed, non-empty, no control chars — GitHub accepts
+ *  most printable names; empty string means "not set". */
+export function ghLabelEnv(): string | null {
+  const v = process.env.ANNOTAKIT_GH_LABEL?.trim();
+  return v ? v : null;
+}
+
+/** Workstream scope regex source from env (JS RegExp string, case-sensitive).
+ *  When set, this engine only mirrors threads whose origin key matches —
+ *  see ghsync.ts threadScopeKey. */
+export function ghScopeEnv(): string | null {
+  const v = process.env.ANNOTAKIT_GH_SCOPE?.trim();
+  return v ? v : null;
 }
 
 /* --------------------------------- git facts --------------------------------- */

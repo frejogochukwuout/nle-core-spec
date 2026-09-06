@@ -136,6 +136,52 @@ describe('trim via end handle', () => {
   });
 });
 
+describe('R18h trim zones: shaded-edge grammar (threads #8/#9/#10)', () => {
+  it('trim zones are keyboard-gated by selection (no affordance when unselected)', () => {
+    render(<Timeline />);
+    // default doc: nothing selected → zones are NOT tab stops
+    expect(screen.getByTestId('mini-trim-end-c2').tabIndex).toBe(-1);
+    expect(screen.getByTestId('mini-trim-start-c2').tabIndex).toBe(-1);
+    // selecting the clip opens the zones to the tab order
+    act(() => S().select('c2'));
+    expect(screen.getByTestId('mini-trim-end-c2').tabIndex).toBe(0);
+    expect(screen.getByTestId('mini-trim-start-c2').tabIndex).toBe(0);
+  });
+
+  it('keyboard trim still works from the end zone once selected', () => {
+    render(<Timeline />);
+    act(() => S().select('c2'));
+    const handle = screen.getByTestId('mini-trim-end-c2'); // c2 4.5→8, dur 3.5
+    fireEvent.keyDown(handle, { key: 'ArrowRight' }); // +0.5s
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.duration).toBe(4);
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' }); // back
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.duration).toBe(3.5);
+  });
+
+  it('pointer trim still works from the zone (no handle bar, same hit target)', () => {
+    render(<Timeline />);
+    const handle = screen.getByTestId('mini-trim-end-c2');
+    drag(handle, 8 * 48, 20 * 48); // clamps to next neighbor at 9 → dur 4.5
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.duration).toBe(4.5);
+  });
+});
+
+describe('R18h split glyph (thread #9: cut in the middle, family grammar)', () => {
+  it('the split button carries the purpose-drawn clip-rect glyph, not lucide scissors', () => {
+    render(<Timeline />);
+    const svg = screen.getByTestId('mini-btn-split').querySelector('svg');
+    expect(svg).not.toBeNull();
+    // family grammar: a clip <rect> + a center playhead <path> (the cut)
+    expect(svg!.querySelectorAll('rect').length).toBeGreaterThanOrEqual(1);
+    expect(svg!.querySelectorAll('path').length).toBeGreaterThanOrEqual(1);
+    // the trim siblings next to it carry the same grammar
+    const head = screen.getByTestId('mini-btn-cuthead').querySelector('svg');
+    const tail = screen.getByTestId('mini-btn-cuttail').querySelector('svg');
+    expect(head!.querySelectorAll('rect').length).toBeGreaterThanOrEqual(3);
+    expect(tail!.querySelectorAll('rect').length).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('tools row', () => {
   it('split button splits at the playhead (fallback targeting)', async () => {
     render(<Timeline />);

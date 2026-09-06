@@ -19,7 +19,9 @@ import { createGhSync, type GhSync } from './ghsync';
 import { createAutoSync, type AutoSync } from './sync';
 import {
   detectGithubRepo,
+  ghLabelEnv,
   ghRepoEnv,
+  ghScopeEnv,
   ghToken,
   isGitRepo,
   isPathTracked,
@@ -37,7 +39,19 @@ const VERSION = '0.5.0';
  *  (a health-check loop can pass instantly against a stale process). */
 const BOOTED_AT = new Date().toISOString();
 const CONFIG_FILE = 'annotakit.config.json';
-const GH_LABEL = 'annotakit';
+const GH_LABEL_DEFAULT = 'annotakit';
+
+/** Compile a scope regex from a config/env string; invalid source → null + a
+ *  boot warning (never take the whole mirror down over a typo). */
+function compileScope(src: string | null | undefined): { re: RegExp | null; error?: string } {
+  const s = typeof src === 'string' ? src.trim() : '';
+  if (!s) return { re: null };
+  try {
+    return { re: new RegExp(s) };
+  } catch (err) {
+    return { re: null, error: err instanceof Error ? err.message : String(err) };
+  }
+}
 
 /* ------------------------- channel singleton (dev WS) ------------------------- */
 
@@ -70,6 +84,12 @@ interface Runtime {
   /** repo after full resolution chain (config beats env beats detection). */
   repo: string | null;
   repoSource: string;
+  /** Workstream label after resolution (config ghLabel beats env beats default). */
+  label: string;
+  labelSource: string;
+  /** Workstream scope regex (config ghScope beats env) + where it came from. */
+  scope: RegExp | null;
+  scopeSource: string;
   /** Last seen dev-server origin (for issue-body story links). */
   origin: string;
   started: boolean;
@@ -150,6 +170,21 @@ function bootstrap(configDir: string, port?: number): Runtime {
   const ghAuto = config.ghAuto !== false && !['0', 'false', 'off', 'no'].includes(String(process.env.ANNOTAKIT_GH_AUTO ?? '').toLowerCase());
   const pollSec = nonNegNum(process.env.ANNOTAKIT_GH_POLL) ?? nonNegNum(config.ghPoll) ?? 60;
   const intervalMs = nonNegNum(process.env.ANNOTAKIT_GH_INTERVAL) ?? 700;
+  // workstream separation: label (issues get ['annotakit', label]; the pull
+  // universe lists by it) + scope (only matching threads are mirrored here —
+  // the shared-store multi-instance case). Config beats env beats default.
+  const configLabel = typeof config.ghLabel === 'string' ? config.ghLabel.trim() : '';
+  const envLabel = ghLabelEnv();
+  const label = configLabel || envLabel || GH_LABEL_DEFAULT;
+  const labelSource = configLabel ? `${CONFIG_FILE} ghLabel` : envLabel ? 'ANNOTAKIT_GH_LABEL env' : 'default';
+  const configScopeSrc = typeof config.ghScope === 'string' ? config.ghScope : null;
+  const envScopeSrc = ghScopeEnv();
+  const scopeSrc = configScopeSrc ?? envScopeSrc;
+  const scopeFrom = configScopeSrc ? `${CONFIG_FILE} ghScope` : envScopeSrc ? 'ANNOTAKIT_GH_SCOPE env' : '';
+  const { re: scopeRe, error: scopeError } = compileScope(scopeSrc);
+  if (scopeError) {
+    bootWarnings.push(`ghScope regex "${scopeSrc}" is invalid (${scopeError}) — mirroring ALL threads (scope disabled). Fix the regex in ${CONFIG_FILE} or ANNOTAKIT_GH_SCOPE and restart.`);
+  }
   const ghsync = createGhSync({
     store,
     repo,
@@ -158,6 +193,8 @@ function bootstrap(configDir: string, port?: number): Runtime {
     enabled: ghAuto,
     pollSec,
     intervalMs,
+    label,
+    scope: scopeRe,
     origin: () => runtime?.origin ?? 'http://localhost:6006',
     onEngineMutation: (thread, reason) => {
       // engine-side writes (gh mapping, pulled replies) are mutations too:
@@ -166,9 +203,14 @@ function bootstrap(configDir: string, port?: number): Runtime {
       sync.notify();
     },
   });
-  runtime = { store, sync, ghsync, config, root, configPath: `${configDir}/${CONFIG_FILE}`, repo, repoSource, origin: port ? `http://localhost:${port}` : 'http://localhost:6006', started: true, bootWarnings };
+  runtime = { store, sync, ghsync, config, root, configPath: `${configDir}/${CONFIG_FILE}`, repo, repoSource, label, labelSource, scope: scopeRe, scopeSource: scopeFrom, origin: port ? `http://localhost:${port}` : 'http://localhost:6006', started: true, bootWarnings };
   if (repo) {
     console.warn(`[storybook-annotakit] GitHub mirror target: ${repo} (${repoSource})`);
+    if (label !== GH_LABEL_DEFAULT || scopeRe) {
+      console.warn(
+        `[storybook-annotakit] workstream: label "${label}" (${labelSource})${scopeRe ? `, scope /${scopeRe.source}/ (${scopeFrom})` : ' (no scope — mirroring every thread in the store)'}`,
+      );
+    }
   } else {
     console.warn(
       `[storybook-annotakit] no GitHub repo configured — local mode: REST + digests work fully; POST /sync explains how to add the mirror (${CONFIG_FILE}, .env, or git remote)`,
@@ -520,7 +562,8 @@ async function handleApi(
       rest: true,
       digests: ['md', 'json'],
       github: ghSync.mode === 'auto',
-      githubLabel: GH_LABEL,
+      githubLabel: rt.label,
+      ...(rt.scope ? { githubScope: rt.scope.source } : {}),
       ...(ghSync.mode !== 'auto'
         ? { githubReason: ghSync.mode === 'off' ? 'disabled (ANNOTAKIT_GH_AUTO=0 / ghAuto:false)' : !hasToken ? 'no token' : 'no repo' }
         : {}),
@@ -539,6 +582,8 @@ async function handleApi(
       gh: {
         repo: rt.repo,
         hasToken,
+        label: rt.label,
+        ...(rt.scope ? { scope: rt.scope.source } : {}),
         autoSync: rt.sync.describe(),
         ghSync,
       },

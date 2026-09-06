@@ -108,7 +108,7 @@ curl "$BASE/annotakit/api/export?format=json&status=open"  # lean JSON bundle
   - **Push on every mutation** (debounced, serialized): thread → issue, reply → comment, resolve → close, reopen → reopen, delete → close + note. Idempotent — `POST /annotakit/api/sync` reconciles both directions and creates **zero** duplicates, no matter how often you call it. A thread deleted while its issue is being created self-closes it (no orphans).
   - **Pull every 60s** (configurable): an agent closing the issue on GitHub resolves the thread in Storybook within a minute, importing its comments as replies (`source: "github"`). Reopening re-opens the thread; commenting on a closed issue still imports.
   - **Failure behavior**: 401 → self-healing a/b/c steps, mirror pauses, local mode keeps working. Rate limits → timed backoff (Retry-After respected). Remote issue deleted → mapping resets and heals. Fetch timeouts, pagination (>100), and comment-`since` gating keep the API budget flat as threads grow. Verified live on this repo: [issue #9](https://github.com/melodietexoss/storybook-annotakit/issues/9) (tabular-nums feedback → agent commit `542e7b0` → evidence comment → close → thread resolved in Storybook within one poll).
-  - Knobs: `ANNOTAKIT_GH_AUTO=0` (local mode) · `ANNOTAKIT_GH_POLL=<sec>` · `ANNOTAKIT_GH_REPO` · `ANNOTAKIT_GH_API` (GHE) · `ANNOTAKIT_GH_INTERVAL=<ms>`.
+  - Knobs: `ANNOTAKIT_GH_AUTO=0` (local mode) · `ANNOTAKIT_GH_POLL=<sec>` · `ANNOTAKIT_GH_REPO` · `ANNOTAKIT_GH_API` (GHE) · `ANNOTAKIT_GH_INTERVAL=<ms>` · `ANNOTAKIT_GH_LABEL=<label>` · `ANNOTAKIT_GH_SCOPE=<regex>` (workstream separation — below).
   - `POST /gh` is kept as a legacy alias of `POST /sync` — digest publishing is gone (v0.2.0 digest issues in existing repos should be closed manually once).
 - Loop: reviewer pins → issue appears → agent fixes code at the `jsx:` path → agent comments evidence + closes → thread resolves in Storybook (60s poll) → reviewer re-checks, may reopen → issue reopens. Hands-free both directions; without GitHub, the same loop runs entirely over Path B.
 
@@ -125,11 +125,22 @@ The previous kit's JSON was "extremely verbose" and the markdown "too cluttered"
 | mirror on/off | env `ANNOTAKIT_GH_AUTO=0` or config `{"ghAuto":false}` (default: on; off = local mode) |
 | poll interval | env `ANNOTAKIT_GH_POLL=<sec>` or config `{"ghPoll":60}` (0 = pull on POST /sync only) |
 | GHE / custom API | env `ANNOTAKIT_GH_API=<base url>` |
+| workstream label | env `ANNOTAKIT_GH_LABEL=shell-mini` or config `{"ghLabel":"shell-mini"}` — issues are filed as `['annotakit','shell-mini']` and the pull universe lists by it |
+| workstream scope | env `ANNOTAKIT_GH_SCOPE=<regex>` or config `{"ghScope":"..."}` — only threads whose origin key (storyId + component source file + story URL) matches are mirrored by this engine |
 | author name | Annotakit panel input (localStorage `annotakit:author`) |
 | disable per story | `parameters: { annotakit: { disabled: true } }` |
 | store location (v0.5.0) | `<git-common-dir>/annotakit/threads.db` — immune to branch switches and `git clean -fdx`, structurally un-gitignorable; durability = the `annotakit` orphan branch (see below) |
 
 All env vars are read once at boot — restart `storybook dev` after changing `.env`. `.env` holds a secret: `echo ".env" >> .gitignore` BEFORE writing the token into it (the engine never commits it, but `git add -A` would).
+
+### Workstream separation (one repo, several review surfaces)
+
+When two Storybook apps share ONE repo and ONE store (e.g. co-located UI mocks pushed to the same project), a single flat issue stream mixes all workstreams. Two knobs split it without forking anything:
+
+- **`ghLabel` / `ANNOTAKIT_GH_LABEL`** — this instance's issues are created with BOTH `annotakit` and the workstream label, and the pull loop lists by the workstream label. On GitHub, `issues?q=label:shell-mini` is the filtered view; `label:annotakit` still sees everything.
+- **`ghScope` / `ANNOTAKIT_GH_SCOPE`** — a JS regex. Only threads whose origin key — `storyId`, the pinned component's `source.file`, and the story `url`, joined with spaces — match are mirrored (created / pulled / counted as stalled) by THIS engine. The other instance runs its own engine with its own scope; already-mapped threads are still pushed (a mapping is a commitment), never pulled by a foreign engine. Backfill existing issues' labels once via the GitHub API and both directions stay isolated.
+
+Scopes survive URL churn: match on something durable (component source paths) alongside the story URL host.
 
 ## Demo
 

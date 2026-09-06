@@ -216,6 +216,11 @@ export interface HealthInfo {
   gh?: {
     repo: string | null;
     hasToken: boolean;
+    /** Workstream label issues are filed under ('annotakit' default). */
+    label?: string;
+    /** Workstream scope regex source — when set, this engine mirrors only
+     *  threads whose origin key matches (multi-instance shared store). */
+    scope?: string;
     autoSync: string;
     ghSync?: GhSyncStatus;
   };
@@ -232,6 +237,9 @@ export interface AgentSurfaces {
   github: boolean;
   /** Label the mirror files issues under. */
   githubLabel: string;
+  /** Scope regex source the mirror is restricted to (workstream filter,
+   *  multi-instance shared store). Absent = every thread in the store. */
+  githubScope?: string;
   /** Why the mirror is off (when github=false): 'no token' | 'no repo' | 'disabled'. */
   githubReason?: string;
   /** How feedback survives: pushed to a remote, committed locally, or file only. */

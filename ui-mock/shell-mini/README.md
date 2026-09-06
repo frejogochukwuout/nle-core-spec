@@ -156,6 +156,20 @@ Run it at boot or any time; safe twice.
    geometry tokens are overridden (panel 20→8, control 8→4, clip 2, video
    frame 0) — the reviewer's live judgment over the snapshot's roundness.
    Original values kept inline in tokens.css for provenance.
+8. **Trim affordance: shaded edges, no handle bars** (R18h, threads
+   #8/#9/#10 — "remove handler and use shaded edge instead … NLE doesn't
+   usually add handles like a typical webapp"): the RH reference draws
+   2×10px accent bars at clip edges (`RH-timeline-editor.html
+   .qc-track-item__trim::before`); user feedback overrides. The clip edge
+   IS the trim control now — 14px drag zones per edge whose affordance is
+   a dark-scrim gradient (quiet when the clip is selected, strong on
+   hover/focus/drag, invisible when unselected+unhovered). Zones stay
+   real buttons: ←/→ keyboard trim kept, tabIndex only when selected.
+   The RH originals remain in timeline.css comments for provenance.
+9. **Split glyph joins the trim family** (R18h, thread #9): the lucide
+   Scissors is replaced by a purpose-drawn clip-rect glyph with the
+   playhead cutting through the MIDDLE (both halves solid — a split
+   discards nothing), matching the TrimStart/TrimEnd grammar beside it.
 
 ## Layout
 

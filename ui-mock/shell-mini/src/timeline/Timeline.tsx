@@ -25,7 +25,6 @@ import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointer
 import {
   Undo2,
   Redo2,
-  Scissors,
   Trash2,
   Magnet,
   ZoomOut,
@@ -36,8 +35,10 @@ import {
   EyeOff,
 } from 'lucide-react';
 /* R18g (thread #23): purpose-drawn trim glyphs — the lucide
-   ArrowLeftToLine/ArrowRightToLine pair read as jump-to-start/end */
-import { TrimStartIcon, TrimEndIcon } from '../lib/icons';
+   ArrowLeftToLine/ArrowRightToLine pair read as jump-to-start/end.
+   R18h (thread #9): SplitIcon joins the family — Scissors read as a
+   different metaphor; the split glyph cuts the clip in the middle. */
+import { TrimStartIcon, TrimEndIcon, SplitIcon } from '../lib/icons';
 import { useMini } from '../state/useMini';
 import { useKeys } from '../hooks/useKeys';
 import {
@@ -120,7 +121,7 @@ function ToolsRow() {
           onClick={() => splitAtPlayhead()}
           data-testid="mini-btn-split"
         >
-          <Scissors />
+          <SplitIcon />
         </button>
         <button
           type="button"
@@ -455,6 +456,13 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
         />
       )}
       <span className="qc-track-item__label">{media?.name ?? clip.id}</span>
+      {/* R18h (threads #8/#9/#10): NLE trim grammar — NO handle bars. The
+          clip edge itself is the trim control: a 14px drag zone per edge whose
+          affordance is a SHADED (dark-scrim) edge gradient (CSS), visible only
+          when the clip is selected (quiet) or the edge is hovered/focused
+          (strong) — an unselected, unhovered clip shows pure filmstrip.
+          Kept as <button> for pointer + keyboard (←/→) semantics; tabIndex
+          only when selected so the tab order stays honest. */}
       <button
         type="button"
         className="qc-track-item__trim qc-track-item__trim--start"
@@ -462,8 +470,9 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
         title={
           rippleOn
             ? 'Ripple trim start — the head closes; later clips follow left (←/→ when focused)'
-            : 'Drag to trim — ←/→ when focused'
+            : 'Drag the edge to trim — ←/→ when focused'
         }
+        tabIndex={selected ? 0 : -1}
         data-testid={`mini-trim-start-${clip.id}`}
         onPointerDown={(e) => {
           e.stopPropagation();
@@ -489,8 +498,9 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
         title={
           rippleOn
             ? 'Ripple trim end — later clips follow the edge (←/→ when focused)'
-            : 'Drag to trim — ←/→ when focused'
+            : 'Drag the edge to trim — ←/→ when focused'
         }
+        tabIndex={selected ? 0 : -1}
         data-testid={`mini-trim-end-${clip.id}`}
         onPointerDown={(e) => {
           e.stopPropagation();

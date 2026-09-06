@@ -52,7 +52,9 @@ below — it is COMPLETE on origin and its standing items are preserved.
   digests + github); `GET /annotakit/api/threads`, `/export?format=md`,
   POST/DELETE threads, POST `/sync`. Token: `.env` in shell-mini
   (gitignored — **recreate after a recycle**: PAT from chat +
-  `ANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec`).
+  `ANNOTAKIT_GH_REPO=melodietexoss/shell-mini-review` +
+  `ANNOTAKIT_GH_LABEL=mini` + `ANNOTAKIT_GH_SCOPE=4c1120aa|src/(timeline|shell)/`
+  — see the R18h bullet).
 - **Upstream contribution filed (R18c):** the vendored `refHasOurReadme`
   patch is reported upstream — melodietexoss/storybook-annotakit **issue
   #16** (full cwd-relative-ls-tree diagnosis + repro + improvement
@@ -110,6 +112,39 @@ below — it is COMPLETE on origin and its standing items are preserved.
   #26-#36 in our repo) — those are the sibling agent's queue, not ours;
   our timeline scroll-end was checked and does NOT have their #36
   crop-off bug (we keep a min 8s runway + full-width lane surfaces).
+- **R18h — WORKSTREAM SEPARATION (user request) + feedback wave 3:**
+  the mini's GH feedback now lives in its OWN repo,
+  **melodietexoss/shell-mini-review** (private, PAT-owner — the old
+  frejogochukwuout/nle-core-spec stream stays as history; the PAT is
+  read-only there: label/close/push all 403, which is WHY the repo moved).
+  Kit feature added to the vendor (env.ts/routes.ts/ghsync.ts, dist
+  rebuilt): **`ghLabel`/`ANNOTAKIT_GH_LABEL`** — issues filed as
+  `['annotakit','mini']`, pull universe lists by the workstream label;
+  **`ghScope`/`ANNOTAKIT_GH_SCOPE`** — regex over the thread origin key
+  (storyId + component source file + story URL); only matching threads
+  are created/pulled/counted-stalled by this engine (mapped threads are
+  still pushed — a mapping is a commitment). Boot migration ran clean:
+  19 historical mini threads 404-healed + re-mirrored closed into the
+  new repo (mutex-serialized — heal-all completes before any re-creation,
+  no issue-number collisions), 4 open feedback threads → issues #1-#4,
+  sibling's 27 threads scoped OUT (old repo untouched — verified).
+  Feedback wave 3 (4 threads, ALL fixed + thread-resolved, issues
+  auto-closed with evidence): trim HANDLES removed — the clip edge IS
+  the trim control (14px zones, dark-scrim shaded edge: quiet when
+  selected, strong on hover/focus/drag, invisible when unselected+
+  unhovered; buttons kept for pointer+←/→ keyboard trim, tabIndex
+  gated by selection; documented RH deviation — the reference draws
+  2×10px accent bars); SplitIcon replaces lucide Scissors (same
+  clip-rect grammar as the trim glyphs, playhead cuts the MIDDLE, both
+  halves solid — VLM-verified). 167/167 tests, tsc clean, build green.
+  **SIBLING ADOPTION NOTE:** their engine should set their own
+  `ANNOTAKIT_GH_LABEL=variants`-style workstream + scope
+  (`4deec8a5|src/components/`) pointing at whatever repo they own
+  credentials for, then backfill labels once — the kit README's
+  "Workstream separation" section has the recipe.
+  **PUSH BLOCKER (open):** the PAT cannot push the nle-core-spec main
+  branch (read-only) — commits land locally + /home/sync bundle/tarball;
+  origin push needs the frejogochukwuout credential (flag to the user).
 - **R18 correction (what was REVERTED):** the R16 "storybook can't serve
   publicly, static-mount it instead" verdict was wrong; the workaround
   infrastructure was removed — `public/stories/` (8.4MB), the

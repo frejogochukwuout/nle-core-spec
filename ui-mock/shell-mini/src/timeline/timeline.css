@@ -561,7 +561,15 @@
   pointer-events: none;
 }
 
-/* trim handles — 14px zones, 2×10px bars (RH-verbatim) */
+/* trim zones — 14px edge strips, the clip edge IS the handle (R18h,
+   threads #8/#9/#10: "remove handler and use shaded edge instead", "do not
+   show when not selected", "hovering should show some shade around edge").
+   DEVIATION from RH: the reference mock draws 2×10px accent bars
+   (RH-timeline-editor.html .qc-track-item__trim::before) — user feedback
+   overrides: any interference with the filmstrip visual is bad; NLEs shade
+   the edge instead. The zones stay real <button>s (pointer + ←/→ keyboard
+   trim); affordance = a dark-scrim gradient over the edge that appears on
+   selection (quiet), hover/focus (strong), and mid-drag. */
 .qc-track-item__trim {
   position: absolute;
   z-index: 2;
@@ -577,15 +585,12 @@
 }
 
 .qc-track-item__trim::before {
-  position: absolute;
-  top: 50%;
-  width: 2px;
-  height: 10px;
-  border-radius: 2px;
-  background: var(--canvas-quick-cut-selection);
   content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
   pointer-events: none;
-  transform: translateY(-50%);
 }
 
 .qc-track-item__trim--start {
@@ -593,7 +598,12 @@
 }
 
 .qc-track-item__trim--start::before {
-  left: 4px;
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.28) 45%,
+    rgba(0, 0, 0, 0) 100%
+  );
 }
 
 .qc-track-item__trim--end {
@@ -601,7 +611,42 @@
 }
 
 .qc-track-item__trim--end::before {
-  right: 4px;
+  background: linear-gradient(
+    to left,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.28) 45%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+/* selected: quiet standing shade — the NLE "trim brackets live at the
+   edges" hint; unselected + unhovered = invisible (pure filmstrip).
+   0.75 × the 0.55 peak ≈ 0.41 edge darkening: perceivable on bright
+   filmstrips, still quieter than the working (hover) shade. */
+.qc-track-item.is-selected > .qc-track-item__trim::before {
+  opacity: 0.75;
+}
+
+/* the working shade: hover, keyboard focus, mid-drag */
+.qc-track-item__trim:hover::before,
+.qc-track-item__trim:focus-visible::before,
+.qc-track-item.is-dragging > .qc-track-item__trim::before {
+  opacity: 1;
+}
+
+/* keyboard focus ring: a hairline accent AT the edge (visible but minimal —
+   focus indicators must never be invisible, thread #10 says no accent bar
+   as the standing affordance; focus is the one place it's honest) */
+.qc-track-item__trim:focus-visible {
+  outline: none;
+}
+
+.qc-track-item__trim--start:focus-visible {
+  box-shadow: inset 2px 0 0 var(--canvas-quick-cut-selection);
+}
+
+.qc-track-item__trim--end:focus-visible {
+  box-shadow: inset -2px 0 0 var(--canvas-quick-cut-selection);
 }
 
 /* ---- drag ghost shading (preview state) --------------------- */
