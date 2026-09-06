@@ -168,11 +168,11 @@ export const MediaPoolNoResults: StoryObj = {
   ),
 };
 
-/* ---- inspector: empty + multi-select (spec 18 §4.4) -------------------------- */
+/* ---- inspector: empty + multi-select (spec 18 §4.4 / R20-W3 D4) ------------ */
 
-/** Nothing selected (selection: []): “Nothing to inspect” state row and the
- *  hidden-not-disabled tab strip collapsed to Video only (the §4.4 empty-state
- *  rule — no phantom audio/effects tabs). */
+/** Nothing selected (selection: []): the ACTIVE-TRACK fallback sheet
+ *  (th_mto5fdf6) — the same TrackSheet the track domain renders, with the
+ *  "select a clip" hint row. The old tab strip is gone (R20-W3). */
 export const InspectorEmpty: StoryObj = {
   name: 'Inspector — nothing selected',
   parameters: { layout: 'padded' },
@@ -195,7 +195,7 @@ export const InspectorMultiMixed: StoryObj = {
   parameters: { layout: 'padded' },
   render: () => (
     <>
-      <StoreBoot patch={{ selection: ['el-1', 'el-4'], inspectorTab: 'video' }} />
+      <StoreBoot patch={{ selection: ['el-1', 'el-4'] }} />
       <PanelBox width={340} height={700}>
         <Inspector />
       </PanelBox>

@@ -161,6 +161,13 @@ tests can target the same surface.
 
 ## Known spec deviations (intentional, for reaction)
 
+- **R20-W3:** inspector is type-driven without the 4-tab strip per reviewer
+  thread #53; 18 §4.4/§11.6 deviation registered (C58). The panel is ONE
+  scroll of sections picked by selected-entity type (inspectorpanel.tsx
+  grammar: SectionHeader caret/keyframe-slot/reset + ControlRow 96px label);
+  the ONLY surviving tablist is the compact [Levels | EQ] sub-tab pair inside
+  the Audio section (spec 18 §11.6 semantics kept). The Project sheet is the
+  D4.4-descoped read-only summary (full per-stage design = C58).
 - **R20-W0:** viewer zoom ladder is Fit/1.25×/1.5×/2×/4× — the 1.25× step
   (annotakit GH #66) deviates from spec 18 §3.3's Fit/1.5/2/4 ladder.
 - **R20-W0:** mixer strip micro-labels (9px dB readout, 8px scale ticks)

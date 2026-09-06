@@ -57,6 +57,20 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
     expect(getByRole('button', { name: 'Inspector' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  /* R20-W3 (D4.4): the Project sheet toggle — right cluster, flips
+     inspectorProjectMode (the inspector rail renders the read-only sheet). */
+  it('the Project button toggles inspectorProjectMode via aria-pressed (R20-W3 D4.4)', () => {
+    const { getByTestId } = renderPlain(<Toolbar2 />);
+    const btn = getByTestId('shell-toolbar-btn-project');
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    expect(S().inspectorProjectMode).toBe(false);
+    fireEvent.click(btn);
+    expect(S().inspectorProjectMode).toBe(true);
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(btn);
+    expect(S().inspectorProjectMode).toBe(false);
+  });
+
   it('shows the project title and status from the mock document (§4.1 center)', () => {
     const { getByText, getByTitle } = renderPlain(<Toolbar2 />);
     expect(getByText('Beach Doc — Rough Cut')).toBeInTheDocument();
@@ -114,12 +128,12 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     // ← walks back
     fireEvent.keyDown(btn('Inspector'), { key: 'ArrowLeft' });
     expect(document.activeElement).toBe(btn('Effects'));
-    // wrap: ← from the first lands on the LAST (Inspector after the C38
-    // removal), → from the last on the first
+    // wrap: ← from the first lands on the LAST, → from the last on the first
+    // (R20-W3: the last stop is now the Project sheet toggle — 4 buttons)
     focus('Media Pool');
     fireEvent.keyDown(btn('Media Pool'), { key: 'ArrowLeft' });
-    expect(document.activeElement).toBe(btn('Inspector'));
-    fireEvent.keyDown(btn('Inspector'), { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(btn('Project'));
+    fireEvent.keyDown(btn('Project'), { key: 'ArrowRight' });
     expect(document.activeElement).toBe(btn('Media Pool'));
     // the tab stop follows the rover, not the boot index
     expect(btn('Media Pool')).toHaveAttribute('tabindex', '0');
@@ -135,8 +149,8 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     );
     act(() => { btn('Media Pool').focus(); });
     fireEvent.keyDown(btn('Media Pool'), { key: 'End' });
-    expect(document.activeElement).toBe(btn('Inspector'));
-    fireEvent.keyDown(btn('Inspector'), { key: 'Home' });
+    expect(document.activeElement).toBe(btn('Project'));
+    fireEvent.keyDown(btn('Project'), { key: 'Home' });
     expect(document.activeElement).toBe(btn('Media Pool'));
     // Tab is NOT intercepted — it leaves the toolbar for the next stop
     await user.tab();

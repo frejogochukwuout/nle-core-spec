@@ -216,7 +216,9 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
     const s = useUi.getState();
     if (s.page !== 'edit') s.setPage('edit');
     if (!s.panels.inspector) s.togglePanel('inspector');
-    s.setInspectorTab('video');
+    /* R20-W3: no inspectorTab surface anymore — the type-driven inspector
+       derives its sections from the selection (the clip is selected by the
+       router before this runs, so the sheet is already the right one). */
     // focus call: the panel root is not focusable — focus its F6 region wrapper
     requestAnimationFrame(() => {
       const root = document.querySelector('[data-testid="shell-inspector"]');

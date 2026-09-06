@@ -41,7 +41,6 @@ import { createMixerScene, type MockMixerScene, type MixerTrackSettings, type Du
 
 export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch';
 export type Page = 'edit' | 'color' | 'audio' | 'deliver';
-export type InspectorTab = 'video' | 'audio' | 'effects' | 'transition';
 export type ToastKind = 'info' | 'success' | 'error' | 'persist';
 /* R20-W1 (DESIGN-R20 D1.4): 'bridge' renamed 'meters' — the minimized
    state is now full-height thin meter COLUMNS, not a stacked rail. */
@@ -350,6 +349,20 @@ interface UiState {
   viewerSafeGuides: boolean; // action/title safe-area guides (Frame)
   loop: { start: number; end: number };
   selection: string[];
+  /* R20-W3 (DESIGN-R20 D4.2): the track/effect selection domains — mirrors
+     of the R19 selectedMarkerId domain-swap law. selectTrack clears the clip
+     selection + marker + effect domains; selectEffect keeps its clip selected
+     (the effect domain is {clipId, fxId} — a composite, documented judgment:
+     an effect never exists without its clip, and the pair lets selection
+     writes clear the domain when the clip deselects, without a doc lookup).
+     View state, never snapshotted. */
+  selectedTrackId: string | null;
+  selectedEffectId: string | null;
+  /** the clip the selectedEffectId lives on (the domain's other half) */
+  selectedEffectClipId: string | null;
+  /* R20-W3 (D4.4 descoped): the minimal Project sheet toggle — the toolbar
+     button flips this view-state flag; selecting ANY entity exits it. */
+  inspectorProjectMode: boolean;
   pxPerSec: number;
   /** dynamic minimum pps (spec-05 §5.2) — slider bottom / reconcile floor */
   zoomMinPps: number;
@@ -358,7 +371,6 @@ interface UiState {
   search: string;
   sortBy: 'name' | 'duration' | 'date' | 'type';
   sortDir: 'asc' | 'desc';
-  inspectorTab: InspectorTab;
   masterMuted: boolean;
   masterVolume: number;
   mediaW: number;
@@ -466,7 +478,10 @@ interface UiState {
   setSearch: (s: string) => void;
   setSortBy: (s: UiState['sortBy']) => void;
   setSortDir: (d: UiState['sortDir']) => void;
-  setInspectorTab: (t: InspectorTab) => void;
+  /* R20-W3: selection-domain setters (see the state-field comment above) */
+  selectTrack: (id: string | null) => void;
+  selectEffect: (clipId: string, fxId: string | null) => void;
+  toggleInspectorProjectMode: () => void;
   toggleMasterMute: () => void;
   setMasterVolume: (v: number) => void;
   setMediaW: (w: number) => void;
@@ -632,7 +647,6 @@ export const useUi = create<UiState>((set, get) => ({
   search: '',
   sortBy: 'name',
   sortDir: 'asc',
-  inspectorTab: 'video',
   masterMuted: false,
   masterVolume: 0.78,
   mediaW: 280,
@@ -644,6 +658,10 @@ export const useUi = create<UiState>((set, get) => ({
   mediaDrag: null,
   focusedTrackId: null,
   selectedMarkerId: null,
+  selectedTrackId: null,
+  selectedEffectId: null,
+  selectedEffectClipId: null,
+  inspectorProjectMode: false,
   viewerMode: 'program',
   sourceMediaId: null,
   hoverInsertPreview: null, // R20-W2: view-state, never snapshotted
@@ -682,6 +700,10 @@ export const useUi = create<UiState>((set, get) => ({
       activeSceneId: id,
       selection: [],
       playhead,
+      /* R20-W3: the track/effect domains die with the scene switch (stale ids) */
+      selectedTrackId: null,
+      selectedEffectId: null,
+      selectedEffectClipId: null,
       ...(sc ? { lockAll: sc.tracks.every((t) => t.locked) } : {}),
     };
   }),
@@ -775,8 +797,15 @@ export const useUi = create<UiState>((set, get) => ({
   selectMarker: (id) => set((s) => ({
     selectedMarkerId: id,
     /* mutual exclusivity (one selection domain at a time): picking a marker
-       clears the clip selection so the inspector rail swaps domains cleanly */
-    ...(id ? { selection: [] } : {}),
+       clears the clip selection so the inspector rail swaps domains cleanly.
+       R20-W3: the track/effect domains clear too (selectTrack law's mirror). */
+    ...(id ? {
+      selection: [],
+      selectedTrackId: null,
+      selectedEffectId: null,
+      selectedEffectClipId: null,
+      inspectorProjectMode: false,
+    } : {}),
   })),
   updateMarker: (id, patch) => withHistory(set, get, (scenes) => {
     const s = get();
@@ -939,7 +968,16 @@ export const useUi = create<UiState>((set, get) => ({
     get().pushToast(plan.toast!);
   },
 
-  setSelection: (ids) => set({ selection: ids, selectedMarkerId: null }),
+  setSelection: (ids) => set((s) => ({
+    selection: ids,
+    selectedMarkerId: null,
+    selectedTrackId: null,
+    /* the effect domain survives ONLY while its clip stays selected (D4.2) */
+    ...(s.selectedEffectClipId !== null && !ids.includes(s.selectedEffectClipId)
+      ? { selectedEffectId: null, selectedEffectClipId: null }
+      : {}),
+    inspectorProjectMode: false,
+  })),
   selectElement: (id, additive) => set((s) => {
     // spec 05 §12.3 linked selection: "selecting one selects both" — the A/V
     // pair (el-2 ↔ el-7 in the fixture) enters/leaves the selection as a
@@ -955,10 +993,21 @@ export const useUi = create<UiState>((set, get) => ({
       return other && other !== target ? [target, other] : [target];
     };
     const group = pairOf(id);
-    if (!additive) return { selection: group, selectedMarkerId: null };
+    /* R20-W3 domain laws: a fresh clip selection clears the marker/track
+       domains and exits project mode; the effect domain survives only when
+       its clip stays in the new selection (toggle-off drops it). */
+    const keepFx = (next: string[]) =>
+      s.selectedEffectClipId !== null && next.includes(s.selectedEffectClipId);
+    const fxClear = (next: string[]): Partial<UiState> =>
+      (keepFx(next) ? {} : { selectedEffectId: null, selectedEffectClipId: null });
+    if (!additive) return { selection: group, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...fxClear(group) };
     const groupSelected = group.every((x) => s.selection.includes(x));
-    if (groupSelected) return { selection: s.selection.filter((x) => !group.includes(x)) };
-    return { selection: [...s.selection.filter((x) => !group.includes(x)), ...group], selectedMarkerId: null };
+    if (groupSelected) {
+      const next = s.selection.filter((x) => !group.includes(x));
+      return { selection: next, ...fxClear(next) };
+    }
+    const grown = [...s.selection.filter((x) => !group.includes(x)), ...group];
+    return { selection: grown, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...fxClear(grown) };
   }),
   selectTrackElements: (trackId, additive) => set((s) => {
     const sc = s.scenes.find((x) => x.id === s.activeSceneId);
@@ -1000,7 +1049,32 @@ export const useUi = create<UiState>((set, get) => ({
   setSearch: (s) => set({ search: s }),
   setSortBy: (sortBy) => set({ sortBy }),
   setSortDir: (d) => set({ sortDir: d }),
-  setInspectorTab: (t) => set({ inspectorTab: t }),
+  /* R20-W3: the domain-clearing spread shared by every selection write —
+     mirrors the selectedMarkerId law (selectMarker :775): one selection
+     domain at a time. The effect domain dies with its clip: setSelection /
+     selectElement drop it unless the new selection still holds the clip. */
+  selectTrack: (id) => set((s) => ({
+    selectedTrackId: id,
+    ...(id ? {
+      selection: [],
+      selectedMarkerId: null,
+      selectedEffectId: null,
+      selectedEffectClipId: null,
+      inspectorProjectMode: false,
+    } : {}),
+  })),
+  selectEffect: (clipId, fxId) => set((s) => ({
+    selectedEffectId: fxId,
+    selectedEffectClipId: fxId ? clipId : null,
+    ...(fxId ? {
+      /* the effect's clip STAYS selected (the accordion expands in place);
+       * the track + marker domains clear, project mode exits */
+      selectedTrackId: null,
+      selectedMarkerId: null,
+      inspectorProjectMode: false,
+    } : {}),
+  })),
+  toggleInspectorProjectMode: () => set((s) => ({ inspectorProjectMode: !s.inspectorProjectMode })),
   toggleMasterMute: () => set((s) => ({ masterMuted: !s.masterMuted })),
   setMasterVolume: (v) => set({ masterVolume: clamp(v, 0, 1) }),
   setMediaW: (w) => set({ mediaW: clamp(w, 200, 480) }),
@@ -1446,6 +1520,9 @@ export const useUi = create<UiState>((set, get) => ({
     const hit = findEl(scenes, elementId);
     if (!hit || hit.track.locked) return;
     if (hit.el.effects) hit.el.effects = hit.el.effects.filter((f) => f.id !== fxId);
+    // R20-W3: the effect domain dies with its effect
+    const s = get();
+    if (s.selectedEffectId === fxId) set({ selectedEffectId: null, selectedEffectClipId: null });
     return scenes;
   }),
   setEffectParam: (elementId, fxId, param, value) => withHistory(set, get, (scenes) => {

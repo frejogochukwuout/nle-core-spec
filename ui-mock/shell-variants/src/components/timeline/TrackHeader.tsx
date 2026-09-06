@@ -81,6 +81,7 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
   const setTrackHeightPref = useUi((s) => s.setTrackHeightPref);
   const focused = useUi((s) => s.focusedTrackId === track.id);
   const setFocusedTrack = useUi((s) => s.setFocusedTrack);
+  const selectTrack = useUi((s) => s.selectTrack);
   const menu = useContextMenu(); // §4.9 track-header menu
 
   /* §4.9 track-header menu — direct toggles reuse the module-level
@@ -191,6 +192,16 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
            setFocusedTrack was store-surface-only before (R14 no-op sweep) */
         if (useUi.getState().focusedTrackId !== track.id) setFocusedTrack(track.id);
       }}
+      onClick={(e) => {
+        /* R20-W3 (D4.2): the header's NON-INTERACTIVE residue (name / clip-
+           count / lane area — NOT the M/S/L/V/W buttons, fader or menu) selects
+           the track: focus (onPointerDown above) + selectTrack. The store law
+           clears the clip selection + marker/effect domains (one domain at a
+           time) and the inspector rail swaps to the TrackSheet. */
+        const target = e.target as HTMLElement;
+        if (target.closest('button, input, select, textarea, [role="menu"]')) return;
+        if (useUi.getState().selectedTrackId !== track.id) selectTrack(track.id);
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -199,7 +210,13 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
       }}
       onKeyDown={(e) => {
         /* fires for focus on the header itself OR any of its M/S/L buttons
-           (keydown bubbles to this host) */
+           (keydown bubbles to this host) — the select-track key route only
+           applies to the HEADER itself so Enter on a button stays a toggle */
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+          e.preventDefault();
+          selectTrack(track.id);
+          return;
+        }
         if (!isMenuKey(e)) return;
         e.preventDefault();
         e.stopPropagation();
