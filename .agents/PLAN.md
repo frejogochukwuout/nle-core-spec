@@ -1,8 +1,23 @@
 # PLAN — Long-Horizon Task Tracker (nle-core-spec)
 
 **Created:** 2026-09-02 (Round 8 wrap-up — user directive: push/backup every micro milestone; PLAN tracks the long horizon, HANDOFF tracks the next session only)
-**Current round:** 16 IN PROGRESS → shell-mini MVP BOOTSTRAPPED (`96ea0db`, R16 A1-A4: design-audited + code-reviewed + 93 tests green) **and SERVING LIVE on port 3000** (R16 continuation session: origin PAT push DONE — GitHub reconciled via merge with the parallel R15-UI push, no force; Vite dev server daemonized via double-fork on :3000 behind Caddy :81 → the public preview URL IS the shell-mini app). **The horizon is now the A0-A7b assembly plan (spec 14 / ARCH-R15 §3.4), with the shell-mini track as the MVP-era UI surface.** R17+ = either (a) the user green-lights `nle-app` creation (week −1 pre-flight first — REVIEW-R15-EXEC §7's 12 items) or (b) further seal-polish rounds or (c) shell-mini iteration (v0.2: DnD + annotakit + keyboard-clip-focus).
+**Current round:** 19 COMPLETE (`952a415`: wave 7 closed 9/9 + OT-seam deep pass — free-drag + insert-push, scrub bar, ghosts, track selection, 18-ui-shell v1.3 §16 designates shell-mini the FIRST MVP) → **Current round:** 16 IN PROGRESS → shell-mini MVP BOOTSTRAPPED (`96ea0db`, R16 A1-A4: design-audited + code-reviewed + 93 tests green) **and SERVING LIVE on port 3000** (R16 continuation session: origin PAT push DONE — GitHub reconciled via merge with the parallel R15-UI push, no force; Vite dev server daemonized via double-fork on :3000 behind Caddy :81 → the public preview URL IS the shell-mini app). **The horizon is now the A0-A7b assembly plan (spec 14 / ARCH-R15 §3.4), with the shell-mini track as the MVP-era UI surface.** R17+ = either (a) the user green-lights `nle-app` creation (week −1 pre-flight first — REVIEW-R15-EXEC §7's 12 items) or (b) further seal-polish rounds or (c) shell-mini iteration (v0.2: DnD + annotakit + keyboard-clip-focus).
 **Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec (PAT shared in-session, kept in local `.git/config` + chat only — NEVER commit it; GitHub's secret scanner blocks token-bearing pushes). GitLab mirror remains the second remote (WAF 403s are probabilistic — retry).
+
+---
+
+## Round 19 (2026-09-06) — shell-mini: wave 7 + OT seams + drag deep pass + scrubbing + MVP designation (COMPLETE)
+
+**User ask:** check the latest feedbacks; (1) track opencut-timeline seams for the actual timeline ops (not improvised mock logic), (2) reflect everything in the UI spec with shell-mini as the first MVP before shell-full, (3) full deep pass on timeline drag handling ("can't move a clip in front of another clip — one-lane street"), (4) ensure scrubbing is enabled.
+
+**Landed:**
+- Wave 7 (mirror #45–#53, 9 threads) closed: rails whole-click, empty-lane track inspect (inspector track card + mutual-exclusion selection with survive-iff-visible healing), minimize slot law (measured 23/34 both modes), V1/A1 markers vs hidden-when-locked heads, half-open head corners, trim ghost edges (outward-only, ripple-start suppressed), 9-step zoom ladder (hardcodes swept), play-button centering + the viewer scrub bar + seek controls (edit-point walk-back).
+- **The drag law rewritten** (user item 3): free drag from the snapshot; conflicting drops INSERT (Premiere insert-edit geometry — dedicated insertPlacement, ALWAYS-floor, cross-track law); is-pushed live affordance; commit at the UP position; both-edge magnet + frozen field; moveClip = the OT wire law (refuse + toast; nudge refuses).
+- **OT seam tracking** (item 1): `ui-mock/shell-mini/docs/OT-SEAMS.md` — 14-row op map, drop-law matrix, mockup→library swap path; README deviations #22–#27.
+- **Spec** (item 2): 18-ui-shell.md v1.3 §16 — shell-mini = the first shippable MVP (embedding contract + canon rules).
+- Adversarial design review (4 P1 + 7 P2 adopted, `.agents/design/r19-drag-seams-design.md`); tests 235→302; tsc/builds green; live-verified + VLM; threads resolved, mirror 0 open; pushed origin+gitlab (merge-first with the sibling's R20); /home/sync r19 bundle+tarball.
+
+**Standing next:** the user's next review round on the new surfaces (insert drag feel, scrub bar, ghosts); quiet-window chores: annotakit vendor v0.5.2 upgrade; cross-track drag in the window model is a host-rebind question (registered, not scheduled).
 
 ---
 

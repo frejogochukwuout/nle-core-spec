@@ -1183,3 +1183,54 @@ port), not what any env currently runs.
     instead of rewriting. Law: contracts-first (stubs compile), integration
     ownership stays with the orchestrator, and re-issued tasks to a partially
     completed tree should AUDIT-then-fix, not rebuild.
+
+## R19 meta-learnings (shell-mini stream — wave 7 + OT-seam deep pass round)
+
+72. **`setPointerCapture` THROWS on untrusted (synthetic) pointer events in a
+    real browser — jsdom is a no-op, so unit tests never see it.** The R19
+    live-verification drag "silently did nothing": the synthetic
+    PointerEvent dispatches fine, React's handler runs, but
+    `setPointerCapture(fakePointerId)` throws NotFoundError (no active
+    pointer) BEFORE the handler's state updates — aborting the whole
+    gesture start. The clip gestures survived by luck (their capture call
+    sits AFTER the ref assignment, so the throw only skipped the last
+    line). Law: capture is an ENHANCEMENT — wrap every
+    `setPointerCapture` in try/catch (the finishGesture release pattern,
+    applied to the down side too), and when a synthetic-event gesture
+    "fails" live, check for a capture throw before suspecting the law.
+    (Trusted CDP-driven mouse moves via agent-browser `mouse` avoid the
+    class entirely — prefer them for final verification.)
+
+73. **Test pure helpers against the FULL doc shape they'll receive, not
+    the filtered subset that makes the case clean.** R19's
+    `insertPlacement` shipped with a V1-filtered invariant sweep that
+    proved no-overlap — and a live store test caught the real bug: the
+    helper ran over the WHOLE doc (audio clip included), treated the A1
+    clip under the video span as a conflict, and shifted BOTH tracks.
+    The geometry suite passed because every test passed
+    `doc.clips.filter(c => c.trackId === 'V1')`. Law: the helper's test
+    matrix must include the exact container it's called with (grep the
+    caller), and cross-domain members (other tracks) are a REQUIRED test
+    axis, not noise.
+
+74. **When one gesture path both APPLIES and CLEARS via callbacks, the
+    clears run AFTER the apply.** R19's commit-at-up fix (applyGesture at
+    the pointerup coordinates) re-fired the snap-guide and trim-ghost
+    signals from inside the shared applier — the "clears with the
+    gesture" lines that ran first were instantly un-done and the ghost
+    stayed painted after release. The live test caught it; the fix is
+    ordering, not logic (move onSnapGuide(null)/onTrimGhost(null) below
+    the commit block). General: any handler that delegates to a shared
+    emitter and then "resets" the emitter's outputs must reset LAST —
+    or the emitter needs a silent flag for the terminal application.
+
+75. **A default renumber silently re-pins every story control.** The R19
+    zoom ladder (5 → 9 steps) renumbered "48pps" from step 1 to step 2 —
+    and the stories' `zoomStep: 1` pins (written when 1 WAS the default)
+    silently became 36pps. Unit tests passed (they set state directly);
+    the live drag math then "looked wrong" by exactly the pps ratio
+    (0.75). Law: when a ladder/index renumber lands, sweep EVERY story
+    arg + test literal that pins the old index (rg the number), and when
+    a live gesture result is off by a clean RATIO, suspect the zoom pps
+    before the gesture law — read it back from the live DOM
+    (style.left÷time) first.

@@ -233,6 +233,36 @@ below — it is COMPLETE on origin and its standing items are preserved.
   the permanent RH edge fade is gone; the shade returns ONLY in trim
   mode (zone hover via :has() + active gesture via is-trimming-*,
   live-verified both halves + VLM-clean crop; +2 tests → 235/235).
+- **R19 — feedback wave 7 (mirror #45–#53, ALL 9 fixed + resolved) + the
+  user's four-track directive (OT seams / UI-spec MVP designation / the
+  drag deep pass / scrubbing):** the ONE-LANE STREET IS GONE — clips drag
+  freely from the pre-drag snapshot; a conflicting drop INSERTS (Premiere
+  insert-edit geometry: `insertPlacement` with the ALWAYS-floor, tail
+  spacing preserved, no split-at-insert, cross-track law pinned); the
+  pushed tail tints `is-pushed` live; commits land at the UP position;
+  both clip edges magnet (nearest, ties→left) over a FROZEN gesture-start
+  magnet field; the programmatic `moveClip` is the OT timeline.move wire
+  law (overlap ⇒ refuse + toast; nudge routes it). SCRUBBING: the viewer
+  transport's second row = full-width scrub bar (center measured 0px
+  under the play button; drag/click; role=slider ←/→/Home/End) + ⏮ and
+  |◀ seek buttons (edit-point walk-back) + Home in useKeys. Trim GHOSTS
+  (outward-only, ripple-start suppressed). Track selection: empty-lane +
+  head-badge → the inspector's track card (mutual exclusion, heals with
+  the binding setters). Track heads: V1/A1 markers on single-pair
+  unlocked, hidden when locked, 6px 0 0 6px corners. Rails = whole-
+  surface buttons. Zoom = 9 steps [24…384], every hardcode derives from
+  the ladder length. **docs/OT-SEAMS.md** = the 14-row mini↔OT op map +
+  drop-law matrix + mockup→library swap path (README deviations #22–#27).
+  **18-ui-shell.md v1.3 §16** designates shell-mini the FIRST SHIPPABLE
+  MVP (embedding contract; canon rules: spec wins, deviations registered).
+  302/302 tests, tsc clean, both builds green; live-verified (insert drag
+  with tail push + audio untouched, ghost render/clear, scrub 25→60%,
+  seek walk-back 7.0→5.5→1.7→0, rails, slot stability) + VLM rounds.
+  Committed `952a415` (merge-first with the sibling's R20 W0/W1 — their
+  queue is shell-variants, untouched); origin + gitlab pushed;
+  /home/sync r19 bundle + tarball. NOTE: the sibling stream is ACTIVE in
+  this repo (R20 in flight on shell-variants) — fetch+merge before every
+  push, their SKILL items mint fast (#69–#71 are THEIRS; mine are #72–#75).
 - **R18 correction (what was REVERTED):** the R16 "storybook can't serve
   publicly, static-mount it instead" verdict was wrong; the workaround
   infrastructure was removed — `public/stories/` (8.4MB), the
