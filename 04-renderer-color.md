@@ -1,11 +1,26 @@
 # 04 — Renderer & Color: WebGPU, 10-bit Pipeline, Scene-Linear Color Management (REFINED)
 
 **Stream:** GPU rendering pipeline + color management
-**Status:** Refined spec — sub-agent scout SCOUT-04 has verified all claims against FreeCut + OpenCut-classic source
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the renderer stack is engine BASE @ `f68ab8c` 356/356; the color instruments (S-engine) + CPU transition fallback (R-engine-p2) are the forward work); Refined spec — sub-agent scout SCOUT-04 has verified all claims against FreeCut + OpenCut-classic source
 **Primary teacher:** FreeCut `gpu-*` infrastructure (to be ported to 10-bit scene-linear) + OpenCut-classic Rust `compositor/` shaders
 **Seed file:** `04-renderer-color.md`
 **Refined by:** SCOUT-04 (general-purpose scout)
 **Date:** 2026-08-22
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- nle-engine @ `f68ab8c` — 356/356 vitest, tsc 0 — the renderer stack: the WebGPU compositor, the 44-effect registry, real A/V export (vendors OT @ `3420b5f`, WDC @ `5570321`).
+- MOCK-side design reference (pinned in-repo, NOT shipping code): `ui-mock/shell-variants` @ 1,334 tests — the W4 wave (`src/lib/color/`: colorSpace / gradeMath / qualifierMath / scopesMath; spec-08-exact math + real scopes data). Its engine binding is W-color.
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- **The color instruments — scopes (waveform/vectorscope), secondary qualifier, power window — have ZERO engine code today.** Engine; S-engine (∥ crawl, 4-6 wk; acceptance: each instrument's engine milestone green, consumed + pinned at W-color — S-engine builds, W-color consumes).
+- **CPU transition renderers as export fallback.** Engine; R-engine-p2, non-blocking (acceptance: the per-item engine milestone, written when queued, green).
+- Register: spec 14 §4.2 + §3.2 W-color — the worklist; acceptance lives here.
+
+**ACCEPTANCE & TEST PLAN:** §17 (the executable contract; §12 = the preserved intent list) + spec 17 §13A facet rows + the battery's posture checks; BASE rows' acceptance = the cited suite at the cited pin (regression role).
 
 ---
 

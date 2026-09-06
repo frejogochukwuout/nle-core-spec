@@ -1,11 +1,28 @@
 # 20 — Audio Core: web-daw-core, the Three-Layer Track Model, and Audio-Domain Convergence
 
 **Stream:** Audio engine (mixing graph, DSP, offline render) — the AUDIO domain of Decision 12
-**Status:** v1.0 (Round 9 — new spec per Decision 13; source analysis: `audits/ARCH-R9-three-domain-strategy.md` §1.4/§3, web-daw-core `README.md`/`PLAN.md`/`HANDOFF.md`/`docs/track-model.md`, all read at `bc68ee0`)
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: WDC 740/740 @ `fe05d85` + the engine bridge family + the app's WDC audio host are BASE; M2 / the mixer G-surface full wiring / N2b (W-audio) are the forward work); v1.0 (Round 9 — new spec per Decision 13; source analysis: `audits/ARCH-R9-three-domain-strategy.md` §1.4/§3, web-daw-core `README.md`/`PLAN.md`/`HANDOFF.md`/`docs/track-model.md`, all read at `bc68ee0`)
 **Spec file:** `20-audio-core.md` (single canon file per 00-master §2.5)
 **Primary teacher:** web-daw-core (`github.com/bearachprema/web-daw-core`, private) — the DAW-grade engine extracted from web-daw `main@913d0d7`
 **Baseline:** 737/737 tests green in Node (~70 s), `tsc --noEmit` clean, zero runtime deps, manifest-synced from the only LIVING ancestor (web-daw) — *(R9-era field; superseded by the R15 re-baseline line below — 721/721 PURE core after the M1.6 bridge relocation)*
 **R15 re-baseline + amendments (SCOUT-R15-C, verified by running):** web-daw-core @ `374711c` — **721/721** re-run, `tsc --noEmit` clean, **zero submodules** (the bridge relocated to nle-engine at M1.6); nle-engine @ `f526e67` — **274/274** vitest + **265/265** browser rows + **318** probe checks (its `vendor/web-daw-core` pin `5243c49` sits one docs-only commit behind WDC HEAD). Amendments: §4.1/§4.2/§5/§6.2/§11 bridge-home corrections (M1.6 relocation), §4.2 G-surface authoring contract (A4), §6.5/§10/§12.4 retirement rows CLOSED (AudioMixer deleted @`20fa266`; direct mix retired @`abdf9ee`), §7 M2 re-scoped as the app's A4 phase (ARCH-R15 §3.4)
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- web-daw-core (WDC) @ `fe05d85` (consumed @ `5570321`) — 740/740, tsc 0 — the PURE core: the E layer (ChannelStrip graph, DSP surface, offline render); W1 canonical meter taps landed + the first upstream-direction push.
+- The engine bridge family @ nle-engine `f68ab8c` — 356/356 vitest, tsc 0 — N2 volume/mute flatten, N3 cut-centered transition windows (real audio crossfades), W1 meter bridge.
+- The app's WDC audio host @ nle-test-app `e662759` — 83/83, tsc 0 — real strips/meters/transport.
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- **M2** — SoundTouch offline pitch, sidechain helper, PDC coordination, automation shapes. app+WDC+engine; W-audio (acceptance: offline parity pins ≤ −60 dBFS + the realtime-vs-offline null rig).
+- **Mixer G-surface FULL wiring** — inserts/sends/aux real (today: `bridgeSceneSettings` materializes unity faders + solo only, §7's honest gap). app+engine; W-audio (acceptance: mixer params audible-parity offline pins).
+- **N2b keyframed volume** — engine design round queued. Engine; W-audio (acceptance: per-segment gain automation + mixdown parity pins).
+- Register: spec 14 §4.3 — the worklist; acceptance lives here.
+
+**ACCEPTANCE & TEST PLAN:** §10 (the facet rows for spec 17 §13A — the audio T1) + §5's H3 null-parity standing gate (≥60 dB) + the battery's posture checks; BASE acceptance = the cited suites at the cited pins (regression role).
 
 ---
 
