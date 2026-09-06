@@ -1146,3 +1146,16 @@ describe('PR69 C53: the pending-gesture window', () => {
     expect(S().gesturePending).toBe(false);
   });
 });
+
+describe('R2-a P3-c: commits obey the pending window too', () => {
+  it('trimClip is inert while a scrub holds the window open (the keyboard trim reached commit)', () => {
+    S().beginPendingGesture();
+    S().trimClip('c1', 'end', 3); // the old law: one history entry mid-scrub
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(3.5); // untouched
+    expect(S().past).toHaveLength(0);
+    S().endPendingGesture();
+    S().trimClip('c1', 'end', 3);
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(3);
+    expect(S().past).toHaveLength(1); // live after the release
+  });
+});

@@ -17,7 +17,7 @@
    "centerly aligned" reading), drag/click scrubs the playhead, and the
    focusable slider surface carries ←/→/Home/End. */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Play, Pause, Maximize2, Minimize2 } from 'lucide-react';
 import { useMini, VIEWER_ASPECTS, aspectEntry, boundClips } from '../state/useMini';
 import { usePlayhead } from '../hooks/usePlayhead';
@@ -205,6 +205,12 @@ function ScrubBar({ extent }: { extent: number }) {
   const beginPendingGesture = useMini((s) => s.beginPendingGesture);
   const endPendingGesture = useMini((s) => s.endPendingGesture);
   const [dragging, setDragging] = useState(false);
+  /* R2-a P3-b (round 3): unmount sweep — an unmount mid-scrub (host
+   * remount / HMR / the viewer leaving the tree) never delivers a
+   * pointerup; the shared pending window closes with the surface or
+   * mutating keys stay dead until the next gesture completes. The
+   * zustand action identity is stable, so mount-only deps are safe. */
+  useEffect(() => () => endPendingGesture(), [endPendingGesture]);
   const barRef = useRef<HTMLDivElement>(null);
   const frac = extent > 0 ? Math.min(playhead / extent, 1) : 0;
 

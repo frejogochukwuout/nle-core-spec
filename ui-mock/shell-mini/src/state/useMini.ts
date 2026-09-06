@@ -286,7 +286,12 @@ export const useMini = create<MiniState>((set, get) => {
    * change inside a commit. */
   const commit = (mutate: (doc: Doc) => Doc | void): boolean => {
     const state = get();
-    if (state.dragActive) return false; // interaction lock: no commits mid-drag
+    /* R2-a P3-c (round 3): the PENDING window counts too — the keyboard
+     * trim activation (and the arrows) reached commit while a scrub held
+     * the window open, stepping the doc + minting history entries
+     * mid-gesture. With this gate the whole commit family obeys the same
+     * law the useKeys mutations already do (they die at POINTERDOWN). */
+    if (state.dragActive || state.gesturePending) return false; // interaction lock: no commits mid-gesture
     const draft: Doc = {
       tracks: state.doc.tracks,
       media: state.doc.media,

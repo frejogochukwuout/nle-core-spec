@@ -1256,6 +1256,11 @@ function Playhead({
   const beginPendingGesture = useMini((s) => s.beginPendingGesture);
   const endPendingGesture = useMini((s) => s.endPendingGesture);
   const [dragging, setDragging] = useState(false);
+  /* R2-a P3-b (round 3): unmount sweep — the min/full branches render
+   * DIFFERENT Playhead instances, so a mode flip mid-handle-scrub unmounts
+   * the scrubbing one with no pointerup ever coming. The window closes
+   * with the surface (edge.stop is the hook's own unmount law). */
+  useEffect(() => () => endPendingGesture(), [endPendingGesture]);
   const x = timeToPx(playhead, pps);
   const atStart = playhead < 0.5;
   const atEnd = playhead > endTime - 0.5;
@@ -1442,6 +1447,23 @@ function RulerScrub({
     const rect = elRef.current?.getBoundingClientRect();
     setPlayhead(pxToTime(clientX - (rect ? rect.left : 0), pps));
   };
+  /* R2-a P2-1 (round 3): the release path stops the EDGE LOOP too — the
+   * R21c wiring changed up/cancel to endPendingGesture only, deleting the
+   * edge.stop the playhead handle kept: releasing with the pointer parked
+   * in the 48px edge zone left the rAF loop gliding the timeline and
+   * re-seeking the playhead long after the up (the user's release
+   * position destroyed). */
+  const releaseScrub = () => {
+    edge.stop();
+    endPendingGesture();
+  };
+  /* R2-a P3-b (round 3): unmount sweep (ClipItem C9 parity) — a surface
+   * swap mid-scrub (minimize flip, host remount, HMR) never delivers a
+   * pointerup/cancel; the shared pending window must close with the
+   * surface or mutating keys stay dead + the tick frozen until the next
+   * gesture completes. edge.stop is the hook's own unmount law. The
+   * zustand action identity is stable, so the mount-only deps are safe. */
+  useEffect(() => () => endPendingGesture(), [endPendingGesture]);
   return (
     <div
       ref={elRef}
@@ -1471,8 +1493,8 @@ function RulerScrub({
           edge.maybeStart();
         }
       }}
-      onPointerUp={endPendingGesture}
-      onPointerCancel={endPendingGesture}
+      onPointerUp={releaseScrub}
+      onPointerCancel={releaseScrub}
     >
       <RulerMarks pps={pps} endTime={endTime} compact={compact} />
     </div>
@@ -1564,20 +1586,23 @@ export function Timeline({ style }: { style?: CSSProperties }) {
   const endTime = Math.max(contentEnd(boundClips(doc, trackMode, boundVideoTrack, boundAudioTrack)), 8, viewportTime);
   const width = timeToPx(endTime, pps);
 
-  /* R1-b P3-10: the minimize/expand swap mounts a NEW .qc-scroll at
-   * scrollLeft 0. Preserve the LEFTMOST VISIBLE TIME across the swap:
-   * recorded on the outgoing element (origin-corrected), restored on the
-   * incoming one (origin-adjusted). jsdom measures 0 — the restore is a
-   * no-op there. */
+  /* R1-b P3-10 → R2-a P2-2/P3-a (round 3): preserve the LEFTMOST VISIBLE
+   * TIME across the minimize/expand element swap. The stash is
+   * CONTINUOUS — onScroll records the origin-corrected time on every
+   * scroll (user pan, zoom anchor, edge auto-scroll), so there is no
+   * cleanup-timing race (the old cleanup read scrollRef.current AFTER
+   * React had re-attached it to the incoming element, recording 0); the
+   * restore runs ONCE per element swap in the effect body — never inside
+   * measure(), which fires on every resize/observer tick (the R21c wiring
+   * re-anchored the scroll on every resize, snapping it to the stale
+   * stash). Origin-adjusted with THIS render's pps/origin; jsdom measures
+   * 0 → a harmless no-op there. Requires the App-side single-slot law
+   * (the component instance must survive the flip for the stash to). */
   const scrollTimeRef = useRef(0);
-  useEffect(() => {
-    return () => {
-      const el = scrollRef.current;
-      if (el && el.clientWidth > 0) {
-        scrollTimeRef.current = pxToTime(el.scrollLeft + extentOriginPx, pps);
-      }
-    };
-  }, [timelineMinimized, pps, extentOriginPx]);
+  const noteScroll = () => {
+    const el = scrollRef.current;
+    if (el) scrollTimeRef.current = pxToTime(el.scrollLeft + extentOriginPx, pps);
+  };
 
   /* viewport measurement (ResizeObserver when available, resize listener
    *  as the jsdom/old-browser fallback). R18j: deps include the minimized
@@ -1586,12 +1611,13 @@ export function Timeline({ style }: { style?: CSSProperties }) {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    /* the one-shot re-anchor — ONLY on the element swap (effect re-run).
+     * A resize / splitter drag / observer tick must NOT re-anchor (the
+     * R2-a P2-2 regression: one resize snapped scrollLeft 500 → 0). */
+    el.scrollLeft = Math.max(0, timeToPx(scrollTimeRef.current, pps) - extentOriginPx);
     const measure = () => {
       const w = el.clientWidth;
       setViewportW((prev) => (Math.abs(prev - w) > 1 ? w : prev));
-      // R1-b P3-10: re-anchor the fresh scroll element to the last
-      // visible time (origin-adjusted; pps from THIS render)
-      if (w > 0) el.scrollLeft = Math.max(0, timeToPx(scrollTimeRef.current, pps) - extentOriginPx);
     };
     measure();
     if (typeof ResizeObserver !== 'undefined') {
@@ -1601,6 +1627,8 @@ export function Timeline({ style }: { style?: CSSProperties }) {
     }
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
+    // pps/extentOriginPx are read at swap time by design; scrollTimeRef is a ref
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timelineMinimized]);
 
   /* R18i: publish the ruler extent — setPlayhead clamps to it, so the
@@ -1655,7 +1683,16 @@ export function Timeline({ style }: { style?: CSSProperties }) {
           >
             <PanelBottomOpen size={14} strokeWidth={1.75} aria-hidden="true" />
           </button>
-          <div className="qc-scroll" data-testid="mini-timeline-scroll" ref={scrollRef}>
+          <div
+            className="qc-scroll"
+            data-testid="mini-timeline-scroll"
+            ref={scrollRef}
+            /* R2-a P3-a (round 3): the CONTINUOUS stash — every scroll
+                (user pan, zoom anchor, edge auto-scroll) records the
+                origin-corrected leftmost-visible time; the element-swap
+                restore reads it. */
+            onScroll={noteScroll}
+          >
             <div
               style={{
                 width,
@@ -1714,7 +1751,7 @@ export function Timeline({ style }: { style?: CSSProperties }) {
     >
       <ToolsRow />
       <div className="qc-timeline__scroll-wrap">
-        <div className="qc-scroll" data-testid="mini-timeline-scroll" ref={scrollRef}>
+        <div className="qc-scroll" data-testid="mini-timeline-scroll" ref={scrollRef} onScroll={noteScroll}>
           {/* ONE shared scroll content (audit M3): ruler + lanes + playhead
               move together; min-width 100% keeps surfaces full-viewport at
               low zoom. Everything inside positions in px from RENDER_ORIGIN.
