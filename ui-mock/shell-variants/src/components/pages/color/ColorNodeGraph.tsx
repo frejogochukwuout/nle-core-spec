@@ -27,7 +27,7 @@ const TITLE_H = 18;
 const PORT = 7;
 const TOP_PORT = 18; // upper edge of thumbnail
 const BOT_PORT = 48; // thumbnail bottom edge
-const CANVAS_W = 640;
+const CANVAS_W = 706; // the mock layout's true extent (master-out x=596 + card ~110)
 const CANVAS_H = 268;
 
 type NodeKind = 'master' | 'grade' | 'fx' | 'mixer';
@@ -298,9 +298,14 @@ export function ColorNodeGraph({ docked = false }: ColorNodeGraphProps) {
   const workspace = (
     <div className="min-h-0 flex-1 overflow-auto" style={{ background: 'var(--nodegraph-bg)' }}>
       <div
-        className="relative h-full w-full min-w-[640px]"
+        className="relative"
         style={{
-          minHeight: CANVAS_H,
+          /* EXPLICIT extents: the nodes/edges are absolutely positioned (out
+             of flow — they never extend a scroll region). The canvas box
+             itself carries the extents so the dock/standalone scroll shows
+             the whole graph (R22-D4: scrollable at natural size). */
+          width: CANVAS_W,
+          height: CANVAS_H,
           backgroundColor: 'var(--nodegraph-bg)',
           backgroundImage: 'linear-gradient(var(--nodegraph-grid) 1px, transparent 1px), linear-gradient(90deg, var(--nodegraph-grid) 1px, transparent 1px)',
           backgroundSize: '64px 64px, 64px 64px',

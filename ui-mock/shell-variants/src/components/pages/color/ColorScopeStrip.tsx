@@ -179,7 +179,11 @@ export function ColorScopeStrip() {
           className={`grid shrink-0 gap-[2px] ${gridMode ? 'grid-cols-2' : 'grid-cols-4'}`}
           style={{
             background: '#000',
-            height: gridMode ? 'max(240px, 45%)' : 130,
+            /* D3's bounded budget as FIXED pixels — percentage heights
+               resolve against a content-based parent here (indefinite) and
+               blew the column out. 240px grid / 130px row; the dock header
+               adds 26px; the VIEWER keeps the remaining mainbody. */
+            height: gridMode ? 240 : 130,
           }}
         >
           {PANELS.map((p) => (
