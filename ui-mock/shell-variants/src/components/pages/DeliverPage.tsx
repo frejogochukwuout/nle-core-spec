@@ -1,30 +1,30 @@
 /* DeliverPage — spec 18 §4.8 / specs 10-11: FCPXML export, optional cloud
    master, render settings, progress list (job rows + retry per §6.4).
-   R19 th_mto37ba3 (gap C37): redesigned as a FULL-VIEW export surface that
-   fills whatever container it gets (the Wave III shell routes the whole
-   mainbody here, replacing the right-rail mount). Three internal regions:
-     LEFT   (min 260px) — presets (moved here) + the render queue/job list;
-     CENTER (flex)      — export summary: project/timeline identity,
-                          duration/fps/res, the RANGE (loop in/out TCs from
-                          the store — "set I/O on the timeline"), destination;
-     RIGHT  (min 300px) — render settings: format/codec/resolution/
-                          destination + the range select; field rows WRAP and
-                          the select truncates (th_mto35hrm overflow fix).
-   th_mto38qzp: preset tiles got breathing room — 2-column wrapping grid,
-   larger min-height, icon + title + subtitle layout.
+   R22 W5 (issues #88/#89 — the layout ruling): the three regions follow the
+   STANDARD mainbody grammar now:
+     LEFT   (280px)  — PRESETS ONLY (#89: "left side is related to asset
+                       browsing (presets are okay, queues are not)");
+     CENTER (flex)   — the VIDEO PREVIEW (the program Viewer, read-only —
+                       #88: "video preview should still be here") while
+                       idle; THE RENDER QUEUE replaces the preview while a
+                       render is active (#89: "the center view may be better
+                       for these queues replacing the video preview when
+                       rendering is happening");
+     RIGHT  (340px)  — the deliver INSPECTOR: render settings + the export
+                       summary (the metadata the reviewer wanted "in
+                       inspector, or as a separate console panel", #88).
+   th_mto38qzp: preset tiles keep the breathing-room grammar.
    Honest mock: the export CTA / Reveal / Retry never run an encode — each
    pushes an info toast that says the render queue is mock, and the CTA
-   appends a static queued job row (it never progresses). Render settings
-   (range/resolution/bundle/format/codec) are LOCAL state the queue READS —
-   the queued row's name + bundle chip mirror the choices, the summary
-   region mirrors the format/codec; §4.2 state rows: an empty active scene
-   swaps the queue for the empty-state row + honestly disables the CTA, and
-   the job list carries one failed fixture whose Retry uses the same honest
-   toast. */
+   appends a static queued job row (it never progresses — so the queue view
+   persists after queueing; that IS the "rendering is happening" state).
+   Render settings stay LOCAL state the queue READS. §4.2 state rows: an
+   empty active scene honestly disables the CTA + the queue's empty row. */
 
 import { FileVideo, FileCode2, Camera, Download, RefreshCw, CheckCircle2, LoaderCircle, Clock, TriangleAlert, MonitorPlay } from 'lucide-react';
 import { useState } from 'react';
 import { useUi } from '../../state/useUiStore';
+import { Viewer } from '../shell/Viewer';
 import { project, sceneDuration } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
 
@@ -44,11 +44,13 @@ type Job = { id: string; name: string; progress: number; state: 'done' | 'runnin
 
 const JOBS: Job[] = [
   /* §4.2 error-state fixture (R14): one permanently-failed row — the Retry
-     affordance already exists for non-done rows and fires the honest toast */
+     affordance already exists for non-done rows and fires the honest toast.
+     R22 W5: NO running row by default — the center shows the PREVIEW (#88);
+     queueing an export flips it to the queue (#89's replacement rule). */
   { id: 'j-0', name: 'Beach Doc — v2 master.mp4', progress: 62, state: 'failed', time: '12m ago' },
   { id: 'j-1', name: 'Beach Doc — v3 master.mp4', progress: 100, state: 'done', time: '2m ago' },
   { id: 'j-2', name: 'Beach Doc — v3.fcpxml', progress: 100, state: 'done', time: '2m ago' },
-  { id: 'j-3', name: 'Interview selects master.mp4', progress: 38, state: 'running', time: '' },
+  { id: 'j-3', name: 'Interview selects master.mp4', progress: 100, state: 'done', time: '26m ago' },
 ];
 
 /* file suffix for a queued row per preset — keeps the honest-mock story */
@@ -59,6 +61,10 @@ const MOCK_RENDER_DETAIL = 'render queue is mock — no encode runs';
 export function DeliverPage() {
   const [preset, setPreset] = useState('fcpxml');
   const [jobs, setJobs] = useState<Job[]>(JOBS);
+  /* the center-view toggle: queueing an export auto-shows the queue; the
+     header toggle lets the user inspect past renders while idle (#89's
+     center home + #88's preview-default) */
+  const [showQueue, setShowQueue] = useState(false);
   const pushToast = useUi((s) => s.pushToast);
   const scenes = useUi((s) => s.scenes);
   const activeSceneId = useUi((s) => s.activeSceneId);
@@ -98,27 +104,47 @@ export function DeliverPage() {
       time: '',
       bundle: bundleMedia,
     }]);
+    setShowQueue(true); // the center flips to the queue (#89)
   };
+
+  /* R22 W5 (#89): "rendering is happening" = any queued/running row. While
+     true the CENTER swaps the video preview for the queue; the honest mock
+     queued row never progresses, so the queue view persists after the CTA
+     (that IS the mock's rendering state). The header toggle reviews past
+     renders while idle. */
+  const renderActive = jobs.some((j) => j.state === 'queued' || j.state === 'running');
+  const queueView = renderActive || showQueue;
 
   return (
     <div data-testid="shell-deliver" className="flex h-full w-full min-h-0 min-w-0 flex-col bg-panel">
       <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-3" style={{ height: 28, minHeight: 28 }}>
         <span className="text-[12px] font-semibold text-tprimary">Deliver</span>
         <span className="text-[11px] text-tfaint">export &amp; handoff</span>
+        <div className="grow" />
+        <button
+          type="button"
+          className={`toolbtn !py-[2px] !text-[11px] ${queueView ? 'active' : ''}`}
+          aria-pressed={queueView}
+          data-testid="shell-deliver-queue-toggle"
+          data-tip={queueView ? 'Back to the video preview' : 'Review the render queue (past + active renders)'}
+          onClick={() => setShowQueue((v) => !v)}
+        >
+          <Clock size={12} strokeWidth={1.7} />
+          <span>Queue{renderActive ? ' · rendering' : ` · ${jobs.length}`}</span>
+        </button>
       </div>
 
-      {/* full-view body — fills whatever container the shell gives it; the
-          three regions keep their minimums and the row scrolls (not clips)
-          in a still-narrow container (rail mount until Wave III wiring) */}
-      <div className="flex min-h-0 flex-1 overflow-x-auto">
+      {/* the standard-grammar body: presets left · preview/queue center ·
+          the deliver inspector right (R22 W5, #88/#89) */}
+      <div className="flex min-h-0 flex-1">
 
-        {/* ---- LEFT: presets + render queue (min 260px) ------------------ */}
+        {/* ---- LEFT: PRESETS ONLY (min 260px) — #89 ----------------------- */}
         <div data-testid="shell-deliver-queue" className="flex w-[280px] min-w-[260px] shrink-0 flex-col border-r border-hairline">
           <div className="scroll-y min-h-0 flex-1 px-3 py-3">
-            {/* preset picker — th_mto38qzp: 2-col wrapping grid, taller tiles,
-                icon + title + subtitle breathing room */}
+            {/* preset picker — th_mto38qzp grammar: 2-col wrapping grid,
+                taller tiles, icon + title + subtitle breathing room */}
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-tfaint">Presets</div>
-            <div className="mb-4 grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2.5">
               {PRESETS.map((p) => {
                 const Icon = p.icon;
                 const active = preset === p.id;
@@ -138,80 +164,100 @@ export function DeliverPage() {
                 );
               })}
             </div>
-
-            {/* job list — §4.2: the empty scene swaps the queue for the
-                empty-state row (nothing was ever renderable) */}
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Render queue</div>
-            {emptyTimeline ? (
-              <div data-testid="shell-deliver-state-empty" className="rounded-[var(--radius)] border border-dashed border-soft px-3 py-4 text-center text-[11px] text-tmuted">
-                Timeline is empty — nothing to export
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                {jobs.map((j) => (
-                  <div key={j.id} className="flex items-center gap-2.5 rounded-[var(--radius)] border border-soft px-2.5 py-2" data-testid="shell-deliver-job">
-                    {j.state === 'done' ? (
-                      <CheckCircle2 size={14} className="shrink-0 text-[var(--mk-green)]" />
-                    ) : j.state === 'failed' ? (
-                      /* §4.2 error state (R14): red/amber failure affordance */
-                      <TriangleAlert size={14} className="shrink-0 text-[var(--danger)]" />
-                    ) : j.state === 'queued' ? (
-                      /* static queued row — the honest-mock export artifact; it
-                         never progresses (no encode runs) */
-                      <Clock size={14} className="shrink-0 text-tmuted" />
-                    ) : (
-                      <LoaderCircle size={14} className="shrink-0 animate-spin text-accent" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="min-w-0 truncate text-[11.5px] text-tprimary">{j.name}</span>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          {/* R14: bundle-media chip mirrors the checkbox on queued rows */}
-                          {j.bundle && (
-                            <span className="mono rounded border border-soft px-1 text-[10px] text-tmuted" data-testid="shell-deliver-job-bundle">bundle media</span>
-                          )}
-                          {j.state === 'failed' ? (
-                            <span className="mono text-[11px] font-semibold text-[var(--danger)]">Failed</span>
-                          ) : (
-                            <span className="mono text-[11px] text-tmuted">{j.state === 'done' ? j.time : `${j.progress}%`}</span>
-                          )}
-                        </div>
-                      </div>
-                      {j.state === 'running' && (
-                        <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-[var(--border-soft)]">
-                          <div className="h-full rounded-full" style={{ width: `${j.progress}%`, background: 'var(--accent-selection)' }} />
-                        </div>
-                      )}
-                    </div>
-                    {j.state === 'done' ? (
-                      <button
-                        className="icon-btn !h-[22px]"
-                        data-tip="Reveal file"
-                        aria-label="Reveal file"
-                        onClick={() => pushToast({ kind: 'info', title: 'Reveal file', detail: 'render queue is mock — no file was written' })}
-                      >
-                        <Download size={12} />
-                      </button>
-                    ) : (
-                      <button
-                        className="icon-btn !h-[22px]"
-                        data-tip="Retry"
-                        aria-label="Retry job"
-                        onClick={() => pushToast({ kind: 'info', title: `Retry ${j.name}`, detail: MOCK_RENDER_DETAIL })}
-                      >
-                        <RefreshCw size={12} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            <p className="mt-3 text-[10px] leading-relaxed text-tfaint">
+              {renderActive
+                ? 'Rendering — the queue shows in the center view.'
+                : 'Queue an export — the render queue replaces the center preview while rendering.'}
+            </p>
           </div>
         </div>
 
-        {/* ---- CENTER: export summary (flex) ------------------------------ */}
-        <div data-testid="shell-deliver-summary" className="flex min-w-0 flex-1 flex-col">
-          <div className="scroll-y min-h-0 flex-1 px-5 py-4">
+        {/* ---- CENTER: the video PREVIEW (idle) / the QUEUE (rendering) —
+              #88 + #89 ------------------------------------------------------ */}
+        {queueView ? (
+          <div data-testid="shell-deliver-summary" className="flex min-w-0 min-w-0 flex-1 flex-col">
+            <div className="scroll-y min-h-0 flex-1 px-5 py-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <LoaderCircle size={13} className="animate-spin text-accent" aria-hidden="true" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Render queue — rendering</span>
+                </div>
+                <span className="text-[10px] text-tfaint" data-tip="The queued row is the honest mock — no encode runs; the preview returns when the mock completes">mock render</span>
+              </div>
+              {/* §4.2: the empty scene swaps the queue for the empty-state row */}
+              {emptyTimeline ? (
+                <div data-testid="shell-deliver-state-empty" className="rounded-[var(--radius)] border border-dashed border-soft px-3 py-4 text-center text-[11px] text-tmuted">
+                  Timeline is empty — nothing to export
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {jobs.map((j) => (
+                    <div key={j.id} className="flex items-center gap-2.5 rounded-[var(--radius)] border border-soft px-3 py-2.5" data-testid="shell-deliver-job">
+                      {j.state === 'done' ? (
+                        <CheckCircle2 size={14} className="shrink-0 text-[var(--mk-green)]" />
+                      ) : j.state === 'failed' ? (
+                        <TriangleAlert size={14} className="shrink-0 text-[var(--danger)]" />
+                      ) : j.state === 'queued' ? (
+                        <Clock size={14} className="shrink-0 text-tmuted" />
+                      ) : (
+                        <LoaderCircle size={14} className="shrink-0 animate-spin text-accent" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="min-w-0 truncate text-[11.5px] text-tprimary">{j.name}</span>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {j.bundle && (
+                              <span className="mono rounded border border-soft px-1 text-[10px] text-tmuted" data-testid="shell-deliver-job-bundle">bundle media</span>
+                            )}
+                            {j.state === 'failed' ? (
+                              <span className="mono text-[11px] font-semibold text-[var(--danger)]">Failed</span>
+                            ) : (
+                              <span className="mono text-[11px] text-tmuted">{j.state === 'done' ? j.time : `${j.progress}%`}</span>
+                            )}
+                          </div>
+                        </div>
+                        {j.state === 'running' && (
+                          <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-[var(--border-soft)]">
+                            <div className="h-full rounded-full" style={{ width: `${j.progress}%`, background: 'var(--accent-selection)' }} />
+                          </div>
+                        )}
+                      </div>
+                      {j.state === 'done' ? (
+                        <button
+                          className="icon-btn !h-[22px]"
+                          data-tip="Reveal file"
+                          aria-label="Reveal file"
+                          onClick={() => pushToast({ kind: 'info', title: 'Reveal file', detail: 'render queue is mock — no file was written' })}
+                        >
+                          <Download size={12} />
+                        </button>
+                      ) : (
+                        <button
+                          className="icon-btn !h-[22px]"
+                          data-tip="Retry"
+                          aria-label="Retry job"
+                          onClick={() => pushToast({ kind: 'info', title: `Retry ${j.name}`, detail: MOCK_RENDER_DETAIL })}
+                        >
+                          <RefreshCw size={12} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div data-testid="shell-deliver-preview" className="flex min-w-0 flex-1 flex-col">
+            {/* #88: the video preview RETURNS — the program viewer (real,
+                read-only; the transport drives the real playhead) */}
+            <Viewer duration={duration} />
+          </div>
+        )}
+
+        {/* ---- RIGHT: the deliver INSPECTOR (min 300px) — #88 ------------ */}
+        <div data-testid="shell-deliver-settings" className="scroll-y flex w-[340px] min-w-[300px] shrink-0 flex-col border-l border-hairline">
+          <div className="min-h-0 flex-1 px-3 py-3">
             {/* project metadata section (spec 18 §4.1: project title deep-links here) */}
             <div className="mb-4 flex items-center justify-between rounded-[var(--radius)] border border-soft bg-inset px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
@@ -261,13 +307,9 @@ export function DeliverPage() {
                 <div className="mt-1 text-[11px] text-tmuted">set I/O on the timeline (I / O at the playhead, or the viewer transport marks)</div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* ---- RIGHT: render settings (min 300px) ------------------------- */}
-        <div data-testid="shell-deliver-settings" className="flex w-[340px] min-w-[300px] shrink-0 flex-col border-l border-hairline">
-          <div className="scroll-y min-h-0 flex-1 px-3 py-3">
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Render settings</div>
+            {/* ---- the deliver inspector's render settings half (#88) ----- */}
+            <div className="mb-1 mt-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Render settings</div>
             {/* th_mto35hrm: field rows WRAP (label keeps its basis, control
                 takes the rest) and the <select> is min-w-0 + truncate — the
                 long In→Out option can no longer push the column wide */}
