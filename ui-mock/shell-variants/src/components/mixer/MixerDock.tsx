@@ -119,6 +119,34 @@ function FullDock() {
     return () => ro.disconnect();
   }, []);
 
+  /* R20-W0 B1 (thread th_mtp5yku1, DESIGN-R20 D1.1): the old Tailwind
+     max-w-[60%] resolved against this dock's own CONTENT-SIZED shrink-0
+     wrapper (AppShell .shell-region has no width), so the percentage was
+     circular → dock collapsed to ~237px and the channel scroll region went
+     0px wide (strips invisible/overlapping). Fix: measure the definite-width
+     timeline ROW (dock → wrapper → row) and cap the dock at an absolute px
+     budget: min(60% of row, 22 rail + (N audio + 2 aux + 1 master) strips).
+     The channel region keeps a 2-strip (172px) floor so it can never
+     collapse to zero; aux/master always render after it. */
+  const [maxW, setMaxW] = useState<number | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    // two ancestors up = the timeline row (flex-1, definite width); one up is
+    // the content-sized shrink-0 wrapper (the B1 feedback loop — never use it)
+    const row = el.parentElement?.parentElement;
+    if (!row) return;
+    const nStrips = audio.length + 3; // + 2 aux + master
+    const measure = () => {
+      const rowW = row.getBoundingClientRect().width;
+      if (rowW > 0) setMaxW(Math.min(0.6 * rowW, 22 + nStrips * 86));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    return () => ro.disconnect();
+  }, [audio.length]);
+
   // strip-focus flash (escalation gesture feedback) — 1.2s ring, same as v2.1
   useEffect(() => {
     if (!stripFlash) return;
@@ -130,7 +158,8 @@ function FullDock() {
   return (
     <div
       ref={ref}
-      className="flex h-full min-h-0 max-w-[60%] shrink-0 items-stretch border-l border-hairline bg-shell"
+      className="flex h-full min-h-0 shrink-0 items-stretch border-l border-hairline bg-shell"
+      style={maxW !== null ? { maxWidth: `${Math.round(maxW)}px` } : undefined}
       data-testid="mixer-dock-full"
       role="group"
       aria-label="Audio mixer"
@@ -158,7 +187,7 @@ function FullDock() {
           the FULL dock height (h-full, terminal fader sections — fixes
           th_mto6496s; the old fixed 110px centerpiece left the bottom half
           of the dock's right region empty) */}
-      <div className="flex min-h-0 min-w-0 items-stretch overflow-x-auto">
+      <div className="flex min-h-0 min-w-[172px] items-stretch overflow-x-auto">
         {audio.map((t, i) => (
           <ChannelStrip
             key={t.id}

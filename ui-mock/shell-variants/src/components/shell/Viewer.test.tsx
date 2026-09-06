@@ -46,10 +46,13 @@ describe('Viewer (spec 18 §4.3)', () => {
     const select = screen.getByLabelText('Viewer zoom') as HTMLSelectElement;
     // labels match the ACTUAL multipliers of the fit width (R13 fix: the old
     // 50%/100%/200% were container percentages, not magnifications)
-    expect(select.options).toHaveLength(4);
-    for (const label of ['Fit', '1.5×', '2×', '4×']) {
+    // R20: 1.25× added to the ladder (thread th_mtp93qp5 / GH #66)
+    expect(select.options).toHaveLength(5);
+    for (const label of ['Fit', '1.25×', '1.5×', '2×', '4×']) {
       expect(within(select).getByRole('option', { name: label })).toBeInTheDocument();
     }
+    fireEvent.change(select, { target: { value: '1.25×' } });
+    expect((img.parentElement as HTMLElement).style.width).toBe('125%');
     fireEvent.change(select, { target: { value: '2×' } });
     expect((img.parentElement as HTMLElement).style.width).toBe('200%');
     fireEvent.change(select, { target: { value: '4×' } });

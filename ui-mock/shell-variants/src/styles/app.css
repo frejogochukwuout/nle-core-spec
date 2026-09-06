@@ -170,8 +170,17 @@ body {
   );
 }
 
-/* tooltip (CSS-only, 500ms delay per spec 18 §9) */
-[data-tip] { position: relative; }
+/* tooltip (CSS-only, 500ms delay per spec 18 §9).
+   R20-W0 (threads th_mtp5r6yl / th_mtp5rda8): the position:relative context
+   MUST live in @layer base — as an unlayered rule it outranked Tailwind's
+   @layer utilities .absolute, so every data-tip element that ALSO carried
+   .absolute (ruler marker pins, range-marker caps, clip markers, debug FAB)
+   computed position:relative, stacked in flow and cascaded out of the marker
+   band ("free floating markers"). Layered = utilities win for .absolute,
+   and plain buttons keep relative from base. */
+@layer base {
+  [data-tip] { position: relative; }
+}
 [data-tip]::after {
   content: attr(data-tip);
   position: absolute;

@@ -179,8 +179,11 @@ export function Viewer({ duration }: { duration: number }) {
      does: Fit = letterbox-fill (1× fit width), the rest multiply the fit
      width (overflow-auto lets ≥2× scroll). The old 50/100/200% labels were
      container-percentages, not magnifications (R13 fix). */
-  const zoomOptions = ['Fit', '1.5×', '2×', '4×'] as const;
-  const m = zoom === 'Fit' ? 1 : zoom === '1.5×' ? 1.5 : zoom === '2×' ? 2 : 4;
+  const zoomOptions = ['Fit', '1.25×', '1.5×', '2×', '4×'] as const;
+  // R20 (thread th_mtp93qp5 / GH #66): 1.25× added — a fine-grained step the
+  // reviewer asked for; DEVIATION from spec 18 §3.3's Fit/1.5/2/4 ladder
+  // (registered in README deviations register).
+  const m = zoom === 'Fit' ? 1 : zoom === '1.25×' ? 1.25 : zoom === '1.5×' ? 1.5 : zoom === '2×' ? 2 : 4;
   const zoomStyle: React.CSSProperties = zoom === 'Fit'
     ? { width: '100%' }
     : { width: `${m * 100}%`, maxWidth: 'none', maxHeight: 'none', flexShrink: 0 };
