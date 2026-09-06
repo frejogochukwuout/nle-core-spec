@@ -7,6 +7,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within, act } from '@testing-library/react';
 import { MediaPool } from './MediaPool';
 import { useMini } from '../state/useMini';
+import { seedDoc } from '../lib/mockData';
 
 const S = () => useMini.getState();
 
@@ -192,5 +193,38 @@ describe('R18j image duration honesty (thread #18)', () => {
     render(<MediaPool />);
     expect(screen.getByTestId('mini-media-m-title').getAttribute('aria-label')).not.toContain('00:03.5');
     expect(screen.getByTestId('mini-media-m-drone').getAttribute('aria-label')).toContain('00:04.5');
+  });
+});
+
+/* ---- R18k (thread #23): video-only mode head + list ---------------- */
+
+describe('R18k video-only mode (thread #23)', () => {
+  it('video-only: no type tabs, a plain Media head, only video cards', () => {
+    useMini.setState({ trackMode: 'video' });
+    render(<MediaPool />);
+    expect(screen.queryByTestId('mini-pool-tab-all')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-pool-tab-video')).not.toBeInTheDocument();
+    expect(screen.getByTestId('mini-pool-head-video')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-pool-list').textContent).not.toContain('interview_audio');
+    expect(screen.getByTestId('mini-media-m-drone')).toBeInTheDocument(); // video stays
+    expect(screen.queryByTestId('mini-media-m-title')).not.toBeInTheDocument(); // image filtered
+    expect(screen.queryByTestId('mini-media-m-interview')).not.toBeInTheDocument(); // audio filtered
+  });
+
+  it('video-only empty state is honest (no video media)', () => {
+    // docChanged ignores media-only mutations — setState directly (documented trap)
+    useMini.setState({
+      trackMode: 'video',
+      doc: { tracks: seedDoc().tracks, media: seedDoc().media.filter((m) => m.kind !== 'video'), clips: [] },
+    });
+    render(<MediaPool />);
+    expect(screen.getByTestId('mini-pool-empty').textContent).toContain('No video media');
+  });
+
+  it('paired mode keeps the tabs (the full editor grammar survives)', () => {
+    useMini.setState({ trackMode: 'paired' });
+    render(<MediaPool />);
+    expect(screen.getByTestId('mini-pool-tab-all')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-pool-tab-video')).toBeInTheDocument();
   });
 });

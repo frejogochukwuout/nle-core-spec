@@ -87,9 +87,16 @@
   color: var(--canvas-editor-text-primary);
 }
 
+/* R18k (thread #4): the active chip was 6.5% white over the 5.2% toolbar
+   surface — ~1.3% separation, effectively invisible. 15% surface + white
+   ink + a hairline inset ring reads clearly as "engaged" without going
+   loud. REGISTERED DEVIATION: RH's own active tool is the same 6.5%
+   (extraction §4) — the reviewer's contrast complaint overrules skin
+   fidelity here. Same grammar as .mini-pool__tab.is-active. */
 .qc-toolbar__icon.is-active {
-  background: var(--canvas-editor-control-surface);
-  color: var(--canvas-quick-cut-control-active);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 .qc-toolbar__icon:disabled,
@@ -190,7 +197,9 @@
 .qc-ruler {
   position: relative;
   z-index: 2;
-  padding: 0 10px;
+  /* R18k: 46 = RENDER_ORIGIN_PX — marks align with t=0 AFTER the head
+     rail; the rail itself sits BELOW the ruler (sticky within the stage) */
+  padding: 0 10px 0 46px;
 }
 
 .qc-ruler__inner {
@@ -267,10 +276,11 @@
   /* inside the positioned scroll content: spans ruler (34px) + lanes.
      Content height = ruler 34 + layout pad 8 + lanes 80 + pad 8 + stage
      margin 12 = 142; lanes end at 122 → bottom inset 20px lands the line
-     exactly at the last lane's end. Horizontal 10px aligns with the
-     ruler's padding + stage margin+padding (2+8 = 10px). */
+     exactly at the last lane's end. R18k: horizontal 46 = the head rail
+     + stage margin — t=0 sits after the rail, aligned with ruler marks
+     and lane clips. */
   top: 0;
-  left: 10px;
+  left: 46px;
   right: 10px;
   bottom: 20px;
   pointer-events: none;
@@ -377,28 +387,74 @@
 
 /* ---- stage / tracks (RH anatomy, R18d contrast lift) -------- */
 
+/* R18k (review P1-1): overflow:hidden REMOVED — it would capture the
+   sticky head column (an overflow:hidden ancestor IS a scroll mechanism
+   for sticky purposes, and the stage never scrolls, so the heads would
+   never pin). The lanes clip their own content; the panel clips the
+   rest (.qc-timeline overflow). */
 .qc-stage {
   position: relative;
   z-index: 1;
   margin: 0 2px 12px;
-  overflow: hidden;
 }
 
+/* R18k: the layout is now a FLEX ROW — [fixed head rail | lanes] inside
+   the well. NO left padding: the head rail starts at the stage's 2px
+   margin, lanes at 2+44=46 = RENDER_ORIGIN_PX (Timeline.tsx). */
 .qc-track-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  padding: 8px;
+  display: flex;
+  padding: 8px 8px 8px 0;
   box-sizing: border-box;
+  border-radius: var(--canvas-editor-radius-track);
+  position: relative;
+  background: rgba(0, 0, 0, 0.42); /* R18f: deeper well — timeline reads as its own room */
+}
+
+/* R18k (review P1-1): the FIXED track-head rail — sticky at the
+   scrollport's left edge while the lanes scroll UNDER it. Opaque: clips
+   sliding beneath must vanish (the well is translucent, so the rail
+   carries its own solid ≈well-over-panel-over-vignette color). */
+.qc-track-heads {
+  flex: 0 0 44px; /* = TRACK_HEAD_W (Timeline.tsx) — keep in sync */
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: var(--canvas-editor-space-sm); /* must match .qc-tracks' gap */
+  background: #0e0f10;
+  border-right: 1px solid rgba(255, 255, 255, 0.035);
+}
+
+/* one head cell per lane — the SAME flex law as the lane rows
+   (1 1 36px + min-height) so the rail stays row-aligned with its lane
+   in every context (shell stretch AND solo stories); the collapsed
+   audio bar's cell shrinks to its 22px. Lane-surface grammar. */
+.qc-track-head {
+  flex: 1 1 var(--canvas-editor-track-height);
+  min-height: var(--canvas-editor-track-height);
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 6px;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  border-radius: var(--canvas-editor-radius-control);
+}
+
+.qc-track-head--collapsed {
+  flex: 0 0 auto;
+  height: 22px;
+  min-height: 22px;
 }
 
 .qc-tracks {
+  flex: 1 1 auto;
+  min-width: 0; /* was min-width:100% — the head rail takes the leading width now; flex fills the rest */
   display: flex;
   flex-direction: column;
   gap: var(--canvas-editor-space-sm);
-  border-radius: var(--canvas-editor-radius-track);
   position: relative;
-  min-width: 100%;
-  background: rgba(0, 0, 0, 0.42); /* R18f: deeper well — timeline reads as its own room */
 }
 
 .qc-track-row__content {
@@ -438,21 +494,43 @@
   color: var(--canvas-editor-text-default);
 }
 
-/* lane badge (mini addition, D3.2: V1/A1 at lane left edge) */
-.qc-track-row__badge {
-  position: absolute;
-  z-index: 5;
-  left: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 1px 5px;
+/* lane head (mini addition, D3.2; R18k: selector instead of a label) */
+/* R18k (thread #3 + review P1-1): the select lives in the FIXED head
+   cell — badge-sized, vertically centered, never over a clip. */
+.qc-track-select {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.qc-track-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 18px;
+  padding: 0 16px 0 6px;
+  border: none;
   border-radius: 4px;
-  background: var(--canvas-quick-cut-audio-label-surface);
+  background-color: var(--canvas-quick-cut-audio-label-surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 3l3 3 3-3' fill='none' stroke='rgba(255,255,255,0.55)' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
   color: var(--canvas-editor-text-muted);
+  font-family: inherit;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
-  line-height: 1.4;
-  pointer-events: none;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.12s, background-color 0.12s;
+}
+
+.qc-track-select select:hover {
+  color: var(--canvas-editor-text-default);
+  background-color: rgba(20, 20, 20, 0.9);
+}
+
+.qc-track-select select:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
 }
 
 /* ---- clips (RH-verbatim anatomy + gradient bodies) ---------- */
@@ -489,18 +567,35 @@
   background-size: auto 100%;
 }
 
-/* RH-verbatim edge fade over the filmstrip */
+/* the filmstrip's edge shade (was a permanent RH-style fade) */
+/* R18k (panel thread #1): the STANDING edge shade is GONE — the
+   reviewer read it as a subtle dim over the filmstrip of every clip
+   (it was there to define edges / seat the label). It returns ONLY as
+   a TRIM-MODE affordance: hovering the edge drag zone (before dragging
+   — "incl. when hovering before dragging the handle") or actively
+   trimming that edge shades exactly that edge, alongside the 2px
+   accent line. :has() = the hover-before-drag half; .is-trimming-* =
+   the active-drag half (ClipItem state). */
 .qc-track-item__filmstrip::after {
+  content: none;
+}
+
+.qc-track-item:has(.qc-track-item__trim--start:hover) > .qc-track-item__filmstrip::after,
+.qc-track-item.is-trimming-start > .qc-track-item__filmstrip::after {
   position: absolute;
   inset: 0;
   content: "";
-  background: linear-gradient(
-    90deg,
-    rgba(0, 0, 0, 0.2),
-    transparent 14%,
-    transparent 86%,
-    rgba(0, 0, 0, 0.24)
-  );
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.34), transparent 18%);
+  border-radius: inherit;
+}
+
+.qc-track-item:has(.qc-track-item__trim--end:hover) > .qc-track-item__filmstrip::after,
+.qc-track-item.is-trimming-end > .qc-track-item__filmstrip::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(90deg, transparent 82%, rgba(0, 0, 0, 0.38));
+  border-radius: inherit;
 }
 
 /* audio waveform body (R18e: real envelope bars, feedback #12 — the
@@ -684,6 +779,16 @@
   flex: 0 0 auto; /* sized by content, never stretched */
 }
 
+/* R18k (thread #20): the min strip sits --mini-gutter-collapsed (6px)
+   from the viewer/main row above — the root's 12px gap minus this
+   negative margin. Scoped to the APP layout (.mini-root's direct
+   child): solo Timeline stories render the strip inside review frames
+   where the root gap doesn't exist (review P3-5 — compensating for
+   nothing there left an 18px gap where the frame promised 24). */
+.mini-root > .qc-timeline.is-minimized {
+  margin-top: calc(-1 * (var(--mini-gutter) - var(--mini-gutter-collapsed)));
+}
+
 .qc-min {
   display: flex;
   align-items: stretch;
@@ -744,11 +849,14 @@
   display: none;
 }
 
-/* the pill sub-rows: 14px each, 2px apart, one shared well */
+/* R18k (thread #21): ONE video pill sub-row (audio sub-rows left the
+   minimized strip by design — see Timeline.tsx). 20px tall (was 14px
+   when it shared the strip with A1): the pills take the whole strip
+   height = bigger targets, the strip itself is slimmer overall. */
 .qc-min-lane {
   position: relative;
-  height: 14px;
-  margin: 0 10px 2px;
+  height: 20px;
+  margin: 0 10px 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.045);
   overflow: hidden;
@@ -756,11 +864,6 @@
 
 .qc-min-lane.is-drop-target {
   box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.55);
-}
-
-.qc-min-lane--audio {
-  background: rgba(120, 255, 190, 0.035);
-  margin-bottom: 6px; /* bottom breathing room before the panel edge */
 }
 
 /* pills: solid hue tints, fully rounded ends, tiny centered label */
@@ -774,11 +877,6 @@
 
 .qc-track-item--pill:active {
   cursor: grabbing;
-}
-
-.qc-min-lane--audio .qc-track-item--pill {
-  /* audio pills: their own quiet green family, distinct from video hues */
-  background: hsl(150 22% 24%);
 }
 
 .qc-track-item--pill .qc-track-item__label {
@@ -813,10 +911,12 @@
 
 /* playhead in the strip: the line spans the whole compact surface, the
    handle sits in the slim ruler; the hover time pill is suppressed (the
-   viewer's transport tc is the live read while minimized) */
+   viewer's transport tc is the live read while minimized). R18k: left 10
+   — the strip has NO head rail (its own origin; see MIN_ORIGIN_PX). */
 .qc-timeline.is-minimized .qc-playhead-overlay {
   top: 4px;
   bottom: 8px;
+  left: 10px;
 }
 
 .qc-timeline.is-minimized .qc-ruler__playhead {

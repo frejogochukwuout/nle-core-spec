@@ -97,6 +97,18 @@
   /* mini-shell aliases (layout metrics from DESIGN D4; pool/inspector
      widths now live in App.tsx splitter state — R18d) */
   --mini-gutter: 12px;
+  /* R18k (thread #20): the gutter around the VIEWER when the shell is in
+     a collapsed state — pool/inspector rails (left/right) and the
+     minimized timeline strip (below) all net exactly this distance from
+     the viewer. Before: 12px below (root gap) vs 2px at the sides (main
+     row gap) — the reviewer read the rails as cramped against the
+     viewer and the strip as distant. 6px = the middle: rails breathe,
+     the strip sits closer, everything matches. Expanded panels keep the
+     2px main-row gap (splitters live there) and 12px root gaps. */
+  --mini-gutter-collapsed: 6px;
+  /* the expanded main row: pool | viewer | inspector sit close together;
+     the splitters occupy this gap (6px handle at -1px margins) */
+  --mini-main-gap: 2px;
   /* R18j (thread #17): slimmed 56 → 36 — the bar is chrome-only since the
      transport moved into the viewer (R18g), so it no longer earns a tall
      strip; downstream hosts will restyle this bar anyway (customization

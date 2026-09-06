@@ -24,6 +24,8 @@ import {
   type Clip,
   type Doc,
   type Media,
+  type Track,
+  type TrackKind,
 } from '../lib/mockData';
 import {
   MAX_HISTORY,
@@ -61,6 +63,50 @@ export type ViewerAspect = (typeof VIEWER_ASPECTS)[number]['id'];
 /** ViewerAspect → its entry (falls back to 16:9 for stray values). */
 export function aspectEntry(id: string): (typeof VIEWER_ASPECTS)[number] {
   return VIEWER_ASPECTS.find((a) => a.id === id) ?? VIEWER_ASPECTS[0];
+}
+
+/* ---- R18k track-binding selectors (threads #21/#23/#3) --------------
+ * Pure helpers — every consumer (Timeline lanes, Viewer lookup, ruler
+ * extent) asks the same question: which tracks/clips does the bound
+ * mini actually show? */
+
+/** The tracks the mini renders: bound pair in paired mode, the bound
+ *  video track alone in video-only mode. Order = render order (video
+ *  first, audio under). */
+export function visibleTracks(
+  doc: Doc,
+  mode: 'paired' | 'video',
+  boundVideo: string,
+  boundAudio: string,
+): Track[] {
+  const video = doc.tracks.find((t) => t.id === boundVideo && t.kind === 'video');
+  if (!video) return [];
+  if (mode === 'video') return [video];
+  const audio = doc.tracks.find((t) => t.id === boundAudio && t.kind === 'audio');
+  return audio ? [video, audio] : [video];
+}
+
+/** Clips living on the visible tracks — the mini's entire world for
+ *  the ruler extent, viewer wrap and playback content. */
+export function boundClips(
+  doc: Doc,
+  mode: 'paired' | 'video',
+  boundVideo: string,
+  boundAudio: string,
+): Clip[] {
+  const ids = new Set(visibleTracks(doc, mode, boundVideo, boundAudio).map((t) => t.id));
+  return doc.clips.filter((c) => ids.has(c.trackId));
+}
+
+/** The bound track of a given kind — the append/insert target. */
+export function boundTrackOfKind(
+  doc: Doc,
+  kind: TrackKind,
+  boundVideo: string,
+  boundAudio: string,
+): Track | undefined {
+  const want = kind === 'audio' ? boundAudio : boundVideo;
+  return doc.tracks.find((t) => t.id === want && t.kind === kind);
 }
 
 export interface MiniState {
@@ -109,6 +155,28 @@ export interface MiniState {
   setInspectorCollapsed: (collapsed: boolean) => void;
   setTimelineMinimized: (minimized: boolean) => void;
   setViewerAspect: (aspect: ViewerAspect) => void;
+
+  /* ---- R18k track binding (threads #21/#23/#3) --------------------
+   * The mini is a window onto the PROJECT, not the whole project: it
+   * binds ONE video track (+ ONE audio track in paired mode) and edits
+   * there. 'paired' (default) = the current V1+A1 grammar. 'video' =
+   * the simplified special mode (thread #23): video clips only, audio
+   * is what's baked into them — one lane, pool filtered to video with
+   * no tabs, no A1 anywhere. trackBindingLocked = the embedded-host
+   * injection (thread #3): the outer wrapper pinned the pair, so the
+   * lane-head selector is disabled AND the labels are invisible (an
+   * injected environment has no numbered track name to show). View
+   * state — never history, drag-gated like the rest of the layout
+   * family (a rebind mid-gesture would swap the lanes under the
+   * pointer). */
+  trackMode: 'paired' | 'video';
+  boundVideoTrack: string;
+  boundAudioTrack: string;
+  trackBindingLocked: boolean;
+  setTrackMode: (mode: 'paired' | 'video') => void;
+  setBoundVideoTrack: (trackId: string) => void;
+  setBoundAudioTrack: (trackId: string) => void;
+  setTrackBindingLocked: (locked: boolean) => void;
   selectedId: string | null;
   dragActive: boolean; // interaction lock (audit M2)
   toast: ToastMsg | null;
@@ -220,6 +288,12 @@ export const useMini = create<MiniState>((set, get) => {
     timelineMinimized: false,
     viewerMax: false,
     viewerAspect: '16:9',
+    /* R18k (threads #21/#23/#3): default binding = the basic V1/A1 pair —
+     * the seed project's only pair, so the default frame is unchanged. */
+    trackMode: 'paired',
+    boundVideoTrack: TRACK_VIDEO,
+    boundAudioTrack: TRACK_AUDIO,
+    trackBindingLocked: false,
     selectedId: null,
     dragActive: false,
     toast: null,
@@ -282,7 +356,10 @@ export const useMini = create<MiniState>((set, get) => {
     togglePlay: () => {
       const state = get();
       if (state.dragActive) return; // interaction lock
-      if (!state.playing && contentEnd(state.doc.clips) === 0) {
+      // R18k: "empty" means the BOUND world is empty (video-only mode with
+      // only audio clips bound-elsewhere is still nothing to play here)
+      const world = boundClips(state.doc, state.trackMode, state.boundVideoTrack, state.boundAudioTrack);
+      if (!state.playing && contentEnd(world) === 0) {
         // empty doc → immediate pause, never a zero-length loop (D3.3)
         set({ playing: false });
         get().pushToast('info', 'Nothing to play — the timeline is empty.');
@@ -292,9 +369,14 @@ export const useMini = create<MiniState>((set, get) => {
     },
 
     tick: (dt) => {
-      const { playing, playhead, doc } = get();
+      const state = get();
+      const { playing, playhead, doc } = state;
       if (!playing) return;
-      const end = contentEnd(doc.clips);
+      // R18k: playback content = the bound tracks' clips (same world the
+      // ruler and viewer show)
+      const end = contentEnd(
+        boundClips(doc, state.trackMode, state.boundVideoTrack, state.boundAudioTrack),
+      );
       if (end === 0) {
         // doc emptied WHILE playing (review #5): stop, never a zero-length loop
         set({ playing: false, playhead: 0 });
@@ -372,6 +454,72 @@ export const useMini = create<MiniState>((set, get) => {
       if (get().dragActive) return; // the frame resize moves hit targets
       if (get().viewerAspect === aspect) return;
       set({ viewerAspect: aspect });
+    },
+
+    /* ---- R18k track binding (threads #21/#23/#3) --------------------
+     * View-only, drag-gated. Selection law (review P2-3, unified): keep
+     * the selectedId iff its clip stays VISIBLE after the change — a
+     * selection pointing at an invisible clip is a trap (inspector facts
+     * about off-screen state; keyboard targets acting blind), but a
+     * selection that survives the world change is continuity, not a
+     * trap. ONE helper, three setters. */
+
+    setTrackMode: (mode) => {
+      const state = get();
+      if (state.dragActive) return;
+      if (state.trackMode === mode) return;
+      if (state.trackBindingLocked) return; // pinned environment — mode is the host's call
+      const sel = state.selectedId;
+      const selClip = sel ? state.doc.clips.find((c) => c.id === sel) : undefined;
+      const visibleIds = new Set(
+        visibleTracks(state.doc, mode, state.boundVideoTrack, state.boundAudioTrack).map((t) => t.id),
+      );
+      set({
+        trackMode: mode,
+        selectedId: selClip && visibleIds.has(selClip.trackId) ? sel : null,
+      });
+    },
+
+    setBoundVideoTrack: (trackId) => {
+      const state = get();
+      if (state.dragActive) return;
+      if (state.trackBindingLocked) return; // injected environment — pinned
+      if (state.boundVideoTrack === trackId) return;
+      const track = state.doc.tracks.find((t) => t.id === trackId && t.kind === 'video');
+      if (!track) return; // only real video tracks bind
+      const sel = state.selectedId;
+      const selClip = sel ? state.doc.clips.find((c) => c.id === sel) : undefined;
+      const visibleIds = new Set(
+        visibleTracks(state.doc, state.trackMode, trackId, state.boundAudioTrack).map((t) => t.id),
+      );
+      set({
+        boundVideoTrack: trackId,
+        selectedId: selClip && visibleIds.has(selClip.trackId) ? sel : null,
+      });
+    },
+
+    setBoundAudioTrack: (trackId) => {
+      const state = get();
+      if (state.dragActive) return;
+      if (state.trackBindingLocked) return;
+      if (state.boundAudioTrack === trackId) return;
+      const track = state.doc.tracks.find((t) => t.id === trackId && t.kind === 'audio');
+      if (!track) return;
+      const sel = state.selectedId;
+      const selClip = sel ? state.doc.clips.find((c) => c.id === sel) : undefined;
+      const visibleIds = new Set(
+        visibleTracks(state.doc, state.trackMode, state.boundVideoTrack, trackId).map((t) => t.id),
+      );
+      set({
+        boundAudioTrack: trackId,
+        selectedId: selClip && visibleIds.has(selClip.trackId) ? sel : null,
+      });
+    },
+
+    setTrackBindingLocked: (locked) => {
+      if (get().dragActive) return;
+      if (get().trackBindingLocked === locked) return;
+      set({ trackBindingLocked: locked });
     },
 
     pushToast: (kind, text) => {
@@ -698,7 +846,25 @@ export const useMini = create<MiniState>((set, get) => {
       if (state.dragActive) return; // interaction lock
       const media = findMedia(state.doc, mediaId);
       if (!media) return;
-      const trackId = laneForMedia(media.kind) === 'audio' ? TRACK_AUDIO : TRACK_VIDEO;
+      // R18k (threads #21/#3): the append target is the BOUND track of the
+      // media's kind — not a global constant. Video-only mode is strictly
+      // video media (thread #23: "filter to just video types" — audio is
+      // baked into the clips, stills live in the full editor; the pool
+      // never offers them there, but the store re-validates like the
+      // drop zones do).
+      const wantKind = laneForMedia(media.kind);
+      if (state.trackMode === 'video' && media.kind !== 'video') {
+        state.pushToast('info', 'Video-only mode — audio and stills live in the full editor.');
+        return;
+      }
+      const track = boundTrackOfKind(state.doc, wantKind, state.boundVideoTrack, state.boundAudioTrack);
+      if (!track) {
+        // R18k (review P2-2): refusal parity — every other refusal toasts;
+        // a silent no-op reads as a dead button
+        state.pushToast('info', `No ${wantKind} track is bound — nothing to append to.`);
+        return;
+      }
+      const trackId = track.id;
       const ok = commit((doc) => {
         const trackClips = doc.clips.filter((c) => c.trackId === trackId);
         const end = contentEnd(trackClips);
@@ -718,11 +884,18 @@ export const useMini = create<MiniState>((set, get) => {
       if (state.dragActive) return; // interaction lock
       const media = findMedia(state.doc, mediaId);
       if (!media) return;
-      // kind routing (D3.2): audio→A1, video/image→V1 — the drop zone is
-      // the source of truth for WHICH track, but the store re-validates.
-      const needTrack = laneForMedia(media.kind) === 'audio' ? TRACK_AUDIO : TRACK_VIDEO;
-      if (trackId !== needTrack) {
-        state.pushToast('info', `${media.kind} media belongs on ${needTrack}.`);
+      // R18k (threads #21/#3): kind routing (D3.2) now resolves to the
+      // BOUND track of the media's kind — the drop zone is the source of
+      // truth for WHICH track, but the store re-validates against the
+      // binding (and the mode: video-only accepts strictly video media).
+      const wantKind = laneForMedia(media.kind);
+      if (state.trackMode === 'video' && media.kind !== 'video') {
+        state.pushToast('info', 'Video-only mode — audio and stills live in the full editor.');
+        return;
+      }
+      const bound = boundTrackOfKind(state.doc, wantKind, state.boundVideoTrack, state.boundAudioTrack);
+      if (!bound || trackId !== bound.id) {
+        state.pushToast('info', `${media.kind} media belongs on ${bound?.id ?? 'its bound lane'}.`);
         return;
       }
       const trackClips = state.doc.clips.filter((c) => c.trackId === trackId);
@@ -778,6 +951,10 @@ export const useMini = create<MiniState>((set, get) => {
         timelineMinimized: false,
         viewerMax: false,
         viewerAspect: '16:9',
+        trackMode: 'paired',
+        boundVideoTrack: TRACK_VIDEO,
+        boundAudioTrack: TRACK_AUDIO,
+        trackBindingLocked: false,
         selectedId: null,
         dragActive: false,
         toast: null,

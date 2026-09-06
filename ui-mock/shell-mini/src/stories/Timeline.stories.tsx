@@ -1,27 +1,27 @@
-/* Timeline stories (D8) — the solo panel: default, every zoom tier,
-   selected clip, audio clip focus, empty lanes, and a scrolled state
-   (reviews the shared scroll wrapper + playhead alignment under scroll). */
+/* Timeline stories (R18k restructure — micro → macro within the timeline
+   component group): the CLIP atom, the TOOLBAR, then the whole PANEL.
+   State variations (zoom tiers, toggles, selection, playhead, modes,
+   track binding) are CONTROLS on the panel stories — not a list item
+   per state (the old file had 15; the reviewer asked for fewer items
+   with controls covering the variations).
 
-import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useLayoutEffect } from 'react';
-import { Timeline } from '../timeline/Timeline';
-import { useMini } from '../state/useMini';
+   Coordinate note: all stories render the real components — ClipItem's
+   gesture engine and ToolsRow's actions are live in every story. */
+
+import type { ArgTypes, Meta, StoryObj } from '@storybook/react-vite';
+import { Timeline, ToolsRow, ClipItem } from '../timeline/Timeline';
+import { ppsFor } from '../lib/geometry';
 import { seedDoc } from '../lib/mockData';
+import { StoreArgs, docFor, selectionFor, type Patch } from './storyKit';
 
 const meta: Meta = {
   title: 'Timeline',
 };
 export default meta;
 
-function Boot({ patch }: { patch?: Partial<ReturnType<typeof useMini.getState>> }) {
-  useLayoutEffect(() => {
-    if (patch) useMini.setState(patch);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
-  }, []);
-  return null;
-}
-
-function Frame({ children, patch }: { children: React.ReactNode; patch?: Partial<ReturnType<typeof useMini.getState>> }) {
+/* the solo-panel frame: the app's own vignette so the panel reads on the
+   real surface, 100vh like the Shell stories */
+function Frame({ children, patch }: { children: React.ReactNode; patch?: Patch }) {
   return (
     <div
       style={{
@@ -31,168 +31,252 @@ function Frame({ children, patch }: { children: React.ReactNode; patch?: Partial
         boxSizing: 'border-box',
       }}
     >
-      <Boot patch={patch} />
+      {patch && <StoreArgs patch={patch} />}
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>{children}</div>
     </div>
   );
 }
 
-export const Default: StoryObj = {
-  name: 'Timeline — default (48pps, seed)',
-  render: () => (
-    <Frame>
-      <Timeline />
-    </Frame>
-  ),
+/* ------------------------------------------------------------------ */
+/* 1. the clip atom — anatomy review at natural size                   */
+
+interface ClipArgs {
+  media: 'video' | 'image' | 'audio';
+  selected: boolean;
+  filmstripOn: boolean;
+  compact: boolean;
+  zoomStep: number;
+}
+
+const CLIP_MEDIA: Record<ClipArgs['media'], string> = {
+  video: 'm-drone',
+  image: 'm-title',
+  audio: 'm-interview',
 };
 
-export const Zoom0: StoryObj = {
-  name: 'Timeline — zoom 0 (24pps overview)',
-  render: () => (
-    <Frame patch={{ zoomStep: 0 }}>
-      <Timeline />
-    </Frame>
-  ),
-};
-
-export const Zoom2: StoryObj = {
-  name: 'Timeline — zoom 2 (96pps)',
-  render: () => (
-    <Frame patch={{ zoomStep: 2 }}>
-      <Timeline />
-    </Frame>
-  ),
-};
-
-export const Zoom3: StoryObj = {
-  name: 'Timeline — zoom 3 (192pps)',
-  render: () => (
-    <Frame patch={{ zoomStep: 3 }}>
-      <Timeline />
-    </Frame>
-  ),
-};
-
-export const Zoom4: StoryObj = {
-  name: 'Timeline — zoom 4 (384pps, scrollable)',
-  render: () => (
-    <Frame patch={{ zoomStep: 4 }}>
-      <Timeline />
-    </Frame>
-  ),
-};
-
-export const Scrolled: StoryObj = {
-  name: 'Timeline — scrolled mid-document (zoom 4)',
-  render: () => (
-    <Frame patch={{ zoomStep: 4, playhead: 6.25 }}>
-      <Timeline />
-    </Frame>
-  ),
-  /* scroll the shared wrapper to ~6s so ruler+lanes+playhead alignment
-     under scroll is directly reviewable */
-  play: async () => {
-    const scroller = document.querySelector('[data-testid="mini-timeline-scroll"]') as HTMLElement | null;
-    if (scroller) scroller.scrollLeft = 6.25 * 384;
+export const Clip: StoryObj<ClipArgs> = {
+  name: 'Clip — anatomy & states',
+  args: { media: 'video', selected: false, filmstripOn: true, compact: false, zoomStep: 1 },
+  argTypes: {
+    media: { control: 'inline-radio', options: ['video', 'image', 'audio'] },
+    selected: { control: 'boolean' },
+    filmstripOn: { control: 'boolean', description: 'filmstrip ↔ color-block body (video/image clips)' },
+    compact: { control: 'boolean', description: 'pill body — the minimized strip render' },
+    zoomStep: {
+      control: 'radio',
+      options: [0, 1, 2, 3],
+      labels: { 0: '0 · 24pps', 1: '1 · 48pps', 2: '2 · 96pps', 3: '3 · 192pps' },
+    },
   },
-};
-
-export const ClipSelected: StoryObj = {
-  name: 'Timeline — clip selected (selection ring)',
-  render: () => (
-    <Frame patch={{ selectedId: 'c2' }}>
-      <Timeline />
-    </Frame>
-  ),
-};
-
-export const AudioFocus: StoryObj = {
-  name: 'Timeline — audio clip selected (waveform body)',
-  render: () => (
-    <Frame patch={{ selectedId: 'c4', playhead: 4 }}>
-      <Timeline />
-    </Frame>
-  ),
-};
-
-export const PlayheadMid: StoryObj = {
-  name: 'Timeline — playhead mid-doc (time pill on hover)',
-  render: () => (
-    <Frame patch={{ playhead: 5.25 }}>
-      <Timeline />
-    </Frame>
-  ),
-};
-
-export const EmptyLanes: StoryObj = {
-  name: 'Timeline — empty lanes',
-  render: () => {
-    const { doc } = useMini.getState();
+  render: ({ media, selected, filmstripOn, compact, zoomStep }) => {
+    const doc = seedDoc();
+    const m = doc.media.find((x) => x.id === CLIP_MEDIA[media])!;
+    // the demo clip lives IN the store doc (review P3-6) — gestures are
+    // real: drag/trim commit through the actual store + history, not a
+    // prop-only ghost the keyboard/delete actions would silently miss
+    const demoClip = { id: 'clip-demo', trackId: 'V1', mediaId: m.id, start: 1, duration: m.duration };
     return (
       <Frame
         patch={{
-          doc: { tracks: doc.tracks, media: doc.media, clips: [] },
-          selectedId: null,
-          playhead: 0,
+          doc: { ...doc, clips: [demoClip] },
+          filmstripOn,
+          selectedId: selected ? 'clip-demo' : null,
         }}
       >
-        <Timeline />
+        <div className="qc-timeline" data-testid="mini-timeline" style={{ ['--qc-minor-tick-step' as string]: '48px' }}>
+          <div className="qc-stage">
+            <div className="qc-track-layout">
+              {/* the real geometry (review P3-6): an empty head rail keeps
+                  the lane at RENDER_ORIGIN (46) so gesture math is honest */}
+              <div className="qc-track-heads" aria-hidden="true" />
+              <div className="qc-tracks">
+                <div
+                  className="qc-track-row__content"
+                  role="group"
+                  aria-label={`Clip anatomy — ${media}`}
+                  data-testid="mini-clip-harness"
+                  style={{ height: compact ? 20 : 36, flex: '0 0 auto' }}
+                >
+                  <ClipItem
+                    clip={demoClip}
+                    media={m}
+                    pps={ppsFor(zoomStep)}
+                    snapOn={false}
+                    selected={selected}
+                    filmstripOn={filmstripOn}
+                    snapTargets={[]}
+                    onSnapGuide={() => {}}
+                    compact={compact}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p style={{ color: 'rgba(255,255,255,0.52)', fontSize: 11, margin: '14px 2px 0' }}>
+          Real ClipItem on a real lane surface — hover the clip edges for the trim affordance, drag to move,
+          drag the edge zones to trim. Filmstrip/waveform/label anatomy per media kind.
+        </p>
       </Frame>
     );
   },
 };
 
-export const SnapOffState: StoryObj = {
-  name: 'Timeline — snap toggle off (magnet icon inactive)',
-  render: () => (
-    <Frame patch={{ snapOn: false }}>
-      <Timeline />
-    </Frame>
-  ),
-};
+/* ------------------------------------------------------------------ */
+/* 2. the toolbar — toggles + history states as controls               */
 
-/* ---- R18e: the new edit/view states ---- */
+interface ToolbarArgs {
+  snapOn: boolean;
+  rippleOn: boolean;
+  filmstripOn: boolean;
+  audioLaneVisible: boolean;
+  videoOnly: boolean;
+  hasHistory: boolean;
+  hasSelection: boolean;
+}
 
-export const RippleOn: StoryObj = {
-  name: 'Timeline — ripple edit ON',
-  render: () => (
-    <Frame patch={{ rippleOn: true }}>
-      <Timeline />
-    </Frame>
-  ),
-};
-
-export const FilmstripOff: StoryObj = {
-  name: 'Timeline — filmstrip OFF (color-block clips)',
-  render: () => (
-    <Frame patch={{ filmstripOn: false }}>
-      <Timeline />
-    </Frame>
-  ),
-};
-
-export const AudioLaneHidden: StoryObj = {
-  name: 'Timeline — audio lane hidden (A1 off)',
-  render: () => (
-    <Frame patch={{ audioLaneVisible: false }}>
-      <Timeline />
-    </Frame>
-  ),
-};
-
-export const AfterCutHead: StoryObj = {
-  name: 'Timeline — after cut head at 6s (c2)',
-  render: () => (
+export const Toolbar: StoryObj<ToolbarArgs> = {
+  name: 'Toolbar — tools & toggles',
+  args: { snapOn: true, rippleOn: false, filmstripOn: true, audioLaneVisible: true, videoOnly: false, hasHistory: true, hasSelection: true },
+  argTypes: {
+    snapOn: { control: 'boolean' },
+    rippleOn: { control: 'boolean' },
+    filmstripOn: { control: 'boolean' },
+    audioLaneVisible: { control: 'boolean' },
+    videoOnly: { control: 'boolean', description: 'video-only mode — the audio-lane eye leaves the toolbar' },
+    hasHistory: { control: 'boolean', description: 'undo/redo enabled (patches a past entry)' },
+    hasSelection: { control: 'boolean', description: 'a selected clip (delete tool enabled)' },
+  },
+  render: ({ snapOn, rippleOn, filmstripOn, audioLaneVisible, videoOnly, hasHistory, hasSelection }) => (
     <Frame
       patch={{
-        selectedId: 'c2',
-        playhead: 6,
-        doc: {
-          ...seedDoc(),
-          clips: seedDoc().clips.map((c) => (c.id === 'c2' ? { ...c, start: 6, duration: 2 } : c)),
-        },
+        snapOn,
+        rippleOn,
+        filmstripOn,
+        audioLaneVisible,
+        trackMode: videoOnly ? 'video' : 'paired',
+        past: hasHistory ? [seedDoc()] : [],
+        future: [],
+        selectedId: hasSelection ? 'c2' : null,
       }}
     >
+      <div className="qc-timeline" data-testid="mini-timeline" style={{ ['--qc-minor-tick-step' as string]: '48px' }}>
+        <ToolsRow />
+      </div>
+      <p style={{ color: 'rgba(255,255,255,0.52)', fontSize: 11, margin: '14px 2px 0' }}>
+        The tools row solo: the minimize toggle leads (thread #2), the active chips carry the R18k contrast fix
+        (thread #4) — every button is live (undo/redo/split/cut/delete toggles act on the seed doc).
+      </p>
+    </Frame>
+  ),
+};
+
+/* ------------------------------------------------------------------ */
+/* 3. the panel — all state variations as controls                     */
+
+interface PanelArgs {
+  zoomStep: number;
+  playhead: number;
+  selection: string;
+  snapOn: boolean;
+  rippleOn: boolean;
+  filmstripOn: boolean;
+  audioLaneVisible: boolean;
+  timelineMinimized: boolean;
+  videoOnly: boolean;
+  locked: boolean;
+  project: 'seed' | 'multi' | 'empty';
+  boundVideoTrack: string;
+  boundAudioTrack: string;
+}
+
+const panelArgTypes: ArgTypes<PanelArgs> = {
+  zoomStep: {
+    control: 'radio',
+    options: [0, 1, 2, 3, 4],
+    labels: { 0: '0 · 24pps overview', 1: '1 · 48pps default', 2: '2 · 96pps', 3: '3 · 192pps', 4: '4 · 384pps' },
+  },
+  playhead: { control: { type: 'range', min: 0, max: 14, step: 0.25 } },
+  selection: { control: 'inline-radio', options: ['none', 'c1', 'c2', 'c3', 'c4'] },
+  snapOn: { control: 'boolean' },
+  rippleOn: { control: 'boolean' },
+  filmstripOn: { control: 'boolean' },
+  audioLaneVisible: { control: 'boolean' },
+  timelineMinimized: { control: 'boolean', description: 'compact strip — video pills only (thread #21)' },
+  videoOnly: { control: 'boolean', description: 'single-track special mode (thread #23)' },
+  locked: { control: 'boolean', description: 'host-injected binding — selector hidden (thread #3)' },
+  project: {
+    control: 'radio',
+    options: ['seed', 'multi', 'empty'] as const,
+    labels: { seed: 'seed (V1+A1)', multi: 'multi-track (V1/V2/A1/A2)', empty: 'empty lanes' },
+  },
+  boundVideoTrack: { control: 'inline-radio', options: ['V1', 'V2'], description: 'which project video track the lane binds (needs the multi project)' },
+  boundAudioTrack: { control: 'inline-radio', options: ['A1', 'A2'], description: 'which project audio track the lane binds (needs the multi project)' },
+};
+
+function panelPatch(args: PanelArgs): Patch {
+  return {
+    doc: docFor(args.project),
+    zoomStep: args.zoomStep,
+    playhead: args.playhead,
+    selectedId: selectionFor(args.selection),
+    snapOn: args.snapOn,
+    rippleOn: args.rippleOn,
+    filmstripOn: args.filmstripOn,
+    audioLaneVisible: args.audioLaneVisible,
+    timelineMinimized: args.timelineMinimized,
+    trackMode: args.videoOnly ? 'video' : 'paired',
+    trackBindingLocked: args.locked,
+    boundVideoTrack: args.boundVideoTrack,
+    boundAudioTrack: args.boundAudioTrack,
+  };
+}
+
+export const PanelDefault: StoryObj<PanelArgs> = {
+  name: 'Panel — default (state controls)',
+  args: {
+    zoomStep: 1,
+    playhead: 5.25,
+    selection: 'none',
+    snapOn: false,
+    rippleOn: false,
+    filmstripOn: true,
+    audioLaneVisible: true,
+    timelineMinimized: false,
+    videoOnly: false,
+    locked: false,
+    project: 'seed',
+    boundVideoTrack: 'V1',
+    boundAudioTrack: 'A1',
+  },
+  argTypes: panelArgTypes,
+  render: (args) => (
+    <Frame patch={panelPatch(args)}>
+      <Timeline />
+    </Frame>
+  ),
+};
+
+export const PanelEmptyLanes: StoryObj<PanelArgs> = {
+  name: 'Panel — empty lanes',
+  args: {
+    zoomStep: 1,
+    playhead: 0,
+    selection: 'none',
+    snapOn: false,
+    rippleOn: false,
+    filmstripOn: true,
+    audioLaneVisible: true,
+    timelineMinimized: false,
+    videoOnly: false,
+    locked: false,
+    project: 'empty',
+    boundVideoTrack: 'V1',
+    boundAudioTrack: 'A1',
+  },
+  argTypes: panelArgTypes,
+  render: (args) => (
+    <Frame patch={panelPatch(args)}>
       <Timeline />
     </Frame>
   ),

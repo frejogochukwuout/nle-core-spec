@@ -111,10 +111,15 @@ body {
   outline-offset: 2px;
 }
 
-/* green brand CTA — Export only (D10.5) */
+/* green brand CTA — Export only (D10.5).
+   R18k (thread #22): the topbar slimmed to 36px (R18j) but the CTA kept
+   its 34px height — 1px of clearance each side, flush against the panel
+   borders, reading as overflow in the thin bar. 26px + 12px font in the
+   36px bar (34px interior after the 1px panel borders) = 4px breathing
+   room per side. */
 .mini-cta {
-  height: 34px;
-  padding: 0 16px;
+  height: 26px;
+  padding: 0 12px;
   border: none;
   /* R18g: was the full 999px pill — with panels/controls tightened
      (feedback #18) the pill CTA read as a mismatch; small radius keeps
@@ -122,7 +127,7 @@ body {
   border-radius: 6px;
   background: var(--rh-green);
   color: #06251b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 650;
   display: inline-flex;
   align-items: center;

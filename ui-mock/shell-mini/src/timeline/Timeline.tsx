@@ -45,7 +45,7 @@ import {
    R18h (thread #9): SplitIcon joins the family — Scissors read as a
    different metaphor; the split glyph cuts the clip in the middle. */
 import { TrimStartIcon, TrimEndIcon, SplitIcon } from '../lib/icons';
-import { useMini } from '../state/useMini';
+import { useMini, visibleTracks, boundClips } from '../state/useMini';
 import { useKeys } from '../hooks/useKeys';
 import {
   clipsOfTrack,
@@ -66,17 +66,38 @@ import type { Clip, Media, Track } from '../lib/mockData';
 import './timeline.css';
 
 const DRAG_THRESHOLD_PX = 5;
-/** shared render origin: content-left → ruler/lane/playhead t=0 (px) */
-const RENDER_ORIGIN_PX = 10;
+/** R18k (review P1-1): the FIXED track-head column — the NLE-standard
+ *  home for the lane heads (selectors/labels). Clips at t=0 start after
+ *  it, so the head NEVER overlays a clip's drag/trim hit zones (the old
+ *  in-lane badge sat on the same pixels as a clip's head, fine while it
+ *  was pointer-events:none, wrong the moment it became a select).
+ *  Sticky: heads stay pinned at the scrollport's left edge while the
+ *  lanes scroll under them. */
+const TRACK_HEAD_W = 44;
+/** shared render origin: content-left → ruler/lane/playhead t=0 (px).
+ *  R18k: stage margin 2 + head column 44 — every t↔px consumer (ruler
+ *  padding, playhead overlay left, lane/drop/gesture origin) flows
+ *  through THIS constant, so the whole law moves as one. */
+const RENDER_ORIGIN_PX = 2 + TRACK_HEAD_W;
+/** R18k: the compact strip's own origin — no head rail there (the 30px
+ *  expand button sits OUTSIDE the scroll as a flex sibling), so pills /
+ *  marks / playhead keep the classic 10px. Keeping the strip at 10 (vs
+ *  46) means toggling minimize moves t=0 by just 6px, not 36. */
+const MIN_ORIGIN_PX = 10;
 
 /* ---------- tools row (RH-verbatim look, R18e additions) ---------- */
 
-function ToolsRow() {
+/* exported for the solo Toolbar story (R18k storybook restructure —
+   the micro-level review surface) */
+export function ToolsRow() {
   const zoomStep = useMini((s) => s.zoomStep);
   const snapOn = useMini((s) => s.snapOn);
   const rippleOn = useMini((s) => s.rippleOn);
   const filmstripOn = useMini((s) => s.filmstripOn);
   const audioLaneVisible = useMini((s) => s.audioLaneVisible);
+  /* R18k (thread #23): video-only mode has no audio lane — the eye toggle
+   * would control state nothing renders, so it leaves the toolbar. */
+  const trackMode = useMini((s) => s.trackMode);
   const canUndo = useMini((s) => s.past.length > 0);
   const canRedo = useMini((s) => s.future.length > 0);
   const selectedId = useMini((s) => s.selectedId);
@@ -95,6 +116,23 @@ function ToolsRow() {
 
   return (
     <div className="qc-timeline__tools" data-testid="mini-timeline-tools">
+      {/* R18k (thread #2): the minimize toggle leads the row — a MODE
+          switch, not an edit action. First position = the button keeps
+          its slot while the toolbar persists across the two modes (the
+          reviewer's "stays while toggling" reading), and the mode
+          switches group at the row's head instead of the tail. */}
+      <div className="qc-toolbar__group">
+        <button
+          type="button"
+          className="qc-toolbar__icon"
+          aria-label="Minimize timeline"
+          title="Minimize the timeline — compact strip, editing stays live"
+          onClick={() => toggleTimelineMin()}
+          data-testid="mini-btn-timeline-min"
+        >
+          <PanelBottomClose />
+        </button>
+      </div>
       <div className="qc-toolbar__group">
         <button
           type="button"
@@ -196,29 +234,19 @@ function ToolsRow() {
         >
           <Film />
         </button>
-        <button
-          type="button"
-          className={`qc-toolbar__icon${audioLaneVisible ? ' is-active' : ''}`}
-          aria-label={audioLaneVisible ? 'Audio lane visible' : 'Audio lane hidden'}
-          aria-pressed={audioLaneVisible}
-          title="Show / hide the audio lane (A1)"
-          onClick={() => toggleAudioLane()}
-          data-testid="mini-btn-audiolane"
-        >
-          {audioLaneVisible ? <Eye /> : <EyeOff />}
-        </button>
-        {/* R18j (thread #13): minimize the timeline — the compact strip
-            keeps seeking / drag / trim / arrange live; expand restores */}
-        <button
-          type="button"
-          className="qc-toolbar__icon"
-          aria-label="Minimize timeline"
-          title="Minimize the timeline — compact strip, editing stays live"
-          onClick={() => toggleTimelineMin()}
-          data-testid="mini-btn-timeline-min"
-        >
-          <PanelBottomClose />
-        </button>
+        {trackMode === 'paired' && (
+          <button
+            type="button"
+            className={`qc-toolbar__icon${audioLaneVisible ? ' is-active' : ''}`}
+            aria-label={audioLaneVisible ? 'Audio lane visible' : 'Audio lane hidden'}
+            aria-pressed={audioLaneVisible}
+            title="Show / hide the audio lane (A1)"
+            onClick={() => toggleAudioLane()}
+            data-testid="mini-btn-audiolane"
+          >
+            {audioLaneVisible ? <Eye /> : <EyeOff />}
+          </button>
+        )}
       </div>
       <div className="qc-toolbar__group qc-toolbar__group--right" data-testid="mini-timeline-zoom">
         <button
@@ -334,9 +362,15 @@ interface ClipProps {
    *  gesture engine (move + trim zones + auto-scroll) is IDENTICAL, so
    *  dragging / trimming / arranging stay live while minimized. */
   compact?: boolean;
+  /** R18k: this clip's px origin within the scroll content — the lane
+   *  (46, after the fixed head rail) vs the compact strip (10, no rail).
+   *  The gesture math is origin-relative; the default matches full lanes. */
+  originPx?: number;
 }
 
-function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact }: ClipProps) {
+/* exported for the solo Clip story (R18k storybook restructure — the
+   clip-anatomy review surface at natural size, no panel chrome) */
+export function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact, originPx = RENDER_ORIGIN_PX }: ClipProps) {
   const select = useMini((s) => s.select);
   const beginDrag = useMini((s) => s.beginDrag);
   const endDrag = useMini((s) => s.endDrag);
@@ -361,10 +395,14 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
     lastX: number; // latest pointer clientX (auto-scroll reads it each frame)
   }>({ kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0 });
   const autoScrollRaf = useRef<number | null>(null);
+  /** R18k (panel thread #1): WHICH edge is being trimmed while the
+   *  gesture runs — drives the trim-mode edge shade (the standing filmstrip
+   *  shade is gone; it returns ONLY as this affordance). */
+  const [trimmingEdge, setTrimmingEdge] = useState<'start' | 'end' | null>(null);
 
   const timeAt = (clientX: number, el: HTMLElement): number => {
     const content = el.closest('[data-qc-scroll-content]') as HTMLElement | null;
-    const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
+    const origin = (content ? content.getBoundingClientRect().left : 0) + originPx;
     return pxToTime(clientX - origin, pps);
   };
 
@@ -397,7 +435,7 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
     const gs = g.current;
     if (!gs.kind || gs.id !== clip.id || !gs.active) return;
     const content = gs.contentEl;
-    const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
+    const origin = (content ? content.getBoundingClientRect().left : 0) + originPx;
     const t = pxToTime(clientX - origin, pps);
     if (gs.kind === 'move') {
       const raw = t - gs.grabOffset;
@@ -472,6 +510,7 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
       if (Math.abs(e.clientX - gs.startX) < DRAG_THRESHOLD_PX) return; // 5px threshold
       gs.active = true;
       setDragging(true);
+      if (gs.kind !== 'move') setTrimmingEdge(gs.kind === 'trim-start' ? 'start' : 'end'); // R18k
       beginDrag(); // interaction lock engages exactly when the gesture does
     }
     applyGesture(e.clientX);
@@ -494,6 +533,7 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
       else endDrag(); // ONE history entry per committed gesture
     }
     setDragging(false);
+    setTrimmingEdge(null); // R18k: the trim-mode shade leaves with the gesture
     g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0 };
   };
 
@@ -521,7 +561,7 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
 
   return (
     <div
-      className={`qc-track-item${compact ? ' qc-track-item--pill' : ''}${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}`}
+      className={`qc-track-item${compact ? ' qc-track-item--pill' : ''}${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${trimmingEdge ? ` is-trimming-${trimmingEdge}` : ''}`}
       style={style}
       data-testid={`mini-clip-${clip.id}`}
       data-clip-id={clip.id}
@@ -621,6 +661,54 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
           }
         }}
       />
+    </div>
+  );
+}
+
+/* ---------- R18k (thread #3): the track-head column ----------------
+ * The plain "V1"/"A1" labels are GONE — the reviewer's law: the head is
+ * either a SELECTABLE dropdown (which project track this lane binds to)
+ * or completely invisible. The select lives in the FIXED head column
+ * (never over a clip — review P1-1). Visible only when BOTH: the project
+ * offers a real choice (2+ tracks of this kind) AND the host hasn't
+ * pinned the pair (trackBindingLocked — an injected environment has no
+ * numbered track name to show). A single-track project shows an empty
+ * head cell (thread #21: the "V1" label on the only lane is noise). The
+ * cell itself always renders — the column must stay row-aligned with
+ * its lane (36px, or 22px when the audio lane is collapsed). */
+
+function TrackHead({ track, collapsed }: { track: Track; collapsed: boolean }) {
+  const doc = useMini((s) => s.doc);
+  const locked = useMini((s) => s.trackBindingLocked);
+  const boundVideo = useMini((s) => s.boundVideoTrack);
+  const boundAudio = useMini((s) => s.boundAudioTrack);
+  const setBoundVideo = useMini((s) => s.setBoundVideoTrack);
+  const setBoundAudio = useMini((s) => s.setBoundAudioTrack);
+  const candidates = doc.tracks.filter((t) => t.kind === track.kind);
+  const showSelect = !locked && !collapsed && candidates.length >= 2;
+  const bound = track.kind === 'video' ? boundVideo : boundAudio;
+  const onChange = track.kind === 'video' ? setBoundVideo : setBoundAudio;
+  return (
+    <div
+      className={`qc-track-head${collapsed ? ' qc-track-head--collapsed' : ''}`}
+      data-testid={`mini-track-head-${track.id}`}
+    >
+      {showSelect && (
+        <div className="qc-track-select" data-testid={`mini-track-select-${track.kind}`}>
+          <select
+            value={bound}
+            onChange={(e) => onChange(e.target.value)}
+            aria-label={`${track.kind === 'video' ? 'Video' : 'Audio'} track binding`}
+            title={`Which project ${track.kind} track this lane edits — the mini binds one pair; embedded hosts may pin it`}
+          >
+            {candidates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
@@ -737,11 +825,11 @@ function Lane({
           const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
           insertMediaAt(media.id, track.id, pxToTime(e.clientX - origin, pps));
         }}
-        data-testid="mini-lane-A1-collapsed"
-        title="Audio lane hidden — click to show (A1)"
+        data-testid={`mini-lane-${track.id}-collapsed`}
+        title={`Audio lane hidden — click to show (${track.label})`}
         aria-label={`Audio lane hidden, ${hiddenCount} clip${hiddenCount === 1 ? '' : 's'} preserved — click to show`}
       >
-        A1 · {hiddenCount} hidden
+        {track.label} · {hiddenCount} hidden
         <Eye size={14} strokeWidth={1.5} aria-hidden="true" />
       </button>
     );
@@ -753,14 +841,13 @@ function Lane({
     <div
       className={`qc-track-row__content${dropping ? ' is-drop-target' : ''}`}
       role="group"
-      aria-label={track.kind === 'audio' ? 'Audio track A1' : 'Video track V1'}
+      aria-label={`${track.kind === 'audio' ? 'Audio' : 'Video'} track ${track.label}`}
       data-testid={`mini-lane-${track.id}`}
       data-track-kind={track.kind}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <span className="qc-track-row__badge">{track.label}</span>
       {clips.map((c) => {
         // magnet targets (fix #2): same-track neighbors (never self) + playhead
         const targets: number[] = [playhead];
@@ -833,7 +920,7 @@ function MinLane({
       return;
     }
     const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
-    const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
+    const origin = (content ? content.getBoundingClientRect().left : 0) + MIN_ORIGIN_PX; // R18k: the strip has no head rail
     const t = pxToTime(e.clientX - origin, pps);
     const place = insertionAt(clips, media.duration, t);
     if (!place) {
@@ -860,7 +947,7 @@ function MinLane({
     setDrop(null);
     if (!media) return;
     const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
-    const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
+    const origin = (content ? content.getBoundingClientRect().left : 0) + MIN_ORIGIN_PX;
     const t = pxToTime(e.clientX - origin, pps);
     insertMediaAt(media.id, track.id, t);
   };
@@ -869,7 +956,7 @@ function MinLane({
     <div
       className={`qc-min-lane${drop ? ' is-drop-target' : ''}${track.kind === 'audio' ? ' qc-min-lane--audio' : ''}`}
       role="group"
-      aria-label={track.kind === 'audio' ? 'Audio pills A1' : 'Video pills V1'}
+      aria-label={`${track.kind === 'audio' ? 'Audio' : 'Video'} pills ${track.label}`}
       data-testid={`mini-min-lane-${track.id}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -893,6 +980,7 @@ function MinLane({
             snapTargets={targets}
             onSnapGuide={onSnapGuide}
             compact
+            originPx={MIN_ORIGIN_PX}
           />
         );
       })}
@@ -910,7 +998,18 @@ function MinLane({
 
 /* ---------- playhead ---------- */
 
-function Playhead({ pps, endTime }: { pps: number; endTime: number }) {
+function Playhead({
+  pps,
+  endTime,
+  originPx = RENDER_ORIGIN_PX,
+}: {
+  pps: number;
+  endTime: number;
+  /** R18k: where t=0 sits in the scroll content — 46 after the head rail
+   *  (full timeline) vs 10 in the compact strip. The scrub math and the
+   *  CSS overlay left MUST agree (see .qc-playhead-overlay rules). */
+  originPx?: number;
+}) {
   const playhead = useMini((s) => s.playhead);
   const setPlayhead = useMini((s) => s.setPlayhead);
   const [dragging, setDragging] = useState(false);
@@ -920,7 +1019,7 @@ function Playhead({ pps, endTime }: { pps: number; endTime: number }) {
 
   const scrubFrom = (e: ReactPointerEvent<HTMLElement>) => {
     const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
-    const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
+    const origin = (content ? content.getBoundingClientRect().left : 0) + originPx;
     setPlayhead(pxToTime(e.clientX - origin, pps));
   };
 
@@ -988,6 +1087,34 @@ export function Timeline({ style }: { style?: CSSProperties }) {
   const filmstripOn = useMini((s) => s.filmstripOn);
   const setPlayhead = useMini((s) => s.setPlayhead);
   const setRulerEnd = useMini((s) => s.setRulerEnd);
+  /* R18k (threads #21/#23/#3): the mini renders the BOUND tracks — the
+   * pair in paired mode, the single video lane in video-only mode. Clips
+   * on unbound project tracks exist in the doc but are not this window's
+   * world (the ruler extent and viewer follow the same bound set). */
+  const trackMode = useMini((s) => s.trackMode);
+  const boundVideoTrack = useMini((s) => s.boundVideoTrack);
+  const boundAudioTrack = useMini((s) => s.boundAudioTrack);
+  const audioLaneVisible = useMini((s) => s.audioLaneVisible);
+  const setBoundVideoTrack = useMini((s) => s.setBoundVideoTrack);
+  const setBoundAudioTrack = useMini((s) => s.setBoundAudioTrack);
+  /* R18k (review P2-2, stale binding heal): a story control (or a host)
+   *  can swap the doc under a binding that points at a track the new doc
+   *  doesn't have — visibleTracks would return [] and the timeline would
+   *  render a silent empty world. View-level self-repair: fall the
+   *  binding back to the doc's first track of that kind. In-app this is
+   *  unreachable (tracks are immutable; reset() re-aligns) — it exists so
+   *  the review surface never bricks itself. */
+  useEffect(() => {
+    if (!doc.tracks.some((t) => t.id === boundVideoTrack && t.kind === 'video')) {
+      const first = doc.tracks.find((t) => t.kind === 'video');
+      if (first) setBoundVideoTrack(first.id);
+    }
+    if (!doc.tracks.some((t) => t.id === boundAudioTrack && t.kind === 'audio')) {
+      const first = doc.tracks.find((t) => t.kind === 'audio');
+      if (first) setBoundAudioTrack(first.id);
+    }
+  }, [doc, boundVideoTrack, boundAudioTrack, setBoundVideoTrack, setBoundAudioTrack]);
+  const lanes = visibleTracks(doc, trackMode, boundVideoTrack, boundAudioTrack);
   /* R18j (thread #13): the minimized strip — effective when the flag is
    *  set OR the viewer is maxed (thread #19: the timeline MINIMIZES for
    *  max view, it never disappears). Expanded restores the splitter-sized
@@ -1016,7 +1143,9 @@ export function Timeline({ style }: { style?: CSSProperties }) {
   // one label of runway past the viewport so the rightmost visible label
   // is never cut by the scroll edge
   const viewportTime = viewportW > 0 ? (viewportW - RENDER_ORIGIN_PX) / pps + step : 0;
-  const endTime = Math.max(contentEnd(doc.clips), 8, viewportTime);
+  // R18k: ruler extent follows the BOUND clips — clips on unbound project
+  // tracks are not this window's content
+  const endTime = Math.max(contentEnd(boundClips(doc, trackMode, boundVideoTrack, boundAudioTrack)), 8, viewportTime);
   const width = timeToPx(endTime, pps);
 
   /* viewport measurement (ResizeObserver when available, resize listener
@@ -1105,22 +1234,30 @@ export function Timeline({ style }: { style?: CSSProperties }) {
                   </div>
                 </div>
               </div>
-              {doc.tracks.map((track) => (
-                <MinLane
-                  key={track.id}
-                  track={track}
-                  pps={pps}
-                  snapOn={snapOn}
-                  playhead={playhead}
-                  onSnapGuide={setSnapGuide}
-                />
-              ))}
-              <Playhead pps={pps} endTime={endTime} />
+              {lanes
+                .filter((track) => track.kind === 'video')
+                /* R18k (thread #21): the minimized strip is the VIDEO
+                 * navigation surface — audio sub-rows are hidden by design
+                 * (the reviewer's preference). A1 can de-sync from V1 in
+                 * the doc, but that editing happens EXPANDED; minimized
+                 * = slim + the video pills get the whole strip height
+                 * (bigger targets, thread #21's "more selectable"). */
+                .map((track) => (
+                  <MinLane
+                    key={track.id}
+                    track={track}
+                    pps={pps}
+                    snapOn={snapOn}
+                    playhead={playhead}
+                    onSnapGuide={setSnapGuide}
+                  />
+                ))}
+              <Playhead pps={pps} endTime={endTime} originPx={MIN_ORIGIN_PX} />
               {snapGuide !== null && (
                 <div
                   className="qc-snap-guide"
                   aria-hidden="true"
-                  style={{ left: RENDER_ORIGIN_PX + timeToPx(snapGuide, pps) }}
+                  style={{ left: MIN_ORIGIN_PX + timeToPx(snapGuide, pps) }}
                   data-testid="mini-snap-guide"
                 />
               )}
@@ -1182,8 +1319,21 @@ export function Timeline({ style }: { style?: CSSProperties }) {
             </div>
             <div className="qc-stage">
               <div className="qc-track-layout">
-                <div className="qc-tracks" style={{ width: '100%' }}>
-                  {doc.tracks.map((track) => (
+                {/* R18k (review P1-1): the fixed head column — the lane
+                    heads live HERE (sticky, never over a clip), row-
+                    aligned with their lanes (36px, 22px when the audio
+                    lane is collapsed). */}
+                <div className="qc-track-heads" aria-label="Track heads">
+                  {lanes.map((track) => (
+                    <TrackHead
+                      key={track.id}
+                      track={track}
+                      collapsed={track.kind === 'audio' && !audioLaneVisible}
+                    />
+                  ))}
+                </div>
+                <div className="qc-tracks">
+                  {lanes.map((track) => (
                     <Lane
                       key={track.id}
                       track={track}

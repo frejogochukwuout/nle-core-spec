@@ -6,13 +6,14 @@
    origin is x=0, so clientX maps DIRECTLY to time via pps (deterministic:
    default zoom 48pps). */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { Timeline } from './Timeline';
 import App from '../App';
 import { useMini } from '../state/useMini';
 import { poolDrag } from '../shell/MediaPool';
+import { seedDoc, multiTrackDoc } from '../lib/mockData';
 
 const S = () => useMini.getState();
 const user = userEvent.setup();
@@ -234,11 +235,11 @@ describe('playhead handle drag (review gap #5)', () => {
   it('dragging the playhead follows the pointer through the shared origin', () => {
     render(<Timeline />);
     const ph = screen.getByTestId('mini-playhead');
-    fireEvent.pointerDown(ph, { button: 0, pointerId: 5, clientX: 10, clientY: 20 });
-    fireEvent.pointerMove(ph, { pointerId: 5, clientX: 246, clientY: 20 });
-    // origin = content.left(0) + 10 → t = (246-10)/48 = 4.916…
-    expect(S().playhead).toBeCloseTo((246 - 10) / 48, 5);
-    fireEvent.pointerUp(ph, { pointerId: 5, clientX: 246, clientY: 20 });
+    fireEvent.pointerDown(ph, { button: 0, pointerId: 5, clientX: 46, clientY: 20 });
+    fireEvent.pointerMove(ph, { pointerId: 5, clientX: 282, clientY: 20 });
+    // R18k: origin = content.left(0) + 46 (the fixed head rail) → t = (282-46)/48 = 4.916…
+    expect(S().playhead).toBeCloseTo((282 - 46) / 48, 5);
+    fireEvent.pointerUp(ph, { pointerId: 5, clientX: 282, clientY: 20 });
   });
 
   it('keyboard scrub: arrow keys step the playhead by 0.5s', () => {
@@ -439,10 +440,10 @@ describe('R18e pool→timeline DnD (feedback #13 / v0.2 deferral closed)', () =>
     // poolDrag registry is the dragover-time media source (module singleton)
     poolDrag.current = 'm-lower';
     const transfer = dt('m-lower');
-    // want = quantize((660-10)/48) = 13.5; c3 ends 12.5 → free → exact spot
-    fireEvent(lane, dragEvent('dragover', 660, transfer));
+    // want = quantize((696-46)/48) = 13.5 (R18k origin: +36 head rail); c3 ends 12.5 → free → exact spot
+    fireEvent(lane, dragEvent('dragover', 696, transfer));
     expect(screen.getByTestId('mini-drop-outline-V1')).toBeInTheDocument();
-    fireEvent(lane, dragEvent('drop', 660, transfer));
+    fireEvent(lane, dragEvent('drop', 696, transfer));
     poolDrag.current = null;
     const added = S().doc.clips.find((c) => c.mediaId === 'm-lower')!;
     expect(added).toMatchObject({ trackId: 'V1', duration: 2.5, start: 13.5 });
@@ -524,7 +525,7 @@ describe('R18f DnD fallback: dataTransfer-only drop (registry miss)', () => {
     render(<Timeline />);
     const lane = screen.getByTestId('mini-lane-V1');
     poolDrag.current = null; // registry miss — cross-window style drag
-    const ev = new MouseEvent('drop', { bubbles: true, cancelable: true, clientX: 660, clientY: 40 });
+    const ev = new MouseEvent('drop', { bubbles: true, cancelable: true, clientX: 696, clientY: 40 }); // +36: R18k head-rail origin
     Object.defineProperty(ev, 'dataTransfer', {
       value: {
         types: ['application/x-mini-media'],
@@ -542,7 +543,7 @@ describe('R18f DnD fallback: dataTransfer-only drop (registry miss)', () => {
     const lane = screen.getByTestId('mini-lane-V1');
     poolDrag.current = null;
     const transfer = { types: ['application/x-mini-media'], getData: () => 'x', dropEffect: '' };
-    const ev = new MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 660, clientY: 40 });
+    const ev = new MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 696, clientY: 40 }); // +36: R18k head-rail origin
     Object.defineProperty(ev, 'dataTransfer', { value: transfer });
     fireEvent(lane, ev);
     expect(transfer.dropEffect).toBe('copy');
@@ -582,19 +583,23 @@ describe('R18f wave-2: waveform SVG sizing law', () => {
    dragging / trimming / arranging live. */
 
 describe('R18j minimized timeline (thread #13)', () => {
-  it('minimize hides the tools, renders the compact strip with pill sub-rows', () => {
+  it('minimize hides the tools, renders the compact strip with the video pill row', () => {
     render(<Timeline />);
     fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
     expect(screen.getByTestId('mini-timeline-min')).toBeInTheDocument();
     expect(screen.queryByTestId('mini-timeline-tools')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mini-lane-V1')).not.toBeInTheDocument(); // full lanes gone
-    expect(screen.getByTestId('mini-min-lane-V1')).toBeInTheDocument(); // pill sub-rows live
-    expect(screen.getByTestId('mini-min-lane-A1')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-min-lane-V1')).toBeInTheDocument(); // the video pill row lives
+    // R18k (thread #21): the A1 sub-row is GONE in minimized mode — the
+    // strip is the video navigation surface; audio editing happens
+    // expanded (A1 can de-sync from V1, so its pills would mislead)
+    expect(screen.queryByTestId('mini-min-lane-A1')).not.toBeInTheDocument();
     expect(screen.getByTestId('mini-clip-c1')).toBeInTheDocument(); // same clip testids
     expect(screen.getByTestId('mini-clip-c1')).toHaveClass('qc-track-item--pill');
+    // the audio clip c4 lives on A1 — not rendered in the strip either
+    expect(screen.queryByTestId('mini-clip-c4')).not.toBeInTheDocument();
     expect(screen.getByTestId('mini-playhead')).toBeInTheDocument(); // still scrubbable
     // pills render no filmstrip/waveform bodies — label-only
-    expect(screen.getByTestId('mini-clip-c4').querySelector('.qc-track-item__waveform')).toBeNull();
     expect(screen.getByTestId('mini-clip-c1').querySelector('.qc-track-item__filmstrip')).toBeNull();
   });
 
@@ -671,5 +676,170 @@ describe('R18j minimized timeline (thread #13)', () => {
     const added = S().doc.clips.find((c) => c.mediaId === 'm-lower')!;
     expect(added).toBeDefined();
     expect(added.trackId).toBe('V1');
+  });
+});
+
+/* ---- R18k: track binding + video-only mode (threads #21/#23/#3) --- */
+
+describe('R18k track binding rendering', () => {
+  beforeEach(() => {
+    S().reset(); // this suite owns its world (multiTrackDoc etc.) — restore per test
+  });
+
+  it('seed project: no track selectors (single pair — plain labels are gone, nothing replaces them)', () => {
+    render(<Timeline />);
+    // the old plain V1/A1 badges are gone entirely (thread #3: dropdown or invisible)
+    expect(screen.queryByTestId('mini-track-select-video')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-track-select-audio')).not.toBeInTheDocument();
+  });
+
+  it('multi-track project: lane heads are SELECTORS listing the candidates', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    render(<Timeline />);
+    const videoSel = screen.getByTestId('mini-track-select-video').querySelector('select') as HTMLSelectElement;
+    const audioSel = screen.getByTestId('mini-track-select-audio').querySelector('select') as HTMLSelectElement;
+    expect(Array.from(videoSel.options).map((o) => o.value)).toEqual(['V1', 'V2']);
+    expect(Array.from(audioSel.options).map((o) => o.value)).toEqual(['A1', 'A2']);
+    expect(videoSel.value).toBe('V1');
+    // lanes render the bound pair only — V2/A2 content is out of this window
+    expect(screen.getByTestId('mini-lane-V1')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-lane-A1')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-lane-V2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-clip-c5')).not.toBeInTheDocument();
+  });
+
+  it('changing the video selector rebinds the lane (V2 clips arrive, V1 leave)', () => {
+    useMini.setState({ doc: multiTrackDoc(), selectedId: 'c2' });
+    render(<Timeline />);
+    fireEvent.change(screen.getByTestId('mini-track-select-video').querySelector('select')!, {
+      target: { value: 'V2' },
+    });
+    expect(S().boundVideoTrack).toBe('V2');
+    expect(screen.getByTestId('mini-clip-c5')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-clip-c1')).not.toBeInTheDocument();
+    expect(S().selectedId).toBeNull(); // c2 left the visible world — not a trap
+  });
+
+  it('locked binding: selectors are invisible (host-injected environment)', () => {
+    useMini.setState({ doc: multiTrackDoc(), trackBindingLocked: true });
+    render(<Timeline />);
+    expect(screen.queryByTestId('mini-track-select-video')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-track-select-audio')).not.toBeInTheDocument();
+  });
+
+  it('video-only mode: ONE lane, no audio lane, no audio-lane eye toggle', () => {
+    useMini.setState({ doc: multiTrackDoc(), trackMode: 'video' });
+    render(<Timeline />);
+    expect(screen.getByTestId('mini-lane-V1')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-lane-A1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-btn-audiolane')).not.toBeInTheDocument();
+    expect(screen.getByTestId('mini-btn-filmstrip')).toBeInTheDocument(); // video toggles stay
+    expect(screen.getByTestId('mini-clip-c1')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-clip-c4')).not.toBeInTheDocument(); // A1 clips out of the world
+  });
+
+  it('ruler extent follows the BOUND world (V2 ends at 12, not the doc max)', () => {
+    useMini.setState({ doc: multiTrackDoc(), trackMode: 'video', boundVideoTrack: 'V2' });
+    render(<Timeline />);
+    // V2 clips: c5 1→6.5, c6 8→12 → contentEnd 12; seed V1+A1 world would end 12.5
+    expect(S().rulerEnd).toBe(12);
+  });
+
+  it('minimized strip in video-only mode: the single video pill row (audio never appears)', () => {
+    useMini.setState({ doc: multiTrackDoc(), trackMode: 'video' });
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+    expect(screen.getByTestId('mini-min-lane-V1')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-min-lane-A1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-min-lane-V2')).not.toBeInTheDocument();
+  });
+
+  it('toolbar: the minimize toggle leads the row (thread #2)', () => {
+    render(<Timeline />);
+    const tools = screen.getByTestId('mini-timeline-tools');
+    const groups = tools.querySelectorAll('.qc-toolbar__group');
+    const firstGroupButtons = groups[0].querySelectorAll('button');
+    expect(firstGroupButtons[0]).toHaveAttribute('data-testid', 'mini-btn-timeline-min');
+  });
+});
+
+/* ---- R18k review fixes: head rail + heal + keyboard surface ------- */
+
+describe('R18k review-fix hardening', () => {
+  beforeEach(() => {
+    S().reset();
+  });
+
+  it('the head rail renders one cell per lane — never a selector over a clip', () => {
+    render(<Timeline />);
+    // seed: V1 + A1 lanes → 2 head cells, both WITHOUT selectors (single pair)
+    expect(screen.getByTestId('mini-track-head-V1')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-track-head-A1')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-track-select-video')).not.toBeInTheDocument();
+    // the selector lives in the head cell, NOT inside the lane content
+    act(() => {
+      useMini.setState({ doc: multiTrackDoc() });
+    });
+    const sel = screen.getByTestId('mini-track-select-video');
+    const lane = screen.getByTestId('mini-lane-V1');
+    expect(lane.contains(sel)).toBe(false); // review P1-1: never over a clip
+    expect(screen.getByTestId('mini-track-head-V1').contains(sel)).toBe(true);
+  });
+
+  it('stale binding heals on doc swap (no silent empty world — review P2-2)', () => {
+    useMini.setState({ doc: multiTrackDoc(), boundVideoTrack: 'V2', boundAudioTrack: 'A2' });
+    render(<Timeline />);
+    // swap the doc under the binding (a story control / host injection)
+    act(() => {
+      useMini.setState({ doc: seedDoc() });
+    });
+    // the heal effect falls both bindings back to the seed doc's tracks
+    expect(S().boundVideoTrack).toBe('V1');
+    expect(S().boundAudioTrack).toBe('A1');
+    expect(screen.getByTestId('mini-lane-V1')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-clip-c1')).toBeInTheDocument();
+  });
+
+  it('useKeys skips a focused SELECT (review P2-4): no split while the dropdown is open', () => {
+    useMini.setState({ doc: multiTrackDoc(), selectedId: 'c1' });
+    render(<Timeline />);
+    const sel = screen.getByTestId('mini-track-select-video').querySelector('select')!;
+    const clipsBefore = S().doc.clips.length;
+    fireEvent.keyDown(sel, { key: 's' });
+    expect(S().doc.clips).toHaveLength(clipsBefore); // the select owns its keys
+    // same key on a neutral target still splits
+    fireEvent.keyDown(document.body, { key: 's' });
+    expect(S().doc.clips).toHaveLength(clipsBefore + 1);
+  });
+});
+
+/* ---- R18k (panel thread #1): trim-mode edge shade ------------------- */
+
+describe('R18k trim-mode edge shade (panel thread #1)', () => {
+  beforeEach(() => {
+    S().reset();
+  });
+
+  it('the trimming class engages with the trim gesture and leaves with it', () => {
+    render(<Timeline />);
+    const clip = screen.getByTestId('mini-clip-c1');
+    const zone = screen.getByTestId('mini-trim-end-c1');
+    expect(clip.className).not.toContain('is-trimming');
+    // engage: pointerdown + cross the 5px threshold
+    fireEvent.pointerDown(zone, { button: 0, pointerId: 9, clientX: 165, clientY: 10 });
+    fireEvent.pointerMove(zone, { pointerId: 9, clientX: 171, clientY: 10 });
+    expect(clip.className).toContain('is-trimming-end'); // the shade is ON mid-gesture
+    expect(clip.className).toContain('is-dragging');
+    // release: the shade leaves with the gesture
+    fireEvent.pointerUp(zone, { pointerId: 9, clientX: 175, clientY: 10 });
+    expect(clip.className).not.toContain('is-trimming-end');
+    expect(clip.className).not.toContain('is-dragging');
+  });
+
+  it('a MOVE gesture never paints the trimming shade', () => {
+    render(<Timeline />);
+    const clip = screen.getByTestId('mini-clip-c2');
+    drag(clip, 250, 300);
+    expect(clip.className).not.toContain('is-trimming');
   });
 });

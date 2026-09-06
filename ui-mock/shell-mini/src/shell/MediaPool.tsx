@@ -158,7 +158,14 @@ function MediaCard({ media }: { media: Media }) {
 export function MediaPool() {
   const media = useMini((s) => s.doc.media);
   const [tab, setTab] = useState<PoolTab>('all');
-  const shown = tab === 'all' ? media : media.filter((m) => m.kind === tab);
+  /* R18k (thread #23): video-only mode — the simplified special mode has
+   * no media-type concept: no tabs, the list filters to video (audio is
+   * what's baked into the clips; stills live in the full editor). The
+   * local tab state survives the mode switch so paired mode restores
+   * the reviewer's last filter. */
+  const trackMode = useMini((s) => s.trackMode);
+  const videoOnly = trackMode === 'video';
+  const shown = videoOnly ? media.filter((m) => m.kind === 'video') : tab === 'all' ? media : media.filter((m) => m.kind === tab);
 
   /* R18j (thread #14): the pool collapses to a thin left rail. The rail's
    *  expand click is mode-aware: with viewerMax ON the rail means "hidden
@@ -194,37 +201,56 @@ export function MediaPool() {
 
   return (
     <aside className="mini-panel mini-pool" data-testid="mini-pool" aria-label="Media pool">
-      <div className="mini-panel__head mini-pool__tabs" role="group" aria-label="Filter media by type">
-        {POOL_TABS.map((t) => (
+      {videoOnly ? (
+        /* video-only head: a plain title + the collapse button (thread
+           #23: "the media bin need no tabs as we filter to just video
+           types") — the segmented control is the full editor's grammar */
+        <div className="mini-panel__head mini-pool__head" data-testid="mini-pool-head-video">
+          <span className="mini-pool__title">Media</span>
           <button
-            key={t.id}
             type="button"
-            className={`mini-pool__tab${tab === t.id ? ' is-active' : ''}`}
-            aria-pressed={tab === t.id}
-            onClick={() => setTab(t.id)}
-            data-testid={`mini-pool-tab-${t.id}`}
+            className="mini-pool__collapse"
+            aria-label="Collapse media pool"
+            title="Collapse media pool"
+            onClick={togglePool}
+            data-testid="mini-btn-pool-collapse"
           >
-            {t.label}
+            <PanelLeftClose size={14} strokeWidth={1.75} aria-hidden="true" />
           </button>
-        ))}
-        <button
-          type="button"
-          className="mini-pool__collapse"
-          aria-label="Collapse media pool"
-          title="Collapse media pool"
-          onClick={togglePool}
-          data-testid="mini-btn-pool-collapse"
-        >
-          <PanelLeftClose size={14} strokeWidth={1.75} aria-hidden="true" />
-        </button>
-      </div>
+        </div>
+      ) : (
+        <div className="mini-panel__head mini-pool__tabs" role="group" aria-label="Filter media by type">
+          {POOL_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`mini-pool__tab${tab === t.id ? ' is-active' : ''}`}
+              aria-pressed={tab === t.id}
+              onClick={() => setTab(t.id)}
+              data-testid={`mini-pool-tab-${t.id}`}
+            >
+              {t.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="mini-pool__collapse"
+            aria-label="Collapse media pool"
+            title="Collapse media pool"
+            onClick={togglePool}
+            data-testid="mini-btn-pool-collapse"
+          >
+            <PanelLeftClose size={14} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        </div>
+      )}
       <div className="mini-scroll mini-pool__list" data-testid="mini-pool-list">
         {shown.map((m) => (
           <MediaCard key={m.id} media={m} />
         ))}
         {shown.length === 0 && (
           <p className="mini-pool__empty" data-testid="mini-pool-empty">
-            No {tab} media in this project
+            {videoOnly ? 'No video media in this project' : `No ${tab} media in this project`}
           </p>
         )}
       </div>

@@ -45,6 +45,15 @@ const preview: Preview = {
   },
   parameters: {
     layout: 'fullscreen',
+    /* R18k restructure: sidebar reads micro → macro — Primitives (glyph
+       atoms) → Timeline (the component group: clip / toolbar / panel) →
+       Panels (shell regions) → Shell (the whole app). State variations
+       live in each story's CONTROLS, not in sibling list items. */
+    options: {
+      storySort: {
+        order: ['Primitives', 'Timeline', 'Panels', 'Shell'],
+      },
+    },
     viewport: {
       options: {
         'mini-1920x1080': { name: 'Mini 1920×1080', styles: { width: '1920px', height: '1080px' }, type: 'desktop' },

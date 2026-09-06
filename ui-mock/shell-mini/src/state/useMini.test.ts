@@ -3,8 +3,8 @@
    append routing, playback wrap. Strict equality (grid is binary-exact). */
 
 import { describe, expect, it, beforeEach } from 'vitest';
-import { useMini } from '../state/useMini';
-import { seedDoc } from '../lib/mockData';
+import { useMini, visibleTracks, boundClips } from '../state/useMini';
+import { seedDoc, multiTrackDoc } from '../lib/mockData';
 
 const S = () => useMini.getState();
 
@@ -582,5 +582,164 @@ describe('R18j layout state', () => {
     expect(S().poolCollapsed).toBe(false);
     expect(S().viewerMax).toBe(false);
     expect(S().viewerAspect).toBe('16:9');
+  });
+});
+
+/* ---- R18k track binding (threads #21/#23/#3) ---------------------- */
+
+describe('R18k track binding + video-only mode', () => {
+  it('defaults: paired mode, V1/A1 binding, unlocked', () => {
+    expect(S().trackMode).toBe('paired');
+    expect(S().boundVideoTrack).toBe('V1');
+    expect(S().boundAudioTrack).toBe('A1');
+    expect(S().trackBindingLocked).toBe(false);
+  });
+
+  it('binding actions are drag-gated and idempotent', () => {
+    S().beginDrag();
+    S().setTrackMode('video');
+    S().setBoundVideoTrack('V2');
+    S().setTrackBindingLocked(true);
+    expect(S().trackMode).toBe('paired');
+    expect(S().boundVideoTrack).toBe('V1');
+    expect(S().trackBindingLocked).toBe(false);
+    S().endDrag();
+    S().setTrackMode('video');
+    S().setTrackMode('video'); // idempotent — no churn
+    expect(S().trackMode).toBe('video');
+  });
+
+  it('rebinding clears a selection that left the visible world, keeps one that joined it', () => {
+    useMini.setState({ doc: multiTrackDoc(), selectedId: 'c2' }); // c2 on V1
+    S().setBoundVideoTrack('V2');
+    expect(S().selectedId).toBeNull(); // c2 is invisible now — not a trap
+    S().select('c5'); // c5 on V2
+    S().setBoundVideoTrack('V2'); // same binding — no-op, selection survives
+    expect(S().selectedId).toBe('c5');
+  });
+
+  it('locked bindings refuse rebinds (host-injected environment)', () => {
+    useMini.setState({ doc: multiTrackDoc(), trackBindingLocked: true });
+    S().setBoundVideoTrack('V2');
+    S().setBoundAudioTrack('A2');
+    expect(S().boundVideoTrack).toBe('V1');
+    expect(S().boundAudioTrack).toBe('A1');
+  });
+
+  it('only real tracks of the right kind bind (stray ids rejected)', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    S().setBoundVideoTrack('A1'); // audio track — wrong kind
+    S().setBoundAudioTrack('V2'); // video track — wrong kind
+    S().setBoundVideoTrack('V9'); // does not exist
+    expect(S().boundVideoTrack).toBe('V1');
+    expect(S().boundAudioTrack).toBe('A1');
+    S().setBoundVideoTrack('V2');
+    expect(S().boundVideoTrack).toBe('V2');
+  });
+
+  it('selection law (review P2-3): a selection survives iff its clip stays VISIBLE', () => {
+    useMini.setState({ doc: multiTrackDoc(), selectedId: 'c2' }); // c2 on V1
+    S().setBoundVideoTrack('V2');
+    expect(S().selectedId).toBeNull(); // c2 is invisible now — not a trap
+    useMini.setState({ selectedId: 'c4' }); // c4 on A1
+    S().setBoundVideoTrack('V1'); // video rebind — A1 still visible
+    expect(S().selectedId).toBe('c4'); // the audio selection SURVIVES the video rebind
+    S().setBoundVideoTrack('V2'); // back to the V2 world
+    S().select('c5'); // c5 on V2
+    S().setTrackMode('video'); // video-only: V2 bound → c5 still visible
+    expect(S().selectedId).toBe('c5'); // survives the mode switch too
+    S().setTrackMode('video'); // idempotent — no churn
+    expect(S().trackMode).toBe('video');
+  });
+
+  it('setTrackMode is locked-gated (a pinned environment owns the mode)', () => {
+    useMini.setState({ trackBindingLocked: true });
+    S().setTrackMode('video');
+    expect(S().trackMode).toBe('paired');
+    useMini.setState({ trackBindingLocked: false });
+    S().setTrackMode('video');
+    expect(S().trackMode).toBe('video');
+  });
+
+  it('visibleTracks: the bound pair in paired mode, video alone in video mode', () => {
+    const doc = multiTrackDoc();
+    expect(visibleTracks(doc, 'paired', 'V1', 'A1').map((t) => t.id)).toEqual(['V1', 'A1']);
+    expect(visibleTracks(doc, 'paired', 'V2', 'A2').map((t) => t.id)).toEqual(['V2', 'A2']);
+    expect(visibleTracks(doc, 'video', 'V2', 'A2').map((t) => t.id)).toEqual(['V2']);
+    expect(visibleTracks(doc, 'video', 'V1', 'A1').map((t) => t.id)).toEqual(['V1']);
+    // stray binding (track vanished): empty world, not a crash
+    expect(visibleTracks(doc, 'paired', 'V9', 'A1')).toEqual([]);
+  });
+
+  it('boundClips: only clips on the bound tracks are the mini world', () => {
+    const doc = multiTrackDoc();
+    expect(boundClips(doc, 'paired', 'V1', 'A1').map((c) => c.id).sort()).toEqual(['c1', 'c2', 'c3', 'c4']);
+    expect(boundClips(doc, 'video', 'V1', 'A1').map((c) => c.id)).toEqual(['c1', 'c2', 'c3']);
+    expect(boundClips(doc, 'video', 'V2', 'A1').map((c) => c.id)).toEqual(['c5', 'c6']);
+    expect(boundClips(doc, 'paired', 'V2', 'A2').map((c) => c.id).sort()).toEqual(['c5', 'c6', 'c7']);
+  });
+
+  it('addClipFromMedia targets the BOUND track, not a global constant', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    S().setBoundVideoTrack('V2');
+    const before = S().doc.clips.filter((c) => c.mediaId === 'm-sunset'); // just the seed c6
+    S().addClipFromMedia('m-sunset'); // video → bound V2, after c6 (end 12)
+    const after = S().doc.clips.filter((c) => c.mediaId === 'm-sunset');
+    expect(after).toHaveLength(before.length + 1);
+    expect(after.find((c) => c.start === 12 && c.trackId === 'V2')).toBeDefined();
+    S().undo();
+    expect(S().doc.clips.filter((c) => c.mediaId === 'm-sunset')).toHaveLength(before.length);
+  });
+
+  it('video-only mode: audio/image appends are refused with an honest toast', () => {
+    S().setTrackMode('video');
+    S().addClipFromMedia('m-interview'); // audio
+    expect(S().doc.clips.filter((c) => c.mediaId === 'm-interview')).toHaveLength(1); // only the seed c4
+    expect(S().toast?.text).toContain('Video-only mode');
+    S().addClipFromMedia('m-title'); // image — strictly video media (thread #23)
+    expect(S().doc.clips.filter((c) => c.mediaId === 'm-title')).toHaveLength(1); // only the seed c3
+  });
+
+  it('insertMediaAt re-validates against the binding (drop zones can lie)', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    S().setBoundVideoTrack('V2');
+    // a drop claiming V1 while the mini binds V2 → honest refusal
+    S().insertMediaAt('m-sunset', 'V1', 13);
+    expect(S().doc.clips.filter((c) => c.mediaId === 'm-sunset' && c.start === 13)).toHaveLength(0);
+    expect(S().toast?.text).toContain('belongs on V2');
+    // the bound lane accepts
+    S().insertMediaAt('m-sunset', 'V2', 13);
+    expect(S().doc.clips.find((c) => c.mediaId === 'm-sunset' && c.trackId === 'V2' && c.start === 13)).toBeDefined();
+  });
+
+  it('video-only mode: no audio lane to land on — insert refuses', () => {
+    S().setTrackMode('video');
+    S().insertMediaAt('m-interview', 'A1', 0);
+    expect(S().doc.clips.filter((c) => c.mediaId === 'm-interview')).toHaveLength(1); // only the seed c4
+    expect(S().toast?.text).toContain('Video-only mode');
+  });
+
+  it('playback world follows the binding (wrap + empty guard)', () => {
+    useMini.setState({ doc: multiTrackDoc(), playhead: 0, playing: true, trackMode: 'video', boundVideoTrack: 'V2' });
+    S().tick(0.5);
+    expect(S().playhead).toBe(0.5); // plays into the V2 world (end = 12)
+    // a world with no clips = nothing to play
+    useMini.setState({ doc: { tracks: seedDoc().tracks, media: seedDoc().media, clips: [] }, playing: true });
+    S().tick(0.5);
+    expect(S().playing).toBe(false); // stopped, never a zero-length loop
+    expect(S().playhead).toBe(0);
+  });
+
+  it('reset restores the default binding', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    S().setBoundVideoTrack('V2');
+    S().setBoundAudioTrack('A2');
+    S().setTrackMode('video');
+    S().setTrackBindingLocked(true);
+    S().reset();
+    expect(S().trackMode).toBe('paired');
+    expect(S().boundVideoTrack).toBe('V1');
+    expect(S().boundAudioTrack).toBe('A1');
+    expect(S().trackBindingLocked).toBe(false);
   });
 });

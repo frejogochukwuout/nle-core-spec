@@ -77,6 +77,34 @@ export function laneForMedia(kind: MediaKind): TrackKind {
   return kind === 'audio' ? 'audio' : 'video';
 }
 
+/** R18k (threads #21/#3): a project with MORE than the basic V1/A1 pair —
+ *  the mini binds to ONE video + ONE audio track (the track-selector
+ *  dropdowns demo against this doc). Deterministic, grid-clean, same
+ *  media pool. V2 carries the GoPro b-roll, A2 the ambience bed, so
+ *  binding V2/A2 visibly swaps the lane content. */
+export function multiTrackDoc(): Doc {
+  return {
+    tracks: [
+      { id: TRACK_VIDEO, kind: 'video', label: 'V1' },
+      { id: 'V2', kind: 'video', label: 'V2' },
+      { id: TRACK_AUDIO, kind: 'audio', label: 'A1' },
+      { id: 'A2', kind: 'audio', label: 'A2' },
+    ],
+    media: SEED_MEDIA.map((m) => ({ ...m })),
+    clips: [
+      { id: 'c1', trackId: TRACK_VIDEO, mediaId: 'm-drone', start: 0, duration: 3.5 },
+      { id: 'c2', trackId: TRACK_VIDEO, mediaId: 'm-beach', start: 4.5, duration: 3.5 },
+      { id: 'c3', trackId: TRACK_VIDEO, mediaId: 'm-title', start: 9, duration: 3.5 },
+      { id: 'c4', trackId: TRACK_AUDIO, mediaId: 'm-interview', start: 1.5, duration: 7 },
+      // V2: b-roll under the interview stretch
+      { id: 'c5', trackId: 'V2', mediaId: 'm-gopro', start: 1, duration: 5.5 },
+      { id: 'c6', trackId: 'V2', mediaId: 'm-sunset', start: 8, duration: 4 },
+      // A2: ambience bed
+      { id: 'c7', trackId: 'A2', mediaId: 'm-ambience', start: 0.5, duration: 6 },
+    ],
+  };
+}
+
 /** Deterministic clip-id minting (no Date.now — deterministic testids;
  *  the per-module counter alone is collision-safe). */
 let clipSeq = 0;

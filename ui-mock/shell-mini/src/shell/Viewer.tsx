@@ -12,7 +12,7 @@
    viewer takes the freed space. */
 
 import { Play, Pause, Maximize2, Minimize2 } from 'lucide-react';
-import { useMini, VIEWER_ASPECTS, aspectEntry } from '../state/useMini';
+import { useMini, VIEWER_ASPECTS, aspectEntry, boundClips } from '../state/useMini';
 import { fmtTimecode } from '../lib/timecode';
 import { thumbGradientFor } from '../lib/filmstrip';
 import { contentEnd } from '../lib/geometry';
@@ -26,15 +26,22 @@ export function Viewer() {
   const toggleViewerMax = useMini((s) => s.toggleViewerMax);
   const viewerAspect = useMini((s) => s.viewerAspect);
   const setViewerAspect = useMini((s) => s.setViewerAspect);
+  /* R18k (threads #21/#23): the viewer plays the BOUND world — a V2 clip
+   * under the playhead never leaks into a V1-bound session (and video-only
+   * mode never surfaces the full editor's audio-lane content). */
+  const trackMode = useMini((s) => s.trackMode);
+  const boundVideoTrack = useMini((s) => s.boundVideoTrack);
+  const boundAudioTrack = useMini((s) => s.boundAudioTrack);
+  const world = boundClips(doc, trackMode, boundVideoTrack, boundAudioTrack);
 
-  const under = doc.clips
+  const under = world
     .filter((c) => {
       const media = doc.media.find((m) => m.id === c.mediaId);
       return media && media.kind !== 'audio' && playhead >= c.start && playhead < c.start + c.duration;
     })
     .sort((a, b) => b.start - a.start)[0];
   const media = under ? doc.media.find((m) => m.id === under.mediaId) : undefined;
-  const end = contentEnd(doc.clips);
+  const end = contentEnd(world);
   const ar = aspectEntry(viewerAspect);
 
   return (

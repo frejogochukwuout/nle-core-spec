@@ -187,6 +187,52 @@ below — it is COMPLETE on origin and its standing items are preserved.
   timeline--default (transition-block styling) pins the SIBLING's
   component tree + their preview URL — their queue, correctly scoped
   out of our mirror.
+- **R18k — feedback wave 6 (threads #20–#23 + timeline #2/#3/#4, mirror
+  issues #37–#43, ALL fixed + resolved) + the user's storybook
+  restructure:** the deep-design item was the TRACK-BINDING model
+  (threads #21/#23/#3): the mini is a window onto the project —
+  trackMode 'paired'|'video' + boundVideoTrack/boundAudioTrack +
+  trackBindingLocked (host-injected: selectors invisible, rebinds
+  refused, mode switch gated). The VIDEO-ONLY special mode: pool has no
+  tabs (video-only list, plain Media head), ONE lane, no A1 anywhere,
+  audio/still inserts refused with honest toasts; ruler extent /
+  playback wrap / viewer lookup all follow boundClips. Lane heads moved
+  to a FIXED track-head column — the NLE-standard sticky rail at the
+  scrollport's left edge (clips scroll UNDER it; RENDER_ORIGIN moved
+  10→46 = stage margin 2 + rail 44, the whole ruler/playhead/lane/
+  drop/gesture law moved as ONE through the shared constant; the
+  minimized strip keeps its own 10px origin via a per-context
+  originPx prop). Heads are either track-SELECTOR dropdowns (multi-
+  track projects — multiTrackDoc() V1/V2/A1/A2 ships for demo+tests,
+  live rebind swaps lane content and clears only selections that left
+  the visible world) or invisible (locked / single-pair). The minimized
+  strip is now the VIDEO navigation surface (thread #21): A1 sub-row
+  gone by design, strip 49px, pills 18px. Quick fixes: Export CTA
+  26px for the slim bar (was flush 34px), active chips 15%+white+ring
+  (toolbar + pool tabs — deviation from RH's 6.5% registered), minimize
+  button LEADS the tools row, collapsed-mode gutter token 6px (measured
+  6/6/6 around the viewer in max mode). STORYBOOK RESTRUCTURE (the
+  user's ask): 34 stories → 13 in 4 micro→macro groups (Primitives →
+  Timeline/Clip|Toolbar|Panel → Panels → Shell) via storySort; state
+  variations are CONTROLS re-applied through StoreArgs (JSON round-trip
+  patch, useLayoutEffect keyed on the serialized patch — controls win
+  over ephemeral in-story interaction); shell--default kept its story
+  id. Code-review subagent round found + fixed: P1 (first draft's
+  select sat on the t=0 clip's trim zone — the head column IS the fix;
+  hit-tested), P2 stale-binding silent empty world (Timeline heals the
+  binding on doc swap + refusal toast parity), P2 selection law unified
+  (survives iff the clip stays visible), P2 useKeys now skips SELECT
+  (also fixed the R18j aspect-select Space hijack), P3s (min-strip
+  negative margin scoped to .mini-root, Clip-story demo clip lives in
+  the store doc so gestures are real). Tests 204→233 (+29), tsc clean,
+  build green; live-verified (origin law: mark t=0 == clip t=0 == rail
+  end; sticky pinned at scrollLeft 500; gaps 6/6/6; drag clamp exact)
+  + VLM rounds (head rail 9/10, glyphs+clip 9/10, CTA fit, video-only
+  mode). A NEW thread landed mid-wrap on the restructured panel story
+  (mirror #44: standing filmstrip edge shade) — fixed in the same pass:
+  the permanent RH edge fade is gone; the shade returns ONLY in trim
+  mode (zone hover via :has() + active gesture via is-trimming-*,
+  live-verified both halves + VLM-clean crop; +2 tests → 235/235).
 - **R18 correction (what was REVERTED):** the R16 "storybook can't serve
   publicly, static-mount it instead" verdict was wrong; the workaround
   infrastructure was removed — `public/stories/` (8.4MB), the
@@ -219,6 +265,7 @@ below — it is COMPLETE on origin and its standing items are preserved.
      the next agent session runs it as FIRST ACTION.
   3. *Durable state:* GitHub origin + gitlab mirror + /home/sync bundle+
      tarball refreshed at every wrap-up.
+
 
 ## FIRST ACTIONS for the next session (in order)
 

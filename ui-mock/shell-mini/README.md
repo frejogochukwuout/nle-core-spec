@@ -143,16 +143,40 @@ Run it at boot or any time; safe twice.
   transport's right slot is an aspect-ratio controller (16:9 / 4:3 /
   1:1 / 9:16 / 2.39:1) and the stage letterboxes to it exactly at any
   size (container-query sizing).
-- **Minimized timeline** (R18j, thread #13): one compact strip (~59px)
-  — slim every-other-label ruler + V/A pill sub-rows; seek, drag, trim,
-  arrange, selection and pool-drops all still work (same gesture
-  engine); an expand button at the strip's left restores the full panel.
+- **Minimized timeline** (R18j thread #13 → R18k thread #21): one
+  compact strip (49px) — slim every-other-label ruler + a SINGLE video
+  pill row (the A1 sub-row is gone by design: audio can de-sync from
+  video in the doc, so its editing happens EXPANDED; pills grew 12→18px,
+  more selectable); seek, drag, trim, arrange, selection and pool-drops
+  all still work (same gesture engine); an expand button at the strip's
+  left restores the full panel.
+- **Track binding + the video-only special mode** (R18k, threads
+  #21/#23/#3): the mini is a WINDOW onto the project, not the whole
+  project — it binds ONE video track (+ ONE audio track in paired
+  mode). Lane heads live in a FIXED track-head column (the NLE-standard
+  rail: sticky at the scrollport's left edge while clips scroll under
+  it) and are either a track-SELECTOR dropdown (multi-track projects,
+  live rebind with honest selection clearing) or completely invisible
+  (host-injected `trackBindingLocked`, single-pair projects). The
+  `video` mode is the simplified special mode: no pool tabs
+  (video-only list with a plain Media head), ONE lane, no A1 anywhere,
+  audio/still inserts refused with honest toasts; ruler extent,
+  playback wrap and the viewer all follow the bound world. A multi-track
+  mock doc (V1/V2/A1/A2) ships for the demo + tests.
 - **Radii** (R18g, feedback #18/#21/#22 → re-tuned R18i, thread #11):
   panels 20→8px, controls 8→4px, clips at the reviewer's middle ground
   6px (2px read too sharp for shell-mini's casual language; 10px read
   as gaps between cuts), the video frame square (screen content is never
   rounded), Export CTA 6px. Documented deviation from the RH-verbatim
   token set (see tokens.css — original values kept in comments).
+- **Storybook: 13 stories in 4 micro→macro groups** (R18k, the user's
+  restructure ask): Primitives (the glyph family) → Timeline (clip /
+  toolbar / panel) → Panels (topbar / pool / viewer / inspector / toast)
+  → Shell (app compositions). State variations are CONTROLS on each
+  story (zoom tiers, toggles, playhead, selection, project variant,
+  track binding, layout states, toast kind+text) — re-applied to the
+  store on every control change — instead of sibling list items (the
+  old file had 34).
 
 ## What's OUT (deliberate — the deviations register)
 
@@ -216,7 +240,42 @@ Run it at boot or any time; safe twice.
 14. **Topbar is a downstream customization point** (R18j, thread #17 —
    see the section below): slim 36px chrome-only bar; the placeholder
    brand + Export stub are EXPLICITLY meant to be swapped by the host
-   product, not extended.
+   product, not extended. R18k (thread #22): the Export CTA is sized
+   FOR the slim bar (26px — 5px breathing room top/bottom; the old 34px
+   sat flush against the borders and read as overflow).
+15. **Active chip contrast over RH's own** (R18k, thread #4): RH's
+   active tool chip is 6.5% white on a 5.2% toolbar surface — the
+   reviewer found it too subtle to read, so the mini's active chips
+   (toolbar toggles + pool tabs) are 15% white + white ink + hairline
+   inset ring. Deliberate deviation from skin fidelity; the extraction
+   doc's original value stays in the register.
+16. **Minimized strip = video pills only** (R18k, thread #21): the A1
+   sub-row is hidden in minimized mode BY DESIGN (audio editing happens
+   expanded; the strip is the video navigation surface). Pro-NLE
+   collapsed tracks hide audio bodies the same way.
+17. **Plain track labels are gone — selector or invisible** (R18k,
+   thread #3): lane heads live in the fixed head column and are either
+   dropdowns (multi-track projects) or nothing (locked/single-pair).
+   The first draft put the select over the first clip's trim zone — the
+   review round caught it; the head column is the proper fix.
+18. **Collapsed-mode gutter = 6px everywhere** (R18k, thread #20):
+   --mini-gutter-collapsed token; every boundary around the viewer in a
+   collapsed state (rails left/right, min strip below) nets exactly 6px
+   (measured). Expanded panels keep 2px splitter gaps + 12px root gaps.
+19. **The keyboard surface skips SELECT** (R18k, review P2-4): a
+   focused track-binding or aspect dropdown keeps its own keys — Space
+   opens it, letters pick options — instead of firing global
+   split/zoom. (Also fixed the R18j aspect select's Space hijack.)
+20. **Storybook story-count diet** (R18k, the user's ask): 34 stories
+   → 13 in 4 ordered groups, controls for state variations. The two
+   long-lived review surfaces kept their IDs (`shell--default`);
+   state-clone stories (zoom tiers, snap off, ripple on…) became args.
+21. **Filmstrip edge shade = trim-mode only** (R18k, panel thread #1):
+   the permanent RH-style edge fade (rgba(0,0,0,.2)→.24) is gone from
+   every clip — it read as a subtle dim over the filmstrip. The same
+   shade returns ONLY while trimming: hovering an edge drag zone
+   (:has()) or actively dragging it (is-trimming-* from the gesture
+   engine) shades exactly that edge, alongside the 2px accent line.
 
 ## The topbar is a downstream customization point (R18j, thread #17)
 

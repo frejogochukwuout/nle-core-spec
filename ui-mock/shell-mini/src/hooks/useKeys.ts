@@ -1,8 +1,11 @@
 /* Keyboard surface (D3.8, audit m4): Space, S, [ ], Del, ⌘Z/⌘⇧Z, ±, 0, Esc.
    Esc priority: cancel active drag FIRST, else deselect.
    While dragActive, ONLY Esc is honored (audit M2 interaction lock) —
-   every other key returns early. Input targets (typing in a field) are
-   skipped so the surface stays honest.
+   every other key returns early. Form-control targets (typing in a
+   field, opening a select) are skipped so the surface stays honest —
+   R18k (review P2-4): SELECT joins the skip list; a focused track
+   binding / aspect dropdown must keep its own keys (Space opens it,
+   typing letters finds options) instead of firing global split/zoom.
    R18e: [ / ] = cut head / cut tail at playhead (RH 裁剪开始/裁剪结束). */
 
 import { useEffect } from 'react';
@@ -12,7 +15,13 @@ export function useKeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
         return;
       }
       const s = useMini.getState();
