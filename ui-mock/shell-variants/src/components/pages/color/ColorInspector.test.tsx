@@ -11,10 +11,11 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ColorInspector } from './ColorInspector';
-import { useUi, type UiState } from '../../../state/useUiStore';
+import { useUi } from '../../../state/useUiStore';
+import { type UiPatch } from '../../../test/helpers';
 import { DEFAULT_GRADE, DEFAULT_QUALIFIER } from '../../../lib/color';
 
-type Patch = Partial<UiState> | ((s: UiState) => Partial<UiState>);
+type Patch = UiPatch;
 
 const setStore = (patch?: Patch) => {
   useUi.setState((s) => ({
@@ -27,7 +28,7 @@ const setStore = (patch?: Patch) => {
     colorInspectorTab: 'primaries',
     colorGradeTarget: 'clip',
     selectedColorNodeId: 'primary',
-    ...(() => (typeof patch === 'function' ? patch(useUi.getState()) : patch))(),
+    ...(patch ?? {}),
   }));
 };
 
@@ -129,7 +130,7 @@ describe('ColorInspector — the panel round-trips (store-driven, single owner)'
   it('Qualifier: the qualifier seed writes through the grade record (one entry, undoable)', () => {
     mountInspector({ colorInspectorTab: 'qualifier' });
     useUi.getState().setGrade('el-2', { qualifier: { ...DEFAULT_QUALIFIER, hueCenter: 28, hueWidth: 46 } });
-    expect(S().mockGrades['el-2'].qualifier.hueCenter).toBe(28);
+    expect(S().mockGrades['el-2']?.qualifier?.hueCenter).toBe(28);
     // one history entry per committed grade write (the D3 commit law)
     expect(S().past.length).toBe(1);
     useUi.getState().undo();

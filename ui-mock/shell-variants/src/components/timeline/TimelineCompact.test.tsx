@@ -12,9 +12,10 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { TimelineCompact } from './TimelineCompact';
-import { useUi, type UiState } from '../../state/useUiStore';
+import { useUi } from '../../state/useUiStore';
+import { type UiPatch } from '../../test/helpers';
 
-type Patch = Partial<UiState> | ((s: UiState) => Partial<UiState>);
+type Patch = UiPatch;
 
 const setStore = (patch?: Patch) => {
   useUi.setState((s) => ({
@@ -22,7 +23,7 @@ const setStore = (patch?: Patch) => {
     scenes: s.scenes,
     selection: ['el-2'],
     colorGradeTarget: 'clip',
-    ...(() => (typeof patch === 'function' ? patch(useUi.getState()) : patch))(),
+    ...(patch ?? {}),
   }));
 };
 

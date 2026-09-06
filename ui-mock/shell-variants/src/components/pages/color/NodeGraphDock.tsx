@@ -27,8 +27,7 @@ export function NodeGraphDock() {
   return (
     <div
       data-testid="shell-color-nodedock"
-      className="flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l border-hairline bg-panel"
-      style={{ width: '48%', minWidth: 420 }}
+      className="flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden border-l border-hairline bg-panel"
       aria-label="Node graph console"
     >
       {/* dock header (26px — the shell bar grammar; the console's provenance

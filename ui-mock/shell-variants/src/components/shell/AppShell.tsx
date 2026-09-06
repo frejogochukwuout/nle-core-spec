@@ -336,7 +336,7 @@ function AppShellInner() {
         <SceneTabs />
         <div className="flex min-h-0 flex-1">
           {page === 'color' ? (
-            <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <TimelineCompact />
             </div>
           ) : (
@@ -348,7 +348,7 @@ function AppShellInner() {
               must not leave an invisible zero-width stop in the cycle
               (single-writer per index, deepest-match law). */}
           {page === 'color' && colorNodesDock && (
-            <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0">
+            <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0" style={{ width: '48%', minWidth: 420 }}>
               <NodeGraphDock />
             </div>
           )}
