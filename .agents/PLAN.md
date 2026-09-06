@@ -22,6 +22,26 @@
 
 ---
 
+## Round 22 (2026-09-07) — shell-variants: the COLOR VIEW REWRITE + all-view revision round (COMPLETE except W6)
+
+**User ask (the P0):** "the color grade view is a disaster. it deviated severely... no one has the memory of the original reference under ui-mock/ and no one bothered to look. the whole layout is a mess. need to completely rewrite" + "follow my feedbacks from annotakit the latest ux review feedbacks" (19 new issues #71-#89) + "do a proper and thorough revision across all views".
+
+**Process:** the reference canon read IN FULL by the orchestrator (davinci shell + wheels/scopes/node-graph/qualifier refs) → DESIGN-R22 v1 → 2 parallel fresh-context audits (R22-A design: 3 BLOCKERs + 12 CONCERNs caught — the scopes pixel budget was degenerate, the node-graph fit numbers wrong, the insert-mode list wrong; R22-B seams: the full blast radius + the "existing seam" myths debunked) → v2 → implement in waves.
+
+**Landed (all pushed):**
+- **W0 the color rewrite (the flagship):** ColorConsole + ColorInspectorRail DELETED; the composition = media pool left (Pool|Stills) / viewer DOMINANT center / ColorInspector (Primaries|Curves|Qualifier tabs — the #78 directive) right / TimelineCompact (#75, V/A/T token-coded) + NodeGraphDock (#74 clipped+scrollable) in the timeline area; the scopes = a 4-state console (off/collapsed/row/grid, default OFF — the mixer's collapsed law); page-aware defaults (55% mainbody + 420px inspector, user-drag wins). Stills tab = real grade presets (apply/save, gap C59). Live-verified end-to-end (viewer 1196x428, scopes 266px bounded, 8 nodes zero leak).
+- **W2 mixer:** #71 the phantom scroll gap = the [data-tip]::after tooltips extending the scroll extent at opacity:0 (display:none is the ONLY fix — visibility:hidden does NOT remove it in Chromium; measured both live); #72 AuxStrip rewritten with the master's alignment grammar (all faders exact-aligned, live-verified); #81 EQ/FX param sections in the ChannelEditor (gap C60 view-state mocks).
+- **W3 insert modes:** #83 all 7 buttons always inline (the <560px kebab retired — the reviewer saw 2 buttons because the collapse hid 5), the hover preview fades+slides (the reference's own 0.3s ease-in-out + translateY 4px).
+- **W4 source trim:** #84/#85 the SourceRangeBar (dual clamped handles + keyboard) + THE SEAM: ctx.sourceRange in the planner (dur = out−in, sourceStart = in; fitToFill retimes the range; backward-compat pinned).
+- **W5 deliver:** #88 the video preview RETURNS (the program Viewer, center) + summary→the right inspector; #89 presets-only left + the queue replaces the center while rendering (auto-flip + header toggle).
+- **Toolbar2 (#73/#80/#86/#87):** console toggles right (Scopes/Nodes/Mixer/Inspector), page-aware left label (Sound Library on audio — the old label lied), Effects + Project buttons REMOVED (the LeftDock Effects tab retires WITH W6).
+
+**Gates at close:** tsc 0, **1349/1349**, vite + storybook builds green; live-verified (color composition + #71 phantom=0 + #72 alignment + #74 zero leak + zero console errors); all 19 threads resolved with fix evidence (scripts/r22-resolve-threads.mjs; the GH issue mirror had transient GitHub-connectivity failures — retries landed; the annotakit store's own ghSync self-heals on next mutation).
+
+**Standing next (R23):**
+- **W6 — the Effect/transition view (#82, REGISTERED in DESIGN-R22 W6):** the FX page — TimelineCompact in seamMode (frozen tracks, hoverable seams → apply transition objects; head/tail → fades), transition-specific inspector, effects assets in the left dock, the LeftDock Effects tab retires in the same wave. The blocking-track fade objects stay until it lands.
+- The per-mode transition glyph TODO (W5 R20 carry-forward); node-graph binding beyond Primary/Secondary (C56); the scopes' sub-100px cell-header shrink (registered adaptation); the 62 old open threads in the shared annotakit db (mini-stream era — the kit's logical merge reconciles).
+
 ## Round 21 (2026-09-06) — the P0 drag-revert round (COMPLETE, executed across two parallel sessions)
 
 **User ask (P0, `ui-mock/shell-mini/user-msg`, pushed 07:46Z — 32 min after R20):** "revert all the recent 'drag' related timeline 'fixes'... the last two rounds of changes related to timeline drag support should be all reverted. related to new issue opened issue#57 from annotekit too."
