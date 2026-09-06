@@ -3,8 +3,19 @@
    app dock. Splitters: 6px visual line / 12px interactive hit target,
    double-click resets (§3.2). Splitters OWN the seam lines — adjacent panels
    carry no borders (single-source seams, no double hairlines). Page dock
-   swaps the right rail (Edit → Inspector, Color → grading stack, Deliver →
-   export panel) — all at the same resizable inspectorW. */
+   swaps the right rail (Edit → Inspector, Color → ColorInspector tabs,
+   Deliver → export panel) — all at the same resizable inspectorW.
+
+   R22 (DESIGN-R22 D1) — the color page composition REWRITTEN (issues
+   #74/#77/#78/#79): the MEDIA POOL stays in the left dock (the node graph
+   no longer steals its slot); the VIEWER is the dominant center surface
+   with the scopes console beneath it only while toggled on (never
+   permanently); the COLOR INSPECTOR (Primaries/Curves/Qualifier tabs) is
+   the one grading surface in the right rail; the timeline area carries the
+   TimelineCompact strip (issue #75) with the NodeGraphDock console beside
+   it (toggleable, the mixer mechanism). Page-aware defaults (D2/D8): the
+   color page's mainbody = 55% and inspector = 420px until the user drags
+   (mainBodyUserSet / inspectorWUserSet — the user's drag always wins). */
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useUi } from '../../state/useUiStore';
@@ -18,7 +29,8 @@ import { AppDock } from './AppDock';
 import { TimelineToolbar } from '../timeline/TimelineToolbar';
 import { SceneTabs } from '../timeline/SceneTabs';
 import { Timeline } from '../timeline/Timeline';
-import { ColorInspectorRail, ColorNodeGraph, ColorScopeStrip, ColorConsole } from '../pages/ColorPage';
+import { ColorInspector, ColorScopeStrip, NodeGraphDock } from '../pages/ColorPage';
+import { TimelineCompact } from '../timeline/TimelineCompact';
 import { DeliverPage } from '../pages/DeliverPage';
 import { ChannelEditor } from '../mixer/ChannelEditor';
 import { MarkerInspector } from '../panels/MarkerInspector';
@@ -218,8 +230,24 @@ function AppShellInner() {
      grade target the console edits). */
   const captionSelected = selection.length === 1
     && findElement(scenes, selection[0])?.track.kind === 'caption';
+  /* R22: the console dock view-states (scopes under the viewer; node graph
+     beside the compact timeline) + the user-drag flags for the page-aware
+     defaults below. */
+  const colorScopesState = useUi((s) => s.colorScopesState);
+  const colorNodesDock = useUi((s) => s.colorNodesDock);
+  const mainBodyUserSet = useUi((s) => s.mainBodyUserSet);
+  const inspectorWUserSet = useUi((s) => s.inspectorWUserSet);
+
+  /* R22-D8/D2: page-aware defaults — the color page wants a TALL mainbody
+     (the timeline area only carries the compact strip) and the reference's
+     420px inspector; the user's drag (mainBodyUserSet / inspectorWUserSet)
+     always wins and persists. Read-time only — no write-on-navigate. */
+  const mainBodyHeight = mainBodyH !== 0
+    ? mainBodyH
+    : page === 'color' && !mainBodyUserSet ? '55%' : '40%';
+  const effectiveInspectorW = page === 'color' && !inspectorWUserSet ? 420 : inspectorW;
   const rightPanel: ReactNode =
-    page === 'color' ? <ColorInspectorRail />
+    page === 'color' ? <ColorInspector />
     : page === 'audio' ? <ChannelEditor />
     : selectedMarkerId ? <MarkerInspector />
     : captionSelected ? <CaptionInspector />
@@ -242,7 +270,7 @@ function AppShellInner() {
           stays live below with the loop in/out as the export range. */}
       <div
         className="mainbody flex shrink-0 overflow-hidden"
-        style={{ height: mainBodyH || '40%', minHeight: 320 }}
+        style={{ height: mainBodyHeight, minHeight: 320 }}
       >
         {page === 'deliver' ? (
           <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 flex-1">
@@ -251,11 +279,12 @@ function AppShellInner() {
         ) : (
           <>
             {/* R19: one LeftDock surface (th_mtoyt5fv "use the same area as
-                bin") — Pool|Effects tabs in the mediaW slot; on the color page
-                the slot carries the node graph (reference composition). */}
+                bin") — Pool|Effects tabs in the mediaW slot. R22-D1: the
+                COLOR page keeps the media pool here (Pool|Stills tabs) — the
+                node graph no longer steals this slot (issue #77). */}
             {(panels.mediaPool || panels.effects) && (
               <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
-                {page === 'color' ? <ColorNodeGraph /> : <LeftDock />}
+                <LeftDock />
               </div>
             )}
             {(panels.mediaPool || panels.effects) && (
@@ -263,22 +292,26 @@ function AppShellInner() {
             )}
 
             <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region panel-shadow flex min-h-0 min-w-0 flex-1 flex-col">
+              {/* R22-D1: the viewer is the DOMINANT surface — nothing renders
+                  beneath it on the color page unless the scopes console is
+                  toggled ON (issue #77's thin-line starvation dies here). */}
               <div className="min-h-0 flex-1">
                 <Viewer duration={duration} />
               </div>
-              {/* R20-W4b/W4c color composition: the scope strip slot under the
-                  viewer — ColorScopeStrip (C53, REAL since W4c: traces from
-                  the graded frame the viewer publishes on the bus). Never a
-                  console tab — the simultaneity law (color-layout §2.1e). */}
-              {page === 'color' && <ColorScopeStrip />}
+              {/* R22-D3: the scopes console under the viewer — store-driven
+                  (off | collapsed | row | grid); REAL traces from the graded
+                  frame the viewer publishes on the bus (W4c kept, #76). */}
+              {page === 'color' && colorScopesState !== 'off' && <ColorScopeStrip />}
             </div>
 
-            {/* right-docked panel: dragging the seam LEFT (dx<0) widens it */}
+            {/* right-docked panel: dragging the seam LEFT (dx<0) widens it.
+                R22-D2: the color page defaults to the reference's 420px
+                until the user drags (inspectorWUserSet). */}
             {panels.inspector && (
-              <VSplitter onDrag={(dx) => setInspectorW(dx === 0 ? 340 : useUi.getState().inspectorW - dx)} />
+              <VSplitter onDrag={(dx) => setInspectorW(dx === 0 ? (page === 'color' ? 420 : 340) : useUi.getState().inspectorW - dx)} />
             )}
             {panels.inspector && (
-              <div ref={(el) => { regionsRef.current[3] = el; }} tabIndex={-1} className="shell-region panel-shadow z-10 flex h-full min-h-0 shrink-0" style={{ width: inspectorW }}>
+              <div ref={(el) => { regionsRef.current[3] = el; }} tabIndex={-1} className="shell-region panel-shadow z-10 flex h-full min-h-0 shrink-0" style={{ width: effectiveInspectorW }}>
                 {rightPanel}
               </div>
             )}
@@ -288,32 +321,39 @@ function AppShellInner() {
 
       <HSplitter onDrag={(dy) => setMainBodyH(dy === 0 ? 0 : (useUi.getState().mainBodyH || window.innerHeight * 0.4) + dy)} />
 
-      {/* ---- timeline block + mixer dock (design doc v2.2 §4 — the mixer
-          sits SIDE BY SIDE with the multi-track lanes, not under them;
-          7th F6 region) ----
-          R20-W4b (DESIGN-R20 D3, C51): on the COLOR page the timeline lanes
-          are REPLACED by the ColorConsole (frozen lane strip + tabs + body —
-          the Mixer-Console precedent). The console takes the mixer dock's
-          F6 7th-region slot (region-cycle parity; the mixer does not render
-          in color mode per color-layout §2.4). The Edit page keeps the full
-          Timeline. */}
+      {/* ---- timeline block + console docks (design doc v2.2 §4 — the
+          mixer sits SIDE BY SIDE with the multi-track lanes, not under them;
+          F6 region slots [6]/[7], single-writer per index) ----
+          R22-D1 (DESIGN-R22): on the COLOR page the timeline lanes are
+          REPLACED by TimelineCompact (the #75 generalized compact strip —
+          frozen, click = grade target) and the NodeGraphDock console sits
+          beside it (toggleable, the mixer mechanism, issue #78). The mixer
+          renders on ALL pages now (issue #73 — Toolbar2 carries the toggle);
+          on the color page at the 55% mainbody its FLOOR auto-degrade is the
+          honest behavior (registered). */}
       <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />
         <div className="flex min-h-0 flex-1">
           {page === 'color' ? (
-            <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
-              <ColorConsole />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <TimelineCompact />
             </div>
           ) : (
             <Timeline />
           )}
-          {/* F6 region 7 (spec 18 §11.5 amendment): only a focus stop while
-              the dock is actually visible — a collapsed dock must not leave
-              an invisible zero-width F6 stop in the cycle. Color mode is
-              excluded (the console owns the slot above). */}
-          {mixerVisible && page !== 'color' && (
+          {/* F6 region slots [6]/[7] (spec 18 §11.5 amendment): the VISIBLE
+              timeline-area consoles get focus stops in dock order — the
+              nodes dock first on color, the mixer next; a collapsed/off dock
+              must not leave an invisible zero-width stop in the cycle
+              (single-writer per index, deepest-match law). */}
+          {page === 'color' && colorNodesDock && (
             <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0">
+              <NodeGraphDock />
+            </div>
+          )}
+          {mixerVisible && (
+            <div ref={(el) => { regionsRef.current[7] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0">
               <MixerDock />
             </div>
           )}

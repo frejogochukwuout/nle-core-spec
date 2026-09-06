@@ -21,6 +21,13 @@ const gray = () => makeTestImageData(64, 36, () => [128, 128, 128]);
 const publish = (img: ImageData) =>
   publishGradedFrame({ imageData: img, width: img.width, height: img.height, mediaId: 'm-02', elementId: 'el-2', mode: 'program' as const });
 
+/** R22-D3: solo mounts boot the dock OPEN (the store's 'off' default = the
+ *  component is not rendered at all — the mixer collapsed law). */
+const renderStrip = () => {
+  act(() => { useUi.setState({ colorScopesState: 'grid' }); });
+  return render(<ColorScopeStrip />);
+};
+
 /* recording ctx for the pure-painter tests (no React) */
 const recorder = () => {
   const calls: { op: string; args: unknown[] }[] = [];
@@ -57,6 +64,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   __clearGradedFrameBus();
   stub = stubCanvas2D();
+  useUi.setState({ colorScopesState: 'grid', qualifierPreviewOn: false });
 });
 
 afterEach(() => {
@@ -95,7 +103,7 @@ describe('the graded-frame bus (the W4c seam)', () => {
 
 describe("ColorScopeStrip — standby + collapse (W4b slot laws preserved)", () => {
   it('no graded frame yet: the four quadrants show the honest no-signal row (no canvas, no ctx)', () => {
-    render(<ColorScopeStrip />);
+    renderStrip();
     for (const kind of ['waveform', 'parade', 'vectorscope', 'histogram']) {
       expect(screen.getByTestId(`shell-color-scope-${kind}`)).toHaveTextContent(/no signal/);
       expect(screen.queryByTestId(`shell-color-scope-${kind}-canvas`)).toBeNull();
@@ -104,7 +112,7 @@ describe("ColorScopeStrip — standby + collapse (W4b slot laws preserved)", () 
   });
 
   it('collapse law: aria-expanded flips, the grid unmounts', () => {
-    render(<ColorScopeStrip />);
+    renderStrip();
     const collapse = screen.getByTestId('shell-color-scopes-collapse');
     expect(collapse).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(collapse);
@@ -114,14 +122,14 @@ describe("ColorScopeStrip — standby + collapse (W4b slot laws preserved)", () 
   });
 
   it('a frame on the bus flips the status line to the live geometry + fps', async () => {
-    render(<ColorScopeStrip />);
+    renderStrip();
     act(() => { publish(red()); });
     await act(async () => { vi.advanceTimersByTime(0); });
     expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/64×36 · 10 fps/);
   });
 
   it('the matte-preview hint rides the status line (qualifierPreviewOn)', () => {
-    render(<ColorScopeStrip />);
+    renderStrip();
     act(() => { useUi.setState({ qualifierPreviewOn: true }); });
     expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/matte preview on/);
     act(() => { useUi.setState({ qualifierPreviewOn: false }); });
@@ -131,7 +139,7 @@ describe("ColorScopeStrip — standby + collapse (W4b slot laws preserved)", () 
 
 describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () => {
   it('vectorscope: the trace lands at ~103° (BT.601 red), graticule + skin line + labels drawn', async () => {
-    render(<ColorScopeStrip />);
+    renderStrip();
     act(() => { publish(red()); });
     await act(async () => { vi.advanceTimersByTime(0); });
     // graticule: 3 circles (100/75/25%), crosshair, 6 target boxes, labels
@@ -153,7 +161,7 @@ describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () =
   });
 
   it('waveform: BT.601 luma of red (≈76) — one run per column at the matching height, density alpha 1', async () => {
-    render(<ColorScopeStrip />);
+    renderStrip();
     act(() => { publish(red()); });
     await act(async () => { vi.advanceTimersByTime(0); });
     expect(ops('waveform', 'set:globalCompositeOperation')).toContainEqual(['lighter']);
@@ -168,7 +176,7 @@ describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () =
   });
 
   it('parade: three panels with per-channel colors at their x offsets', async () => {
-    render(<ColorScopeStrip />);
+    renderStrip();
     act(() => { publish(red()); });
     await act(async () => { vi.advanceTimersByTime(0); });
     const colorsSeen: string[] = [];
@@ -197,7 +205,7 @@ describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () =
   });
 
   it('histogram: three stacked 256-bin tracks draw', async () => {
-    render(<ColorScopeStrip />);
+    renderStrip();
     act(() => { publish(red()); });
     await act(async () => { vi.advanceTimersByTime(0); });
     // three zero-axis lines (one per track) + bars in each third
@@ -209,7 +217,7 @@ describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () =
   });
 
   it('THROTTLE (spec 08 §11.4): a second frame inside the window defers ONE draw', async () => {
-    render(<ColorScopeStrip />);
+    renderStrip();
     act(() => { publish(red()); });
     await act(async () => { vi.advanceTimersByTime(0); });
     const bgFills = () => ops('waveform', 'fillRect').filter((a) => a[0] === 0 && a[1] === 0 && a[2] === 320 && a[3] === 160).length;

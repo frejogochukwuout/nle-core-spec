@@ -15,7 +15,7 @@ import {
   ColorPage,
   ColorNodeGraph,
   ColorScopeStrip,
-  ColorInspectorRail,
+  ColorInspector,
   WheelsPanel,
   CurvesPanel,
   QualifierPanel,
@@ -31,7 +31,7 @@ const input = (label: string) => screen.getByLabelText(label) as HTMLInputElemen
 
 const setStore = (patch?: Patch) => {
   useUi.setState({
-    page: 'color', mockGrades: {}, past: [], future: [], colorConsoleTab: 'primaries',
+    page: 'color', mockGrades: {}, past: [], future: [], colorInspectorTab: 'primaries',
     colorGradeTarget: 'clip', qualifierPreviewOn: false, selectedColorNodeId: 'primary',
     selection: ['el-2'], toasts: [],
     ...patch,
@@ -63,12 +63,12 @@ const mountPanel = (ui: React.ReactElement, patch?: Patch) => {
   return render(ui);
 };
 
-describe('ColorPage rail (spec 18 §4.8 — the inspector slot carries the color sections)', () => {
-  it('renders the page root with the color inspector rail', () => {
+describe('ColorPage (spec 18 §4.8 — the inspector slot carries the color tools)', () => {
+  it('renders the page root with the color inspector', () => {
     boot();
     expect(screen.getByTestId('shell-color')).toBeInTheDocument();
-    expect(screen.getByText('inspector rail — clip-level color sections (spec 18 §4.8)')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-rail')).toBeInTheDocument();
+    expect(screen.getByText('inspector — clip-level color tools as tabs (spec 18 §4.8, R22)')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
   });
 });
 
@@ -204,7 +204,7 @@ describe('WheelsPanel (Primaries — store-driven GradeParams)', () => {
 
 describe('CurvesPanel (C55 — master RGB spline, record-stored points)', () => {
   const mountCurves = (patch?: Patch) => {
-    setStore({ colorConsoleTab: 'curves', ...patch });
+    setStore({ colorInspectorTab: 'curves', ...patch });
     return render(<CurvesPanel />);
   };
   it('boots at the identity diagonal: two endpoint points, monotone path renders', () => {
@@ -275,7 +275,7 @@ describe('CurvesPanel (C55 — master RGB spline, record-stored points)', () => 
 
 describe('QualifierPanel (C54 — spec 08 §8.1 store-driven keyer)', () => {
   const mountQualifier = (patch?: Patch) => {
-    setStore({ colorConsoleTab: 'qualifier', ...patch });
+    setStore({ colorInspectorTab: 'qualifier', ...patch });
     return render(<QualifierPanel />);
   };
 
@@ -419,6 +419,7 @@ describe('ColorNodeGraph (left dock — reference topology kept, C56 binding)', 
 
 describe('ColorScopeStrip (C53 — real since W4c; solo = no bus frame yet)', () => {
   it('standby quadrants + the live status line + collapse (testids stable from W4b)', () => {
+    act(() => { useUi.setState({ colorScopesState: 'grid' }); }); // R22-D3: solo mounts boot the dock OPEN
     render(<ColorScopeStrip />);
     expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
     expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/standby — no graded frame/);
@@ -434,6 +435,7 @@ describe('ColorScopeStrip (C53 — real since W4c; solo = no bus frame yet)', ()
   });
 
   it('the seam stays live: qualifierPreviewOn shows in the status line', () => {
+    act(() => { useUi.setState({ colorScopesState: 'grid' }); });
     render(<ColorScopeStrip />);
     expect(screen.getByTestId('shell-color-scopes-status')).not.toHaveTextContent(/matte preview on/);
     act(() => { useUi.setState({ qualifierPreviewOn: true }); });
@@ -441,49 +443,34 @@ describe('ColorScopeStrip (C53 — real since W4c; solo = no bus frame yet)', ()
   });
 });
 
-describe('ColorInspectorRail (C51 fold — the W3 grammar, same target resolver)', () => {
+describe('ColorInspector (C51 fold — the W3 grammar, same target resolver)', () => {
   it('chip shows WHICH target; the Timeline target adds the Timeline grade badge', () => {
-    mountPanel(<ColorInspectorRail />);
-    expect(screen.getByTestId('shell-color-rail-chip')).toHaveTextContent('Marina interview');
-    expect(screen.queryByTestId('shell-color-rail-timeline-badge')).toBeNull();
+    mountPanel(<ColorInspector />);
+    expect(screen.getByTestId('shell-color-inspector-chip')).toHaveTextContent('Marina interview');
+    expect(screen.queryByTestId('shell-color-inspector-timeline-badge')).toBeNull();
     act(() => { useUi.setState({ colorGradeTarget: 'timeline' }); });
-    expect(screen.getByTestId('shell-color-rail-chip')).toHaveTextContent('Timeline');
-    expect(screen.getByTestId('shell-color-rail-timeline-badge')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-inspector-chip')).toHaveTextContent('Timeline');
+    expect(screen.getByTestId('shell-color-inspector-timeline-badge')).toBeInTheDocument();
   });
 
-  it('ParamRows (Group grammar) write the target GradeParams — every scalar asserts its store field', () => {
-    mountPanel(<ColorInspectorRail />);
-    for (const label of ['Exposure', 'Contrast', 'Pivot', 'Temperature', 'Tint', 'Mid Detail', 'Saturation', 'Hue']) {
-      expect(screen.getByRole('slider', { name: `${label} slider` })).toBeInTheDocument();
-      expect(screen.getByLabelText(`${label} value`)).toBeInTheDocument();
+  it('R22 (#78): the inspector carries the PANELS as tabs — the wheels mount on Primaries', () => {
+    mountPanel(<ColorInspector />);
+    // the wheels reference anatomy: 4 wheel headers ride the panel body
+    expect(screen.getByTestId('shell-color-inspector-tab-primaries')).toHaveAttribute('aria-selected', 'true');
+    for (const w of ['Lift', 'Gamma', 'Gain', 'Offset']) {
+      expect(screen.getByText(w)).toBeInTheDocument();
     }
-    const exp = screen.getByLabelText('Exposure value') as HTMLInputElement;
-    fireEvent.change(exp, { target: { value: '0.5' } });
-    fireEvent.keyDown(exp, { key: 'Enter' });
+  });
+
+  it('the store round-trips through the SAME resolver (single-owner law, store-level)', () => {
+    mountPanel(<ColorInspector />);
+    act(() => { useUi.getState().setGrade('el-2', { exposure: 0.5, temperature: 12 }); });
     expect(S().mockGrades['el-2'].exposure).toBe(0.5);
-    const temp = screen.getByLabelText('Temperature value') as HTMLInputElement;
-    fireEvent.change(temp, { target: { value: '12' } });
-    fireEvent.blur(temp);
     expect(S().mockGrades['el-2'].temperature).toBe(12);
-    // timeline target: the SAME rows write the timeline record
+    // timeline target: the SAME record domain writes the timeline record
     act(() => { useUi.setState({ colorGradeTarget: 'timeline' }); });
-    const exp2 = screen.getByLabelText('Exposure value') as HTMLInputElement;
-    fireEvent.change(exp2, { target: { value: '1.5' } });
-    fireEvent.keyDown(exp2, { key: 'Enter' });
+    act(() => { useUi.getState().setGrade(TIMELINE_GRADE_KEY, { exposure: 1.5 }); });
     expect(S().mockGrades[TIMELINE_GRADE_KEY].exposure).toBe(1.5);
     expect(S().mockGrades['el-2'].exposure).toBe(0.5); // clip record untouched
-  });
-
-  it('sections collapse via the W3 caret; reset per row restores the spec default', () => {
-    mountPanel(<ColorInspectorRail />);
-    const hue = screen.getByLabelText('Hue value') as HTMLInputElement;
-    fireEvent.change(hue, { target: { value: '20' } });
-    fireEvent.keyDown(hue, { key: 'Enter' });
-    expect(S().mockGrades['el-2'].hue).toBe(20);
-    fireEvent.click(screen.getByRole('button', { name: 'Reset Hue' }));
-    expect(S().mockGrades['el-2'].hue).toBe(DEFAULT_GRADE.hue);
-    const caret = screen.getByTestId('shell-inspector-group-color-caret');
-    fireEvent.click(caret);
-    expect(caret).toHaveAttribute('aria-expanded', 'false');
   });
 });

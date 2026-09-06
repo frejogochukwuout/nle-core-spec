@@ -1,9 +1,22 @@
 # 07 — Composition: Scene Graph, Layer Model, Blend Modes, Transitions
 
 **Stream:** Composition runtime (builds FrameDescriptor from SceneState)
-**Status:** Refined by sub-agent scout (SCOUT-07) — open questions answered with source code references
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the N1 composition-frame seam (64 seam pins) + the N3 cut-centered crossfade ramps accepted as BASE @ `f68ab8c` 356/356; forward = the S-engine projector parity corpus); Refined by sub-agent scout (SCOUT-07) — open questions answered with source code references
 **Primary teacher:** FreeCut `composition-runtime/` + OpenCut-classic `compositor/` + `apps/web/src/services/renderer/`
 **Spec file:** `07-composition.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- nle-engine @ `f68ab8c` — 356/356 vitest, tsc 0 — the composition-frame seam landed: N1 — pure `buildCompositionFrame` + jsdom-safe painter (64 seam pins at the engine); N3 — the cut-centered crossfade ramps (driving the app's real audio crossfades). Vendors OT @ `3420b5f`, WDC @ `5570321`.
+- nle-test-app @ `e662759` — 83/83, tsc 0 — the consumption proof: ProgramCanvas renders REAL frames through the N1 seam.
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- The projector parity corpus — the N1 composition-frame family's formal S4 suite (SceneTracks→ingestion translator + corpus) — S-engine (∥ crawl) (acceptance: S4 parity suite green vs the engine Timeline oracle on the corpus).
+
+**ACCEPTANCE & TEST PLAN:** §12 (the architect's 9-bullet intent list) + §17 Testing (the executable contract: Tier 1 purity/ordering, Tier 2 blend/transition pixel rows, Tier 3); spec 17 §13A facet rows (§13A.5 projector property tests — both identity laws + never-loss); the R22 battery's posture checks (BASE rows re-verified at their pins — the regression role).
 
 ---
 

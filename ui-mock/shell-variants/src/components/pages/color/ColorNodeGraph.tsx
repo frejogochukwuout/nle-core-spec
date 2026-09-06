@@ -264,7 +264,15 @@ const NODE_BINDINGS: Record<string, 'primaries' | 'qualifier'> = {
 
 /* ---------- the graph ---------- */
 
-export function ColorNodeGraph() {
+export interface ColorNodeGraphProps {
+  /** R22-D4: when true the graph renders DOCKED inside the NodeGraphDock —
+   *  the dock owns the toolbar chrome and this component renders ONLY the
+   *  workspace (scrollable at natural size; the dock clips — the #74 fix).
+   *  Standalone (stories/solo mounts) keeps its own 38px toolbar. */
+  docked?: boolean;
+}
+
+export function ColorNodeGraph({ docked = false }: ColorNodeGraphProps) {
   /* honest one-shot toasts: (a) the mock-only graph controls (clip picker,
      page dots, overflow menu; hand tool = gesture deferral), (b) the C56
      deferral — non-bound node kinds are display state. */
@@ -272,7 +280,7 @@ export function ColorNodeGraph() {
   const tellUnbound = useHonestToast('Node graph', 'node graphs land with C56 — only the Primaries and Qualifier nodes bind today');
   const selected = useUi((s) => s.selectedColorNodeId);
   const setColorNode = useUi((s) => s.setColorNode);
-  const setColorConsoleTab = useUi((s) => s.setColorConsoleTab);
+  const setColorInspectorTab = useUi((s) => s.setColorInspectorTab);
   const [tool, setTool] = useState<'arrow' | 'hand'>('arrow');
   const [page, setPage] = useState(1);
 
@@ -283,9 +291,67 @@ export function ColorNodeGraph() {
     }
     setColorNode(id);
     const binding = NODE_BINDINGS[id];
-    if (binding) setColorConsoleTab(binding); // honest routing — no fake binding
+    if (binding) setColorInspectorTab(binding); // honest routing — no fake binding
     else tellUnbound(); // corrector/parallel/fx/master: display state, C56
   };
+
+  const workspace = (
+    <div className="min-h-0 flex-1 overflow-auto" style={{ background: 'var(--nodegraph-bg)' }}>
+      <div
+        className="relative h-full w-full min-w-[640px]"
+        style={{
+          minHeight: CANVAS_H,
+          backgroundColor: 'var(--nodegraph-bg)',
+          backgroundImage: 'linear-gradient(var(--nodegraph-grid) 1px, transparent 1px), linear-gradient(90deg, var(--nodegraph-grid) 1px, transparent 1px)',
+          backgroundSize: '64px 64px, 64px 64px',
+          backgroundPosition: '-32px -32px, -32px -32px',
+        }}
+      >
+        {/* edges — straight 2px lines from port centers (z-1 under nodes) */}
+        <svg width={CANVAS_W} height={CANVAS_H} className="pointer-events-none absolute left-0 top-0 z-[1]" aria-hidden>
+          {EDGES.map(({ from, to }) => {
+            const a = portXY(nodeById(from[0]), from[1]);
+            const b = portXY(nodeById(to[0]), to[1]);
+            return <line key={`${from.join('-')}-${to.join('-')}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--node-edge)" strokeWidth="2" />;
+          })}
+        </svg>
+
+        {/* nodes — focusable buttons; click toggles selection (ONE max) */}
+        {NODES.map((n) => {
+          const isSel = n.id === selected;
+          return (
+            <button
+              key={n.id}
+              type="button"
+              data-testid={`shell-color-node-${n.id}`}
+              aria-pressed={isSel}
+              aria-label={`${n.title} node${n.num ? ` ${n.num}` : ''}`}
+              onClick={() => clickNode(n.id)}
+              className="absolute z-[2] flex flex-col items-center"
+              style={{ left: n.x, top: n.y, width: cardW(n) }}
+            >
+              {hasTitle(n) && (
+                <span className="mb-[6px] whitespace-nowrap text-[12px] font-medium text-tprimary" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                  {n.title}
+                </span>
+              )}
+              <NodeCard n={n} selected={isSel} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  /* R22-D4: docked = the NodeGraphDock owns the chrome; this renders ONLY the
+     workspace (scrollable at natural size; the dock clips — the #74 fix). */
+  if (docked) {
+    return (
+      <div data-testid="shell-color-nodegraph" className="flex h-full min-h-0 w-full flex-col" style={{ background: 'var(--nodegraph-bg)' }}>
+        {workspace}
+      </div>
+    );
+  }
 
   return (
     <div data-testid="shell-color-nodegraph" className="flex h-full min-h-0 w-full min-w-[400px] flex-col" style={{ background: 'var(--nodegraph-bg)' }}>
@@ -363,53 +429,7 @@ export function ColorNodeGraph() {
           </button>
         </div>
       </div>
-
-      {/* workspace: 64px grid, offset -32 so nodes sit on intersections */}
-      <div className="min-h-0 flex-1 overflow-auto" style={{ background: 'var(--nodegraph-bg)' }}>
-        <div
-          className="relative h-full w-full min-w-[640px]"
-          style={{
-            minHeight: CANVAS_H,
-            backgroundColor: 'var(--nodegraph-bg)',
-            backgroundImage: 'linear-gradient(var(--nodegraph-grid) 1px, transparent 1px), linear-gradient(90deg, var(--nodegraph-grid) 1px, transparent 1px)',
-            backgroundSize: '64px 64px, 64px 64px',
-            backgroundPosition: '-32px -32px, -32px -32px',
-          }}
-        >
-          {/* edges — straight 2px lines from port centers (z-1 under nodes) */}
-          <svg width={CANVAS_W} height={CANVAS_H} className="pointer-events-none absolute left-0 top-0 z-[1]" aria-hidden>
-            {EDGES.map(({ from, to }) => {
-              const a = portXY(nodeById(from[0]), from[1]);
-              const b = portXY(nodeById(to[0]), to[1]);
-              return <line key={`${from.join('-')}-${to.join('-')}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--node-edge)" strokeWidth="2" />;
-            })}
-          </svg>
-
-          {/* nodes — focusable buttons; click toggles selection (ONE max) */}
-          {NODES.map((n) => {
-            const isSel = n.id === selected;
-            return (
-              <button
-                key={n.id}
-                type="button"
-                data-testid={`shell-color-node-${n.id}`}
-                aria-pressed={isSel}
-                aria-label={`${n.title} node${n.num ? ` ${n.num}` : ''}`}
-                onClick={() => clickNode(n.id)}
-                className="absolute z-[2] flex flex-col items-center"
-                style={{ left: n.x, top: n.y, width: cardW(n) }}
-              >
-                {hasTitle(n) && (
-                  <span className="mb-[6px] whitespace-nowrap text-[12px] font-medium text-tprimary" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                    {n.title}
-                  </span>
-                )}
-                <NodeCard n={n} selected={isSel} />
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {workspace}
     </div>
   );
 }

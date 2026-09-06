@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
 import { CheatSheet } from './CheatSheet';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
+import { useUi } from '../../state/useUiStore';
 
 /** 1280×800 host (§3.2 minimum) — jsdom ignores geometry, but the size keeps
  *  the DOM honest about the real mount contract. */
@@ -149,39 +150,61 @@ describe('mixer dock (design doc v2.2 §4 — side by side with the lanes)', () 
 });
 
 describe('page switching via the AppDock (spec 18 §4.8)', () => {
-  it('Edit → Color: rail = color sections + node-graph dock + scope strip + CONSOLE in the timeline area (R20-W4b D3 composition)', async () => {
+  it('Edit → Color: the R22-D1 composition — media pool stays, viewer dominant, inspector = color tabs, compact timeline (issues #77/#78/#79)', async () => {
     const user = userEvent.setup();
     renderAppShell();
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     await user.click(screen.getByTestId('shell-dock-page-color'));
     expect(store().page).toBe('color');
-    // timeline area = the ColorConsole (the full Timeline is GONE on this page)
-    expect(screen.getByTestId('shell-color-console')).toBeInTheDocument();
+    // timeline area = the compact strip (the full Timeline is GONE on this page)
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
-    // rail = the clip-level color sections (W3 grammar, same grade target)
-    expect(screen.getByTestId('shell-color-rail')).toBeInTheDocument();
+    // rail = the ColorInspector (the ONE grading surface, tabs under this panel)
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Color inspector tools' })).toBeInTheDocument();
     expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
-    // left dock = the node graph; under the viewer = the scope strip slot
-    expect(screen.getByTestId('shell-color-nodegraph')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
+    // left dock = the MEDIA POOL (Pool|Stills) — the node graph NEVER docks here (#77)
+    expect(screen.getByTestId('shell-leftdock')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-leftdock-tab-pool')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-leftdock-tab-stills')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-nodegraph')).not.toBeInTheDocument();
+    // the scopes console is OFF by default (nothing permanent under the viewer, #77)
+    expect(screen.queryByTestId('shell-color-scopes')).not.toBeInTheDocument();
+    // the node-graph console dock is OFF by default (#78)
+    expect(screen.queryByTestId('shell-color-nodedock')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Color' })).toHaveAttribute('aria-current', 'page');
-    // the console's lane strip + tab bar mount inside the timeline block
-    expect(screen.getByTestId('shell-color-console-lanes')).toBeInTheDocument();
-    expect(screen.getByRole('tablist', { name: 'Color console tools' })).toBeInTheDocument();
   });
 
-  it('the mixer dock does NOT render in color mode (the console owns the timeline row, color-layout §2.4)', async () => {
+  it('the R22 consoles: Scopes + Nodes toggle from the toolbar (#73), the mixer renders on color too', async () => {
     const user = userEvent.setup();
     renderAppShell({ mixerState: 'full' });
     expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument(); // edit page: side by side
     await user.click(screen.getByTestId('shell-dock-page-color'));
-    expect(screen.queryByTestId('mixer-dock-full')).not.toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-console')).toBeInTheDocument();
-    // leaving color restores the mixer dock
-    await user.click(screen.getByTestId('shell-dock-page-edit'));
+    // the mixer still renders on the color page (issue #73 — the toggle lives in Toolbar2)
     expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument();
-    expect(screen.queryByTestId('shell-color-console')).not.toBeInTheDocument();
+    // the scopes console: off → grid via the toolbar toggle, then minimize from the header
+    await user.click(screen.getByTestId('shell-toolbar-btn-scopes'));
+    expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-scopes-grid')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-scopes-layout-grid')).toHaveAttribute('aria-pressed', 'true');
+    // row layout: the 1×4 band
+    await user.click(screen.getByTestId('shell-color-scopes-layout-row'));
+    expect(screen.getByTestId('shell-color-scopes-layout-row')).toHaveAttribute('aria-pressed', 'true');
+    // minimize: the grid unmounts, the header row survives
+    await user.click(screen.getByTestId('shell-color-scopes-collapse'));
+    expect(screen.queryByTestId('shell-color-scopes-grid')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
+    // the nodes console dock: the workspace is scrollable + the dock clips (#74)
+    await user.click(screen.getByTestId('shell-toolbar-btn-nodes'));
+    expect(screen.getByTestId('shell-color-nodedock')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-nodegraph')).toBeInTheDocument();
+    // leaving color restores the standard timeline + drops the consoles
+    await user.click(screen.getByTestId('shell-dock-page-edit'));
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-nodedock')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-scopes')).not.toBeInTheDocument();
   });
 
   it('Audio dock button enters audio focus: page + full mixer + lane boost + SoundLibrary/ChannelEditor', async () => {
@@ -252,14 +275,16 @@ describe('inspector rail routing + toolbar panel toggles (R20-W3 D4 domains)', (
     expect(screen.getByTestId('inspector-breadcrumb')).toBeInTheDocument();
   });
 
-  it('the toolbar Project button swaps the rail to the read-only ProjectSheet (D4.4 descoped)', async () => {
+  it('R22-D5 (#87): the Project button is REMOVED from the toolbar; the ProjectSheet law stays (store-driven)', async () => {
     const user = userEvent.setup();
     renderAppShell();
-    await user.click(screen.getByTestId('shell-toolbar-btn-project'));
-    expect(store().inspectorProjectMode).toBe(true);
+    // the button is gone — the console toggles own the slot
+    expect(screen.queryByTestId('shell-toolbar-btn-project')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-toolbar-btn-effects')).not.toBeInTheDocument();
+    // the store law survives (dead-but-harmless field): project mode still
+    // swaps the rail when set directly, and a selection still exits it
+    act(() => { useUi.setState({ inspectorProjectMode: true }); });
     expect(screen.getByTestId('shell-inspector-project')).toBeInTheDocument();
-    // selecting any entity exits project mode (the store law) — el-1 has no
-    // A/V link pair, so the sheet lands on the single-clip entity
     await user.click(screen.getByTestId('clip-el-1'));
     expect(store().inspectorProjectMode).toBe(false);
     expect(screen.queryByTestId('shell-inspector-project')).not.toBeInTheDocument();
@@ -280,11 +305,11 @@ describe('inspector rail routing + toolbar panel toggles (R20-W3 D4 domains)', (
     expect(screen.getByTestId('shell-mediapool')).toBeInTheDocument();
   });
 
-  it('toolbar Effects toggle: the LeftDock tabs appear and the Effects tab carries the library (R19 th_mtoyt5fv — same area as the bin)', async () => {
+  it('LeftDock Effects tabs (panels.effects via the store — the toolbar button is gone, R22-D5/#86; the tab retires with the Effect view #82)', async () => {
     const user = userEvent.setup();
     renderAppShell();
     expect(screen.queryByTestId('shell-effects')).not.toBeInTheDocument();
-    await user.click(screen.getByTestId('shell-toolbar-btn-effects'));
+    act(() => { useUi.setState((s) => ({ panels: { ...s.panels, effects: true } })); });
     expect(store().panels.effects).toBe(true);
     // both panels on → the dock is tabbed; the POOL tab is active by default
     expect(screen.getByTestId('shell-leftdock-tab-pool')).toHaveAttribute('aria-selected', 'true');
@@ -298,7 +323,7 @@ describe('inspector rail routing + toolbar panel toggles (R20-W3 D4 domains)', (
   it('effect rows are drag sources: dragStart writes the fixed x-nle-effect payload (R14 wiring)', async () => {
     const user = userEvent.setup();
     renderAppShell();
-    await user.click(screen.getByTestId('shell-toolbar-btn-effects'));
+    act(() => { useUi.setState((s) => ({ panels: { ...s.panels, effects: true } })); });
     await user.click(screen.getByTestId('shell-leftdock-tab-effects'));
     const row = screen.getByTestId('shell-effects-row-gaussian-blur');
     expect(row).toHaveAttribute('draggable', 'true');
@@ -316,7 +341,7 @@ describe('inspector rail routing + toolbar panel toggles (R20-W3 D4 domains)', (
   it('clicking an effect row answers with the drag-to-clip toast (pointer fallback, R14)', async () => {
     const user = userEvent.setup();
     renderAppShell();
-    await user.click(screen.getByTestId('shell-toolbar-btn-effects'));
+    act(() => { useUi.setState((s) => ({ panels: { ...s.panels, effects: true } })); });
     await user.click(screen.getByTestId('shell-leftdock-tab-effects'));
     await user.click(screen.getByTestId('shell-effects-row-vignette'));
     expect(store().toasts.at(-1)).toMatchObject({
