@@ -1,8 +1,26 @@
 # PLAN — Long-Horizon Task Tracker (nle-core-spec)
 
 **Created:** 2026-09-02 (Round 8 wrap-up — user directive: push/backup every micro milestone; PLAN tracks the long horizon, HANDOFF tracks the next session only)
-**Current round:** 19 COMPLETE (`952a415`: wave 7 closed 9/9 + OT-seam deep pass — free-drag + insert-push, scrub bar, ghosts, track selection, 18-ui-shell v1.3 §16 designates shell-mini the FIRST MVP) → **Current round:** 16 IN PROGRESS → shell-mini MVP BOOTSTRAPPED (`96ea0db`, R16 A1-A4: design-audited + code-reviewed + 93 tests green) **and SERVING LIVE on port 3000** (R16 continuation session: origin PAT push DONE — GitHub reconciled via merge with the parallel R15-UI push, no force; Vite dev server daemonized via double-fork on :3000 behind Caddy :81 → the public preview URL IS the shell-mini app). **The horizon is now the A0-A7b assembly plan (spec 14 / ARCH-R15 §3.4), with the shell-mini track as the MVP-era UI surface.** R17+ = either (a) the user green-lights `nle-app` creation (week −1 pre-flight first — REVIEW-R15-EXEC §7's 12 items) or (b) further seal-polish rounds or (c) shell-mini iteration (v0.2: DnD + annotakit + keyboard-clip-focus).
+**Current round:** 21 COMPLETE (the P0 drag revert landed: R21 `0bc5fc4` = the full PR-69 review round by the sibling session + R21b `c8b174d` = the user's P0 executed — R19+R20 drag rewrites reverted to the R18k clamp law, nearest-magnet user-endorsed to survive; R21-2 (this session) verified everything in a fresh sandbox, landed the forensics record `.agents/design/r21-p0-forensics.md` + the wrap docs). **The horizon is the A0-A7b assembly plan (spec 14 / ARCH-R15 §3.4), with the shell-mini track as the MVP-era UI surface.** Next: the user's next review round on the reverted drag + R21's PR69 fixes; the variants stream is mid-color-wave (W4c landed 08:44Z).
 **Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec (PAT shared in-session, kept in local `.git/config` + chat only — NEVER commit it; GitHub's secret scanner blocks token-bearing pushes). GitLab mirror remains the second remote (WAF 403s are probabilistic — retry).
+
+---
+
+## Round 21 (2026-09-06) — the P0 drag-revert round (COMPLETE, executed across two parallel sessions)
+
+**User ask (P0, `ui-mock/shell-mini/user-msg`, pushed 07:46Z — 32 min after R20):** "revert all the recent 'drag' related timeline 'fixes'... the last two rounds of changes related to timeline drag support should be all reverted. related to new issue opened issue#57 from annotekit too."
+
+**Landed (sibling session, `0bc5fc4` + `c8b174d`):**
+- R21 (PR #69 review round): all 56 inline comments — 8 P2 + 38 P3 + 10 CodeRabbit (Space-yields-to-focused-control, Enter-only clip activation, singleton usePlayhead, e.repeat guards, gesturePending window, tick interaction-lock, zoom anchor-at-playhead, edge auto-scroll on ruler, Lane/MinLane dedup via useLaneDnd + RulerScrub, toast pause/TTL/close, vendor hardening C28-C45: origin validation, Link-rel=next same-origin, store-queue liveness, GIT_CONFIG env auth, dist rebuild; a11y sweep; tests 317→354).
+- R21b (the P0): R19+R20 drag-law rewrites REVERTED to the R18k clamp law — previewMove = clampMove; endDrag = commit-if-changed; plain-Doc history entries; the escape/refuse/mint/rebind machinery + verdict affordances DELETED. KEPT (user-endorsed / drag-neutral): nearest magnet (PR-69 C17 + the user's 08:44Z PR reply: "The nearest law survives the drag revert"), frozen magnet field, commit-at-UP, moveClip wouldOverlap refusal, capture guards, trim ghosts, mute, ladder, scrubbing. Tests 354→343 (clamp pins at geometry/store/component level). README deviation #22 REVERTED + new #35; OT-SEAMS drag rows tombstoned as the seam map for a future USER-REQUESTED retry.
+
+**Landed (this session, R21-2 — the verification + forensics + wrap round):**
+- Independent verification in a fresh sandbox: tsc 0, vitest 343/343, vite + storybook builds green; live browser drags (c2 across c1: neighbors frozen, clamp at 3.5s, no chip, zero page errors).
+- `.agents/design/r21-p0-forensics.md` — the timeline forensics (author-date -0700 offsets + server push events → "the last two rounds" = R19+R20, the only coherent reading), the R21-R1 adversarial review record, the strict-vs-pragmatic divergence resolution (the user's PR reply adjudicated), the parallel-session race record.
+- PLAN/HANDOFF/SKILL wrap (the sibling session had not updated them); user-msg consumed.
+- This session's own strict-reading revert (committed 08:56Z, 17 min AFTER the sibling's 08:39Z R21b) was discarded via `reset --hard origin/main` — the remote is canon; the divergence points are registered, not re-litigated.
+
+**Standing next:** the user's next review round on the reverted drag + the R21 PR69 fixes; issue #57 stays the variants stream's queue; quiet-window chores: annotakit vendor v0.5.2 upgrade, the OT-SEAMS tombstoned drag rows as the map for any future USER-REQUESTED drag retry; if the user wants the stricter revert variants (silent moveClip / last-move commit), each is a one-small-commit change registered in the forensics doc §3.
 
 ---
 

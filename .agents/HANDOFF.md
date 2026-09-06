@@ -1,27 +1,56 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-05 (late), end of the R18 session (user-corrected serving
-layout: the full Storybook dev server owns :3000; R16 workaround stack
-reverted; core history: R16 `96ea0db` → `be1f141` → the origin-merge commit →
-R17 parallel-stream merge `3fb3360`). Parallel R15-UI round content is folded
-below — it is COMPLETE on origin and its standing items are preserved.
-**Scope of this file:** IMMEDIATE next session ONLY. Long horizon lives in
-`.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`
-(R15-UI = #47-51, R16 = #53-58 — renumbered after the collision).
+**Written:** 2026-09-06 ~09:0xZ, end of the R21-2 session (the P0
+drag-revert round). **READ THIS SECTION FIRST — everything below the
+`-----` divider is R18-era serving/environment detail that is still
+ACCURATE as background (env layout, :3000 ownership, annotakit kit,
+mirror repo) but predates R19/R20/R21.**
 
-> **Per-env :3000 ownership (user directive, R17):** there are TWO parallel
-> streams with SEPARATE sandboxes. The shell-mini stream's env serves
-> shell-mini (as described below — that's THEIR env). The shell-variants
-> stream's env (chat `4deec8a5`) serves **shell-variants' own Storybook 10.6
-> dev on :3000** via `ui-mock/shell-variants/scripts/sb3000.py` (double-fork
-> daemon, PPID=1) from the persistent runtime copy at
-> `/home/z/my-project/shell-variants` — same Host law
-> (`core.allowedHosts: true`), same restorer pattern
-> (`scripts/boot-restore.sh`, iso `/home/z/my-project/.zscripts/dev.sh`),
-> plus the orphan `annotakit` branch on origin for threads.db git-push
-> durability. "Serve YOURS in this env" — do not cross-stream-serve.
+## Current state (R21 — the P0 is DONE)
 
----
+- **The user's P0 (user-msg, 07:46Z) is EXECUTED**: the R19 (insert-push)
+  and R20 (OT-faithful escape) drag-law rewrites are REVERTED; the drag is
+  the R18k clamp law again (mover clamps between same-track neighbors;
+  neighbors never move; plain-Doc history entries; verdict chips/rings
+  gone). Executed by the sibling session as `c8b174d` (R21b) on top of
+  `0bc5fc4` (R21 — the full PR-69 review round: 56 comments, vendor
+  hardening, a11y sweep, 343/343 tests). Verified independently by THIS
+  session in a fresh sandbox: tsc 0, 343/343, vite + storybook builds
+  green, live drags clean (neighbors frozen, clamp, no chip, zero page
+  errors). Forensics + the race record: `.agents/design/r21-p0-forensics.md`.
+- **user-msg is CONSUMED** (deleted in the R21-2 wrap commit — the full
+  text is quoted in the R21b commit message + the forensics doc). If a new
+  user-msg appears, read it FIRST and re-fetch origin before acting
+  (SKILL #81: the sibling sessions race).
+- **The strict-vs-pragmatic divergence is registered, not open**: the
+  nearest magnet survives the revert (the user's own PR-69 reply at 08:44Z
+  demands it); commit-at-UP + moveClip refuse+toast are the sibling's
+  documented keeps. If the user wants the stricter variants (silent
+  moveClip, last-move commit), each is a one-small-commit change — see
+  forensics doc §3.
+- **Issue #57** (the P0's referenced annotakit thread) is a shell-VARIANTS
+  review issue ("Full Shell — Audio Focus — shouldn't show half and crop
+  by half") — THEIR queue, not the mini's (cross-stream-serve prohibition).
+- **The variants stream is mid-color-wave** (R20 W4a-W4c landed through
+  08:44Z: real color math, grade state/console, graded viewer + scopes).
+  Expect their commits to interleave with yours — merge-first, never force.
+
+## Next session scope (immediate)
+
+1. **The user's next review round** on (a) the reverted drag feel and
+   (b) the R21 PR-69 fixes — watch the annotakit mirror
+   (melodietexoss/shell-mini-review — PAT owner, NOT our two PATs; threads
+   also live in the orphan `annotakit` branch store) + a possible new
+   `user-msg` file.
+2. Quiet-window chores (standing): annotakit vendor upgrade to v0.5.2
+   upstream; the OT-SEAMS tombstoned drag rows are the seam map for any
+   future USER-REQUESTED drag retry (never re-architect drag unprompted —
+   two consecutive user rejections, R19 AND R20).
+3. Long horizon: the A0-A7b assembly plan (spec 14 / ARCH-R15) — the
+   mini stays the MVP-era UI surface.
+
+-----
+
 
 ## What is LIVE right now (the headline — R18 layout)
 

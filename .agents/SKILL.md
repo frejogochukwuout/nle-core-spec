@@ -1276,3 +1276,46 @@ port), not what any env currently runs.
     batch, re-grep the target symbols before re-running the "same" batch —
     construct the new batch against what's actually on disk, not what the
     error message implies.
+
+## R21 meta-learnings (the P0 drag-revert round — forensics + the parallel-session race)
+
+81. **FETCH IMMEDIATELY BEFORE EXECUTING a P0-class directive — the user
+    runs parallel sessions that may have already acted.** This session
+    restored context from a fetch taken at ~08:1x, spent ~40 minutes
+    executing the full P0 revert + gates + live verification, and pushed at
+    08:56 — 17 minutes AFTER a sibling session had already landed the same
+    directive (08:39Z) on a RICHER base this session never had (their R21
+    PR-69 round). The push rejection was the first signal of the race; the
+    correct response was `reset --hard origin/main` (remote = canon, never
+    force push) + salvage of the unique deltas (forensics + wrap docs).
+    Law: after context restore, ALWAYS `git fetch` + `git log HEAD..origin/main`
+    right before starting execution of any user directive — cheap
+    insurance against an entire wasted round.
+
+82. **Commit-date forensics for cross-timezone directives: the display
+    lies, the offsets don't.** The user-msg commits DISPLAYED as 00:44-00:45
+    while the mini rounds displayed 06:04/07:13 — a naive read places the
+    user's revert order BEFORE both drag rewrites (contradiction). The
+    truth: `%ai` showed the user-msg authored at **-0700** (Pacific) = 
+    07:44-07:45Z, and the GitHub events API push timestamp (07:46:00Z)
+    confirmed it — 32 minutes AFTER R20. `git log`'s default display mixes
+    author timezones into one local view. Law: for any "which came first"
+    question involving commits from different authors, check raw `%ai`
+    offsets AND the server-side push events
+    (`GET /repos/:owner/:repo/events` → PushEvent created_at) before
+    ruling on intent.
+
+83. **A "revert the last two rounds" order has a strict and a pragmatic
+    reading — reconcile with the user's NEWER review comments before
+    choosing.** Strict (this session): revert every drag-touched change
+    including commit-at-UP, nearest-magnet, and the moveClip refuse+toast.
+    Pragmatic (the sibling session that shipped): revert the drag LAW (the
+    drop resolution/escape machinery), keep gesture-composition details
+    with documented user endorsements. The user had already adjudicated on
+    the PR ("The nearest law survives the drag revert — it's a PR-69 C17
+    requirement", 08:44Z) — a comment this session hadn't read because it
+    examined the tree but not the PR review threads. Law: before executing
+    a revert directive, sweep the PR review comments + issue threads for
+    POST-DIRECTIVE endorsements that constrain the revert scope; when both
+    readings are defensible, register the divergence for the user instead
+    of re-litigating unilaterally.
