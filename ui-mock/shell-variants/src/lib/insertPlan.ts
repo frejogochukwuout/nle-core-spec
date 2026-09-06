@@ -70,8 +70,17 @@ export type InsertPatchOp =
   | { op: 'patchElement'; trackId: string; id: string; fields: Partial<ElementJSON> };
 
 export interface InsertPlanGeometry {
-  /** where the NEW clip lands (fitToFill carries the computed rate). */
-  ghost?: { trackId: string; start: number; dur: number; speed?: number; laneIndex: number; laneKind: TrackJSON['kind'] };
+  /** where the NEW clip lands (fitToFill carries the computed rate).
+   *
+   * `laneIndex` is WORKING-scene numbering — the planner mutates its private
+   * clone (placeOnTop's minted track spliced in), so the index is the
+   * POST-COMMIT lane number. `insertLineAfter` (R20-W6FIX P2-1) is set when
+   * the plan MINTS a track: the LIVE-scene splice index the new track enters
+   * at — the renderer draws the ghost at that INSERT LINE
+   * (laneTopAt(insertLineAfter)), never at a lane-index walk over the LIVE
+   * array (the prefix above the splice is identical, so the two agree for
+   * today's single mint site — the field pins the law by construction). */
+  ghost?: { trackId: string; start: number; dur: number; speed?: number; laneIndex: number; laneKind: TrackJSON['kind']; insertLineAfter?: number };
   /** reference arrow grammar: down = the source enters the track, right =
    *  followers shift (insert/ripple only — the reference shows the right
    *  arrow in exactly those two views). */
@@ -322,7 +331,12 @@ export function planInsertMedia(
     if (Math.abs(rate - srcDur / span) > 1e-6) {
       return { ...base, reason: { kind: 'error', title: 'Fit to Fill', detail: `source ${srcDur.toFixed(1)}s cannot fill ${span.toFixed(1)}s within the rate clamp [${RATE_MIN}, ${RATE_MAX}] — refusing rather than silently mis-fitting` } };
     }
-    const t = resolveTargetTrack(wscene, type, ctx);
+    /* P2-4 (R20-W6FIX): fitToFill NEVER retargets through the selection —
+       R19's law (first unlocked lane of the media's kind) stands; the
+       contract's §5(b) selection fallback belongs to the 5 shared modes
+       only. Pinned: a selection whose track accepts the source type must
+       NOT hijack the fit-to-fill lane. */
+    const t = resolveTargetTrack(wscene, type, ctx, { retarget: false });
     if (!t) {
       /* the no-op guard: withHistory returning undefined (every compatible
          lane locked) must NOT hear the success toast — refusal here. */
@@ -344,6 +358,10 @@ export function planInsertMedia(
 
   /* ---- shared placement: insert / overwrite / append / placeOnTop / rippleOverwrite ---- */
   let track: TrackJSON | undefined;
+  /** P2-1 (R20-W6FIX): set when THIS plan mints a track — the live-scene
+   * splice index, carried on the ghost so the preview renders at the insert
+   * line instead of trusting working-scene lane numbering. */
+  let plannedTrackInsert: number | undefined;
   if (mode === 'placeOnTop' && type !== 'audio') {
     // P2 (R19-REV): place-on-top is a VISUAL-lane concept; audio has no
     // "top" — audio media falls through to its own kind routing below
@@ -355,9 +373,12 @@ export function planInsertMedia(
       track = { id: idFactory('t-overlay-'), kind: 'overlay', name: 'Text 2', badge: 'T2', muted: false, solo: false, locked: false, visible: true, elements: [] };
       wscene.tracks.splice(insertIndex, 0, track);
       ops.push({ op: 'createTrack', trackId: track.id, track, insertIndex });
+      plannedTrackInsert = insertIndex;
     }
   } else {
-    track = resolveTargetTrack(wscene, type, ctx);
+    // P2-4 (R20-W6FIX): the selection retarget is the 5 shared modes' law
+    // (contract §5(b)); fitToFill passes retarget:false — see its branch.
+    track = resolveTargetTrack(wscene, type, ctx, { retarget: true });
   }
   if (!track) {
     return { ...base, reason: { kind: 'error', title: 'Edit action', detail: `no unlocked ${laneWord(type)} lane for ${m.name} (locked lanes refuse placement — spec 06)` } };
@@ -448,6 +469,7 @@ export function planInsertMedia(
   ops.push({ op: 'insertElement', trackId: track.id, element: el });
 
   geometry.ghost = ghostOf(track, time, dur);
+  if (plannedTrackInsert !== undefined) geometry.ghost.insertLineAfter = plannedTrackInsert; // P2-1 insert line
   geometry.displaced = displaced.length > 0 ? displaced : undefined;
   geometry.arrows = { down: true, right: displaced.length > 0 };
   // insert straddlers keep their split tick (set above); overwrite family
@@ -461,22 +483,34 @@ export function planInsertMedia(
 
 /* ---- target resolution (thread #65 / contract §5, DESIGN-R20 D2 audio
    routing): TYPE WINS. (a) an explicit targetTrackId (the pool drop path)
-   is validated for kind compatibility + lock; (b) a selected element whose
-   track ACCEPTS the source type retargets there ("target track of selected
-   clip" — same-kind convention; a video clip selected under an audio
-   source is IGNORED, never obeyed); (c) media-type default = first
-   unlocked lane of the routed kind. A locked retarget candidate falls
-   through to (c) — the refusal law stays "no unlocked compatible lane
-   AT ALL", exactly today's shape. ---- */
-function resolveTargetTrack(scene: SceneJSON, type: ElementType, ctx: InsertPlanContext): TrackJSON | undefined {
+   is validated for kind compatibility + lock; (b) a selected element of
+   the SAME ELEMENT KIND as the source retargets there ("target track of
+   selected clip", contract §5(b) — R20-W6FIX P2-4: the pre-W6 reading
+   tested whether the selected element's TRACK ACCEPTS the source type,
+   which let a video source retarget through a selected TEXT/IMAGE clip
+   onto the overlay lane; the contract's law is exact element-type
+   equality — video retargets via a selected VIDEO clip, audio via AUDIO,
+   image via IMAGE; a different-kind selection is IGNORED, never obeyed);
+   (c) media-type default = first unlocked lane of the routed kind. A
+   locked retarget candidate falls through to (c) — the refusal law stays
+   "no unlocked compatible lane AT ALL", exactly today's shape.
+   `retarget:false` (fitToFill) skips (b) entirely — R19's kind-lane law. ---- */
+function resolveTargetTrack(
+  scene: SceneJSON,
+  type: ElementType,
+  ctx: InsertPlanContext,
+  opts: { retarget: boolean },
+): TrackJSON | undefined {
   if (ctx.targetTrackId) {
     const t = scene.tracks.find((x) => x.id === ctx.targetTrackId);
     if (t && !t.locked && trackAcceptsElement(t.kind, type)) return t;
     return undefined; // explicit target refused → honest refusal, never silent redirect
   }
-  const selHit = ctx.selection
-    .map((id) => findInScene(scene, id))
-    .find((h): h is { el: ElementJSON; track: TrackJSON } => !!h && trackAcceptsElement(h.track.kind, type) && !h.track.locked);
+  const selHit = opts.retarget
+    ? ctx.selection
+        .map((id) => findInScene(scene, id))
+        .find((h): h is { el: ElementJSON; track: TrackJSON } => !!h && h.el.type === type && !h.track.locked)
+    : undefined;
   const wantKind: TrackJSON['kind'] = type === 'audio' ? 'audio' : type === 'image' ? 'overlay' : 'main';
   return selHit?.track ?? scene.tracks.find((t) => t.kind === wantKind && !t.locked);
 }

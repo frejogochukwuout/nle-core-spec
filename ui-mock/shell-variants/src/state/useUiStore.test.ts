@@ -1963,6 +1963,47 @@ describe('R19: insertMediaAt — the 7 Resolve edit functions (real placement)',
   });
 });
 
+/* R20-W6FIX (P2-4): the retarget law is now SAME-ELEMENT-KIND (contract
+   insert-modes.md §5(b)) — the selection fallback fires only when the
+   selected clip's TYPE equals the source's mapped type; the pre-W6
+   "selected element's TRACK accepts the source type" reading let a video
+   source retarget through a selected TEXT/IMAGE clip onto the overlay.
+   fitToFill never retargets at all (R19's first-unlocked-kind-lane law).
+   The positive same-kind direction is pinned at the planner level
+   (insertPlan.test.ts, synthetic overlay-resident video/image elements). */
+describe('R20-W6FIX P2-4: insertMediaAt retargets by SAME ELEMENT KIND (contract §5(b))', () => {
+  it('video source + TEXT clip selected → places on MAIN, not the selected clip\'s overlay lane', () => {
+    act(() => { S().setSelection(['el-5']); }); // el-5 = text on tr-overlay-1
+    act(() => { S().setPlayhead(12); });
+    act(() => { S().insertMediaAt('m-03', 'insert'); });
+    const main = track('sc-1', 'tr-main').elements;
+    expect(main.find((e) => e.mediaId === 'm-03' && e.startTime === 12)).toBeDefined();
+    // the overlay lane NEVER received it (the old track-accepts reading landed there)
+    expect(track('sc-1', 'tr-overlay-1').elements.some((e) => e.mediaId === 'm-03')).toBe(false);
+  });
+
+  it('audio source + VIDEO clip selected → the audio lane (type wins)', () => {
+    act(() => { S().setSelection(['el-1']); });
+    act(() => { S().insertMediaAt('m-07', 'append'); });
+    const a1 = track('sc-1', 'tr-audio-1').elements;
+    expect(a1.at(-1)!.mediaId).toBe('m-07');
+    expect(a1.at(-1)!.startTime).toBe(30); // lane tail, after el-6
+    expect(a1.at(-1)!.type).toBe('audio');
+  });
+
+  it('fitToFill NEVER retargets: an overlay-resident selection cannot hijack the lane', () => {
+    // el-5 (text) lives on tr-overlay-1, which ACCEPTS video — the pre-W6
+    // retarget would have fit-to-filled onto the overlay; the kind law
+    // (first unlocked lane of the media's kind = main) stands
+    act(() => { S().setSelection(['el-5']); });
+    act(() => { S().insertMediaAt('m-05', 'fitToFill'); });
+    const fitted = track('sc-1', 'tr-main').elements.find((e) => e.mediaId === 'm-05' && Math.abs(e.duration - 26) < 0.01);
+    expect(fitted).toBeDefined();
+    expect(fitted!.speed).toBeCloseTo(12.8 / 26, 4);
+    expect(track('sc-1', 'tr-overlay-1').elements.some((e) => e.mediaId === 'm-05')).toBe(false);
+  });
+});
+
 describe('R19: activeTrackOf (inspector empty-selection fallback)', () => {
   it('derivation: focused track wins, then topmost visual under the playhead, then main', () => {
     const sc = project.scenes[0];

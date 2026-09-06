@@ -377,22 +377,6 @@ function canApplyMovesToTracks(tracks: TrackJSON[], moves: PlannedMove[]): boole
   return true;
 }
 
-/** the ghost geometry helper: cumulative lane top for a track index over the
- *  variant-aware lane heights (content space; the caller adds the ruler zone
- *  offset). Pure math, exported for the Timeline's preview walk. */
-export function laneBandTops(
-  trackCount: number,
-  laneHeight: (index: number) => number,
-): number[] {
-  const tops: number[] = [];
-  let top = 0;
-  for (let i = 0; i < trackCount; i++) {
-    tops.push(top);
-    top += laneHeight(i);
-  }
-  return tops;
-}
-
 /** map the resolution's insertIndex-space plans onto the store's commit
  *  shape ({id, kind, insertAboveTrackId}). Block entries share ONE anchor
  *  track — the track at the block's start index — because sequential

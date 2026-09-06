@@ -156,6 +156,14 @@ export function CurvesPanel() {
                 }}
                 onPointerUp={commitDrag}
                 onPointerCancel={() => setDrag(null)}
+                /* R20-W6FIX (P3): LOST-POINTER-CAPTURE COMMITS — the same law
+                   as every color-page slider (controls.tsx MicroSlider,
+                   WheelsPanel puck, QualifierPanel handles): capture loss is
+                   the terminal gesture event, so the transient buffer lands
+                   as ONE undoable commit (the D3 law), never a silent revert.
+                   (Clip fade handles / ruler brackets intentionally DISCARD —
+                   their gestures re-derive from doc state; the color family
+                   is the majority law and this panel matches it.) */
                 onLostPointerCapture={commitDrag}
                 onKeyDown={(e) => {
                   const s = keyStep(e);

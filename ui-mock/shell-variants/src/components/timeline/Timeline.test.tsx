@@ -1101,3 +1101,36 @@ describe('R15-F1 FIX 1 (end-to-end): the Alt+drag repro gesture through the REAL
     expect(overlay.elements.find((e) => e.id === 'el-5')!.startTime).toBe(8.75);
   });
 });
+
+/* ---- R20-W6FIX (P2-1): the hover-placement preview's MINTED-track ghost ---- */
+
+describe('R20-W6FIX P2-1: placeOnTop minted-track ghost renders at the INSERT line', () => {
+  it('NO unlocked overlay (tr-overlay-1 locked) → the minted ghost sits at the planned insert line, overlay-shaped', () => {
+    // lock the fixture's ONLY overlay → placeOnTop mints a new track above
+    // main (splice at live index 1, the main lane's top edge)
+    act(() => { useUi.getState().toggleTrackCmd('sc-1', 'tr-overlay-1', 'locked'); });
+    boot({ playhead: 2, hoverInsertPreview: { mediaId: 'm-08', mode: 'placeOnTop' } });
+    const ghost = screen.getByTestId('insert-preview-ghost');
+    // the ghost targets the PREVIEW-MINTED track (never a live track id)
+    expect(ghost.getAttribute('data-track-id')).toMatch(/^preview-t-overlay-/);
+    expect(ghost).toHaveAttribute('data-start', '2');
+    expect(ghost).toHaveAttribute('data-dur', '4');
+    /* the INSERT LINE (readout header zone 44 + tr-overlay-1's filmstrip 60
+       = 104): the new lane's post-apply top — the prefix above the splice.
+       The ghost sits there (top 104 + 2 inset) with OVERLAY geometry
+       (60 − 4 inset = 56 tall), NOT on the main lane's band (a main-lane
+       ghost would carry main's 80px height — the one-lane-off failure the
+       review pinned). */
+    expect(ghost.style.top).toBe('106px');
+    expect(ghost.style.height).toBe('56px');
+    // the plan is armed for the source + mode under test
+    expect(store().hoverInsertPreview).toEqual({ mediaId: 'm-08', mode: 'placeOnTop' });
+  });
+
+  it('an unlocked overlay stays the placeOnTop target (no mint, no insert line)', () => {
+    boot({ playhead: 2, hoverInsertPreview: { mediaId: 'm-08', mode: 'placeOnTop' } });
+    const ghost = screen.getByTestId('insert-preview-ghost');
+    expect(ghost).toHaveAttribute('data-track-id', 'tr-overlay-1');
+    expect(ghost.style.top).toBe('46px'); // zone 44 + 2 — lane 1 (the overlay)
+  });
+});

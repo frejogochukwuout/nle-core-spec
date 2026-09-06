@@ -1047,7 +1047,15 @@ export function Timeline() {
                toolbar's role=status description, not this layer. ---- */}
           {insertPreview?.ok && insertPreview.geometry.ghost && (() => {
             const g = insertPreview.geometry.ghost;
-            const laneTop = laneTopAt(g.laneIndex);
+            /* R20-W6FIX (P2-1): a plan that MINTS a track (placeOnTop with
+               no unlocked overlay) splices it into the LIVE track array at
+               ghost.insertLineAfter — render at that INSERT LINE, the live
+               prefix above the splice (the new lane's post-apply top).
+               laneIndex alone is working-scene numbering (the mint is
+               already spliced into the planner's clone) and only coincides
+               with a LIVE-array walk for the current single mint site; the
+               explicit insert-line law pins the ghost by construction. */
+            const laneTop = laneTopAt(g.insertLineAfter ?? g.laneIndex);
             const laneH = laneHeightOf(g.trackId, g.laneKind);
             const gLeft = g.start * pxPerSec;
             const gWidth = Math.max(6, g.dur * pxPerSec);

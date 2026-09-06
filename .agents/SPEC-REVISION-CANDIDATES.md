@@ -442,3 +442,42 @@ SKILL meta-learning: check the ledger BEFORE minting gap ids in a design doc.)
   strip).
 - Fader/scale/meter equal-height law + 86px strips + piecewise dB display taper (model
   stays linear −60..+6; view-layer map), FX chip rack on real inserts.
+
+---
+
+## I. R20 registrations (shell-variants round 2 — the unified C45–C58 ledger)
+
+Round R20 minted its gap ledger in two contract drafts (insert-modes C45–C49,
+color-layout C45–C52) before DESIGN-R20 D6 unified them into ONE **C45–C58**
+series. This §I block is the ledger's authoritative copy for the seal round
+(source: DESIGN-R20.md D6 + the two contracts' detail rows; status reflects
+the shipped W0–W5 implementation). The D6 map, verbatim:
+
+| draft (in contract) | unified |
+|---|---|
+| insert-modes C45–C49 | C45–C49 (1:1, no change) |
+| color-layout C45 (grade sidecar) | C50 |
+| color-layout C46 (console layout) | C51 |
+| color-layout C47 (CPU preview) | C52 |
+| color-layout C48 (real scopes) | C53 |
+| color-layout C49 (qualifier) | C54 |
+| color-layout C50 (curves) | C55 |
+| color-layout C51 (node binding) | C56 |
+| color-layout C52 (clip color inspector rail) | folded into C51 (one sentence) |
+
+| # | Mock invention / gap | Spec clause touched | Where / status |
+|---|---|---|---|
+| C45 | **7-mode source edit-function family** — insert/overwrite/append/placeOnTop/rippleOverwrite/replace/fitToFill mapped to OT: only `timeline.insert` exists (and it is reject-not-shift, not ripple); overwrite/replace/rippleOverwrite/fitToFill are command composites (split+delete+insert / +retime), placeOnTop is engine-only `insertElementOnNewTrack`, append is insert-at-totalDuration | 06 §5.9 (add an "edit functions" subsection enumerating the family as composites), 15 §13.15 (InsertCommand `ripple` param already listed as wire-need) | lib/insertPlan.ts (pure plan/apply split, R20-W2) + useUiStore.applyInsertPlan — mock-real, ONE undo entry per op; OT @4d56c17 verified read-only |
+| C46 | **Source-transport insertion-mode cluster** — the 7 one-shot mode buttons live in the SOURCE-preview transport row (single-viewer adaptation of Resolve's under-source edit overlay / Premiere's source-monitor Insert/Overwrite); program monitor hosts no edit ops; NOT a radiogroup (no persistent mode — no NLE has one) | 18 §4.3 v1.2 (source-preview chrome contract) | components/shell/SourceEditBar.tsx (replaces the R19 program-monitor EditOverlay dock, removed per issue #63); kebab overflow <560px carries the APG menu keyboard law (R20-W6FIX P2-3) |
+| C47 | **Audio-source track routing law** — media-type routing overrides selection-kind when incompatible (audio-only source → audio lane even when a video clip is selected); selection of the SAME element kind retargets ("target track of selected clip" — R20-W6FIX P2-4 tightened to exact element-type equality per contract §5(b); fitToFill never retargets); frozen/untargetable wrong-kind lanes while an audio source is loaded | 06 §5.9 edge cases, 18 §4.3 | lib/insertPlan.ts resolveTargetTrack + Timeline.tsx frozen-lane affordance (source-mode only) |
+| C48 | **Hover-placement preview** — plan/apply split so preview == commit BY CONSTRUCTION (the same pure planner); timeline renders ghost/displaced-arrows/overwrite-shading/split-tick/speed-badge from the plan (reference timeline_edit_modes (2).html grammar); NO NLE precedent for button-hover placement preview (drag-preview grammar extended) | 18 §4.3/§9 (preview-geometry contract), 05 §5 placement (dry-run form) | hooks/useInsertPreview.ts + Timeline.tsx insert-preview layer; preview ids via a counting-only fake factory (never advances the store counter); R20-W6FIX P2-1 added ghost.insertLineAfter so a minted track's ghost renders at the planned insert line |
+| C49 | **Audio hover-dwell autoplay = waveform motion** (extends C42) — pool audio cards get a waveform-motion preview on ≥400ms dwell (sweep line across the deterministic bars; video gets ken-burns) | 18 §4.2 (C42's poster-frame round extended to audio) | MediaPool.tsx (thread #68 / th_mtp97ipa) |
+| C50 | **mockGrades sidecar + undo snapshot extension** — `Record<elementId|'timeline', GradeParams & {curves}>` beside the doc (mockMixer precedent, NEVER on ElementJSON); withHistory snapshots the sidecar so grades undo/redo round-trip | 08 §4.2 (verbatim field names), 09 (no color fields on the model — sidecar ruling needed) | state/mockGrades.ts + useUiStore setGrade/resetGrade; the `'timeline'` key is a POST-clip sequential second pass (README deviation) |
+| C51 | **ColorConsole layout (incl. clip-rail)** — the color page's timeline area is a console (frozen lane strip, click-to-target clips, [Primaries|Curves|Qualifier] tabs) + the clip color inspector rail folded in | 18 §4.8 (color-mode composition) | pages/color/ColorConsole.tsx |
+| C52 | **CPU preview pipeline** — decode → linear → §4.2 grade stack (clip then timeline) + curve-LUT bake + qualifier → encode, ≤960×540 working res, rAF-coalesced, per-mediaId decode cache | 08 §4.2/§5.2/§12 (cache strategy) | pages/color/GradedViewerCanvas.tsx + lib/color/* (W4a math libs) |
+| C53 | **Real scopes** — Waveform/Parade/Vectorscope plotting REAL data from the graded buffer (density-alpha cells, BT.601 + §11.3 graticule, 10fps throttle) — **SUPERSEDES §H C43** (the seeded-trace ColorScopesDock/scopeTraces.ts were deleted in R20-W4b; C43's deterministic-trace stopgap is retired, append-only note on C43's row above) | 08 §11 (scope accuracy), 04 (render readback) | pages/color/ColorScopeStrip.tsx + lib/color/scopesMath.ts |
+| C54 | **Qualifier HSL keying** — circular hue distance w/ wraparound, soft sat/lum windows, mask+invert+strength; viewer matte overlay + eyedropper sampling the graded buffer | 08 §8.1 | pages/color/QualifierPanel.tsx + lib/color/qualifierMath.ts |
+| C55 | **Curves tab** — REAL monotone piecewise-cubic spline editor (Fritsch–Carlson, no overshoot); points in GradeParams.curves; the 256-entry LUT bake composes in the viewer | 08 §5 (curves as a separate bake), §5.2 | pages/color/CurvesPanel.tsx + curveMath.ts |
+| C56 | **Node-graph → grade binding** — the graph's primaries/qualifier nodes bind to the target grade record; other node types honest-toast | 08 (node pipeline implied by the effect chain), 18 §15.3 | pages/color/ColorNodeGraph.tsx |
+| C57 | **Per-track height overrides + per-track FX home** — trackHeightOverrides view-state (5px resize strip, drag/±4px ⇧16/dbl-click reset, min 24/32 max 240) composed pref×boost with the yield rule; view state, never snapshotted | 05 §12.2, 18 §4.9 (Height rows/pref) | useUiStore.setTrackHeight + TrackHeader.tsx + Timeline.tsx laneHeightOf |
+| C58 | **Project-level properties** — read-only ProjectSheet (D4.4 descoped); full per-stage design pending; also carries the 18 §4.4/§11.6 tab-strip deviation note (type-driven inspector, R20-W3) | 18 §4.4/§11.6, 09 (project-level property home) | components/shell/Toolbar2.tsx ProjectSheet (registered in README) |

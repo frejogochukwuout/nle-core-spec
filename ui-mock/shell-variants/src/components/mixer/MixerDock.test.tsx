@@ -109,7 +109,10 @@ describe('MixerDock', () => {
     // D1.4/B4: from `meters` the cycle lands on FULL on both pages — the old
     // "Collapse mixer rail" quirk label is replaced by an honest state name
     const btn = screen.getByRole('button', { name: 'Mixer: meter columns (click for full strips)' });
-    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    /* R20-W6FIX (P2-2): the dock IS open in the meters state — the pressed
+       value is DERIVED (mixerState !== 'collapsed'), not the hard-coded
+       false the review caught lying. */
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
     expect(btn.querySelector('svg')!.getAttribute('class')).toContain('lucide-panel-right'); // PanelRight glyph (B4)
     fireEvent.click(btn);
     expect(store().mixerState).toBe('full');

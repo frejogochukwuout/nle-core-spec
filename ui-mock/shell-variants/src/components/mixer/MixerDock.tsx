@@ -150,6 +150,12 @@ function MetersDock() {
   const toggleMasterMute = useUi((s) => s.toggleMasterMute);
   const cycleMixerState = useUi((s) => s.cycleMixerState);
   const page = useUi((s) => s.page);
+  /* R20-W6FIX (P2-2): the expand button's pressed state derives from the
+     ACTUAL dock state (open = mixerState !== 'collapsed') — the dock IS
+     open in the meters state, so the old hard-coded aria-pressed={false}
+     was a lie to assistive tech. The label/data-tip still names the state
+     + next cycle stop (B4). */
+  const open = useUi((s) => s.mixerState !== 'collapsed');
   const audio = scene.tracks.filter((t) => t.kind === 'audio');
   const ref = useRef<HTMLDivElement>(null);
   // B1 budget: N columns + the pinned master column + rail padding
@@ -200,7 +206,7 @@ function MetersDock() {
           onClick={() => cycleMixerState()}
           data-tip={expandLabel}
           aria-label={expandLabel}
-          aria-pressed={false}
+          aria-pressed={open /* P2-2: meters IS open — never hard-code false */}
         >
           <PanelRight size={12} strokeWidth={1.7} />
         </button>
@@ -217,6 +223,10 @@ function FullDock() {
   const setStripFocus = useUi((s) => s.setStripFocus);
   const cycleMixerState = useUi((s) => s.cycleMixerState);
   const page = useUi((s) => s.page);
+  /* R20-W6FIX (P2-2): same law as the meters dock — the collapse control's
+     pressed state is DERIVED (open = mixerState !== 'collapsed'), not the
+     bare always-true attribute it used to carry. */
+  const open = useUi((s) => s.mixerState !== 'collapsed');
   const audio = scene.tracks.filter((t) => t.kind === 'audio');
   const [flashOn, setFlashOn] = useState(false);
 
@@ -290,7 +300,7 @@ function FullDock() {
           className="icon-btn icon-btn-sm"
           data-tip={collapseLabel}
           aria-label={collapseLabel}
-          aria-pressed
+          aria-pressed={open /* P2-2: explicit boolean, derived from state */}
         >
           <PanelLeft size={12} strokeWidth={1.7} />
         </button>

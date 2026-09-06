@@ -25,6 +25,10 @@
      shared status line announces it; NO geometry ever paints.
    - Below ~560px available width the five secondary modes collapse into a
      kebab overflow menu (Insert/Overwrite + divider + kebab stay inline).
+     R20-W6FIX (P2-3): the menu carries the APG menu keyboard law — ↑/↓
+     rove among the items (wrapping), Home/End jump, focus lands on the
+     FIRST item on open, Escape returns to the kebab, Tab closes; handled
+     keys stop propagation so the toolbar rover cannot hijack mid-menu.
    - After a commit the preview clears and the viewer STAYS in source mode
      (repeated inserts are the point — Resolve/Premiere behavior). */
 
@@ -193,9 +197,46 @@ export function SourceEditBar() {
   /* ---- kebab overflow menu state (narrow only) */
   const [menuOpen, setMenuOpen] = useState(false);
   const menuHostRef = useRef<HTMLSpanElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const kebabRef = useRef<HTMLButtonElement>(null);
+  /* P2-3 (R20-W6FIX): the collapsed secondary items get the APG menu
+     keyboard law — they were tabIndex -1 with NO roving (only Escape +
+     outside-click closed the menu, keyboard users were stranded on the
+     kebab). ↑/↓ move focus among the items (wrapping), Home/End jump the
+     ends; handled keys STOP PROPAGATION so the toolbar's horizontal rover
+     never hijacks them mid-menu. */
+  const menuItems = () =>
+    Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+  const focusMenu = (i: number) => {
+    const items = menuItems();
+    const n = items.length;
+    if (n === 0) return;
+    items[((i % n) + n) % n]!.focus();
+  };
+  const onMenuKey = (e: React.KeyboardEvent) => {
+    const items = menuItems();
+    const n = items.length;
+    if (n === 0) return;
+    const cur = items.indexOf(document.activeElement as HTMLElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); focusMenu(cur === -1 ? 0 : cur + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); focusMenu(cur === -1 ? n - 1 : cur - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); e.stopPropagation(); focusMenu(0); }
+    else if (e.key === 'End') { e.preventDefault(); e.stopPropagation(); focusMenu(n - 1); }
+    else if (e.key === 'Tab') {
+      // APG: Tab leaves the menu (default focus move) and CLOSES it — no
+      // stranded open popup with focus gone
+      setMenuOpen(false);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      // a vertical menu does not use the horizontal keys — swallow them so
+      // the toolbar's ←/→ rover cannot steal focus out of an open menu
+      e.stopPropagation();
+    }
+  };
   useEffect(() => {
     if (!menuOpen) return;
+    // APG: focus moves to the FIRST item when the menu opens (keyboard and
+    // pointer openers alike — the task-pinned law)
+    menuItems()[0]?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.stopPropagation(); setMenuOpen(false); kebabRef.current?.focus(); }
     };
@@ -213,19 +254,27 @@ export function SourceEditBar() {
   /* ---- the commit: one-shot action on the SOURCE asset (wrong-asset bug
      fix — never mediaSelection). Refusal honesty lives in the planner.
      After the commit the preview clears and the viewer STAYS in source
-     mode (§2.6 — repeated inserts are the point). */
-  const run = (mode: InsertMediaMode) => {
+     mode (§2.6 — repeated inserts are the point). Returns whether it
+     committed — the menu's activation wrapper returns focus to the kebab
+     only on a real commit (the refusal path keeps the menu open). */
+  const run = (mode: InsertMediaMode): boolean => {
     if (!sourceMediaId) {
       pushToast({
         kind: 'info',
         title: 'Edit functions',
         detail: 'open a media asset in the source viewer first (the edit functions act on the source asset — Resolve semantics)',
       });
-      return;
+      return false;
     }
     insertMediaAt(sourceMediaId, mode);
     useUi.getState().setHoverInsertPreview(null); // preview clears on commit
     setMenuOpen(false);
+    return true;
+  };
+  /* APG menu law: activating an item closes the menu — focus returns to the
+     invoking control (the kebab), never strands on a removed node. */
+  const runFromMenu = (mode: InsertMediaMode) => {
+    if (run(mode)) kebabRef.current?.focus();
   };
 
   /* ---- the shared live description (aria-describedby target): announces
@@ -286,9 +335,11 @@ export function SourceEditBar() {
           </button>
           {menuOpen && (
             <div
+              ref={menuRef}
               role="menu"
               aria-label="More edit modes"
               data-testid="shell-source-edit-overflow-menu"
+              onKeyDown={onMenuKey}
               className="absolute left-0 top-[110%] z-50 flex flex-col gap-0.5 rounded-[var(--radius)] border border-strong bg-inset p-1"
             >
               {secondary.map((def) => (
@@ -296,7 +347,7 @@ export function SourceEditBar() {
                   key={def.mode}
                   def={def}
                   mediaId={sourceMediaId}
-                  run={run}
+                  run={runFromMenu}
                   setHover={setHover}
                   refusal={refusalFor(def.mode)}
                   asMenuItem

@@ -161,6 +161,34 @@ tests can target the same surface.
 
 ## Known spec deviations (intentional, for reaction)
 
+- **R20-W6 (retarget same-kind law):** the insert-media selection fallback
+  retargets only when the selected clip's ELEMENT TYPE equals the source's
+  mapped type (video↔video / audio↔audio / image↔image), per
+  docs/r20/insert-modes.md §5(b) — the spec set has no retarget ruling at
+  all, and the interim "selected clip's track ACCEPTS the source type"
+  reading (W2) let a video source retarget through a selected TEXT/IMAGE
+  clip onto the overlay lane. fitToFill never retargets (R19's
+  first-unlocked-kind-lane law). Registered per the deviation law, citing
+  the contract.
+- **R20-W2 (hover-placement preview, C48):** dwelling ≥150 ms (or focusing)
+  a SourceEditBar mode button PREVIEWS the edit's final placement on the
+  timeline — ghost clip, displacement arrows, overwrite-span shading,
+  split tick + split ghost, fit-to-fill speed badge — computed by the same
+  pure planner the commit runs (plan/apply split, so preview == commit by
+  construction; the preview never advances the store's id counter). No NLE
+  has button-hover placement preview (the drag-preview grammar extended);
+  registered as C48 for the seal.
+- **R20-W2 (source-mode `,/.` insert/overwrite):** comma and period fire
+  Insert / Overwrite for the SOURCE asset while the viewer is in source
+  mode — spec 16 §3.6 binds `,`/`.` to slip-left/slip-right (clip
+  gestures). The mock gates the capture to source mode, so the bindings
+  are context-disjoint from the spec's (never active at the same time);
+  registered per the deviation law.
+- **R20-W2 (NaN-clientX drop fallback):** a pool→timeline drop event with
+  a non-finite/missing clientX (a malformed drop event — also the jsdom
+  `Event` fallback which drops `clientX`) falls back to the PLAYHEAD
+  exactly like an unspecified time, instead of placing at NaN — honest
+  degradation, pinned by tests.
 - **R20-W5 (the track-resize strip width):** the per-track height resize
   strip on the track header's bottom edge is **5px** (TrackHeader.tsx
   `RESIZE_STRIP_H`), where the normative contract
