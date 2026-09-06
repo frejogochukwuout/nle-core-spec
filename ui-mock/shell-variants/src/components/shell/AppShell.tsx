@@ -266,10 +266,10 @@ function AppShellInner() {
               <div className="min-h-0 flex-1">
                 <Viewer duration={duration} />
               </div>
-              {/* R20-W4b color composition: the scope strip slot under the
-                  viewer — ColorScopeStrip (C53 placeholder; W4c fills the
-                  real traces through useScopeSource). Never a console tab —
-                  the simultaneity law (color-layout §2.1e). */}
+              {/* R20-W4b/W4c color composition: the scope strip slot under the
+                  viewer — ColorScopeStrip (C53, REAL since W4c: traces from
+                  the graded frame the viewer publishes on the bus). Never a
+                  console tab — the simultaneity law (color-layout §2.1e). */}
               {page === 'color' && <ColorScopeStrip />}
             </div>
 

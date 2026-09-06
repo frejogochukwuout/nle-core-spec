@@ -1,11 +1,13 @@
-/* ColorPage + the R20-W4b color surfaces (spec 18 §4.8; DESIGN-R20 D3 /
-   gaps C50/C51/C54/C55/C56). CONTRACT CHANGE from R19-B4: the grading
+/* ColorPage + the R20-W4b/W4c color surfaces (spec 18 §4.8; DESIGN-R20 D3 /
+   gaps C50/C51/C53/C54/C55/C56). CONTRACT CHANGE from R19-B4: the grading
    surfaces are STORE-DRIVEN (mockGrades sidecar, spec 08 §4.2/§8.1 field
    names verbatim) — every control asserts its STORE WRITE; the YRGB rows
    are DERIVED read-only readouts; the qualifier is the spec-shaped HSL
    keyer params; the curves editor edits the record's curve points; the
-   node graph selection binds to the console's tab routing; the scopes dock
-   is the W4c placeholder (the seeded-trace dock is deleted, C53). */
+   node graph selection binds to the console's tab routing; the scope strip
+   is REAL since W4c (fed by the graded-frame bus; the seeded-trace dock is
+   deleted, C53) — the strip's own drawing tests live in
+   ColorScopeStrip.test.tsx. */
 
 import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
@@ -352,6 +354,19 @@ describe('QualifierPanel (C54 — spec 08 §8.1 store-driven keyer)', () => {
     mountQualifier();
     expect(document.querySelectorAll('[data-testid^="shell-color-matte-"]')).toHaveLength(0);
   });
+
+  it('R20-W4c: the EYEDROPPER toggle arms/disarms the viewer picker (view-state)', () => {
+    mountQualifier();
+    const picker = screen.getByTestId('shell-color-qualifier-picker');
+    expect(picker).toHaveAttribute('aria-pressed', 'false');
+    expect(S().qualifierPickerOn).toBe(false);
+    fireEvent.click(picker);
+    expect(picker).toHaveAttribute('aria-pressed', 'true');
+    expect(S().qualifierPickerOn).toBe(true);
+    expect(S().past).toHaveLength(0); // view-state, NEVER a history entry
+    fireEvent.click(picker);
+    expect(S().qualifierPickerOn).toBe(false);
+  });
 });
 
 describe('ColorNodeGraph (left dock — reference topology kept, C56 binding)', () => {
@@ -402,13 +417,13 @@ describe('ColorNodeGraph (left dock — reference topology kept, C56 binding)', 
   });
 });
 
-describe('ColorScopeStrip (the W4c slot placeholder — C53)', () => {
-  it('reserves the slot with the 4 quadrant placeholders + collapse (testids stable for W4c)', () => {
+describe('ColorScopeStrip (C53 — real since W4c; solo = no bus frame yet)', () => {
+  it('standby quadrants + the live status line + collapse (testids stable from W4b)', () => {
     render(<ColorScopeStrip />);
     expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/real traces land with the viewer canvas/);
+    expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/standby — no graded frame/);
     for (const kind of ['waveform', 'parade', 'vectorscope', 'histogram']) {
-      expect(screen.getByTestId(`shell-color-scope-${kind}`)).toHaveTextContent(/placeholder/);
+      expect(screen.getByTestId(`shell-color-scope-${kind}`)).toHaveTextContent(/no signal/);
     }
     const collapse = screen.getByTestId('shell-color-scopes-collapse');
     expect(collapse).toHaveAttribute('aria-expanded', 'true');

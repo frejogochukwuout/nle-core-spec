@@ -14,13 +14,15 @@
    The 14-field "Matte Finesse" block is GONE — those were reference-HTML
    display fields with no spec 08 §8 counterpart; the honest spec-shaped
    surface is the §17.E secondary correction (exposure/sat/temp/tint) +
-   strength/invert. The eyedropper tools + the viewer matte overlay land with
-   W4c (the dropper samples the graded canvas) — the Preview Matte toggle
-   here flips the store's qualifierPreviewOn view-state (W4c's seam) and
-   mirrors showMask into the grade record so it round-trips undo. */
+   strength/invert. R20-W4c (C54) made the eyedropper + viewer matte real:
+   the toggle arms the viewer canvas picker (qualifierPickerOn view-state);
+   the click-through samples the graded buffer and seeds the qualifier
+   Center values (one setGrade per pick; the pick disarms), and the green
+   matte overlay renders in the viewer while qualifierPreviewOn (the toggle
+   also mirrors showMask into the grade record so it round-trips undo). */
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Contrast, Eye, RotateCcw } from 'lucide-react';
+import { Contrast, Eye, Pipette, RotateCcw } from 'lucide-react';
 import { MicroSlider, NumCell } from './controls';
 import { useGradeRecord } from './useGradeTarget';
 import { useGradingToast } from './useHonestToast';
@@ -283,6 +285,8 @@ export function QualifierPanel() {
   const tell = useGradingToast();
   const previewOn = useUi((s) => s.qualifierPreviewOn);
   const setPreviewOn = useUi((s) => s.setQualifierPreviewOn);
+  const pickerOn = useUi((s) => s.qualifierPickerOn);
+  const setPickerOn = useUi((s) => s.setQualifierPickerOn);
 
   if (rec.targetId == null) {
     return (
@@ -324,14 +328,14 @@ export function QualifierPanel() {
         </button>
       </div>
 
-      {/* toolbar row: Preview Matte | Invert (both REAL — store-bound) */}
+      {/* toolbar row: Preview Matte | Invert | Eyedropper (all REAL — store-bound) */}
       <div className="flex h-[38px] shrink-0 items-center gap-3 border-b border-hairline bg-raised px-3">
         <button
           type="button"
           aria-label="Preview matte"
           aria-pressed={previewOn}
           data-testid="shell-color-qualifier-preview"
-          data-tip="Matte preview overlay in the viewer (W4c renders it)"
+          data-tip="Matte preview overlay in the viewer (C54)"
           className={`icon-btn ${previewOn ? 'toggled' : ''}`}
           onClick={() => togglePreview(!previewOn)}
         >
@@ -348,7 +352,20 @@ export function QualifierPanel() {
         >
           <Contrast size={16} strokeWidth={1.5} />
         </button>
-        <span className="ml-auto text-[10px] text-tfaint">eyedropper + viewer overlay land with W4c</span>
+        {/* R20-W4c (C54): the eyedropper — arms the viewer canvas picker
+            (qualifierPickerOn view-state); the click-through samples the
+            graded buffer and seeds the Center values via setGrade. */}
+        <button
+          type="button"
+          aria-label="Qualifier eyedropper"
+          aria-pressed={pickerOn}
+          data-testid="shell-color-qualifier-picker"
+          data-tip="Arm the eyedropper — click the viewer image to seed the qualifier center (C54)"
+          className={`icon-btn ml-auto ${pickerOn ? 'toggled' : ''}`}
+          onClick={() => setPickerOn(!pickerOn)}
+        >
+          <Pipette size={16} strokeWidth={1.5} />
+        </button>
       </div>
 
       {/* HSL sections — store-bound dual handles + fields (spec 08 §8.1) */}

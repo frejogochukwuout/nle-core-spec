@@ -495,6 +495,11 @@ interface UiState {
   /** Qualifier matte-preview overlay switch (C54 preview half — W4c renders
      the viewer overlay; this view-state is the immediate toggle). */
   qualifierPreviewOn: boolean;
+  /** R20-W4c (C54): qualifier EYEDROPPER armed — the viewer canvas samples
+     the clicked pixel from the graded buffer and seeds the target's
+     qualifier Center values (one setGrade per pick; the pick disarms).
+     View-state, never snapshotted (same law as qualifierPreviewOn). */
+  qualifierPickerOn: boolean;
   /** Selected node-graph node (C56) — 'primary'/'secondary' bind to the
      target's GradeParams/qualifier surfaces; other node kinds are honest
      display state (C56 toast). */
@@ -611,6 +616,7 @@ interface UiState {
   setColorConsoleTab: (tab: UiState['colorConsoleTab']) => void;
   setColorGradeTarget: (t: UiState['colorGradeTarget']) => void;
   setQualifierPreviewOn: (v: boolean) => void;
+  setQualifierPickerOn: (v: boolean) => void;
   setColorNode: (id: string | null) => void;
   undo: () => void;
   redo: () => void;
@@ -799,6 +805,7 @@ export const useUi = create<UiState>((set, get) => ({
   colorConsoleTab: 'primaries',
   colorGradeTarget: 'clip',
   qualifierPreviewOn: false,
+  qualifierPickerOn: false,
   selectedColorNodeId: 'primary',
 
   setPage: (p) => set((s) => ({
@@ -1319,6 +1326,7 @@ export const useUi = create<UiState>((set, get) => ({
   setColorConsoleTab: (tab) => set({ colorConsoleTab: tab }),
   setColorGradeTarget: (t) => set({ colorGradeTarget: t }),
   setQualifierPreviewOn: (v) => set({ qualifierPreviewOn: v }),
+  setQualifierPickerOn: (v) => set({ qualifierPickerOn: v }),
   /* C56: node selection is view-state (never snapshotted); 'primary' and
      'secondary' are the two honest bindings — selecting them routes the
      console tab to the surface they own (the node graph's click handler

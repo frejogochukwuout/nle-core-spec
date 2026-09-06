@@ -19,6 +19,7 @@ import { mediaById, type ElementJSON, type SceneJSON, type TrackJSON } from '../
 import { snapToFrame, tc } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
 import { SourceEditBar } from './SourceEditBar';
+import { GradedViewerCanvas } from './GradedViewerCanvas';
 
 /* multi-track law (R14): scan ALL tracks of the kind, topmost wins — the
    single-find version hid clips on a second Video/Text track (addTrack makes
@@ -268,12 +269,19 @@ export function Viewer({ duration }: { duration: number }) {
              names the mode honestly — the poster is NOT played back. */
           <>
             {sourceMedia && sourceMedia.type !== 'audio' && !sourceMedia.offline ? (
+              page === 'color' ? (
+                /* R20-W4c (D3): the color page's source preview is the graded
+                   canvas surface too — but the stack is EMPTY (the raw,
+                   ungraded asset; color-layout §3.6 divergence). */
+                <GradedViewerCanvas mediaId={sourceMediaId} elementId={null} mode="source" />
+              ) : (
               <img
                 src={sourceMedia.thumbnail}
                 alt={`Source preview: ${sourceMedia.name}`}
                 className="h-full w-full object-contain"
                 onError={() => pushToast({ kind: 'error', title: 'Source preview failed to decode', detail: 'poster decode failed — check the media pool (spec 18 §4.2)' })}
               />
+              )
             ) : sourceMedia?.type === 'audio' ? (
               <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] px-10">
                 <svg width="100%" height={96} preserveAspectRatio="none" aria-hidden="true" className="max-h-[60%]">
@@ -307,8 +315,14 @@ export function Viewer({ duration }: { duration: number }) {
           <>
           {/* one name, one channel: real alt text (alt="" would mark the
               monitor decorative and drop the name from the a11y tree —
-              R13 review caught alt="" + aria-label conflicting) */}
-          {img && !img.offline ? (
+              R13 review caught alt="" + aria-label conflicting).
+              R20-W4c (D3): on the COLOR page the image surface is the graded
+              <canvas> (GradedViewerCanvas — decode→grade stack→encode, rAF
+              coalesced); every OTHER page keeps this <img> (the program
+              monitor boundary — 60+ Viewer tests pin it). */}
+          {page === 'color' ? (
+            <GradedViewerCanvas mediaId={el?.mediaId ?? null} elementId={el?.id ?? null} mode="program" />
+          ) : img && !img.offline ? (
             frameLoading ? (
               /* §4.2 loading row: first-frame decode skeleton (pulse) */
               <div data-testid="shell-viewer-state-loading" role="status" className="flex h-full w-full animate-pulse items-center justify-center bg-[#0a0a0c] text-[13px] text-[#9a9aa5]">
