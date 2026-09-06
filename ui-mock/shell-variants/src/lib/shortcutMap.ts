@@ -55,7 +55,12 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
   { action: 'clips-trim-end', keys: '⌥]', group: 'Clips', desc: 'Ripple-trim clip end to playhead' },
   { action: 'clips-trim-start-noripple', keys: '[', group: 'Clips', desc: 'Trim clip start to playhead (leaves gap)' },
   { action: 'clips-trim-end-noripple', keys: ']', group: 'Clips', desc: 'Trim clip end to playhead (leaves gap)' },
-  { action: 'clips-slip', keys: ', / . (⇧ ×10)', group: 'Clips', desc: 'Slip selection ∓1 frame (∓10 with ⇧)' },
+  { action: 'clips-slip', keys: ', / . (⇧ ×10)', group: 'Clips', desc: 'Slip selection ∓1 frame (∓10 with ⇧) — source mode hands , / . to insert/overwrite' },
+  /* R20-W2 (D2 / C46): the source-viewer insert family — Premiere grammar,
+     gated to source-preview mode so the binding is context-disjoint from
+     spec 16 §3.6's slip ladder above (registered deviation). */
+  { action: 'clips-source-insert', keys: ', (source mode)', group: 'Clips', desc: 'Insert the source asset at the playhead (source viewer only — insert mode)' },
+  { action: 'clips-source-overwrite', keys: '. (source mode)', group: 'Clips', desc: 'Overwrite at the playhead with the source asset (source viewer only)' },
   { action: 'clips-undo', keys: '⌘Z', group: 'Clips', desc: 'Undo' },
   { action: 'clips-redo', keys: '⇧⌘Z', group: 'Clips', desc: 'Redo' },
 

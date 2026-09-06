@@ -11,7 +11,10 @@
      warning badge (§4.2 missing-asset state);
    - hover-to-autoplay (R19 th_mto2s2nc, gap C42): dwelling ≥400 ms on a
      card runs a subtle scrub preview — ken-burns pan on the poster, a
-     PREVIEW chip + a progress hairline. Ambient and toast-free.
+     PREVIEW chip + a progress hairline. Ambient and toast-free. R20-W2
+     (thread #68 / C49): AUDIO cards get the same-dwell WAVEFORM MOTION —
+     a 2px accent playhead sweeps the envelope (pool-audio-sweep), honest
+     preview indicator, no audio.
    - sort: 4 modes × asc/desc direction toggle, persisted with the view
      pref under ONE localStorage key ("nle-mock-pool-prefs"); hydrated on
      mount only while the store still holds defaults (defensive);
@@ -26,8 +29,9 @@
    - drag-to-lane: cards are HTML5 drag sources (custom data type); the
      timeline lanes (Timeline.tsx) are drop targets driving mediaDrag:
      pointer ghost (thumbnail + name, 50% opacity), copy / not-allowed
-     cursor via dropEffect, hovered-lane highlight; drop commits an
-     honest-mock toast — the store has no insertElement action yet;
+     cursor via dropEffect, hovered-lane highlight; R20-W2: the drop
+     commits the REAL plan/apply placement (insert; Alt = overwrite) —
+     the old toast-only mock is gone;
    - context menu (§4.9, consumed via ContextMenu.tsx): Reveal in timeline
      / Copy / Move to… / Remove from pool;
    - state rows: empty (import CTA + sample project §4.10), loading
@@ -114,7 +118,7 @@ function Thumb({ m, small = false, preview = false }: { m: MediaRecord; small?: 
     const bars = getWaveform(m.id, small ? 28 : 48, { amplitude: 0.9 });
     const h = small ? 14 : 34;
     return (
-      <div className="flex w-full items-center justify-center overflow-hidden bg-inset" style={{ height: small ? 22 : 46 }}>
+      <div className="relative flex w-full items-center justify-center overflow-hidden bg-inset" style={{ height: small ? 22 : 46 }}>
         <svg width="100%" height={h} preserveAspectRatio="none" aria-hidden="true">
           {bars.map((b, i) => (
             <rect
@@ -129,6 +133,20 @@ function Thumb({ m, small = false, preview = false }: { m: MediaRecord; small?: 
             />
           ))}
         </svg>
+        {/* R20-W2 (thread #68 / C49): audio hover-dwell WAVEFORM MOTION — a
+            2px accent playhead sweeps the envelope over the same 6s window
+            the video ken-burns runs (one low-duty sweep, no loop). HONEST
+            MOCK: this is a PREVIEW INDICATOR, there is no audio — the sweep
+            animates the static deterministic envelope, it does not play
+            anything. Stop on leave = unmount (cancelDwell resets preview). */}
+        {preview && (
+          <div
+            data-testid="shell-mediapool-waveform-sweep"
+            aria-hidden="true"
+            className="pool-audio-sweep pointer-events-none absolute bottom-0 top-0 w-[2px]"
+            style={{ background: 'var(--accent-selection)' }}
+          />
+        )}
       </div>
     );
   }

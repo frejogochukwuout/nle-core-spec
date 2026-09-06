@@ -32,9 +32,11 @@ import { zoomController, createWheelZoomAccumulator } from '../../lib/zoomContro
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
 import { Clip, buildClipMenuItems, CAPTION_PARCHMENT, type ClipDragEvent, type ClipDragHost } from './Clip';
+import { SpeedGaugeIcon } from './editModeIcons';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { POOL_DRAG_TYPE, isDroppable } from '../shell/MediaPool';
 import { useConfirm } from '../shell/ConfirmDialog';
+import { useInsertPreview } from '../../hooks/useInsertPreview';
 
 /* R15 T3 — the drop-target PREVIEW the Timeline renders while a cross-track
    drag is engaged. `ghosts` are content-space boxes at the RESOLVED target
@@ -82,6 +84,20 @@ export function Timeline() {
   const pushToast = useUi((s) => s.pushToast);
   const mediaDrag = useUi((s) => s.mediaDrag); // pool drag-to-lane state (18 §4.2)
   const selection = useUi((s) => s.selection); // R15 T9: selected clips are never virtualized away
+  /* R20-W2 (C48): the armed hover-placement preview — plan computed by the
+     SAME pure planner the commit runs (useInsertPreview hook; never a raw
+     zustand selector). ok:false renders NO geometry (the source bar's tip
+     carries the refusal instead). */
+  const insertPreview = useInsertPreview();
+  /* R20-W2 (thread #65 / contract §5): source-mode-only frozen-lane guard —
+     while an AUDIO source is loaded in the source viewer, non-audio lanes
+     render dimmed + aria-disabled and refuse drops honestly. PROGRAM MODE
+     NEVER DIMS (the guard is viewerMode==='source' && audio source —
+     exitSourcePreview clearing is the side-effect). */
+  const viewerMode = useUi((s) => s.viewerMode);
+  const sourceMediaId = useUi((s) => s.sourceMediaId);
+  const audioSourceFrozen = viewerMode === 'source'
+    && (sourceMediaId ? mediaById(sourceMediaId)?.type === 'audio' : false);
   const menu = useContextMenu(); // §4.9 timeline-empty + clip menus (R15 T2 router)
   const confirm = useConfirm(); // §6.4 multi-delete confirmation (clip menu route)
 
@@ -813,19 +829,28 @@ export function Timeline() {
             const dragHighlight = !!dragPreview && !dragPreview.conflict && !dragPreview.frozen && dragPreview.hoverIndex === trackIdx;
             /* media-pool drag-to-lane (18 §4.2): lane = drop target while a
                pool card drag is in flight; highlight + copy/not-allowed cursor
-               come from mediaDrag, drop commits an honest-mock toast (the
-               store has no insertElement action yet) */
+               come from mediaDrag. R20-W2 (contract §7): the DROP now commits
+               the REAL placement through plan/apply (insertMediaAt with the
+               drop time + this lane as the explicit target; Alt = overwrite)
+               — the old toast-only path never touched the doc. The frozen
+               guard (thread #65) marks non-audio lanes not-allowed while an
+               audio source is loaded in source mode. */
+            const frozenLane = audioSourceFrozen && track.kind !== 'audio';
             const over = mediaDrag?.overTrackId === track.id;
             const laneDropCls = over ? (mediaDrag && mediaDrag.allowed ? ' pool-lane-ok' : ' pool-lane-bad') : '';
             return (
               <div
                 key={track.id}
+                aria-disabled={frozenLane || undefined}
+                data-frozen={frozenLane || undefined}
                 className={`relative shrink-0 border-b border-hairline cursor-crosshair${laneDropCls}`}
                 style={{
                   height: h,
                   background: laneBg(track.kind),
-                  opacity: track.visible ? 1 : 0.35,
-                  cursor: track.locked ? 'not-allowed' : over && mediaDrag ? (mediaDrag.allowed ? 'copy' : 'not-allowed') : undefined,
+                  /* visible-off stays 0.35; the frozen guard dims ON TOP of it
+                     (source-mode only — program mode never dims) */
+                  opacity: (track.visible ? 1 : 0.35) * (frozenLane ? 0.55 : 1),
+                  cursor: track.locked ? 'not-allowed' : over && mediaDrag ? (mediaDrag.allowed ? 'copy' : 'not-allowed') : frozenLane ? 'not-allowed' : undefined,
                 }}
                 onDragOver={(e) => {
                   if (!e.dataTransfer.types.includes(POOL_DRAG_TYPE)) return;
@@ -833,7 +858,7 @@ export function Timeline() {
                   const md = useUi.getState().mediaDrag;
                   if (!md) return;
                   const media = mediaById(md.mediaId);
-                  const allowed = !!media && !track.locked && isDroppable(track.kind, media.type);
+                  const allowed = !!media && !track.locked && isDroppable(track.kind, media.type) && !frozenLane;
                   e.dataTransfer.dropEffect = allowed ? 'copy' : 'none';
                   if (md.overTrackId !== track.id || md.allowed !== allowed) {
                     useUi.getState().setMediaDrag({ mediaId: md.mediaId, overTrackId: track.id, allowed });
@@ -853,12 +878,30 @@ export function Timeline() {
                   const md = useUi.getState().mediaDrag;
                   const media = md ? mediaById(md.mediaId) : undefined;
                   if (md && media) {
-                    if (md.allowed && md.overTrackId === track.id) {
+                    if (frozenLane) {
+                      /* thread #65 honest refusal — pointer-events stay ALLOWED
+                         (the lane stays interactive, just not a legal target
+                         for the loaded audio source), so the drop gets the
+                         truthful toast, never silence */
                       useUi.getState().pushToast({
-                        kind: 'success',
-                        title: `Placed ${media.name} on ${track.badge}`,
-                        detail: 'mock: insertElement lands with the engine round (spec 15 §5.4 / 06 §5.9)',
+                        kind: 'error',
+                        title: 'Frozen lane',
+                        detail: 'an audio source targets audio lanes — video lanes are frozen while the source viewer holds audio (thread #65)',
                       });
+                    } else if (md.allowed && md.overTrackId === track.id) {
+                      /* R20-W2: real placement — plan+apply through
+                         insertMediaAt (mode 'insert'; Alt = 'overwrite') with
+                         the drop x as the time + this lane as the explicit
+                         target. The success toast is the insert-family
+                         toast — what actually happened.
+                         NaN guard: a drop event without a finite clientX
+                         (jsdom's Event fallback, keyboard-initiated drops)
+                         falls back to the planner's playhead semantics —
+                         never a NaN time. */
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      const rawT = (e.clientX - rect.left) / pxPerSec;
+                      const dropTime = Number.isFinite(rawT) ? Math.max(0, rawT) : undefined;
+                      useUi.getState().insertMediaAt(md.mediaId, e.altKey ? 'overwrite' : 'insert', { time: dropTime, targetTrackId: track.id });
                     } else {
                       useUi.getState().pushToast({
                         kind: 'error',
@@ -897,6 +940,11 @@ export function Timeline() {
                     snapTargets={snapTargets}
                     dragHost={onClipDragEvent}
                     previewSuppressed={dragPreview?.anchorId === el.id}
+                    /* R20-W2 translate-preview: displaced followers glide to
+                       their final position (the reference's final-state view) */
+                    insertPreviewShift={insertPreview?.ok
+                      ? insertPreview.geometry.displaced?.find((d) => d.elId === el.id)?.dx
+                      : undefined}
                   />
                 ))}
 
@@ -976,6 +1024,153 @@ export function Timeline() {
               style={{ top: dragPreview.insertLineY, height: 2, background: 'var(--accent)', zIndex: 10, boxShadow: '0 0 2px rgba(0,0,0,0.6)' }}
             />
           )}
+
+          {/* ---- R20-W2 hover-placement preview (C48): the SAME plan the
+               commit would run, painted in the reference's ghost grammar
+               (timeline_edit_modes (2).html §1.3) in the z-10 ghost layer.
+               ok:false renders NOTHING here — the refusal lives in the
+               source bar's tip + status line (never paint geometry the op
+               won't perform). All pieces aria-hidden: the a11y route is the
+               toolbar's role=status description, not this layer. ---- */}
+          {insertPreview?.ok && insertPreview.geometry.ghost && (() => {
+            const g = insertPreview.geometry.ghost;
+            const laneTop = laneTopAt(g.laneIndex);
+            const laneH = laneHeight(g.laneKind);
+            const gLeft = g.start * pxPerSec;
+            const gWidth = Math.max(6, g.dur * pxPerSec);
+            const elsById = new Map<string, ElementJSON>();
+            for (const t of scene.tracks) for (const e of t.elements) elsById.set(e.id, e);
+            return (
+              <div data-testid="insert-preview-layer" aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ zIndex: 10 }}>
+                {/* ghost clip — the reference .clip-ghost law: 2px dashed
+                    border (≈#646464 → --border-strong token), radius 4,
+                    ghostBg(type) fill (contract §3.2) */}
+                <div
+                  data-testid="insert-preview-ghost"
+                  data-track-id={g.trackId}
+                  data-start={g.start}
+                  data-dur={g.dur}
+                  className="clip-drag-ghost absolute rounded-[4px]"
+                  style={{
+                    left: gLeft, top: laneTop + 2, width: gWidth, height: Math.max(4, laneH - 4),
+                    background: ghostBg(insertPreview.type),
+                    border: '2px dashed var(--border-strong)',
+                    opacity: 0.9,
+                  }}
+                />
+                {/* fit-to-fill speed badge — reference gauge SVG (verbatim)
+                    + the computed rate on the ghost (§1.3 badge styles) */}
+                {g.speed !== undefined && (
+                  <div
+                    data-testid="insert-preview-speed-badge"
+                    className="absolute flex items-center gap-[3px] rounded-[10px]"
+                    style={{
+                      left: gLeft + 4, top: laneTop + 4,
+                      padding: '1px 8px 1px 6px',
+                      background: 'rgba(17,17,17,.62)', border: '1px solid rgba(255,255,255,.28)',
+                      color: '#fff', fontSize: 10, fontWeight: 700,
+                    }}
+                  >
+                    <SpeedGaugeIcon />
+                    <span>{g.speed.toFixed(2)}×</span>
+                  </div>
+                )}
+                {/* overwrite-span shading — covered regions of EXISTING clips
+                    (rgba(0,0,0,.55) + diagonal hatch ≈ the reference's
+                    brightness(.45) slot treatment, contract §3.2) */}
+                {insertPreview.geometry.overwriteSpans?.map((s, i) => (
+                  <div
+                    key={`ovs-${i}`}
+                    data-testid="insert-preview-overwrite-span"
+                    data-track-id={s.trackId}
+                    className="absolute"
+                    style={{
+                      left: s.start * pxPerSec, top: laneTop,
+                      width: Math.max(2, s.dur * pxPerSec), height: laneH,
+                      background: 'rgba(0,0,0,.55)',
+                      backgroundImage: 'repeating-linear-gradient(45deg, transparent 0 4px, rgba(255,255,255,0.08) 4px 8px)',
+                    }}
+                  />
+                ))}
+                {/* insert straddler: the 2px split tick at the cut + the
+                    right half's dashed ghost at its FINAL position (the
+                    clip itself stays rendered; the split tick shows the cut) */}
+                {insertPreview.geometry.splitAt !== undefined && (
+                  <div
+                    data-testid="insert-preview-split-tick"
+                    className="absolute"
+                    style={{ left: insertPreview.geometry.splitAt * pxPerSec - 1, top: laneTop, width: 2, height: laneH, background: 'var(--accent)', opacity: 0.8 }}
+                  />
+                )}
+                {insertPreview.geometry.splitGhost && (
+                  <div
+                    data-testid="insert-preview-split-ghost"
+                    data-track-id={insertPreview.geometry.splitGhost.trackId}
+                    className="clip-drag-ghost absolute rounded-[4px]"
+                    style={{
+                      left: insertPreview.geometry.splitGhost.start * pxPerSec,
+                      top: laneTop + 2,
+                      width: Math.max(6, insertPreview.geometry.splitGhost.dur * pxPerSec),
+                      height: Math.max(4, laneH - 4),
+                      background: ghostBg(insertPreview.type),
+                      border: '2px dashed var(--border-strong)',
+                      opacity: 0.55,
+                    }}
+                  />
+                )}
+                {/* displaced followers: dashed outline at the ORIGINAL
+                    position — the clip element itself translates to its
+                    final position via Clip.insertPreviewShift (REV-A P2-6:
+                    the reference shows the FINAL state) */}
+                {insertPreview.geometry.displaced?.map((d) => {
+                  const dEl = elsById.get(d.elId);
+                  if (!dEl) return null;
+                  return (
+                    <div
+                      key={`dis-${d.elId}`}
+                      data-testid={`insert-preview-displaced-ghost-${d.elId}`}
+                      className="absolute rounded-[2px]"
+                      style={{
+                        left: dEl.startTime * pxPerSec, top: laneTop + 2,
+                        width: Math.max(6, dEl.duration * pxPerSec), height: Math.max(4, laneH - 4),
+                        border: '1px dashed var(--border-strong)', opacity: 0.6,
+                      }}
+                    />
+                  );
+                })}
+                {/* white displacement arrows — reference SVG paths VERBATIM
+                    (§1.3): 16×28 down at the ghost center-x (the source
+                    enters the track, drop-shadow like the reference), 28×16
+                    right at each displaced clip's ORIGINAL left edge
+                    (followers shift — insert/ripple only, by construction) */}
+                {insertPreview.geometry.arrows?.down && (
+                  <svg
+                    data-testid="insert-preview-arrow-down"
+                    width={16} height={28} viewBox="0 0 16 28"
+                    className="absolute"
+                    style={{ left: gLeft + gWidth / 2 - 8, top: laneTop + Math.max(0, (laneH - 28) / 2), filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.6))' }}
+                  >
+                    <path d="M 5 0 L 11 0 L 11 16 L 16 16 L 8 28 L 0 16 L 5 16 Z" fill="#ffffff" />
+                  </svg>
+                )}
+                {insertPreview.geometry.arrows?.right && insertPreview.geometry.displaced?.map((d) => {
+                  const dEl = elsById.get(d.elId);
+                  if (!dEl) return null;
+                  return (
+                    <svg
+                      key={`arw-${d.elId}`}
+                      data-testid={`insert-preview-arrow-right-${d.elId}`}
+                      width={28} height={16} viewBox="0 0 28 16"
+                      className="absolute"
+                      style={{ left: dEl.startTime * pxPerSec, top: laneTop + Math.max(0, (laneH - 16) / 2), filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.6))' }}
+                    >
+                      <path d="M 0 5 L 16 5 L 16 0 L 28 8 L 16 16 L 16 11 L 0 11 Z" fill="#ffffff" />
+                    </svg>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* ---- R15 T5 SNAP INDICATOR: 2px accent line at 40% opacity
                (z 40 — above drag ghosts 10 / marquee 35, below the playhead

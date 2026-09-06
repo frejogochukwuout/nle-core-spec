@@ -378,8 +378,23 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           }
           return;
         }
-        case ',': if (s.selection.length > 0) s.slipNudge(s.selection, e.shiftKey ? -10 : -1); return;
-        case '.': if (s.selection.length > 0) s.slipNudge(s.selection, e.shiftKey ? 10 : 1); return;
+        case ',':
+        case '.':
+          /* R20-W2 (DESIGN-R20 D2, C46): source-mode insert/overwrite — the
+             Premiere grammar (`,` = insert, `.` = overwrite) acting on the
+             SOURCE asset. GATED to the source viewer, which makes it
+             CONTEXT-DISJOINT from spec 16 §3.6's clips-slip (`, / .` slip
+             the SELECTION — program mode keeps that ladder below, and the
+             source-mode handoff is registered in the deviation register).
+             Bind only while a source with duration could load; the store's
+             honest toasts carry the refusals. */
+          if (s.viewerMode === 'source' && s.sourceMediaId) {
+            e.preventDefault();
+            s.insertMediaAt(s.sourceMediaId, key === ',' ? 'insert' : 'overwrite');
+            return;
+          }
+          if (s.selection.length > 0) s.slipNudge(s.selection, e.shiftKey ? (key === ',' ? -10 : 10) : (key === ',' ? -1 : 1));
+          return;
         /* spec 16 §3.4 ⇧,/⇧. = 10-frame slip ladder (R14 — was 1-frame only);
            spec 16 §3.8 zoom keys: ×1.7 canonical step (R15 T1 revision,
            same factor as the toolbar buttons) via the zoom bus */
