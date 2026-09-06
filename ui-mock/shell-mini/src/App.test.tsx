@@ -186,9 +186,11 @@ describe('viewer', () => {
   it('shows the clip under the playhead', () => {
     renderApp();
     setStore(() => S().setPlayhead(1)); // inside c1 (drone)
-    // pool card + the transport meta on the right of the transport row
-    expect(screen.getAllByText('drone_launch.mp4').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByTestId('mini-viewer-meta')).toHaveTextContent('drone_launch.mp4');
+    // the media frame renders + the pool card still carries the name
+    // (R18j thread #16: the transport's right slot is the aspect
+    // controller now — the name lives in the pool/inspector, one place)
+    expect(screen.getByTestId('mini-viewer-frame')).toBeInTheDocument();
+    expect(screen.getAllByText('drone_launch.mp4').length).toBeGreaterThanOrEqual(1);
   });
 
   it('empty state past the last video clip', () => {
@@ -296,5 +298,92 @@ describe('splitters', () => {
     expect(screen.getByRole('separator', { name: 'Media pool width' })).toHaveAttribute('aria-valuenow', '180');
     for (let i = 0; i < 40; i += 1) fireEvent.keyDown(pool, { key: 'ArrowRight', shiftKey: true });
     expect(screen.getByRole('separator', { name: 'Media pool width' })).toHaveAttribute('aria-valuenow', '420');
+  });
+});
+
+/* ---- R18j layout wave (threads #13/#14/#15/#16/#18/#19) ----------- */
+
+describe('R18j panel collapse + viewer max + aspect (threads #13/#14/#19)', () => {
+  it('pool collapses to a rail and back; splitters follow (thread #14)', () => {
+    renderApp();
+    fireEvent.click(screen.getByTestId('mini-btn-pool-collapse'));
+    expect(screen.getByTestId('mini-pool-collapsed')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-pool')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-splitter-media-pool-width')).not.toBeInTheDocument();
+    // vertical 90° label present (the standard collapsed-panel style)
+    expect(screen.getByText('Media')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('mini-btn-pool-expand'));
+    expect(screen.getByTestId('mini-pool')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-splitter-media-pool-width')).toBeInTheDocument();
+  });
+
+  it('inspector collapses to a rail and back (thread #13)', () => {
+    renderApp();
+    fireEvent.click(screen.getByTestId('mini-btn-inspector-collapse'));
+    expect(screen.getByTestId('mini-inspector-collapsed')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-inspector')).not.toBeInTheDocument();
+    expect(screen.getByText('Inspector')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('mini-btn-inspector-expand'));
+    expect(screen.getByTestId('mini-inspector')).toBeInTheDocument();
+  });
+
+  it('viewer max composes all three: rails + minimized timeline (thread #19)', () => {
+    renderApp();
+    fireEvent.click(screen.getByTestId('mini-btn-viewer-max'));
+    // pool + inspector collapse to rails
+    expect(screen.getByTestId('mini-pool-collapsed')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-inspector-collapsed')).toBeInTheDocument();
+    // timeline MINIMIZES (never disappears) — compact strip live
+    expect(screen.getByTestId('mini-timeline-min')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-timeline-tools')).not.toBeInTheDocument();
+    // the individual flags were NOT destroyed — exit restores the layout
+    fireEvent.click(screen.getByTestId('mini-btn-viewer-max'));
+    expect(screen.getByTestId('mini-pool')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-inspector')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-timeline-tools')).toBeInTheDocument();
+  });
+
+  it('a rail click while maxed exits max mode (mode-aware rails)', () => {
+    renderApp();
+    fireEvent.click(screen.getByTestId('mini-btn-viewer-max'));
+    fireEvent.click(screen.getByTestId('mini-btn-pool-expand'));
+    // exiting max restores the user's layout wholesale
+    expect(screen.getByTestId('mini-pool')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-inspector')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-timeline-tools')).toBeInTheDocument();
+  });
+
+  it('individually-collapsed panels stay collapsed after a max round-trip', () => {
+    renderApp();
+    setStore(() => S().togglePool()); // user's own choice: pool collapsed
+    fireEvent.click(screen.getByTestId('mini-btn-viewer-max')); // max hides more
+    fireEvent.click(screen.getByTestId('mini-btn-viewer-max')); // exit max
+    // the individual choice survives the round trip
+    expect(screen.getByTestId('mini-pool-collapsed')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-inspector')).toBeInTheDocument();
+  });
+
+  it('aspect controller: select switches the frame ratio (thread #16)', () => {
+    renderApp();
+    setStore(() => S().setPlayhead(1)); // a media frame is showing
+    const select = screen.getByTestId('mini-viewer-aspect-select') as HTMLSelectElement;
+    expect(select.value).toBe('16:9');
+    const frame = screen.getByTestId('mini-viewer-frame');
+    expect(frame.style.aspectRatio).toBe('16 / 9');
+    fireEvent.change(select, { target: { value: '9:16' } });
+    expect(S().viewerAspect).toBe('9:16');
+    expect(frame.style.aspectRatio).toBe('9 / 16');
+    // the media name is no longer the transport's right slot — the
+    // controller replaced it (the name lives in pool/inspector)
+    expect(screen.queryByTestId('mini-viewer-meta')).not.toBeInTheDocument();
+  });
+
+  it('image clips drop "Source length" from the inspector (thread #18)', () => {
+    renderApp();
+    setStore(() => S().select('c3')); // title_card.png — image
+    expect(screen.getByText('Duration')).toBeInTheDocument(); // edit decision stays
+    expect(screen.queryByText('Source length')).not.toBeInTheDocument();
+    setStore(() => S().select('c1')); // drone video — source length back
+    expect(screen.getByText('Source length')).toBeInTheDocument();
   });
 });

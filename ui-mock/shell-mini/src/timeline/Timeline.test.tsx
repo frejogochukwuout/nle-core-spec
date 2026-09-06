@@ -282,14 +282,14 @@ describe('pointercancel (review gap #3)', () => {
 });
 
 describe('snap-off commits raw positions (review gap #4)', () => {
-  it('with snap ON the same drag quantizes to the grid', () => {
+  it('R18i: with snap ON and no magnet in range the drag also commits RAW (magnet-only snapping — the 0.5s beat grid left the snap path)', () => {
     render(<Timeline />);
     act(() => {
       S().toggleSnap(); // ON (default is off since R18e)
     });
     const c2 = screen.getByTestId('mini-clip-c2');
-    drag(c2, 256, 286); // raw start 5.125
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5); // quantized
+    drag(c2, 256, 286); // raw start 5.125, 2.6s from the c1 edge — no magnet
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.125); // smooth, NOT grid-stepped
   });
 
   it('with snap OFF (the default) the drag commits the raw (unquantized) start', () => {
@@ -573,5 +573,103 @@ describe('R18f wave-2: waveform SVG sizing law', () => {
     expect(svg.style.width).toBe('100%');
     expect(svg.style.height).toBe('100%');
     expect(svg.getAttribute('preserveAspectRatio')).toBe('none');
+  });
+});
+
+/* ---- R18j (thread #13): the minimized timeline strip --------------
+   The tools row hides, V/A collapse into pill sub-rows in one compact
+   strip, the slim ruler seeks, and the SAME gesture engine keeps
+   dragging / trimming / arranging live. */
+
+describe('R18j minimized timeline (thread #13)', () => {
+  it('minimize hides the tools, renders the compact strip with pill sub-rows', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+    expect(screen.getByTestId('mini-timeline-min')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-timeline-tools')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-lane-V1')).not.toBeInTheDocument(); // full lanes gone
+    expect(screen.getByTestId('mini-min-lane-V1')).toBeInTheDocument(); // pill sub-rows live
+    expect(screen.getByTestId('mini-min-lane-A1')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-clip-c1')).toBeInTheDocument(); // same clip testids
+    expect(screen.getByTestId('mini-clip-c1')).toHaveClass('qc-track-item--pill');
+    expect(screen.getByTestId('mini-playhead')).toBeInTheDocument(); // still scrubbable
+    // pills render no filmstrip/waveform bodies — label-only
+    expect(screen.getByTestId('mini-clip-c4').querySelector('.qc-track-item__waveform')).toBeNull();
+    expect(screen.getByTestId('mini-clip-c1').querySelector('.qc-track-item__filmstrip')).toBeNull();
+  });
+
+  it('the slim ruler still seeks (click sets the playhead)', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+    fireEvent.pointerDown(screen.getByTestId('mini-ruler'), {
+      button: 0,
+      pointerId: 9,
+      clientX: 96, // 48pps → 2.0s (content origin x=0 in jsdom)
+    });
+    expect(S().playhead).toBe(2);
+  });
+
+  it('dragging a pill still moves the clip — same engine, one history entry', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+    const c2 = screen.getByTestId('mini-clip-c2'); // 4.5→8, grab offset honored
+    drag(c2, 250, 300); // 5px threshold crossed → active drag → +50px = +1s
+    expect(S().doc.clips.find((x) => x.id === 'c2')!.start).toBe(5.5);
+    expect(S().past).toHaveLength(1); // exactly one entry for the gesture
+  });
+
+  it('trim zones still work on pills (pointer trim from the edge)', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+    // toX 202: (202−10)/48 = exactly 4.0s — the end handle drags the edge there
+    drag(screen.getByTestId('mini-trim-end-c1'), 165, 202); // c1 0→3.5 → end to 4.0s
+    expect(S().doc.clips.find((x) => x.id === 'c1')!.duration).toBe(4);
+  });
+
+  it('expand restores the full timeline (tools + lanes)', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+    fireEvent.click(screen.getByTestId('mini-btn-timeline-expand'));
+    expect(screen.getByTestId('mini-timeline-tools')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-lane-V1')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-timeline-min')).not.toBeInTheDocument();
+    expect(S().timelineMinimized).toBe(false);
+  });
+
+  it('the compact ruler thins its labels (every-other)', () => {
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+    // 48pps → normal step 2s labels; compact = every 4s
+    const marks = screen.getAllByTestId(/^mini-clip-/); // sanity: strip rendered
+    expect(marks.length).toBeGreaterThan(0);
+    const labels = screen.getAllByText(/^00:\d{2}$/).map((el) => el.textContent);
+    expect(labels).toContain('00:00');
+    expect(labels).not.toContain('00:02'); // thinned out in compact mode
+    expect(labels).toContain('00:04');
+  });
+
+  it('pool drags still land on the pill sub-rows (video→V, audio→A)', () => {
+    render(<App />);
+    fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
+    poolDrag.current = 'm-lower'; // image 2.5s → V1
+    // jsdom/RTL trap (documented in the R18e suite above): fireEvent's
+    // dataTransfer events DROP clientX — dispatch a real MouseEvent with
+    // the type string and inject the dataTransfer stub
+    const dtLower = {
+      types: ['application/x-mini-media'],
+      getData: (type: string) => (type === 'application/x-mini-media' ? 'm-lower' : ''),
+    };
+    const ev = (type: 'dragover' | 'drop', x: number) => {
+      const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: 12 });
+      Object.defineProperty(e, 'dataTransfer', { value: dtLower });
+      return e;
+    };
+    const lane = screen.getByTestId('mini-min-lane-V1');
+    fireEvent(lane, ev('dragover', 660)); // (660−10)/48 ≈ 13.5s = past the tail
+    fireEvent(lane, ev('drop', 660));
+    poolDrag.current = null;
+    const added = S().doc.clips.find((c) => c.mediaId === 'm-lower')!;
+    expect(added).toBeDefined();
+    expect(added.trackId).toBe('V1');
   });
 });

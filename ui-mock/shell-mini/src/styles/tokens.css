@@ -76,9 +76,12 @@
   --canvas-editor-radius-control: 4px; /* RH: 8px */
   --canvas-radius-md: 4px; /* RH: 10px */
   --canvas-radius-lg: 6px; /* RH: 16px */
-  /* R18g (thread #22): clips are near-square — big corner cutouts between
-     adjacent clips read as gaps in the cut */
-  --mini-radius-clip: 2px;
+  /* R18g (thread #22): clips tightened (RH 10px read as gaps between
+     adjacent cuts). R18i (thread #11 repost) re-tuned after living with
+     it: 2px was TOO sharp for the mini's casual, rounded-everywhere
+     language — 6px is the agreed middle (the old 10 was "too rounded",
+     2 read as a web table, 6 keeps the round feel without corner gaps). */
+  --mini-radius-clip: 6px;
 
   /* spacing / metrics */
   --canvas-editor-space-xs: 4px;
@@ -94,7 +97,14 @@
   /* mini-shell aliases (layout metrics from DESIGN D4; pool/inspector
      widths now live in App.tsx splitter state — R18d) */
   --mini-gutter: 12px;
-  --mini-topbar-h: 56px;
+  /* R18j (thread #17): slimmed 56 → 36 — the bar is chrome-only since the
+     transport moved into the viewer (R18g), so it no longer earns a tall
+     strip; downstream hosts will restyle this bar anyway (customization
+     point, see Topbar.tsx note) */
+  --mini-topbar-h: 36px;
+  /* R18j (threads #13/#14): the collapsed panel rail width (pool left /
+     inspector right — vertical label + expand button) */
+  --mini-rail-w: 30px;
 
   /* mini-shell surfaces (R18d polish wave — feedback #13: the original
      rgba(11,12,13,.88) panels over the #0d0d0d root left ~4% luminance

@@ -562,14 +562,14 @@
 }
 
 /* trim zones — 14px edge strips, the clip edge IS the handle (R18h,
-   threads #8/#9/#10: "remove handler and use shaded edge instead", "do not
-   show when not selected", "hovering should show some shade around edge").
-   DEVIATION from RH: the reference mock draws 2×10px accent bars
-   (RH-timeline-editor.html .qc-track-item__trim::before) — user feedback
-   overrides: any interference with the filmstrip visual is bad; NLEs shade
-   the edge instead. The zones stay real <button>s (pointer + ←/→ keyboard
-   trim); affordance = a dark-scrim gradient over the edge that appears on
-   selection (quiet), hover/focus (strong), and mid-drag. */
+   threads #8/#9/#10; REVISITED R18i thread #10 repost after living with
+   it: the dark-scrim shade "messes up with the filmstrip too much" —
+   REMOVED. The affordance is now a 2px accent line exactly AT the edge,
+   shown ONLY while the zone is hovered / pressed (the moment right
+   before/at drag start — "ONLY when hovering i.e. at the moment of
+   dragging already") or keyboard-focused. Nothing shows when merely
+   selected; an unhovered clip is pure filmstrip. The zones stay real
+   <button>s (pointer + ←/→ keyboard trim). */
 .qc-track-item__trim {
   position: absolute;
   z-index: 2;
@@ -584,69 +584,51 @@
   cursor: ew-resize;
 }
 
-.qc-track-item__trim::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-  pointer-events: none;
-}
-
+/* the affordance: a 2px accent line welded to the edge, fading in — much
+   closer to the edge than the removed R18h scrim and than RH's 2×10px
+   bars, zero filmstrip interference while idle */
 .qc-track-item__trim--start {
   left: 0;
-}
-
-.qc-track-item__trim--start::before {
-  background: linear-gradient(
-    to right,
-    rgba(0, 0, 0, 0.55) 0%,
-    rgba(0, 0, 0, 0.28) 45%,
-    rgba(0, 0, 0, 0) 100%
-  );
 }
 
 .qc-track-item__trim--end {
   right: 0;
 }
 
+.qc-track-item__trim::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  pointer-events: none;
+  background: var(--canvas-quick-cut-selection);
+}
+
 .qc-track-item__trim--end::before {
-  background: linear-gradient(
-    to left,
-    rgba(0, 0, 0, 0.55) 0%,
-    rgba(0, 0, 0, 0.28) 45%,
-    rgba(0, 0, 0, 0) 100%
-  );
+  left: auto;
+  right: 0;
 }
 
-/* selected: quiet standing shade — the NLE "trim brackets live at the
-   edges" hint; unselected + unhovered = invisible (pure filmstrip).
-   0.75 × the 0.55 peak ≈ 0.41 edge darkening: perceivable on bright
-   filmstrips, still quieter than the working (hover) shade. */
-.qc-track-item.is-selected > .qc-track-item__trim::before {
-  opacity: 0.75;
-}
-
-/* the working shade: hover, keyboard focus, mid-drag */
+/* R18i: the ONLY states that paint the line — hover (about to drag),
+   :active (pointer down / touch, no hover there), and focus-visible
+   (keyboard). NOT selection, NOT drag-ghost. While an edge gesture runs
+   the pointer stays captured inside the zone → hover persists → the line
+   stays live through the trim. A MOVE drag shows no trim lines (pointer
+   is on the body, not the zone). */
 .qc-track-item__trim:hover::before,
-.qc-track-item__trim:focus-visible::before,
-.qc-track-item.is-dragging > .qc-track-item__trim::before {
+.qc-track-item__trim:active::before,
+.qc-track-item__trim:focus-visible::before {
   opacity: 1;
 }
 
-/* keyboard focus ring: a hairline accent AT the edge (visible but minimal —
-   focus indicators must never be invisible, thread #10 says no accent bar
-   as the standing affordance; focus is the one place it's honest) */
+/* keyboard focus ring doubles as the same edge line (focus indicators
+   must never be invisible — the one place the accent is standing) */
 .qc-track-item__trim:focus-visible {
   outline: none;
-}
-
-.qc-track-item__trim--start:focus-visible {
-  box-shadow: inset 2px 0 0 var(--canvas-quick-cut-selection);
-}
-
-.qc-track-item__trim--end:focus-visible {
-  box-shadow: inset -2px 0 0 var(--canvas-quick-cut-selection);
 }
 
 /* ---- drag ghost shading (preview state) --------------------- */
@@ -683,7 +665,174 @@
   pointer-events: none;
 }
 
+/* R18j (thread #13): the same ghost in the minimized sub-rows — pill
+   radius, no top/bottom inset (the 14px rows have none to give) */
+.qc-drop-outline--min {
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+}
 
+/* ---- R18j (thread #13): the minimized timeline strip --------------
+   Toolbar hidden, one compact strip: slim ruler (every-other label,
+   no ticks) + two thin pill sub-rows (V over A — separate rows so
+   overlapped ranges never stack or steal each other's clicks). The
+   playhead stays fully scrubbable; the pills drag/trim through the
+   SAME ClipItem gesture engine (compact render). Layout: a 30px
+   expand rail on the left + the shared scroll surface. */
+.qc-timeline.is-minimized {
+  flex: 0 0 auto; /* sized by content, never stretched */
+}
+
+.qc-min {
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--mini-panel-head-rule);
+}
+
+.qc-min__expand {
+  flex: 0 0 auto;
+  width: 30px;
+  border: none;
+  background: transparent;
+  color: var(--canvas-editor-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.qc-min__expand:hover {
+  background: var(--canvas-editor-control-hover);
+  color: var(--canvas-editor-text-default);
+}
+
+.qc-min__expand:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: -2px;
+}
+
+.qc-min .qc-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* compact ruler: 16px, labels only, no minor-tick band, no per-mark ticks */
+.qc-ruler--min {
+  padding: 4px 10px 0;
+}
+
+.qc-ruler__content--min {
+  height: 16px;
+  min-width: 100%;
+  cursor: pointer;
+}
+
+.qc-ruler--min .qc-ruler__content::before,
+.qc-ruler__content--min::before {
+  display: none;
+}
+
+.qc-ruler--min .qc-ruler__label {
+  top: 4px;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.qc-ruler--min .qc-ruler__tick {
+  display: none;
+}
+
+/* the pill sub-rows: 14px each, 2px apart, one shared well */
+.qc-min-lane {
+  position: relative;
+  height: 14px;
+  margin: 0 10px 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  overflow: hidden;
+}
+
+.qc-min-lane.is-drop-target {
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.55);
+}
+
+.qc-min-lane--audio {
+  background: rgba(120, 255, 190, 0.035);
+  margin-bottom: 6px; /* bottom breathing room before the panel edge */
+}
+
+/* pills: solid hue tints, fully rounded ends, tiny centered label */
+.qc-track-item--pill {
+  top: 1px;
+  bottom: 1px;
+  border-radius: 999px;
+  background: hsl(var(--qc-block-hue, 210) 26% 30%);
+  cursor: grab;
+}
+
+.qc-track-item--pill:active {
+  cursor: grabbing;
+}
+
+.qc-min-lane--audio .qc-track-item--pill {
+  /* audio pills: their own quiet green family, distinct from video hues */
+  background: hsl(150 22% 24%);
+}
+
+.qc-track-item--pill .qc-track-item__label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: calc(100% - 8px);
+  margin: 0 auto;
+  padding: 0 4px;
+  background: none;
+  font-size: 9px;
+  line-height: 1;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* trim zones inside a pill: narrower (the pill is only 12px tall) and
+   fully rounded to match the pill ends */
+.qc-track-item--pill .qc-track-item__trim {
+  width: 10px;
+}
+
+.qc-track-item--pill .qc-track-item__trim--start {
+  border-radius: 999px 0 0 999px;
+}
+
+.qc-track-item--pill .qc-track-item__trim--end {
+  border-radius: 0 999px 999px 0;
+}
+
+/* playhead in the strip: the line spans the whole compact surface, the
+   handle sits in the slim ruler; the hover time pill is suppressed (the
+   viewer's transport tc is the live read while minimized) */
+.qc-timeline.is-minimized .qc-playhead-overlay {
+  top: 4px;
+  bottom: 8px;
+}
+
+.qc-timeline.is-minimized .qc-ruler__playhead {
+  top: 1px;
+}
+
+.qc-timeline.is-minimized .qc-ruler__playhead::after,
+.qc-timeline.is-minimized .qc-ruler__playhead::before {
+  display: none;
+}
+
+/* the snap guide spans the compact strip */
+.qc-timeline.is-minimized .qc-snap-guide {
+  top: 4px;
+  bottom: 8px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .qc-toolbar__icon,

@@ -2,11 +2,17 @@
    playhead (topmost video/image clip). R18g (threads #24/#25): the
    transport (timecode + play control) now lives BELOW the video, centered
    — RH's grammar (grid [1fr auto 1fr]: tc left · play center · name
-   right). The old in-stage info overlay (name + big tc) and the topbar
-   transport are both gone; the topbar keeps brand + Export. */
+   right). R18j (thread #16): the right transport slot became the ASPECT
+   RATIO controller (the media name lives in the Inspector — one place,
+   and the reviewer asked for the controller "instead"); the stage
+   letterboxes the frame to the chosen AR (container-query min() — the
+   frame always fits AND always keeps its ratio). R18j (thread #19): the
+   head's max button toggles the composed full-screen mode — pool +
+   inspector collapse to rails, the timeline MINIMIZES (never hides), the
+   viewer takes the freed space. */
 
-import { Play, Pause } from 'lucide-react';
-import { useMini } from '../state/useMini';
+import { Play, Pause, Maximize2, Minimize2 } from 'lucide-react';
+import { useMini, VIEWER_ASPECTS, aspectEntry } from '../state/useMini';
 import { fmtTimecode } from '../lib/timecode';
 import { thumbGradientFor } from '../lib/filmstrip';
 import { contentEnd } from '../lib/geometry';
@@ -16,6 +22,10 @@ export function Viewer() {
   const playing = useMini((s) => s.playing);
   const doc = useMini((s) => s.doc);
   const togglePlay = useMini((s) => s.togglePlay);
+  const viewerMax = useMini((s) => s.viewerMax);
+  const toggleViewerMax = useMini((s) => s.toggleViewerMax);
+  const viewerAspect = useMini((s) => s.viewerAspect);
+  const setViewerAspect = useMini((s) => s.setViewerAspect);
 
   const under = doc.clips
     .filter((c) => {
@@ -25,16 +35,47 @@ export function Viewer() {
     .sort((a, b) => b.start - a.start)[0];
   const media = under ? doc.media.find((m) => m.id === under.mediaId) : undefined;
   const end = contentEnd(doc.clips);
+  const ar = aspectEntry(viewerAspect);
 
   return (
     <section className="mini-panel mini-viewer" data-testid="mini-viewer" aria-label="Viewer">
-      <div className="mini-panel__head">Viewer</div>
+      <div className="mini-panel__head mini-viewer__head">
+        <span className="mini-viewer__head-label">Viewer</span>
+        {/* R18j (thread #19): max/full-screen toggle — composes the panel
+            collapses (left rail + right rail + minimized timeline); the
+            minimized timeline STAYS operable, so scrubbing continues in
+            the big view. Toggle-back restores the user's exact layout. */}
+        <button
+          type="button"
+          className="mini-viewer__maxbtn"
+          aria-label={viewerMax ? 'Restore normal layout' : 'Maximize viewer'}
+          aria-pressed={viewerMax}
+          title={
+            viewerMax
+              ? 'Restore the normal layout (panels and timeline return)'
+              : 'Maximize the viewer — side panels collapse, timeline minimizes'
+          }
+          onClick={toggleViewerMax}
+          data-testid="mini-btn-viewer-max"
+        >
+          {viewerMax ? <Minimize2 size={14} strokeWidth={1.75} /> : <Maximize2 size={14} strokeWidth={1.75} />}
+        </button>
+      </div>
       <div className="mini-viewer__stage">
         {media ? (
           <div
             className="mini-viewer__frame"
             aria-hidden="true"
-            style={{ background: thumbGradientFor(media) }}
+            style={{
+              background: thumbGradientFor(media),
+              aspectRatio: ar.css,
+              /* letterbox law: the frame is exactly as wide as the SHORTER
+                 constraint allows — never cropped, never distorted. cqw/cqh
+                 come from the stage (container-type: size). jsdom leaves
+                 the declaration uncomputed; tests assert aspectRatio. */
+              width: `min(100cqw, calc(100cqh * ${ar.ratio}))`,
+            }}
+            data-testid="mini-viewer-frame"
           />
         ) : (
           <div className="mini-viewer__empty" data-testid="mini-viewer-empty">
@@ -61,9 +102,25 @@ export function Viewer() {
         >
           {playing ? <Pause size={16} /> : <Play size={16} />}
         </button>
-        <span className="mini-viewer__transportmeta" data-testid="mini-viewer-meta">
-          {media ? media.name : ''}
-        </span>
+        {/* R18j (thread #16): the aspect controller — a styled native
+            <select> (keyboard + a11y for free). Replaces the media-name
+            span; the name lives in the Inspector now. */}
+        <label className="mini-viewer__aspect" data-testid="mini-viewer-aspect">
+          <span className="mini-viewer__aspect-label">Aspect</span>
+          <select
+            className="mini-viewer__aspect-select"
+            value={viewerAspect}
+            onChange={(e) => setViewerAspect(e.target.value as typeof viewerAspect)}
+            aria-label="Viewer aspect ratio"
+            data-testid="mini-viewer-aspect-select"
+          >
+            {VIEWER_ASPECTS.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
     </section>
   );

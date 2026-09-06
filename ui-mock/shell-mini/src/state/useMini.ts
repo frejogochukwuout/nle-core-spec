@@ -47,6 +47,22 @@ export interface ToastMsg {
   seq: number; // increments so identical texts still re-fire the toast
 }
 
+/** R18j (thread #16): common viewer aspect ratios. `ratio` = numeric w/h
+ *  (sizing math); `css` feeds `aspect-ratio` directly. */
+export const VIEWER_ASPECTS = [
+  { id: '16:9', label: '16:9', ratio: 16 / 9, css: '16 / 9' },
+  { id: '4:3', label: '4:3', ratio: 4 / 3, css: '4 / 3' },
+  { id: '1:1', label: '1:1', ratio: 1, css: '1 / 1' },
+  { id: '9:16', label: '9:16', ratio: 9 / 16, css: '9 / 16' },
+  { id: '2.39:1', label: '2.39:1 · Cinema', ratio: 2.39, css: '2.39 / 1' },
+] as const;
+export type ViewerAspect = (typeof VIEWER_ASPECTS)[number]['id'];
+
+/** ViewerAspect → its entry (falls back to 16:9 for stray values). */
+export function aspectEntry(id: string): (typeof VIEWER_ASPECTS)[number] {
+  return VIEWER_ASPECTS.find((a) => a.id === id) ?? VIEWER_ASPECTS[0];
+}
+
 export interface MiniState {
   doc: Doc;
   playhead: number; // unquantized seconds (D5)
@@ -62,6 +78,37 @@ export interface MiniState {
   filmstripOn: boolean;
   /** A1 lane visibility (R18e, feedback #8) — view state only */
   audioLaneVisible: boolean;
+  /** R18i (thread #12, ruler): the ruler extent — max(contentEnd, min 8s,
+   *  viewport coverage) synced from the Timeline component. setPlayhead
+   *  clamps HERE, not to contentEnd: an NLE ruler is scrubbable across its
+   *  whole surface, even past the last clip (Premiere/Resolve/FCP all
+   *  populate + allow scrubbing the full visible ruler). Playback wrap
+   *  stays at contentEnd (D3.3) — that is about CONTENT, this is about
+   *  the ruler surface. Default 8 = the pre-R18i min runway. */
+  rulerEnd: number;
+  setRulerEnd: (end: number) => void;
+  /* ---- R18j layout state (threads #13/#14/#15/#16/#19) -------------
+   *  View-only chrome state — never in history, always drag-gated (a
+   *  relayout mid-gesture would invalidate the live pointer math).
+   *  viewerMax (thread #19) is COMPOSED, not stored per-panel: the
+   *  effective collapse is `individual flag || viewerMax`, so entering
+   *  max mode leaves the user's individual choices intact and exiting
+   *  restores their exact layout. timelineMinimized (thread #13) is
+   *  "minimize", not hide — the compact strip keeps seeking/drag/trim. */
+  poolCollapsed: boolean;
+  inspectorCollapsed: boolean;
+  timelineMinimized: boolean;
+  viewerMax: boolean;
+  /** R18j (thread #16): viewer frame aspect — the letterboxed stage AR */
+  viewerAspect: ViewerAspect;
+  togglePool: () => void;
+  toggleInspector: () => void;
+  toggleTimelineMin: () => void;
+  toggleViewerMax: () => void;
+  setPoolCollapsed: (collapsed: boolean) => void;
+  setInspectorCollapsed: (collapsed: boolean) => void;
+  setTimelineMinimized: (minimized: boolean) => void;
+  setViewerAspect: (aspect: ViewerAspect) => void;
   selectedId: string | null;
   dragActive: boolean; // interaction lock (audit M2)
   toast: ToastMsg | null;
@@ -166,6 +213,13 @@ export const useMini = create<MiniState>((set, get) => {
     rippleOn: false,
     filmstripOn: true,
     audioLaneVisible: true,
+    rulerEnd: 8, // R18i: floor = the min runway; Timeline raises it to viewport coverage
+    // R18j layout defaults: everything expanded, normal (non-max) viewer
+    poolCollapsed: false,
+    inspectorCollapsed: false,
+    timelineMinimized: false,
+    viewerMax: false,
+    viewerAspect: '16:9',
     selectedId: null,
     dragActive: false,
     toast: null,
@@ -212,7 +266,17 @@ export const useMini = create<MiniState>((set, get) => {
 
     setPlayhead: (t) => {
       if (get().dragActive) return; // interaction lock (review #4)
-      set({ playhead: clampPlayhead(t, contentEnd(get().doc.clips)) });
+      // R18i: clamp to the RULER extent — scrubbing over the last shown
+      // timestamp keeps following the pointer (the reported bug); the old
+      // contentEnd clamp pinned the playhead at the last clip's edge while
+      // the ruler surface continued bare for hundreds of px
+      set({ playhead: clampPlayhead(t, get().rulerEnd) });
+    },
+
+    setRulerEnd: (end) => {
+      const next = Math.max(end, 0);
+      if (Math.abs(get().rulerEnd - next) < 1e-9) return; // no-op churn guard
+      set({ rulerEnd: next });
     },
 
     togglePlay: () => {
@@ -262,6 +326,52 @@ export const useMini = create<MiniState>((set, get) => {
     toggleAudioLane: () => {
       if (get().dragActive) return; // interaction lock
       set({ audioLaneVisible: !get().audioLaneVisible });
+    },
+
+    /* ---- R18j layout actions (view-only, drag-gated) ---------------- */
+
+    togglePool: () => {
+      if (get().dragActive) return; // relayout mid-gesture breaks pointer math
+      set({ poolCollapsed: !get().poolCollapsed });
+    },
+
+    toggleInspector: () => {
+      if (get().dragActive) return;
+      set({ inspectorCollapsed: !get().inspectorCollapsed });
+    },
+
+    toggleTimelineMin: () => {
+      if (get().dragActive) return;
+      set({ timelineMinimized: !get().timelineMinimized });
+    },
+
+    toggleViewerMax: () => {
+      if (get().dragActive) return;
+      set({ viewerMax: !get().viewerMax });
+    },
+
+    setPoolCollapsed: (collapsed) => {
+      if (get().dragActive) return;
+      if (get().poolCollapsed === collapsed) return; // no-op churn guard
+      set({ poolCollapsed: collapsed });
+    },
+
+    setInspectorCollapsed: (collapsed) => {
+      if (get().dragActive) return;
+      if (get().inspectorCollapsed === collapsed) return;
+      set({ inspectorCollapsed: collapsed });
+    },
+
+    setTimelineMinimized: (minimized) => {
+      if (get().dragActive) return;
+      if (get().timelineMinimized === minimized) return;
+      set({ timelineMinimized: minimized });
+    },
+
+    setViewerAspect: (aspect) => {
+      if (get().dragActive) return; // the frame resize moves hit targets
+      if (get().viewerAspect === aspect) return;
+      set({ viewerAspect: aspect });
     },
 
     pushToast: (kind, text) => {
@@ -662,6 +772,12 @@ export const useMini = create<MiniState>((set, get) => {
         rippleOn: false,
         filmstripOn: true,
         audioLaneVisible: true,
+        rulerEnd: 8,
+        poolCollapsed: false,
+        inspectorCollapsed: false,
+        timelineMinimized: false,
+        viewerMax: false,
+        viewerAspect: '16:9',
         selectedId: null,
         dragActive: false,
         toast: null,

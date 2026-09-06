@@ -145,6 +145,48 @@ below — it is COMPLETE on origin and its standing items are preserved.
   **PUSH BLOCKER (open):** the PAT cannot push the nle-core-spec main
   branch (read-only) — commits land locally + /home/sync bundle/tarball;
   origin push needs the frejogochukwuout credential (flag to the user).
+- **R18i/R18j — feedback waves 4 + 5 (13 threads, ALL fixed + resolved
+  through the kit's loop; mirror issues #24–#36 auto-closed with
+  evidence):** wave 4 (#24–#28): pool type TABS (All/Video/Image/Audio
+  segmented control, view-only state); trim affordance revised — the
+  dark scrim REMOVED (it fought the filmstrip), now a 2px accent line
+  AT the edge, hover/press/focus only; clip radius re-tuned 2→6px (the
+  reviewer's middle ground, --mini-radius-clip); RULER BUG root-caused
+  (labels stopped at contentEnd = 57% bare surface + setPlayhead clamped
+  at contentEnd so dragging past the last label pinned the playhead) —
+  now full-visible-surface labels (ResizeObserver), playhead scrubs to
+  the ruler end, and edge-parked drags AUTO-SCROLL (gesture re-applies
+  each frame; live-verified scrollLeft 0→972); snap = MAGNET ONLY (deep
+  research: Premiere/Resolve/FCP/Avid snap to edit points + playhead,
+  never a beat grid — the 0.5s quantize left the snap path; snap-off is
+  fully smooth; live-verified raw 8.04 → exact 8.0 with the guide).
+  Wave 5 (#29–#36, the "i have more feedbacks" round): pool + inspector
+  COLLAPSE to 30px vertical-label rails (MEDIA / INSPECTOR at 90°,
+  mode-aware — a rail click under viewer max EXITS max); VIDEO CARDS
+  hover-autoplay (synthetic-media equivalent: animated gradient thumb +
+  live ticking timecode chip, wraps at source length; images/audio never
+  autoplay; prefers-reduced-motion respected); the transport's right
+  slot is now the ASPECT CONTROLLER (16:9/4:3/1:1/9:16/2.39:1 dropdown;
+  stage letterboxes via container-query sizing — live-measured 428×241
+  = exactly 16:9, 576×241 = exactly 2.39:1); the TOPBAR slimmed 56→36px
+  and is a documented DOWNSTREAM CUSTOMIZATION POINT (Topbar.tsx block
+  comment + README section + this entry — embedded-use exit/parent
+  handshake + export handshake live in the host, not the mini); IMAGES
+  carry no duration (no pool chip, no inspector "Source length" — a
+  still has none; a placement's extent is an edit decision); the
+  TIMELINE MINIMIZES (thread #13, first design pass ready for review):
+  one ~59px strip — toolbar hidden, slim every-other-label ruler, V/A
+  pill sub-rows (hue tints, no filmstrip bodies) running the SAME
+  ClipItem gesture engine so seek/drag/trim/arrange/pool-drops stay
+  live (live-verified: ruler scrub to 00:04.2, real-mouse pill drag
+  +48px = +1s); the VIEWER MAX button (thread #19) composes all three
+  collapse modes and toggle-back restores the exact individual layout
+  (flags survive the round-trip — OR-composition, never overwrite).
+  Tests 167→204 (+37), tsc clean, build green; VLM rounds on default
+  (6/6) and maximized (5/5) frames. The one remaining open thread on
+  timeline--default (transition-block styling) pins the SIBLING's
+  component tree + their preview URL — their queue, correctly scoped
+  out of our mirror.
 - **R18 correction (what was REVERTED):** the R16 "storybook can't serve
   publicly, static-mount it instead" verdict was wrong; the workaround
   infrastructure was removed — `public/stories/` (8.4MB), the

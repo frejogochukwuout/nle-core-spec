@@ -138,6 +138,7 @@ describe('splitAtPlayhead (audit M1)', () => {
   });
 
   it('toasts when nothing is under the playhead and nothing is selected', () => {
+    S().setRulerEnd(12.5); // the mounted Timeline always publishes ≥ contentEnd
     S().setPlayhead(12.5);
     S().splitAtPlayhead();
     expect(S().doc.clips).toHaveLength(4);
@@ -174,6 +175,7 @@ describe('append routing (audit M5)', () => {
 describe('playback (audit m1)', () => {
   it('wraps to 0 and continues at contentEnd', () => {
     S().togglePlay(); // playing must be engaged for tick to advance
+    S().setRulerEnd(12.5); // mounted-Timeline parity (R18i: scrub clamps to rulerEnd)
     S().setPlayhead(12.4);
     S().tick(0.2); // 12.6 >= 12.5 → wrap
     expect(S().playhead).toBe(0);
@@ -196,13 +198,23 @@ describe('playback (audit m1)', () => {
     expect(S().playing).toBe(false);
     expect(S().playhead).toBe(0);
   });
-  it('scrub clamps to [0, contentEnd] unquantized', () => {
+  it('scrub clamps to [0, rulerEnd] unquantized (R18i — the published ruler surface)', () => {
+    S().setRulerEnd(12.5); // mounted-Timeline parity: rulerEnd ≥ contentEnd
     S().setPlayhead(3.33);
     expect(S().playhead).toBe(3.33);
     S().setPlayhead(99);
     expect(S().playhead).toBe(12.5);
     S().setPlayhead(-1);
     expect(S().playhead).toBe(0);
+  });
+  it('R18i: scrub PAST contentEnd follows the ruler (the reported bug — playhead pinned at the last clip edge)', () => {
+    // the visible ruler surface (viewport coverage) extends past the last
+    // clip: setPlayhead must keep following the pointer out there
+    S().setRulerEnd(20);
+    S().setPlayhead(15.25);
+    expect(S().playhead).toBe(15.25); // past contentEnd 12.5, on the ruler
+    S().setPlayhead(20.5);
+    expect(S().playhead).toBe(20); // clamped at the surface edge
   });
 });
 
@@ -511,5 +523,64 @@ describe('R18f undo/redo round-trips (review P2-2)', () => {
     S().undo();
     expect(S().doc.clips).toHaveLength(4);
     expect(S().doc.clips.find((c) => c.mediaId === 'm-lower')).toBeUndefined();
+  });
+});
+
+/* ---- R18j layout state (threads #13/#14/#15/#16/#19) ------------- */
+
+describe('R18j layout state', () => {
+  it('defaults: everything expanded, 16:9, no max', () => {
+    expect(S().poolCollapsed).toBe(false);
+    expect(S().inspectorCollapsed).toBe(false);
+    expect(S().timelineMinimized).toBe(false);
+    expect(S().viewerMax).toBe(false);
+    expect(S().viewerAspect).toBe('16:9');
+  });
+
+  it('toggles flip the flags; setters are idempotent (no churn)', () => {
+    S().togglePool();
+    S().toggleInspector();
+    S().toggleTimelineMin();
+    S().toggleViewerMax();
+    expect(S().poolCollapsed).toBe(true);
+    expect(S().inspectorCollapsed).toBe(true);
+    expect(S().timelineMinimized).toBe(true);
+    expect(S().viewerMax).toBe(true);
+    S().setPoolCollapsed(true); // already true — no-op
+    expect(S().poolCollapsed).toBe(true);
+    S().setPoolCollapsed(false);
+    expect(S().poolCollapsed).toBe(false);
+  });
+
+  it('setViewerAspect only accepts the advertised ratios (strays fall back at read time)', () => {
+    S().setViewerAspect('4:3');
+    expect(S().viewerAspect).toBe('4:3');
+    S().setViewerAspect('2.39:1');
+    expect(S().viewerAspect).toBe('2.39:1');
+  });
+
+  it('layout actions are drag-gated (a relayout mid-gesture breaks pointer math)', () => {
+    S().beginDrag();
+    S().togglePool();
+    S().toggleViewerMax();
+    S().setTimelineMinimized(true);
+    S().setViewerAspect('1:1');
+    expect(S().poolCollapsed).toBe(false);
+    expect(S().viewerMax).toBe(false);
+    expect(S().timelineMinimized).toBe(false);
+    expect(S().viewerAspect).toBe('16:9');
+    S().endDrag();
+    S().togglePool();
+    expect(S().poolCollapsed).toBe(true);
+  });
+
+  it('reset clears the layout wave too', () => {
+    S().togglePool();
+    S().toggleViewerMax();
+    S().setViewerAspect('9:16');
+    S().reset();
+    expect(S().poolCollapsed).toBe(false);
+    expect(S().viewerMax).toBe(false);
+    expect(S().viewerAspect).toBe('16:9');
   });
 });

@@ -26,7 +26,8 @@
 
 .mini-topbar__title {
   color: var(--canvas-editor-text-strong);
-  font-size: 13px;
+  /* R18j (thread #17): 13 → 12 to sit right in the slimmer 36px bar */
+  font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
   overflow: hidden;
@@ -56,6 +57,62 @@
   margin: 0 -1px;
 }
 
+/* ---- collapsed panel rails (R18j threads #13/#14) ---------------
+   The pool (left) and inspector (right) collapse to a thin full-height
+   rail: an expand button + a vertical 90° label — the standard collapsed
+   panel style (the pool reads top→bottom; the inspector, docked right,
+   reads bottom→top like right-docked panels in the Adobe family). The
+   rail is ONE button so the whole strip is a click target. */
+
+.mini-pool.is-collapsed,
+.mini-inspector.is-collapsed {
+  width: var(--mini-rail-w);
+  flex: 0 0 var(--mini-rail-w);
+  display: flex;
+  overflow: hidden;
+}
+
+.mini-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 0;
+  border: none;
+  background: transparent;
+  color: var(--canvas-editor-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mini-rail:hover {
+  background: var(--canvas-editor-control-hover);
+  color: var(--canvas-editor-text-default);
+}
+
+.mini-rail:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: -2px;
+}
+
+.mini-rail__label {
+  /* 90° label: vertical text, one narrow column */
+  writing-mode: vertical-rl;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: inherit;
+  user-select: none;
+}
+
+/* right-docked inspector: mirror the label to read bottom→top */
+.mini-inspector.is-collapsed .mini-rail__label {
+  transform: rotate(180deg);
+}
+
 /* ---- media pool ----------------------------------------------- */
 
 .mini-pool {
@@ -64,6 +121,84 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* R18i (shell thread #11): the pool head IS the type filter — a compact
+   segmented control (All / Video / Image / Audio). Same visual language
+   as the timeline toolbar's is-active chips. */
+.mini-pool__tabs {
+  gap: 2px;
+}
+
+.mini-pool__tab {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 22px;
+  padding: 0 2px;
+  border: none;
+  border-radius: var(--canvas-editor-radius-control);
+  background: transparent;
+  color: var(--canvas-editor-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mini-pool__tab:hover {
+  background: var(--canvas-editor-control-hover);
+  color: var(--canvas-editor-text-muted);
+}
+
+.mini-pool__tab.is-active {
+  background: var(--canvas-editor-control-surface);
+  color: var(--canvas-quick-cut-control-active);
+}
+
+.mini-pool__tab:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
+/* R18j (thread #14): collapse button at the tabs' right — flex 0 so the
+   four filter tabs keep sharing the row equally; same icon language as
+   the inspector's PanelRightClose on the other side */
+.mini-pool__collapse {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--canvas-editor-radius-control);
+  background: transparent;
+  color: var(--canvas-editor-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mini-pool__collapse:hover {
+  background: var(--canvas-editor-control-hover);
+  color: var(--canvas-editor-text-default);
+}
+
+.mini-pool__collapse:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
+/* honest empty state (a tab with no media of that kind) */
+.mini-pool__empty {
+  margin: 12px 4px;
+  color: var(--canvas-editor-text-muted);
+  font-size: 11px;
+  text-align: center;
 }
 
 .mini-pool__list {
@@ -122,6 +257,33 @@
 
 /* kind badge — ICON chip, not text (R18g port of the reviewer's sibling
    feedback #28/#30: "an icon would be better… the standard NLE way") */
+/* R18j (thread #15): hover autoplay preview — a real app plays a
+   <video> here; the mock's synthetic equivalent animates the gradient
+   thumb (slow pan over a doubled background = emulated camera motion).
+   Paired in TSX with the live timecode chip. */
+.mini-media-card__thumb.is-previewing {
+  /* !important is deliberate: the thumb's inline `background:` shorthand
+     (the media gradient) resets background-size to auto, and inline styles
+     outrank class rules — the pan needs the doubled canvas */
+  background-size: 200% 100% !important;
+  animation: mini-thumb-pan 2.4s linear infinite;
+}
+
+@keyframes mini-thumb-pan {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: -100% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mini-media-card__thumb.is-previewing {
+    animation: none; /* the ticking timecode still communicates playback */
+  }
+}
+
 .mini-media-card__kind {
   position: absolute;
   top: var(--canvas-editor-space-sm);
@@ -169,6 +331,49 @@
   overflow: hidden;
 }
 
+/* R18j (thread #19): the head becomes a row — label left, the max-mode
+   toggle pinned at the head's right edge (the reviewer's "button on
+   right edge" of the viewer). Same quiet icon-button language as the
+   pool/inspector collapse buttons. */
+.mini-viewer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--canvas-editor-space-sm);
+}
+
+.mini-viewer__head-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-viewer__maxbtn {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 20px;
+  border: none;
+  border-radius: var(--canvas-editor-radius-control);
+  background: transparent;
+  color: var(--canvas-editor-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mini-viewer__maxbtn:hover {
+  background: var(--canvas-editor-control-hover);
+  color: var(--canvas-editor-text-default);
+}
+
+.mini-viewer__maxbtn:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
 .mini-viewer__stage {
   position: relative;
   flex: 1 1 auto;
@@ -188,11 +393,18 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  /* R18j (thread #16): the stage is a size container — the AR frame sizes
+     itself with cqw/cqh units (fits AND keeps its ratio, letterboxed) */
+  container-type: size;
 }
 
+/* R18j (thread #16): the media frame letterboxes to the chosen aspect
+   ratio — width = min(full stage width, height × ratio); height follows
+   from aspect-ratio. Never cropped, never distorted, at any panel size
+   (this is what max mode stretches it through, too). The width math
+   lives inline (per-ratio) in Viewer.tsx. */
 .mini-viewer__frame {
-  position: absolute;
-  inset: 0;
+  position: relative;
   opacity: 0.92;
 }
 
@@ -250,15 +462,57 @@
   outline-offset: 2px;
 }
 
-.mini-viewer__transportmeta {
+/* R18j (thread #16): the transport's right slot is the ASPECT CONTROLLER
+   (replaces the media name — the name lives in the Inspector): a compact
+   label + styled native <select> (keyboard/a11y for free). */
+.mini-viewer__aspect {
   justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.mini-viewer__aspect-label {
+  color: var(--canvas-text-tertiary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   white-space: nowrap;
-  color: var(--canvas-editor-text-muted);
-  font-size: 11px;
+}
+
+.mini-viewer__aspect-select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 22px;
+  padding: 0 18px 0 8px;
+  border: none;
+  border-radius: var(--canvas-editor-radius-control);
+  background: var(--canvas-editor-control-surface);
+  color: var(--canvas-editor-text-default);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  /* quiet chevron via background image (native select otherwise paints
+     a light UA arrow that fights the dark chrome) */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'%3E%3Cpath d='M1 1.5 4 4.5 7 1.5' fill='none' stroke='%239a9a9a' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.mini-viewer__aspect-select:hover {
+  background-color: var(--canvas-editor-control-hover);
+}
+
+.mini-viewer__aspect-select:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
+.mini-viewer__aspect-select option {
+  background: #16181a;
+  color: var(--canvas-editor-text-default);
 }
 
 .mini-viewer__empty {
@@ -288,6 +542,47 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* R18j (thread #13): the head becomes a row — label + collapse button
+   (mirrors the pool's tabs-row collapse on the left edge) */
+.mini-inspector__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--canvas-editor-space-sm);
+}
+
+.mini-inspector__head-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-inspector__collapse {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 20px;
+  border: none;
+  border-radius: var(--canvas-editor-radius-control);
+  background: transparent;
+  color: var(--canvas-editor-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mini-inspector__collapse:hover {
+  background: var(--canvas-editor-control-hover);
+  color: var(--canvas-editor-text-default);
+}
+
+.mini-inspector__collapse:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
 }
 
 .mini-inspector__body {

@@ -7,6 +7,7 @@ import { ToastRegion } from './shell/ToastRegion';
 import { Splitter } from './shell/Splitter';
 import { Timeline } from './timeline/Timeline';
 import { usePlayhead } from './hooks/usePlayhead';
+import { useMini } from './state/useMini';
 
 /* Layout metrics (R18d splitters — feedback #13): the pool/inspector widths
    and the timeline height are drag-resizable with sane rails; defaults are
@@ -25,49 +26,80 @@ export default function App() {
   const [inspW, setInspW] = useState(INSP_W.initial);
   const [tlH, setTlH] = useState(TL_H.initial);
 
+  /* R18j (threads #13/#14/#19): panel collapse + viewer max. The effective
+   *  collapse is `individual flag || viewerMax` — max mode never destroys
+   *  the user's individual choices, and leaving max restores their exact
+   *  layout. The width/height states survive collapse so expand is exact. */
+  const poolCollapsed = useMini((s) => s.poolCollapsed || s.viewerMax);
+  const inspectorCollapsed = useMini((s) => s.inspectorCollapsed || s.viewerMax);
+  const timelineMinimized = useMini((s) => s.timelineMinimized || s.viewerMax);
+
   return (
     <div className="mini-root" data-testid="mini-root">
       <Topbar />
       <div className="mini-main">
-        <div style={{ width: poolW, flexShrink: 0, display: 'flex', minWidth: 0 }}>
+        {poolCollapsed ? (
+          /* collapsed: the pool renders its own thin rail (thread #14) —
+             no width wrapper, no splitter (nothing to resize) */
           <MediaPool />
-        </div>
-        <Splitter
-          orientation="vertical"
-          value={poolW}
-          min={POOL_W.min}
-          max={POOL_W.max}
-          initial={POOL_W.initial}
-          onChange={setPoolW}
-          label="Media pool width"
-        />
+        ) : (
+          <>
+            <div style={{ width: poolW, flexShrink: 0, display: 'flex', minWidth: 0 }}>
+              <MediaPool />
+            </div>
+            <Splitter
+              orientation="vertical"
+              value={poolW}
+              min={POOL_W.min}
+              max={POOL_W.max}
+              initial={POOL_W.initial}
+              onChange={setPoolW}
+              label="Media pool width"
+            />
+          </>
+        )}
         <Viewer />
-        {/* R18g (thread #20): invert — the inspector sits RIGHT of this
-            handle, so dragging right shrinks it (the old code grew it) */}
-        <Splitter
-          orientation="vertical"
-          invert
-          value={inspW}
-          min={INSP_W.min}
-          max={INSP_W.max}
-          initial={INSP_W.initial}
-          onChange={setInspW}
-          label="Inspector width"
-        />
-        <div style={{ width: inspW, flexShrink: 0, display: 'flex', minWidth: 0 }}>
+        {inspectorCollapsed ? (
+          /* collapsed: the inspector renders its own thin rail (thread #13) */
           <Inspector />
-        </div>
+        ) : (
+          <>
+            {/* R18g (thread #20): invert — the inspector sits RIGHT of this
+                handle, so dragging right shrinks it (the old code grew it) */}
+            <Splitter
+              orientation="vertical"
+              invert
+              value={inspW}
+              min={INSP_W.min}
+              max={INSP_W.max}
+              initial={INSP_W.initial}
+              onChange={setInspW}
+              label="Inspector width"
+            />
+            <div style={{ width: inspW, flexShrink: 0, display: 'flex', minWidth: 0 }}>
+              <Inspector />
+            </div>
+          </>
+        )}
       </div>
-      <Splitter
-        orientation="horizontal"
-        value={tlH}
-        min={TL_H.min}
-        max={TL_H.max}
-        initial={TL_H.initial}
-        onChange={setTlH}
-        label="Timeline height"
-      />
-      <Timeline style={{ height: tlH }} />
+      {timelineMinimized ? (
+        /* R18j (thread #13): minimized = the compact strip sizes itself —
+            no row splitter (nothing to resize), tlH survives for restore */
+        <Timeline />
+      ) : (
+        <>
+          <Splitter
+            orientation="horizontal"
+            value={tlH}
+            min={TL_H.min}
+            max={TL_H.max}
+            initial={TL_H.initial}
+            onChange={setTlH}
+            label="Timeline height"
+          />
+          <Timeline style={{ height: tlH }} />
+        </>
+      )}
       <ToastRegion />
     </div>
   );

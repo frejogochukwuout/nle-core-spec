@@ -13,7 +13,11 @@
 
    Snap law (review fix #2): magnet targets = SAME-TRACK neighbor edges
    + playhead, NEVER the dragged clip's own edges. R18e: an engaged
-   magnet paints the snap guide (2px, tracks-wide).
+   magnet paints the snap guide (2px, tracks-wide). R18i (thread #12):
+   the toggle is the MAGNET ONLY — the pro-NLE convention (Premiere /
+   Resolve / FCP / Avid snap to edit points + playhead, never a time
+   grid); the 0.5s beat-quantize left the snap path, so a snap-on drag
+   is smooth except where it magnet-jumps to an edit point.
 
    R18e additions: RH cut styles (cut head / cut tail at playhead —
    feedback #7), ripple toggle (#16), filmstrip↔color-block toggle
@@ -21,7 +25,7 @@
    pool→timeline DnD drop zones (#13 polish wave / v0.2 deferral closed),
    playhead Enter no-op (#11). */
 
-import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, useMemo } from 'react';
+import { useRef, useState, useEffect, type CSSProperties, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent, useMemo } from 'react';
 import {
   Undo2,
   Redo2,
@@ -33,6 +37,8 @@ import {
   Film,
   Eye,
   EyeOff,
+  PanelBottomClose,
+  PanelBottomOpen,
 } from 'lucide-react';
 /* R18g (thread #23): purpose-drawn trim glyphs — the lucide
    ArrowLeftToLine/ArrowRightToLine pair read as jump-to-start/end.
@@ -85,6 +91,7 @@ function ToolsRow() {
   const toggleFilmstrip = useMini((s) => s.toggleFilmstrip);
   const toggleAudioLane = useMini((s) => s.toggleAudioLane);
   const setZoomStep = useMini((s) => s.setZoomStep);
+  const toggleTimelineMin = useMini((s) => s.toggleTimelineMin);
 
   return (
     <div className="qc-timeline__tools" data-testid="mini-timeline-tools">
@@ -159,7 +166,7 @@ function ToolsRow() {
           className={`qc-toolbar__icon${snapOn ? ' is-active' : ''}`}
           aria-label={snapOn ? 'Snapping on' : 'Snapping off'}
           aria-pressed={snapOn}
-          title="Snapping (grid + magnet) — off by default"
+          title="Snapping — magnet to clip edges + playhead (NLE standard) — off by default"
           onClick={() => toggleSnap()}
           data-testid="mini-btn-snap"
         >
@@ -199,6 +206,18 @@ function ToolsRow() {
           data-testid="mini-btn-audiolane"
         >
           {audioLaneVisible ? <Eye /> : <EyeOff />}
+        </button>
+        {/* R18j (thread #13): minimize the timeline — the compact strip
+            keeps seeking / drag / trim / arrange live; expand restores */}
+        <button
+          type="button"
+          className="qc-toolbar__icon"
+          aria-label="Minimize timeline"
+          title="Minimize the timeline — compact strip, editing stays live"
+          onClick={() => toggleTimelineMin()}
+          data-testid="mini-btn-timeline-min"
+        >
+          <PanelBottomClose />
         </button>
       </div>
       <div className="qc-toolbar__group qc-toolbar__group--right" data-testid="mini-timeline-zoom">
@@ -243,9 +262,12 @@ function ToolsRow() {
 
 /* ---------- ruler (px-positioned marks — review fix #1) ---------- */
 
-function RulerMarks({ pps, endTime }: { pps: number; endTime: number }) {
+/** R18j (thread #13): `compact` — the minimized strip's slim ruler: every
+ *  OTHER label (×2 step), ticks/tick-band suppressed via CSS
+ *  (.qc-ruler--min), 16px tall. Same px coordinate law. */
+function RulerMarks({ pps, endTime, compact }: { pps: number; endTime: number; compact?: boolean }) {
   const marks: React.ReactNode[] = [];
-  const step = labelStepFor(pps);
+  const step = labelStepFor(pps) * (compact ? 2 : 1);
   const last = Math.floor((endTime + 1e-9) / step) * step;
   for (let t = 0; t <= endTime + 1e-9; t += step) {
     const isLast = t === last;
@@ -307,9 +329,14 @@ interface ClipProps {
   snapTargets: number[];
   /** R18e: report the engaged magnet target (or null) for the snap guide */
   onSnapGuide: (t: number | null) => void;
+  /** R18j (thread #13): pill rendering for the minimized strip — no
+   *  filmstrip/waveform/block body, label-only, fully-rounded ends. The
+   *  gesture engine (move + trim zones + auto-scroll) is IDENTICAL, so
+   *  dragging / trimming / arranging stay live while minimized. */
+  compact?: boolean;
 }
 
-function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide }: ClipProps) {
+function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets, onSnapGuide, compact }: ClipProps) {
   const select = useMini((s) => s.select);
   const beginDrag = useMini((s) => s.beginDrag);
   const endDrag = useMini((s) => s.endDrag);
@@ -320,7 +347,9 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
   const rippleOn = useMini((s) => s.rippleOn); // R18f: handle hints change under ripple
   const [dragging, setDragging] = useState(false);
 
-  /* gesture session (component-held; the store holds the doc snapshot) */
+  /* gesture session (component-held; the store holds the doc snapshot).
+   *  R18i adds contentEl + lastX: the edge auto-scroll loop re-applies the
+   *  gesture against the LIVE content rect while the timeline scrolls. */
   const g = useRef<{
     kind: 'move' | 'trim-start' | 'trim-end' | null;
     pointerId: number | null; // this gesture owns exactly one pointer (fix #4)
@@ -328,7 +357,10 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
     grabOffset: number; // pointerTime − clip.start at pointerdown
     active: boolean;
     id: string;
-  }>({ kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '' });
+    contentEl: HTMLElement | null; // the shared scroll content (origin law)
+    lastX: number; // latest pointer clientX (auto-scroll reads it each frame)
+  }>({ kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0 });
+  const autoScrollRaf = useRef<number | null>(null);
 
   const timeAt = (clientX: number, el: HTMLElement): number => {
     const content = el.closest('[data-qc-scroll-content]') as HTMLElement | null;
@@ -350,21 +382,23 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
       grabOffset: timeAt(e.clientX, e.currentTarget as HTMLElement) - clip.start,
       active: false,
       id: clip.id,
+      contentEl: (e.currentTarget as HTMLElement).closest(
+        '[data-qc-scroll-content]',
+      ) as HTMLElement | null,
+      lastX: e.clientX,
     };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  const onPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
+  /** apply the gesture at a pointer position (shared by pointermove and
+   *  the auto-scroll loop — the loop's clientX is the STATIONARY pointer,
+   *  but the content rect moves under it as the timeline scrolls) */
+  const applyGesture = (clientX: number) => {
     const gs = g.current;
-    if (!gs.kind || gs.id !== clip.id) return;
-    if (gs.pointerId !== null && e.pointerId !== gs.pointerId) return; // foreign pointer
-    if (!gs.active) {
-      if (Math.abs(e.clientX - gs.startX) < DRAG_THRESHOLD_PX) return; // 5px threshold
-      gs.active = true;
-      setDragging(true);
-      beginDrag(); // interaction lock engages exactly when the gesture does
-    }
-    const t = timeAt(e.clientX, e.currentTarget as HTMLElement);
+    if (!gs.kind || gs.id !== clip.id || !gs.active) return;
+    const content = gs.contentEl;
+    const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
+    const t = pxToTime(clientX - origin, pps);
     if (gs.kind === 'move') {
       const raw = t - gs.grabOffset;
       // R18e: report the engaged magnet (guide paints at the TARGET)
@@ -379,10 +413,76 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
     }
   };
 
+  const stopAutoScroll = () => {
+    if (autoScrollRaf.current !== null) {
+      cancelAnimationFrame(autoScrollRaf.current);
+      autoScrollRaf.current = null;
+    }
+  };
+
+  /** R18i (thread #12, "dragging over the last shown"): pointer parked at
+   *  the scroll viewport edge → scroll + re-apply each frame, so the clip
+   *  keeps moving (visible) instead of dragging blind off-viewport. Skips
+   *  when measurement is impossible (jsdom: clientWidth/rect width = 0). */
+  const maybeAutoScroll = () => {
+    const gs = g.current;
+    if (!gs.kind || !gs.active || !gs.contentEl || autoScrollRaf.current !== null) return;
+    const scrollEl = gs.contentEl.closest('.qc-scroll') as HTMLElement | null;
+    if (!scrollEl || scrollEl.clientWidth <= 0) return;
+    const vr = scrollEl.getBoundingClientRect();
+    if (vr.width <= 0) return; // jsdom guard
+    const inZone = (x: number) =>
+      x > vr.right - EDGE_PX ? 1 : x < vr.left + EDGE_PX ? -1 : 0;
+    if (inZone(gs.lastX) === 0) return;
+    let stalls = 0; // frames with no scroll progress — bounded termination
+    const step = () => {
+      const cur = g.current;
+      if (!cur.kind || !cur.active || !cur.contentEl) {
+        autoScrollRaf.current = null;
+        return;
+      }
+      const sc = cur.contentEl.closest('.qc-scroll') as HTMLElement | null;
+      if (!sc) {
+        autoScrollRaf.current = null;
+        return;
+      }
+      const before = sc.scrollLeft;
+      const dir = inZone(cur.lastX);
+      if (dir !== 0) sc.scrollLeft = before + dir * SCROLL_SPEED_PX;
+      applyGesture(cur.lastX); // content moved under the stationary pointer
+      // applyGesture may GROW the content (free drag right) → next frame has
+      // new scroll room even at the current limit; only a sustained stall
+      // (clamped clip, no growth) terminates the loop
+      stalls = sc.scrollLeft !== before ? 0 : stalls + 1;
+      if (inZone(cur.lastX) !== 0 && stalls < 12) {
+        autoScrollRaf.current = requestAnimationFrame(step);
+      } else {
+        autoScrollRaf.current = null;
+      }
+    };
+    autoScrollRaf.current = requestAnimationFrame(step);
+  };
+
+  const onPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
+    const gs = g.current;
+    if (!gs.kind || gs.id !== clip.id) return;
+    if (gs.pointerId !== null && e.pointerId !== gs.pointerId) return; // foreign pointer
+    gs.lastX = e.clientX;
+    if (!gs.active) {
+      if (Math.abs(e.clientX - gs.startX) < DRAG_THRESHOLD_PX) return; // 5px threshold
+      gs.active = true;
+      setDragging(true);
+      beginDrag(); // interaction lock engages exactly when the gesture does
+    }
+    applyGesture(e.clientX);
+    maybeAutoScroll(); // R18i: edge-parked pointer keeps the drag visible
+  };
+
   const finishGesture = (e: ReactPointerEvent<HTMLElement>, canceled: boolean) => {
     const gs = g.current;
     if (!gs.kind || gs.id !== clip.id) return;
     if (gs.pointerId !== null && e.pointerId !== gs.pointerId) return; // foreign pointer
+    stopAutoScroll(); // R18i: the loop never outlives its gesture
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {
@@ -394,7 +494,7 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
       else endDrag(); // ONE history entry per committed gesture
     }
     setDragging(false);
-    g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '' };
+    g.current = { kind: null, pointerId: null, startX: 0, grabOffset: 0, active: false, id: '', contentEl: null, lastX: 0 };
   };
 
   /** keyboard trim on the handles (review fix #7: no inert controls) */
@@ -410,14 +510,18 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
     left: timeToPx(clip.start, pps),
     width: Math.max(timeToPx(clip.duration, pps), 1),
   };
-  if (!isAudio && filmstripOn) {
+  if (compact) {
+    // R18j (thread #13): the pill body — the media's hue tint (CSS consumes
+    // --qc-block-hue), audio pills get their own tint via the kind class
+    (style as Record<string, string | number>)['--qc-block-hue'] = media?.hue ?? 210;
+  } else if (!isAudio && filmstripOn) {
     // RH clip body: per-clip grey gradient (extraction §3)
     style.background = 'linear-gradient(135deg, rgba(120,120,120,0.95), rgba(72,72,72,0.92))';
   }
 
   return (
     <div
-      className={`qc-track-item${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}`}
+      className={`qc-track-item${compact ? ' qc-track-item--pill' : ''}${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}`}
       style={style}
       data-testid={`mini-clip-${clip.id}`}
       data-clip-id={clip.id}
@@ -437,7 +541,7 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
       onPointerUp={(e) => finishGesture(e, false)}
       onPointerCancel={(e) => finishGesture(e, true)}
     >
-      {isAudio ? (
+      {compact ? null : isAudio ? (
         media && <WaveformBody media={media} widthPx={timeToPx(clip.duration, pps)} />
       ) : filmstripOn ? (
         media && (
@@ -456,13 +560,11 @@ function ClipItem({ clip, media, pps, snapOn, selected, filmstripOn, snapTargets
         />
       )}
       <span className="qc-track-item__label">{media?.name ?? clip.id}</span>
-      {/* R18h (threads #8/#9/#10): NLE trim grammar — NO handle bars. The
-          clip edge itself is the trim control: a 14px drag zone per edge whose
-          affordance is a SHADED (dark-scrim) edge gradient (CSS), visible only
-          when the clip is selected (quiet) or the edge is hovered/focused
-          (strong) — an unselected, unhovered clip shows pure filmstrip.
-          Kept as <button> for pointer + keyboard (←/→) semantics; tabIndex
-          only when selected so the tab order stays honest. */}
+      {/* R18i (thread #10 repost): trim affordance = a 2px accent line AT
+          the edge, ONLY on hover/press/focus (CSS) — the R18h dark-scrim
+          shade is gone (it fought the filmstrip). The zone stays a real
+          <button> for pointer + keyboard (←/→) semantics; tabIndex only
+          when selected so the tab order stays honest. */}
       <button
         type="button"
         className="qc-track-item__trim qc-track-item__trim--start"
@@ -692,6 +794,120 @@ function Lane({
   );
 }
 
+/* ---------- R18j (thread #13): minimized sub-row --------------------
+ * One thin pill row per track inside the single compact strip. V and A
+ * keep separate sub-rows (never stacked on each other) so overlapped
+ * time ranges stay individually clickable — the reviewer's "collapse
+ * the two tracks V/A into a single timeline, each clip more like pills".
+ * Pool drags still land: the row validates kind routing and inserts at
+ * the pointer's time (same insertionAt law as the full lanes). */
+
+function MinLane({
+  track,
+  pps,
+  snapOn,
+  playhead,
+  onSnapGuide,
+}: {
+  track: Track;
+  pps: number;
+  snapOn: boolean;
+  playhead: number;
+  onSnapGuide: (t: number | null) => void;
+}) {
+  const doc = useMini((s) => s.doc);
+  const selectedId = useMini((s) => s.selectedId);
+  const insertMediaAt = useMini((s) => s.insertMediaAt);
+  const clips = clipsOfTrack(doc, track.id);
+  const [drop, setDrop] = useState<DropPreview | null>(null);
+
+  const onDragOver = (e: ReactDragEvent<HTMLElement>) => {
+    if (!e.dataTransfer.types.includes(POOL_DRAG_TYPE)) return;
+    e.preventDefault();
+    const mediaId = poolDrag.current;
+    const media = mediaId ? doc.media.find((m) => m.id === mediaId) : undefined;
+    const compatible = media ? isDroppable(track.kind, media.kind) : true;
+    e.dataTransfer.dropEffect = compatible ? 'copy' : 'none';
+    if (!media || !compatible) {
+      setDrop((prev) => (prev === null ? prev : null));
+      return;
+    }
+    const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
+    const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
+    const t = pxToTime(e.clientX - origin, pps);
+    const place = insertionAt(clips, media.duration, t);
+    if (!place) {
+      setDrop((prev) => (prev === null ? prev : null));
+      return;
+    }
+    const next = { startPx: timeToPx(place.start, pps), widthPx: timeToPx(media.duration, pps) };
+    setDrop((prev) =>
+      prev && prev.startPx === next.startPx && prev.widthPx === next.widthPx ? prev : next,
+    );
+  };
+
+  const onDragLeave = (e: ReactDragEvent<HTMLElement>) => {
+    if (!e.dataTransfer.types.includes(POOL_DRAG_TYPE)) return;
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setDrop(null);
+  };
+
+  const onDrop = (e: ReactDragEvent<HTMLElement>) => {
+    if (!e.dataTransfer.types.includes(POOL_DRAG_TYPE)) return;
+    e.preventDefault();
+    const mediaId = e.dataTransfer.getData(POOL_DRAG_TYPE) || poolDrag.current;
+    const media = mediaId ? doc.media.find((m) => m.id === mediaId) : undefined;
+    setDrop(null);
+    if (!media) return;
+    const content = e.currentTarget.closest('[data-qc-scroll-content]') as HTMLElement | null;
+    const origin = (content ? content.getBoundingClientRect().left : 0) + RENDER_ORIGIN_PX;
+    const t = pxToTime(e.clientX - origin, pps);
+    insertMediaAt(media.id, track.id, t);
+  };
+
+  return (
+    <div
+      className={`qc-min-lane${drop ? ' is-drop-target' : ''}${track.kind === 'audio' ? ' qc-min-lane--audio' : ''}`}
+      role="group"
+      aria-label={track.kind === 'audio' ? 'Audio pills A1' : 'Video pills V1'}
+      data-testid={`mini-min-lane-${track.id}`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {clips.map((c) => {
+        const targets: number[] = [playhead];
+        for (const other of clips) {
+          if (other.id === c.id) continue;
+          targets.push(other.start, other.start + other.duration);
+        }
+        return (
+          <ClipItem
+            key={c.id}
+            clip={c}
+            media={doc.media.find((m) => m.id === c.mediaId)}
+            pps={pps}
+            snapOn={snapOn}
+            selected={selectedId === c.id}
+            filmstripOn={false}
+            snapTargets={targets}
+            onSnapGuide={onSnapGuide}
+            compact
+          />
+        );
+      })}
+      {drop && (
+        <div
+          className="qc-drop-outline qc-drop-outline--min"
+          aria-hidden="true"
+          style={{ left: drop.startPx, width: drop.widthPx }}
+          data-testid={`mini-drop-outline-${track.id}`}
+        />
+      )}
+    </div>
+  );
+}
+
 /* ---------- playhead ---------- */
 
 function Playhead({ pps, endTime }: { pps: number; endTime: number }) {
@@ -756,6 +972,14 @@ function Playhead({ pps, endTime }: { pps: number; endTime: number }) {
 
 /* ---------- the panel ---------- */
 
+/** R18i (thread #12): edge auto-scroll constants — when a clip gesture's
+ *  pointer parks within EDGE_PX of the scroll viewport edge, the timeline
+ *  scrolls (and the gesture keeps re-applying against the scrolled
+ *  content) so dragging past the last shown timestamp stays VISIBLE
+ *  instead of dragging blind off-viewport. */
+const EDGE_PX = 48;
+const SCROLL_SPEED_PX = 12; // per frame ≈ 720px/s at 60fps
+
 export function Timeline({ style }: { style?: CSSProperties }) {
   const doc = useMini((s) => s.doc);
   const zoomStep = useMini((s) => s.zoomStep);
@@ -763,6 +987,24 @@ export function Timeline({ style }: { style?: CSSProperties }) {
   const snapOn = useMini((s) => s.snapOn);
   const filmstripOn = useMini((s) => s.filmstripOn);
   const setPlayhead = useMini((s) => s.setPlayhead);
+  const setRulerEnd = useMini((s) => s.setRulerEnd);
+  /* R18j (thread #13): the minimized strip — effective when the flag is
+   *  set OR the viewer is maxed (thread #19: the timeline MINIMIZES for
+   *  max view, it never disappears). Expanded restores the splitter-sized
+   *  height; tlH lives in App and survives. */
+  const timelineMinimized = useMini((s) => s.timelineMinimized || s.viewerMax);
+  const viewerMax = useMini((s) => s.viewerMax);
+  const setTimelineMinimized = useMini((s) => s.setTimelineMinimized);
+  const toggleViewerMax = useMini((s) => s.toggleViewerMax);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  /** R18i (thread #12, ruler): measured scroll viewport width — the ruler
+   *  populates timestamps across the WHOLE visible surface ("consistently
+   *  show all the time"), not just to the content end. The old surface
+   *  left ~57% of the ruler bare (ticks, no labels) and pinned the
+   *  playhead at contentEnd — Premiere/Resolve/FCP all show + allow
+   *  scrubbing the full visible ruler. jsdom measures 0 → the floor is
+   *  the pre-R18i behavior (content + min 8s). */
+  const [viewportW, setViewportW] = useState(0);
   // R18f (review P1-4): the keyboard surface lives HERE, not in App — the
   // solo Timeline stories get the advertised shortcuts (S/[/]/Del/⌘Z…);
   // App renders Timeline, so the hook still mounts exactly once.
@@ -770,8 +1012,124 @@ export function Timeline({ style }: { style?: CSSProperties }) {
   /** R18e: the engaged magnet target while a gesture runs (snap guide) */
   const [snapGuide, setSnapGuide] = useState<number | null>(null);
   const pps = ppsFor(zoomStep);
-  const endTime = Math.max(contentEnd(doc.clips), 8); // min 8s ruler runway
+  const step = labelStepFor(pps);
+  // one label of runway past the viewport so the rightmost visible label
+  // is never cut by the scroll edge
+  const viewportTime = viewportW > 0 ? (viewportW - RENDER_ORIGIN_PX) / pps + step : 0;
+  const endTime = Math.max(contentEnd(doc.clips), 8, viewportTime);
   const width = timeToPx(endTime, pps);
+
+  /* viewport measurement (ResizeObserver when available, resize listener
+   *  as the jsdom/old-browser fallback). R18j: deps include the minimized
+   *  flag — the mode switch swaps the .qc-scroll element, so the observer
+   *  must re-attach to the live one. */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth;
+      setViewportW((prev) => (Math.abs(prev - w) > 1 ? w : prev));
+    };
+    measure();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [timelineMinimized]);
+
+  /* R18i: publish the ruler extent — setPlayhead clamps to it, so the
+   *  playhead scrubs the full visible ruler surface (the reported bug:
+   *  dragging over the last shown timestamp pinned at contentEnd) */
+  useEffect(() => {
+    setRulerEnd(endTime);
+  }, [endTime, setRulerEnd]);
+
+  /* ---- R18j (thread #13): the minimized strip ----------------------
+   * Toolbar hidden, ruler slimmed (every-other label), V/A pills in one
+   * compact strip, playhead fully scrubbable, clips draggable/trimmable
+   * (ClipItem compact reuses the whole gesture engine), pool drags land
+   * on the sub-rows. The expand rail is mode-aware like the panel rails:
+   * under viewerMax it EXITS max mode; otherwise it un-minimizes. */
+  if (timelineMinimized) {
+    return (
+      <div
+        className="qc-timeline is-minimized"
+        data-testid="mini-timeline-min"
+        style={{ ...style, ['--qc-minor-tick-step' as string]: `${pps}px` }}
+      >
+        <div className="qc-min">
+          <button
+            type="button"
+            className="qc-min__expand"
+            onClick={() => (viewerMax ? toggleViewerMax() : setTimelineMinimized(false))}
+            aria-label="Expand timeline"
+            title="Expand the timeline — full toolbar and lanes return"
+            data-testid="mini-btn-timeline-expand"
+          >
+            <PanelBottomOpen size={14} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+          <div className="qc-scroll" data-testid="mini-timeline-scroll" ref={scrollRef}>
+            <div
+              style={{
+                width,
+                minWidth: '100%',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+              data-qc-scroll-content
+            >
+              <div className="qc-ruler qc-ruler--min">
+                <div className="qc-ruler__inner">
+                  <div
+                    className="qc-ruler__content qc-ruler__content--min"
+                    data-testid="mini-ruler"
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      if (useMini.getState().dragActive) return; // lock (fix #4)
+                      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setPlayhead(pxToTime(e.clientX - rect.left, pps));
+                    }}
+                    onPointerMove={(e) => {
+                      if (e.buttons === 1 && !useMini.getState().dragActive) {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setPlayhead(pxToTime(e.clientX - rect.left, pps));
+                      }
+                    }}
+                  >
+                    <RulerMarks pps={pps} endTime={endTime} compact />
+                  </div>
+                </div>
+              </div>
+              {doc.tracks.map((track) => (
+                <MinLane
+                  key={track.id}
+                  track={track}
+                  pps={pps}
+                  snapOn={snapOn}
+                  playhead={playhead}
+                  onSnapGuide={setSnapGuide}
+                />
+              ))}
+              <Playhead pps={pps} endTime={endTime} />
+              {snapGuide !== null && (
+                <div
+                  className="qc-snap-guide"
+                  aria-hidden="true"
+                  style={{ left: RENDER_ORIGIN_PX + timeToPx(snapGuide, pps) }}
+                  data-testid="mini-snap-guide"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -781,7 +1139,7 @@ export function Timeline({ style }: { style?: CSSProperties }) {
     >
       <ToolsRow />
       <div className="qc-timeline__scroll-wrap">
-        <div className="qc-scroll" data-testid="mini-timeline-scroll">
+        <div className="qc-scroll" data-testid="mini-timeline-scroll" ref={scrollRef}>
           {/* ONE shared scroll content (audit M3): ruler + lanes + playhead
               move together; min-width 100% keeps surfaces full-viewport at
               low zoom. Everything inside positions in px from RENDER_ORIGIN.

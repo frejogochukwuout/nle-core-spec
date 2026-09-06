@@ -159,25 +159,31 @@ describe('splitPoint (audit M1: quantized + clamped + windowed)', () => {
   });
 });
 
-describe('resolveSnap (magnet first, then grid)', () => {
+describe('resolveSnap (R18i: magnet only — the NLE snap convention)', () => {
   it('returns raw when snap is off', () => {
     expect(resolveSnap(2.3, false, 96, [2])).toBe(2.3);
   });
-  it('magnet wins over grid (a playhead target is kept EXACT)', () => {
+  it('magnet commits its EXACT target (a playhead target is kept off-grid)', () => {
     expect(resolveSnap(2.03, true, 96, [2])).toBe(2); // 0.03s*96 ≈ 3px < 12px magnet
     expect(resolveSnap(2.03, true, 96, [2.07])).toBe(2.07); // magnet target kept exact (off-grid ok)
   });
-  it('falls back to the grid when no magnet hit', () => {
-    expect(resolveSnap(2.3, true, 96, [10])).toBe(2.5);
+  it('no magnet hit → the pointer time passes through SMOOTH (no beat-grid stepping)', () => {
+    // R18i (thread #12): the 0.5s grid no longer fills this branch — NLE
+    // snap toggles are edit-point magnets, not beat grids; drags commit the
+    // pointer's own position exactly like an NLE frame-aligns to the pointer
+    expect(resolveSnap(2.3, true, 96, [10])).toBe(2.3);
   });
-  it('no magnet beyond 12px (grid result must differ from the target)', () => {
-    // 2.4 vs target 2: |Δ|*96 = 38px > 12 → grid 2.5 (≠ target 2 — a broken
+  it('no magnet beyond 12px (raw result must differ from the target)', () => {
+    // 2.4 vs target 2: |Δ|*96 = 38px > 12 → raw 2.4 (≠ target 2 — a broken
     // radius check would return 2 and fail this)
-    expect(resolveSnap(2.4, true, 96, [2])).toBe(2.5);
+    expect(resolveSnap(2.4, true, 96, [2])).toBe(2.4);
   });
   it('magnet radius is 12px inclusive', () => {
     expect(magnetTarget(2.125, 96, [2])).toBe(2); // exactly 12px
     expect(magnetTarget(2.13, 96, [2])).toBeNull(); // just past
+  });
+  it('snap ON with no targets at all is a pure passthrough', () => {
+    expect(resolveSnap(7.312, true, 48, [])).toBe(7.312);
   });
 });
 

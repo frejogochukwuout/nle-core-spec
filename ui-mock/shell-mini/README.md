@@ -124,11 +124,35 @@ Run it at boot or any time; safe twice.
   and the inspector splitter drags with boundary semantics (drag right
   shrinks — R18g feedback #20 fixed the inverted direction). Snap is
   OFF by default (feedback #10 — the magnet is a deliberate opt-in now).
-- **Radii** (R18g, feedback #18/#21/#22): panels 20→8px, controls 8→4px,
-  clips near-square (2px — big clip corners read as gaps between cuts),
-  the video frame square (screen content is never rounded), Export CTA
-  6px. Documented deviation from the RH-verbatim token set (see
-  tokens.css — original values kept in comments).
+- **Ruler + scrubbing** (R18i, threads #11/#12): the ruler populates the
+  FULL visible surface (ResizeObserver-measured), the playhead scrubs
+  past the last clip to the ruler's end (Premiere/Resolve/FCP behavior),
+  and drags parked at the scroll edge AUTO-SCROLL with the gesture
+  re-applying each frame — dragging past the last shown timestamp stays
+  visible instead of going blind off-viewport.
+- **Pool tabs + collapse + hover-preview** (R18i/R18j): segmented
+  All/Video/Image/Audio filter in the pool head (view-only state); the
+  pool and inspector each COLLAPSE to a 30px vertical-label rail
+  (MEDIA / INSPECTOR at 90°, mode-aware under viewer max); video cards
+  play a hover preview (animated thumb + live ticking timecode; images
+  and audio never autoplay; keyboard focus parity).
+- **Viewer max + aspect ratio** (R18j): a max button at the viewer
+  head's right edge composes full-screen — side panels to rails, the
+  timeline MINIMIZES (never hides), toggle-back restores the exact
+  layout (individual collapse flags survive the round-trip); the
+  transport's right slot is an aspect-ratio controller (16:9 / 4:3 /
+  1:1 / 9:16 / 2.39:1) and the stage letterboxes to it exactly at any
+  size (container-query sizing).
+- **Minimized timeline** (R18j, thread #13): one compact strip (~59px)
+  — slim every-other-label ruler + V/A pill sub-rows; seek, drag, trim,
+  arrange, selection and pool-drops all still work (same gesture
+  engine); an expand button at the strip's left restores the full panel.
+- **Radii** (R18g, feedback #18/#21/#22 → re-tuned R18i, thread #11):
+  panels 20→8px, controls 8→4px, clips at the reviewer's middle ground
+  6px (2px read too sharp for shell-mini's casual language; 10px read
+  as gaps between cuts), the video frame square (screen content is never
+  rounded), Export CTA 6px. Documented deviation from the RH-verbatim
+  token set (see tokens.css — original values kept in comments).
 
 ## What's OUT (deliberate — the deviations register)
 
@@ -156,20 +180,55 @@ Run it at boot or any time; safe twice.
    geometry tokens are overridden (panel 20→8, control 8→4, clip 2, video
    frame 0) — the reviewer's live judgment over the snapshot's roundness.
    Original values kept inline in tokens.css for provenance.
-8. **Trim affordance: shaded edges, no handle bars** (R18h, threads
-   #8/#9/#10 — "remove handler and use shaded edge instead … NLE doesn't
-   usually add handles like a typical webapp"): the RH reference draws
-   2×10px accent bars at clip edges (`RH-timeline-editor.html
-   .qc-track-item__trim::before`); user feedback overrides. The clip edge
-   IS the trim control now — 14px drag zones per edge whose affordance is
-   a dark-scrim gradient (quiet when the clip is selected, strong on
-   hover/focus/drag, invisible when unselected+unhovered). Zones stay
-   real buttons: ←/→ keyboard trim kept, tabIndex only when selected.
-   The RH originals remain in timeline.css comments for provenance.
+8. **Trim affordance: edge lines, no handle bars** (R18h → revised
+   R18i, threads #8/#9/#10 + the #10 repost): the RH reference draws
+   2×10px accent bars at clip edges; user feedback overrode twice — first
+   to a dark-scrim shaded edge (R18h), then (R18i, "the current one
+   messes up the filmstrip too much") to NO standing affordance at all:
+   a 2px accent line AT the very edge, visible ONLY on hover/press/focus.
+   The clip edge IS the trim control — 14px drag zones per edge, real
+   buttons with ←/→ keyboard trim, tabIndex only when selected. The RH
+   originals remain in timeline.css comments for provenance.
 9. **Split glyph joins the trim family** (R18h, thread #9): the lucide
    Scissors is replaced by a purpose-drawn clip-rect glyph with the
    playhead cutting through the MIDDLE (both halves solid — a split
    discards nothing), matching the TrimStart/TrimEnd grammar beside it.
+10. **Snap = magnet only** (R18i, thread #12): the pro-NLE convention —
+   the toggle governs the edit-point magnet (same-track neighbor edges +
+   playhead) and NOTHING else; the 0.5s beat-quantize left the snap path
+   entirely (snap OFF = fully smooth raw drag). Beat-stepping, if ever
+   wanted, would be a separate consumer-editor feature (v0.2 candidate).
+11. **Aspect controller replaces the transport's name slot** (R18j,
+   thread #16): the transport row's right slot is an aspect-ratio
+   dropdown (16:9/4:3/1:1/9:16/2.39:1) instead of the media name — the
+   name lives in the pool card + inspector (one place). The stage
+   letterboxes via container-query sizing (always fits, always on-ratio).
+12. **Minimized timeline = pills** (R18j, thread #13): the compact strip
+   renders clips as label-only hue-tinted pills (no filmstrip/waveform
+   bodies) with V/A in separate 14px sub-rows inside one strip — the
+   same ClipItem gesture engine runs underneath, so seek/drag/trim/
+   arrange stay live. The playhead's hover time pill is suppressed in
+   the strip (the viewer transport tc is the live read).
+13. **Images carry no duration** (R18j, thread #18): stills show no
+   duration chip in the pool and no "Source length" row in the
+   inspector — a still has no intrinsic length; a placement's extent is
+   an edit decision (shown as the clip Duration).
+14. **Topbar is a downstream customization point** (R18j, thread #17 —
+   see the section below): slim 36px chrome-only bar; the placeholder
+   brand + Export stub are EXPLICITLY meant to be swapped by the host
+   product, not extended.
+
+## The topbar is a downstream customization point (R18j, thread #17)
+
+shell-mini is a UI template meant to be EMBEDDED in a host product, not
+a standalone app. This bar is where a downstream integration replaces
+our placeholder brand + Export with ITS chrome: the exit / "back to
+parent" affordance (cross button, breadcrumb, ESC-to-parent handshake),
+the host's project identity, and the real Export flow (render →
+progress → host artifact handoff). The current Export CTA is an honest
+mock stub on purpose. Keep this bar minimal and stateless so a host can
+swap it without touching the rest of the shell; anything richer belongs
+in the host, not here. (Mirrored in Topbar.tsx and .agents/HANDOFF.md.)
 
 ## Layout
 

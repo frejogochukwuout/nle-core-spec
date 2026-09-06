@@ -105,9 +105,19 @@ export function splitPoint(playhead: number, clip: Clip): number | null {
   return Math.min(Math.max(quantize(playhead), lo), hi);
 }
 
-/** SNAP (D7): snap toggle governs grid quantization AND the 12px magnet.
- *  Magnet targets are the CALLER's responsibility (same-track neighbor
- *  edges + playhead — NEVER the dragged clip's own edges, review fix #2). */
+/** SNAP (R18i, thread #12 "two types of snapping"): the toggle governs
+ *  the MAGNET ONLY — the pro-NLE convention. Research (Premiere Pro "Snap",
+ *  Resolve snapping, FCP snapping, Avid Snap-to-Head/Tail): one toggle
+ *  snaps to EDIT POINTS — clip edges, playhead (+ markers, which we lack).
+ *  None of them snap to a time grid; positions are frame-aligned by the
+ *  document model, not by the snap toggle. Our 0.5s GRID keeps that exact
+ *  role: the quantum for PROGRAMMATIC edits (split / insert / ripple)
+ *  stays grid-clean, but pointer drags commit the pointer's own position
+ *  (smooth) or the magnet's exact target (jump) — never a beat-step.
+ *  This removes the felt conflict: dragging near an edge magnet-jumps,
+ *  elsewhere it moves smoothly. Magnet targets are the CALLER's
+ *  responsibility (same-track neighbor edges + playhead — NEVER the
+ *  dragged clip's own edges, review fix #2). */
 export const SNAP_PX = 12;
 
 /** The nearest magnet target within 12px, or null. */
@@ -118,14 +128,18 @@ export function magnetTarget(t: number, pps: number, targets: number[]): number 
   return null;
 }
 
-/** The ONE snap law (component-facing): magnet FIRST (exact target — a
- *  playhead magnet hit commits the playhead's exact time, the documented
- *  grid exception), else grid quantize when snap is on, else raw. */
+/** The ONE snap law (component-facing): with snap ON the magnet commits
+ *  its EXACT target (a playhead magnet hit may be off-grid by design —
+ *  the documented grid exception); otherwise the pointer's own time
+ *  passes through untouched. The 0.5s beat-quantize that used to fill
+ *  the "no magnet" branch is GONE (R18i research — NLE snap toggles are
+ *  edit-point magnets; beat stepping is a consumer-editor feature and
+ *  it fought the magnet mid-gesture). */
 export function resolveSnap(t: number, snapOn: boolean, pps: number, targets: number[]): number {
   if (!snapOn) return t;
   const magnet = magnetTarget(t, pps, targets);
   if (magnet !== null) return magnet;
-  return quantize(t);
+  return t;
 }
 
 /** Playhead scrub clamp (D7): [0, contentEnd], unquantized. */
