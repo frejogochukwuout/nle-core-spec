@@ -1381,16 +1381,17 @@ describe('R6 — the KEPT clip edge auto-scroll (R18i/R18k law, now netted)', ()
       });
       expect(io.state.val).toBe(12); // the loop scrolled
       expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5); // + followed
-      // the loop only lives while the gesture does: release stops it
+      // the loop only lives while the gesture does: release stops it, and
+      // the drained post-release frames schedule NOTHING further (a live
+      // loop would have re-requested a frame inside its callback)
       fireEvent.pointerUp(c2, { pointerId: 42, clientX: 790, clientY: 10 });
-      const pending = queue.length;
       act(() => {
         const q = queue;
         queue = [];
         q.forEach((cb) => cb(performance.now()));
       });
       expect(io.state.val).toBe(12); // frozen after the release
-      expect(pending).toBeGreaterThanOrEqual(0); // (drain safety)
+      expect(queue).toHaveLength(0); // the loop did not reschedule
     } finally {
       rafSpy.mockRestore();
       io.restore();
