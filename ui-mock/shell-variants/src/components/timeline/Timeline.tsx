@@ -180,7 +180,7 @@ export function Timeline() {
     const ids: string[] = [];
     let top = zoneH; // first lane starts below the ruler zone
     for (const track of scene.tracks) {
-      const h = laneHeight(track.kind);
+      const h = laneHeight(track);
       if (!track.locked && yBot > top && yTop < top + h) {
         for (const el of track.elements) {
           if (tMax > el.startTime && tMin < el.startTime + el.duration) ids.push(el.id);
@@ -277,7 +277,17 @@ export function Timeline() {
 
   const audioLaneBoost = useUi((s) => s.audioLaneBoost);
   const trackHeightPref = useUi((s) => s.trackHeightPref);
-  const laneHeight = (kind: TrackJSON['kind']) => {
+  const trackHeightOverrides = useUi((s) => s.trackHeightOverrides);
+  /* R20-W5 (thread #58 / D1.5, gap C57): laneHeight per TRACK. Composition
+     (timeline-cluster thread-4 §4b, binding): explicit override REPLACES the
+     pref'd auto size for that track, then audioLaneBoost still transforms
+     (audio ×1.6, main cap 40, overlay cap 28) — the boost is a page-level
+     view transform applied uniformly, so a custom height participates in it
+     PROPORTIONALLY (custom 60px audio → 96 in focus; custom 120 main CAPS
+     at 40 — the documented yield rule). laneHeightOf(id, kind) serves the
+     virtual layouts (drag ghosts / insert-preview new tracks — fresh ids,
+     no override → auto); laneHeight(track) is the normal entry. */
+  const laneHeightOf = (trackId: string, kind: TrackJSON['kind']): number => {
     /* R19 caption lane (gap C34): 32px Sub-lane (reference §2.5 — the 24px
        parchment chips + 4px insets); filmstrip/blocks kind heights apply to
        every other kind. */
@@ -287,16 +297,18 @@ export function Timeline() {
        default), min 24px, rounded to px. B3 registration: the state-home
        question (per-track vs global) is a seal item — the mock answers
        GLOBAL (one pref for all lanes); deviation noted in the store. */
-    const sized = trackHeightPref === 'compact'
+    const auto = trackHeightPref === 'compact'
       ? Math.max(24, Math.round(base * 0.6))
       : trackHeightPref === 'tall'
         ? Math.max(24, Math.round(base * 1.4))
         : base;
+    const sized = trackHeightOverrides[trackId] ?? auto;
     // audio focus: audio lanes ×1.6, video/overlay compress (design doc §3.2)
-    // — applied on the PREF'D height so the two axes compose
+    // — applied on the OVERRIDE-then-PREF'D height so the axes compose
     if (audioLaneBoost) return kind === 'audio' ? Math.round(sized * 1.6) : kind === 'main' ? Math.min(sized, 40) : Math.min(sized, 28);
     return sized;
   };
+  const laneHeight = (track: TrackJSON): number => laneHeightOf(track.id, track.kind);
 
   // R15 T5 snap targets: element edges on UNLOCKED tracks only (locked
   // lanes are inert — their edges are not snap sources), + playhead, 0,
@@ -316,14 +328,14 @@ export function Timeline() {
      (canonical gap law N/A, design T3). */
   const laneTopAt = (index: number): number => {
     let top = zoneH;
-    for (let i = 0; i < index && i < scene.tracks.length; i++) top += laneHeight(scene.tracks[i]!.kind);
+    for (let i = 0; i < index && i < scene.tracks.length; i++) top += laneHeight(scene.tracks[i]!);
     return top;
   };
   const laneAtContentY = (contentY: number): number | 'above' | 'below' => {
     if (contentY < zoneH) return 'above';
     let top = zoneH;
     for (let i = 0; i < scene.tracks.length; i++) {
-      const h = laneHeight(scene.tracks[i]!.kind);
+      const h = laneHeight(scene.tracks[i]!);
       if (contentY < top + h) return i;
       top += h;
     }
@@ -391,7 +403,8 @@ export function Timeline() {
     const box = sc?.getBoundingClientRect();
     const contentY = box ? clientY - box.top + (sc?.scrollTop ?? 0) : 0;
     const ownTop = laneTopAt(session.anchorTrackIdx);
-    const ownH = laneHeight(scene.tracks[session.anchorTrackIdx]?.kind ?? 'main');
+    const anchorTrack = scene.tracks[session.anchorTrackIdx];
+    const ownH = anchorTrack ? laneHeight(anchorTrack) : 80;
     const engaged = box ? contentY <= ownTop - DRAG_THRESHOLD_PX || contentY >= ownTop + ownH + DRAG_THRESHOLD_PX : false;
     if (!engaged) {
       // horizontal-only: target = the anchor's own lane (the clip's own
@@ -427,7 +440,7 @@ export function Timeline() {
     let acc = zoneH;
     for (const l of layout) {
       tops.push(acc);
-      acc += laneHeight(l.kind);
+      acc += laneHeightOf(l.id, l.kind);
     }
     const elsById = new Map<string, ElementJSON>();
     for (const t of scene.tracks) for (const e of t.elements) elsById.set(e.id, e);
@@ -441,7 +454,7 @@ export function Timeline() {
         duration: el?.duration ?? 0,
         type: el?.type ?? 'video',
         top: tops[Math.max(0, layoutIdx)] ?? zoneH,
-        height: laneHeight(layout[Math.max(0, layoutIdx)]?.kind ?? 'main') - 4,
+        height: laneHeightOf(layout[Math.max(0, layoutIdx)]?.id ?? '', layout[Math.max(0, layoutIdx)]?.kind ?? 'main') - 4,
         anchor: move.id === anchorId,
       };
     });
@@ -520,7 +533,7 @@ export function Timeline() {
             duration: anchorEl.duration,
             type: anchorEl.type,
             top: laneTopAt(hoveredIdx),
-            height: laneHeight(scene.tracks[hoveredIdx]!.kind) - 4,
+            height: laneHeight(scene.tracks[hoveredIdx]!) - 4,
             anchor: true,
           }
         : null;
@@ -743,7 +756,7 @@ export function Timeline() {
           </div>
         )}
         {scene.tracks.map((track) => (
-          <TrackHeader key={track.id} track={track} sceneId={scene.id} height={laneHeight(track.kind)} />
+          <TrackHeader key={track.id} track={track} sceneId={scene.id} height={laneHeight(track)} />
         ))}
         {/* add-track affordance (mock: adds a real audio track) */}
         <button
@@ -823,7 +836,7 @@ export function Timeline() {
           <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} playhead={playhead} contentW={contentW} view={{ scrollLeft, viewportW: viewportW || 900 }} />
 
           {scene.tracks.map((track, trackIdx) => {
-            const h = laneHeight(track.kind);
+            const h = laneHeight(track);
             /* R15 T3: band-highlight the hovered lane while a VALID cross-track
                drop target holds (conflict/frozen previews never highlight). */
             const dragHighlight = !!dragPreview && !dragPreview.conflict && !dragPreview.frozen && dragPreview.hoverIndex === trackIdx;
@@ -1035,7 +1048,7 @@ export function Timeline() {
           {insertPreview?.ok && insertPreview.geometry.ghost && (() => {
             const g = insertPreview.geometry.ghost;
             const laneTop = laneTopAt(g.laneIndex);
-            const laneH = laneHeight(g.laneKind);
+            const laneH = laneHeightOf(g.trackId, g.laneKind);
             const gLeft = g.start * pxPerSec;
             const gWidth = Math.max(6, g.dur * pxPerSec);
             const elsById = new Map<string, ElementJSON>();

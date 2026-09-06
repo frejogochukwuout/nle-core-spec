@@ -481,6 +481,26 @@ interface UiState {
      state-home question (per-track vs global) is a seal item — the mock answers
      GLOBAL, a noted deviation; view state, not doc. */
   trackHeightPref: 'compact' | 'normal' | 'tall' | null;
+  /* R20-W5 (thread #58 / D1.5, gap C57): PER-TRACK pixel-height overrides —
+     trackId → px; ABSENT = auto (the kind-based height × the global pref).
+     VIEW state: never inside a withHistory snapshot (the snapshot slice
+     stays scenes/activeSceneId/lockAll/selection/mockGrades) — the pref
+     precedent's law. Track ids are stable per scene; stale ids are harmless
+     (looked up per the active scene's tracks). Drag math note: in audio
+     focus the override participates in the page-level boost PROPORTIONALLY
+     (audio ×1.6; custom main >40 CAPS in focus — the documented yield rule,
+     timeline-cluster.md thread-4 §4b; switch to "override wins absolutely"
+     is a one-line change in Timeline.laneHeight if reviewers object). */
+  trackHeightOverrides: Record<string, number>;
+  /* R20-W5 (thread #67 / D1.5): media-bay MODE filter — when ON, the pool +
+     SoundLibrary auto-filter to audio assets (audio type + audio-bearing
+     video, the SoundLibrary grouping) with an honest count chip + an
+     'Audio only' toggle. Default ON so the AUDIO page (where it is honored)
+     boots filtered; Edit/Color/Deliver pages render the pool unfiltered
+     (MediaPool gates the effect on page === 'audio' — SoundLibrary is the
+     audio-page surface, so it honors the flag directly). View state, never
+     persisted, never snapshotted. */
+  poolModeFilter: boolean;
 
   /* ---- R20-W4b (DESIGN-R20 D3, gaps C50/C51/C55/C56) ---- */
   /* mockGrades is UNDOABLE (the withHistory snapshot carries it — undo/redo
@@ -606,6 +626,12 @@ interface UiState {
   toggleStripInserts: (trackId: string) => void;
   setAudioLaneBoost: (v: boolean) => void;
   setTrackHeightPref: (p: UiState['trackHeightPref']) => void;
+  /** R20-W5 (thread #58): per-track height write. `px` is clamped by the
+   *  store to [min, 240] where min = 32 for caption tracks (the 24px chip +
+   *  4px insets floor) else 24 — the single owner of the law; `null` = reset
+   *  to auto (key deleted). View state: no history entry ever. */
+  setTrackHeight: (trackId: string, px: number | null) => void;
+  setPoolModeFilter: (v: boolean) => void;
   setStripFocus: (id: string | null) => void;
   setMixerTrack: (trackId: string, patch: Partial<MixerTrackSettings>) => void;
   setAuxBus: (bus: 'a1' | 'a2', patch: Partial<AuxBusSettings>) => void;
@@ -798,6 +824,8 @@ export const useUi = create<UiState>((set, get) => ({
   stripInsertsOn: {},
   mixerFloorWarned: false,
   trackHeightPref: null,
+  trackHeightOverrides: {}, // R20-W5: per-track view state, absent = auto
+  poolModeFilter: true, // R20-W5: default ON — the audio page boots filtered
   /* R20-W4b: the grade sidecar boots EMPTY (absent key = identity grade);
      console view-state defaults: Primaries tab, Clip target, no matte
      preview, Primary node selected (C56 default binding). */
@@ -1287,6 +1315,28 @@ export const useUi = create<UiState>((set, get) => ({
   toggleStripInserts: (trackId) => set((s) => ({ stripInsertsOn: { ...s.stripInsertsOn, [trackId]: !(s.stripInsertsOn[trackId] ?? true) } })),
   setAudioLaneBoost: (v) => set({ audioLaneBoost: v }),
   setTrackHeightPref: (p) => set({ trackHeightPref: p }), /* §4.9 Height pref — view state, no history */
+  setTrackHeight: (trackId, px) => set((s) => {
+    /* R20-W5 (thread #58): clamp law lives HERE (single owner) — min 32 for
+       caption tracks (the 24px chip + 4px insets floor), else 24; max 240.
+       The kind lookup scans scenes (a track exists in exactly one scene;
+       unknown ids get the generic 24 floor — harmless). */
+    const kind = (() => {
+      for (const sc of s.scenes) {
+        const hit = sc.tracks.find((t) => t.id === trackId);
+        if (hit) return hit.kind;
+      }
+      return null;
+    })();
+    if (px === null) {
+      const next = { ...s.trackHeightOverrides };
+      delete next[trackId];
+      return { trackHeightOverrides: next };
+    }
+    const min = kind === 'caption' ? 32 : 24;
+    const clamped = Math.round(Math.min(240, Math.max(min, px)));
+    return { trackHeightOverrides: { ...s.trackHeightOverrides, [trackId]: clamped } };
+  }),
+  setPoolModeFilter: (v) => set({ poolModeFilter: v }), /* R20-W5: view state, no history */
   setStripFocus: (id) => set({ stripFocus: id }),
   setMixerTrack: (trackId, patch) => set((s) => ({
     // ?? DEFAULT_MIXER_TRACK: a track missing from the sidecar (added after

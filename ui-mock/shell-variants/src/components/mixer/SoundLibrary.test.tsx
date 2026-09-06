@@ -3,10 +3,11 @@
    no-result state, media-selection wiring, double-click reveal, and the
    Import-sound CTA. */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
 import { SoundLibrary } from './SoundLibrary';
 import { renderPlain, store } from '../../test/helpers';
+import { useUi } from '../../state/useUiStore';
 
 const item = (name: RegExp) => screen.getByRole('button', { name });
 
@@ -93,5 +94,44 @@ describe('SoundLibrary', () => {
   it('the footer counts live-region reports items + selection (design doc §3.2)', () => {
     renderPlain(<SoundLibrary />);
     expect(screen.getByText('6 sounds · 1 selected')).toBeInTheDocument(); // m-02 ships selected
+  });
+});
+
+/* R20-W5 (thread #67 / D1.5): the mode filter — the SoundLibrary IS the
+   audio-page pool (LeftDock swap), so it honors poolModeFilter directly:
+   ON = audio + audio-bearing video (the default), OFF = the whole media
+   pool, with the honest count chip + 'Audio only' toggle. */
+describe('SoundLibrary R20-W5 — the mode filter (thread #67)', () => {
+  afterEach(() => {
+    useUi.setState({ poolModeFilter: true });
+  });
+
+  it('default ON: the count chip reads 6/8 and the toggle is pressed', () => {
+    useUi.setState({ poolModeFilter: true });
+    renderPlain(<SoundLibrary />);
+    expect(screen.getByTestId('shell-soundlibrary-count')).toHaveTextContent('6/8');
+    const toggle = screen.getByTestId('shell-soundlibrary-audio-toggle');
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveAttribute('aria-label', 'Audio only');
+  });
+
+  it('toggling OFF lists the WHOLE media pool (8 items incl. the offline video + still) — chip honest', () => {
+    useUi.setState({ poolModeFilter: true });
+    renderPlain(<SoundLibrary />);
+    fireEvent.click(screen.getByTestId('shell-soundlibrary-audio-toggle'));
+    expect(store().poolModeFilter).toBe(false); // shared view-state write (the pool respects it too)
+    expect(screen.getAllByTestId('shell-soundlibrary-item')).toHaveLength(8);
+    expect(screen.getByTestId('shell-soundlibrary-count')).toHaveTextContent('8/8');
+    expect(screen.getByText(/waves_closeup/)).toBeInTheDocument(); // offline video now listed
+    expect(screen.getByText(/title_card/)).toBeInTheDocument(); // still now listed
+    expect(screen.getByTestId('shell-soundlibrary-audio-toggle')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('the footer note is honest about the filter state', () => {
+    useUi.setState({ poolModeFilter: true });
+    renderPlain(<SoundLibrary />);
+    expect(screen.getByText(/audio-bearing video included/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('shell-soundlibrary-audio-toggle'));
+    expect(screen.getByText(/all media — Audio only is off/)).toBeInTheDocument();
   });
 });

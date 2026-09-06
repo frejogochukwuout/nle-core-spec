@@ -169,6 +169,59 @@ describe('Timeline', () => {
     expect(laneOf('el-6').style.height).toBe('34px');
   });
 
+  /* ---- R20-W5 (thread #58 / D1.5, gap C57): PER-TRACK lane heights ---- */
+
+  it('setTrackHeight override → lane div AND header both reflow; view state (no history)', () => {
+    boot({});
+    act(() => { useUi.getState().setTrackHeight('tr-main', 120); });
+    expect(laneOf('el-1').style.height).toBe('120px');
+    expect(screen.getByTestId('shell-track-header-tr-main').style.height).toBe('120px');
+    expect(store().past).toHaveLength(0); // view state — never inside a withHistory snapshot
+    // the Clip prop + other lanes keep their auto heights (single-source laneHeight)
+    expect(laneOf('el-5').style.height).toBe('60px');
+    expect(laneOf('el-6').style.height).toBe('60px');
+    // downstream consumers reflow too: the crossfade block's height (lane − 4px inset)
+    expect(screen.getByTestId('transition-el-2').style.height).toBe('116px');
+  });
+
+  it('store clamp law: min 24 (caption floor 32 — the 24px chip + insets), max 240; null resets to auto', () => {
+    boot({});
+    act(() => { useUi.getState().setTrackHeight('tr-main', 500); });
+    expect(store().trackHeightOverrides['tr-main']).toBe(240);
+    act(() => { useUi.getState().setTrackHeight('tr-main', 5); });
+    expect(store().trackHeightOverrides['tr-main']).toBe(24);
+    act(() => { useUi.getState().setTrackHeight('tr-caption', 30); });
+    expect(store().trackHeightOverrides['tr-caption']).toBe(32); // caption floor wins
+    act(() => { useUi.getState().setTrackHeight('tr-main', null); });
+    expect(store().trackHeightOverrides['tr-main']).toBeUndefined(); // key deleted
+    expect(laneOf('el-1').style.height).toBe('80px'); // back to the kind auto height
+  });
+
+  it('composition: override REPLACES the pref-sized auto; the boost still transforms (yield rule)', () => {
+    boot({ audioLaneBoost: true });
+    // custom 60 audio lane shows 96 in focus (×1.6 — proportional participation)
+    act(() => { useUi.getState().setTrackHeight('tr-audio-1', 60); });
+    expect(laneOf('el-6').style.height).toBe('96px');
+    // custom 120 main CAPS at 40 in focus — the documented yield rule
+    act(() => { useUi.getState().setTrackHeight('tr-main', 120); });
+    expect(laneOf('el-1').style.height).toBe('40px');
+    // the pref only applies where NO override exists (overlay auto tall 84 → capped 28)
+    act(() => { useUi.getState().setTrackHeightPref('tall'); });
+    expect(laneOf('el-5').style.height).toBe('28px');
+    expect(laneOf('el-6').style.height).toBe('96px'); // the override still REPLACES the pref
+    expect(laneOf('el-1').style.height).toBe('40px');
+  });
+
+  it('undo/redo never touches trackHeightOverrides (view state, not a snapshot slice)', () => {
+    boot({});
+    act(() => { useUi.getState().setTrackHeight('tr-main', 120); });
+    // a doc mutation (marker add) mints history; undo restores scenes but NOT the height
+    act(() => { useUi.getState().addMarker(5); });
+    expect(store().past).toHaveLength(1);
+    act(() => { useUi.getState().undo(); });
+    expect(laneOf('el-1').style.height).toBe('120px'); // the override survived the undo round-trip
+  });
+
   it('renders the crossfade box straddling the el-2 → el-3 cut (spec 05 §12.3 transition indicator)', () => {
     boot({});
     expect(screen.getByTestId('transition-el-2')).toHaveAttribute('aria-label', 'Crossfade transition, 0.75 seconds');

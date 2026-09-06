@@ -5,6 +5,7 @@
    no horizontal overflow. */
 
 import { Lock, Eye, EyeOff, Volume2, VolumeX, Headphones, Activity, SlidersHorizontal } from 'lucide-react';
+import { useRef } from 'react';
 import { useUi } from '../../state/useUiStore';
 import type { TrackJSON } from '../../lib/mockData';
 import { dbToSlider, sliderToDb } from '../../state/mockMixer';
@@ -15,6 +16,16 @@ import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/
 // single source of truth: the undoable store command (headers, strips, bridge)
 const toggleTrack = (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') =>
   useUi.getState().toggleTrackCmd(sceneId, trackId, field);
+
+/* R20-W5 (thread #58 / D1.5, gap C57): per-track resize-strip constants. The
+   store's setTrackHeight is the single owner of the clamp [min, 240] — these
+   mirrors exist so the strip's keyboard Home/End and the drag preview can
+   aim without a store round-trip (same values, pinned by tests).
+   The strip itself is 5px (the mission's figure; timeline-cluster thread-4
+   §4b drew 6px — registered in the README deviation list). */
+const RESIZE_STRIP_H = 5;
+const trackMinHeight = (kind: TrackJSON['kind']) => (kind === 'caption' ? 32 : 24);
+const TRACK_MAX_HEIGHT = 240;
 
 /* R15-A4 — audio track-header micro-meter (v2.2 §3.2 promise, never
    implemented until now): a 4px view-only vertical level display fed by the
@@ -79,10 +90,34 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
   const addTrack = useUi((s) => s.addTrack);
   const trackHeightPref = useUi((s) => s.trackHeightPref);
   const setTrackHeightPref = useUi((s) => s.setTrackHeightPref);
+  /* R20-W5 (thread #58): the per-track override surface — setTrackHeight
+     (view state, no history) + the resize strip's drag/keyboard math. */
+  const trackHeightOverrides = useUi((s) => s.trackHeightOverrides);
+  const setTrackHeight = useUi((s) => s.setTrackHeight);
+  const audioLaneBoost = useUi((s) => s.audioLaneBoost);
+  const hasOverride = trackHeightOverrides[track.id] != null;
   const focused = useUi((s) => s.focusedTrackId === track.id);
   const setFocusedTrack = useUi((s) => s.setFocusedTrack);
   const selectTrack = useUi((s) => s.selectTrack);
   const menu = useContextMenu(); // §4.9 track-header menu
+
+  /* R20-W5 (thread #58): the drag/keyboard SEED — the display height prop
+     inverted through the boost (audio ÷1.6 in audio focus; main/overlay caps
+     yield, the documented rule). No boost → the display IS the override-or-
+     auto value, so the seed is exact; boosted audio is exact to the rounding;
+     capped lanes seed at the cap (growing past it stays invisible until the
+     boost lifts — the yield rule). Derived per render — no clipStyle lookup
+     needed (the header never needs the kind base; the store clamps anyway). */
+  const seedHeight = audioLaneBoost && track.kind === 'audio' ? height / 1.6 : height;
+  const currentHeight = () => trackHeightOverrides[track.id] ?? seedHeight;
+  /* R20-W5 resize strip gesture state: `seed` = the override-space height at
+     pointerdown (accumulated); `last` = the last clientY (incremental dy —
+     the splitter's pattern). Display dy maps back through the boost so the
+     lane follows the pointer 1:1 on boosted lanes. */
+  const resizeSeed = useRef<number | null>(null);
+  const resizeLast = useRef<number | null>(null);
+  const resizeStep = (dir: 1 | -1, shift: boolean) =>
+    setTrackHeight(track.id, currentHeight() + dir * 4 * (shift ? 4 : 1));
 
   /* §4.9 track-header menu — direct toggles reuse the module-level
      toggleTrack helper (the M/S/L buttons use it too). "Delete track" is
@@ -109,6 +144,17 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
     { id: 'height-compact', label: 'Height: Compact', checked: trackHeightPref === 'compact', sep: true, onSelect: () => setTrackHeightPref('compact') },
     { id: 'height-normal', label: 'Height: Normal', checked: trackHeightPref === 'normal', onSelect: () => setTrackHeightPref('normal') },
     { id: 'height-tall', label: 'Height: Tall', checked: trackHeightPref === 'tall', onSelect: () => setTrackHeightPref('tall') },
+    /* R20-W5 (thread #58): per-track reset — enabled only while THIS track
+       carries an override (checked mirrors the custom state); the strip's
+       double-click runs the same reset. */
+    {
+      id: 'height-reset-track',
+      label: 'Height: Reset to auto',
+      checked: hasOverride,
+      disabled: !hasOverride,
+      tip: hasOverride ? 'per-track height back to the kind default' : 'this track is already at its auto height',
+      onSelect: () => setTrackHeight(track.id, null),
+    },
     { id: 'rename', label: 'Rename track', disabled: true, tip: 'mock: inline rename needs the track-name update command', sep: true },
     { id: 'mute', label: 'Mute', checked: track.muted, sep: true, onSelect: () => toggleTrack(sceneId, track.id, 'muted') },
     { id: 'solo', label: 'Solo', checked: track.solo, onSelect: () => toggleTrack(sceneId, track.id, 'solo') },
@@ -286,6 +332,56 @@ export function TrackHeader({ track, height, sceneId }: { track: TrackJSON; heig
       {/* A4: view-only audio micro-meter on the tall header's right edge —
           see HeaderMicroMeter for the compact-safety note */}
       {track.kind === 'audio' && tall && <HeaderMicroMeter trackId={track.id} badge={track.badge} />}
+      {/* ---- R20-W5 (thread #58 / D1.5, gap C57): the per-track RESIZE STRIP —
+           a 5px strip pinned INSIDE the header's overflow:hidden box at its
+           bottom edge. Grammar cloned from the app splitter (AppShell.tsx):
+           pointer-capture drag, arrows ±4px (⇧ ×4 = 16px), Home/End = MIN/MAX,
+           double-click reset, role=separator + own tab stop (the APG-honest
+           resizable path — one extra stop per track, documented). Display dy
+           maps back through the audio-focus boost (audio ÷1.6) so the STORE
+           value follows the pointer 1:1 on boosted lanes. The 2px hover
+           hairline goes accent on group-hover (the splitter's rail law). ---- */}
+      <div
+        data-testid={`track-resize-${track.id}`}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label={`Track height ${track.name}`}
+        tabIndex={0}
+        className="group/resize absolute inset-x-0 bottom-0 z-[2] cursor-ns-resize"
+        style={{ height: RESIZE_STRIP_H }}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* inactive pointer id (R15-A5 guard) */ }
+          resizeSeed.current = currentHeight();
+          resizeLast.current = e.clientY;
+        }}
+        onPointerMove={(e) => {
+          if (e.buttons !== 1 || resizeSeed.current === null) return;
+          /* display px → override: audio lanes carry the ×1.6 boost in audio
+             focus — divide it out so the lane follows the pointer exactly;
+             main/overlay caps yield (a custom >cap lane holds its stored
+             value; the documented yield rule) */
+          const dy = e.clientY - (resizeLast.current ?? e.clientY);
+          resizeLast.current = e.clientY;
+          const dyo = audioLaneBoost && track.kind === 'audio' ? dy / 1.6 : dy;
+          resizeSeed.current += dyo;
+          setTrackHeight(track.id, resizeSeed.current);
+        }}
+        onPointerUp={() => { resizeSeed.current = null; resizeLast.current = null; }}
+        onPointerCancel={() => { resizeSeed.current = null; resizeLast.current = null; }}
+        onLostPointerCapture={() => { resizeSeed.current = null; resizeLast.current = null; }}
+        onDoubleClick={() => setTrackHeight(track.id, null)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); resizeStep(-1, e.shiftKey); }
+          else if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); resizeStep(1, e.shiftKey); }
+          else if (e.key === 'Home') { e.preventDefault(); e.stopPropagation(); setTrackHeight(track.id, trackMinHeight(track.kind)); }
+          else if (e.key === 'End') { e.preventDefault(); e.stopPropagation(); setTrackHeight(track.id, TRACK_MAX_HEIGHT); }
+        }}
+      >
+        <div className="pointer-events-none flex h-full items-center justify-center">
+          <div className="h-px w-[96%] bg-hairline transition-colors group-hover/resize:bg-accent" />
+        </div>
+      </div>
       {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
     </div>
   );

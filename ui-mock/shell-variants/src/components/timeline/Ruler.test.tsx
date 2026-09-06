@@ -383,29 +383,79 @@ describe('R19 — the ruler menu "Go to Marker ›" submenu is REAL', () => {
   });
 });
 
-describe('R19 — in/out bracket clamp + mirror (th_mto2ook8)', () => {
-  it('loop start at 0: the in bracket stays fully visible (left ≥ 0) and mirrors its fan inward', () => {
+/* R20-W5 (th_mtp5tlgu / timeline-cluster thread-3): the brackets are FULL-BAND
+   12×(bandTop−3) handles anchored INSIDE the loop region — the R19
+   clamp+mirror (data-mirrored / scaleX(−1)) is DELETED (anchoring inside the
+   region makes both hacks dead); the glyphs' Y coordinates all derive from
+   the svg's own height so nothing can ever crop (the old fan's third blade
+   ran to y 16.92 inside a 15px svg). */
+describe('R20-W5 — full-band in/out bracket handles (th_mtp5tlgu / thread-3)', () => {
+  const svgYs = (handle: HTMLElement): number[] => {
+    const svg = handle.querySelector('svg')!;
+    const d = svg.querySelector('path')!.getAttribute('d')!;
+    /* every `M<x> <y>` / `L<x> <y>` pair — group 1 is the Y coordinate */
+    return Array.from(d.matchAll(/[ML]\d+(?:\.\d+)?\s(\d+(?:\.\d+)?)/g)).map((m) => parseFloat(m[1]!));
+  };
+
+  it('loop start at 0: the in handle anchors fully INSIDE — left 0, width 12, full-band 27px, no mirror', () => {
     act(() => { useUi.setState({ loop: { start: 0, end: 28 } }); });
     boot({});
     const inB = screen.getByTestId('shell-ruler-bracket-in');
-    expect(parseFloat(inB.style.left)).toBeGreaterThanOrEqual(0); // was −2 → half-cut-off
-    expect(inB).toHaveAttribute('data-mirrored'); // glyph points inward (scaleX −1)
-    expect(parseFloat(inB.style.left) + parseFloat(inB.style.width)).toBeLessThanOrEqual(13);
+    expect(inB.style.left).toBe('0px'); // bandLeft itself — never −2 (the old half-cut)
+    expect(inB.style.width).toBe('12px');
+    expect(inB.style.height).toBe('27px'); // bandTop 30 − 3 — the full band (was 15 = "half")
+    expect(inB).not.toHaveAttribute('data-mirrored'); // the R19 mirror hack is GONE
+    // the handle's own tooltip rides the thread-1 CSS-layer fix (data-tip on an absolute element)
+    expect(inB).toHaveAttribute('data-tip', 'In 00:00:00:00');
   });
 
-  it('loop end at the content edge: the out bracket clamps into [0, contentW−13] and mirrors', () => {
+  it('loop end at the content edge: the out handle anchors inside (bandRight − 12), never mirrored', () => {
     act(() => { useUi.setState({ loop: { start: 2, end: 30 } }); });
-    const contentW = 1383; // bandRight 1380 − 7 → 1373 > contentW−13 = 1370 → clamp bites
+    const contentW = 1383;
     boot({ contentW });
     const outB = screen.getByTestId('shell-ruler-bracket-out');
-    expect(parseFloat(outB.style.left)).toBe(contentW - 13);
-    expect(outB).toHaveAttribute('data-mirrored');
-    expect(parseFloat(outB.style.left)).toBeLessThanOrEqual(contentW - 13);
+    expect(parseFloat(outB.style.left)).toBe(30 * 46 - 12); // 1368 — inside the region's right edge
+    expect(parseFloat(outB.style.left)).toBeLessThanOrEqual(contentW - 12);
+    expect(outB).not.toHaveAttribute('data-mirrored');
   });
 
-  it('unclamped brackets keep their natural position (no mirror attribute)', () => {
-    boot({}); // fixture loop {2, 28} — both well inside [0, 1564]
-    expect(screen.getByTestId('shell-ruler-bracket-in')).not.toHaveAttribute('data-mirrored');
-    expect(screen.getByTestId('shell-ruler-bracket-out')).not.toHaveAttribute('data-mirrored');
+  it('defensive clamp only: a bandRight past contentW clamps into [0, contentW−12] — still no mirror', () => {
+    act(() => { useUi.setState({ loop: { start: 2, end: 30 } }); });
+    const contentW = 1370; // bandRight 1380 − 12 = 1368 > contentW − 12 = 1358 → clamp bites
+    boot({ contentW });
+    const outB = screen.getByTestId('shell-ruler-bracket-out');
+    expect(parseFloat(outB.style.left)).toBe(contentW - 12);
+    expect(outB).not.toHaveAttribute('data-mirrored');
+  });
+
+  it('unclamped brackets keep their natural INSIDE anchors (fixture loop {2, 28})', () => {
+    boot({});
+    expect(screen.getByTestId('shell-ruler-bracket-in').style.left).toBe('92px');   // 2 s × 46
+    expect(screen.getByTestId('shell-ruler-bracket-out').style.left).toBe(`${28 * 46 - 12}px`); // 1276
+  });
+
+  it('glyph containment: every path Y coordinate ≤ the svg height — the 16.92>15 crop class is dead', () => {
+    boot({});
+    for (const side of ['in', 'out'] as const) {
+      const handle = screen.getByTestId(`shell-ruler-bracket-${side}`);
+      const svg = handle.querySelector('svg')!;
+      const svgH = parseFloat(svg.getAttribute('height')!); // 27 − 2 = 25
+      const ys = svgYs(handle);
+      expect(ys.length).toBeGreaterThan(6); // the "[" + 3 grip ticks — a real bracket glyph
+      for (const y of ys) expect(y).toBeLessThanOrEqual(svgH);
+    }
+  });
+
+  it('the handles never intersect the marker band (top + height ≤ bandTop 30) and stay grabbable', () => {
+    boot({});
+    for (const side of ['in', 'out'] as const) {
+      const handle = screen.getByTestId(`shell-ruler-bracket-${side}`);
+      const top = parseFloat(handle.style.top);
+      const h = parseFloat(handle.style.height);
+      expect(top).toBe(2);
+      expect(top + h).toBeLessThanOrEqual(30); // clear of the y 30–44 marker band
+      expect(handle.className).toContain('cursor-ew-resize'); // the whole 12×27 box is the grab target
+      expect(handle.className).toContain('pointer-events-auto');
+    }
   });
 });

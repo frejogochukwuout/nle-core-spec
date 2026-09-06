@@ -6,9 +6,9 @@
    Thumb/waveform grammar. */
 
 import { useMemo, useState } from 'react';
-import { Search, Upload, Waves, Music2, X, ArrowUpNarrowWide, ArrowDownWideNarrow } from 'lucide-react';
+import { Search, Upload, Waves, Music2, X, ArrowUpNarrowWide, ArrowDownWideNarrow, AudioLines } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
-import { project, type MediaRecord } from '../../lib/mockData';
+import { project, isAudioBearing, type MediaRecord } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
 import { ROLES, ROLE_LABEL, type Role } from '../../state/mockMixer';
@@ -26,7 +26,9 @@ const MEDIA_ROLES: Record<string, Role> = {
   'm-01': 'music',    // beach_wide ambience music bed
 };
 
-const audioBearing = (m: MediaRecord) => m.type === 'audio' || (m.type === 'video' && !m.offline);
+/* R20-W5 (thread #67): the mode filter's audio-bearing predicate is the
+   SHARED isAudioBearing (mockData) — the local copy is retired so the pool
+   and this library can never disagree. */
 
 function AudioThumb({ m, h = 30 }: { m: MediaRecord; h?: number }) {
   const bars = getWaveform(m.id, 64, { amplitude: 0.9 });
@@ -50,6 +52,12 @@ export function SoundLibrary() {
      the two views sort independently */
   const [sortBy, setSortBy] = useState<'name' | 'type' | 'duration'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  /* R20-W5 (thread #67 / D1.5): the media-bay MODE filter — this IS the
+     audio-page pool (LeftDock swaps it in), so it honors poolModeFilter
+     directly: ON = audio + audio-bearing video (the default view), OFF =
+     the whole media pool (honest — the toggle says what it does). */
+  const poolModeFilter = useUi((s) => s.poolModeFilter);
+  const setPoolModeFilter = useUi((s) => s.setPoolModeFilter);
   const setPlayhead = useUi((s) => s.setPlayhead);
   const scenes = useUi((s) => s.scenes);
   const activeSceneId = useUi((s) => s.activeSceneId);
@@ -69,10 +77,10 @@ export function SoundLibrary() {
 
   const items = useMemo(
     () => project.media
-      .filter(audioBearing)
+      .filter((m) => (poolModeFilter ? isAudioBearing(m) : true))
       .filter((m) => m.name.toLowerCase().includes(q.toLowerCase()))
       .sort(cmp), // sorted BEFORE grouping → each role group inherits the order
-    [q, sortBy, sortDir],
+    [q, sortBy, sortDir, poolModeFilter],
   );
 
   const grouped = useMemo(() => {
@@ -96,8 +104,24 @@ export function SoundLibrary() {
       <div className="flex items-center gap-2 border-b border-hairline px-2 py-1.5">
         <Waves size={12} className="text-[var(--type-audio)]" />
         <span className="text-[11px] font-semibold text-tprimary">Sound Library</span>
-        <span className="mono text-[10px] text-tfaint">{items.length}</span>
+        {/* R20-W5 (thread #67): the honest count chip — visible count / pool
+            size (a filter that hides assets must say how many). */}
+        <span className="mono text-[10px] text-tfaint" data-testid="shell-soundlibrary-count">{items.length}/{project.media.length}</span>
         <div className="grow" />
+        {/* R20-W5 (thread #67): the small 'Audio only' MODE toggle — view-state
+            poolModeFilter; OFF lists the whole media pool (the footer then
+            says so honestly). */}
+        <button
+          type="button"
+          className={`icon-btn !h-[18px] !w-[18px] shrink-0 ${poolModeFilter ? 'toggled' : ''}`}
+          onClick={() => setPoolModeFilter(!poolModeFilter)}
+          aria-pressed={poolModeFilter}
+          aria-label="Audio only"
+          data-tip="Audio only — filter to audio + audio-bearing video"
+          data-testid="shell-soundlibrary-audio-toggle"
+        >
+          <AudioLines size={12} strokeWidth={1.6} />
+        </button>
         <button
           className="toolbtn !py-1"
           onClick={() => pushToast({ kind: 'info', title: 'Import sound', detail: 'File picker is mock — drop files on the library' })}
@@ -189,7 +213,7 @@ export function SoundLibrary() {
       <div aria-live="polite" className="flex items-center gap-2 border-t border-hairline px-2.5 py-1 text-[11px] text-tmuted">
         <span>{items.length} sounds · {mediaSelection.length} selected</span>
         <span className="grow" />
-        <span className="mono text-[10px] text-tfaint">audio-bearing video included</span>
+        <span className="mono text-[10px] text-tfaint">{poolModeFilter ? 'audio-bearing video included' : 'all media — Audio only is off'}</span>
       </div>
     </div>
   );

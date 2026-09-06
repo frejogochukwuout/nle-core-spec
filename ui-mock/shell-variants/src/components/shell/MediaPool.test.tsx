@@ -8,7 +8,7 @@
    return, close-then-dispatch) is tested here through its MediaPool host.
    Real timers: the skeleton is a real 900 ms timer, like the shipped code. */
 
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MediaPool } from './MediaPool';
 import { useUi } from '../../state/useUiStore';
@@ -409,5 +409,58 @@ describe('MediaPool (spec 18 §4.2)', () => {
     fireEvent.click(screen.getByTestId('shell-menu-mediapool-remove'));
     expect(S().toasts[1].kind).toBe('success');
     expect(screen.getAllByTestId('shell-mediapool-card')).toHaveLength(7); // pool-only removal
+  });
+});
+
+/* R20-W5 (thread #67 / D1.5): the audio-page MODE filter — the pool
+   auto-filters to audio + audio-bearing video (the shared isAudioBearing
+   predicate) with an honest count chip + 'Audio only' toggle; other pages
+   render the pool unfiltered. */
+describe('MediaPool R20-W5 — the audio-page mode filter (thread #67)', () => {
+  afterEach(() => {
+    useUi.setState({ page: 'edit', poolModeFilter: true });
+  });
+
+  it('audio page boots FILTERED: 6 audio-bearing cards (offline video + still excluded), honest chip + pressed toggle', async () => {
+    useUi.setState({ page: 'audio', poolModeFilter: true });
+    await renderPool();
+    expect(screen.getAllByTestId('shell-mediapool-card')).toHaveLength(6); // m-01..03, m-05..07
+    expect(screen.queryByText(/waves_closeup/)).toBeNull(); // m-04 offline video — no usable audio
+    expect(screen.queryByText(/title_card/)).toBeNull(); // still image
+    const toggle = screen.getByTestId('shell-mediapool-audio-toggle');
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveAttribute('aria-label', 'Audio only');
+    expect(screen.getByTestId('shell-mediapool-audio-count')).toHaveTextContent('6/8'); // honest count
+  });
+
+  it('the toggle lifts the filter → the full pool returns (8 cards, chip follows)', async () => {
+    useUi.setState({ page: 'audio', poolModeFilter: true });
+    await renderPool();
+    fireEvent.click(screen.getByTestId('shell-mediapool-audio-toggle'));
+    expect(S().poolModeFilter).toBe(false); // view-state write
+    expect(screen.getAllByTestId('shell-mediapool-card')).toHaveLength(8);
+    expect(screen.getByTestId('shell-mediapool-audio-count')).toHaveTextContent('8/8');
+    expect(screen.getByTestId('shell-mediapool-audio-toggle')).toHaveAttribute('aria-pressed', 'false');
+    // re-arming restores the filter (the chip never lies about what is hidden)
+    fireEvent.click(screen.getByTestId('shell-mediapool-audio-toggle'));
+    expect(screen.getAllByTestId('shell-mediapool-card')).toHaveLength(6);
+  });
+
+  it('Edit (and Color/Deliver) pages render the pool UNFILTERED — no toggle, no chip', async () => {
+    useUi.setState({ page: 'edit', poolModeFilter: true }); // the flag is ON but page-gated
+    await renderPool();
+    expect(screen.getAllByTestId('shell-mediapool-card')).toHaveLength(8);
+    expect(screen.queryByTestId('shell-mediapool-audio-toggle')).toBeNull();
+    expect(screen.queryByTestId('shell-mediapool-audio-count')).toBeNull();
+  });
+
+  it('the mode filter composes with search (both must pass)', async () => {
+    useUi.setState({ page: 'audio', poolModeFilter: true });
+    await renderPool();
+    fireEvent.change(screen.getByLabelText('Search media'), { target: { value: 'marina' } });
+    await act(async () => { await sleep(240); });
+    // marina matches m-02 (video, online) + m-07 (audio) — both audio-bearing
+    expect(screen.getAllByTestId('shell-mediapool-card')).toHaveLength(2);
+    expect(screen.getByTestId('shell-mediapool-audio-count')).toHaveTextContent('2/8');
   });
 });

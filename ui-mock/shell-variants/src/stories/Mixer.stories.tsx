@@ -258,7 +258,10 @@ export const ChannelEditorStory: StoryObj = {
 
 /* ---- sound library (audio-focus media pool) -------------------------------- */
 
-/** Audio media + audio-bearing video grouped by role, role chips, import CTA. */
+/** Audio media + audio-bearing video grouped by role, role chips, import CTA.
+ *  R20-W5 (thread #67): the library honors the media-bay MODE filter
+ *  (poolModeFilter, default ON) — the honest count chip shows visible/total
+ *  and the 'Audio only' toggle in the header lists the WHOLE pool when off. */
 export const SoundLibraryStory: StoryObj = {
   name: 'Sound library',
   parameters: { layout: 'padded' },

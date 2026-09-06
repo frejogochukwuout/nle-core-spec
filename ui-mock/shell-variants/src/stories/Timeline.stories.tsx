@@ -135,7 +135,7 @@ export const ClipStates: StoryObj = {
       <StoreBoot patch={{ selection: ['demo-sel'] }} />
       <div className="flex flex-col gap-4 p-4">
         <Lane label="V1 · main — selected, offline, F-badge, linked+50%" track={mainLane} els={videoEls} kind="main" />
-        <Lane label="A1 · audio — fade ramps (symmetric envelope + fades)" track={audioLane} els={audioEls} kind="audio" />
+        <Lane label="A1 · audio — fade transition objects (symmetric envelope + drag-to-resize fades)" track={audioLane} els={audioEls} kind="audio" />
         <Lane label="CC · captions — parchment chips" track={captionLane} els={captionEls} kind="caption" />
         <Lane label="A2 · audio — locked track (stripes)" track={lockedAudioLane} els={lockedEls} kind="audio" />
       </div>
@@ -236,6 +236,115 @@ export const MarkersAndCaptions: StoryObj = {
         </div>
         <div className="flex min-h-0 flex-1 flex-col">
           <Timeline />
+        </div>
+      </div>
+    </>
+  ),
+};
+
+/* ---- R20-W5 (thread #57 / timeline-cluster thread-3): loop handles at the
+   content edges — the full-band 12×27 brackets anchored INSIDE the loop
+   region (in at loop.start, out at loop.end−12); the R19 clamp+mirror is
+   gone, so t=0 and t=end are the honest edge cases. ---- */
+export const LoopHandlesFullBand: StoryObj = {
+  name: 'Ruler — loop handles full-band (edges)',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ loop: { start: 0, end: 30 } }} />
+      <RulerStory />
+      <div className="mono mt-2 text-[11px] text-tmuted">
+        ( loop 0 → 30 s: the in handle sits flush at x=0 INSIDE the region, the out handle at
+        bandRight−12 — full-band 27px bracket glyphs, never cropped, never mirrored ·
+        drag either handle, or focus + ←/→ (⇧ ×10) )
+      </div>
+    </>
+  ),
+};
+
+/* ---- R20-W5 (thread #56 / timeline-cluster thread-2): text clips render as
+   centered thin bars clamp(20, lane·0.4, 28)px — the caption-chip grammar
+   with the name inside; the clip box keeps the full-lane drag/select/trim
+   surface. ---- */
+const textLane: TrackJSON = {
+  id: 'demo-text', kind: 'overlay', name: 'T1', badge: 'T1',
+  muted: false, solo: false, locked: false, visible: true,
+  elements: [
+    { id: 'demo-text-1', type: 'text', trackId: 'demo-text', name: 'MARINA — FISHERWOMAN', startTime: 1, duration: 5 },
+    { id: 'demo-text-2', type: 'text', trackId: 'demo-text', name: 'A longer title card label that truncates inside the bar', startTime: 7, duration: 6 },
+  ],
+};
+function TextLaneRow({ h, label }: { h: number; label: string }) {
+  const pxPerSec = useUi((s) => s.pxPerSec);
+  return (
+    <div>
+      <div className="mono mb-1 text-[11px] text-tmuted">{label} — bar height {Math.max(20, Math.min(28, Math.round(h * 0.4)))}px</div>
+      <div className="relative w-full border-b border-hairline" style={{ height: h, background: 'var(--lane-overlay)' }}>
+        {textLane.elements.map((el) => (
+          <Clip key={el.id} el={el} track={textLane} pxPerSec={pxPerSec} laneHeight={h} snapTargets={SNAP_TARGETS} />
+        ))}
+      </div>
+    </div>
+  );
+}
+export const TextClipThinBar: StoryObj = {
+  name: 'Clip — text thin bar',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ selection: [] }} />
+      <div className="flex flex-col gap-4 p-4">
+        <TextLaneRow h={80} label="T1 · 80px lane" />
+        <TextLaneRow h={60} label="T1 · 60px lane (default overlay — 24px bar)" />
+        <TextLaneRow h={34} label="T1 · 34px lane (blocks-like — 20px floor)" />
+      </div>
+    </>
+  ),
+};
+
+/* ---- R20-W5 (thread #58 / D1.5, gap C57): mixed per-track heights —
+   trackHeightOverrides (view state) via the header's resize strip: drag a
+   header's bottom edge, or focus the strip and use ↑/↓ ±4px (⇧ 16px),
+   double-click resets. ---- */
+export const TrackHeightsMixed: StoryObj = {
+  name: 'Timeline — track heights mixed',
+  parameters: { layout: 'fullscreen' },
+  render: () => (
+    <>
+      <StoreBoot patch={{
+        trackHeightOverrides: { 'tr-main': 120, 'tr-audio-1': 44, 'tr-caption': 48 },
+        selection: [],
+      }} />
+      <div className="flex h-screen flex-col bg-app">
+        <div className="mono flex h-[40px] shrink-0 items-center px-3 text-[11px] text-tmuted">
+          ( V1 resized to 120px · A1 to 44px · CC to 48px — drag any header's bottom edge, arrows
+          ±4px (⇧ 16px) on the focused strip, double-click resets to auto )
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Timeline />
+        </div>
+      </div>
+    </>
+  ),
+};
+
+/* ---- R20-W5 (thread #62 / timeline-cluster thread-5): fade-in/out as
+   selectable width-draggable TRANSITION OBJECTS — the crossfade-block
+   grammar at the clip head/tail; drag an object's edge to resize the fade
+   (one undo entry per gesture), click selects the clip → the inspector
+   Fades group is the parametric surface. ---- */
+export const FadeTransitionObjects: StoryObj = {
+  name: 'Clip — fade transition objects',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ pxPerSec: 92, selection: [] }} />
+      <div className="flex flex-col gap-4 p-4">
+        <Lane label="A1 · audio — 1.2s fade-in / 1.5s fade-out objects (drag the bright edge)" track={audioLane} els={audioEls} kind="audio" />
+        <div className="mono text-[11px] text-tmuted">
+          ( the object's RIGHT edge is the full-amplitude boundary for the fade-in — "only the right
+          half" of a crossfade block; mirrored at the tail · ←/→ ±1 frame (⇧ ×10), Home 0 / End clip
+          length · the fake curve-handle dots are gone )
         </div>
       </div>
     </>

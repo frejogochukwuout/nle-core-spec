@@ -3,7 +3,7 @@
    minifaders (spec 16 §3.8 / design doc §3.2), compact vs tall layout, and
    the §4.9 header menu. */
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { act, fireEvent, screen } from '@testing-library/react';
 import { TrackHeader } from './TrackHeader';
 import { renderPlain, store } from '../../test/helpers';
@@ -205,6 +205,94 @@ describe('TrackHeader R15-A4 — audio micro-meters (v2.2 §3.2)', () => {
     act(() => { __setLevel('tr-audio-1', -30); });
     const fill = screen.getByTestId('track-micrometer-A1-fill') as HTMLElement;
     expect(fill.style.clipPath).toBe('inset(50% 0 0 0)'); // (−30+60)/60
+  });
+});
+
+/* R20-W5 (thread #58 / D1.5, gap C57): the per-track height resize strip —
+   pointer drag (display dy ÷ boost for audio), keyboard ±4/⇧16, dbl-click
+   reset, the menu Reset row, and the store's clamp law. View state: never a
+   history entry (the pref precedent's law, pinned). */
+describe('TrackHeader R20-W5 — per-track resize strip (thread #58 / D1.5, gap C57)', () => {
+  beforeEach(() => {
+    useUi.setState({ trackHeightOverrides: {}, audioLaneBoost: false });
+  });
+
+  it('separator a11y + geometry: role/orientation/label, own tab stop, 5px at the header bottom edge', () => {
+    renderPlain(<Header trackId="tr-main" height={80} />);
+    const sep = screen.getByTestId('track-resize-tr-main');
+    expect(sep).toHaveAttribute('role', 'separator');
+    expect(sep).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(sep).toHaveAttribute('aria-label', 'Track height V1');
+    expect(sep).toHaveAttribute('tabindex', '0'); // the APG-honest resizable path — one extra stop per track
+    expect(sep.style.height).toBe('5px');
+    expect(sep.className).toContain('cursor-ns-resize');
+    expect(sep.className).toContain('bottom-0'); // pinned at the bottom edge, inside overflow:hidden
+  });
+
+  it('pointer drag resizes the track — view state, no history entry', () => {
+    renderPlain(<Header trackId="tr-main" height={80} />);
+    const sep = screen.getByTestId('track-resize-tr-main');
+    fireEvent.pointerDown(sep, { pointerId: 1, button: 0, clientY: 100 });
+    fireEvent.pointerMove(sep, { pointerId: 1, buttons: 1, clientY: 160 }); // +60 display px (no boost: 1:1)
+    expect(store().trackHeightOverrides['tr-main']).toBe(140); // 80 + 60
+    expect(store().past).toHaveLength(0); // view state, never snapshotted
+    fireEvent.pointerUp(sep, { pointerId: 1 });
+    // a second drag seeds from the OVERRIDE (the static height prop is stale — the override wins)
+    fireEvent.pointerDown(sep, { pointerId: 2, button: 0, clientY: 100 });
+    fireEvent.pointerMove(sep, { pointerId: 2, buttons: 1, clientY: 80 }); // −20
+    expect(store().trackHeightOverrides['tr-main']).toBe(120);
+    fireEvent.pointerUp(sep, { pointerId: 2 });
+  });
+
+  it('audio-focus drag math: display dy ÷ 1.6 — the STORE value follows the pointer 1:1 on boosted lanes', () => {
+    useUi.setState({ audioLaneBoost: true });
+    renderPlain(<Header trackId="tr-audio-1" height={96} />); // 60 auto × 1.6 displayed
+    const sep = screen.getByTestId('track-resize-tr-audio-1');
+    fireEvent.pointerDown(sep, { pointerId: 1, button: 0, clientY: 200 });
+    fireEvent.pointerMove(sep, { pointerId: 1, buttons: 1, clientY: 232 }); // +32 display px
+    expect(store().trackHeightOverrides['tr-audio-1']).toBe(80); // 60 + 32 / 1.6
+    fireEvent.pointerUp(sep, { pointerId: 1 });
+    useUi.setState({ audioLaneBoost: false });
+  });
+
+  it('keyboard ±4px (⇧ ×4 = 16px); Home/End clamp to the store MIN/MAX', () => {
+    renderPlain(<Header trackId="tr-main" height={80} />);
+    const sep = screen.getByTestId('track-resize-tr-main');
+    fireEvent.keyDown(sep, { key: 'ArrowDown' });
+    expect(store().trackHeightOverrides['tr-main']).toBe(84);
+    fireEvent.keyDown(sep, { key: 'ArrowDown', shiftKey: true });
+    expect(store().trackHeightOverrides['tr-main']).toBe(100);
+    fireEvent.keyDown(sep, { key: 'ArrowUp' });
+    expect(store().trackHeightOverrides['tr-main']).toBe(96);
+    fireEvent.keyDown(sep, { key: 'End' });
+    expect(store().trackHeightOverrides['tr-main']).toBe(240); // MAX
+    fireEvent.keyDown(sep, { key: 'Home' });
+    expect(store().trackHeightOverrides['tr-main']).toBe(24); // MIN (caption floor is 32 — Timeline/store tests)
+    expect(store().past).toHaveLength(0); // still view state under the keyboard route
+  });
+
+  it('double-click resets the track to auto (override deleted)', () => {
+    useUi.setState({ trackHeightOverrides: { 'tr-main': 120 } });
+    renderPlain(<Header trackId="tr-main" height={120} />);
+    fireEvent.doubleClick(screen.getByTestId('track-resize-tr-main'));
+    expect(store().trackHeightOverrides['tr-main']).toBeUndefined();
+  });
+
+  it('the menu Reset row: enabled + checked only while an override exists; select resets to auto', () => {
+    useUi.setState({ trackHeightOverrides: { 'tr-main': 120 } });
+    renderPlain(<Header trackId="tr-main" height={120} />);
+    fireEvent.contextMenu(screen.getByTestId('shell-track-header-tr-main'), { clientX: 5, clientY: 5 });
+    const armed = screen.getByTestId('shell-menu-track-height-reset-track');
+    expect(armed).toHaveAttribute('aria-checked', 'true'); // menuitemcheckbox — a custom height is active
+    expect(armed).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(armed);
+    expect(store().trackHeightOverrides['tr-main']).toBeUndefined(); // reset to auto
+    expect(screen.queryByTestId('shell-menu-track')).not.toBeInTheDocument(); // closed after select
+    // re-open with NO override → the honest disabled row (nothing to reset)
+    fireEvent.contextMenu(screen.getByTestId('shell-track-header-tr-main'), { clientX: 5, clientY: 5 });
+    const idle = screen.getByTestId('shell-menu-track-height-reset-track');
+    expect(idle).toHaveAttribute('aria-checked', 'false');
+    expect(idle).toHaveAttribute('aria-disabled', 'true');
   });
 });
 

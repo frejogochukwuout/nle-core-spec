@@ -161,6 +161,15 @@ tests can target the same surface.
 
 ## Known spec deviations (intentional, for reaction)
 
+- **R20-W5 (the track-resize strip width):** the per-track height resize
+  strip on the track header's bottom edge is **5px** (TrackHeader.tsx
+  `RESIZE_STRIP_H`), where the normative contract
+  docs/r20/timeline-cluster.md thread-4 §4b drew **6px** (`style={{ height:
+  6 }}`). The R20-W5 task specified 5px; the grab grammar is unchanged
+  (pointer-capture drag, arrows ±4px / ⇧ ×4, dbl-click reset, role=separator
+  with its own tab stop) and the 1px difference only narrows the hit band
+  inside the header's overflow:hidden box — registered here per the
+  deviation law, citing the contract.
 - **R20-W4c (the timeline-grade law):** the mockGrades `'timeline'` key is a
   POST-CLIP pass applied to every program frame as a SECOND full
   GradeParams application in sequence AFTER the clip's record

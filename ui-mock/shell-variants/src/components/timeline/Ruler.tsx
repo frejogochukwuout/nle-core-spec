@@ -12,8 +12,10 @@
    timeline-marker-only.html §1.3/§1.4) live. Markers never visually enter
    lane territory. Pins are CLICKABLE (selectMarker — the inspector rail
    swaps to MarkerInspector) and keyboard-operable (Enter).
-   R19 th_mto2ook8: in/out brackets clamp into [0, contentW−13] and mirror
-   their fan glyph when clamped so they stay fully visible + point inward. */
+   R20-W5 (th_mtp5tlgu / timeline-cluster thread-3): the in/out brackets are
+   FULL-BAND 12×(bandTop−3) handles anchored INSIDE the loop region, with
+   real bracket glyphs derived from the handle height (never crops); the R19
+   clamp+mirror is gone (anchoring inside makes it dead). */
 
 import { useEffect, useRef, useState } from 'react';
 import { useUi } from '../../state/useUiStore';
@@ -298,18 +300,20 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
   const bandLeft = snapPxToDeviceGrid(loop.start * pxPerSec);
   const bandW = Math.max(2, snapPxToDeviceGrid((loop.end - loop.start) * pxPerSec));
 
-  /* fixes th_mto2ook8 — bracket clamp + mirror: the fan glyphs clipped at
-     the content edges when the loop started/ended at the runway bounds.
-     Clamp the 13px-wide bracket boxes into [0, contentW−13]; when the clamp
-     bit, mirror the fan (scaleX(−1)) so it stays fully visible AND points
-     inward toward the loop region. */
-  const BRACKET_W = 13;
-  const inBracketX = Math.max(0, Math.min(bandLeft - 2, Math.max(0, contentW - BRACKET_W)));
-  const inClamped = bandLeft - 2 < 0;
-  const outBracketX = Math.max(0, Math.min(bandLeft + bandW - 7, Math.max(0, contentW - BRACKET_W)));
-  const outClamped = bandLeft + bandW - 7 > Math.max(0, contentW - BRACKET_W);
-  const bracketTop = readout ? 14 : 1;
-  const bracketH = bandTop - bracketTop - 1;
+  /* R20-W5 (thread #57 / timeline-cluster thread-3): FULL-BAND bracket
+     handles — 12px wide, spanning y 2 .. bandTop−1 (27px in readout, 9px in
+     slim — bracketH-derived, ALWAYS clear of the marker band), anchored
+     INSIDE the loop region (in at bandLeft, out at bandRight−12). Because the
+     handles sit inside the region by construction, the R19 clamp+mirror
+     (data-mirrored / scaleX(−1)) hacks are DELETED — only a defensive clamp
+     into [0, contentW−12] survives. The glyphs are real brackets (⌐¬ caps)
+     with every coordinate derived from the ACTUAL svg height, so nothing can
+     ever crop (the old fan's third blade ran to y 16.92 inside a 15px svg). */
+  const HANDLE_W = 12;
+  const handleTop = 2;
+  const handleH = Math.max(6, bandTop - 3); // readout: 44−14−3 = 27 · slim: 22−10−3 = 9
+  const inHandleX = Math.max(0, Math.min(bandLeft, Math.max(0, contentW - HANDLE_W)));
+  const outHandleX = Math.max(0, Math.min(bandLeft + bandW - HANDLE_W, Math.max(0, contentW - HANDLE_W)));
 
   return (
     <div
@@ -432,8 +436,12 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
         className="absolute bottom-0 top-0"
         style={{ left: bandLeft, width: bandW, background: 'var(--accent-selection)', opacity: loopEnabled ? 0.24 : 0.13 }}
       />
-      {/* in bracket — interactive loop edge (R14: draggable + keyboard;
-          R19 th_mto2ook8: clamped + mirrored at the left content edge) */}
+      {/* in bracket — FULL-BAND handle anchored INSIDE the loop region (R14
+          grammar: draggable + keyboard slider; R20-W5 thread-3: 12×27, real
+          "[" glyph, bracketH-derived coordinates — no clamp, no mirror). The
+          12px-wide strip may briefly pass under an 11px TC label; z 7 wins
+          and loop edges usually sit between labels (contract's accepted
+          trade for the bigger grab target). */}
       <div
         {...bracketHandlers('in')}
         role="slider"
@@ -444,16 +452,23 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
         aria-valuetext={tc(loop.start)}
         tabIndex={0}
         data-testid="shell-ruler-bracket-in"
-        data-mirrored={inClamped || undefined}
+        data-tip={`In ${tc(loop.start)}`}
         className="pointer-events-auto absolute z-[7] flex cursor-ew-resize items-center"
-        style={{ left: inBracketX, top: bracketTop, width: BRACKET_W, height: bracketH }}
+        style={{ left: inHandleX, top: handleTop, width: HANDLE_W, height: handleH }}
       >
-        <svg className="pointer-events-none" width="9" height={bracketH} aria-hidden="true" style={inClamped ? { transform: 'scaleX(-1)' } : undefined}>
-          <path d={`M7 0 L1 ${zoneH / 4} M7 0 L1 0 M7 0 L1 ${zoneH / 2.6}`} stroke="var(--accent-selection)" strokeWidth="1.6" fill="none" />
+        <svg className="pointer-events-none" width="8" height={handleH - 2} aria-hidden="true">
+          {/* open "[" whose stem rides the region edge + 3 grip ticks at
+              25/50/75% — ALL Y coords derive from this svg's own height */}
+          <path
+            d={`M7 1 L2 1 L2 ${handleH - 3} L7 ${handleH - 3} M4 ${(handleH - 2) * 0.25 + 1} L7 ${(handleH - 2) * 0.25 + 1} M4 ${(handleH - 2) * 0.5 + 1} L7 ${(handleH - 2) * 0.5 + 1} M4 ${(handleH - 2) * 0.75 + 1} L7 ${(handleH - 2) * 0.75 + 1}`}
+            stroke="var(--accent-selection)"
+            strokeWidth="1.6"
+            fill="none"
+          />
         </svg>
       </div>
-      {/* out bracket — interactive loop edge (R14: draggable + keyboard;
-          R19 th_mto2ook8: clamped + mirrored at the right content edge) */}
+      {/* out bracket — the mirrored "]" at the loop region's right edge,
+          same full-band geometry (R20-W5 thread-3: clamp+mirror deleted) */}
       <div
         {...bracketHandlers('out')}
         role="slider"
@@ -464,12 +479,17 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
         aria-valuetext={tc(loop.end)}
         tabIndex={0}
         data-testid="shell-ruler-bracket-out"
-        data-mirrored={outClamped || undefined}
+        data-tip={`Out ${tc(loop.end)}`}
         className="pointer-events-auto absolute z-[7] flex cursor-ew-resize items-center"
-        style={{ left: outBracketX, top: bracketTop, width: BRACKET_W, height: bracketH }}
+        style={{ left: outHandleX, top: handleTop, width: HANDLE_W, height: handleH }}
       >
-        <svg className="pointer-events-none" width="9" height={bracketH} aria-hidden="true" style={outClamped ? { transform: 'scaleX(-1)' } : undefined}>
-          <path d={`M2 0 L8 ${zoneH / 4} M2 0 L8 0 M2 0 L8 ${zoneH / 2.6}`} stroke="var(--accent-selection)" strokeWidth="1.6" fill="none" />
+        <svg className="pointer-events-none" width="8" height={handleH - 2} aria-hidden="true" style={{ position: 'absolute', right: 0 }}>
+          <path
+            d={`M1 1 L6 1 L6 ${handleH - 3} L1 ${handleH - 3} M1 ${(handleH - 2) * 0.25 + 1} L4 ${(handleH - 2) * 0.25 + 1} M1 ${(handleH - 2) * 0.5 + 1} L4 ${(handleH - 2) * 0.5 + 1} M1 ${(handleH - 2) * 0.75 + 1} L4 ${(handleH - 2) * 0.75 + 1}`}
+            stroke="var(--accent-selection)"
+            strokeWidth="1.6"
+            fill="none"
+          />
         </svg>
       </div>
 
@@ -522,7 +542,7 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
            round; the band is click-select only. ---- */}
       {scene.markers.filter((m): m is Marker & { duration: number } => !!m.duration && m.duration > 0).map((m) => {
         const left = snapPxToDeviceGrid(m.time * pxPerSec);
-        const w = Math.max(BRACKET_W, snapPxToDeviceGrid(m.duration * pxPerSec));
+        const w = Math.max(13, snapPxToDeviceGrid(m.duration * pxPerSec)); // min band width (was BRACKET_W)
         return (
           <button
             key={m.id}

@@ -302,6 +302,16 @@ export function mediaById(id: string | undefined): MediaRecord | undefined {
   return media.find((m) => m.id === id);
 }
 
+/* R20-W5 (thread #67 / D1.5, the media-bay mode filter): the ONE shared
+   "audio-bearing" predicate — audio assets + ONLINE video (the SoundLibrary's
+   existing grouping, lifted to the shared model module so MediaPool and
+   SoundLibrary can never disagree about what the mode filter admits).
+   Offline video is excluded (a dead video track has no usable audio), as are
+   still images. */
+export function isAudioBearing(m: MediaRecord): boolean {
+  return m.type === 'audio' || (m.type === 'video' && !m.offline);
+}
+
 /** element under the playhead on the main/overlay tracks (viewer source).
  *  Multi-track law (R14 review): iterate ALL tracks of each kind — the
  *  single-`find` version made clips on a second Video/Text/Audio track

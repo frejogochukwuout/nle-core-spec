@@ -50,6 +50,26 @@ export const MediaPoolList: StoryObj = {
   render: () => <PoolStory patch={{ mediaView: 'list' }} />,
 };
 
+/** R20-W5 (thread #67 / D1.5): the media-bay MODE filter — on the AUDIO page
+ *  the pool auto-filters to audio + audio-bearing video (the shared
+ *  isAudioBearing predicate) with the honest count chip + the small 'Audio
+ *  only' toggle in the header; Edit/Color/Deliver pages render the pool
+ *  unfiltered. The SoundLibrary (the audio-page dock swap) honors the same
+ *  view-state flag — see the Mixer/SoundLibrary story. */
+export const MediaPoolAudioModeFilter: StoryObj = {
+  name: 'Media pool — audio mode filter (thread #67)',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <PoolStory patch={{ page: 'audio' }} />
+      <div className="mono mt-2 text-[11px] text-tmuted">
+        ( 6/8 audio-bearing assets shown — offline video + stills hidden; the AudioLines toggle lifts
+        the filter; the chip always reports visible/total )
+      </div>
+    </>
+  ),
+};
+
 /** R19 th_mto2s2nc — hover-dwell scrub preview: the play fn dwells on the
  *  first card ≥ 400 ms so the ambient preview chrome (PREVIEW chip + the
  *  ken-burns pan + progress hairline) is reviewable without a mouse. The

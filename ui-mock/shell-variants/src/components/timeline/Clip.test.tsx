@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { act, fireEvent, screen } from '@testing-library/react';
-import { Clip, EFFECT_DRAG_TYPE, CLIP_WAVEFORM_RAMP } from './Clip';
+import { Clip, EFFECT_DRAG_TYPE, CLIP_WAVEFORM_RAMP, textBarHeight } from './Clip';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 import { snapToFrame } from '../../lib/timecode';
@@ -19,14 +19,15 @@ import { POOL_DRAG_TYPE } from '../shell/MediaPool';
 /* snap targets mirroring the real Timeline set (clip edges + playhead) */
 const SNAP = [0, 8.5, 17, 24, 30, 16];
 
-/** Stands the active scene's lanes up like Timeline does (static read — Clip
- *  subscribes to the store itself for selection/tool-driven visuals). */
-function Lanes() {
-  const scene = useUi.getState().scenes.find((s) => s.id === 'sc-1')!;
+/** Stands the active scene's lanes up like Timeline does — SUBSCRIBED to
+ *  scenes so store writes (fade commits, splits) re-render with fresh el
+ *  props, exactly like the real Timeline's flow. */
+function Lanes({ overlayH = 60 }: { overlayH?: number }) {
+  const scene = useUi((s) => s.scenes.find((x) => x.id === 'sc-1')!);
   return (
     <>
       {scene.tracks.map((t) => {
-        const h = t.kind === 'main' ? 80 : 60;
+        const h = t.kind === 'main' ? 80 : t.id === 'tr-overlay-1' ? overlayH : 60;
         return (
           <div key={t.id} style={{ position: 'relative', height: h, width: 1400 }}>
             {t.elements.map((el) => (
@@ -68,12 +69,12 @@ describe('Clip', () => {
     expect(screen.getByTestId('clip-el-1').querySelector('[title="Linked A/V"]')).toBeNull();
   });
 
-  it('audio clips render a waveform body + fade ramps, not a filmstrip (spec 05 §7.1/§9)', () => {
+  it('audio clips render a waveform body + fade transition objects, not a filmstrip (spec 05 §7.1/§9, R20-W5 thread-5)', () => {
     boot({});
     const clip = screen.getByTestId('clip-el-6');
     expect(clip.querySelectorAll('svg rect').length).toBeGreaterThan(10); // waveform bars
-    // el-6 has audioFadeIn 1 s / audioFadeOut 2 s → both ramp overlays (46 px/s)
-    expect(clip.querySelectorAll('svg.pointer-events-none').length).toBe(2);
+    // el-6 has audioFadeIn 1 s / audioFadeOut 2 s → both transition objects (46 px/s)
+    expect(clip.querySelectorAll('[data-testid^="fade-object-el-6"]').length).toBe(2);
     expect(clip.querySelector('div[style*="background-image"]')).toBeNull(); // no thumbnail strip
   });
 
@@ -96,11 +97,61 @@ describe('Clip', () => {
     expect(screen.getByTestId('clip-el-1')).not.toHaveTextContent('OFFLINE');
   });
 
-  it('text clips render the centered text-clip body (spec 05 §7.3 clip kinds)', () => {
+  it('text clips render the CENTERED THIN BAR (R20-W5 thread #56): clamp(20, lane·0.4, 28) = 24px at lane 60, label inside', () => {
     boot({});
     const clip = screen.getByTestId('clip-el-5');
-    expect(clip.innerHTML).toContain('var(--clip-text)');
-    expect(clip).toHaveTextContent('MARINA — FISHERWOMAN');
+    const bar = screen.getByTestId('text-bar-el-5');
+    expect(bar.style.height).toBe('24px'); // round(60 × 0.4)
+    expect(bar.style.background).toBe('var(--clip-text)'); // caption-chip grammar skin
+    expect(bar).toHaveTextContent('MARINA — FISHERWOMAN'); // the name lives INSIDE the bar
+    expect(bar.querySelector('span')!.className).toContain('truncate'); // truncates, never wraps
+    /* the CLIP BOX keeps the full-lane drag/select/trim/marquee surface (the
+       contract's hit-test law — the bar is only the visual body): */
+    expect(clip.className).toContain('top-[2px]');
+    expect(clip.className).toContain('bottom-[2px]');
+    expect(clip.querySelector('div > div > div')).not.toBeNull(); // centering wrapper inside the box
+    // the bar re-clamps at the extremes via the exported formula (single source)
+    expect(textBarHeight(34)).toBe(20);
+    expect(textBarHeight(80)).toBe(28);
+    expect(textBarHeight(10)).toBe(20);
+  });
+
+  it('the thin bar re-clamps with the LANE height (20px in a 34px lane) — per-track heights reflow it', () => {
+    const first = boot({ selection: [] });
+    first.unmount();
+    // re-render with the overlay lane at 34px (blocks-like lane height)
+    const { unmount } = renderShell(<Lanes overlayH={34} />);
+    expect(screen.getByTestId('text-bar-el-5').style.height).toBe('20px'); // 34×0.4 = 13.6 → clamped to 20
+    unmount();
+  });
+
+  it('blocks-variant text clips route through the SAME thin bar (blocks keeps full-height bodies for video/audio only)', () => {
+    window.localStorage.setItem('nle-shell-variants:v1', 'theme:resolve,density:pro,clip:blocks,accent:gold,header:readout');
+    boot({});
+    expect(screen.getByTestId('text-bar-el-5').style.height).toBe('24px'); // not the full-height blocks body
+    // the audio blocks body stays full-height (the isText routing is text-only)
+    expect(screen.getByTestId('clip-el-6').querySelector('[style*="--clip-audio-a"]')).not.toBeNull();
+    window.localStorage.removeItem('nle-shell-variants:v1');
+  });
+
+  it('the clip box keeps the full-lane SELECT surface around the thin bar (contract hit-test law)', () => {
+    boot({ selection: [] });
+    const clip = screen.getByTestId('clip-el-5');
+    fireEvent.click(clip); // anywhere in the box — not just the bar — selects
+    expect(store().selection).toEqual(['el-5']);
+  });
+
+  it('alt-drag ghost for a text clip renders the SAME-HEIGHT thin bar (preview matches the drop)', () => {
+    boot({});
+    const clip = screen.getByTestId('clip-el-5');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 402, altKey: true }); // 8.75 s × 46
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 510, altKey: true });
+    const ghost = screen.getByTestId('clip-ghost-el-5');
+    expect(ghost.style.background).toBe('transparent'); // the outer ghost no longer fills the lane
+    const bar = ghost.querySelector('[style*="--clip-text"]') as HTMLElement;
+    expect(bar.style.height).toBe('24px');
+    expect(bar.style.background).toBe('var(--clip-text)');
+    fireEvent.pointerUp(clip, { pointerId: 1, clientX: 510, altKey: true });
   });
 
   it('the F effect badge only appears when an effect is enabled (spec 18 §9 badges)', () => {
@@ -748,42 +799,126 @@ describe('R19 waveform v2 (th_mto2xtgc + th_mto2y86w)', () => {
   });
 });
 
-describe('R19 audio fade geometry (th_mto2ph3i — curves were REVERSED)', () => {
-  it('fade-IN rises bottom-left → top-right; fade-OUT falls top-left → bottom-right (el-6: 1s in / 2s out at 46pps)', () => {
+/* R20-W5 (thread #62 / timeline-cluster thread-5): fades render as SELECTABLE,
+   width-draggable TRANSITION OBJECTS (crossfade-block grammar, half-width at
+   the clip head/tail). The fake curve-handle dots are REMOVED — they promised
+   interaction they never had (the thread's core complaint). The envelope line
+   + inaudible wedge geometry is unchanged (th_mto2ph3i) but now lives INSIDE
+   the object node. */
+describe('R20-W5 fade transition objects (thread #62 / timeline-cluster thread-5)', () => {
+  it('slider semantics + width = model fields × pps; the fake handle dots are GONE (el-6: 1s in / 2s out at 46pps)', () => {
     boot({});
-    const clip = screen.getByTestId('clip-el-6');
-    const fadeSvgs = clip.querySelectorAll('svg.pointer-events-none');
-    expect(fadeSvgs.length).toBe(2);
+    const inObj = screen.getByTestId('fade-object-el-6-in');
+    const outObj = screen.getByTestId('fade-object-el-6-out');
+    expect(inObj).toHaveAttribute('role', 'slider');
+    expect(inObj).toHaveAttribute('aria-label', 'Fade in duration, 1.00 seconds');
+    expect(inObj).toHaveAttribute('aria-valuemin', '0');
+    expect(inObj).toHaveAttribute('aria-valuemax', '720'); // 30 s × 24
+    expect(inObj).toHaveAttribute('aria-valuenow', '24');  // 1 s × 24 — frame units, like the ruler sliders
+    expect(inObj).toHaveAttribute('aria-valuetext', '1.00s');
+    expect(outObj).toHaveAttribute('aria-label', 'Fade out duration, 2.00 seconds');
+    expect(outObj).toHaveAttribute('aria-valuenow', '48'); // 2 s × 24
+    expect(inObj.style.width).toBe('46px'); // audioFadeIn 1 s × 46 pps
+    expect(outObj.style.width).toBe('92px'); // audioFadeOut 2 s × 46 pps
+    // crossfade-block grammar: 1px border + gradient fill + 2px radius + ew-resize grab
+    expect(inObj.style.border).toContain('var(--fade-line)');
+    expect(inObj.style.background).toContain('linear-gradient');
+    expect(inObj.className).toContain('cursor-ew-resize');
+    expect(inObj.className).toContain('rounded-[2px]');
+    // the FULL-AMPLITUDE bright strip: right edge on the in object, LEFT edge on the out (mirrored)
+    const inStrip = inObj.querySelector('div[style*="--fade-line"]') as HTMLElement;
+    expect(inStrip.className).toContain('right-0');
+    const outStrip = outObj.querySelector('div[style*="--fade-line"]') as HTMLElement;
+    expect(outStrip.className).toContain('left-0');
+    // the fake handle dots are GONE (no circle anywhere in the clip)
+    expect(screen.getByTestId('clip-el-6').querySelectorAll('circle').length).toBe(0);
+  });
+
+  it('the envelope line + inaudible wedge live INSIDE the object node — geometry unchanged (th_mto2ph3i)', () => {
+    boot({});
     const bodyH = 60 - 4; // clip box inset 2px top/bottom of the 60px lane
-    const fadeIn = fadeSvgs[0]!; // left-anchored
-    const fadeOut = fadeSvgs[1]!; // right-anchored
-    // fade-in line: (1, bodyH) → (45, 0) — zero at clip start, full at fade end
-    const inLine = fadeIn.querySelector('line')!;
+    const inSvg = screen.getByTestId('fade-object-el-6-in').querySelector('svg')!;
+    const inLine = inSvg.querySelector('line')!;
+    // fade-in: rises (1, bodyH) → (45, 0) — zero at clip start, full at fade end
     expect(inLine.getAttribute('x1')).toBe('1');
     expect(inLine.getAttribute('y1')).toBe(`${bodyH}`);
     expect(inLine.getAttribute('x2')).toBe('45');
     expect(inLine.getAttribute('y2')).toBe('0');
-    // fade-out line: (1, 0) → (90, bodyH) — FULL at the fade start (the overlay's LEFT
-    // edge — it is right-anchored, so local left = clip end − fade), ZERO at the clip end
-    const outLine = fadeOut.querySelector('line')!;
+    const inFill = inSvg.querySelector('polygon')!;
+    expect(inFill.getAttribute('points')).toBe(`1,0 1,${bodyH} 45,0`);
+    expect(inFill.getAttribute('fill')).toBe('rgba(0,0,0,0.25)');
+    const outSvg = screen.getByTestId('fade-object-el-6-out').querySelector('svg')!;
+    const outLine = outSvg.querySelector('line')!;
+    // fade-out: falls (1, 0) → (90, bodyH) — full at the fade start, zero at the clip end
     expect(outLine.getAttribute('x1')).toBe('1');
     expect(outLine.getAttribute('y1')).toBe('0');
     expect(outLine.getAttribute('x2')).toBe('90');
     expect(outLine.getAttribute('y2')).toBe(`${bodyH}`);
-    // soft inaudible-region fills (black 25%): the wedge ABOVE each envelope line —
-    // thickest on the QUIET side (clip start for the in, clip end for the out)
-    const inFill = fadeIn.querySelector('polygon')!;
-    expect(inFill.getAttribute('points')).toBe(`1,0 1,${bodyH} 45,0`);
-    expect(inFill.getAttribute('fill')).toBe('rgba(0,0,0,0.25)');
-    const outFill = fadeOut.querySelector('polygon')!;
+    const outFill = outSvg.querySelector('polygon')!;
     expect(outFill.getAttribute('points')).toBe(`1,0 90,0 90,${bodyH}`);
     expect(outFill.getAttribute('fill')).toBe('rgba(0,0,0,0.25)');
-    // handle dots ride the line's full-amplitude (top) end of each ramp
-    const inDot = fadeIn.querySelector('circle')!;
-    expect(parseFloat(inDot.getAttribute('cx') ?? '0')).toBe(44); // fade END — full amplitude reached
-    const outDot = fadeOut.querySelector('circle')!;
-    expect(parseFloat(outDot.getAttribute('cx') ?? '0')).toBe(3); // fade START — still full amplitude
-    expect(parseFloat(outDot.getAttribute('cy') ?? '0')).toBe(3);
+  });
+
+  it('dragging the IN object: press SELECTS the clip, live local preview (no mid-drag writes), ONE commit + ONE undo entry', () => {
+    boot({ selection: [] });
+    const inObj = screen.getByTestId('fade-object-el-6-in');
+    fireEvent.pointerDown(inObj, { pointerId: 4, button: 0, clientX: 0 });
+    expect(store().selection).toEqual(['el-6']); // select-on-press — the domain stays the CLIP
+    fireEvent.pointerMove(inObj, { pointerId: 4, buttons: 1, clientX: 115 }); // 115/46 = 2.5 s
+    // LIVE PREVIEW from local state — the store is untouched mid-drag (one-entry law)
+    expect(el('el-6').audioFadeIn).toBe(1);
+    expect(screen.getByTestId('fade-object-el-6-in').style.width).toBe('115px');
+    expect(screen.getByTestId('fade-object-el-6-in')).toHaveAttribute('aria-valuetext', '2.50s'); // a11y follows the preview
+    expect(store().past).toHaveLength(0);
+    fireEvent.pointerUp(inObj, { pointerId: 4 });
+    expect(el('el-6').audioFadeIn).toBe(2.5);
+    expect(screen.getByTestId('fade-object-el-6-in').style.width).toBe('115px'); // committed width == preview
+    expect(store().past).toHaveLength(1); // ONE entry per gesture — never per pointermove
+  });
+
+  it('dragging the OUT object resizes from the clip TAIL; clamped to [0, duration]; no-fade clips render no objects', () => {
+    boot({ selection: [] });
+    const outObj = screen.getByTestId('fade-object-el-6-out');
+    fireEvent.pointerDown(outObj, { pointerId: 5, button: 0, clientX: 1380 }); // clip right edge (30 s × 46, jsdom rect.left 0)
+    fireEvent.pointerMove(outObj, { pointerId: 5, buttons: 1, clientX: 1196 }); // 1380 − 1196 = 184 px → 4 s
+    fireEvent.pointerUp(outObj, { pointerId: 5 });
+    expect(el('el-6').audioFadeOut).toBe(4);
+    // the clamp: dragging past the clip bounds clamps to [0, duration]
+    fireEvent.pointerDown(outObj, { pointerId: 6, button: 0, clientX: 1380 });
+    fireEvent.pointerMove(outObj, { pointerId: 6, buttons: 1, clientX: -100 }); // beyond the clip head
+    fireEvent.pointerUp(outObj, { pointerId: 6 });
+    expect(el('el-6').audioFadeOut).toBe(30); // clamped to el.duration, never negative
+    // el-7 carries no fade fields → no objects (a 0-width fade renders nothing)
+    expect(screen.queryByTestId('fade-object-el-7-in')).toBeNull();
+    expect(screen.queryByTestId('fade-object-el-7-out')).toBeNull();
+  });
+
+  it('a plain click on the object selects the clip only — no value change, no history entry', () => {
+    boot({ selection: [] });
+    const inObj = screen.getByTestId('fade-object-el-6-in');
+    fireEvent.pointerDown(inObj, { pointerId: 7, button: 0, clientX: 10 });
+    fireEvent.pointerUp(inObj, { pointerId: 7 });
+    expect(store().selection).toEqual(['el-6']);
+    expect(el('el-6').audioFadeIn).toBe(1); // unchanged — no-op release commits nothing
+    expect(store().past).toHaveLength(0);
+  });
+
+  it('keyboard: arrows nudge ±1 frame (⇧ ×10), Home 0 / End duration — one undoable step per keypress', () => {
+    boot({});
+    const inObj = screen.getByTestId('fade-object-el-6-in');
+    fireEvent.keyDown(inObj, { key: 'ArrowRight' });
+    expect(el('el-6').audioFadeIn).toBeCloseTo(1 + 1 / 24, 5);
+    expect(store().past).toHaveLength(1);
+    fireEvent.keyDown(inObj, { key: 'ArrowRight', shiftKey: true });
+    expect(el('el-6').audioFadeIn).toBeCloseTo(1 + 11 / 24, 5);
+    expect(store().past).toHaveLength(2);
+    fireEvent.keyDown(inObj, { key: 'Home' });
+    expect(el('el-6').audioFadeIn).toBe(0);
+    expect(screen.queryByTestId('fade-object-el-6-in')).toBeNull(); // 0-width fade renders no object
+    // End rides the OUT object (the in object just unmounted at zero)
+    fireEvent.keyDown(screen.getByTestId('fade-object-el-6-out'), { key: 'End' });
+    expect(el('el-6').audioFadeOut).toBe(30); // clamped to the clip duration
+    expect(store().past).toHaveLength(4);
   });
 });
 

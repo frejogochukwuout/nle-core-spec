@@ -54,6 +54,16 @@ export const CAPTION_PARCHMENT = '#c1b59c';
    single source). */
 export const CLIP_WAVEFORM_RAMP = 0.08;
 
+/* R20-W5 (thread #56 / timeline-cluster thread-2): text clips render as a
+   CENTERED THIN BAR (caption-chip grammar, --clip-text skin) instead of a
+   full-height block — TEXT_BAR_H = clamp(20, round(lane·0.4), 28): 24px in
+   the 60px overlay lane, 20px in the 34px blocks lane, 28px at 80px. The
+   CLIP BOX keeps the full lane height (drag/select/trim/marquee surface —
+   unchanged, the contract's hit-test law); the bar is purely the visual
+   body inside it. Exported for the Clip.test formula pin. */
+export const textBarHeight = (laneHeight: number): number =>
+  Math.max(20, Math.min(28, Math.round(laneHeight * 0.4)));
+
 /* R15-A5: pointer capture is BEST-EFFORT — synthetic / inactive pointer ids
    (Storybook play functions, browser automation) throw NotFoundError on
    setPointerCapture; the drag grammar works without capture (moves route to
@@ -825,6 +835,16 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
   const fadeLeftW = (el.audioFadeIn ?? 0) * pxPerSec;
   const fadeRightW = (el.audioFadeOut ?? 0) * pxPerSec;
   const bodyH = laneHeight - 4;  // the clip box is inset 2px top/bottom in the lane
+  /* R20-W5 (thread #62 / timeline-cluster thread-5): fade-in/out render as
+     selectable, width-draggable TRANSITION OBJECTS — the live width during a
+     drag rides LOCAL state (NO store writes mid-drag; ONE setElementField
+     commit on pointerup = one undo entry, the R15-T4 one-entry-per-gesture
+     law). `t` is the previewed duration in seconds (frame-snapped). */
+  const [fadeDrag, setFadeDrag] = useState<{ side: 'in' | 'out'; t: number } | null>(null);
+  const fadeInLive = fadeDrag?.side === 'in' ? fadeDrag.t * pxPerSec : fadeLeftW;
+  const fadeOutLive = fadeDrag?.side === 'out' ? fadeDrag.t * pxPerSec : fadeRightW;
+  const fadeInModel = fadeDrag?.side === 'in' ? fadeDrag.t : (el.audioFadeIn ?? 0);
+  const fadeOutModel = fadeDrag?.side === 'out' ? fadeDrag.t : (el.audioFadeOut ?? 0);
 
   const clipLabel = (color: string, align: 'left' | 'center' = 'left') => (
     <span
@@ -855,7 +875,9 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
         </div>
       </div>
     );
-  } else if (clipStyle === 'blocks') {
+  } else if (clipStyle === 'blocks' && !isText) {
+    /* R20-W5 (thread #56): blocks keeps its compact full-height look for
+       video/audio only — isText falls through to the thin-bar body below. */
     body = (
       <div
         className="flex h-full items-center overflow-hidden px-1.5"
@@ -902,49 +924,31 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
             );
           })}
         </svg>
-        {/* fade ramps (spec 05 §14.10) — fixes th_mto2ph3i: BOTH curves were
-            REVERSED (the thread pinned the fade-in, but the fade-out line had
-            the same mirror bug). Fade-IN RISES bottom-left (zero at clip start)
-            → top-right (full at fade end); fade-OUT FALLS top-left (full at
-            fade start) → bottom-right (zero at clip end) — the overlay is
-            right-anchored, so its LEFT edge is the fade start and its RIGHT
-            edge is the clip END: the line must run (1, 0) → (fadeRightW−2,
-            bodyH) in the overlay's own frame (SVG y=0 is TOP). The soft fill
-            polygon shades the INAUDIBLE region (black 25%) — the wedge ABOVE
-            the envelope line, thickest on the QUIET side (clip start for a
-            fade-in, clip end for a fade-out), vanishing where the signal
-            reaches full amplitude. Handle dots ride the line's FULL-amplitude
-            end (the top end of each ramp). */}
-        {fadeLeftW > 6 && (
-          <svg className="pointer-events-none absolute inset-y-0 left-0" width={fadeLeftW} height={bodyH} aria-hidden="true">
-            {/* th_mto2ph3i fade-in: rises (1, bodyH) → (fadeLeftW−1, 0) — zero
-                at clip start, full at fade end; the inaudible wedge (above the
-                line) hugs the clip's START edge */}
-            <polygon points={`1,0 1,${bodyH} ${fadeLeftW - 1},0`} fill="rgba(0,0,0,0.25)" />
-            <line x1="1" y1={bodyH} x2={fadeLeftW - 1} y2="0" stroke="var(--fade-line)" strokeWidth="2" />
-            <circle cx={fadeLeftW - 2} cy="3" r="2.6" fill="var(--fade-line)" stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
-          </svg>
-        )}
-        {fadeRightW > 6 && (
-          <svg className="pointer-events-none absolute inset-y-0 right-0" width={fadeRightW} height={bodyH} aria-hidden="true">
-            {/* th_mto2ph3i fade-out: falls (1,0) → (fadeRightW−2, bodyH) —
-                full at the fade start, zero at the clip end; the inaudible
-                wedge (above the line) hugs the clip's END edge */}
-            <polygon points={`1,0 ${fadeRightW - 2},0 ${fadeRightW - 2},${bodyH}`} fill="rgba(0,0,0,0.25)" />
-            <line x1="1" y1="0" x2={fadeRightW - 2} y2={bodyH} stroke="var(--fade-line)" strokeWidth="2" />
-            <circle cx="3" cy="3" r="2.6" fill="var(--fade-line)" stroke="rgba(0,0,0,0.4)" strokeWidth="0.5" />
-          </svg>
-        )}
+        {/* R20-W5 (thread #62): the fade overlays LEFT this body — they are
+            now the SELECTABLE transition objects rendered at the clip-box
+            level (see fade-object-${el.id}-in/-out below, z-[3]); the fake
+            handle dots are GONE (they promised interaction they never had).
+            The waveform's ramp option stays — the envelope and the object
+            width tell the same story from two surfaces (store = the single
+            owner, el.audioFadeIn). */}
         {clipLabel('var(--clip-audio-label)')}
       </div>
     );
   } else if (isText) {
+    /* R20-W5 (thread #56 / timeline-cluster thread-2): CENTERED THIN BAR
+       (caption-chip grammar) — height clamp(20, lane·0.4, 28), label inside
+       the bar (truncated; the bottom clipLabel reads wrong on a 24px bar and
+       is dropped), vertically centered (Resolve centers text bars). The
+       clip box around it keeps the full-lane drag/select/trim surface. */
     body = (
-      <div
-        className="flex h-full items-center justify-center overflow-hidden"
-        style={{ background: 'var(--clip-text)', borderRight: '1px solid rgba(0,0,0,0.25)' }}
-      >
-        {clipLabel('var(--clip-text-label)', 'center')}
+      <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden">
+        <div
+          data-testid={`text-bar-${el.id}`}
+          className="mx-[2px] flex max-w-full shrink-0 items-center justify-center overflow-hidden rounded-[2px] border px-2"
+          style={{ height: textBarHeight(laneHeight), background: 'var(--clip-text)', borderColor: 'rgba(0,0,0,0.35)' }}
+        >
+          <span className="truncate text-[11px] font-medium" style={{ color: 'var(--clip-text-label)' }}>{el.name}</span>
+        </div>
       </div>
     );
   } else {
@@ -995,16 +999,92 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       style={{
         left: drag.origStart * pxPerSec,
         width: Math.max(6, el.duration * pxPerSec),
+        /* R20-W5 (thread #56): the text ghost renders the same THIN BAR the
+           drop will produce (background + label inside the bar) — the outer
+           ghost box goes transparent so the preview matches the drop. */
         background: isAudio
           ? 'linear-gradient(to bottom, var(--clip-audio-a), var(--clip-audio-b))'
           : isText
-            ? 'var(--clip-text)'
+            ? 'transparent'
             : 'var(--clip-video)',
       }}
     >
-      {clipLabel(isAudio ? 'var(--clip-audio-label)' : isText ? 'var(--clip-text-label)' : 'var(--clip-label-text)')}
+      {isText ? (
+        <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden">
+          <div
+            className="mx-[2px] flex max-w-full shrink-0 items-center justify-center overflow-hidden rounded-[2px] border px-2"
+            style={{ height: textBarHeight(laneHeight), background: 'var(--clip-text)', borderColor: 'rgba(0,0,0,0.35)' }}
+          >
+            <span className="truncate text-[11px] font-medium" style={{ color: 'var(--clip-text-label)' }}>{el.name}</span>
+          </div>
+        </div>
+      ) : (
+        clipLabel(isAudio ? 'var(--clip-audio-label)' : 'var(--clip-label-text)')
+      )}
     </div>
   ) : null;
+
+  /* ---------- R20-W5 (thread #62 / timeline-cluster thread-5): the FADE
+     TRANSITION OBJECTS' gesture grammar — cloned from the loop brackets'
+     law (Ruler.tsx bracketHandlers): pointerdown selects the clip + arms the
+     drag (local preview only), pointermove resizes, pointerup commits ONE
+     setElementField (one undo entry). Each keypress = one undoable step
+     (bracket-nudge semantics). Each fade clamps independently to
+     [0, el.duration]; overlap of in/out objects is allowed (visual stacking:
+     the out object renders above the in when they meet). The object stays
+     mounted while ITS drag is live even below the 6px gate — unmounting
+     mid-gesture would drop the handlers (width collapses to the border box). */
+  const fadeHandlers = (side: 'in' | 'out') => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      e.stopPropagation(); // must NOT start a clip move/trim gesture
+      /* select-if-unselected (the context-menu router's law): the selection
+         domain stays the CLIP — the inspector's Fades group (existing) is the
+         parametric surface once selected */
+      if (!useUi.getState().selection.includes(el.id)) selectElement(el.id, false);
+      (e.currentTarget as HTMLElement).focus();
+      capturePointer(e.currentTarget as HTMLElement, e.pointerId);
+      const start = side === 'in' ? (el.audioFadeIn ?? 0) : (el.audioFadeOut ?? 0);
+      setFadeDrag({ side, t: start });
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (fadeDrag?.side !== side || e.buttons !== 1) return;
+      const box = ref.current?.getBoundingClientRect(); // the CLIP box — the object's x domain
+      if (!box) return;
+      /* the rendered clip width (geo — no clip gesture can be live during a
+         fade drag, so this is the committed width) backs out the right edge:
+         jsdom's zero-size rects then still resolve against real geometry */
+      const clipRight = box.left + Math.max(6, geo.width);
+      const raw = side === 'in' ? (e.clientX - box.left) / pxPerSec : (clipRight - e.clientX) / pxPerSec;
+      const t = Math.max(0, Math.min(snapToFrame(raw), el.duration));
+      setFadeDrag({ side, t });
+    },
+    onPointerUp: () => {
+      if (fadeDrag?.side !== side) return;
+      const t = fadeDrag.t;
+      setFadeDrag(null);
+      const cur = side === 'in' ? (el.audioFadeIn ?? 0) : (el.audioFadeOut ?? 0);
+      if (t === cur) return; // no-op release (plain click) — no history entry
+      useUi.getState().setElementField(el.id, side === 'in' ? { audioFadeIn: t } : { audioFadeOut: t });
+    },
+    onPointerCancel: () => { if (fadeDrag?.side === side) setFadeDrag(null); },
+    onLostPointerCapture: () => { if (fadeDrag?.side === side) setFadeDrag(null); },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
+      e.preventDefault();
+      e.stopPropagation(); // the clip box's key route must not see the slider keys
+      const cur = side === 'in' ? (el.audioFadeIn ?? 0) : (el.audioFadeOut ?? 0);
+      let next: number;
+      if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = el.duration;
+      else {
+        const frames = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1);
+        next = Math.max(0, Math.min(snapToFrame(cur + frames / 24), el.duration));
+      }
+      if (next === cur) return; // no-op keypress — no history entry
+      useUi.getState().setElementField(el.id, side === 'in' ? { audioFadeIn: next } : { audioFadeOut: next });
+    },
+  });
 
   return (
     <>
@@ -1098,6 +1178,79 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       >
         {body}
       </div>
+
+      {/* ---- R20-W5 (thread #62 / timeline-cluster thread-5): FADE TRANSITION
+           OBJECTS — selectable, width-draggable, crossfade-block grammar
+           (1px border + 2px radius + gradient fill + seconds in the label),
+           half-width at the clip HEAD (fade-in, right-edge = the full-amplitude
+           boundary) and mirrored at the TAIL (fade-out, left-edge). Width =
+           el.audioFadeIn/Out seconds × pps (the live preview during a drag
+           comes from local state — ONE setElementField commit per gesture).
+           Below 6px the object unmounts (a 0-width fade renders no object;
+           the Inspector "Fade in" field creates one). Trim handles sit OUTSIDE
+           the clip edges (±4px) so the head object never fights them — the
+           narrow-clip crowding is visual only, hit zones stay disjoint.
+           R20-W5-TODO(thread #62 follow-up): per-TYPE transition glyphs (fade
+           = wedge; crossfade = two triangles) — the glyph slot is the empty
+           center of this object; type dispatch lands with the transition-type
+           model (spec 09's mock slice has crossfade only). ---- */}
+      {(fadeInLive >= 6 || fadeDrag?.side === 'in') && (
+        <div
+          {...fadeHandlers('in')}
+          data-testid={`fade-object-${el.id}-in`}
+          role="slider"
+          aria-label={`Fade in duration, ${fadeInModel.toFixed(2)} seconds`}
+          aria-valuemin={0}
+          aria-valuemax={Math.round(el.duration * 24)}
+          aria-valuenow={Math.round(fadeInModel * 24)}
+          aria-valuetext={`${fadeInModel.toFixed(2)}s`}
+          tabIndex={0}
+          className="absolute bottom-[2px] left-0 top-[2px] z-[3] cursor-ew-resize overflow-hidden rounded-[2px]"
+          style={{
+            width: Math.max(2, fadeInLive),
+            border: '1px solid var(--fade-line)',
+            background: 'linear-gradient(to right, color-mix(in srgb, var(--fade-line) 6%, transparent), color-mix(in srgb, var(--fade-line) 20%, transparent))',
+          }}
+        >
+          {/* the honest audio semantics live INSIDE the object: the envelope
+              line (zero at the clip head → full at the fade end) + the soft
+              inaudible wedge above it — geometry unchanged from th_mto2ph3i */}
+          <svg className="pointer-events-none absolute inset-y-0 left-0" width={Math.max(1, fadeInLive)} height={bodyH} aria-hidden="true">
+            <polygon points={`1,0 1,${bodyH} ${fadeInLive - 1},0`} fill="rgba(0,0,0,0.25)" />
+            <line x1="1" y1={bodyH} x2={fadeInLive - 1} y2="0" stroke="var(--fade-line)" strokeWidth="2" />
+          </svg>
+          {/* full-amplitude boundary: the bright 8px strip at the object's
+              RIGHT edge — "only the right half" of a crossfade block */}
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-[8px]" style={{ background: 'var(--fade-line)', opacity: 0.55 }} />
+        </div>
+      )}
+      {(fadeOutLive >= 6 || fadeDrag?.side === 'out') && (
+        <div
+          {...fadeHandlers('out')}
+          data-testid={`fade-object-${el.id}-out`}
+          role="slider"
+          aria-label={`Fade out duration, ${fadeOutModel.toFixed(2)} seconds`}
+          aria-valuemin={0}
+          aria-valuemax={Math.round(el.duration * 24)}
+          aria-valuenow={Math.round(fadeOutModel * 24)}
+          aria-valuetext={`${fadeOutModel.toFixed(2)}s`}
+          tabIndex={0}
+          className="absolute bottom-[2px] right-0 top-[2px] z-[3] cursor-ew-resize overflow-hidden rounded-[2px]"
+          style={{
+            width: Math.max(2, fadeOutLive),
+            border: '1px solid var(--fade-line)',
+            background: 'linear-gradient(to left, color-mix(in srgb, var(--fade-line) 20%, transparent), color-mix(in srgb, var(--fade-line) 6%, transparent))',
+          }}
+        >
+          {/* mirrored: full at the fade start → zero at the clip end; the
+              bright strip rides the object's LEFT edge (full-amplitude side) */}
+          <svg className="pointer-events-none absolute inset-y-0 right-0" width={Math.max(1, fadeOutLive)} height={bodyH} aria-hidden="true">
+            <polygon points={`1,0 ${fadeOutLive - 2},0 ${fadeOutLive - 2},${bodyH}`} fill="rgba(0,0,0,0.25)" />
+            <line x1="1" y1="0" x2={fadeOutLive - 2} y2={bodyH} stroke="var(--fade-line)" strokeWidth="2" />
+          </svg>
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-[8px]" style={{ background: 'var(--fade-line)', opacity: 0.55 }} />
+        </div>
+      )}
 
       {/* locked overlay — stripes ON TOP of the body (legible, R2) */}
       {locked && <div className="locked-stripes pointer-events-none absolute inset-0 z-[2]" aria-hidden="true" />}

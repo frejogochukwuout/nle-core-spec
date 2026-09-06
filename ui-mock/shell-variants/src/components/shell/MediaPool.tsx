@@ -44,7 +44,7 @@ import {
   ArrowUpNarrowWide, ArrowDownWideNarrow, Film, AudioLines, Image,
 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
-import { project, type MediaRecord, type MediaType, type TrackKind } from '../../lib/mockData';
+import { project, isAudioBearing, type MediaRecord, type MediaType, type TrackKind } from '../../lib/mockData';
 import { tc, totalDuration, clamp, snapToFrame } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
 import { ContextMenu, useContextMenu, isMenuKey, type MenuItem } from './ContextMenu';
@@ -310,6 +310,17 @@ export function MediaPool() {
   const mediaSelection = useUi((s) => s.mediaSelection);
   const mediaDrag = useUi((s) => s.mediaDrag);
   const activeScene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
+  /* R20-W5 (thread #67 / D1.5, the media-bay MODE filter): ON by default on
+     the AUDIO page (poolModeFilter defaults true) — the pool then lists
+     audio + audio-bearing video only, with the honest count chip + the
+     'Audio only' toggle in the header. Edit/Color/Deliver pages render the
+     pool unfiltered (the flag is page-gated HERE — SoundLibrary, the
+     audio-page dock swap, honors the flag directly). View state, never
+     persisted. */
+  const page = useUi((s) => s.page);
+  const poolModeFilter = useUi((s) => s.poolModeFilter);
+  const setPoolModeFilter = useUi((s) => s.setPoolModeFilter);
+  const audioFilterOn = poolModeFilter && page === 'audio';
   const setMediaView = useUi((s) => s.setMediaView);
   const setSortBy = useUi((s) => s.setSortBy);
   const setSortDir = useUi((s) => s.setSortDir);
@@ -401,14 +412,17 @@ export function MediaPool() {
     useUi.getState().setSearch('');
   };
 
-  /* flat filtered order — sort runs client-side, direction multiplies */
+  /* flat filtered order — sort runs client-side, direction multiplies.
+     R20-W5: the audio-page MODE filter (audio + audio-bearing video, the
+     shared isAudioBearing predicate) composes with the search filter. */
   const items = useMemo<MediaRecord[]>(() => {
     const pool = removedIds.length === 0 ? project.media : project.media.filter((m) => !removedIds.includes(m.id));
-    const filtered = search ? pool.filter((m) => m.name.toLowerCase().includes(search)) : [...pool];
+    const byMode = audioFilterOn ? pool.filter(isAudioBearing) : pool;
+    const filtered = search ? byMode.filter((m) => m.name.toLowerCase().includes(search)) : [...byMode];
     const dir = sortDir === 'asc' ? 1 : -1;
     filtered.sort((a, b) => dir * cmpBy(sortBy, a, b));
     return filtered;
-  }, [search, sortBy, sortDir, removedIds]);
+  }, [search, sortBy, sortDir, removedIds, audioFilterOn]);
 
   /* keep the activedescendant target valid when the list re-filters */
   useEffect(() => {
@@ -688,6 +702,31 @@ export function MediaPool() {
           {sortDir === 'asc' ? <ArrowUpNarrowWide size={13} strokeWidth={1.6} /> : <ArrowDownWideNarrow size={13} strokeWidth={1.6} />}
         </button>
         <div className="flex shrink-0 items-center gap-0.5">
+          {/* R20-W5 (thread #67): the audio-page 'Audio only' MODE filter
+              toggle + the honest count chip (visible count / pool size) —
+              view-state poolModeFilter, page-gated to the audio page. */}
+          {page === 'audio' && (
+            <>
+              <button
+                type="button"
+                className={`icon-btn !h-[22px] !w-[22px] shrink-0 ${audioFilterOn ? 'toggled' : ''}`}
+                onClick={() => setPoolModeFilter(!poolModeFilter)}
+                aria-pressed={audioFilterOn}
+                aria-label="Audio only"
+                data-tip="Audio only — filter to audio + audio-bearing video"
+                data-testid="shell-mediapool-audio-toggle"
+              >
+                <AudioLines size={13} strokeWidth={1.6} />
+              </button>
+              <span
+                className="mono shrink-0 text-[10px] text-tfaint"
+                data-testid="shell-mediapool-audio-count"
+                title={`${items.length} of ${poolSize} assets shown — audio + audio-bearing video`}
+              >
+                {items.length}/{poolSize}
+              </span>
+            </>
+          )}
           <button
             type="button"
             className={`icon-btn !h-[22px] !w-[22px] ${mediaView === 'grid' ? 'toggled' : ''}`}
