@@ -6,13 +6,15 @@
    (th_mtoyu8bl, gap C38) — see the removal note below. */
 
 import { useRef, useState } from 'react';
-import { PanelLeft, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { PanelLeft, Sparkles, SlidersHorizontal, FolderCog } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { project } from '../../lib/mockData';
 
 export function Toolbar2() {
   const panels = useUi((s) => s.panels);
   const togglePanel = useUi((s) => s.togglePanel);
+  const inspectorProjectMode = useUi((s) => s.inspectorProjectMode);
+  const toggleInspectorProjectMode = useUi((s) => s.toggleInspectorProjectMode);
 
   /* roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern): exactly ONE
      button is a tab stop; ←/→ move focus between buttons in DOM order
@@ -40,7 +42,7 @@ export function Toolbar2() {
     else if (e.key === 'End') { e.preventDefault(); focusRover(n - 1); }
   };
   /* per-button roving props (spread in DOM order: pool=0, effects=1,
-     inspector=2); onFocus keeps the tab stop synced with
+     inspector=2, project=3); onFocus keeps the tab stop synced with
      real focus so clicks/mouse users don't fight the arrow model */
   const roverProps = (i: number) => ({
     ref: (el: HTMLButtonElement | null) => { btnRefs.current[i] = el; },
@@ -99,6 +101,20 @@ export function Toolbar2() {
       >
         <SlidersHorizontal size={14} strokeWidth={1.8} />
         <span>Inspector</span>
+      </button>
+      {/* R20-W3 (D4.4, descoped): the minimal Project sheet toggle — flips
+          inspectorProjectMode; the inspector rail renders the read-only
+          ProjectSheet (full project-level design lands with C58). Selecting
+          any entity exits the mode (store law). */}
+      <button
+        {...roverProps(3)}
+        className={`toolbtn ${inspectorProjectMode ? 'active' : ''}`}
+        data-testid="shell-toolbar-btn-project"
+        aria-pressed={inspectorProjectMode}
+        onClick={toggleInspectorProjectMode}
+      >
+        <FolderCog size={14} strokeWidth={1.8} />
+        <span>Project</span>
       </button>
       {/* th_mtoyu8bl (gap C38): the fullscreen-viewer toggle button was REMOVED
           — the v2 fullscreen surface (spec 18 §8.5) is not built and a control

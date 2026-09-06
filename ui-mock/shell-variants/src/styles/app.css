@@ -607,3 +607,16 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
   25%, 75% { box-shadow: 0 0 0 2px var(--accent-selection); }
 }
 .mixer-strip[data-flash='on'] { animation: strip-flash 1.2s ease-in-out; }
+
+/* R20-W2 (thread #68 / C49): audio hover-dwell waveform sweep — a 2px
+   accent playhead translating 0 → 100% across the audio thumb over the
+   SAME 6s PREVIEW window the video ken-burns + hairline run. One sweep,
+   forwards (no loop); low-duty by construction (single linear pass).
+   Unlayered on purpose (the .mono/.vsep tier): the class only owns the
+   animation — position comes from Tailwind's .absolute, width from the
+   inline w-[2px], so nothing here can fight a utility. */
+@keyframes pool-audio-sweep {
+  from { left: 0; }
+  to { left: calc(100% - 2px); }
+}
+.pool-audio-sweep { animation: pool-audio-sweep 6s linear forwards; }

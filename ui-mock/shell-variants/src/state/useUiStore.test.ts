@@ -1972,3 +1972,61 @@ describe('R19: activeTrackOf (inspector empty-selection fallback)', () => {
     expect(activeTrackOf(sc, null, 29.9)!.id).toBe('tr-main'); // past content → main fallback
   });
 });
+
+/* R20-W3 (D4.2): the track/effect selection domains — mirrors of the R19
+   selectedMarkerId domain-swap law. Store-level pins (the component-level
+   matrix lives in Inspector.test.tsx); the inspectorTab surface is GONE
+   (the tab strip was removed per thread #53 — 18 §4.4 deviation registered). */
+describe('R20-W3: track/effect selection domains + project mode', () => {
+  it('selectTrack clears the clip selection + marker/effect domains; setSelection clears it back', () => {
+    act(() => { S().selectElement('el-2', false); });
+    act(() => { S().selectTrack('tr-audio-1'); });
+    expect(S().selectedTrackId).toBe('tr-audio-1');
+    expect(S().selection).toEqual([]);
+    expect(S().selectedMarkerId).toBe(null);
+    act(() => { S().setSelection(['el-1']); });
+    expect(S().selectedTrackId).toBe(null); // one domain at a time
+  });
+
+  it('selectEffect keeps its clip selected; the clip deselecting clears the effect', () => {
+    act(() => { S().setSelection(['el-1']); });
+    act(() => { S().selectEffect('el-1', 'fx-1'); });
+    expect(S().selectedEffectId).toBe('fx-1');
+    expect(S().selectedEffectClipId).toBe('el-1');
+    expect(S().selection).toEqual(['el-1']); // the clip STAYS selected (accordion in place)
+    expect(S().selectedTrackId).toBe(null);
+    // the effect survives a selection that still holds its clip...
+    act(() => { S().setSelection(['el-1', 'el-2']); });
+    expect(S().selectedEffectId).toBe('fx-1');
+    // ...and dies when the clip deselects
+    act(() => { S().setSelection(['el-2']); });
+    expect(S().selectedEffectId).toBe(null);
+    expect(S().selectedEffectClipId).toBe(null);
+  });
+
+  it('selectTrack / selectEffect / selectMarker exit project mode; the toggle flips it', () => {
+    act(() => { S().toggleInspectorProjectMode(); });
+    expect(S().inspectorProjectMode).toBe(true);
+    act(() => { S().selectTrack('tr-main'); });
+    expect(S().inspectorProjectMode).toBe(false);
+    act(() => { S().toggleInspectorProjectMode(); });
+    act(() => { S().selectEffect('el-1', 'fx-1'); });
+    expect(S().inspectorProjectMode).toBe(false);
+    act(() => { S().toggleInspectorProjectMode(); });
+    act(() => { S().selectMarker('mk-2'); });
+    expect(S().inspectorProjectMode).toBe(false);
+  });
+
+  it('scene switch clears the track/effect domains (stale ids never survive)', () => {
+    act(() => { S().selectTrack('tr-audio-1'); });
+    act(() => { S().setActiveScene('sc-2'); });
+    expect(S().selectedTrackId).toBe(null);
+    expect(S().selection).toEqual([]);
+  });
+
+  it('the inspectorTab surface is gone (the tab strip removal, thread #53)', () => {
+    const s = S() as unknown as Record<string, unknown>;
+    expect(s.inspectorTab).toBeUndefined();
+    expect(s.setInspectorTab).toBeUndefined();
+  });
+});

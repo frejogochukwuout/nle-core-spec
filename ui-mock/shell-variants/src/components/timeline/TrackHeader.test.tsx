@@ -207,3 +207,47 @@ describe('TrackHeader R15-A4 — audio micro-meters (v2.2 §3.2)', () => {
     expect(fill.style.clipPath).toBe('inset(50% 0 0 0)'); // (−30+60)/60
   });
 });
+
+/* R20-W3 (D4.2): the header's NON-INTERACTIVE residue (name / clip-count /
+   lane area — NOT the M/S/L/V/W buttons) selects the TRACK: focus (the
+   pointerdown focused-track write) + selectTrack. The store law clears the
+   clip selection + marker/effect domains; the inspector rail swaps to the
+   TrackSheet. The 16 pre-existing header tests keep clicking BUTTONS —
+   those must NOT select the track. */
+describe('TrackHeader R20-W3 — residue-click track selection (D4.2)', () => {
+  it('clicking the name/height residue selects the track (focus + select, domain swap)', () => {
+    useUi.setState({ selection: ['el-2'] }); // a clip is selected
+    renderPlain(<Header trackId="tr-audio-1" height={60} />);
+    // the residue = the header's non-interactive area (badge/name/lane row —
+    // target resolves to the host itself, no button/input ancestor)
+    const host = screen.getByTestId('shell-track-header-tr-audio-1');
+    fireEvent.pointerDown(host);
+    fireEvent.click(host);
+    expect(store().selectedTrackId).toBe('tr-audio-1');
+    expect(store().selection).toEqual([]); // the clip selection cleared (one domain at a time)
+    expect(store().focusedTrackId).toBe('tr-audio-1'); // focus write rides the pointerdown
+  });
+
+  it('M/S/L/V button clicks do NOT select the track (their semantics stay pure)', () => {
+    useUi.setState({ selection: ['el-2'] });
+    renderPlain(<Header trackId="tr-main" height={80} />);
+    fireEvent.click(screen.getByTestId('shell-track-V1-btn-mute'));
+    expect(track('tr-main').muted).toBe(true); // the toggle happened
+    expect(store().selectedTrackId).toBe(null); // but the track domain was NOT entered
+    expect(store().selection).toEqual(['el-2']); // and the clip selection survived
+  });
+
+  it('Enter on the focused header host selects the track (keyboard parity)', () => {
+    renderPlain(<Header trackId="tr-main" height={80} />);
+    const host = screen.getByTestId('shell-track-header-tr-main');
+    host.focus();
+    fireEvent.keyDown(host, { key: 'Enter' });
+    expect(store().selectedTrackId).toBe('tr-main');
+    // Enter on a CHILD button bubbles to the host but the gate holds: no track
+    // selection (and jsdom never synthesizes the button click from keyDown —
+    // the toggle state pins that nothing double-fired)
+    fireEvent.keyDown(screen.getByTestId('shell-track-V1-btn-mute'), { key: 'Enter' });
+    expect(store().selectedTrackId).toBe('tr-main'); // unchanged
+    expect(track('tr-main').muted).toBe(false); // no toggle leaked through the host route
+  });
+});

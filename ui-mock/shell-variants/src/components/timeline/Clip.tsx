@@ -78,6 +78,13 @@ interface ClipProps {
   /** the host suppresses the clip's own optimistic preview while the drag is
    *  cross-track engaged — the ghost at the resolved target replaces it. */
   previewSuppressed?: boolean;
+  /* R20-W2 (C48 hover-placement preview): the insert-preview's
+   * translate-preview for displaced clips — the clip box VISUALLY glides
+   * to its final position (dx seconds × pxPerSec) while a dashed outline
+   * stays at the original position (rendered by the Timeline's preview
+   * layer). The reference's final-state grammar; purely cosmetic — the doc
+   * is untouched until the commit. */
+  insertPreviewShift?: number;
 }
 
 /* R15 T3: the drag-geometry contract the Clip emits on every ACTIVE move
@@ -209,7 +216,9 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
     const s = useUi.getState();
     if (s.page !== 'edit') s.setPage('edit');
     if (!s.panels.inspector) s.togglePanel('inspector');
-    s.setInspectorTab('video');
+    /* R20-W3: no inspectorTab surface anymore — the type-driven inspector
+       derives its sections from the selection (the clip is selected by the
+       router before this runs, so the sheet is already the right one). */
     // focus call: the panel root is not focusable — focus its F6 region wrapper
     requestAnimationFrame(() => {
       const root = document.querySelector('[data-testid="shell-inspector"]');
@@ -285,7 +294,7 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
   ];
 }
 
-export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, previewSuppressed }: ClipProps) {
+export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, previewSuppressed, insertPreviewShift }: ClipProps) {
   const clipStyle = useVariantClipStyle();
   const tool = useUi((s) => s.tool);
   const selection = useUi((s) => s.selection);
@@ -1006,6 +1015,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
         aria-label={`${el.name}, ${tc(el.startTime)}`}
         data-testid={`clip-${el.id}`}
         data-clip-id={el.id} /* R15 T2 context-menu routing hook — the Timeline scroll surface's single onContextMenu resolves the clip under the cursor via closest('[data-clip-id]') */
+        data-displaced={insertPreviewShift !== undefined || undefined} /* R20-W2: the translate-preview flag */
         tabIndex={-1} /* programmatic focus only — roving host for Shift+F10 (§4.9) */
         className={`clip-box absolute top-[2px] bottom-[2px] ${fxHover ? 'ring-1 ring-accent' : ''}`}
         onDoubleClick={(e) => {
@@ -1043,6 +1053,11 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
            100). Inline so the utilities never fight over precedence. */
         zIndex: dragActive ? 10 : selected ? 5 : 1,
         opacity: previewSuppressed ? 0.45 : undefined,
+        /* R20-W2 hover-placement translate-preview (only when a displaced
+           shift is in flight — never on plain renders). */
+        ...(insertPreviewShift !== undefined
+          ? { transform: `translateX(${insertPreviewShift * pxPerSec}px)`, transition: 'transform 120ms ease-out' }
+          : {}),
         cursor,
         pointerEvents: locked ? 'none' : 'auto',
         outline: selected ? '1.5px solid var(--accent-selection)' : hover ? '1px solid var(--border-strong)' : 'none',

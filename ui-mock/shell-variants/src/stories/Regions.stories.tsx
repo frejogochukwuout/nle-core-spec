@@ -53,9 +53,9 @@ export const ViewerDefault: StoryObj = {
  *  The eye toggle is store state (viewerOverlays); the composited text
  *  overlay and the name/TC chips must all disappear here. Mock approximation
  *  (registered, PLAN item 23): the mock hides overlays whenever the active
- *  tool ≠ select, not only while a drag is running (Viewer.tsx). NOTE R19:
- *  the EditOverlay dock rail renders on the frame's right edge in every
- *  program-mode story — B5 fills the stub; the empty rail is the mount. */
+ *  tool ≠ select, not only while a drag is running (Viewer.tsx). R20-W2:
+ *  the program frame is now CLEAN — the 7 edit functions live in the
+ *  SOURCE transport row (SourceEditBar), not a program-monitor dock. */
 export const ViewerOverlaysHidden: StoryObj = {
   name: 'Viewer — in-canvas overlays hidden (blade tool)',
   parameters: { layout: 'padded' },
@@ -74,7 +74,8 @@ export const ViewerSafeGuides: StoryObj = {
  *  dual-purpose; booting viewerMode 'source' + sourceMediaId swaps the chrome
  *  to the exit control + asset name + SOURCE chip, letterboxes the asset
  *  poster (object-contain) with the spec caption, and replaces the transport
- *  cluster with the static source duration TC (no fake playback of a jpg).
+ *  cluster with the SourceEditBar (R20-W2: the 7 one-shot edit functions,
+ *  reference icons) + the static source duration TC (no fake playback).
  *  In the shell this is entered by selecting exactly one pool card (C39). */
 export const ViewerSourcePreview: StoryObj = {
   name: 'Viewer — source preview mode',
@@ -167,11 +168,11 @@ export const MediaPoolNoResults: StoryObj = {
   ),
 };
 
-/* ---- inspector: empty + multi-select (spec 18 §4.4) -------------------------- */
+/* ---- inspector: empty + multi-select (spec 18 §4.4 / R20-W3 D4) ------------ */
 
-/** Nothing selected (selection: []): “Nothing to inspect” state row and the
- *  hidden-not-disabled tab strip collapsed to Video only (the §4.4 empty-state
- *  rule — no phantom audio/effects tabs). */
+/** Nothing selected (selection: []): the ACTIVE-TRACK fallback sheet
+ *  (th_mto5fdf6) — the same TrackSheet the track domain renders, with the
+ *  "select a clip" hint row. The old tab strip is gone (R20-W3). */
 export const InspectorEmpty: StoryObj = {
   name: 'Inspector — nothing selected',
   parameters: { layout: 'padded' },
@@ -194,7 +195,7 @@ export const InspectorMultiMixed: StoryObj = {
   parameters: { layout: 'padded' },
   render: () => (
     <>
-      <StoreBoot patch={{ selection: ['el-1', 'el-4'], inspectorTab: 'video' }} />
+      <StoreBoot patch={{ selection: ['el-1', 'el-4'] }} />
       <PanelBox width={340} height={700}>
         <Inspector />
       </PanelBox>

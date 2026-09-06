@@ -194,15 +194,55 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
   });
 });
 
-describe('inspector tab bar + toolbar panel toggles', () => {
-  it('clicking an inspector tab commits inspectorTab in the store', async () => {
+describe('inspector rail routing + toolbar panel toggles (R20-W3 D4 domains)', () => {
+  it('the tab strip is gone — the rail renders ONE scroll of type-driven sections (thread #53)', () => {
+    renderAppShell();
+    expect(screen.queryByRole('tablist', { name: 'Inspector tabs' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
+    expect(screen.getByTestId('inspector-entity-chip')).toBeInTheDocument();
+  });
+
+  it('the track domain swaps the rail content to the TrackSheet (selected, via the header residue)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ selection: ['el-2'] });
+    // the header's non-interactive residue — userEvent fires the full pointer
+    // sequence (pointerdown → click) the residue route needs
+    const header = screen.getByTestId('shell-track-header-tr-audio-1');
+    await user.click(header);
+    expect(store().selectedTrackId).toBe('tr-audio-1');
+    // the rail (still the Inspector panel) renders the SELECTED track sheet
+    const sheet = screen.getByTestId('shell-track-sheet');
+    expect(sheet).toHaveAttribute('data-via', 'selected');
+    expect(screen.getByTestId('shell-inspector-state-track')).toBeInTheDocument();
+    // selecting a clip clears the domain and restores the clip sections
+    await user.click(screen.getByTestId('clip-el-1'));
+    expect(store().selectedTrackId).toBe(null);
+    expect(screen.queryByTestId('shell-track-sheet')).not.toBeInTheDocument();
+  });
+
+  it('the effect domain renders the EffectEditor in the rail (accordion + breadcrumb chip)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ selection: ['el-1'] });
+    // the effect row in the inspector's Effects section selects the effect
+    await user.click(screen.getByTestId('shell-effect-row-fx-1'));
+    expect(store().selectedEffectId).toBe('fx-1');
+    expect(screen.getByTestId('shell-effect-editor-fx-1')).toBeInTheDocument();
+    expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'effect');
+    expect(screen.getByTestId('inspector-breadcrumb')).toBeInTheDocument();
+  });
+
+  it('the toolbar Project button swaps the rail to the read-only ProjectSheet (D4.4 descoped)', async () => {
     const user = userEvent.setup();
     renderAppShell();
-    const tabs = screen.getByRole('tablist', { name: 'Inspector tabs' });
-    await user.click(within(tabs).getByTestId('shell-inspector-tab-effects'));
-    expect(store().inspectorTab).toBe('effects');
-    expect(within(tabs).getByTestId('shell-inspector-tab-effects')).toHaveAttribute('aria-selected', 'true');
-    expect(within(tabs).getByTestId('shell-inspector-tab-video')).toHaveAttribute('aria-selected', 'false');
+    await user.click(screen.getByTestId('shell-toolbar-btn-project'));
+    expect(store().inspectorProjectMode).toBe(true);
+    expect(screen.getByTestId('shell-inspector-project')).toBeInTheDocument();
+    // selecting any entity exits project mode (the store law) — el-1 has no
+    // A/V link pair, so the sheet lands on the single-clip entity
+    await user.click(screen.getByTestId('clip-el-1'));
+    expect(store().inspectorProjectMode).toBe(false);
+    expect(screen.queryByTestId('shell-inspector-project')).not.toBeInTheDocument();
+    expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'clip');
   });
 
   it('toolbar Media Pool toggle hides the panel region + its splitter (§4.1)', async () => {

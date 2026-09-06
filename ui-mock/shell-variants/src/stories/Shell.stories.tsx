@@ -138,7 +138,7 @@ export const ViewerStory: StoryObj = {
   ),
 };
 
-/* ---- inspector tabs ------------------------------------------------------------ */
+/* ---- inspector (R20-W3 D4: type-driven, one scroll of sections) ---------- */
 
 function InspectorStory({ patch }: { patch: UiPatch }) {
   return (
@@ -151,32 +151,56 @@ function InspectorStory({ patch }: { patch: UiPatch }) {
   );
 }
 
-/** Video tab over el-2 "Marina interview" (default selection). */
-export const InspectorVideo: StoryObj = {
-  name: 'Inspector — video tab',
+/** Video clip (el-2 "Marina interview", default selection): entity chip +
+ *  Transform / Composite / Speed Change / Audio ([Levels|EQ] sub-tabs) /
+ *  Effects / Transition — the full section stack in ONE scroll. */
+export const InspectorVideoClip: StoryObj = {
+  name: 'Inspector — video clip (type-driven sections)',
   parameters: { layout: 'padded' },
-  render: () => <InspectorStory patch={{ inspectorTab: 'video', selection: ['el-2'] }} />,
+  render: () => <InspectorStory patch={{ selection: ['el-2'] }} />,
 };
 
-/** Audio tab over el-7 "interview_marina" (linked audio element). */
-export const InspectorAudio: StoryObj = {
-  name: 'Inspector — audio tab',
+/** Audio clip (el-6): Audio section + Effects only — the spatial family is
+ *  hidden (the section-visibility matrix, hidden-not-visible). */
+export const InspectorAudioClip: StoryObj = {
+  name: 'Inspector — audio clip (Levels|EQ sub-tabs)',
   parameters: { layout: 'padded' },
-  render: () => <InspectorStory patch={{ inspectorTab: 'audio', selection: ['el-7'] }} />,
+  render: () => <InspectorStory patch={{ selection: ['el-6'] }} />,
 };
 
-/** Effects tab over el-1 (carries a disabled Gaussian Blur). */
-export const InspectorEffects: StoryObj = {
-  name: 'Inspector — effects tab',
+/** Track sheet (the track domain): selectedTrackId — the reviewer's
+ *  track-level inspection (M/S/L/V toggles, lane height, Track FX inserts,
+ *  mixer strip for audio tracks). */
+export const InspectorTrackSheet: StoryObj = {
+  name: 'Inspector — track sheet (track domain)',
   parameters: { layout: 'padded' },
-  render: () => <InspectorStory patch={{ inspectorTab: 'effects', selection: ['el-1'] }} />,
+  render: () => <InspectorStory patch={{ selection: [], selectedTrackId: 'tr-audio-1' }} />,
 };
 
-/** Transition tab over el-2 (carries a Cross Dissolve out). */
-export const InspectorTransition: StoryObj = {
-  name: 'Inspector — transition tab',
+/** Effect editor (the effect domain): the selected effect's params expand
+ *  in place (accordion) + the breadcrumb chip (track > clip > effect). */
+export const InspectorEffectEditor: StoryObj = {
+  name: 'Inspector — effect editor (accordion + breadcrumb)',
   parameters: { layout: 'padded' },
-  render: () => <InspectorStory patch={{ inspectorTab: 'transition', selection: ['el-2'] }} />,
+  render: () => (
+    <InspectorStory patch={{ selection: ['el-1'], selectedEffectId: 'fx-1', selectedEffectClipId: 'el-1' }} />
+  ),
+};
+
+/** Empty selection → the R19 ACTIVE-TRACK fallback sheet (th_mto5fdf6):
+ *  the same TrackSheet component, via="fallback". */
+export const InspectorEmptyFallback: StoryObj = {
+  name: 'Inspector — empty selection (active-track fallback)',
+  parameters: { layout: 'padded' },
+  render: () => <InspectorStory patch={{ selection: [] }} />,
+};
+
+/** The minimal Project sheet (D4.4 descoped): read-only summary + the
+ *  honest C58 note — toggled from the Toolbar2 Project button. */
+export const InspectorProjectSheet: StoryObj = {
+  name: 'Inspector — project sheet (read-only, C58 pending)',
+  parameters: { layout: 'padded' },
+  render: () => <InspectorStory patch={{ inspectorProjectMode: true }} />,
 };
 
 /* ---- status strip states -------------------------------------------------------- */

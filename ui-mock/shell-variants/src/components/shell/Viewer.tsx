@@ -6,8 +6,11 @@
    WebGPU canvas stand-in = static frame of the element under the playhead.
    R19: dual-purpose SOURCE PREVIEW MODE (th_mto3504c, spec 18 §4.3 v1.1) —
    viewerMode 'source' swaps the chrome to a raw-asset poster view; caption
-   overlay chips (caption-track elements under the playhead); EditOverlay
-   docked strip on the frame's right edge (B5 fills the stub). */
+   overlay chips (caption-track elements under the playhead).
+   R20-W2 (D2 / issues #63+#64): the 7 edit functions moved INTO the source
+   transport row as the horizontal SourceEditBar — the program-monitor
+   EditOverlay dock is REMOVED (the program monitor is a clean full-frame
+   output; the bar's mount point is the source-mode transport). */
 
 import { useEffect, useRef, useState } from 'react';
 import { Play, Pause, ChevronDown, ChevronLeft, ChevronRight, SkipBack, SkipForward, Repeat, Flag, Frame, Eye, X } from 'lucide-react';
@@ -15,7 +18,7 @@ import { useUi } from '../../state/useUiStore';
 import { mediaById, type ElementJSON, type SceneJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
-import { EditOverlay } from '../panels/EditOverlay';
+import { SourceEditBar } from './SourceEditBar';
 
 /* multi-track law (R14): scan ALL tracks of the kind, topmost wins — the
    single-find version hid clips on a second Video/Text track (addTrack makes
@@ -381,17 +384,10 @@ export function Viewer({ duration }: { duration: number }) {
             </div>
           )}
 
-          {/* R19 EditOverlay dock (B5 fills the stub): 44px vertical strip
-              docked on the frame's RIGHT edge — embedded, not a floating
-              dialog (nle_edit_workflow reference §3.4; only program+edit). */}
-          {page === 'edit' && (
-            <div
-              data-testid="shell-viewer-edit-overlay-dock"
-              className="absolute right-0 top-1/2 z-10 flex w-[44px] -translate-y-1/2 flex-col items-center gap-1 rounded-l-[var(--radius)] border-l border-y border-strong bg-panel py-2"
-            >
-              <EditOverlay />
-            </div>
-          )}
+      {/* R20-W2 (D2 / issue #63): the program-monitor EditOverlay dock is
+          REMOVED — the edit functions belong to the SOURCE transport row
+          (SourceEditBar, mounted below); the program monitor is a clean
+          full-frame output (the old dock also covered ~44px of the image). */}
 
       {/* safe-area guides (viewer UI pref) — broadcast convention:
               90% action-safe + 80% title-safe centered rects, thin lines
@@ -495,12 +491,15 @@ export function Viewer({ duration }: { duration: number }) {
 
       {/* transport-row (32px, spec 18 §4.3): CENTER = transport cluster,
           RIGHT = loop + marks + marker palette. SOURCE mode (th_mto3504c):
-          the transport cluster is REPLACED by the source duration TC —
-          static + honest (no fake playback of a poster; the mark/loop ops
-          belong to the program timeline). */}
+          LEFT = the SourceEditBar (R20-W2: the 7 one-shot edit functions,
+          reference icons, hover-placement preview arming), RIGHT = the
+          static source duration TC — honest (no fake playback of a poster;
+          the mark/loop ops belong to the program timeline). */}
       {sourceMode ? (
-        <div className="relative flex shrink-0 items-center px-2" style={{ height: 32, minHeight: 32 }} data-testid="shell-viewer-transport">
-          <div className="flex flex-1 items-center" />
+        <div className="relative flex shrink-0 items-center gap-2 px-2" style={{ height: 32, minHeight: 32 }} data-testid="shell-viewer-transport">
+          <div className="flex min-w-0 flex-1 items-center">
+            <SourceEditBar />
+          </div>
           <span className="mono shrink-0 text-[11px] text-tmuted" data-testid="shell-viewer-source-duration">
             Source duration {sourceDur !== null ? tc(sourceDur) : '— still image'}
           </span>

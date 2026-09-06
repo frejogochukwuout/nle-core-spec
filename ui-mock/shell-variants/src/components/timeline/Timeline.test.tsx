@@ -6,7 +6,7 @@
    store-driven inline styles, and store wiring — never hit-testing geometry. */
 
 import { describe, expect, it } from 'vitest';
-import { act, fireEvent, screen, within } from '@testing-library/react';
+import { act, createEvent, fireEvent, screen, within } from '@testing-library/react';
 import { Timeline } from './Timeline';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
@@ -242,13 +242,80 @@ describe('Timeline', () => {
     expect(store().selection).toEqual(['cap-3']);
   });
 
-  it('pool drag-to-lane highlights the lane and a drop commits the mock toast (spec 18 §4.2)', () => {
+  /* R20-W2: jsdom's drop Event fallback DROPS clientX/altKey init props (the
+     documented TL dataTransfer-drops-clientX trap) — inject them with
+     Object.defineProperty on a createEvent-built event, the one reliable
+     channel. dropAt(el, x, {alt}) = the honest drop constructor. */
+  const dropAt = (el: HTMLElement, clientX: number, opts?: { alt?: boolean }) => {
+    const ev = createEvent.drop(el, { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    Object.defineProperty(ev, 'clientX', { value: clientX });
+    if (opts?.alt) Object.defineProperty(ev, 'altKey', { value: true });
+    fireEvent(el, ev);
+  };
+
+  it('pool drag-to-lane highlights the lane and a drop commits the REAL plan/apply placement (spec 18 §4.2 / contract §7)', () => {
     boot({ mediaDrag: { mediaId: 'm-06', overTrackId: 'tr-audio-1', allowed: true } });
     expect(laneOf('el-6').className).toContain('pool-lane-ok');
-    fireEvent.drop(laneOf('el-6'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    dropAt(laneOf('el-6'), 0); // jsdom rects are 0 → clientX 0 = time 0
     expect(store().mediaDrag).toBeNull();
     expect(store().toasts.at(-1)!.kind).toBe('success');
-    expect(store().toasts.at(-1)!.title).toBe('Placed ocean_ambience.wav on A1');
+    expect(store().toasts.at(-1)!.title).toBe('Inserted ocean_ambience.wav');
+    /* R20-W2: the old toast-only mock is gone — the drop runs the SAME
+       plan/apply the SourceEditBar runs (mode 'insert', drop x = time 0,
+       this lane the explicit target): a REAL clip lands on A1 (m-06 120 s
+       → capped 30 s at t=0) and ripple-pushes el-6 [0,30) right by 30,
+       ONE undo entry. */
+    const a1 = scene1().tracks.find((t) => t.id === 'tr-audio-1')!;
+    expect(a1.elements.find((e) => e.mediaId === 'm-06' && e.startTime === 0 && e.duration === 30 && e.id !== 'el-6')).toBeDefined();
+    expect(a1.elements.find((e) => e.id === 'el-6')!.startTime).toBe(30);
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('Alt-drop = overwrite (contract §7): the covered span is REPLACED in place — destructive, not ripple-pushed', () => {
+    boot({ mediaDrag: { mediaId: 'm-02', overTrackId: 'tr-main', allowed: true } });
+    dropAt(laneOf('el-1'), 0, { alt: true });
+    const main = scene1().tracks.find((t) => t.id === 'tr-main')!.elements;
+    // m-02 95.2s → capped 30s OVERWRITE at t=0 covers [0,30): el-1 [0,8.5),
+    // el-2 [8.5,17), el-3 [17,24), el-4 [24,30) are ALL fully covered →
+    // removed (overwrite is destructive in place; the new clip replaces the
+    // span — nothing is pushed right)
+    for (const id of ['el-1', 'el-2', 'el-3', 'el-4']) {
+      expect(main.find((e) => e.id === id)).toBeUndefined();
+    }
+    expect(main.find((e) => e.mediaId === 'm-02' && e.startTime === 0 && e.duration === 30)).toBeDefined();
+    expect(main).toHaveLength(1);
+    expect(store().toasts.at(-1)!.title).toBe('Overwrote interview_marina.mp4');
+  });
+
+  it('frozen-lane guard (thread #65): source-mode audio source freezes non-audio lanes — dimmed + aria-disabled + honest drop refusal', () => {
+    boot({ viewerMode: 'source', sourceMediaId: 'm-06', mediaDrag: { mediaId: 'm-01', overTrackId: 'tr-main', allowed: true } });
+    const mainLane = laneOf('el-1');
+    expect(mainLane).toHaveAttribute('data-frozen', 'true');
+    expect(mainLane).toHaveAttribute('aria-disabled', 'true');
+    expect(mainLane.style.opacity).toBe('0.55'); // 1 × 0.55 frozen dim
+    // the audio lane stays fully interactive
+    expect(laneOf('el-6')).not.toHaveAttribute('data-frozen');
+    // a drop on the frozen lane refuses honestly (pointer-events allowed)
+    fireEvent.drop(mainLane, { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    expect(store().toasts.at(-1)).toMatchObject({
+      kind: 'error',
+      title: 'Frozen lane',
+      detail: expect.stringContaining('an audio source targets audio lanes'),
+    });
+    const main = scene1().tracks.find((t) => t.id === 'tr-main')!.elements;
+    // doc untouched: still exactly the 4 fixture clips, no NEW m-01 element
+    // (el-1 is the fixture m-01 clip — it must still be there)
+    expect(main).toHaveLength(4);
+    expect(main.filter((e) => e.mediaId === 'm-01')).toEqual([main.find((e) => e.id === 'el-1')]);
+  });
+
+  it('program mode NEVER dims lanes (the guard is source-mode-only)', () => {
+    boot({ viewerMode: 'program', sourceMediaId: null, mediaDrag: { mediaId: 'm-06', overTrackId: 'tr-audio-1', allowed: true } });
+    expect(laneOf('el-1')).not.toHaveAttribute('data-frozen');
+    expect(laneOf('el-1')).not.toHaveAttribute('aria-disabled');
+    // ...and a source-mode VIDEO source never freezes anything either
+    act(() => { useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' }); });
+    expect(laneOf('el-1')).not.toHaveAttribute('data-frozen');
   });
 
   it('an incompatible pool drop (video media over an audio lane) rejects with an error toast (spec 06 §5.9)', () => {
@@ -403,16 +470,17 @@ describe('pool-drag overTrack/allowed computation (spec 18 §4.2)', () => {
     expect(store().mediaDrag).toEqual({ mediaId: 'm-01', overTrackId: null, allowed: false });
   });
 
-  it('dropping on a dragover-COMPUTED allowed lane commits the honest-mock toast', () => {
+  it('dropping on a dragover-COMPUTED allowed lane commits the real placement', () => {
     boot({ mediaDrag: { mediaId: 'm-06', overTrackId: null, allowed: false } });
     fireEvent.dragOver(laneOf('el-6'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
     expect(store().mediaDrag?.allowed).toBe(true); // computed by the real handler, not boot-patched
-    fireEvent.drop(laneOf('el-6'), { dataTransfer: { types: [POOL_DRAG_TYPE] } });
+    fireEvent.drop(laneOf('el-6'), { dataTransfer: { types: [POOL_DRAG_TYPE] }, clientX: 0 });
     expect(store().mediaDrag).toBeNull();
     expect(store().toasts.at(-1)!.kind).toBe('success');
-    expect(store().toasts.at(-1)!.title).toBe('Placed ocean_ambience.wav on A1');
-    // honest mock: the drop commits a toast only — insertElement lands with
-    // the engine round (spec 15 §5.4), so no element is added to the doc
+    expect(store().toasts.at(-1)!.title).toBe('Inserted ocean_ambience.wav');
+    // R20-W2: real doc change (the old honest-mock covered a toast-only path)
+    const a1 = scene1().tracks.find((t) => t.id === 'tr-audio-1')!;
+    expect(a1.elements.some((e) => e.mediaId === 'm-06')).toBe(true);
   });
 });
 

@@ -367,17 +367,16 @@ describe('Viewer caption overlay (R19)', () => {
   });
 });
 
-/* ---- R19: EditOverlay dock (B5 fills the stub; the mount is the contract) */
-describe('Viewer EditOverlay dock (R19)', () => {
-  it('program + edit page: the 44px dock strip mounts on the frame\'s right edge', () => {
+/* ---- R20-W2 (D2 / issues #63+#64): the EditOverlay dock is GONE; the 7
+   edit functions live in the SOURCE transport row (SourceEditBar). The
+   program monitor is a clean full-frame output in every mode/page. ---- */
+describe('Viewer edit-function placement (R20-W2)', () => {
+  it('program + edit page: NO dock — the program monitor is a clean full-frame output (issue #63)', () => {
     render(<Viewer duration={DUR} />);
-    const dock = screen.getByTestId('shell-viewer-edit-overlay-dock');
-    expect(dock.className).toContain('w-[44px]');
-    expect(dock.className).toContain('rounded-l-');
-    expect(dock.className).toContain('bg-panel');
+    expect(screen.queryByTestId('shell-viewer-edit-overlay-dock')).toBeNull();
   });
 
-  it('source mode and non-edit pages mount NO dock (edit actions need the program frame)', () => {
+  it('source mode and non-edit pages mount NO dock either — the surface is retired everywhere', () => {
     useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
     const { rerender } = render(<Viewer duration={DUR} />);
     expect(screen.queryByTestId('shell-viewer-edit-overlay-dock')).toBeNull();
@@ -385,5 +384,23 @@ describe('Viewer EditOverlay dock (R19)', () => {
     useUi.setState({ page: 'color' });
     rerender(<Viewer duration={DUR} />);
     expect(screen.queryByTestId('shell-viewer-edit-overlay-dock')).toBeNull();
+  });
+
+  it('source mode: the SourceEditBar mounts in the transport row next to the duration TC (issue #64)', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    render(<Viewer duration={DUR} />);
+    const transport = screen.getByTestId('shell-viewer-transport');
+    expect(within(transport).getByTestId('shell-source-edit-bar')).toBeInTheDocument();
+    expect(within(transport).getByTestId('shell-viewer-source-duration')).toBeInTheDocument();
+    // the bar carries the 7 one-shot mode buttons (reference function names)
+    for (const label of ['Insert', 'Overwrite', 'Replace', 'Append at End', 'Ripple Overwrite', 'Place on Top', 'Fit to Fill']) {
+      expect(within(transport).getByRole('button', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it('program mode: NO edit buttons in the transport row (play/mark cluster owns it)', () => {
+    render(<Viewer duration={DUR} />);
+    expect(screen.queryByTestId('shell-source-edit-bar')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Play or pause' })).toBeInTheDocument();
   });
 });

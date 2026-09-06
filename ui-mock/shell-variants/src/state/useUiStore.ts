@@ -13,6 +13,12 @@ import { clamp, snapToFrame } from '../lib/timecode';
 import { PPS_MIN as MIN_PPS, PPS_MAX as MAX_PPS } from '../lib/pixel';
 import { trackAcceptsElement, spansOverlap, zeroAnchorShift, dragRejectionToast, type GroupMoveFail } from '../lib/timelinePlacement';
 import { computeTrackRippleAdjustments, applyRippleAdjustmentsToElements } from '../lib/ripple';
+/* R20-W2 (DESIGN-R20 D2, REV-B P2-4/P2-5): the insert-media split — the
+   pure planner lives in lib/insertPlan.ts (no store import); this module
+   keeps the APPLY half (applyInsertPlan executes the plan's patch under
+   ONE withHistory entry) + the thin insertMediaAt wrapper so the store
+   surface and every existing test stay green. */
+import { planInsertMedia, type InsertPlan, type InsertPlanContext } from '../lib/insertPlan';
 /* R15 T4 trim laws (lib/trimLaws.ts — ONE home shared with the Clip gesture
    so preview and commit always agree): MIN_DUR = 1 frame, neighbor bounds,
    source-extent bounds, batch intersection, rate clamp. */
@@ -35,7 +41,6 @@ import { createMixerScene, type MockMixerScene, type MixerTrackSettings, type Du
 
 export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch';
 export type Page = 'edit' | 'color' | 'audio' | 'deliver';
-export type InspectorTab = 'video' | 'audio' | 'effects' | 'transition';
 export type ToastKind = 'info' | 'success' | 'error' | 'persist';
 /* R20-W1 (DESIGN-R20 D1.4): 'bridge' renamed 'meters' — the minimized
    state is now full-height thin meter COLUMNS, not a stacked rail. */
@@ -43,9 +48,11 @@ export type MixerDockState = 'collapsed' | 'meters' | 'full';
 /* R19 edit-overlay ops (nle_edit_workflow reference): the 7 Resolve edit
    functions. insert/overwrite/append/placeOnTop/rippleOverwrite are REAL
    placement (timelinePlacement laws); replace needs a selected element;
-   fitToFill needs a loop range — honest toasts otherwise (gap note in the
-   EditOverlay component). */
-export type InsertMediaMode = 'insert' | 'overwrite' | 'append' | 'placeOnTop' | 'rippleOverwrite' | 'replace' | 'fitToFill';
+   fitToFill needs a loop range — honest toasts otherwise. R20-W2: the
+   union moved to lib/insertPlan.ts (the pure planner owns it); re-exported
+   so the historical `import from state/useUiStore` surface stays stable. */
+export type { InsertMediaMode } from '../lib/insertPlan';
+import type { InsertMediaMode } from '../lib/insertPlan';
 
 export interface Toast {
   id: number;
@@ -342,6 +349,20 @@ interface UiState {
   viewerSafeGuides: boolean; // action/title safe-area guides (Frame)
   loop: { start: number; end: number };
   selection: string[];
+  /* R20-W3 (DESIGN-R20 D4.2): the track/effect selection domains — mirrors
+     of the R19 selectedMarkerId domain-swap law. selectTrack clears the clip
+     selection + marker + effect domains; selectEffect keeps its clip selected
+     (the effect domain is {clipId, fxId} — a composite, documented judgment:
+     an effect never exists without its clip, and the pair lets selection
+     writes clear the domain when the clip deselects, without a doc lookup).
+     View state, never snapshotted. */
+  selectedTrackId: string | null;
+  selectedEffectId: string | null;
+  /** the clip the selectedEffectId lives on (the domain's other half) */
+  selectedEffectClipId: string | null;
+  /* R20-W3 (D4.4 descoped): the minimal Project sheet toggle — the toolbar
+     button flips this view-state flag; selecting ANY entity exits it. */
+  inspectorProjectMode: boolean;
   pxPerSec: number;
   /** dynamic minimum pps (spec-05 §5.2) — slider bottom / reconcile floor */
   zoomMinPps: number;
@@ -350,7 +371,6 @@ interface UiState {
   search: string;
   sortBy: 'name' | 'duration' | 'date' | 'type';
   sortDir: 'asc' | 'desc';
-  inspectorTab: InspectorTab;
   masterMuted: boolean;
   masterVolume: number;
   mediaW: number;
@@ -394,6 +414,15 @@ interface UiState {
      request — the spec's triggers are the clip menu + source-card play). */
   viewerMode: 'program' | 'source';
   sourceMediaId: string | null;
+  /* R20-W2 (DESIGN-R20 D2 / C48 hover-placement preview): the store holds
+     THE MODE, never a plan object (REV-B P2-4 — a stored plan goes stale
+     and fresh-object identity traps zustand-v5 selectors). The plan is
+     recomputed by the useInsertPreview hook's useMemo against the live
+     doc. View state, NEVER inside a withHistory snapshot (the snapshot
+     slice stays scenes/activeSceneId/lockAll/selection); set via plain
+     set, so hover arms/disarms can never mint undo entries. Cleared as a
+     side-effect by exitSourcePreview (program mode never previews). */
+  hoverInsertPreview: { mediaId: string; mode: InsertMediaMode } | null;
 
   // actions
   setPage: (p: Page) => void;
@@ -428,7 +457,14 @@ interface UiState {
   addCaption: (prevId: string) => void;
   enterSourcePreview: (mediaId: string) => void;
   exitSourcePreview: () => void;
-  insertMediaAt: (mediaId: string, mode: InsertMediaMode, opts?: { time?: number }) => void;
+  /* R20-W2: arms/disarms the hover-placement preview (view-state only). */
+  setHoverInsertPreview: (v: { mediaId: string; mode: InsertMediaMode } | null) => void;
+  insertMediaAt: (mediaId: string, mode: InsertMediaMode, opts?: { time?: number; targetTrackId?: string }) => void;
+  /* R20-W2 (REV-B P2-4/P2-5): executes a planned insert — the commit half
+   * of the plan/apply split. ONE history entry; preserves today's toast
+   * kinds/titles verbatim; selection clears ONLY for the 5 shared modes
+   * (replace/fitToFill do NOT clear selection today). */
+  applyInsertPlan: (plan: InsertPlan) => void;
   setSelection: (ids: string[]) => void;
   selectElement: (id: string, additive: boolean) => void;
   selectTrackElements: (trackId: string, additive: boolean) => void;
@@ -442,7 +478,10 @@ interface UiState {
   setSearch: (s: string) => void;
   setSortBy: (s: UiState['sortBy']) => void;
   setSortDir: (d: UiState['sortDir']) => void;
-  setInspectorTab: (t: InspectorTab) => void;
+  /* R20-W3: selection-domain setters (see the state-field comment above) */
+  selectTrack: (id: string | null) => void;
+  selectEffect: (clipId: string, fxId: string | null) => void;
+  toggleInspectorProjectMode: () => void;
   toggleMasterMute: () => void;
   setMasterVolume: (v: number) => void;
   setMediaW: (w: number) => void;
@@ -571,58 +610,12 @@ function withHistory(set: (partial: any) => void, get: () => UiState, mutate: (s
    on `strip.inserts[0]` — caught by the code review wave. */
 const DEFAULT_MIXER_TRACK: MixerTrackSettings = { fader: -6, pan: 0, inserts: [null, null], auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0 };
 
-/* R19: overwrite-span resolution — the shared trim engine for the Resolve
-   edit functions (overwrite / ripple-overwrite / replace's placement).
-   Mutates the track's element list IN PLACE on the cloned scene:
-   fully-covered spans are removed, head/tail straddles are trimmed, a
-   middle-covered straddle splits into left + right halves (clip markers ride
-   the half that contains their offset). Returns the DISPLACED seconds (the
-   media the new clip replaced) — ripple-overwrite's delta = dur − displaced. */
-function applyOverwriteSpans(track: TrackJSON, time: number, dur: number): number {
-  let displaced = 0;
-  const overlaps = track.elements.filter((e) => spansOverlap({ startTime: time, duration: dur }, e));
-  for (const e of overlaps) {
-    const eStart = e.startTime, eEnd = e.startTime + e.duration;
-    if (eStart >= time - 1e-9 && eEnd <= time + dur + 1e-9) {
-      // fully covered → removed
-      track.elements = track.elements.filter((x) => x.id !== e.id);
-      displaced += e.duration;
-    } else if (eStart >= time - 1e-9) {
-      // covered from the left → trim the head
-      const cut = time + dur - eStart;
-      e.startTime = time + dur;
-      e.duration -= cut;
-      if (e.sourceStart !== undefined) e.sourceStart += cut;
-      if (e.markers) e.markers = e.markers.filter((cm) => cm.offset >= cut).map((cm) => ({ ...cm, offset: cm.offset - cut }));
-      displaced += cut;
-    } else if (eEnd <= time + dur + 1e-9) {
-      // covered from the right → trim the tail
-      displaced += eEnd - time;
-      e.duration = time - eStart;
-      if (e.markers) e.markers = e.markers.filter((cm) => cm.offset <= e.duration);
-    } else {
-      // straddle: the new clip covers the MIDDLE → split into left + right
-      // (split law: right built from the pre-mutation shape keeps transitionOut,
-      // severs linkedTo; left loses transitionOut — R19-REV P2)
-      const rightDur = eEnd - (time + dur);
-      const leftDur = time - eStart;
-      displaced += dur;
-      if (rightDur >= 1 / 24 - 1e-9) {
-        track.elements.push({
-          ...e, id: nextId(`${e.id}-b`),
-          startTime: time + dur,
-          duration: rightDur,
-          ...(e.sourceStart !== undefined ? { sourceStart: e.sourceStart + (time + dur - eStart) } : {}),
-          markers: e.markers ? e.markers.filter((cm) => cm.offset >= leftDur + dur).map((cm) => ({ ...cm, offset: cm.offset - (leftDur + dur) })) : undefined,
-        });
-        delete track.elements[track.elements.length - 1].linkedTo;
-      }
-      e.duration = leftDur;
-      delete e.transitionOut;
-    }
-  }
-  return displaced;
-}
+/* R19: overwrite-span resolution moved to lib/insertPlan.ts (R20-W2) as the
+   recording twin planOverwriteSpans — the same trim engine (fully-covered →
+   removed, head/tail straddles trimmed, middle straddle split with the
+   R19-REV P2 split law) + a patch-op recording so preview and commit share
+   ONE computation. Its only consumers were insertMediaAt's branches, all of
+   which now go through the planner. */
 
 let toastSeq = 1;
 /* monotonic id suffix — Date.now() alone collides on same-millisecond creates
@@ -654,7 +647,6 @@ export const useUi = create<UiState>((set, get) => ({
   search: '',
   sortBy: 'name',
   sortDir: 'asc',
-  inspectorTab: 'video',
   masterMuted: false,
   masterVolume: 0.78,
   mediaW: 280,
@@ -666,8 +658,13 @@ export const useUi = create<UiState>((set, get) => ({
   mediaDrag: null,
   focusedTrackId: null,
   selectedMarkerId: null,
+  selectedTrackId: null,
+  selectedEffectId: null,
+  selectedEffectClipId: null,
+  inspectorProjectMode: false,
   viewerMode: 'program',
   sourceMediaId: null,
+  hoverInsertPreview: null, // R20-W2: view-state, never snapshotted
   toasts: [],
   saveAttempt: 0,
   simulateSaveFail: false,
@@ -703,6 +700,10 @@ export const useUi = create<UiState>((set, get) => ({
       activeSceneId: id,
       selection: [],
       playhead,
+      /* R20-W3: the track/effect domains die with the scene switch (stale ids) */
+      selectedTrackId: null,
+      selectedEffectId: null,
+      selectedEffectClipId: null,
       ...(sc ? { lockAll: sc.tracks.every((t) => t.locked) } : {}),
     };
   }),
@@ -796,8 +797,15 @@ export const useUi = create<UiState>((set, get) => ({
   selectMarker: (id) => set((s) => ({
     selectedMarkerId: id,
     /* mutual exclusivity (one selection domain at a time): picking a marker
-       clears the clip selection so the inspector rail swaps domains cleanly */
-    ...(id ? { selection: [] } : {}),
+       clears the clip selection so the inspector rail swaps domains cleanly.
+       R20-W3: the track/effect domains clear too (selectTrack law's mirror). */
+    ...(id ? {
+      selection: [],
+      selectedTrackId: null,
+      selectedEffectId: null,
+      selectedEffectClipId: null,
+      inspectorProjectMode: false,
+    } : {}),
   })),
   updateMarker: (id, patch) => withHistory(set, get, (scenes) => {
     const s = get();
@@ -870,193 +878,106 @@ export const useUi = create<UiState>((set, get) => ({
     return scenes;
   }),
   enterSourcePreview: (mediaId) => set({ viewerMode: 'source', sourceMediaId: mediaId }),
-  exitSourcePreview: () => set({ viewerMode: 'program', sourceMediaId: null }),
+  /* R20-W2 (DESIGN-R20 D2): exiting source preview also DISARMS the hover
+     preview — program mode is the output view and never previews inserts
+     (the guard is the law, the clearing is the side-effect). */
+  exitSourcePreview: () => set({ viewerMode: 'program', sourceMediaId: null, hoverInsertPreview: null }),
+  /* R20-W2: view-state arm/disarm for the hover-placement preview — plain
+     set, deliberately OUTSIDE any withHistory call (hovering can never mint
+     an undo entry; the snapshot slice stays scenes/activeSceneId/lockAll/
+     selection). */
+  setHoverInsertPreview: (v) => set({ hoverInsertPreview: v }),
 
   /* ---- R19 insertMediaAt: the 7 Resolve edit functions (nle_edit_workflow
      reference), real placement against the same laws the drag/trim gestures
      use (timelinePlacement + frame-snap + half-open spans). ONE history entry
      per op. Modes that lack their inputs degrade to honest toasts (replace:
-     no selection; fitToFill: no loop range) — never a silent no-op. */
+     no selection; fitToFill: no loop range) — never a silent no-op.
+     R20-W2 (REV-B P2-4/P2-5): thin wrapper — plan (pure, lib/insertPlan,
+     REAL idFactory so committed ids are real) → applyInsertPlan. All the
+     placement laws, split laws, marker re-offsets, ripple shifts, audio
+     type-wins routing and toast payloads are the planner's; behavior is
+     equal to the pre-split monolith (the store suite pins it; the new
+     preview==commit geometry test is the WYSIWYG guarantee). */
   insertMediaAt: (mediaId, mode, opts) => {
-    const s0 = get();
-    const m = mediaById(mediaId);
-    if (!m) {
-      s0.pushToast({ kind: 'error', title: 'Edit action', detail: `unknown media ${mediaId}` });
-      return;
-    }
-    const sc0 = s0.scenes.find((x) => x.id === s0.activeSceneId);
-    if (!sc0) return;
-    const type: ElementType = m.type === 'audio' ? 'audio' : m.type === 'image' ? 'image' : 'video';
-
-    // ---- replace: needs a selected element on a compatible track ----
-    if (mode === 'replace') {
-      const sel = s0.selection.map((id) => findEl(s0.scenes, id)).filter(Boolean) as { el: ElementJSON; track: TrackJSON }[];
-      const target = sel.find((h) => trackAcceptsElement(h.track.kind, type) && !h.track.locked);
-      if (!target) {
-        s0.pushToast({ kind: 'info', title: 'Replace', detail: 'select a clip on a compatible track first (replace swaps the selected clip for this media — Resolve edit-function semantics)' });
-        return;
-      }
-      const start = target.el.startTime;
-      withHistory(set, get, (scenes) => {
-        const sc = scenes.find((x) => x.id === s0.activeSceneId)!;
-        const t = sc.tracks.find((x) => x.id === target.track.id)!;
-        t.elements = t.elements.filter((e) => e.id !== target.el.id);
-        const dur = Math.min(m.duration ?? 4, 30);
-        /* replace = remove + OVERWRITE-place: downstream neighbors the longer
-           replacement now covers are trimmed/removed too (the naive version
-           left overlaps on the doc — caught while writing the R19 tests). */
-        applyOverwriteSpans(t, start, dur);
-        t.elements.push({ id: nextId('el-'), type, trackId: t.id, name: m.name, startTime: start, duration: dur, sourceStart: 0, mediaId, speed: 1, opacity: 1 });
-        t.elements.sort((a, b) => a.startTime - b.startTime);
-        return scenes;
-      });
-      s0.pushToast({ kind: 'success', title: `Replaced with ${m.name}`, detail: 'replace: selected clip removed, media placed at its start (spec 06 edit functions)' });
-      return;
-    }
-
-    // ---- fitToFill: needs a >1-frame loop range; rate-clamped honest refusal ----
-    if (mode === 'fitToFill') {
-      const span = s0.loop.end - s0.loop.start;
-      const srcDur = m.duration ?? 0;
-      if (span <= 1 / 24 || srcDur <= 0) {
-        s0.pushToast({ kind: 'info', title: 'Fit to Fill', detail: 'set an In/Out range (I / O) with duration, and use a media asset with known duration — fit-to-fill retimes the source into the range' });
-        return;
-      }
-      const rate = clamp(srcDur / span, RATE_MIN, RATE_MAX);
-      if (Math.abs(rate - srcDur / span) > 1e-6) {
-        s0.pushToast({ kind: 'error', title: 'Fit to Fill', detail: `source ${srcDur.toFixed(1)}s cannot fill ${span.toFixed(1)}s within the rate clamp [${RATE_MIN}, ${RATE_MAX}] — refusing rather than silently mis-fitting` });
-        return;
-      }
-      /* ONE history entry: place directly at the loop start with duration =
-         span and speed = rate (the earlier re-then-search version could pick
-         a SAME-MEDIA sibling element — el-4 also uses m-05 — caught by the
-         R19 test wave). Overwrite-trims ride applyOverwriteSpans. */
-      withHistory(set, get, (scenes) => {
-        const sc = scenes.find((x) => x.id === s0.activeSceneId)!;
-        const wantKind: TrackJSON['kind'] = type === 'audio' ? 'audio' : type === 'image' ? 'overlay' : 'main';
-        const t = sc.tracks.find((x) => x.kind === wantKind && !x.locked);
-        if (!t) return;
-        const at = snapToFrame(s0.loop.start);
-        applyOverwriteSpans(t, at, span);
-        t.elements.push({ id: nextId('el-'), type, trackId: t.id, name: m.name, startTime: at, duration: snapToFrame(span), sourceStart: 0, mediaId, speed: rate, opacity: 1 });
-        t.elements.sort((a, b) => a.startTime - b.startTime);
-        return scenes;
-      });
-      // P2 (R19-REV): the no-op guard — withHistory returning undefined (every
-      // compatible lane locked) must NOT hear the success toast
-      if (get().scenes === s0.scenes) {
-        s0.pushToast({ kind: 'error', title: 'Fit to Fill', detail: `no unlocked ${type === 'audio' ? 'audio' : 'video'} lane for ${m.name} (locked lanes refuse placement — spec 06)` });
-        return;
-      }
-      s0.pushToast({ kind: 'success', title: `Fit to fill ${m.name}`, detail: `retimed ${srcDur.toFixed(1)}s source into the ${span.toFixed(1)}s In/Out range at ${rate.toFixed(3)}× (rate-clamped laws, spec 06 §5.8)` });
-      return;
-    }
-
-    // ---- shared placement for insert/overwrite/append/placeOnTop/rippleOverwrite ----
-    withHistory(set, get, (scenes) => {
-      const s = get();
-      const sc = scenes.find((x) => x.id === s.activeSceneId)!;
-      let track: TrackJSON | undefined;
-      if (mode === 'placeOnTop' && type !== 'audio') {
-        // P2 (R19-REV): place-on-top is a VISUAL-lane concept; audio has no
-        // "top" — audio media falls through to its own kind routing below
-        track = [...sc.tracks].reverse().find((t) => t.kind === 'overlay' && !t.locked);
-        if (!track) {
-          // create one above the main track (the addTrack shape)
-          track = { id: nextId('t-overlay-'), kind: 'overlay', name: 'Text 2', badge: 'T2', muted: false, solo: false, locked: false, visible: true, elements: [] };
-          const mainIdx = sc.tracks.findIndex((t) => t.kind === 'main');
-          sc.tracks.splice(mainIdx < 0 ? 0 : mainIdx, 0, track);
-        }
-      } else {
-        const wantKind: TrackJSON['kind'] = type === 'audio' ? 'audio' : type === 'image' ? 'overlay' : 'main';
-        track = sc.tracks.find((t) => t.kind === wantKind && !t.locked);
-      }
-      if (!track) return; // no unlocked compatible lane — honest toast below
-
-      const dur = Math.min(m.duration ?? 4, 30);
-      let time: number;
-      if (mode === 'append') {
-        time = track.elements.reduce((end, e) => Math.max(end, e.startTime + e.duration), 0);
-      } else {
-        time = snapToFrame(Math.max(0, opts?.time ?? s.playhead));
-      }
-
-      const overlaps = track.elements.filter((e) => spansOverlap({ startTime: time, duration: dur }, e));
-
-      if (mode === 'insert' || (mode === 'placeOnTop' && overlaps.length > 0)) {
-        // ripple insert: split straddlers, push everything at/after `time` right
-        const pushedRight = new Set<string>(); // R19 test caught the double-shift: pushed right halves must NOT re-shift
-        for (const e of overlaps) {
-          if (e.startTime < time - 1e-9) {
-            // straddler → right half lands after the new clip; left half keeps
-            // the slot. SPLIT LAW (splitElement's settled shape, R19-REV P2):
-            // the right half is built from the PRE-mutation shape so it KEEPS
-            // transitionOut (the transition rides the tail) and SEVERS linkedTo
-            // (the audio partner never links to both halves — R14 law).
-            const rightDur = e.startTime + e.duration - time;
-            const leftDur = time - e.startTime;
-            if (rightDur >= 1 / 24 - 1e-9) {
-              const rightId = nextId(`${e.id}-b`);
-              pushedRight.add(rightId);
-              track.elements.push({
-                ...e, id: rightId,
-                startTime: time + dur,
-                duration: rightDur,
-                ...(e.sourceStart !== undefined ? { sourceStart: e.sourceStart + leftDur } : {}),
-                markers: e.markers ? e.markers.filter((cm) => cm.offset >= leftDur).map((cm) => ({ ...cm, offset: cm.offset - leftDur })) : undefined,
-              });
-              delete track.elements[track.elements.length - 1].linkedTo;
-            }
-            e.duration = leftDur;
-            delete e.transitionOut;
-          } else {
-            e.startTime += dur;
-          }
-        }
-        // non-overlapping later elements also shift right (the ripple half
-        // of the insert law; straddlers were split above, so they're excluded)
-        const later = track.elements.filter((e) => e.startTime > time + dur - 1e-9 && !pushedRight.has(e.id) && overlaps.every((o) => o.id !== e.id));
-        for (const e of later) e.startTime += dur;
-      } else if (mode === 'overwrite' || mode === 'rippleOverwrite') {
-        const displaced = applyOverwriteSpans(track, time, dur);
-        if (mode === 'rippleOverwrite') {
-          // close/open the gap: later content shifts by (inserted − displaced)
-          const delta = dur - displaced;
-          if (Math.abs(delta) >= 1 / 24) {
-            const later = track.elements.filter((e) => e.startTime >= time + dur - 1e-9);
-            for (const e of later) e.startTime = Math.max(time + dur, snapToFrame(e.startTime + delta));
-          }
-        }
-      }
-
-      track.elements.push({
-        id: nextId('el-'), type, trackId: track.id, name: m.name,
-        startTime: time, duration: dur, sourceStart: 0, mediaId,
-        speed: 1, opacity: 1,
-      });
-      track.elements.sort((a, b) => a.startTime - b.startTime);
-      set({ selection: [] });
-      return scenes;
-    });
-    const sAfter = get();
-    if (sAfter.scenes === s0.scenes) {
-      // withHistory no-op'd (no unlocked compatible lane)
-      s0.pushToast({ kind: 'error', title: 'Edit action', detail: `no unlocked ${type === 'audio' ? 'audio' : type === 'image' ? 'overlay' : 'video'} lane for ${m.name} (locked lanes refuse placement — spec 06)` });
-      return;
-    }
-    const modeLabel: Record<Exclude<InsertMediaMode, 'replace' | 'fitToFill'>, string> = {
-      insert: 'Inserted', overwrite: 'Overwrote', append: 'Appended',
-      placeOnTop: 'Placed on top', rippleOverwrite: 'Ripple-overwrote',
+    const s = get();
+    const ctx: InsertPlanContext = {
+      playhead: s.playhead,
+      loop: s.loop,
+      selection: s.selection,
+      ...(opts?.time !== undefined ? { time: opts.time } : {}),
+      ...(opts?.targetTrackId !== undefined ? { targetTrackId: opts.targetTrackId } : {}),
     };
-    s0.pushToast({
-      kind: 'success',
-      title: `${modeLabel[mode as Exclude<InsertMediaMode, 'replace' | 'fitToFill'>]} ${m.name}`,
-      detail: 'real placement (frame-snap + half-open spans + ripple laws, spec 06 §5.9) — undoable as one step',
-    });
+    const plan = planInsertMedia(s.scenes, s.activeSceneId, mediaId, mode, ctx, nextId);
+    get().applyInsertPlan(plan);
   },
 
+  /* ---- R20-W2 applyInsertPlan: the commit half. Executes the plan's patch
+     ops IN EMISSION ORDER (mirroring the planner's dry-run exactly) on the
+     withHistory clone: ONE undo entry, toasts preserved verbatim
+     (plan.reason = the refusal toast, plan.toast = the success toast),
+     set({selection: []}) ONLY for the 5 shared modes (replace/fitToFill do
+     NOT clear selection today — plan.clearSelection is the planner's law).
+     A stale plan (scene/tracks gone since planning — only possible if an
+     old plan object is applied) leaves BOTH the doc and the toast stack
+     untouched: undefined from mutate = no history entry (withHistory's
+     no-op contract). */
+  applyInsertPlan: (plan) => {
+    if (!plan.ok) {
+      // honest refusal — never a silent no-op (the no-reason variant is the
+      // preserved no-active-scene silence of the old monolith)
+      if (plan.reason) get().pushToast(plan.reason);
+      return;
+    }
+    const before = get().scenes;
+    withHistory(set, get, (scenes) => {
+      const sc = scenes.find((x) => x.id === plan.sceneId);
+      if (!sc) return; // stale — no history entry, no toast
+      const affected = new Set<string>();
+      for (const op of plan.patch) {
+        if (op.op === 'createTrack') {
+          sc.tracks.splice(Math.min(op.insertIndex, sc.tracks.length), 0, op.track);
+          continue;
+        }
+        const t = sc.tracks.find((x) => x.id === op.trackId);
+        if (!t) return; // stale — abort before any history entry
+        if (op.op === 'insertElement') {
+          t.elements.push(op.element);
+        } else if (op.op === 'removeElement') {
+          t.elements = t.elements.filter((e) => e.id !== op.id);
+        } else {
+          const el = t.elements.find((e) => e.id === op.id);
+          if (!el) return; // stale — abort before any history entry
+          for (const [k, v] of Object.entries(op.fields)) {
+            if (v === undefined) delete (el as unknown as Record<string, unknown>)[k]; // transitionOut/linkedTo SEVER
+            else (el as unknown as Record<string, unknown>)[k] = v;
+          }
+        }
+        affected.add(t.id);
+      }
+      // lanes stay time-ordered (every branch of the old monolith sorted the
+      // touched track; the applier sorts exactly the affected ones)
+      for (const tid of affected) {
+        const t = sc.tracks.find((x) => x.id === tid);
+        if (t) t.elements.sort((a, b) => a.startTime - b.startTime);
+      }
+      if (plan.clearSelection) set({ selection: [] }); // 5 shared modes only — inside the entry, like today
+      return scenes;
+    });
+    if (get().scenes === before) return; // no-op (stale plan) — no toast
+    get().pushToast(plan.toast!);
+  },
 
-  setSelection: (ids) => set({ selection: ids, selectedMarkerId: null }),
+  setSelection: (ids) => set((s) => ({
+    selection: ids,
+    selectedMarkerId: null,
+    selectedTrackId: null,
+    /* the effect domain survives ONLY while its clip stays selected (D4.2) */
+    ...(s.selectedEffectClipId !== null && !ids.includes(s.selectedEffectClipId)
+      ? { selectedEffectId: null, selectedEffectClipId: null }
+      : {}),
+    inspectorProjectMode: false,
+  })),
   selectElement: (id, additive) => set((s) => {
     // spec 05 §12.3 linked selection: "selecting one selects both" — the A/V
     // pair (el-2 ↔ el-7 in the fixture) enters/leaves the selection as a
@@ -1072,10 +993,21 @@ export const useUi = create<UiState>((set, get) => ({
       return other && other !== target ? [target, other] : [target];
     };
     const group = pairOf(id);
-    if (!additive) return { selection: group, selectedMarkerId: null };
+    /* R20-W3 domain laws: a fresh clip selection clears the marker/track
+       domains and exits project mode; the effect domain survives only when
+       its clip stays in the new selection (toggle-off drops it). */
+    const keepFx = (next: string[]) =>
+      s.selectedEffectClipId !== null && next.includes(s.selectedEffectClipId);
+    const fxClear = (next: string[]): Partial<UiState> =>
+      (keepFx(next) ? {} : { selectedEffectId: null, selectedEffectClipId: null });
+    if (!additive) return { selection: group, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...fxClear(group) };
     const groupSelected = group.every((x) => s.selection.includes(x));
-    if (groupSelected) return { selection: s.selection.filter((x) => !group.includes(x)) };
-    return { selection: [...s.selection.filter((x) => !group.includes(x)), ...group], selectedMarkerId: null };
+    if (groupSelected) {
+      const next = s.selection.filter((x) => !group.includes(x));
+      return { selection: next, ...fxClear(next) };
+    }
+    const grown = [...s.selection.filter((x) => !group.includes(x)), ...group];
+    return { selection: grown, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...fxClear(grown) };
   }),
   selectTrackElements: (trackId, additive) => set((s) => {
     const sc = s.scenes.find((x) => x.id === s.activeSceneId);
@@ -1117,7 +1049,32 @@ export const useUi = create<UiState>((set, get) => ({
   setSearch: (s) => set({ search: s }),
   setSortBy: (sortBy) => set({ sortBy }),
   setSortDir: (d) => set({ sortDir: d }),
-  setInspectorTab: (t) => set({ inspectorTab: t }),
+  /* R20-W3: the domain-clearing spread shared by every selection write —
+     mirrors the selectedMarkerId law (selectMarker :775): one selection
+     domain at a time. The effect domain dies with its clip: setSelection /
+     selectElement drop it unless the new selection still holds the clip. */
+  selectTrack: (id) => set((s) => ({
+    selectedTrackId: id,
+    ...(id ? {
+      selection: [],
+      selectedMarkerId: null,
+      selectedEffectId: null,
+      selectedEffectClipId: null,
+      inspectorProjectMode: false,
+    } : {}),
+  })),
+  selectEffect: (clipId, fxId) => set((s) => ({
+    selectedEffectId: fxId,
+    selectedEffectClipId: fxId ? clipId : null,
+    ...(fxId ? {
+      /* the effect's clip STAYS selected (the accordion expands in place);
+       * the track + marker domains clear, project mode exits */
+      selectedTrackId: null,
+      selectedMarkerId: null,
+      inspectorProjectMode: false,
+    } : {}),
+  })),
+  toggleInspectorProjectMode: () => set((s) => ({ inspectorProjectMode: !s.inspectorProjectMode })),
   toggleMasterMute: () => set((s) => ({ masterMuted: !s.masterMuted })),
   setMasterVolume: (v) => set({ masterVolume: clamp(v, 0, 1) }),
   setMediaW: (w) => set({ mediaW: clamp(w, 200, 480) }),
@@ -1563,6 +1520,9 @@ export const useUi = create<UiState>((set, get) => ({
     const hit = findEl(scenes, elementId);
     if (!hit || hit.track.locked) return;
     if (hit.el.effects) hit.el.effects = hit.el.effects.filter((f) => f.id !== fxId);
+    // R20-W3: the effect domain dies with its effect
+    const s = get();
+    if (s.selectedEffectId === fxId) set({ selectedEffectId: null, selectedEffectClipId: null });
     return scenes;
   }),
   setEffectParam: (elementId, fxId, param, value) => withHistory(set, get, (scenes) => {
