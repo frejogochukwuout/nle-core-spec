@@ -1,16 +1,18 @@
-/* R19-B4 — the once-per-mount honest toast (spec 08 §4 render-round
-   boundary). Extends ColorPage's R14 display-state contract to the whole
-   reference-grade grading surface: every control does REAL local state work
-   (readouts follow), and the FIRST interaction per mount fires exactly ONE
-   toast saying the engine doesn't grade yet. Further touches stay silent. */
+/* R20-W4b — the once-per-mount honest toast. The R19-B4 boundary ("grading
+   stack is display state") is GONE: every control now writes the mockGrades
+   sidecar for real (undoable). The honest remaining boundary is the VIEWER
+   PREVIEW — the grade canvas lands with W4c (DESIGN-R20 D3 pipeline), so the
+   first grade interaction per mount fires ONE toast saying exactly that.
+   LUT select, eyedropper tools and non-bound node types keep their own
+   one-shot messages (each a real deferral, never a silent no-op). */
 
 import { useRef } from 'react';
 import { useUi } from '../../../state/useUiStore';
 
-/** The shared wheels/qualifier message (wording pinned by tests). */
+/** The shared grade-write boundary message (wording pinned by tests). */
 export const GRADING_TOAST = {
-  title: 'Color params',
-  detail: 'grading stack is display state (spec 08 §4 render round)',
+  title: 'Color grades',
+  detail: 'grade values are real (mockGrades) — viewer preview renders with the canvas (spec 08 §12)',
 } as const;
 
 /** One-shot toast: fires on first call per component mount, then never. */
@@ -24,7 +26,7 @@ export function useHonestToast(title: string, detail: string) {
   };
 }
 
-/** Wheels + qualifier variant of the one-shot toast. */
+/** Grade-write boundary variant (wheels/curves/qualifier/rail). */
 export function useGradingToast() {
   return useHonestToast(GRADING_TOAST.title, GRADING_TOAST.detail);
 }

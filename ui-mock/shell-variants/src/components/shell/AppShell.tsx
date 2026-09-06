@@ -18,7 +18,7 @@ import { AppDock } from './AppDock';
 import { TimelineToolbar } from '../timeline/TimelineToolbar';
 import { SceneTabs } from '../timeline/SceneTabs';
 import { Timeline } from '../timeline/Timeline';
-import { ColorRailPanel, ColorNodeGraph, ColorScopesDock } from '../pages/ColorPage';
+import { ColorInspectorRail, ColorNodeGraph, ColorScopeStrip, ColorConsole } from '../pages/ColorPage';
 import { DeliverPage } from '../pages/DeliverPage';
 import { ChannelEditor } from '../mixer/ChannelEditor';
 import { MarkerInspector } from '../panels/MarkerInspector';
@@ -212,11 +212,14 @@ function AppShellInner() {
   /* R19 rail routing: a selected marker swaps the rail for the embedded
      MarkerInspector (the reference's marker DIALOG as a panel — user
      directive); a single caption-track selection swaps for the
-     CaptionInspector. Both clear the other selection domain in the store. */
+     CaptionInspector. Both clear the other selection domain in the store.
+     R20-W4b (D3): the color page's rail = the clip-level color sections
+     (ColorInspectorRail — the W3 inspector grammar, store-bound to the SAME
+     grade target the console edits). */
   const captionSelected = selection.length === 1
     && findElement(scenes, selection[0])?.track.kind === 'caption';
   const rightPanel: ReactNode =
-    page === 'color' ? <ColorRailPanel />
+    page === 'color' ? <ColorInspectorRail />
     : page === 'audio' ? <ChannelEditor />
     : selectedMarkerId ? <MarkerInspector />
     : captionSelected ? <CaptionInspector />
@@ -263,9 +266,11 @@ function AppShellInner() {
               <div className="min-h-0 flex-1">
                 <Viewer duration={duration} />
               </div>
-              {/* R19 color composition: the scopes dock under the viewer
-                  (reference 2×2; collapsible via its own header chevron) */}
-              {page === 'color' && <ColorScopesDock />}
+              {/* R20-W4b color composition: the scope strip slot under the
+                  viewer — ColorScopeStrip (C53 placeholder; W4c fills the
+                  real traces through useScopeSource). Never a console tab —
+                  the simultaneity law (color-layout §2.1e). */}
+              {page === 'color' && <ColorScopeStrip />}
             </div>
 
             {/* right-docked panel: dragging the seam LEFT (dx<0) widens it */}
@@ -285,16 +290,29 @@ function AppShellInner() {
 
       {/* ---- timeline block + mixer dock (design doc v2.2 §4 — the mixer
           sits SIDE BY SIDE with the multi-track lanes, not under them;
-          7th F6 region) ---- */}
+          7th F6 region) ----
+          R20-W4b (DESIGN-R20 D3, C51): on the COLOR page the timeline lanes
+          are REPLACED by the ColorConsole (frozen lane strip + tabs + body —
+          the Mixer-Console precedent). The console takes the mixer dock's
+          F6 7th-region slot (region-cycle parity; the mixer does not render
+          in color mode per color-layout §2.4). The Edit page keeps the full
+          Timeline. */}
       <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />
         <div className="flex min-h-0 flex-1">
-          <Timeline />
+          {page === 'color' ? (
+            <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
+              <ColorConsole />
+            </div>
+          ) : (
+            <Timeline />
+          )}
           {/* F6 region 7 (spec 18 §11.5 amendment): only a focus stop while
               the dock is actually visible — a collapsed dock must not leave
-              an invisible zero-width F6 stop in the cycle */}
-          {mixerVisible && (
+              an invisible zero-width F6 stop in the cycle. Color mode is
+              excluded (the console owns the slot above). */}
+          {mixerVisible && page !== 'color' && (
             <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0">
               <MixerDock />
             </div>

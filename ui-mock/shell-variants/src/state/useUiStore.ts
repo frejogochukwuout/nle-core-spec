@@ -38,6 +38,13 @@ import {
   stretchDeltaBounds,
 } from '../lib/trimLaws';
 import { createMixerScene, type MockMixerScene, type MixerTrackSettings, type DuckingSettings, type AuxBusSettings } from './mockMixer';
+/* R20-W4b (DESIGN-R20 D3, gap C50): the grade sidecar. GradeParams/defaults
+   come VERBATIM from W4a's lib/color (spec 08 §4.2 WheelsParams field names —
+   the store never renames them); the mock-only curves extension (spec 08 §5
+   point model, gap C55) is curveMath's CurveSet — lib/color is read-only
+   this wave, so MockGrade EXTENDS it structurally instead. */
+import { DEFAULT_GRADE, DEFAULT_QUALIFIER, type GradeParams, type QualifierParams } from '../lib/color';
+import type { CurveSet } from '../components/pages/color/curveMath';
 
 export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch';
 export type Page = 'edit' | 'color' | 'audio' | 'deliver';
@@ -76,6 +83,74 @@ const cloneEl = (e: ElementJSON): ElementJSON => ({
   ...(e.eq ? { eq: [...e.eq] as ElementJSON['eq'] } : {}),
 });
 const clone = (scenes: SceneJSON[]): SceneJSON[] => scenes.map((s) => ({ ...s, tracks: s.tracks.map((t) => ({ ...t, elements: t.elements.map(cloneEl) })), markers: s.markers.map((m) => ({ ...m })) }));
+
+/* ---------- R20-W4b: the mockGrades sidecar (gap C50) ----------
+
+   GradeParams per elementId + the special TIMELINE_GRADE_KEY (the post-clip /
+   timeline-level grade — Resolve post-clip semantics). NEVER on ElementJSON
+   (spec 09 has no color fields; the mockMixer sidecar is the precedent).
+   Absent key = DEFAULT_GRADE (identity), so reset = key deletion. */
+
+export const TIMELINE_GRADE_KEY = 'timeline';
+
+/** GradeParams (spec 08 §4.2, W4a) + the mock curves extension (spec 08 §5). */
+export type MockGrade = GradeParams & { curves?: CurveSet };
+
+/** Partial patch: qualifier merges deeply, curves replaces the set. */
+export type GradePatch = Partial<Omit<MockGrade, 'qualifier' | 'curves'>> & {
+  qualifier?: Partial<QualifierParams> | null;
+  curves?: CurveSet;
+};
+
+const DEFAULT_MOCK_GRADE: MockGrade = { ...DEFAULT_GRADE };
+
+const cloneGrades = (g: Record<string, MockGrade>): Record<string, MockGrade> => {
+  const out: Record<string, MockGrade> = {};
+  for (const k of Object.keys(g)) {
+    const v = g[k];
+    out[k] = {
+      ...v,
+      ...(v.qualifier ? { qualifier: { ...v.qualifier } } : {}),
+      ...(v.curves ? { curves: { master: v.curves.master.map((p) => ({ ...p })) } } : {}),
+    };
+  }
+  return out;
+};
+
+/** Deep partial merge of a patch onto a grade record (qualifier merges). */
+function mergeGrade(base: MockGrade, patch: GradePatch): MockGrade {
+  const out: MockGrade = { ...base };
+  for (const key of Object.keys(patch) as (keyof GradePatch)[]) {
+    if (key === 'qualifier') {
+      const q = patch.qualifier;
+      if (q === null) out.qualifier = null;
+      else if (q !== undefined) out.qualifier = { ...(base.qualifier ?? DEFAULT_QUALIFIER), ...q };
+    } else if (key === 'curves') {
+      if (patch.curves !== undefined) out.curves = { master: patch.curves.master.map((p) => ({ ...p })) };
+    } else {
+      const v = patch[key];
+      if (v !== undefined) (out as unknown as Record<string, unknown>)[key as string] = v;
+    }
+  }
+  return out;
+}
+
+/** Deep equality (records are ~30 numbers + two small objects; key order is
+    insertion-stable because mergeGrade spreads base first — stringify is a
+    faithful equality here and used ONLY to detect no-op patches). */
+const gradeEqual = (a: MockGrade, b: MockGrade): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** The grade the console/rail edit: 'timeline' when the target toggle says so,
+    else the FIRST selected clip (the single-owner law — every surface resolves
+    the SAME id from the store, so console and rail can never disagree). */
+export function resolveGradeTargetId(s: Pick<UiState, 'colorGradeTarget' | 'selection'>): string | null {
+  return s.colorGradeTarget === 'timeline' ? TIMELINE_GRADE_KEY : (s.selection[0] ?? null);
+}
+
+/** Record lookup with the identity default (absent key = DEFAULT_GRADE). */
+export function gradeOf(s: Pick<UiState, 'mockGrades'>, id: string): MockGrade {
+  return s.mockGrades[id] ?? DEFAULT_MOCK_GRADE;
+}
 
 const findEl = (scenes: SceneJSON[], id: string): { el: ElementJSON; track: TrackJSON; scene: SceneJSON } | null => {
   for (const sc of scenes) for (const t of sc.tracks) {
@@ -384,8 +459,8 @@ interface UiState {
   toasts: Toast[];
   saveAttempt: number;
   simulateSaveFail: boolean;
-  past: { scenes: SceneJSON[]; activeSceneId: string; lockAll?: boolean; selection?: string[] }[];
-  future: { scenes: SceneJSON[]; activeSceneId: string; lockAll?: boolean; selection?: string[] }[];
+  past: HistoryEntry[];
+  future: HistoryEntry[];
   // ---- audio focus mode (design doc docs/DESIGN-audio-mode.md v2.1) ----
   mixer: MockMixerScene;      // mock G-slice (spec 20 §4.2 shape)
   mixerState: MixerDockState;
@@ -406,6 +481,24 @@ interface UiState {
      state-home question (per-track vs global) is a seal item — the mock answers
      GLOBAL, a noted deviation; view state, not doc. */
   trackHeightPref: 'compact' | 'normal' | 'tall' | null;
+
+  /* ---- R20-W4b (DESIGN-R20 D3, gaps C50/C51/C55/C56) ---- */
+  /* mockGrades is UNDOABLE (the withHistory snapshot carries it — undo/redo
+     round-trips grades; one history entry per committed setGrade/resetGrade).
+     The console view-state below is NEVER snapshotted (mockMixer view-state
+     law). */
+  mockGrades: Record<string, MockGrade>;
+  /** active ColorConsole tab (C51). */
+  colorConsoleTab: 'primaries' | 'curves' | 'qualifier';
+  /** Clip ⇄ Timeline grade-target toggle (C51); 'clip' resolves to selection[0]. */
+  colorGradeTarget: 'clip' | 'timeline';
+  /** Qualifier matte-preview overlay switch (C54 preview half — W4c renders
+     the viewer overlay; this view-state is the immediate toggle). */
+  qualifierPreviewOn: boolean;
+  /** Selected node-graph node (C56) — 'primary'/'secondary' bind to the
+     target's GradeParams/qualifier surfaces; other node kinds are honest
+     display state (C56 toast). */
+  selectedColorNodeId: string | null;
 
   /* ---- R19: marker v2 / captions / source-preview view state ---- */
   selectedMarkerId: string | null; // marker inspector routing (rail swap)
@@ -512,6 +605,13 @@ interface UiState {
   setMixerTrack: (trackId: string, patch: Partial<MixerTrackSettings>) => void;
   setAuxBus: (bus: 'a1' | 'a2', patch: Partial<AuxBusSettings>) => void;
   setDucking: (trackId: string, patch: Partial<DuckingSettings>) => void;
+  /* R20-W4b grade sidecar + console view-state (C50/C51). */
+  setGrade: (id: string, patch: GradePatch) => void;
+  resetGrade: (id: string) => void;
+  setColorConsoleTab: (tab: UiState['colorConsoleTab']) => void;
+  setColorGradeTarget: (t: UiState['colorGradeTarget']) => void;
+  setQualifierPreviewOn: (v: boolean) => void;
+  setColorNode: (id: string | null) => void;
   undo: () => void;
   redo: () => void;
   /* R15 T3 batch move: ONE history entry, doc mutation only. Laws (frame-snap,
@@ -589,11 +689,24 @@ const activeSceneDuration = (s: UiState): number => {
    The snapshot carries `lockAll` alongside the doc because toggleLockAll
    fans out into the doc AND flips the view flag atomically — undoing one
    half of that pair left the flag inverted (aria-pressed lying, next toggle
-   doing the OPPOSITE of its label). */
+   doing the OPPOSITE of its label).
+   R20-W4b (C50): the snapshot ALSO carries mockGrades — grade writes ride
+   the SAME wrapper (setGrade mutates the sidecar via a direct set() inside
+   mutate, exactly the toggleLockAll fan-out pattern), so undo/redo
+   round-trip grades one history entry per committed edit. Existing snapshot
+   consumers assert their own fields — the extra key is additive. */
 const HISTORY = 50;
+interface HistoryEntry {
+  scenes: SceneJSON[];
+  activeSceneId: string;
+  lockAll?: boolean;
+  selection?: string[];
+  /** R20-W4b (C50): the grade sidecar rides the snapshot. */
+  mockGrades?: Record<string, MockGrade>;
+}
 function withHistory(set: (partial: any) => void, get: () => UiState, mutate: (scenes: SceneJSON[]) => SceneJSON[] | void) {
   const s = get();
-  const before = { scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll, selection: [...s.selection] };
+  const before: HistoryEntry = { scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll, selection: [...s.selection], mockGrades: cloneGrades(s.mockGrades) };
   const next = mutate(clone(s.scenes));
   if (next === undefined) return; // no-op — no history entry
   set({
@@ -668,8 +781,8 @@ export const useUi = create<UiState>((set, get) => ({
   toasts: [],
   saveAttempt: 0,
   simulateSaveFail: false,
-  past: [],
-  future: [],
+  past: [] as HistoryEntry[],
+  future: [] as HistoryEntry[],
   mixer: createMixerScene(project.scenes.flatMap((sc) => sc.tracks.filter((t) => t.kind === 'audio').map((t) => t.id))),
   mixerState: 'collapsed',
   audioLaneBoost: false,
@@ -679,6 +792,14 @@ export const useUi = create<UiState>((set, get) => ({
   stripInsertsOn: {},
   mixerFloorWarned: false,
   trackHeightPref: null,
+  /* R20-W4b: the grade sidecar boots EMPTY (absent key = identity grade);
+     console view-state defaults: Primaries tab, Clip target, no matte
+     preview, Primary node selected (C56 default binding). */
+  mockGrades: {},
+  colorConsoleTab: 'primaries',
+  colorGradeTarget: 'clip',
+  qualifierPreviewOn: false,
+  selectedColorNodeId: 'primary',
 
   setPage: (p) => set((s) => ({
     page: p,
@@ -1176,16 +1297,47 @@ export const useUi = create<UiState>((set, get) => ({
     },
   })),
 
+  /* ---- R20-W4b: grade sidecar + console view-state ---- */
+  setGrade: (id, patch) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const base = s.mockGrades[id] ?? DEFAULT_MOCK_GRADE;
+    const merged = mergeGrade(base, patch);
+    if (gradeEqual(merged, base)) return; // no-op → no history entry
+    // scenes ride along unchanged (the clone IS the new doc); the sidecar is
+    // the real payload — the toggleLockAll fan-out pattern.
+    set({ mockGrades: { ...s.mockGrades, [id]: merged } });
+    return scenes;
+  }),
+  resetGrade: (id) => withHistory(set, get, (scenes) => {
+    const s = get();
+    if (!(id in s.mockGrades)) return; // already identity → no history entry
+    const next = { ...s.mockGrades };
+    delete next[id];
+    set({ mockGrades: next });
+    return scenes;
+  }),
+  setColorConsoleTab: (tab) => set({ colorConsoleTab: tab }),
+  setColorGradeTarget: (t) => set({ colorGradeTarget: t }),
+  setQualifierPreviewOn: (v) => set({ qualifierPreviewOn: v }),
+  /* C56: node selection is view-state (never snapshotted); 'primary' and
+     'secondary' are the two honest bindings — selecting them routes the
+     console tab to the surface they own (the node graph's click handler
+     does the routing; the store only records the selection). */
+  setColorNode: (id) => set({ selectedColorNodeId: id }),
+
   undo: () => set((s) => {
     if (s.past.length === 0) return {};
     const prev = s.past[s.past.length - 1];
     return {
       past: s.past.slice(0, -1),
-      future: [{ scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll, selection: [...s.selection] }, ...s.future].slice(0, HISTORY),
+      future: [{ scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll, selection: [...s.selection], mockGrades: cloneGrades(s.mockGrades) }, ...s.future].slice(0, HISTORY),
       scenes: prev.scenes,
       activeSceneId: prev.activeSceneId,
       ...(prev.lockAll !== undefined ? { lockAll: prev.lockAll } : {}),
       ...(prev.selection !== undefined ? { selection: [...prev.selection] } : {}),
+      /* R20-W4b (C50): round-trip the grade sidecar with the doc — a grade
+         write undone restores the pre-edit grades (view-state stays). */
+      ...(prev.mockGrades !== undefined ? { mockGrades: prev.mockGrades } : {}),
     };
   }),
   redo: () => set((s) => {
@@ -1193,11 +1345,12 @@ export const useUi = create<UiState>((set, get) => ({
     const next = s.future[0];
     return {
       future: s.future.slice(1),
-      past: [...s.past, { scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll, selection: [...s.selection] }].slice(-HISTORY),
+      past: [...s.past, { scenes: clone(s.scenes), activeSceneId: s.activeSceneId, lockAll: s.lockAll, selection: [...s.selection], mockGrades: cloneGrades(s.mockGrades) }].slice(-HISTORY),
       scenes: next.scenes,
       activeSceneId: next.activeSceneId,
       ...(next.lockAll !== undefined ? { lockAll: next.lockAll } : {}),
       ...(next.selection !== undefined ? { selection: [...next.selection] } : {}),
+      ...(next.mockGrades !== undefined ? { mockGrades: next.mockGrades } : {}),
     };
   }),
 

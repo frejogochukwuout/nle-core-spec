@@ -1,26 +1,23 @@
-/* ColorNodeGraph — the left-dock grading surface (R19-B4). Reference-grade
-   rebuild of color_grading_node_graph.html (color-cluster.md §3), rebased
-   from the reference's 1080px spread into a ~640×268 logical canvas that
-   fills its container (min ~400px wide; scrolls when narrower).
-   38px toolbar: arrow/hand tools (aria-pressed toggles — display state),
-   2 page dots, "Clip" chip (honest toast), 60px zoom-slider LOOK (static,
-   aria-hidden), "…" menu. Workspace: 64px grid on --nodegraph-bg.
-   Topology (ref §3.5/3.6, static positions are FINE per task): Master In →
-   Primary 01 → {Secondary 02 ∥ Water 03} → Mixer → Tilt Shift 05 → Lens
-   Flare 06 → Master Out. Node anatomy: 106×86 cards (60px thumb + 24px
-   footer + number badge, 12px icons), 7×7 square ports (green video / blue
-   key), blue right-triangle input, selection = --danger border + 1px halo
-   (click to select — REAL local state, exactly ONE selected, default = Lens
-   Flare per the reference's static class), fx nodes carry the italic serif
-   "fx" glyph, connected-clip badge = 2px --port-blue progress bar (full /
-   40% partial), edges = straight 2px --node-edge lines computed from port
-   centers. Nodes are focusable buttons (tab order = DOM order).
-   R19-TODO(orchestrator): no drag/pan/zoom (gesture round) — the hand tool
-   answers with an honest toast instead of a silent no-op. */
+/* ColorNodeGraph — the left-dock grading surface (R19-B4 reference rebuild,
+   color-cluster §3). R20-W4b (gap C56): node selection is now HONEST and
+   STORE-DRIVEN — exactly ONE selected node lives in the store's
+   selectedColorNodeId (view state):
+     · Primary 01 binds to the target's GradeParams (the primaries surface) —
+       selecting it routes the console to the Primaries tab;
+     · Secondary 02 binds to GradeParams.qualifier (the secondary node) —
+       selecting it routes the console to the Qualifier tab;
+     · every other node kind (corrector/parallel/fx/master) renders but is
+       display state — the first such selection fires ONE honest toast
+       ('node graphs land with C56'); never a silent fake binding.
+   The console header shows the node chip (which surface is being edited).
+   Topology/anatomy unchanged: 38px toolbar (arrow/hand tools, page dots,
+   Clip chip, zoom look, …), 64px grid workspace, 106×86 cards, ports/edges
+   exactly as before. */
 
 import { useState } from 'react';
 import { Hand, Layers, MousePointer2 } from 'lucide-react';
 import { useHonestToast } from './useHonestToast';
+import { useUi } from '../../../state/useUiStore';
 
 /* ---------- geometry (color-cluster.md §3.4) ---------- */
 
@@ -259,16 +256,36 @@ function NodeCard({ n, selected }: { n: NodeDef; selected: boolean }) {
   );
 }
 
+/* the two HONEST bindings (C56): node id → the console surface it owns. */
+const NODE_BINDINGS: Record<string, 'primaries' | 'qualifier'> = {
+  primary: 'primaries',
+  secondary: 'qualifier',
+};
+
 /* ---------- the graph ---------- */
 
 export function ColorNodeGraph() {
-  /* honest one-shot toast for the mock-only graph controls (clip picker,
-     page dots, overflow menu; hand tool fires it on activation) */
+  /* honest one-shot toasts: (a) the mock-only graph controls (clip picker,
+     page dots, overflow menu; hand tool = gesture deferral), (b) the C56
+     deferral — non-bound node kinds are display state. */
   const tell = useHonestToast('Node graph', 'node graph controls are display state — drag / pan / zoom land in the interaction round (R19-TODO)');
-  const [selected, setSelected] = useState<string | null>('lens'); // reference: Lens Flare selected
+  const tellUnbound = useHonestToast('Node graph', 'node graphs land with C56 — only the Primaries and Qualifier nodes bind today');
+  const selected = useUi((s) => s.selectedColorNodeId);
+  const setColorNode = useUi((s) => s.setColorNode);
+  const setColorConsoleTab = useUi((s) => s.setColorConsoleTab);
   const [tool, setTool] = useState<'arrow' | 'hand'>('arrow');
   const [page, setPage] = useState(1);
-  const clickNode = (id: string) => setSelected((sel) => (sel === id ? null : id));
+
+  const clickNode = (id: string) => {
+    if (selected === id) {
+      setColorNode(null); // toggle off (the old exactly-one law)
+      return;
+    }
+    setColorNode(id);
+    const binding = NODE_BINDINGS[id];
+    if (binding) setColorConsoleTab(binding); // honest routing — no fake binding
+    else tellUnbound(); // corrector/parallel/fx/master: display state, C56
+  };
 
   return (
     <div data-testid="shell-color-nodegraph" className="flex h-full min-h-0 w-full min-w-[400px] flex-col" style={{ background: 'var(--nodegraph-bg)' }}>

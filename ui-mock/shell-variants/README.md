@@ -161,6 +161,31 @@ tests can target the same surface.
 
 ## Known spec deviations (intentional, for reaction)
 
+- **R20-W4b:** the color page's timeline area is the ColorConsole (gap C51,
+  18 §4.8 color-mode composition): frozen lane strip — ruler 22px, video
+  lanes a UNIFORM 24px (overlay+caption included; color-layout §2.3's 18px
+  overlay variant folded into one video height), audio 16px dimmed; clips
+  are click-to-target buttons with NO trim/drag gestures. The Curves tab
+  body scrolls internally at small heights (registered). The timeline-level
+  grade lives under the store's special key `'timeline'` in the mockGrades
+  sidecar (C50; spec 09 has no color fields — mockMixer sidecar precedent),
+  never on ElementJSON; the Clip ⇄ Timeline toggle is its single owner.
+- **R20-W4b:** `MockGrade = GradeParams & { curves?: CurveSet }` — W4a's
+  lib/color GradeParams (spec 08 §4.2, verbatim) is read-only this wave, so
+  the curves points (spec 08 §5, gap C55) extend the RECORD type in the
+  store instead of the lib; the curve eval/bake lives in
+  components/pages/color/curveMath.ts (the W4c viewer seam).
+- **R20-W4b:** Qualifier panel is the spec 08 §8.1 surface only — the
+  reference HTML's 14-field "Matte Finesse" block (no §8 counterpart) is
+  DELETED, replaced by the §17.E secondary correction + strength/invert;
+  the eyedropper + viewer matte overlay are W4c's (the Preview Matte toggle
+  writes the qualifierPreviewOn view-state and mirrors showMask into the
+  record).
+- **R20-W4b:** the mixer dock does not render in color mode (the console
+  owns the timeline row + the F6 7th-region slot; color-layout §2.4). The
+  scopes slot under the viewer is the ColorScopeStrip placeholder (C53
+  supersedes the seeded-trace dock — scopeTraces.ts/ColorScopesDock.tsx
+  deleted, grep-verified zero other consumers).
 - **R20-W3:** inspector is type-driven without the 4-tab strip per reviewer
   thread #53; 18 §4.4/§11.6 deviation registered (C58). The panel is ONE
   scroll of sections picked by selected-entity type (inspectorpanel.tsx
