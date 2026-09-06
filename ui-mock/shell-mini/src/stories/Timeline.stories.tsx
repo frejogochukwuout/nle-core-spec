@@ -64,8 +64,18 @@ export const Clip: StoryObj<ClipArgs> = {
     compact: { control: 'boolean', description: 'pill body — the minimized strip render' },
     zoomStep: {
       control: 'radio',
-      options: [0, 1, 2, 3],
-      labels: { 0: '0 · 24pps', 1: '1 · 48pps', 2: '2 · 96pps', 3: '3 · 192pps' },
+      options: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+      labels: {
+        0: '0 · 24pps',
+        1: '1 · 36pps',
+        2: '2 · 48pps default',
+        3: '3 · 72pps',
+        4: '4 · 96pps',
+        5: '5 · 144pps',
+        6: '6 · 192pps',
+        7: '7 · 288pps',
+        8: '8 · 384pps',
+      },
     },
   },
   render: ({ media, selected, filmstripOn, compact, zoomStep }) => {
@@ -193,8 +203,18 @@ interface PanelArgs {
 const panelArgTypes: ArgTypes<PanelArgs> = {
   zoomStep: {
     control: 'radio',
-    options: [0, 1, 2, 3, 4],
-    labels: { 0: '0 · 24pps overview', 1: '1 · 48pps default', 2: '2 · 96pps', 3: '3 · 192pps', 4: '4 · 384pps' },
+    options: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+    labels: {
+      0: '0 · 24pps overview',
+      1: '1 · 36pps',
+      2: '2 · 48pps default',
+      3: '3 · 72pps',
+      4: '4 · 96pps',
+      5: '5 · 144pps',
+      6: '6 · 192pps',
+      7: '7 · 288pps',
+      8: '8 · 384pps',
+    },
   },
   playhead: { control: { type: 'range', min: 0, max: 14, step: 0.25 } },
   selection: { control: 'inline-radio', options: ['none', 'c1', 'c2', 'c3', 'c4'] },

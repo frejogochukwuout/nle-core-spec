@@ -641,6 +641,32 @@ describe('PR69 C3/C20: solo surfaces play for real; the viewer stage announces i
     expect(S().playhead).toBe(0.5); // the loop's step, wired
   });
 
+  it('R6 (R5-b P3-8): the loop is WIRED to rAF and ticks exactly once per frame (the singleton under both mounts)', () => {
+    // the net above calls tick() manually — a dead or double rAF loop
+    // passes it. This one drives the REAL wiring: fake the rAF + clock,
+    // advance one frame, and the playhead must move by exactly one 16ms
+    // dt (a dead loop stays at 0; TWO loops — a singleton regression —
+    // would land at 2×dt). NOTE: jsdom ships a native rAF (the setup.ts
+    // shim never installs), so rAF itself must be in toFake.
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame'],
+    });
+    try {
+      renderApp(); // mounts Timeline AND Viewer — both mount usePlayhead
+      setStore(() => useMini.setState({ playing: true, playhead: 1 }));
+      act(() => {
+        vi.advanceTimersByTime(16);
+      });
+      expect(useMini.getState().playhead).toBeCloseTo(1.016, 5);
+      act(() => {
+        vi.advanceTimersByTime(16);
+      });
+      expect(useMini.getState().playhead).toBeCloseTo(1.032, 5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('C20: the populated viewer frame exposes name/role/label (no aria-hidden)', () => {
     renderApp();
     const frame = screen.getByTestId('mini-viewer-frame');

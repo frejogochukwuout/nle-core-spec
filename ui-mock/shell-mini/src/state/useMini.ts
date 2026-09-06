@@ -945,7 +945,10 @@ export const useMini = create<MiniState>((set, get) => {
         doc.clips.push(right);
       });
       // keep the left half selected (the split product the user is editing)
-      if (p !== null) set({ selectedId: id });
+      // R6 (R5-b P2-1): routed through select() — the XOR law (one inspector
+      // subject) survives the no-selection fallback path too; a bare
+      // set({selectedId}) left a selected TRACK + a selected CLIP co-existing
+      if (p !== null) get().select(id);
     },
 
     deleteSelected: () => {
@@ -995,7 +998,8 @@ export const useMini = create<MiniState>((set, get) => {
         return;
       }
       get().trimClip(target, 'start', t); // ripple-aware when rippleOn
-      set({ selectedId: target });
+      // R6 (R5-b P2-1): select() keeps the XOR law on the fallback path
+      get().select(target);
     },
 
     cutTailAtPlayhead: () => {
@@ -1018,7 +1022,8 @@ export const useMini = create<MiniState>((set, get) => {
         return;
       }
       get().trimClip(target, 'end', t); // ripple-aware when rippleOn
-      set({ selectedId: target });
+      // R6 (R5-b P2-1): select() keeps the XOR law on the fallback path
+      get().select(target);
     },
 
     addClipFromMedia: (mediaId) => {

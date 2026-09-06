@@ -36,8 +36,10 @@ export function useKeys() {
         return;
       }
       /* PR69 C16: OS key-repeat re-fires keydown ~20-30/s while held — the
-       * bindings are single-shot actions, not scrub surfaces. (Esc above
-       * stays idempotent either way.) */
+       * bindings are single-shot actions, not scrub surfaces. One visible
+       * consequence of gating BEFORE the Esc branch: a HELD Esc cancels the
+       * drag on the first press and its repeats never fall through to the
+       * deselect (R18k's repeats did). Registered with the C16 family. */
       if (e.repeat) return;
       const s = useMini.getState();
 

@@ -6,7 +6,7 @@
    origin is x=0, so clientX maps DIRECTLY to time via pps (deterministic:
    default zoom 48pps). */
 
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { Timeline } from './Timeline';
@@ -70,7 +70,7 @@ describe('drag-move (48pps default zoom)', () => {
     expect(S().past).toHaveLength(1); // one entry per gesture
   });
 
-  it('R21 (user P0 revert): dragging toward the next neighbor CLAMPS — c2 parks at c3\u2019s edge, nothing else moves', () => {
+  it('R21 (user P0 revert): dragging toward the next neighbor CLAMPS — c2 parks at c3’s edge, nothing else moves', () => {
     render(<Timeline />);
     const c2 = screen.getByTestId('mini-clip-c2');
     drag(c2, 216, 216 + 300); // raw start = 4.5 + 6.25 = 10.75
@@ -879,6 +879,41 @@ describe('R22 — the plain commit law (R18k restored): the UP seals the last pr
   });
 });
 
+describe('R6 — the single-edge LIVE magnet, pinned at component level (the R22 flagship law)', () => {
+  it('a snap-on drag within 12px of c1’s end snaps to it and paints the guide at the target', () => {
+    render(<Timeline />);
+    setStore(() => S().toggleSnap()); // snap ON
+    const c2 = screen.getByTestId('mini-clip-c2');
+    // grab c2 (start 4.5) at 216 — grabOffset ≈ −0.958s; park the pointer at
+    // 169 → raw ≈ 3.52, i.e. 0.96px from the c1-end target 3.5
+    fireEvent.pointerDown(c2, { button: 0, pointerId: 8, clientX: 216, clientY: 10 });
+    fireEvent.pointerMove(c2, { pointerId: 8, clientX: 222, clientY: 10 }); // activate
+    fireEvent.pointerMove(c2, { pointerId: 8, clientX: 169, clientY: 10 });
+    // the LEFT edge magnetized to 3.5 exactly (guide at 46 + 3.5·48 = 214)
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(3.5);
+    const guide = screen.getByTestId('mini-snap-guide');
+    expect(guide.style.left).toBe('214px');
+    // the guide leaves with the gesture
+    fireEvent.pointerUp(c2, { pointerId: 8, clientX: 169, clientY: 10 });
+    expect(screen.queryByTestId('mini-snap-guide')).toBeNull();
+  });
+
+  it('the playhead target is read LIVE mid-gesture (a moving playhead catches the magnet)', () => {
+    render(<Timeline />);
+    setStore(() => S().toggleSnap());
+    const c2 = screen.getByTestId('mini-clip-c2');
+    fireEvent.pointerDown(c2, { button: 0, pointerId: 9, clientX: 216, clientY: 10 });
+    fireEvent.pointerMove(c2, { pointerId: 9, clientX: 222, clientY: 10 }); // activate
+    // playback moves the playhead INTO the clamp span mid-gesture; a
+    // frozen pre-drag field would still carry the old target (playhead 0)
+    // and never magnetize (raw ≈ 4.22 stays raw)
+    act(() => useMini.setState({ playhead: 4.2 }));
+    fireEvent.pointerMove(c2, { pointerId: 9, clientX: 203, clientY: 10 }); // raw ≈ 4.229
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4.2); // snapped to the LIVE playhead
+    fireEvent.pointerUp(c2, { pointerId: 9, clientX: 203, clientY: 10 });
+  });
+});
+
 describe('R21 (user P0 revert) — neighbors NEVER move mid-gesture (the law every round agreed on), the mover CLAMPS', () => {
   it('dragging c2 across c3: c3/c1 hold their snapshot positions; the mover clamps at the neighbor edge', () => {
     render(<Timeline />);
@@ -1264,5 +1299,101 @@ describe('R2-a → R22 — surface swaps (the pending window is retired; keys st
     setStore(() => S().trimClip('c1', 'end', 3));
     expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(3);
     expect(S().past).toHaveLength(1);
+  });
+});
+
+/* ---- R6 (R5-a/R5-b review round): the R22 law family, discriminated ---- */
+
+describe('R6 — the stateless ruler law (R18k)', () => {
+  it('hover moves with NO button held never scrub (the buttons gate is the whole state machine)', () => {
+    render(<Timeline />);
+    const ruler = screen.getByTestId('mini-ruler');
+    fireEvent.pointerDown(ruler, { button: 0, pointerId: 40, clientX: 100 });
+    expect(S().playhead).toBeCloseTo(100 / 48, 5); // the down-seek
+    // a hover (buttons: 0) after the release-ish drift must be inert — the
+    // R18k ruler has no dragging state to strand
+    fireEvent.pointerUp(ruler, { pointerId: 40, clientX: 100 });
+    fireEvent.pointerMove(ruler, { pointerId: 40, buttons: 0, clientX: 500 });
+    expect(S().playhead).toBeCloseTo(100 / 48, 5); // unchanged
+  });
+});
+
+describe('R6 — the edge-park law: scrub surfaces NEVER glide (R22)', () => {
+  it('a scrub pointer parked at the viewport edge requests NO frames and moves NO scroll', () => {
+    const io = interceptScrollLeft();
+    // manual rAF queue: any frame the scrub surfaces request would land here
+    let queue: FrameRequestCallback[] = [];
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(((cb: FrameRequestCallback) => {
+      queue.push(cb);
+      return 1;
+    }) as typeof window.requestAnimationFrame);
+    try {
+      render(<Timeline />);
+      const scroll = screen.getByTestId('mini-timeline-scroll') as HTMLElement;
+      Object.defineProperty(scroll, 'clientWidth', { configurable: true, get: () => 800 });
+      scroll.getBoundingClientRect = () =>
+        ({ left: 0, right: 800, width: 800, top: 0, bottom: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+      const ruler = screen.getByTestId('mini-ruler');
+      // down + move parked 10px inside the right edge — the R21-era
+      // useEdgeAutoScroll would spin a glide loop here; the R22 law has none
+      fireEvent.pointerDown(ruler, { button: 0, pointerId: 41, clientX: 790 });
+      fireEvent.pointerMove(ruler, { pointerId: 41, buttons: 1, clientX: 790 });
+      act(() => {
+        const q = queue;
+        queue = [];
+        q.forEach((cb) => cb(performance.now()));
+      });
+      expect(queue).toHaveLength(0); // no frame ever scheduled
+      expect(io.state.val).toBe(0); // scrollLeft untouched — no glide
+      fireEvent.pointerUp(ruler, { pointerId: 41, clientX: 790 });
+    } finally {
+      rafSpy.mockRestore();
+      io.restore();
+    }
+  });
+});
+
+describe('R6 — the KEPT clip edge auto-scroll (R18i/R18k law, now netted)', () => {
+  it('a clip drag parked at the viewport edge scrolls + re-applies the gesture each frame', () => {
+    const io = interceptScrollLeft();
+    let queue: FrameRequestCallback[] = [];
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(((cb: FrameRequestCallback) => {
+      queue.push(cb);
+      return 1;
+    }) as typeof window.requestAnimationFrame);
+    try {
+      render(<Timeline />);
+      const scroll = screen.getByTestId('mini-timeline-scroll') as HTMLElement;
+      Object.defineProperty(scroll, 'clientWidth', { configurable: true, get: () => 800 });
+      scroll.getBoundingClientRect = () =>
+        ({ left: 0, right: 800, width: 800, top: 0, bottom: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+      const c2 = screen.getByTestId('mini-clip-c2');
+      // activate the drag, then park the pointer 10px inside the right edge
+      fireEvent.pointerDown(c2, { button: 0, pointerId: 42, clientX: 216, clientY: 10 });
+      fireEvent.pointerMove(c2, { pointerId: 42, buttons: 1, clientX: 790, clientY: 10 });
+      // ONE driven frame: SCROLL_SPEED_PX (12) applied + the gesture
+      // re-applied against the scrolled content (raw way past the clamp
+      // bound → the mover parks at c3's edge, 5.5)
+      act(() => {
+        const q = queue;
+        queue = [];
+        q.forEach((cb) => cb(performance.now()));
+      });
+      expect(io.state.val).toBe(12); // the loop scrolled
+      expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5); // + followed
+      // the loop only lives while the gesture does: release stops it
+      fireEvent.pointerUp(c2, { pointerId: 42, clientX: 790, clientY: 10 });
+      const pending = queue.length;
+      act(() => {
+        const q = queue;
+        queue = [];
+        q.forEach((cb) => cb(performance.now()));
+      });
+      expect(io.state.val).toBe(12); // frozen after the release
+      expect(pending).toBeGreaterThanOrEqual(0); // (drain safety)
+    } finally {
+      rafSpy.mockRestore();
+      io.restore();
+    }
   });
 });

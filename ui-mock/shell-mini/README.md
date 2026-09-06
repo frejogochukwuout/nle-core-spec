@@ -10,7 +10,7 @@ set + DOM anatomy).
 The build contract is [`docs/DESIGN-mvp.md`](docs/DESIGN-mvp.md) (v2.1
 FINAL — design-audit + code-review rounds folded). `../shell-variants/`
 remains the full spec-18 study; this app is the deliberately small sibling:
-~28 source files vs 100+, 334 tests vs 596, 13 stories vs 83 (PR69 refresh; R22: the drag-machinery retirement — 358 → 333 with the retired-law nets).
+~28 source files vs 100+, 342 tests vs ~1340, 13 stories vs 117 (PR69 refresh; R22: the drag-machinery retirement — 358 → 334 with the retired-law nets).
 
 ## Run it
 
@@ -19,7 +19,7 @@ npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-
 npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
                     #   run via `python3 scripts/dev3000.py` double-fork daemon so it
                     #   survives the per-toolcall process reaping — plain nohup/setsid die)
-npm test            # vitest — 7 files / 334 tests (jsdom)
+npm test            # vitest — 7 files / 342 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # the FULL dev server on :3000 (run via `python3
@@ -81,31 +81,19 @@ Run it at boot or any time; safe twice.
   labels + minor tick band, white playhead with hover/drag time pill,
   2 lanes (V1+A1, 36px base, markers) that FLEX-TALL when the timeline is
   resized.
-- **R20 drag law — the OT-faithful pass** (`docs/OT-SEAMS.md` §1.1–1.3,
-  `.agents/design/r20-drag-ot-law.md`): clips drag FREELY across the lane
-  and NOTHING ELSE MOVES mid-gesture (OT's drag view — the R19
-  insert-push law teleported neighbors per pointermove and is RETIRED);
-  overlap is allowed visually, the mover rendering above its lane with the
-  live drop verdict (amber dashed ring + `→ V2` chip while the drop will
-  escape; red ring + `no room · locked` chip while it will refuse). At the
-  UP: free span → plain commit (one history entry); conflicting span → OT's
-  escape THROUGH the window — an existing free same-kind track hosts the
-  drop when one fits, else a MINTED track (V/A series), and the window
-  REBINDS to follow the clip (undo restores doc AND binding — history
-  entries are binding-aware); `trackBindingLocked` → REFUSE (doc restored,
-  no history, honest toast — the mini's CONFLICT). Free spans land at the
-  PREVIEW-rendered position (magnet included, commit at the UP); Esc
-  restores the pre-drag doc; both clip edges magnet (OT snapGroupEdges
-  parity, nearest-wins) and a snap-induced conflict flows through the same
-  drop law; the magnet field freezes at gesture start. All six
-  `setPointerCapture` sites guarded (untrusted pointers throw NotFoundError
-  — live-caught). Programmatic `moveClip` keeps the OT wire law: overlap ⇒
-  REFUSE + honest toast (nudge routes it too).
-- **R19 trim ghosts** (thread #51): while trimming OUTWARD, the dotted
-  ghost edge shows how much further the clip can extend (the
-  source/neighbor bound — "how far you can go before you max out the
-  source"); inward trims and maxed bounds never ghost; ripple start-trim
-  suppresses it (frozen-left law).
+- **The drag law — R18k clamp (the user's settled law, R21 P0 revert +
+  the R22 retirement)**: the mover CLAMPS between its same-track
+  neighbors — neighbors never move mid-gesture, overlap never renders;
+  the preview IS the committed state and the UP seals it with ONE plain
+  history entry (the R19 insert-push, the R20 escape/verdict/track-minting
+  and every later gesture-window add-on are RETIRED — README #22/#35/#39).
+  The clip's left edge is the only magnet candidate (nearest target within
+  12px wins — C17); targets are the LIVE neighbor edges + playhead; an
+  engaged magnet paints the 2px snap guide at the target; Esc restores
+  the pre-drag doc. All six `setPointerCapture` sites guarded (untrusted
+  pointers throw NotFoundError — live-caught). Programmatic `moveClip`
+  keeps the OT wire law: overlap ⇒ REFUSE + honest toast (nudge routes
+  it too).
 - **R19 viewer scrub bar + seek controls** (thread #53 + the scrubbing
   item): the transport's second row is a full-width scrub bar (progress
   fill + playhead tick, its center exactly under the centered play
@@ -422,7 +410,7 @@ Run it at boot or any time; safe twice.
    zoom anchor, C24 extent origin, C13 dedupes, C56 memo law, scroll
    preservation across minimize, C3 singleton playback, C54/C52/C4/
    C15/C18, track markers/mute/lane-select, ScrubBar + seek controls).
-   Tests: 334 (the retired-law nets deleted; R18k-law pins added).
+   Tests: 342 (the retired-law nets deleted; R18k-law pins added).
 
 ## The topbar is a downstream customization point (R18j, thread #17)
 
