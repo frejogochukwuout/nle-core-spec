@@ -10,6 +10,15 @@ library, the ops rename, they don't redesign.
 
 **Reference state studied (R19, re-read R20):** `src/lib/timeline/headless/api.ts`
 (the 24-command wire surface, `{ok, code}` contract), `types/index.ts`
+> **R21 (user P0 revert, 2026-09-06):** the drag rows below describe the
+> R19/R20 drag rounds — **RETIRED by the user's directive** ("the last two
+> rounds of drag changes made things worse"). The shipped drag law is the
+> R18k neighbor clamp again (the mover clamps between same-track
+> neighbors, the preview is the commit, plain history entries; no
+> insert-push, no escape, no minted tracks). The rows are kept as the
+> seam MAP for a future, USER-REQUESTED retry; the mini no longer
+> implements them. The one surviving law: neighbors never move mid-gesture.
+
 (SceneTracks, element fields), `ops/group-move.ts` (resolveGroupMove,
 resolveExistingTrackMove, canApplyMovesToExistingTracks, resolveNewTrackMove,
 snapGroupEdges), `placement/index.ts` (wouldElementOverlap /
@@ -28,7 +37,7 @@ is gone (see §1.3).
 |---|---|---|---|---|
 | 1 | **Drag preview** — `previewMove` + `ClipItem` gesture (`useMini.ts`, `Timeline.tsx`) | `element-interaction-controller.ts` drag session (idle → pending → dragging; the DOC is never mutated during the drag — the view renders the mover from the drag session state) | **R20 faithful:** the mover relocates and NOTHING ELSE — neighbors sit at their snapshot positions for the whole gesture (OT's drag view); overlap is allowed visually (mover renders above its lane with the live verdict affordance); commit resolved at the UP | OT frame-snaps pointer times (fps); the mini commits the raw pointer time (its mock media has no fps — grid law in `geometry.ts` header). OT uses document listeners; the mini uses (guarded) pointer capture — registered micro-delta |
 | 2 | **Move magnet** — `magnetMove` (`geometry.ts`) | `group-move.ts snapGroupEdges` + `snapping/index.ts` | BOTH edges of the moving element are candidates; nearest wins; ties → left; targets = neighbor edges + playhead (never self); a snap-induced conflict flows through the SAME drop law as a raw conflict (R20 review P1-4 — no special case) | OT adds keyframe + bookmark magnets (the mini has neither); the mini's magnet field is FROZEN at gesture start (snapshot) — OT recomputes but nothing in OT moves mid-gesture, so freezing is the parity-preserving choice |
-| 3 | **Move conflict law** — `resolveDropEscape` (`geometry.ts`) + the `endDrag` drop law (`useMini.ts`) | `resolveGroupMove` → `resolveExistingTrackMove` (validated by `canApplyMovesToExistingTracks`: overlap ⇒ null) → `?? resolveNewTrackMove` (newTracksFallback); mouseup: `groupMoveResult` null ⇒ NO commit, snap back | **R20 — the OT law, windowed:** free span → plain commit; conflicting span → the ESCAPE: an existing same-kind track that hosts the span conflict-free (doc order) **or** a MINTED track (`mintTrackId`, kind-local series); the drop lands there and the window REBINDS to follow (the mini's rendering of OT's multi-track canvas — the window is the canvas). `trackBindingLocked` ⇒ REFUSE: restore the pre-drag doc, no history entry, error toast (the mini's `{ok:false, code:'CONFLICT'}`). ONE atomic `set()` (mint + move + rebind + history + toast — review P1-1); the drop position is the PREVIEW-rendered position (P1-3); history entries are BINDING-AWARE so undo restores the rebind exactly (P1-2) | frame rounding (see #1); OT's drop target is pointer-hovered (multi-lane vertical), the mini's drop track is resolved from the span (single-lane window — the escape is vertical THROUGH the window) |
+| 3 | **Move conflict law** — clampMove (`geometry.ts`, R18k restored) | `resolveGroupMove` → overlap ⇒ null ⇒ no commit | **REVERTED (R21, user P0):** the R20 escape/verdict law was retired; the mover CLAMPS between neighbors (the R18k law) — conflict never reaches the commit | pointer drag clamps instead of resolving (the user's verdict: the escape UX was worse than the clamp) |
 | 4 | **Programmatic move** — `moveClip` (`useMini.ts`) | `timeline.move` wire command (overlap ⇒ `{ok:false, code:'CONFLICT'}`) | REJECT on conflict, toast (the mini's error rendering); negative newStart rejected (`requireNonNegativeTicks` parity); dragActive guard BEFORE the toast (no mid-gesture spam) | single move (no `moves[]` batch, no `createTracks[]`); single selection vs `ElementRef[]`; seconds vs ticks |
 | 5 | **Insert (pool DnD)** — `insertionAt` + `insertMediaAt` | `timeline.insert` {element, startTimeTicks, strategy: firstAvailable \| explicit} | place a NEW clip on a track | OT `firstAvailable` = requested span free? take it : next TRACK/new track — **no same-track gap hunt**; the mini hunts same-track gaps (exact → next fitting gap → tail) — a mock affordance, registered. The mini's "explicit" = the exact spot only when free (the drop outline). |
 | 6 | **Trim** — `previewTrim`/`trimClip` + `clampTrimStart/End` | `timeline.trim` {elements, side: left\|right, deltaTicks} | edge semantics; media (source) bound on BOTH edges; ripple mode ignores the neighbor (followers push) | OT element carries `trimStart/trimEnd/sourceDuration`; the mini's clip is a full window over source from in-point 0 (`media.duration` is the extent). Conversion at swap: `project(clip) → {trimStart: 0, trimEnd: sourceDuration − duration}`. Ghost edges (thread #51) read the same bound. |
@@ -37,7 +46,7 @@ is gone (see §1.3).
 | 9 | **Ripple** — `rippleShiftAfter` + the ripple preview/commit laws | OT ripple family (`timeline.rippleDelete`; the W-series interval-diff ops) | follower shift from the edit point, delta-quantized, floor guard | the mini's uniform-shift + floor laws are the R18e/R18f distilled set, tested |
 | 10 | **Seek/scrub** — `setPlayhead` + ruler drag + viewer scrub bar (R19) | `timeline.seek` + `seek-controller` + `playhead-controller` | pointer scrub unquantized; clamped to the measured ruler extent | the viewer bar's extent = `max(contentEnd(bound world), 8)` (runway floor family; ≤ rulerEnd always); Home/End + arrows on the focusable slider |
 | 11 | **Selection** — `select` / `selectTrack` | `timeline.selectElements` (ElementRef[]) | ONE inspector subject at a time (clip XOR track) | single-subject vs multi-ref; track selection is a mini surface (the inspector card, thread #26) — OT has no inspector concept |
-| 12 | **Undo/redo** — snapshot past/future (`HistoryEntry`: doc + bound pair, R20) | `timeline.undo` / `timeline.redo` | snapshot family parity (spec 15 §6.2 strategy 2); one entry per gesture/commit | entries carry the track binding so the escape's rebind is undoable exactly (view-level healing stays for story-control doc swaps only) |
+| 12 | **Undo/redo** — snapshot past/future (plain `Doc` entries; the R20 binding-aware entry was retired with the escape) | `timeline.undo` / `timeline.redo` | snapshot family parity (spec 15 §6.2 strategy 2); one entry per gesture/commit | plain doc snapshots (view-level binding healing covers story-control swaps; drags can no longer rebind) |
 | 13 | **Track model** — `Doc.tracks` + binding (`visibleTracks`) | SceneTracks {overlay[], main singleton, audio[]} | the mini renders the BOUND pair (a window onto the project) | **The embedding seam:** OT's canvas is the whole project; the mini's window binds one video + one audio track (`trackMode`, `boundVideoTrack/boundAudioTrack`, `trackBindingLocked` — host-injected). Cross-track moves in OT map to REBINDING in the mini (the selector). Track creation/removal is out of the window (host owns). |
 | 14 | **Track heads** — markers / selector / hidden | OT's track headers | — | mini law: multi-track+unlocked → selector; single-pair+unlocked → V1/A1 marker; LOCKED → hidden (thread #28) |
 
@@ -46,7 +55,7 @@ is gone (see §1.3).
 | Source | Conflict resolution |
 |---|---|
 | **Pool drag** (new media) | gap-fit: exact spot → next fitting same-track gap → lane tail (never fails; toast reports where) |
-| **Clip drag** (rearrange) | **R20 — the OT drop law:** free span → plain commit; conflicting → escape to a host track (existing same-kind first, else minted) + window rebind; locked window → refuse (doc restored, no history) |
+| **Clip drag** (rearrange) | **R18k clamp law (R21 user P0 revert):** the mover clamps between same-track neighbors; the preview is the commit; one plain history entry — no escape, no minting, no rebind |
 | **Programmatic move** | reject (CONFLICT) + toast |
 
 Registered: the two drag paths intentionally differ — a NEW asset should not

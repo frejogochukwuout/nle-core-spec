@@ -155,9 +155,7 @@ export const Toolbar: StoryObj<ToolbarArgs> = {
         filmstripOn,
         audioLaneVisible,
         trackMode: videoOnly ? 'video' : 'paired',
-        past: hasHistory
-          ? [{ doc: seedDoc(), boundVideoTrack: TRACK_VIDEO, boundAudioTrack: TRACK_AUDIO }]
-          : [],
+        past: hasHistory ? [seedDoc()] : [],
         future: [],
         selectedId: hasSelection ? 'c2' : null,
       }}

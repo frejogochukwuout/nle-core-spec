@@ -10,7 +10,7 @@ set + DOM anatomy).
 The build contract is [`docs/DESIGN-mvp.md`](docs/DESIGN-mvp.md) (v2.1
 FINAL — design-audit + code-review rounds folded). `../shell-variants/`
 remains the full spec-18 study; this app is the deliberately small sibling:
-~28 source files vs 100+, 354 tests vs 596, 13 stories vs 83 (PR69 refresh).
+~28 source files vs 100+, 343 tests vs 596, 13 stories vs 83 (PR69 refresh).
 
 ## Run it
 
@@ -19,7 +19,7 @@ npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-
 npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
                     #   run via `python3 scripts/dev3000.py` double-fork daemon so it
                     #   survives the per-toolcall process reaping — plain nohup/setsid die)
-npm test            # vitest — 7 files / 354 tests (jsdom)
+npm test            # vitest — 7 files / 343 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # the FULL dev server on :3000 (run via `python3
@@ -321,16 +321,13 @@ Run it at boot or any time; safe twice.
    shade returns ONLY while trimming: hovering an edge drag zone
    (:has()) or actively dragging it (is-trimming-* from the gesture
    engine) shades exactly that edge, alongside the 2px accent line.
-22. **Windowed drag escape** (R20 — SUPERSEDES the R19 insert-push
-   deviation, `docs/OT-SEAMS.md` §1.3): OT's move law is overlap-reject
-   with a new-track escape; the mini now follows it THROUGH the window —
-   a conflicting drop escapes to an existing free same-kind track, else a
-   minted one, and the window rebinds (locked ⇒ refuse). The R19
-   insert-push improvisation (Premiere insert-edit via a per-event doc
-   mutation — the "comically buggy" neighbor teleportation) is retired
-   from the register: it was a redesign masquerading as a seam delta. The
-   OT wire law survives verbatim in the programmatic `moveClip` (refuse +
-   toast).
+22. **Windowed drag escape** (R20) — **REVERTED by the user's P0
+   directive 2026-09-06** ("the last two rounds of drag changes made
+   things worse"): the drag is back to the R18k NEIGHBOR-CLAMPED law
+   (the mover clamps between same-track neighbors, the preview is the
+   commit, one plain history entry; no insert-push, no escape/minted
+   tracks, no verdict chips, no rebind). The one surviving law from
+   those rounds: neighbors NEVER move during a gesture. See #35.
 23. **9-step zoom ladder** (R19, thread #52): [24, 36, 48, 72, 96, 144,
    192, 288, 384] — the five R18 anchors preserved with a new rung
    between each (×1.5); default step 2 (48pps unchanged).
@@ -373,6 +370,15 @@ Run it at boot or any time; safe twice.
 34. **Key-repeat ignored on the whole keyboard surface** (PR69 C16):
    rapid-fire ⌘Z was never a registered feature; a held S committed
    double splits (live-proven) — all bindings are single-shot now.
+35. **Drag law = R18k clamp (user P0 revert, 2026-09-06)**: rounds R19
+   (free drag + insert-push) and R20 (OT-faithful escape/verdict) are
+   RETIRED — the user judged both "making things worse". The mover
+   clamps between its same-track neighbors; overlap never renders;
+   history entries are plain docs again; the escape's binding-aware
+   undo, mintTrackId, dropEscape/dragMoverId session fields, and the
+   verdict-chip CSS are deleted. The gesture ENGINE improvements stay
+   (capture guards, edge auto-scroll, commit-at-UP, pending-gesture
+   keyboard lock, unmount cleanup, frozen magnet field).
 
 ## The topbar is a downstream customization point (R18j, thread #17)
 

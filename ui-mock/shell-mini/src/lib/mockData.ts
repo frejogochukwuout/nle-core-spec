@@ -124,19 +124,3 @@ export function __resetClipIds(): void {
   clipSeq = 0;
 }
 
-/** R20 (the drag escape — OT's newTracksFallback windowed): mint the next
- *  track id of a kind. The law: max numeric suffix + 1 WITHIN the kind's
- *  own series (V1,V3 → V4 — never a duplicate of an existing id; the
- *  audio series mints independently: A1,A2 → A3). The minted id IS the
- *  label (the V{n}/A{n} convention is the doc's own naming law). Pure —
- *  takes the track list, returns the id; the caller builds the Track. */
-export function mintTrackId(tracks: Track[], kind: TrackKind): string {
-  const prefix = kind === 'audio' ? 'A' : 'V';
-  let max = 0;
-  for (const t of tracks) {
-    if (t.kind !== kind) continue;
-    const m = new RegExp(`^${prefix}(\\d+)$`).exec(t.id);
-    if (m) max = Math.max(max, Number(m[1]));
-  }
-  return `${prefix}${max + 1}`;
-}

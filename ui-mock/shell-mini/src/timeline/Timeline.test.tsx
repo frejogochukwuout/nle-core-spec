@@ -68,21 +68,20 @@ describe('drag-move (48pps default zoom)', () => {
     expect(S().past).toHaveLength(1); // one entry per gesture
   });
 
-  it('R20: dragging over the next neighbor ESCAPES to a minted V2 — c3 never moves (the OT drop law)', () => {
+  it('R21 (user P0 revert): dragging toward the next neighbor CLAMPS — c2 parks at c3\u2019s edge, nothing else moves', () => {
     render(<Timeline />);
     const c2 = screen.getByTestId('mini-clip-c2');
     drag(c2, 216, 216 + 300); // raw start = 4.5 + 6.25 = 10.75
-    // span [10.75, 14.25) conflicts c3 [9,12.5) on V1; the seed doc has no
-    // second video track → OT's newTracksFallback through the window:
-    // V2 minted, the clip lands there, the window rebinds, c3 NEVER moves
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(10.75);
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V2');
+    // the R18k clamp law restored: c2 [10.75, 14.25) would hit c3 [9,12.5)
+    // → clampMove parks the mover at nextStart - duration = 9 - 3.5 = 5.5;
+    // no escape, no minted track, no rebind, neighbors frozen
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V1');
     expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // frozen
     expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0);
-    expect(S().doc.tracks.map((t) => t.id)).toEqual(['V1', 'V2', 'A1']);
-    expect(S().boundVideoTrack).toBe('V2'); // the window followed the clip
+    expect(S().doc.tracks.map((t) => t.id)).toEqual(['V1', 'A1']);
+    expect(S().boundVideoTrack).toBe('V1'); // no window follow
     expect(S().past).toHaveLength(1);
-    expect(S().toast?.text).toContain('new track V2');
   });
 
   it('sub-threshold wobble: no drag, no history', () => {
@@ -630,10 +629,10 @@ describe('R18j minimized timeline (thread #13)', () => {
     fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
     const c2 = screen.getByTestId('mini-clip-c2'); // 4.5→8, grab offset honored
     drag(c2, 250, 300); // 5px threshold crossed → active drag → +50px ≈ +1.04s
-    // R20: raw = 4.5 + 50/48 = 5.5417; span end 9.0417 overlaps c3@9 by
-    // 0.0417 → escape: c2 lands on MINTED V2, c3 stays exactly at 9
-    expect(S().doc.clips.find((x) => x.id === 'c2')!.start).toBeCloseTo(5.5417, 3);
-    expect(S().doc.clips.find((x) => x.id === 'c2')!.trackId).toBe('V2');
+    // R21 (user P0 revert): raw = 4.5 + 50/48 = 5.5417; span end 9.0417
+    // would overlap c3@9 → the clamp parks the mover at 9 − 3.5 = 5.5
+    expect(S().doc.clips.find((x) => x.id === 'c2')!.start).toBe(5.5);
+    expect(S().doc.clips.find((x) => x.id === 'c2')!.trackId).toBe('V1');
     expect(S().doc.clips.find((x) => x.id === 'c3')!.start).toBe(9); // NEVER pushed
     expect(S().past).toHaveLength(1); // exactly one entry for the gesture
   });
@@ -871,15 +870,16 @@ describe('R20 — commit at the UP position (review P2-11)', () => {
     fireEvent.pointerMove(c2, { pointerId: 7, clientX: 222, clientY: 10 });
     fireEvent.pointerUp(c2, { pointerId: 7, clientX: 216 + 96, clientY: 10 });
     // raw at the up position = 4.5 + (312−216)/48 = 6.5 → span [6.5,10)
-    // conflicts c3@9 → R20 escape: c2 lands on minted V2 at 6.5, c3 at 9
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(6.5);
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V2');
+    // hits c3@9 → the R18k clamp parks the mover at 9 − 3.5 = 5.5 (R21
+    // user P0 revert: no escape, no minted track)
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V1');
     expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // never moved
   });
 });
 
-describe('R20 — the OT drag view: neighbors NEVER move mid-gesture (the comedy, pinned at the component level)', () => {
-  it('dragging c2 across c3: c3/c1 hold their snapshot positions; the mover paints the verdict', () => {
+describe('R21 (user P0 revert) — neighbors NEVER move mid-gesture (the law every round agreed on), the mover CLAMPS', () => {
+  it('dragging c2 across c3: c3/c1 hold their snapshot positions; the mover clamps at the neighbor edge', () => {
     render(<Timeline />);
     const c2 = screen.getByTestId('mini-clip-c2');
     fireEvent.pointerDown(c2, { button: 0, pointerId: 7, clientX: 216, clientY: 10 });
@@ -889,22 +889,17 @@ describe('R20 — the OT drag view: neighbors NEVER move mid-gesture (the comedy
       fireEvent.pointerMove(c2, { pointerId: 7, clientX: x, clientY: 10 });
       expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9); // FROZEN
       expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0); // FROZEN
+      // the mover itself clamps at c3's edge — never overlaps, never escapes
+      expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
     }
-    // the mover paints the live drop verdict: amber ring + the chip naming
-    // the escape target (the seed doc mints V2)
-    expect(c2).toHaveClass('is-drop-escape');
-    expect(screen.getByTestId('mini-drop-chip-c2')).toHaveTextContent('→ V2');
-    // drop: the escape lands on the minted V2; neighbors still frozen
+    // release mid-sweep: the clamped position commits; neighbors frozen
     fireEvent.pointerUp(c2, { pointerId: 7, clientX: 516, clientY: 10 });
-    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V2');
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.trackId).toBe('V1');
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(5.5);
     expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9);
-    // the affordance leaves with the gesture
-    expect(screen.queryByTestId('mini-drop-chip-c2')).not.toBeInTheDocument();
-    expect(S().dropEscape).toBeNull();
-    expect(S().dragMoverId).toBeNull();
   });
 
-  it('a REFUSING drop (locked window): red ring + no-room chip; the doc restores', () => {
+  it('R21 (user P0 revert): the locked window no longer refuses — the clamp law has no conflicts', () => {
     render(<Timeline />);
     act(() => {
       useMini.setState({ trackBindingLocked: true });
@@ -913,13 +908,12 @@ describe('R20 — the OT drag view: neighbors NEVER move mid-gesture (the comedy
     fireEvent.pointerDown(c3, { button: 0, pointerId: 7, clientX: 432, clientY: 10 });
     fireEvent.pointerMove(c3, { pointerId: 7, clientX: 438, clientY: 10 }); // activate
     fireEvent.pointerMove(c3, { pointerId: 7, clientX: 150, clientY: 10 }); // onto c1
-    expect(c3).toHaveClass('is-drop-refuse');
-    expect(screen.getByTestId('mini-drop-chip-c3')).toHaveTextContent('no room · locked');
+    // the mover clamps at c2's tail (8) — the preview IS the commit
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(8);
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.start).toBe(0);
     fireEvent.pointerUp(c3, { pointerId: 7, clientX: 150, clientY: 10 });
-    // OT's no-commit: doc restored, no history
-    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(9);
-    expect(S().past).toHaveLength(0);
-    expect(S().toast?.kind).toBe('error');
+    expect(S().doc.clips.find((c) => c.id === 'c3')!.start).toBe(8);
+    expect(S().past).toHaveLength(1); // plain commit — no refusal path exists
   });
 });
 

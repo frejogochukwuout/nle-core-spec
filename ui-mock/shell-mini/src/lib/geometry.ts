@@ -88,64 +88,21 @@ export function wouldOverlap(
   );
 }
 
-/* R20 — the insert-push law that lived here (insertPlacement /
- * insertPushedIds) is DELETED. It was an improvisation masquerading as a
- * seam deviation: OT has NO insert-push anywhere. The real OT drop law
- * (element-interaction-controller → resolveGroupMove →
- * canApplyMovesToExistingTracks → ?? newTracksFallback) is now
- * resolveDropEscape below, and the store refuses/escapes at the UP —
- * never pushes neighbors, never mid-gesture. */
+/* R21 (user P0 revert, 2026-09-06): the R19 insert-push law AND the R20
+ * escape/verdict drop law are RETIRED — the user judged the last two drag
+ * rounds "making things worse". The drag is back to the R18k law: the
+ * mover CLAMPS between its same-track neighbors (clampMove below —
+ * restored verbatim), neighbors never move mid-gesture, and the UP seals
+ * the previewed position as one plain history entry. */
 
-export type DropEscape =
-  | { verdict: 'free' }
-  | { verdict: 'escape'; trackId: string; minted: boolean }
-  | { verdict: 'conflict' };
-
-/** The OT drop law, windowed (R20). Where a MOVE gesture's span
- *  [start, start+dur) resolves at the UP:
- *
- *  - 'free' — the span is conflict-free on the mover's own track; the
- *    drop commits as a plain move (OT: resolveExistingTrackMove +
- *    canApplyMovesToExistingTracks pass).
- *  - 'escape' — the span conflicts on the mover's track, and OT's
- *    escape hatch applies THROUGH the window: an EXISTING same-kind
- *    track that can host the span conflict-free is preferred (doc track
- *    order — deterministic; OT's canApplyMovesToExistingTracks tried
- *    against the drop target); otherwise a MINTED track (OT's
- *    newTracksFallback — mintTrackId supplies the id).
- *  - 'conflict' — no existing track fits and minting is the only way
- *    out; the STORE upgrades this to 'refuse' when trackBindingLocked
- *    pins the window (the mini's rendering of OT's {ok:false,
- *    code:'CONFLICT'} when the host forbids track creation).
- *
- *  Pure: reads the (pre-drag) doc, never mutates. Cross-track law: only
- *  SAME-kind tracks are escape candidates (audio never escapes to a
- *  video lane); a clip on the mover's own track is the only conflict
- *  source (lanes are parallel worlds, never stacked). */
-export function resolveDropEscape(
-  doc: Pick<Doc, 'tracks' | 'clips'>,
-  moverId: string,
-  start: number,
-  dur: number,
-): DropEscape {
-  const mover = doc.clips.find((c) => c.id === moverId);
-  if (!mover) return { verdict: 'free' };
-  const end = start + dur;
-  const overlapsOn = (trackId: string) =>
-    doc.clips.some(
-      (c) =>
-        c.id !== moverId &&
-        c.trackId === trackId &&
-        start < c.start + c.duration - 1e-9 &&
-        end > c.start + 1e-9,
-    );
-  if (!overlapsOn(mover.trackId)) return { verdict: 'free' };
-  const kind = doc.tracks.find((t) => t.id === mover.trackId)?.kind ?? 'video';
-  for (const t of doc.tracks) {
-    if (t.kind !== kind || t.id === mover.trackId) continue;
-    if (!overlapsOn(t.id)) return { verdict: 'escape', trackId: t.id, minted: false };
-  }
-  return { verdict: 'conflict' };
+/** MOVE clamp (the R18k law, restored): a drag's start lives in
+ *  [prevEnd, nextStart − duration]; a degenerate span (no room) parks at
+ *  the neighbor's end. The preview IS the committed state. */
+export function clampMove(newStart: number, duration: number, prevEnd: number, nextStart: number): number {
+  const lo = prevEnd;
+  const hi = nextStart - duration;
+  if (hi < lo) return lo; // degenerate: no room — park at the neighbor end
+  return Math.min(Math.max(newStart, lo), hi);
 }
 
 /** TRIM ghost bounds (R19, thread #51): how much further the trimmed edge

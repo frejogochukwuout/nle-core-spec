@@ -18,9 +18,6 @@
      all gated (review fix #4: the keyboard layer is only half the surface).
    - selection validation after every history op / commit.
    - no-op guard: an action that changes nothing pushes NO history entry.
-   - history entries are BINDING-AWARE (R20 review P1-2): each entry carries
-     the doc + the bound track pair, so an escape's rebind is undoable
-     exactly (never healed by the view-level stale-binding fallback).
    - split law (review fix #6): the SELECTED clip is the split target; the
      topmost-under-playhead fallback runs ONLY when nothing is selected. */
 
@@ -28,7 +25,6 @@ import { create } from 'zustand';
 import {
   seedDoc,
   mintClipId,
-  mintTrackId,
   laneForMedia,
   TRACK_VIDEO,
   TRACK_AUDIO,
@@ -45,7 +41,7 @@ import {
   PPS_STEPS,
   neighborBounds,
   wouldOverlap,
-  resolveDropEscape,
+  clampMove,
   clipsOfTrack,
   clampTrimStart,
   clampTrimEnd,
@@ -63,30 +59,13 @@ export interface ToastMsg {
   seq: number; // increments so identical texts still re-fire the toast
 }
 
-/** R20 (review P1-2): one history entry = the doc + the bound track pair.
-   undo/redo restore both — the drag escape rebinds the window, and that
-   rebind must be undone exactly (not left to the view's stale-binding
-   self-repair, which exists for story-control doc swaps, not for history). */
-export interface HistoryEntry {
-  doc: Doc;
-  boundVideoTrack: string;
-  boundAudioTrack: string;
-}
-
-/** R20 (the OT drop law): the live verdict a MOVE gesture carries while it
-   runs — what the UP will do. Mirrors OT's session drop state
-   (drag.groupMoveResult) as the single windowed field:
-   - free: span conflict-free on the mover's track → plain commit
-   - escape: conflicts; the UP relocates to trackId — an existing
-     same-kind track that hosts the span conflict-free when one exists
-     (OT's canApplyMovesToExistingTracks), else a MINTED track (OT's
-     newTracksFallback; minted: true) — and the window rebinds to follow
-   - refuse: conflicts and trackBindingLocked pins the window → the UP
-     restores the pre-drag doc, no history (OT's CONFLICT refusal) */
-export type DropVerdict =
-  | { verdict: 'free' }
-  | { verdict: 'escape'; trackId: string; minted: boolean }
-  | { verdict: 'refuse' };
+/** One history entry = the pre-mutation doc (the R18k shape — the R20
+ *  binding-aware entry existed for the escape drop law, REVERTED by the
+ *  user's P0 directive 2026-09-06: the last two drag rounds (R19's
+ *  insert-push + R20's escape/verdict law) made the drag worse, not
+ *  better; the drag is back to the neighbor-clamped preview + plain
+ *  commit. Bindings never change inside a commit anymore. */
+export type HistoryEntry = Doc;
 
 /** R18j (thread #16): common viewer aspect ratios. `ratio` = numeric w/h
  *  (sizing math); `css` feeds `aspect-ratio` directly. */
@@ -228,12 +207,6 @@ export interface MiniState {
   future: HistoryEntry[];
   /** pre-drag doc snapshot — only meaningful while dragActive */
   dragSnapshot: Doc | null;
-  /** R20: the clip the gesture owns (set by previewMove; the escape at
-   * endDrag resolves against it — review P2-9). Null outside a session. */
-  dragMoverId: string | null;
-  /** R20: the live drop verdict while a MOVE gesture runs (null otherwise);
-   * the affordance the mover paints (escape chip / refuse chip). */
-  dropEscape: DropVerdict | null;
 
   /* internal (test surface) */
   _validateSelection: () => void;
@@ -308,8 +281,9 @@ const findClip = (doc: Doc, id: string): Clip | undefined => doc.clips.find((c) 
 
 export const useMini = create<MiniState>((set, get) => {
   /** commit — one history entry per call; returns whether anything changed.
-   * R20: entries are binding-aware (HistoryEntry) so undo restores the
-   * window exactly even after a rebind-escape. */
+   * R21 (user P0 revert): entries are plain docs again — the binding-aware
+   * entry existed for the escape drop law (REVERTED); bindings never
+   * change inside a commit. */
   const commit = (mutate: (doc: Doc) => Doc | void): boolean => {
     const state = get();
     if (state.dragActive) return false; // interaction lock: no commits mid-drag
@@ -321,12 +295,7 @@ export const useMini = create<MiniState>((set, get) => {
     const result = mutate(draft) ?? draft;
     const changed = docChanged(state.doc, result);
     if (!changed) return false;
-    const entry: HistoryEntry = {
-      doc: state.doc,
-      boundVideoTrack: state.boundVideoTrack,
-      boundAudioTrack: state.boundAudioTrack,
-    };
-    const past = [...state.past, entry].slice(-MAX_HISTORY);
+    const past = [...state.past, state.doc].slice(-MAX_HISTORY);
     set({ doc: result, past, future: [] });
     get()._validateSelection();
     return true;
@@ -376,8 +345,6 @@ export const useMini = create<MiniState>((set, get) => {
     trackBindingLocked: false,
     selectedId: null,
     selectedTrackId: null,
-    dragMoverId: null,
-    dropEscape: null,
     dragActive: false,
     gesturePending: false,
     toast: null,
@@ -403,42 +370,32 @@ export const useMini = create<MiniState>((set, get) => {
     _commit: commit,
 
     undo: () => {
-      const { past, doc, boundVideoTrack, boundAudioTrack, future, dragActive } = get();
+      const { past, doc, future, dragActive } = get();
       if (dragActive) return; // interaction lock
       if (past.length === 0) {
         get().pushToast('info', 'Nothing to undo.');
         return;
       }
-      const prev = past[past.length - 1];
-      /* R20: the entry carries the binding pair — an escape drop rebinds
-       * the window to the minted track, and undo restores BOTH the doc
-       * and the pre-drag binding (exactly, not via view-level healing). */
-      const now: HistoryEntry = { doc, boundVideoTrack, boundAudioTrack };
+      /* R21 (user P0 revert): plain-doc entries again — the R20 binding
+       * restore existed for the escape drop law (REVERTED). */
       set({
-        doc: prev.doc,
-        boundVideoTrack: prev.boundVideoTrack,
-        boundAudioTrack: prev.boundAudioTrack,
+        doc: past[past.length - 1],
         past: past.slice(0, -1),
-        future: [now, ...future].slice(0, MAX_HISTORY),
+        future: [doc, ...future].slice(0, MAX_HISTORY),
       });
       get()._validateSelection();
     },
-
     redo: () => {
-      const { future, doc, boundVideoTrack, boundAudioTrack, past, dragActive } = get();
+      const { future, doc, past, dragActive } = get();
       if (dragActive) return;
       if (future.length === 0) {
         get().pushToast('info', 'Nothing to redo.');
         return;
       }
-      const next = future[0];
-      const now: HistoryEntry = { doc, boundVideoTrack, boundAudioTrack };
       set({
-        doc: next.doc,
-        boundVideoTrack: next.boundVideoTrack,
-        boundAudioTrack: next.boundAudioTrack,
+        doc: future[0],
         future: future.slice(1),
-        past: [...past, now].slice(-MAX_HISTORY),
+        past: [...past, doc].slice(-MAX_HISTORY),
       });
       get()._validateSelection();
     },
@@ -728,114 +685,28 @@ export const useMini = create<MiniState>((set, get) => {
     beginDrag: () => {
       const state = get();
       if (state.dragActive) return;
-      /* R20: the session starts verdict-free; previewMove fills
-       * dragMoverId + dropEscape per event (a trim gesture leaves both
-       * null — endDrag then falls to the free-commit path). */
-      set({ dragActive: true, dragSnapshot: state.doc, dragMoverId: null, dropEscape: null });
+      /* R21 (user P0 revert): the session is a plain snapshot again — the
+       * R20 verdict fields (dragMoverId/dropEscape) are gone with the
+       * escape/verdict drop law they served. */
+      set({ dragActive: true, dragSnapshot: state.doc });
     },
 
     endDrag: () => {
-      /* R20 — the OT drop law, resolved at the UP exactly like OT's
-       * handleMouseUp → resolveGroupMove → commit-or-snap-back:
-       *   free span       → plain commit (ONE history entry)
-       *   escape verdict  → the OT escape through the window: mint-or-
-       *                     existing track + move + REBIND, ONE atomic
-       *                     set() (review P1-1: never the gated setters,
-       *                     never commit() — both are mid-drag-blind)
-       *   refuse verdict  → restore the pre-drag doc, NO history entry
-       *                     (OT: groupMoveResult null → no commit; the
-       *                     clip visually snaps back)
-       * The drop position is the PREVIEW-RENDERED position (review P1-3:
-       * what the user saw — magnet included), never re-derived from the
-       * raw pointer time. */
+      /* R21 (user P0 revert) — the R18k law restored: the drag preview was
+       * already the truth (the mover clamped between its neighbors, the
+       * ONLY clip that moved), so the UP is a plain commit-if-changed with
+       * exactly ONE history entry. The R19 insert-push and the R20
+       * escape/refuse/verdict law are RETIRED by the user's directive
+       * ("the last two rounds of drag changes made things worse"). */
       const state = get();
       if (!state.dragActive || !state.dragSnapshot) return;
       const pristine = state.dragSnapshot;
-      const entry: HistoryEntry = {
-        doc: pristine,
-        boundVideoTrack: state.boundVideoTrack,
-        boundAudioTrack: state.boundAudioTrack,
-      };
-
-      const verdict = state.dropEscape;
-      if (verdict?.verdict === 'refuse') {
-        const id = state.dragMoverId;
-        const snapClip = id ? findClip(pristine, id) : undefined;
-        const lane = snapClip ? snapClip.trackId : 'the track';
-        set({
-          doc: pristine,
-          dragActive: false,
-          gesturePending: false,
-          dragSnapshot: null,
-          dragMoverId: null,
-          dropEscape: null,
-        });
-        get()._validateSelection();
-        get().pushToast(
-          'error',
-          `No room on ${lane} — track binding locked by host; drop refused.`,
-        );
-        return;
-      }
-
-      if (verdict?.verdict === 'escape') {
-        const id = state.dragMoverId;
-        const live = id ? findClip(state.doc, id) : undefined; // the preview-rendered drop position
-        const snapClip = id ? findClip(pristine, id) : undefined;
-        if (live && snapClip) {
-          const kind: TrackKind =
-            pristine.tracks.find((t) => t.id === snapClip.trackId)?.kind ?? 'video';
-          /* mint (kind's own series, appended INSIDE the kind's section so
-           * the track order stays V…V A…A) — or keep the existing tracks
-           * when the escape targets an already-existing track */
-          const tracks: Track[] = [...pristine.tracks];
-          if (verdict.minted) {
-            const minted: Track = { id: verdict.trackId, kind, label: verdict.trackId };
-            const lastIndex = tracks.map((t) => t.kind).lastIndexOf(kind);
-            tracks.splice(lastIndex + 1, 0, minted);
-          }
-          const clips = pristine.clips.map((c) =>
-            c.id === id ? { ...c, trackId: verdict.trackId, start: live.start } : c,
-          );
-          /* the window FOLLOWS the clip (design §2.3): the escape rebinds
-           * the bound track of the mover's kind to the drop track — the
-           * atomic set carries it so the user never sees an intermediate
-           * frame where the clip left the window */
-          const rebinding =
-            kind === 'audio'
-              ? { boundAudioTrack: verdict.trackId }
-              : { boundVideoTrack: verdict.trackId };
-          set({
-            doc: { ...pristine, tracks, clips },
-            ...rebinding,
-            dragActive: false,
-            gesturePending: false,
-            dragSnapshot: null,
-            dragMoverId: null,
-            dropEscape: null,
-            past: [...state.past, entry].slice(-MAX_HISTORY),
-            future: [],
-          });
-          get()._validateSelection(); // the mover is on the now-bound track → stays selected
-          get().pushToast(
-            'info',
-            `No room on ${snapClip.trackId} — moved to ${verdict.minted ? 'new track ' : ''}${verdict.trackId}.`,
-          );
-          return;
-        }
-      }
-
-      /* free span (or a degenerate session): commit-if-changed — a drop
-       * that landed back at the snapshot position is a cancel (changed
-       * false → no entry), OT's didMove check. */
       const changed = docChanged(pristine, state.doc);
-      const past = changed ? [...state.past, entry].slice(-MAX_HISTORY) : state.past;
+      const past = changed ? [...state.past, pristine].slice(-MAX_HISTORY) : state.past;
       set({
         dragActive: false,
         gesturePending: false,
         dragSnapshot: null,
-        dragMoverId: null,
-        dropEscape: null,
         past,
         future: changed ? [] : state.future,
       });
@@ -850,56 +721,32 @@ export const useMini = create<MiniState>((set, get) => {
         dragActive: false,
         gesturePending: false,
         dragSnapshot: null,
-        dragMoverId: null,
-        dropEscape: null,
       });
       get()._validateSelection();
     },
 
     previewMove: (id, newStart) => {
-      /* R20 — the OT-faithful preview (the fix for the "comedy"): the
-       * mover relocates and NOTHING ELSE. Computed against the live doc
-       * (which during a move session is snapshot + mover's own position —
-       * no other writer exists), so neighbors sit at their snapshot
-       * positions for the whole gesture, exactly like OT's drag VIEW
-       * rendering the mover from currentTime while the doc stays frozen.
-       * The drop verdict (dropEscape) is derived per event so the mover
-       * can paint what the UP will do; overlap is ALLOWED visually —
-       * the mover renders above its lane (is-dragging z) with the honest
-       * verdict affordance (escape chip / refuse chip). The component
-       * resolves the magnet BEFORE calling (magnetMove — both edges,
-       * frozen snapshot targets; a snap-induced conflict flows through
-       * this same law, review P1-4). */
+      /* R21 (user P0 revert) — the R18k law restored: the mover clamps
+       * between its same-track neighbors (clampMove; degenerate no-room
+       * parks at the neighbor end). Neighbors NEVER move mid-gesture (the
+       * one law from the retired rounds that every reviewer agreed with),
+       * and the preview IS the committed state — endDrag just seals it.
+       * The R19 insert-push (per-event neighbor teleporting) and the R20
+       * overlap-allowed escape/verdict view are RETIRED. */
       const state = get();
       if (!state.dragActive) return; // previews only exist inside a session
-      if (!state.dragSnapshot) return;
-      const snapClip = findClip(state.dragSnapshot, id);
-      if (!snapClip) return;
-      const r = Math.max(0, newStart);
-      const esc = resolveDropEscape(state.dragSnapshot, id, r, snapClip.duration);
-      let verdict: DropVerdict;
-      if (esc.verdict === 'free' || esc.verdict === 'escape') {
-        verdict = esc; // geometry already resolved (free, or an existing host)
-      } else if (state.trackBindingLocked) {
-        verdict = { verdict: 'refuse' }; // the host pins the window — the drop will refuse
-      } else {
-        // OT's newTracksFallback through the window: mint the target id
-        // (deterministic per event — the chip can promise it mid-gesture)
-        const kind: TrackKind =
-          state.dragSnapshot.tracks.find((t) => t.id === snapClip.trackId)?.kind ?? 'video';
-        verdict = {
-          verdict: 'escape',
-          trackId: mintTrackId(state.dragSnapshot.tracks, kind),
-          minted: true,
-        };
-      }
+      const clip = findClip(state.doc, id);
+      if (!clip) return;
+      const { prevEnd, nextStart } = neighborBounds(state.doc, clip);
       set({
         doc: {
           ...state.doc,
-          clips: state.doc.clips.map((c) => (c.id === id ? { ...c, start: r } : c)),
+          clips: state.doc.clips.map((c) =>
+            c.id === id
+              ? { ...c, start: clampMove(newStart, c.duration, prevEnd, nextStart) }
+              : c,
+          ),
         },
-        dragMoverId: id,
-        dropEscape: verdict,
       });
     },
 
@@ -1326,8 +1173,6 @@ export const useMini = create<MiniState>((set, get) => {
         trackBindingLocked: false,
         selectedId: null,
         selectedTrackId: null,
-        dragMoverId: null,
-        dropEscape: null,
         dragActive: false,
         toast: null,
         past: [],

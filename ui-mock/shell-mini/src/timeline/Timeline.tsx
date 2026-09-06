@@ -23,11 +23,12 @@
    (targets from the pre-drag snapshot: a gesture never magnetizes to
    positions it created).
 
-   R19 drag law (docs/OT-SEAMS.md): the clip follows the pointer FREELY
-   across the lane (the one-lane neighbor clamp is gone); a conflicting
-   drop INSERTS — the conflicting tail pushes right (Premiere insert-
-   edit geometry; the single-pair window's stand-in for OT's new-track
-   escape). R19 (thread #51): trim gestures draw the GHOST edge — the
+   R21 (user P0 revert, 2026-09-06): the drag law is the R18k clamp law
+   RESTORED — the mover clamps between its same-track neighbors
+   (neighbors never move mid-gesture), the preview is the committed
+   state, the UP seals one plain history entry. The R19 insert-push and
+   R20 escape/verdict rounds are RETIRED by the user's directive.
+   R19 (thread #51): trim gestures draw the GHOST edge — the
    dotted extent of how much further the edge can reach (outward only).
 
    R18e additions: RH cut styles (cut head / cut tail at playhead —
@@ -407,11 +408,6 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
   const previewTrim = useMini((s) => s.previewTrim);
   const trimClip = useMini((s) => s.trimClip);
   const rippleOn = useMini((s) => s.rippleOn); // R18f: handle hints change under ripple
-  /* R20: the live drop verdict — the MOVER paints what the UP will do
-   * (escape chip / refuse chip). Only this instance's own gesture has
-   * `dragging` true, so the affordance is scoped to the mover without a
-   * prop chain (the store field is global; the local state selects). */
-  const dropEscape = useMini((s) => s.dropEscape);
   const [dragging, setDragging] = useState(false);
 
   /* gesture session (component-held; the store holds the doc snapshot).
@@ -525,10 +521,9 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
       /* R19: BOTH edges magnet (OT snapGroupEdges parity — the left edge
        * AND the right edge of the moving clip are candidates; nearest
        * wins, ties → left). The guide paints at the engaged edge's
-       * target. R20: the span may overlap a neighbor — that is the
-       * OT drag VIEW (the mover renders above its lane); the verdict
-       * chip tells the user what the UP will do, and a snap-induced
-       * conflict flows through the same drop law (review P1-4). */
+       * target. The mover CLAMPS between its neighbors (R21 revert) —
+       * overlap is impossible, so a snap target beyond the clamp bound
+       * lands on the clamp, not past it. */
       const m = snapOn ? magnetMove(raw, pps, clip.duration, targets) : null;
       onSnapGuide(m ? m.guide : null);
       previewMove(clip.id, m ? m.start : raw);
@@ -668,23 +663,9 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
     style.background = 'linear-gradient(135deg, rgba(120,120,120,0.95), rgba(72,72,72,0.92))';
   }
 
-  /* R20: the mover's live verdict classes — the honest affordance while
-   * the span overlaps a same-track sibling (the mover renders ABOVE its
-   * lane; the chip says what the UP will do). escape = amber dashed +
-   * `→ V2` (OT's new-track fallback through the window — or an existing
-   * free same-kind track); refuse = red + locked note (the host pins the
-   * window). Only the MOVER paints these: `dragging` is this instance's
-   * own gesture state, dropEscape is null outside any session. */
-  const escapeChip =
-    dragging && dropEscape?.verdict === 'escape'
-      ? { cls: 'is-drop-escape', label: `→ ${dropEscape.trackId}`, refuse: false }
-      : dragging && dropEscape?.verdict === 'refuse'
-        ? { cls: 'is-drop-refuse', label: 'no room · locked', refuse: true }
-        : null;
-
   return (
     <div
-      className={`qc-track-item${compact ? ' qc-track-item--pill' : ''}${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${trimmingEdge ? ` is-trimming-${trimmingEdge}` : ''}${escapeChip ? ` ${escapeChip.cls}` : ''}`}
+      className={`qc-track-item${compact ? ' qc-track-item--pill' : ''}${selected ? ' is-selected' : ''}${dragging ? ' is-dragging' : ''}${trimmingEdge ? ` is-trimming-${trimmingEdge}` : ''}`}
       style={style}
       data-testid={`mini-clip-${clip.id}`}
       data-clip-id={clip.id}
@@ -727,17 +708,6 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
         />
       )}
       <span className="qc-track-item__label">{media?.name ?? clip.id}</span>
-      {/* R20: the verdict chip rides the mover's TOP edge (the drag law
-          made visible — OT's drop-target affordance, windowed). */}
-      {escapeChip && (
-        <span
-          className={`qc-track-item__drop-chip${escapeChip.refuse ? ' is-refuse' : ''}`}
-          aria-hidden="true"
-          data-testid={`mini-drop-chip-${clip.id}`}
-        >
-          {escapeChip.label}
-        </span>
-      )}
       {/* R18i (thread #10 repost): trim affordance = a 2px accent line AT
           the edge, ONLY on hover/press/focus (CSS) — the R18h dark-scrim
           shade is gone (it fought the filmstrip). The zone stays a real
@@ -1010,9 +980,8 @@ function Lane({
    * runs, targets come from the PRE-DRAG SNAPSHOT (a gesture never
    * magnetizes to positions it created; also fixes the latent ripple-trim
    * ratchet where pushed followers fed their own new edges back as
-   * magnets). R20: the push affordance subscription is GONE — the
-   * mover's own verdict chip (store dropEscape, read in ClipItem)
-   * replaces the followers' is-pushed tint. */
+   * magnets). R21 (user P0 revert): with the clamp law restored nothing
+   * moves except the mover — the frozen snapshot IS the live doc. */
   const dragActive = useMini((s) => s.dragActive);
   const dragSnapshot = useMini((s) => s.dragSnapshot);
   const rippleOn = useMini((s) => s.rippleOn);
@@ -1184,8 +1153,7 @@ function MinLane({
   const doc = useMini((s) => s.doc);
   const selectedId = useMini((s) => s.selectedId);
   /* R19: the same frozen-magnet law as the full lanes — the strip runs
-   * the identical gesture engine (R20: same drop law + verdict chip
-   * too; ClipItem reads dropEscape from the store directly).
+   * the identical gesture engine (the clamp law; no per-surface drift).
    * PR69 C13: the shared DnD engine (originPx is the ONLY difference
    * from the full lanes — 10, no head rail). */
   const dragActive = useMini((s) => s.dragActive);
