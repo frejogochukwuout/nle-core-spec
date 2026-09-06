@@ -418,17 +418,31 @@ describe('audio focus', () => {
     expect(S().mixer.tracks[newId].fader).toBe(-6);
   });
 
-  it('cycleMixerState: Edit walks collapsed → bridge → full → collapsed; Audio toggles bridge ↔ full', () => {
+  it('cycleMixerState: Edit walks collapsed → meters → full → collapsed; Audio toggles meters ↔ full (R20-W1 D1.4)', () => {
     act(() => { S().cycleMixerState(); });
-    expect(S().mixerState).toBe('bridge');
+    expect(S().mixerState).toBe('meters');
     act(() => { S().cycleMixerState(); });
     expect(S().mixerState).toBe('full');
     act(() => { S().cycleMixerState(); });
     expect(S().mixerState).toBe('collapsed');
     act(() => { S().setPage('audio'); S().setMixerState('full'); S().cycleMixerState(); });
-    expect(S().mixerState).toBe('bridge');
+    expect(S().mixerState).toBe('meters');
     act(() => { S().cycleMixerState(); });
     expect(S().mixerState).toBe('full');
+  });
+
+  it('strip display flags (R20-W1 B6): R/I toggle in STORE view-state, defaulting off/on', () => {
+    expect(S().stripArm).toEqual({});
+    expect(S().stripInsertsOn).toEqual({});
+    act(() => { S().toggleStripArm('tr-audio-1'); });
+    expect(S().stripArm['tr-audio-1']).toBe(true);
+    act(() => { S().toggleStripArm('tr-audio-1'); });
+    expect(S().stripArm['tr-audio-1']).toBe(false);
+    act(() => { S().toggleStripInserts('tr-audio-2'); });
+    expect(S().stripInsertsOn['tr-audio-2']).toBe(false); // boots ON (?? true)
+    act(() => { S().toggleStripInserts('tr-audio-2'); });
+    expect(S().stripInsertsOn['tr-audio-2']).toBe(true);
+    expect(S().mixerFloorWarned).toBe(false); // D1.3 one-toast flag boots clear
   });
 });
 

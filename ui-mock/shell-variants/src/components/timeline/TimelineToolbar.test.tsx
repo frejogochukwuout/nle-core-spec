@@ -71,26 +71,39 @@ describe('TimelineToolbar', () => {
     expect(store().pxPerSec).toBeCloseTo(store().zoomMinPps, 1);
   });
 
-  it('the mixer button cycles Edit-page states collapsed → bridge → full → collapsed (design doc v2.2 §4)', () => {
+  it('the mixer button cycles Edit-page states collapsed → meters → full → collapsed (R20-W1 D1.4)', () => {
     boot({});
     const btn = screen.getByTestId('btn-mixer-state');
     expect(btn).toHaveAttribute('aria-pressed', 'false'); // collapsed
+    expect(btn).toHaveAccessibleName('Mixer: closed (click for meter columns)'); // B4 state label
     fireEvent.click(btn);
-    expect(store().mixerState).toBe('bridge');
+    expect(store().mixerState).toBe('meters');
     expect(btn).toHaveAttribute('aria-pressed', 'true');
+    expect(btn).toHaveAccessibleName('Mixer: meter columns (click for full strips)');
     fireEvent.click(btn);
     expect(store().mixerState).toBe('full');
+    expect(btn).toHaveAccessibleName('Mixer: full strips (click to close)');
     fireEvent.click(btn);
     expect(store().mixerState).toBe('collapsed');
     expect(btn).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('in the Audio page the mixer button toggles bridge ↔ full only (design doc v2.2 §4)', () => {
-    boot({ page: 'audio', mixerState: 'bridge' });
+  it('B4: the toolbar mixer icon reflects the state (AudioLines full / PanelRight meters / SlidersHorizontal closed)', () => {
+    boot({});
+    const icons = () => screen.getByTestId('btn-mixer-state').querySelector('svg')!.getAttribute('class') ?? '';
+    expect(icons()).toContain('lucide-sliders-horizontal');
+    fireEvent.click(screen.getByTestId('btn-mixer-state'));
+    expect(icons()).toContain('lucide-panel-right');
+    fireEvent.click(screen.getByTestId('btn-mixer-state'));
+    expect(icons()).toContain('lucide-audio-lines');
+  });
+
+  it('in the Audio page the mixer button toggles meters ↔ full only (page-aware branch preserved)', () => {
+    boot({ page: 'audio', mixerState: 'meters' });
     fireEvent.click(screen.getByTestId('btn-mixer-state'));
     expect(store().mixerState).toBe('full');
     fireEvent.click(screen.getByTestId('btn-mixer-state'));
-    expect(store().mixerState).toBe('bridge');
+    expect(store().mixerState).toBe('meters');
   });
 
   it('master mute + volume drive the shared store values (spec 18 §4.5 master bus)', () => {
@@ -117,9 +130,10 @@ describe('TimelineToolbar', () => {
     const l = meter.querySelector('[data-channel="l"]')!;
     expect(l.querySelector('.meter-segments')).toBeNull(); // no 3px LED lines at 14px
     expect(l.querySelector('.meter-segments-coarse')).not.toBeNull(); // 4 coarse chunks
-    // same palette/engine as the strip meters: token gradient anchored to the well
+    // same palette/engine as the strip meters: token gradient anchored to the
+    // R20-W1 B9 taper positions (amber 37.2% = −18, red 69.2% = −6)
     expect((l.querySelector('div') as HTMLElement).style.background).toContain('var(--meter-green)');
-    expect((l.querySelector('div') as HTMLElement).style.background).toContain('var(--meter-amber) 70%');
+    expect((l.querySelector('div') as HTMLElement).style.background).toContain('var(--meter-amber) 37.2%');
   });
 });
 

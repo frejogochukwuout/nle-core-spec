@@ -1,31 +1,36 @@
 /* ChannelStrip component tests — the G-layer strip projection (spec 20 §4.2 /
-   §12.2) rebuilt to the Fairlight reference anatomy (R19-B1): top bar,
-   input row, FX chip rack + "I" power, graph thumbnails, role label,
-   R/S/M (record-arm display-only), pan crosshair box, the TERMINAL
-   fader section (equal-height columns + shared headroom), plus the
-   reference strip width / compact mode and focus/flash affordances. */
+   §12.2) rebuilt to the Fairlight reference anatomy (R20-W1, DESIGN-R20
+   D1.2 / mixer-contract §1): 3px kind top bar + 25px ID-only header, input
+   row, 5-slot FX rack + "I" power (store-backed display state, B6), graph
+   thumbnails, 48px pan crosshair box, routing bus buttons, NAME title row,
+   R/S/M, and the TERMINAL fader section — [scale | fader | meter] columns
+   (D1 order) with the cross-strip dB gridlines (D2). The height tiers
+   (D1.3) and the narrow width fallback are pinned here at the strip level;
+   the dock-level measurement/tier wiring is MixerDock.test. */
 
 import { describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { ChannelStrip, AuxStrip } from './ChannelStrip';
+import { ChannelStrip, AuxStrip, t3FaderLayout } from './ChannelStrip';
 import { EqThumb, DynThumb } from './StripGraphs';
 import { renderPlain, store } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 import { meterGetSnapshot, __setLevel } from '../../lib/meterEngine';
 
 /** Strip harness reading the track from the store (fresh on doc mutations). */
-function Strip({ trackId, compact = false, focused = false, flashing = false, index = 0 }: {
-  trackId: string; compact?: boolean; focused?: boolean; flashing?: boolean; index?: number;
+function Strip({ trackId, tier = 0, narrow = false, stripH, focused = false, flashing = false, index = 0 }: {
+  trackId: string; tier?: 0 | 1 | 2 | 3; narrow?: boolean; stripH?: number; focused?: boolean; flashing?: boolean; index?: number;
 }) {
   const scene = useUi((s) => s.scenes.find((x) => x.id === 'sc-1')!);
   const track = scene.tracks.find((t) => t.id === trackId);
   if (!track) return null;
   return (
-    <div style={{ height: 460 }}>
+    <div style={{ height: 560 }}>
       <ChannelStrip
         track={track}
         sceneId="sc-1"
-        compact={compact}
+        tier={tier}
+        narrow={narrow}
+        stripH={stripH}
         focused={focused}
         flashing={flashing}
         index={index}
@@ -45,18 +50,19 @@ const track = (id: string) => {
 const g = (id: string) => store().mixer.tracks[id]!;
 
 describe('ChannelStrip', () => {
-  it('renders the A2 strip: badge, name, role label, group semantics (spec 20 §4.2)', () => {
+  it('renders the A2 strip: ID header, NAME title row, group semantics (spec 20 §4.2)', () => {
     renderPlain(<Strip trackId="tr-audio-2" />);
     const s = strip('A2');
     expect(s).toHaveAttribute('role', 'group');
     expect(s).toHaveAttribute('aria-label', 'A2 channel strip');
-    expect(within(s).getByTestId('strip-role')).toHaveTextContent('BGM'); // mockMixer role tag
-    expect(within(s).getAllByText('A2').length).toBe(2); // badge + name header
+    // D5: the header is ID-only — the NAME lives in the 26px title row
+    expect(within(s).getByTestId('strip-title')).toHaveTextContent('A2');
+    expect(within(s).getAllByText('A2').length).toBe(2); // ID header + title row
   });
 
-  it('the A1 strip is tagged Dialogue and gets NO duck-under row (spec 20 §12.2)', () => {
+  it('the A1 strip is tagged Dialogue (top-bar color) and gets NO duck-under row (spec 20 §12.2)', () => {
     renderPlain(<Strip trackId="tr-audio-1" />);
-    expect(within(strip('A1')).getByTestId('strip-role')).toHaveTextContent('Dialogue');
+    expect(screen.getByTestId('mixer-topbar-A1').style.background).toBe('var(--mk-role-dialogue)');
     expect(screen.queryByTestId('mixer-ducking-A1')).toBeNull(); // ducking editing lives in the ChannelEditor
   });
 
@@ -70,7 +76,7 @@ describe('ChannelStrip', () => {
     expect(store().past).toHaveLength(2);
   });
 
-  it('R = record arm: display-only toggle + honest toast, no doc mutation (gap C40)', () => {
+  it('R = record arm: display-only toggle + honest toast, no doc mutation — B6: the flag is STORE state', () => {
     renderPlain(<Strip trackId="tr-audio-2" />);
     const r = screen.getByTestId('strip-rec-arm');
     expect(r).toHaveAttribute('aria-pressed', 'false');
@@ -78,12 +84,25 @@ describe('ChannelStrip', () => {
     const before = store().toasts.length;
     fireEvent.click(r);
     expect(r).toHaveAttribute('aria-pressed', 'true'); // display state flips
+    expect(store().stripArm['tr-audio-2']).toBe(true); // B6: survives unmounts
     expect(store().toasts.length).toBe(before + 1); // honest answer, never silent
     expect(store().toasts.at(-1)!.title).toBe('Record arm');
     // the doc slice is untouched — no recordArm field exists (gap C40)
     expect(track('tr-audio-2').muted).toBe(false);
     expect(track('tr-audio-2').solo).toBe(false);
     expect(track('tr-audio-2').locked).toBe(true); // fixture value, unchanged
+  });
+
+  it('B6: R/I display state survives a remount (was component-local useState, reset on unmount)', () => {
+    const { unmount } = renderPlain(<Strip trackId="tr-audio-2" />);
+    fireEvent.click(screen.getByTestId('strip-rec-arm'));
+    fireEvent.click(screen.getByTestId('fx-power'));
+    unmount();
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    expect(store().stripArm['tr-audio-2']).toBe(true);
+    expect(store().stripInsertsOn['tr-audio-2']).toBe(false);
+    expect(screen.getByTestId('strip-rec-arm')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('fx-power')).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('the dB fader is keyboard-operable and writes the G-slice fader (design doc §6)', () => {
@@ -119,16 +138,16 @@ describe('ChannelStrip', () => {
   });
 });
 
-/* ---------- R19-B1 reference anatomy (audio_mixer.html) ---------- */
-describe('ChannelStrip R19-B1 reference anatomy', () => {
-  it('strip width: 86px full / 72px compact (reference §2.3)', () => {
+/* ---------- R20-W1 reference anatomy (audio_mixer.html, contract §1) ---------- */
+describe('ChannelStrip R20-W1 reference anatomy', () => {
+  it('strip width: uniform 86px full / 72px narrow (D7 — width decoupled from height)', () => {
     const { rerender } = renderPlain(<Strip trackId="tr-audio-2" />);
     expect(strip('A2').style.width).toBe('86px');
-    rerender(<Strip trackId="tr-audio-2" compact />);
+    rerender(<Strip trackId="tr-audio-2" narrow />);
     expect(strip('A2').style.width).toBe('72px');
   });
 
-  it('renders the 3px role-color TOP bar (replaces the old h-1 bottom base bar)', () => {
+  it('header: 3px role-color top bar + 25px ID-only row = the reference 28px bordered header (D5/D13)', () => {
     renderPlain(<Strip trackId="tr-audio-2" />); // fixture role: BGM
     const bar = screen.getByTestId('mixer-topbar-A2');
     expect(bar.className).toContain('h-[3px]');
@@ -146,26 +165,30 @@ describe('ChannelStrip R19-B1 reference anatomy', () => {
     expect(input.getAttribute('title')).toContain('gap C40');
   });
 
-  it('FX chip rack renders N real inserts as gold chips + (2−N) add-slot chips (reference row 3)', () => {
-    // A1 ships inserts ['EQ', null] → 1 gold chip + 1 add chip
+  it('FX rack (D3): 5 slots at T0 — real inserts gold + dim empties + the LAST "+" add; 62px/3 slots at T1', () => {
+    // A1 ships inserts ['EQ', null] → 1 gold chip + 3 dim + 1 add
     const { unmount } = renderPlain(<Strip trackId="tr-audio-1" />);
     const a1 = strip('A1');
+    const rack = within(a1).getByTestId('fx-rack');
+    expect(rack.style.height).toBe('105px'); // reference row 3
     expect(within(a1).getAllByTestId('fx-chip')).toHaveLength(1);
     expect(within(a1).getByTestId('fx-chip')).toHaveTextContent('EQ');
-    expect(within(a1).getAllByTestId('fx-add')).toHaveLength(1);
+    expect(within(a1).getAllByTestId('fx-add')).toHaveLength(1); // the LAST slot only
+    expect(within(a1).getAllByTestId('fx-slot-empty')).toHaveLength(3);
     expect(within(a1).getByTestId('fx-chip').className).toContain('text-[var(--solo)]'); // gold
     unmount();
-    // A2 ships [null, null] → 0 chips + 2 add chips
+    // A2 ships [null, null] → 0 chips + 4 dim + 1 add
     renderPlain(<Strip trackId="tr-audio-2" />);
     const a2 = strip('A2');
     expect(within(a2).queryAllByTestId('fx-chip')).toHaveLength(0);
-    expect(within(a2).getAllByTestId('fx-add')).toHaveLength(2);
+    expect(within(a2).getAllByTestId('fx-add')).toHaveLength(1);
+    expect(within(a2).getAllByTestId('fx-slot-empty')).toHaveLength(4);
   });
 
   it('add-slot chip click answers honestly: insert browser is a v2 surface (gap C40)', () => {
     renderPlain(<Strip trackId="tr-audio-2" />);
     const before = store().toasts.length;
-    fireEvent.click(within(strip('A2')).getAllByTestId('fx-add')[0]);
+    fireEvent.click(within(strip('A2')).getByTestId('fx-add'));
     expect(store().toasts.length).toBe(before + 1);
     expect(store().toasts.at(-1)!.title).toBe('Insert browser');
     expect(store().toasts.at(-1)!.detail).toContain('v2');
@@ -173,15 +196,17 @@ describe('ChannelStrip R19-B1 reference anatomy', () => {
     expect(g('tr-audio-2').inserts).toEqual([null, null]);
   });
 
-  it('"I" power button: 16×16 gold display state + honest toast, no model mutation (reference row 4, gap C40)', () => {
+  it('"I" power button: 16×16 gold, store-backed display state + honest toast (reference row 4, B6/gap C40)', () => {
     renderPlain(<Strip trackId="tr-audio-2" />);
     const i = within(strip('A2')).getByTestId('fx-power');
     expect(i).toHaveAccessibleName('A2 inserts power');
     expect(i).toHaveAttribute('aria-pressed', 'true');
     expect(i.className).toContain('w-[16px]');
+    expect(i.className).toContain('h-[16px]');
     const before = store().toasts.length;
     fireEvent.click(i);
     expect(i).toHaveAttribute('aria-pressed', 'false'); // display state flips
+    expect(store().stripInsertsOn['tr-audio-2']).toBe(false); // in the STORE
     expect(store().toasts.length).toBe(before + 1);
     expect(store().toasts.at(-1)!.title).toBe('Inserts power');
   });
@@ -205,6 +230,33 @@ describe('ChannelStrip R19-B1 reference anatomy', () => {
     expect(dynSolo.container.querySelector('[data-testid="dyn-thumb-path"]')!.getAttribute('d')).toBe(dynA2);
   });
 
+  it('routing row (D4): two 16×16 "1"/"2" bus buttons write outputBus; active bus returns to master', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    const b1 = within(strip('A2')).getByTestId('strip-bus-1');
+    const b2 = within(strip('A2')).getByTestId('strip-bus-2');
+    expect(b1.className).toContain('w-[16px]');
+    expect(b2.className).toContain('h-[16px]');
+    expect(b1).toHaveAttribute('aria-pressed', 'false'); // boots on master
+    fireEvent.click(b1);
+    expect(g('tr-audio-2').outputBus).toBe(1); // REAL G-surface write
+    expect(b1).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(b1);
+    expect(g('tr-audio-2').outputBus).toBe(0); // pressing the active bus returns to master
+    fireEvent.click(b2);
+    expect(g('tr-audio-2').outputBus).toBe(2);
+  });
+
+  it('title row: the NAME, 26px, gold for the music role (reference row 8, D5/D6)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />); // A2 role = bgm → not gold
+    const title = within(strip('A2')).getByTestId('strip-title');
+    expect(title.className).toContain('text-[11px]');
+    expect(title.className).toContain('font-bold');
+    expect(title.className).not.toContain('text-[var(--solo)]');
+    // roles cycle dialogue→bgm→sfx→music per track: a 4th track would be gold
+    // (mockMixer roleSeq) — pinned via the unit's own rack instead:
+    expect(title).toHaveTextContent('A2');
+  });
+
   it('pan box: 48×48 crosshair with the 4px dot at left = 50 + pan/2 % (reference row 6)', () => {
     renderPlain(<Strip trackId="tr-audio-2" />);
     const box = within(strip('A2')).getByTestId('pan-box');
@@ -213,14 +265,6 @@ describe('ChannelStrip R19-B1 reference anatomy', () => {
     const dot = box.querySelector('[data-testid="pan-dot"]') as HTMLElement;
     expect(dot.className).toContain('w-[4px]');
     expect(dot.style.left).toBe('50%'); // pan 0
-  });
-
-  it('compact strips keep the fader but drop graphs + input rows (dock squeeze mode)', () => {
-    renderPlain(<Strip trackId="tr-audio-2" compact />);
-    expect(strip('A2').style.width).toBe('72px');
-    expect(screen.getByRole('slider', { name: 'A2 fader' })).toBeInTheDocument();
-    expect(screen.queryByTestId('strip-graphs')).toBeNull();
-    expect(screen.queryByTestId('strip-input')).toBeNull();
   });
 
   it('R/S/M are normalized 20×20 letter buttons (reference row 9) with semantic on-state tokens kept', () => {
@@ -233,6 +277,103 @@ describe('ChannelStrip R19-B1 reference anatomy', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mute A2' }));
     expect(track('tr-audio-2').muted).toBe(true);
   });
+
+  it('row order (D6): header → input → rack → I → graphs → pan → routing → title → RSM → fader', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    const ids = within(strip('A2'))
+      .getAllByTestId(/^(strip-input|fx-rack|fx-power|strip-graphs|pan-box|strip-bus-1|strip-title|strip-rec-arm|fader-section-A2)$/)
+      .map((el) => el.getAttribute('data-testid'));
+    expect(ids).toEqual([
+      'strip-input', 'fx-rack', 'fx-power', 'strip-graphs', 'pan-box', 'strip-bus-1', 'strip-title', 'strip-rec-arm', 'fader-section-A2',
+    ]);
+  });
+});
+
+/* ---------- height tiers (D1.3) at the strip level ---------- */
+describe('ChannelStrip height tiers (D1.3, contract §4.2 revised)', () => {
+  it('T1: graphs collapse to ONE combined 28px row, pan box 36, fx rack 3 slots, name in header, no routing/title rows', () => {
+    renderPlain(<Strip trackId="tr-audio-2" tier={1} />);
+    const s = strip('A2');
+    const graphs = within(s).getByTestId('strip-graphs');
+    expect(graphs.className).toContain('py-[2px]');
+    // one combined box carrying BOTH deterministic paths
+    expect(within(s).getAllByTestId(/thumb-path$/)).toHaveLength(2); // eq + dyn overlaid
+    expect(within(s).getByTestId('eq-thumb-path')).toBeInTheDocument();
+    expect(within(s).getByTestId('dyn-thumb-path')).toBeInTheDocument();
+    expect(within(s).queryByTestId('eq-thumb')).toBeNull(); // no separate EQ box
+    const pan = within(s).getByTestId('pan-box');
+    expect(pan.className).toContain('w-[36px]'); // pan 48→36
+    expect(within(s).getByTestId('fx-rack').style.height).toBe('62px'); // 3 slots
+    expect(within(s).getByTestId('strip-input')).toBeInTheDocument(); // input stays at T1
+    expect(within(s).queryByTestId('strip-bus-1')).toBeNull(); // routing dropped
+    expect(within(s).queryByTestId('strip-title')).toBeNull(); // name merged into the header
+    // the header carries badge + name (the fixture name equals the badge)
+    const header = within(s).getByText('A2', { selector: '.truncate' });
+    expect(header).toBeInTheDocument();
+    expect(header.tagName).toBe('SPAN');
+  });
+
+  it('T2: graphs + input + rack hidden; the fx-count chip in the header expands a popover', () => {
+    renderPlain(<Strip trackId="tr-audio-2" tier={2} />);
+    const s = strip('A2');
+    expect(within(s).queryByTestId('strip-graphs')).toBeNull();
+    expect(within(s).queryByTestId('strip-input')).toBeNull();
+    expect(within(s).queryByTestId('fx-rack')).toBeNull();
+    expect(within(s).getByTestId('pan-box').className).toContain('w-[36px]');
+    expect(within(s).getByTestId('fx-power')).toBeInTheDocument(); // I row stays
+    const chip = within(s).getByTestId('fx-count');
+    expect(chip).toHaveTextContent('FX0'); // A2 boots with no inserts
+    expect(chip).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(chip);
+    expect(chip).toHaveAttribute('aria-expanded', 'true');
+    const pop = within(s).getByTestId('fx-count-popover');
+    expect(within(pop).getAllByText('—')).toHaveLength(2); // the 2 model slots, empty
+  });
+
+  it('T3: the accessory stack scrolls inside the strip; the trio + RSM pin at the bottom (clamp formula exact)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" tier={3} stripH={300} />);
+    const s = strip('A2');
+    const scroll = within(s).getByTestId('strip-scroll-A2');
+    expect(scroll.className).toContain('scroll-y');
+    // scrollMin = max(40, 300−53−164) = 83
+    expect(scroll.style.minHeight).toBe('83px');
+    // the full accessory stack lives INSIDE the scroll (T0 rows)
+    expect(within(scroll).getByTestId('strip-input')).toBeInTheDocument();
+    expect(within(scroll).getByTestId('fx-rack').style.height).toBe('105px');
+    expect(within(scroll).getByTestId('strip-graphs')).toBeInTheDocument();
+    expect(within(scroll).getByTestId('pan-box')).toBeInTheDocument();
+    expect(within(scroll).getByTestId('strip-bus-1')).toBeInTheDocument();
+    expect(within(scroll).getByTestId('strip-title')).toBeInTheDocument();
+    // faderSection = clamp(300−53−83, 164, 260) = 164 — the travel floor wins
+    const section = within(s).getByTestId('fader-section-A2');
+    expect(section.style.height).toBe('164px');
+    expect(section.className).not.toContain('flex-1'); // FIXED height, not flex
+    // nothing below the fader; RSM sits directly above it, pinned
+    expect(s.lastElementChild).toBe(section);
+  });
+
+  it('t3FaderLayout: the clamp formula pinned at the band edges (travel floor wins, scroll floor 40)', () => {
+    expect(t3FaderLayout(339)).toEqual({ faderHeight: 164, scrollMin: 122 });
+    expect(t3FaderLayout(300)).toEqual({ faderHeight: 164, scrollMin: 83 });
+    expect(t3FaderLayout(280)).toEqual({ faderHeight: 164, scrollMin: 63 });
+    // below the 53+40+164=257 collapse the scroll floor yields to 40px
+    expect(t3FaderLayout(250)).toEqual({ faderHeight: 164, scrollMin: 40 });
+    // the scroll absorbs the remainder (fader pinned at the 164 travel
+    // floor); the 260 upper clamp is the formula's structural guard —
+    // scrollMin keeps growing on hypothetical tall-T3 heights instead
+    expect(t3FaderLayout(420)).toEqual({ faderHeight: 164, scrollMin: 203 });
+  });
+
+  it('narrow strips (D1.3 width fallback): 72px, trio drops the meter column (scale+fader only)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" narrow />);
+    const s = strip('A2');
+    expect(s.style.width).toBe('72px');
+    const cols = within(s).getByTestId('fader-cols-A2');
+    expect(cols.querySelector('[data-col="meter"]')).toBeNull(); // no meter column
+    expect(cols.querySelector('[data-col="fader"]')).not.toBeNull();
+    expect(screen.getByRole('slider', { name: 'A2 fader' })).toBeInTheDocument();
+    expect(within(s).getByTestId('fader-gridlines')).toBeInTheDocument(); // gridlines stay
+  });
 });
 
 /* ---------- the terminal fader section (th_mto37ze9 / th_mto6496s / th_mtoyq7jt) ---------- */
@@ -242,7 +383,7 @@ describe('ChannelStrip terminal fader section (equal-height law)', () => {
     const s = strip('A2');
     const section = screen.getByTestId('fader-section-A2');
     expect(section.className).toContain('flex-1');
-    expect(section.className).toContain('min-h-[124px]');
+    expect(section.className).toContain('min-h-[164px]'); // travel floor 140 + 24 headroom
     expect(s.lastElementChild).toBe(section); // flush to the strip bottom
   });
 
@@ -257,6 +398,30 @@ describe('ChannelStrip terminal fader section (equal-height law)', () => {
     act(() => { __setLevel('tr-audio-2', -6); });
     expect(within(row).getByText('-6.0')).toBeInTheDocument(); // engine peak, signed 1dp
     expect(within(row).queryByText('−∞')).toBeNull();
+  });
+
+  it('column order D1: scale | fader | meter — the meter column renders AFTER the fader column', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    const cols = screen.getByTestId('fader-cols-A2');
+    const faderCol = cols.querySelector('[data-col="fader"]') as HTMLElement;
+    const meterCol = cols.querySelector('[data-col="meter"]') as HTMLElement;
+    expect(faderCol).not.toBeNull();
+    expect(meterCol).not.toBeNull();
+    // the fader column (scale+groove inside) renders BEFORE the meter column
+    expect(faderCol.compareDocumentPosition(meterCol)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    // inside the Fader: the scale column precedes the groove (D1 order)
+    const scale = faderCol.querySelector('[data-col="scale"]') as HTMLElement;
+    const groove = faderCol.querySelector('[data-col="groove"]') as HTMLElement;
+    expect(scale.compareDocumentPosition(groove)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('D2: the cross-strip dB gridlines live inside the pinned columns row', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    const cols = screen.getByTestId('fader-cols-A2');
+    const grid = cols.querySelector('[data-testid="fader-gridlines"]') as HTMLElement;
+    expect(grid).not.toBeNull();
+    expect(grid.style.backgroundImage).toContain('var(--fader-grid) 15%');
+    expect(cols.className).toContain('relative'); // the layer's containing block
   });
 
   it('equal-height law: meter + fader columns share one height var; scale + groove self-stretch (th_mtoyq7jt)', () => {
@@ -314,7 +479,7 @@ describe('ChannelStrip terminal fader section (equal-height law)', () => {
 /* ---------- aux return strips ---------- */
 describe('AuxStrip', () => {
   it('the bus ON badge is a real toggle writing AuxBusSettings.on (R14)', () => {
-    renderPlain(<AuxStrip bus="a2" compact={false} />);
+    renderPlain(<AuxStrip bus="a2" />);
     // fixture: a2 boots OFF (Spare), a1 boots ON (Reverb)
     const a2 = screen.getByRole('button', { name: 'Aux a2 bus on' });
     expect(a2).toHaveAttribute('aria-pressed', 'false');
@@ -328,23 +493,28 @@ describe('AuxStrip', () => {
   });
 
   it('aux return meters use the unified engine keys (auxA/auxB) and honor bus ON/OFF (R15-A2)', () => {
-    renderPlain(<AuxStrip bus="a1" compact={false} />);
-    renderPlain(<AuxStrip bus="a2" compact={false} />);
+    renderPlain(<AuxStrip bus="a1" />);
+    renderPlain(<AuxStrip bus="a2" />);
     // ONE key per bus (was 'aux-a1'/'aux-a2' before the registry unification)
     expect(meterGetSnapshot('auxA').muted).toBe(false); // a1 Reverb boots ON
     expect(meterGetSnapshot('auxB').muted).toBe(true); // a2 Spare boots OFF → honest silent return
   });
 
-  it('aux strips: the type-audio top bar + headroom readout on the engine bus key (A4/R19-B1 grammar)', () => {
-    renderPlain(<AuxStrip bus="a1" compact={false} />);
+  it('aux strips: the type-audio top bar + headroom readout on the engine bus key (A4 grammar)', () => {
+    renderPlain(<AuxStrip bus="a1" />);
     expect(screen.getByTestId('mixer-topbar-aux-a1').style.background).toBe('var(--type-audio)');
     const row = screen.getByTestId('mixer-readout-aux-a1');
     expect(within(row).getByText('-6.0')).toBeInTheDocument(); // a1 Reverb returnGain, no unit
     expect(within(row).getByText('−∞')).toBeInTheDocument();
   });
 
-  it('the aux fader section is terminal with the same equal-height law', () => {
-    renderPlain(<AuxStrip bus="a1" compact={false} />);
+  it('the aux strip keeps the uniform 86px width (D7)', () => {
+    renderPlain(<AuxStrip bus="a1" />);
+    expect(screen.getByTestId('mixer-strip-aux-a1').style.width).toBe('86px');
+  });
+
+  it('the aux fader section is terminal with the same equal-height law + column order', () => {
+    renderPlain(<AuxStrip bus="a1" />);
     const section = screen.getByTestId('fader-section-aux-a1');
     expect(section.className).toContain('flex-1');
     expect(screen.getByTestId('mixer-strip-aux-a1').lastElementChild).toBe(section);
@@ -353,18 +523,17 @@ describe('AuxStrip', () => {
     const faderCol = cols.querySelector('[data-col="fader"]') as HTMLElement;
     expect(meterCol.style.height).toBe('var(--fader-col-h)');
     expect(faderCol.style.height).toBe('var(--fader-col-h)');
+    expect(faderCol.compareDocumentPosition(meterCol)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('aux "no source" state: honest-disabled chip when nothing feeds the bus (A4)', () => {
     // fixture: NOTHING feeds either bus (all sends 0, no outputBus routes) —
-    // both returns carry the honest-disabled chip
-    renderPlain(<AuxStrip bus="a1" compact={false} />);
-    renderPlain(<AuxStrip bus="a2" compact={false} />);
+    // both returns carry the honest-disabled chip in the bus row
+    renderPlain(<AuxStrip bus="a1" />);
+    renderPlain(<AuxStrip bus="a2" />);
     const chip = screen.getByTestId('mixer-nosource-a1');
     expect(chip).toHaveAttribute('aria-disabled', 'true');
     expect(chip).toHaveTextContent('no source');
-    expect(chip.className).toContain('border-dashed');
-    expect(screen.getByTestId('mixer-nosource-a2')).toBeInTheDocument();
     // the state is live, not fixture-frozen: one send > 0 drops a1's chip
     act(() => { useUi.getState().setMixerTrack('tr-audio-2', { auxA: 0.3 }); });
     expect(screen.queryByTestId('mixer-nosource-a1')).toBeNull();

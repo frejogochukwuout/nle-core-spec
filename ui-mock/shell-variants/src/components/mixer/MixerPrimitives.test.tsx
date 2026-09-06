@@ -2,14 +2,18 @@
    design doc §6), PanKnob (R15-A1 DAW dial grammar: vertical drag
    ±range/200 per 100px, Shift ×0.2 fine, non-passive wheel,
    pointer-release-only detent, arc/indicator geometry, bubble), and
-   StripMeter over the shared engine (R15-A2: dB-linear mapping, token
-   palette, LED segments, peak line, mute/clip, engine lifecycle + reset).
+   StripMeter over the shared engine (R15-A2: token palette, LED segments,
+   peak line, mute/clip, engine lifecycle + reset).
    R19-B1: the fader's DISPLAY geometry moved to the reference taper —
    piecewise map unit tests (anchors, round-trip, clamps, monotonicity),
    6px groove / 22×36 thumb / 24px headroom / reference scale marks, and
    drag math routed through the map (px→pos→dB, model-clamped −60..+6).
    StripMeter: the fixed 14px column (th_mto617w1 — never w-full).
    PanBox: the reference pan crosshair box with knob semantics.
+   R20-W1: B7 pointer-release discipline (up/cancel/lostpointercapture clear
+   the drag anchor), B8 aria-orientation on both sliders, B9 the meter fill
+   maps through the SAME taper as the fader (0dB@85% fill, zone stops
+   re-anchored to 37.2/69.2), D2 the FaderGridlines gradient stops.
    Drag math is exercised by mocking getBoundingClientRect where needed
    (jsdom reports 0×0); the knob drag grammar is clientY-relative so it needs
    no rect at all. */
@@ -17,7 +21,7 @@
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { Fader, PanKnob, PanBox, StripMeter, dbToPos, posToDb, dbHeadroomLabel, FADER_TAPER } from './MixerPrimitives';
+import { Fader, PanKnob, PanBox, StripMeter, FaderGridlines, dbToPos, posToDb, dbHeadroomLabel, FADER_TAPER } from './MixerPrimitives';
 import { useUi } from '../../state/useUiStore';
 import { __reset, __setLevel, meterGetSnapshot } from '../../lib/meterEngine';
 
@@ -78,6 +82,7 @@ describe('Fader', () => {
     expect(f).toHaveAttribute('aria-valuemax', '6');
     expect(f).toHaveAttribute('aria-valuenow', '-6');
     expect(f).toHaveAttribute('aria-valuetext', '-6.0 dB');
+    expect(f).toHaveAttribute('aria-orientation', 'vertical'); // R20-W1 B8
     expect(screen.getByText('-6.0')).toBeInTheDocument(); // headroom readout (no unit)
   });
 
@@ -129,6 +134,28 @@ describe('Fader', () => {
     // drag far beyond the top → pos clamps to 1 → model floor −60
     fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: -964 });
     expect(onChange).toHaveBeenLastCalledWith(-60);
+  });
+
+  it('B7: pointerup / pointercancel / lostpointercapture clear the drag anchor — no stale startPos', () => {
+    const onChange = vi.fn();
+    render(<Fader db={-6} onChange={onChange} ariaLabel="Test fader" height={96} />);
+    const f = screen.getByRole('slider', { name: 'Test fader' });
+    f.getBoundingClientRect = () => fakeRect(96);
+    fireEvent.pointerDown(f, { pointerId: 1, button: 0, clientY: 24 });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    // released drag: a stray pointermove (buttons held elsewhere) is ignored
+    fireEvent.pointerUp(f, { pointerId: 1, buttons: 0, clientY: 0 });
+    fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: 0 });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    // same discipline on pointercancel + lostpointercapture
+    fireEvent.pointerDown(f, { pointerId: 2, button: 0, clientY: 24 });
+    fireEvent.pointerCancel(f, { pointerId: 2, buttons: 1, clientY: 0 });
+    fireEvent.pointerMove(f, { pointerId: 2, buttons: 1, clientY: 0 });
+    expect(onChange).toHaveBeenCalledTimes(2);
+    fireEvent.pointerDown(f, { pointerId: 3, button: 0, clientY: 24 });
+    fireEvent(f, new Event('lostpointercapture', { bubbles: true }));
+    fireEvent.pointerMove(f, { pointerId: 3, buttons: 1, clientY: 0 });
+    expect(onChange).toHaveBeenCalledTimes(3);
   });
 
   it('the thumb position follows the controlled db value through the taper — pinned by the stable data-testid hook', () => {
@@ -375,7 +402,15 @@ describe('PanBox (reference §2.4 row 6 — knob semantics in the box look)', ()
     expect(b).toHaveAttribute('aria-valuemin', '-100');
     expect(b).toHaveAttribute('aria-valuemax', '100');
     expect(b).toHaveAttribute('aria-valuetext', 'C');
+    expect(b).toHaveAttribute('aria-orientation', 'horizontal'); // R20-W1 B8
     expect(screen.getByTitle(/Test pan: C/)).toBeInTheDocument(); // value via title (aria-hidden dot)
+  });
+
+  it('R20-W1 D1.3: the lean-tier 36px box (T1/T2 pan 48→36) keeps the same grammar', () => {
+    render(<PanBox pan={0} onChange={() => {}} ariaLabel="Test pan" size={36} />);
+    const b = screen.getByRole('slider', { name: 'Test pan' });
+    expect(b.className).toContain('w-[36px]');
+    expect(b.className).toContain('h-[36px]');
   });
 
   it('mono dot at left = 50 + pan/2 %, top 25% (reference geometry)', () => {
@@ -453,30 +488,42 @@ describe('StripMeter (R15-A2 — shared engine view)', () => {
     expect(screen.getByTitle(/A1: -6\.0 dB · peak -6\.0 dB/)).toBeInTheDocument();
   });
 
-  it('maps display dB linearly: fill = clamp((db+60)/60); db ≥ 0 → full + clip', () => {
+  it('B9: meter fill maps through the fader taper — 0dB@85% fill, −60@0%, −12@52.8% (contract §4.4)', () => {
     render(<StripMeter trackId="t1" db={-6} label="A1" height={40} width={4} />);
     const meter = screen.getByTitle(/A1: -6\.0 dB/);
     const fill = (ch: string) => meter.querySelector(`[data-channel="${ch}"] > div`) as HTMLElement;
     expect(fill('l').style.clipPath).toBe('inset(100% 0 0 0)'); // silent → nothing revealed
     act(() => { __setLevel('t1', -12); });
-    expect(fill('l').style.clipPath).toBe('inset(20% 0 0 0)'); // (−12+60)/60 = 0.8
+    // 1 − dbToPos(−12) = 1 − 0.472 = 0.528 → 52.8% revealed (was 80% dB-linear)
+    expect(fill('l').style.clipPath).toBe('inset(47.2% 0 0 0)');
     act(() => { __setLevel('t1', -60); });
     expect(fill('l').style.clipPath).toBe('inset(100% 0 0 0)'); // at the floor
     act(() => { __setLevel('t1', 0); });
-    expect(fill('l').style.clipPath).toBe('inset(0% 0 0 0)'); // full
-    expect(fill('r').style.clipPath).toBe('inset(0% 0 0 0)'); // stereo — both channels
+    expect(fill('l').style.clipPath).toBe('inset(15% 0 0 0)'); // 0dB → 85% fill = the 15% gridline
+    expect(fill('r').style.clipPath).toBe('inset(15% 0 0 0)'); // stereo — both channels
     expect(meter).toHaveAttribute('data-state', 'clip');
     expect(fill('l').style.background).toContain('var(--meter-red)'); // clip = solid red
   });
 
-  it('palette: token gradient stops agree with the dB zones (amber 70% = −18, red 90% = −6)', () => {
+  it('B9: the fill agrees with dbToPos at the taper anchors (the strip’s instruments never disagree)', () => {
+    render(<StripMeter trackId="t7" db={-6} label="K" height={40} width={4} />);
+    const meter = screen.getByTitle(/K: -6\.0 dB/);
+    const fill = (ch: string) => meter.querySelector(`[data-channel="${ch}"] > div`) as HTMLElement;
+    for (const db of [0, -3, -6, -12, -18, -24, -30, -40, -50, -60]) {
+      act(() => { __setLevel('t7', db); });
+      const pct = Math.round((1 - dbToPos(db)) * 10000) / 100;
+      expect(fill('l').style.clipPath).toBe(`inset(${100 - pct}% 0 0 0)`);
+    }
+  });
+
+  it('palette: token gradient stops re-anchored to the taper (amber 37.2% = −18, red 69.2% = −6)', () => {
     render(<StripMeter trackId="t1" db={-6} label="A1" height={40} width={4} />);
     act(() => { __setLevel('t1', -6); });
     const meter = screen.getByTitle(/A1: -6\.0 dB/);
     const bg = (meter.querySelector('[data-channel="l"] > div') as HTMLElement).style.background;
     expect(bg).toContain('var(--meter-green) 0%');
-    expect(bg).toContain('var(--meter-amber) 70%');
-    expect(bg).toContain('var(--meter-red) 90%)');
+    expect(bg).toContain('var(--meter-amber) 37.2%');
+    expect(bg).toContain('var(--meter-red) 69.2%)');
   });
 
   it('LED segments: 3px overlay by default; the micro-meter swaps in 4 coarse chunks', () => {
@@ -492,7 +539,7 @@ describe('StripMeter (R15-A2 — shared engine view)', () => {
     expect(ml.querySelector('.meter-segments-coarse')).not.toBeNull();
   });
 
-  it('peak line: 1px white/90 at the dB-linear peak position, absent at −∞', () => {
+  it('peak line: 1px white/90 at the TAPER peak position, absent at −∞', () => {
     render(<StripMeter trackId="t1" db={-6} label="A1" height={40} width={4} />
     );
     const meter = screen.getByTitle(/A1: -6\.0 dB/);
@@ -501,10 +548,10 @@ describe('StripMeter (R15-A2 — shared engine view)', () => {
     act(() => { __setLevel('t1', -24, 'l'); __setLevel('t1', -6, 'r'); });
     const lPeak = meter.querySelector('[data-channel="l"] [data-testid="meter-peak"]') as HTMLElement;
     const rPeak = meter.querySelector('[data-channel="r"] [data-testid="meter-peak"]') as HTMLElement;
-    expect(lPeak.style.bottom).toBe('60%'); // (−24+60)/60
-    expect(rPeak.style.bottom).toBe('90%'); // (−6+60)/60
+    expect(lPeak.style.bottom).toBe('27.2%'); // 1 − dbToPos(−24)
+    expect(rPeak.style.bottom).toBe('69.2%'); // 1 − dbToPos(−6)
     const lFill = meter.querySelector('[data-channel="l"] > div') as HTMLElement;
-    expect(lFill.style.clipPath).toBe('inset(40% 0 0 0)'); // L fill 0.6 vs R 0.9 — stereo, not a copy
+    expect(lFill.style.clipPath).toBe('inset(72.8% 0 0 0)'); // L fill 27.2% vs R 69.2% — stereo, not a copy
   });
 
   it('effectiveMuted = muted || (anySolo && !solo): level 0 + data-state=muted + opacity', () => {
@@ -589,9 +636,32 @@ describe('StripMeter (R15-A2 — shared engine view)', () => {
     const meter = screen.getByTitle(/A1: -6\.0 dB/);
     const fill = () => meter.querySelector('[data-channel="l"] > div') as HTMLElement;
     act(() => { __setLevel('t1', -12); });
-    expect(fill().style.clipPath).toBe('inset(20% 0 0 0)');
+    expect(fill().style.clipPath).toBe('inset(47.2% 0 0 0)'); // B9 taper fill
     act(() => { __reset(); });
     expect(fill().style.clipPath).toBe('inset(100% 0 0 0)'); // silent again
     expect(screen.getByTitle(/A1: -6\.0 dB · peak −∞/)).toBeInTheDocument();
+  });
+});
+
+/* ---------- R20-W1 D2: the cross-strip dB gridlines ---------- */
+describe('FaderGridlines (D2 — the reference ::before technique, tokenized)', () => {
+  it('paints 1px token bands at the taper positions 15/28/42/55/68/80/90%', () => {
+    const { container } = render(<FaderGridlines />);
+    const g = container.querySelector('[data-testid="fader-gridlines"]') as HTMLElement;
+    expect(g.getAttribute('aria-hidden')).toBe('true');
+    expect(g.className).toContain('pointer-events-none');
+    const bg = g.style.backgroundImage;
+    expect(bg).toContain('var(--fader-grid) 15%');
+    expect(bg).toContain('var(--fader-grid) 28%');
+    expect(bg).toContain('var(--fader-grid) 42%');
+    expect(bg).toContain('var(--fader-grid) 55%');
+    expect(bg).toContain('var(--fader-grid) 68%');
+    expect(bg).toContain('var(--fader-grid) 80%');
+    expect(bg).toContain('var(--fader-grid) 90%');
+    // 0.5% band edges (the reference's soft stops) + no −50 stop (collides
+    // with the bottom endcap)
+    expect(bg).toContain('transparent 14.5%');
+    expect(bg).toContain('transparent 90.5%');
+    expect(bg).not.toContain('98%');
   });
 });

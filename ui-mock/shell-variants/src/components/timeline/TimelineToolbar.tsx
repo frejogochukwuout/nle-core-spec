@@ -3,10 +3,11 @@
    Mock's sync-bin/auto-sync/dyntrim dropped (§8.10 / §8.9). */
 
 import { useRef } from 'react';
-import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, AudioLines } from 'lucide-react';
+import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, AudioLines, PanelRight, SlidersHorizontal } from 'lucide-react';
 import { useUi, type ToolId } from '../../state/useUiStore';
 import { sceneDuration } from '../../lib/mockData';
 import { StripMeter } from '../mixer/MixerPrimitives';
+import { mixerStateLabel } from '../mixer/MixerDock';
 import { ContextMenu, useContextMenu } from '../shell/ContextMenu';
 import { markerColorItems } from './Ruler';
 
@@ -64,6 +65,7 @@ export function TimelineToolbar() {
   const toggleMasterMute = useUi((s) => s.toggleMasterMute);
   const setMasterVolume = useUi((s) => s.setMasterVolume);
   const mixerState = useUi((s) => s.mixerState);
+  const page = useUi((s) => s.page);
   const cycleMixerState = useUi((s) => s.cycleMixerState);
   const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
   const pushToast = useUi((s) => s.pushToast);
@@ -289,17 +291,26 @@ export function TimelineToolbar() {
 
       <div className="vsep" />
 
-      {/* mixer dock state — design doc v2.2 §4: Edit cycles collapsed→bridge→full;
-          Audio toggles bridge↔full. No chord (⌘⇧M is spec 16 §3.5 mute-all). */}
+      {/* mixer dock state — R20-W1 (DESIGN-R20 D1.4): Edit cycles
+          closed→meters→full→closed; Audio toggles meters↔full. B4: the
+          glyph + label reflect the CURRENT state (closed → SlidersHorizontal,
+          meters → PanelRight, full → AudioLines strips). No chord (⌘M is
+          spec 16 §3.5 focused-track mute). */}
       <button
         className={`icon-btn ${mixerState !== 'collapsed' ? 'toggled' : ''}`}
-        data-tip="Mixer dock (bridge / full, beside the lanes)"
-        aria-label="Toggle mixer dock"
+        data-tip={mixerStateLabel(mixerState, page)}
+        aria-label={mixerStateLabel(mixerState, page)}
         aria-pressed={mixerState !== 'collapsed'}
         onClick={cycleMixerState}
         data-testid="btn-mixer-state"
       >
-        <AudioLines size={14} strokeWidth={1.6} />
+        {mixerState === 'full' ? (
+          <AudioLines size={14} strokeWidth={1.6} />
+        ) : mixerState === 'meters' ? (
+          <PanelRight size={14} strokeWidth={1.6} />
+        ) : (
+          <SlidersHorizontal size={14} strokeWidth={1.6} />
+        )}
       </button>
 
       <div className="vsep" />

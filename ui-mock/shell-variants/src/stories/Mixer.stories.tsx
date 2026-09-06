@@ -54,11 +54,14 @@ export const FullDock: StoryObj = {
   render: () => <MixerDockStory patch={{ mixerState: 'full' }} />,
 };
 
-/** 44px meter-bridge rail: vertical stereo meter per track + master cluster. */
-export const BridgeRail: StoryObj = {
-  name: 'Mixer — Bridge rail',
+/** R20 meters state: full dock height, thin per-track 24px meter columns
+ *  side-by-side (badge row + 2×8px stereo bars + M/S dots; master pinned
+ *  right) — the collapsed/minimized mixer per thread #61 (NOT the old 44px
+ *  vertically-stacked bridge rail). */
+export const MetersState: StoryObj = {
+  name: 'Mixer — Meters state (full-height columns)',
   parameters: { layout: 'fullscreen' },
-  render: () => <MixerDockStory patch={{ mixerState: 'bridge' }} />,
+  render: () => <MixerDockStory patch={{ mixerState: 'meters' }} />,
 };
 
 /* ---- R15 A3/A4 chrome + deterministic engine levels ----------------------- */
@@ -101,20 +104,20 @@ export const FullDockLevels: StoryObj = {
   ),
 };
 
-/** The 44px bridge rail with the same deterministic levels — the glance
- *  surface: per-track stereo meters (A1 normal, A2 clip) + the master
- *  cluster meter peak-held. One engine key per surface: bridge, strips and
- *  the toolbar micro-meter can never disagree (R15-A2 unification). */
-export const BridgeRailLevels: StoryObj = {
-  name: 'Mixer — Bridge rail, deterministic levels',
+/** The R20 meters state with deterministic levels — the glance surface:
+ *  per-track 24px columns (A1 normal, A2 clip) + the master column
+ *  peak-held. One engine key per surface: meters, strips and the toolbar
+ *  micro-meter can never disagree (R15-A2 unification). */
+export const MetersStateLevels: StoryObj = {
+  name: 'Mixer — Meters state, deterministic levels',
   parameters: { layout: 'fullscreen' },
   render: () => (
     <>
-      <StoreBoot patch={{ mixerState: 'bridge' }} />
+      <StoreBoot patch={{ mixerState: 'meters' }} />
       <MeterLevels levels={DOCK_LEVELS} />
       <div className="flex h-screen bg-app">
         <div className="mono flex min-w-0 flex-1 items-center justify-center px-8 text-center text-[11px] text-tmuted">
-          ( multi-track lanes sit here in the real shell — bridge rail preview only ·
+          ( multi-track lanes sit here in the real shell — meter columns preview only ·
           A1 −12 normal / A2 0 dBFS clip / master −6 peak −1 )
         </div>
         <MixerDock />
@@ -139,12 +142,15 @@ export const Collapsed: StoryObj = {
 
 /* ---- ChannelStrip solo ----------------------------------------------------- */
 
-function StripSolo({ compact = false }: { compact?: boolean }) {
+/* ---- ChannelStrip solo (tier API: MIXER_TIER {FULL 560, LEAN 420, MIN
+   340, FLOOR 280}; the strip's own height drives the accessory stack) ---- */
+
+function StripSolo({ tier = 0, height = 520, narrow = false }: { tier?: 0 | 1 | 2 | 3; height?: number; narrow?: boolean }) {
   const track = useUi((s) => s.scenes[0].tracks.find((t): t is TrackJSON => t.id === 'tr-audio-2'));
   if (!track) return null;
   return (
-    <div className={`flex items-stretch border border-hairline ${compact ? 'h-[360px]' : 'h-[520px]'}`}>
-      <ChannelStrip track={track} sceneId="sc-1" compact={compact} focused onStripClick={() => { /* demo */ }} />
+    <div className="flex items-stretch border border-hairline" style={{ height }}>
+      <ChannelStrip track={track} sceneId="sc-1" tier={tier} narrow={narrow} stripH={height} focused onStripClick={() => { /* demo */ }} />
     </div>
   );
 }
@@ -188,14 +194,45 @@ export const ChannelStripSoloLevel: StoryObj = {
   ),
 };
 
-/** Compact strip: what the dock shows when the timeline area is short. */
-export const ChannelStripCompact: StoryObj = {
-  name: 'Mixer — ChannelStrip compact',
+/** Lean tier (T1, 420-559px dock): graphs collapse to one combined row,
+ *  pan box compacts 48→36, fx-rack shows 3 slots. */
+export const ChannelStripLean: StoryObj = {
+  name: 'Mixer — ChannelStrip lean tier (T1 @460px)',
   parameters: { layout: 'padded' },
   render: () => (
     <>
       <StoreBoot patch={{ stripFocus: 'tr-audio-2' }} />
-      <StripSolo compact />
+      <StripSolo tier={1} height={460} />
+    </>
+  ),
+};
+
+/** T3 (<340px): the per-channel VERTICAL SCROLL tier — the accessory stack
+ *  (input/fx/graphs/pan/routing/title/RSM) scrolls inside the strip while
+ *  the fader+scale+meter trio stays PINNED at the bottom (travel ≥140px,
+ *  proportions locked) — thread #59's "tight vertical space, per-channel
+ *  scroll if we truly need more space". */
+export const ChannelStripT3: StoryObj = {
+  name: 'Mixer — ChannelStrip T3 (per-channel scroll @300px)',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ stripFocus: 'tr-audio-2' }} />
+      <StripSolo tier={3} height={300} />
+    </>
+  ),
+};
+
+/** Narrow dock variant (width-only trigger, D1.3): the dock's width budget
+ *  falls below N×86 — 72px scale+fader-only strips (meters via the meters
+ *  state). */
+export const ChannelStripNarrow: StoryObj = {
+  name: 'Mixer — ChannelStrip narrow (72px variant)',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ stripFocus: 'tr-audio-2' }} />
+      <StripSolo tier={1} height={420} narrow />
     </>
   ),
 };

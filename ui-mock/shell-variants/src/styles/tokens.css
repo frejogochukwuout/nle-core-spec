@@ -119,6 +119,9 @@
   --fader-thumb-2: #9a9a9e;
   --fader-cap-accent-1: #eec36a;  /* master accent-tinted cap (A4 consumes) */
   --fader-cap-accent-2: #a87f2d;
+  /* R20-W1 D2: cross-strip dB gridline tint (the reference's
+     rgba(255,255,255,0.03) ::before bands, tokenized) */
+  --fader-grid: rgba(255, 255, 255, 0.03);
   /* role colors — single set reusing the --mk-* ramp (not 12 hexes);
      light overrides below tune the 4 role hues for text-adjacent uses */
   --mk-role-dialogue: var(--mk-blue);
@@ -192,6 +195,7 @@
   --fader-thumb-2: #96969f;
   --fader-cap-accent-1: #f5cd7d;
   --fader-cap-accent-2: #b3852f;
+  --fader-grid: rgba(255, 255, 255, 0.03);
 }
 
 /* ---- light theme: editorial / web-first (exploratory direction C) ---- */
@@ -271,6 +275,8 @@
   --fader-thumb-2: #3f3f49;
   --fader-cap-accent-1: #a87f24;
   --fader-cap-accent-2: #6e561a;
+  /* white 3% is invisible on light lanes — the gridline flips to a dark tint */
+  --fader-grid: rgba(29, 29, 35, 0.06);
   /* role hues deepened for the light skin's text-adjacent uses (A4 role chips);
      fills may use either set — both stay on the --mk-* hue families */
   --mk-role-dialogue: #0069c0;

@@ -1,93 +1,208 @@
 /* MixerDock — the mixer surface docked to the RIGHT of the multi-track
-   lanes (design doc v2.2 revision — end of file; user direction:
-   "side by side with multi-track", not a short row under the timeline).
+   lanes (user direction: "side by side with multi-track", not a short row
+   under the timeline). REBUILT R20-W1 per DESIGN-R20 D1 + the normative
+   r20 mixer-contract (docs/r20/mixer-contract.md).
 
-   Three states (same store state machine as the old MixerRow):
-   - collapsed: not rendered.
-   - bridge: a 44px meter-bridge RAIL — one vertical stereo meter per
-     audio track + a master cluster (meter, mute, collapse) pinned bottom.
-   - full: a classic channel-strip row — vertical strips side by side
-     (one per audio track + 2 aux returns + master), filling the full
-     height the timeline area gives the dock.
+   Three states:
+   - collapsed: not rendered (the F6 region auto-unregisters via
+     mixerVisible in AppShell).
+   - meters (D1.4 — replaces the old 44px stacked 'bridge' rail, thread #61):
+     full dock height, thin per-track 24px meter COLUMNS side by side (badge
+     row + 2×8px stereo bars + M/S micro dots), horizontally scrollable
+     beyond capacity, the master column pinned right with mute + expand.
+   - full: classic channel strips (uniform 86px reference anatomy —
+     ChannelStrip) + aux returns + master, filling the timeline row's height.
 
-   R19-B1: strips stretch h-full with terminal fader sections
-   (th_mto6496s) and the aux returns + master pin to the dock's RIGHT
-   edge, OUTSIDE the channel scroll region (th_mto63f99 — the right
-   region of the mixer block always carries the return/master bank
-   cleanly; channel strips scroll on their own when the row overflows,
-   never under the master). Compact mode recalibrated for the reference
-   strip anatomy (fixed rows ≈ 285px + min fader 124px).
+   Height tiers (D1.3 / contract §4.2): MIXER_TIER {FULL 560, LEAN 420, MIN
+   340, FLOOR 280}. The dock measures itself ONCE (a pre-paint layout pass +
+   a ResizeObserver) and shares the tier with every strip — cross-strip
+   fader-top alignment requires a SHARED tier. T3 (<340) turns each strip's
+   accessory stack into a per-channel scroll (ChannelStrip owns the clamp
+   math). Below the FLOOR (280) the strip layout is not renderable → the
+   dock auto-falls back to the meters state + ONE honest toast per session
+   (store flag mixerFloorWarned).
 
-   Per-track M/S/L in the bridge state is intentionally dropped — the rail
-   is a glance-level surface and the track headers carry the same store
-   commands at the same height. F6-region: the dock joins the focus cycle
-   as the 7th region (registered in AppShell). */
+   B1 (R20-W0, PRESERVED — do not regress): the dock's width budget is
+   measured on the DEFINITE timeline row (dock → wrapper → row; the wrapper
+   is content-sized so a % resolves circularly against it — never use it):
+   budget = min(0.6 × rowWidth, 22 + (N+3)×86). The channel scroll region
+   keeps the 172px 2-strip floor; aux + master render AFTER it (never over
+   it). Narrow mode (D1.3, decoupled from height): budget < N×86 → 72px
+   strips, trio drops the meter column (metering lives in the meters state).
 
-import { useEffect, useRef, useState } from 'react';
-import { AudioLines, ChevronsRight } from 'lucide-react';
-import { useUi } from '../../state/useUiStore';
-import { ChannelStrip, AuxStrip, MasterStrip } from './ChannelStrip';
+   B4 (thread #60): every state control's glyph + label carry the state —
+   closed → no chrome; meters → PanelRight; full → PanelLeft. aria-pressed
+   boolean + an aria-label/data-tip that NAMES the state and the next cycle
+   stop (page-aware) on every control.
+
+   Per-track M/S/L in the meters state is intentionally dots-only — the rail
+   is a glance surface and the track headers + strip RSM rows carry the same
+   store commands. F6-region: the dock joins the focus cycle as the 7th
+   region (registered in AppShell). */
+
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { AudioLines, PanelLeft, PanelRight } from 'lucide-react';
+import { useUi, type MixerDockState, type Page } from '../../state/useUiStore';
+import { ChannelStrip, AuxStrip, MasterStrip, ROLE_BAR } from './ChannelStrip';
+import type { Role } from '../../state/mockMixer';
 import { StripMeter } from './MixerPrimitives';
+import type { TrackJSON } from '../../lib/mockData';
 
-/* ---------- bridge rail (44px, vertical meters) ---------- */
-function BridgeRail() {
-  const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
+/* ---------- height tiers (D1.3 — tests pin the constants) ---------- */
+export const MIXER_TIER = { FULL: 560, LEAN: 420, MIN: 340, FLOOR: 280 } as const;
+export type MixerTier = 0 | 1 | 2 | 3;
+
+/** pure band lookup (the <FLOOR fallback is the dock's job, not the map's) */
+export function mixerTierFor(H: number): MixerTier {
+  if (H >= MIXER_TIER.FULL) return 0;
+  if (H >= MIXER_TIER.LEAN) return 1;
+  if (H >= MIXER_TIER.MIN) return 2;
+  return 3;
+}
+
+/* ---------- B4: state-naming labels for every mixer control ---------- */
+const stateName = (m: MixerDockState) => (m === 'full' ? 'full strips' : m === 'meters' ? 'meter columns' : 'closed');
+
+/** The label every mixer-state control carries: the CURRENT state + the
+    next cycle stop (page-aware — Edit walks closed→meters→full→closed,
+    Audio toggles meters↔full). */
+export function mixerStateLabel(state: MixerDockState, page: Page): string {
+  const next: MixerDockState = page === 'audio'
+    ? (state === 'full' ? 'meters' : 'full')
+    : (state === 'collapsed' ? 'meters' : state === 'meters' ? 'full' : 'collapsed');
+  return next === 'collapsed'
+    ? `Mixer: ${stateName(state)} (click to close)`
+    : `Mixer: ${stateName(state)} (click for ${stateName(next)})`;
+}
+
+/* ---------- B1 width budget (W0, preserved + narrow trigger) ----------
+   Measures the definite timeline row and caps the dock at min(0.6×rowW,
+   needPx). Returns null until measured (jsdom never measures — tests stay
+   deterministic). */
+function useRowBudget(ref: React.RefObject<HTMLDivElement | null>, needPx: number, tracks: number): number | null {
+  const [maxW, setMaxW] = useState<number | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    // two ancestors up = the timeline row (flex-1, definite width); one up is
+    // the content-sized shrink-0 wrapper (the B1 feedback loop — never use it)
+    const row = el.parentElement?.parentElement;
+    if (!row) return;
+    const measure = () => {
+      const rowW = row.getBoundingClientRect().width;
+      if (rowW > 0) setMaxW(Math.min(0.6 * rowW, needPx));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    return () => ro.disconnect();
+  }, [ref, needPx, tracks]);
+  return maxW;
+}
+
+/* ---------- meters dock (D1.4 — thread #61 redesign) ---------- */
+function MeterColumn({ track }: { track: TrackJSON }) {
   const mixer = useUi((s) => s.mixer);
+  const strip = mixer.tracks[track.id];
+  const role = mixer.roles[track.id] as Role | undefined;
+  const duck = mixer.ducking[track.id];
+  return (
+    <div
+      data-testid={`meter-col-${track.badge}`}
+      role="group"
+      aria-label={`${track.name} meter`}
+      className="flex w-[24px] shrink-0 flex-col items-center gap-1"
+      title={`${track.name} — fader ${strip?.fader ?? -6} dB`}
+    >
+      {/* badge row: 10px mono, family color (role ramp — D14 token law) */}
+      <span className="mono text-[10px] font-semibold" style={{ color: role ? ROLE_BAR[role] : 'var(--type-audio)' }}>
+        {track.badge}
+      </span>
+      {/* 2×8px stereo bars, full dock height (ONE engine key per track) */}
+      <div className="flex min-h-0 w-full flex-1 justify-center">
+        <StripMeter
+          trackId={track.id}
+          db={strip?.fader ?? -6}
+          duckAmount={role === 'bgm' || role === 'music' ? (duck?.amount ?? 0) : 0}
+          width={8}
+          fillHeight
+          label={track.name}
+        />
+      </div>
+      {/* M/S micro dots — display-only mirrors of the doc-slice state (the
+          track headers + strip RSM rows own the commands) */}
+      <div
+        data-testid={`meter-ms-${track.badge}`}
+        className="flex items-center gap-1"
+        title={`Mute ${track.muted ? 'on' : 'off'} · Solo ${track.solo ? 'on' : 'off'} — toggle on the track header`}
+      >
+        <span className={`h-[4px] w-[4px] rounded-full ${track.muted ? 'bg-[var(--mute-warn)]' : 'bg-strong'}`} />
+        <span className={`h-[4px] w-[4px] rounded-full ${track.solo ? 'bg-[var(--solo)]' : 'bg-strong'}`} />
+      </div>
+    </div>
+  );
+}
+
+function MetersDock() {
+  const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
   const masterMuted = useUi((s) => s.masterMuted);
   const masterVolume = useUi((s) => s.masterVolume);
   const toggleMasterMute = useUi((s) => s.toggleMasterMute);
   const cycleMixerState = useUi((s) => s.cycleMixerState);
+  const page = useUi((s) => s.page);
   const audio = scene.tracks.filter((t) => t.kind === 'audio');
+  const ref = useRef<HTMLDivElement>(null);
+  // B1 budget: N columns + the pinned master column + rail padding
+  const maxW = useRowBudget(ref, audio.length * 24 + 46, audio.length);
+  // B4: from `meters` the cycle lands on FULL on both pages
+  const expandLabel = mixerStateLabel('meters', page);
 
   return (
     <div
-      className="flex h-full w-[44px] shrink-0 flex-col border-l border-hairline bg-shell"
-      data-testid="mixer-dock-bridge"
+      ref={ref}
+      data-testid="mixer-dock-meters"
       role="group"
-      aria-label="Mixer meter bridge"
+      aria-label="Mixer meters"
+      className="flex h-full shrink-0 items-stretch border-l border-hairline bg-shell"
+      style={maxW !== null ? { maxWidth: `${Math.round(maxW)}px` } : undefined}
     >
-      <div className="flex shrink-0 justify-center border-b border-hairline py-[3px]">
-        <span className="mono text-[10px] font-semibold uppercase tracking-wide text-tfaint">MIX</span>
+      {/* per-track columns — horizontal scroll beyond capacity (thread #61:
+          never stacked) */}
+      <div data-testid="meters-scroll" className="flex min-h-0 min-w-0 flex-1 items-stretch gap-1 overflow-x-auto p-1">
+        {audio.map((t) => (
+          <MeterColumn key={t.id} track={t} />
+        ))}
       </div>
-      {/* per-track vertical meters — each track flexes an equal share */}
-      <div className="flex min-h-0 flex-1 flex-col gap-1 px-1 py-1">
-        {audio.map((t) => {
-          const strip = mixer.tracks[t.id];
-          return (
-            <div key={t.id} className="flex min-h-[30px] flex-1 flex-col items-center gap-0.5" data-testid={`bridge-${t.badge}`}>
-              <span className="mono text-[10px] font-semibold text-[var(--type-audio)]">{t.badge}</span>
-              <StripMeter
-                trackId={t.id}
-                db={strip?.fader ?? -6}
-                duckAmount={mixer.ducking[t.id]?.amount ?? 0}
-                width={17.5}
-                fillHeight
-                label={t.name}
-              />
-            </div>
-          );
-        })}
-      </div>
-      {/* master cluster pinned to the rail bottom — same store values as
-          the toolbar/strip masters (design doc §4.5 single source). R15-A2:
-          ONE 'master' engine key across bridge rail / master strip / toolbar
-          (was 'master-bridge' — three sims disagreed). */}
-      <div className="flex shrink-0 flex-col items-center gap-1 border-t border-hairline px-1 py-1.5">
+      {/* master column pinned right: badge + full-height meter + mute +
+          expand (R15-A2: the ONE 'master' engine key, same values as the
+          toolbar/strip masters — one source) */}
+      <div
+        data-testid="meter-col-master"
+        role="group"
+        aria-label="Master meter column"
+        className="flex w-[30px] shrink-0 flex-col items-center gap-1 border-l border-hairline py-1"
+      >
         <span className="mono text-[10px] font-semibold uppercase tracking-wide text-tprimary">MST</span>
-        <StripMeter trackId="master" db={masterMuted ? -60 : masterVolume * 66 - 60} height={36} width={4} label="Master" />
+        <div className="flex min-h-0 w-full flex-1 justify-center">
+          <StripMeter trackId="master" db={masterMuted ? -60 : masterVolume * 66 - 60} width={8} fillHeight label="Master" />
+        </div>
         <button
           onClick={toggleMasterMute}
           aria-pressed={masterMuted}
           aria-label="Master mute"
+          data-tip="Master mute"
           className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${masterMuted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-inset text-tmuted'}`}
-        >M</button>
+        >
+          M
+        </button>
         <button
           className="icon-btn icon-btn-sm"
           onClick={() => cycleMixerState()}
-          data-tip="Collapse mixer"
-          aria-label="Collapse mixer rail"
+          data-tip={expandLabel}
+          aria-label={expandLabel}
+          aria-pressed={false}
         >
-          <ChevronsRight size={12} strokeWidth={1.7} />
+          <PanelRight size={12} strokeWidth={1.7} />
         </button>
       </div>
     </div>
@@ -101,23 +216,55 @@ function FullDock() {
   const stripFlash = useUi((s) => s.stripFlash);
   const setStripFocus = useUi((s) => s.setStripFocus);
   const cycleMixerState = useUi((s) => s.cycleMixerState);
+  const page = useUi((s) => s.page);
   const audio = scene.tracks.filter((t) => t.kind === 'audio');
   const [flashOn, setFlashOn] = useState(false);
 
-  // compact when the timeline area gets short (main-body drag) — strips drop
-  // the graphs/input rows and slim to 72px; the terminal fader survives.
-  // R19-B1 recalibration: the reference anatomy's fixed rows are ~285px
-  // (top bar 3 + header 24 + input 22 + rack/I 70 + graphs 66 + role 22 +
-  // RSM 24 + pan 56) + min fader 124 → compact below 380px total dock height
+  /* D1.3 height tiers: pre-paint pass + RO, ONE shared tier + measured
+     height for every strip (fader-top alignment). The pre-measure default
+     is T0 (full anatomy) — the layout pass corrects it before the first
+     paint; jsdom never measures (offsetHeight 0 → guarded), keeping tests
+     deterministic. Below the FLOOR: auto-fallback to the meters state +
+     ONE honest toast per session (store flag). */
   const ref = useRef<HTMLDivElement>(null);
-  const [compact, setCompact] = useState(false);
-  useEffect(() => {
+  const [tier, setTier] = useState<MixerTier>(0);
+  const [dockH, setDockH] = useState<number | null>(null);
+  useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => setCompact(el.offsetHeight < 380));
+    if (!el) return;
+    const apply = () => {
+      const H = el.offsetHeight;
+      if (H <= 0) return; // unmeasured — keep the pre-measure default
+      if (H < MIXER_TIER.FLOOR) {
+        const s = useUi.getState();
+        useUi.setState({ mixerState: 'meters', ...(s.mixerFloorWarned ? {} : { mixerFloorWarned: true }) });
+        if (!s.mixerFloorWarned) {
+          s.pushToast({
+            kind: 'info',
+            title: 'Mixer floor',
+            detail: `The mixer dock is ${Math.round(H)}px tall — below the 280px strip floor, so it switched to meter columns. Drag the viewer splitter down to give the strips room.`,
+          });
+        }
+        return;
+      }
+      setTier(mixerTierFor(H));
+      setDockH(H);
+    };
+    apply();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(apply);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  /* B1 (W0, PRESERVED): budget = min(0.6×rowW, 22 + (N+3)×86) measured on
+     the definite timeline row; narrow mode (D1.3, width-only) fires when
+     the budget cannot fit the N channel strips at 86px. */
+  const nStrips = audio.length + 3; // + 2 aux + master
+  const maxW = useRowBudget(ref, 22 + nStrips * 86, audio.length);
+  const narrow = maxW !== null && maxW < audio.length * 86;
+
+  const collapseLabel = mixerStateLabel('full', page);
 
   // strip-focus flash (escalation gesture feedback) — 1.2s ring, same as v2.1
   useEffect(() => {
@@ -130,20 +277,22 @@ function FullDock() {
   return (
     <div
       ref={ref}
-      className="flex h-full min-h-0 max-w-[60%] shrink-0 items-stretch border-l border-hairline bg-shell"
+      className="flex h-full min-h-0 shrink-0 items-stretch border-l border-hairline bg-shell"
+      style={maxW !== null ? { maxWidth: `${Math.round(maxW)}px` } : undefined}
       data-testid="mixer-dock-full"
       role="group"
       aria-label="Audio mixer"
     >
-      {/* dock header — vertical label + collapse control */}
+      {/* dock header — vertical label + the state-aware collapse control (B4) */}
       <div className="relative flex w-[22px] shrink-0 flex-col items-center justify-between border-r border-hairline py-1.5">
         <button
           onClick={() => cycleMixerState()}
           className="icon-btn icon-btn-sm"
-          data-tip="Collapse mixer"
-          aria-label="Collapse mixer dock"
+          data-tip={collapseLabel}
+          aria-label={collapseLabel}
+          aria-pressed
         >
-          <ChevronsRight size={12} strokeWidth={1.7} />
+          <PanelLeft size={12} strokeWidth={1.7} />
         </button>
         <span
           className="mono select-none text-[10px] font-semibold uppercase tracking-[0.18em] text-tfaint"
@@ -154,17 +303,18 @@ function FullDock() {
         </span>
         <AudioLines size={11} strokeWidth={1.6} className="text-tfaint" aria-hidden="true" />
       </div>
-      {/* channel strips — their own horizontal scroll region; strips stretch
-          the FULL dock height (h-full, terminal fader sections — fixes
-          th_mto6496s; the old fixed 110px centerpiece left the bottom half
-          of the dock's right region empty) */}
-      <div className="flex min-h-0 min-w-0 items-stretch overflow-x-auto">
+      {/* channel strips — their own horizontal scroll region (2-strip floor);
+          strips stretch the FULL dock height with terminal fader sections
+          (th_mto6496s) and the shared height tier (D1.3) */}
+      <div className="flex min-h-0 min-w-[172px] items-stretch overflow-x-auto">
         {audio.map((t, i) => (
           <ChannelStrip
             key={t.id}
             track={t}
             sceneId={scene.id}
-            compact={compact}
+            tier={tier}
+            narrow={narrow}
+            stripH={dockH ?? undefined}
             focused={stripFocus === t.id}
             flashing={flashOn && stripFocus === t.id}
             index={i} /* A4: subtle alternating bg parity across the strip row */
@@ -176,9 +326,9 @@ function FullDock() {
           right region always carries the return/master bank cleanly, never
           dead space and never scrolled away under the channel row (fixes
           th_mto63f99) */}
-      <AuxStrip bus="a1" compact={compact} />
-      <AuxStrip bus="a2" compact={compact} />
-      <MasterStrip compact={compact} />
+      <AuxStrip bus="a1" tier={tier} narrow={narrow} />
+      <AuxStrip bus="a2" tier={tier} narrow={narrow} />
+      <MasterStrip tier={tier} narrow={narrow} stripH={dockH ?? undefined} />
     </div>
   );
 }
@@ -187,5 +337,5 @@ function FullDock() {
 export function MixerDock() {
   const mixerState = useUi((s) => s.mixerState);
   if (mixerState === 'collapsed') return null;
-  return mixerState === 'bridge' ? <BridgeRail /> : <FullDock />;
+  return mixerState === 'meters' ? <MetersDock /> : <FullDock />;
 }

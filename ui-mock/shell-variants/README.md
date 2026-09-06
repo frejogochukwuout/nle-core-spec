@@ -161,6 +161,12 @@ tests can target the same surface.
 
 ## Known spec deviations (intentional, for reaction)
 
+- **R20-W0:** viewer zoom ladder is Fit/1.25×/1.5×/2×/4× — the 1.25× step
+  (annotakit GH #66) deviates from spec 18 §3.3's Fit/1.5/2/4 ladder.
+- **R20-W0:** mixer strip micro-labels (9px dB readout, 8px scale ticks)
+  follow the user's `audio_mixer.html` reference anatomy, below spec 18
+  §11.12's 11px floor — registered as reference-fidelity choices for the
+  mixing surface (the floor still applies everywhere else).
 - Presets B/C deviate from the v1 single-dark-theme rule (18 §8.14 / §9) — they exist to test that decision.
 - `blocks` clip mode + slim headers deviate from spec 05 §7/§12.2 canonical rendering — they mirror the davinci mock / OpenCut teacher values.
 - Tool keys follow spec 16 (V/B/T/Y/U, N=snap). Note: spec 18 §4.5's parenthetical keys (A/','/S) disagree with spec 16 §3.2 — flagged as a spec-consistency finding.
