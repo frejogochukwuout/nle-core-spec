@@ -10,7 +10,7 @@ set + DOM anatomy).
 The build contract is [`docs/DESIGN-mvp.md`](docs/DESIGN-mvp.md) (v2.1
 FINAL — design-audit + code-review rounds folded). `../shell-variants/`
 remains the full spec-18 study; this app is the deliberately small sibling:
-~28 source files vs 100+, 333 tests vs 596, 13 stories vs 83 (PR69 refresh; R22: the drag-machinery retirement — 358 → 333 with the retired-law nets).
+~28 source files vs 100+, 334 tests vs 596, 13 stories vs 83 (PR69 refresh; R22: the drag-machinery retirement — 358 → 333 with the retired-law nets).
 
 ## Run it
 
@@ -19,7 +19,7 @@ npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-
 npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
                     #   run via `python3 scripts/dev3000.py` double-fork daemon so it
                     #   survives the per-toolcall process reaping — plain nohup/setsid die)
-npm test            # vitest — 7 files / 333 tests (jsdom)
+npm test            # vitest — 7 files / 334 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # the FULL dev server on :3000 (run via `python3
@@ -422,7 +422,7 @@ Run it at boot or any time; safe twice.
    zoom anchor, C24 extent origin, C13 dedupes, C56 memo law, scroll
    preservation across minimize, C3 singleton playback, C54/C52/C4/
    C15/C18, track markers/mute/lane-select, ScrubBar + seek controls).
-   Tests: 333 (the retired-law nets deleted; R18k-law pins added).
+   Tests: 334 (the retired-law nets deleted; R18k-law pins added).
 
 ## The topbar is a downstream customization point (R18j, thread #17)
 

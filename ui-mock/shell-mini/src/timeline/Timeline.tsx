@@ -339,8 +339,8 @@ function RulerMarks({ pps, endTime, compact }: { pps: number; endTime: number; c
 
 function WaveformBody({ media, widthPx }: { media: Media; widthPx: number }) {
   const bars = Math.max(8, Math.min(Math.round(widthPx / 5), 160));
-  // R18f (review P3): memoized — Lane re-renders on every playhead tick and
-  // zoom step; the envelope is deterministic per (media, bars)
+  // R18f (review P3): memoized — zoom/doc changes re-render the lane; the
+  // envelope is deterministic per (media, bars)
   const values = useMemo(() => waveformFor(media, bars), [media, bars]);
   // viewBox: N units wide × 100 tall; each bar 0.7 wide, centered vertically.
   // R18f wave-2 P1 regression guard: the SVG is sized explicitly on BOTH the
@@ -921,8 +921,8 @@ const EMPTY_TARGETS: number[] = [];
 /* PR69 C56: per-clip magnet targets (neighbor edges, self excluded),
  * memoized per track so the array identities — and therefore every
  * memoized ClipItem below — stay stable across unrelated re-renders.
- * The playhead target joins INSIDE the gesture (applyGesture, read live
- * and frozen by the tick lock). */
+ * The playhead target joins INSIDE the gesture (applyGesture, read
+ * live — the R18k field, minus the per-tick tree re-render). */
 function useTargetsById(magnetClips: Clip[]): Map<string, number[]> {
   return useMemo(() => {
     const m = new Map<string, number[]>();

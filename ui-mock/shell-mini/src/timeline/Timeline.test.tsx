@@ -6,8 +6,8 @@
    origin is x=0, so clientX maps DIRECTLY to time via pps (deterministic:
    default zoom 48pps). */
 
-import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, beforeEach } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { Timeline } from './Timeline';
 import App from '../App';
@@ -1102,6 +1102,27 @@ describe('PR69 C7b: the zoom slider announces units', () => {
   });
 });
 
+describe('PR69 C7a: zoom anchors at the playhead', () => {
+  it('a zoom step change keeps the playhead at its viewport offset (scrollLeft re-derives from the anchor)', () => {
+    const io = interceptScrollLeft();
+    try {
+      render(<Timeline />);
+      setStore(() => S().setPlayhead(6)); // 6s at the default 48pps
+      // the user panned: scrollLeft 100 → the playhead sits 6*48 − 100 = 188px
+      // into the viewport
+      io.state.val = 100;
+      setStore(() => S().setZoomStep(3)); // 48 → 72pps
+      // anchorPx = 188 → scrollLeft' = 6*72 − 188 = 244: the playhead keeps
+      // its exact viewport offset instead of walking off-screen (the old law
+      // kept scrollLeft fixed and the content moved under the playhead)
+      expect(io.sets).toContain(244);
+      expect(io.state.val).toBe(244);
+    } finally {
+      io.restore();
+    }
+  });
+});
+
 
 /* ---- R2 (opus review round 1): the P2 fixes, pinned ---- */
 
@@ -1156,10 +1177,10 @@ describe('R2: ruler extent re-publish (R1-b P2-4)', () => {
 });
 
 /* ---- R2-a round 3: the review-fix regressions pinned ----------------
-   P2-1 (ruler release dropped edge.stop), P2-2 (every resize re-anchored
-   the scroll), P3-a (the stash cleanup raced the ref re-attach; the App
-   ternary remounted the Timeline), P3-b (scrub surfaces had no unmount
-   sweep), P3-c (keyboard trim bypassed the pending-window lock). */
+   P2-2 (every resize re-anchored the scroll) + P3-a (the App ternary
+   remounted the Timeline; the stash cleanup raced the ref re-attach).
+   The P2-1 edge-stop and P3-b/P3-c pending-window nets retired with the
+   R22 machinery sweep — their subjects no longer exist (README #39). */
 
 /** jsdom clamps programmatic scrollLeft to 0 — intercept reads AND
  *  writes on the prototype so the stash + restore law is observable. */
@@ -1228,7 +1249,7 @@ describe('R2-a round 3 — scroll preservation (P2-2/P3-a)', () => {
   });
 });
 
-describe('R2-a round 3 — surface swaps + the pending window (P3-b/P3-c)', () => {
+describe('R2-a → R22 — surface swaps (the pending window is retired; keys stay live)', () => {
   it('a minimize flip mid-scrub leaves the keyboard surface live (the pending window is retired — R22)', () => {
     render(<Timeline />);
     fireEvent.pointerDown(screen.getByTestId('mini-ruler'), {

@@ -876,9 +876,9 @@
 
 /* ---- drag ghost shading (preview state) --------------------- */
 
-/* R20: the mover renders ABOVE its lane (OT's drag view — overlap is
-   allowed visually while the doc stays frozen); the verdict ring +
-   chip carry the drop meaning. */
+/* R22 (the R18k clamp law): the mover renders ABOVE its lane while the
+   gesture runs — the preview IS the committed doc state (overlap never
+   renders under the clamp), so this is purely the lifted-mover affordance. */
 .qc-track-item.is-dragging {
   opacity: 0.85;
   z-index: 5;

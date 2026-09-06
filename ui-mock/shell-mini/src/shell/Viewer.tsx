@@ -17,7 +17,7 @@
    "centerly aligned" reading), drag/click scrubs the playhead, and the
    focusable slider surface carries ←/→/Home/End. */
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Play, Pause, Maximize2, Minimize2 } from 'lucide-react';
 import { useMini, VIEWER_ASPECTS, aspectEntry, boundClips } from '../state/useMini';
 import { usePlayhead } from '../hooks/usePlayhead';
