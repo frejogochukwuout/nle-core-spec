@@ -172,7 +172,8 @@ def gap_rows(t):
     m = re.search(r"\*\*GAP \(the work.*?:\*\*\s*\n(.*?)(?:\*\*ACCEPTANCE|\*\*BASE \(accepted)", t, re.S)
     if not m:
         return []
-    return [l for l in m.group(1).split("\n") if l.strip().startswith("-")]
+    # strikethrough rows (~~...~~) are FLIPPED-to-BASE records, not work rows — exempt
+    return [l for l in m.group(1).split("\n") if l.strip().startswith("-") and not l.strip().startswith("- ~~")]
 
 def ok_placement(n):
     t = specs[n]
@@ -187,7 +188,7 @@ for n in DOMAIN:
     if not rows and n not in (11, 13):
         bad_rows.append(f"{n:02d}:no-gap-rows")
         continue
-    NONWORK = ["REGISTERED; keep as pointer", "Register: spec 14", "No-gap ruling", "Register: the plan"]
+    NONWORK = ["REGISTERED; keep as pointer", "Register: spec 14", "Register: the retired spec-14", "Register: the plan", "No-gap ruling"]
     for r in rows:
         if not any(p in r for p in PHASE_VOCAB) and not any(k in r for k in NONWORK):
             bad_rows.append(f"{n:02d}:no-phase")
