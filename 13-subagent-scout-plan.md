@@ -10,7 +10,7 @@
 
 **BASE (accepted, pinned 2026-09-07):**
 - The protocol is EXECUTING — the §3 workflow (scout → audit → integration review) + §7 worklog IS the operating practice for per-round research agents: R15's four scouts (the A/B/N amendment set — landed as the "(Round 15 amendment)" markers across the specs), R22's two adversarial reviewers, the mockup stream's research contracts.
-- Its downstream product at the R22 pins (the specs this process produced, executing): nle-engine @ `f68ab8c` 356/356, OT @ `05584d8` 459/459, WDC @ `fe05d85` 740/740, nle-ui @ `dba8d52` 640, nle-test-app @ `e662759` 83/83, ui-mock/shell-mini 333 + shell-variants 1,334 (nle-core-spec).
+- Its downstream product at the R22 pins (the specs this process produced, executing): nle-engine @ `f68ab8c` 356/356, OT @ `05584d8` 459/459, WDC @ `fe05d85` 740/740, nle-ui @ `dba8d52` 640, nle-test-app @ `e662759` 83/83, ui-mock/shell-mini 353 + shell-variants 1,334 (nle-core-spec).
 
 **GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
 - No standing gap — the protocol continues per round; the next chartered scouts (if any) are PHASE-ENTRY decisions, not standing charters: the FCPXML parser+corpus choice at R-fcpxml entry; the W-n5 real-file corpus at user re-affirmation of D6 (owner: the orchestrator's charter, per spec 14's phase-entry artifacts) (acceptance: the phase-entry artifact recorded in spec 14 BEFORE the phase's work starts).

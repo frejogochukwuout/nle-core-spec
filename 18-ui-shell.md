@@ -13,7 +13,7 @@
 
 **BASE (accepted, pinned 2026-09-07):**
 - The full-shell DESIGN (§3-§15): region geometry, panel inventory, gesture→command contracts, state rows, a11y floor — the design of record, validated in `ui-mock/shell-variants` (1,334 tests, real color math, W4 real pipelines) and PRODUCTIZED as the `nle-ui` package (`dba8d52`; consumer pin `752991d`; 640 tests, engine-free, boundary-script-gated).
-- The mini DESIGN + law register (§16, `ui-mock/shell-mini` @ 333 tests post-R22-retirement; OT-SEAMS seam map; annotakit live review surface).
+- The mini DESIGN + law register (§16, `ui-mock/shell-mini` @ 353 tests — 333 at the R22 retirement, +10 review-loop nets, +10 seal nets; OT-SEAMS seam map; annotakit live review surface).
 - The app assembly skeleton: `AppShell` + slots (`timelineRegion`/`programMonitor`/`mediaDragSource`) + ProgramCanvas (engine N1) wired in `nle-test-app` @ `e662759` (83 tests).
 
 **GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
@@ -586,8 +586,10 @@ customization point (exit/parent/export handshakes live in the host).
    minimal subset, shaped to the OT command surface (OT-SEAMS §1); when
    the wire protocol's editing subset ships, the mini's store actions
    become command emitters.
-3. **Testing (§12 / spec 17 Tier 3)**: the mini carries 333 vitest tests
-   (post the R22 drag-machinery retirement; the `mini-*` `data-testid`
+3. **Testing (§12 / spec 17 Tier 3)**: the mini carries 353 vitest tests
+   (8 files — the R22 drag-machinery retirement's 333 + the review-loop
+   and seal-round nets; the law corpus census + the testid census live in
+   `docs/LAW-NET-INVENTORY.md`; the `mini-*` `data-testid`
    grammar per §10) + the live annotakit pin-comment review surface; its
    gates (tsc, vitest, vite build, storybook build) run on every change.
 4. **The full shell (§3-§15)** remains the design of record for the

@@ -13,7 +13,7 @@
 **BASE (accepted, pinned 2026-09-07):**
 - opencut-timeline (OT) @ `05584d8` — 459/459 (329 in-page + 130 real-mouse across 14 phases), tsc 0. This spec's interaction contract is executable there: the ops layer (split/trim/move/ripple/delete), snapping/placement/view-math, the headless API; the S-round landed (S1 transport policy — playbackRate/loopRegion/anti-drift/atomic boundary pause; S2 track lock; S3 transitionOut with the null=DELETE key law + split left-drops; S4 bookmark color/note + D-S5 typed ElementParams).
 - nle-test-app @ `e662759` — 83/83, tsc 0. The React view tree of this spec lives APP-side (`timeline-port/`); OT `view/` is utils-only.
-- In-repo law register: `ui-mock/shell-mini/docs/OT-SEAMS.md` — the 14-row op map + the R22 drag-machinery retirement (the verbatim R18k law: clamp between same-track neighbors, single-edge live-field magnet, last-preview seal; shell-mini 333 tests).
+- In-repo law register: `ui-mock/shell-mini/docs/OT-SEAMS.md` — the 14-row op map + the R22 drag-machinery retirement (the verbatim R18k law: clamp between same-track neighbors, single-edge live-field magnet, last-preview seal; shell-mini 353 tests).
 
 **GAP (the work — owner + phase per spec 14; the register is spec 14 §4.1, pointed not duplicated):**
 - Op-family variants slip/slide/roll/rateStretch + wave-2 retime/freezeFrame/rangeRemoval (W-ops; tests carried from nle-engine timeline.ts — acceptance: carried engine tests green).

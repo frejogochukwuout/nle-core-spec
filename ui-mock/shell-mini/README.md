@@ -10,7 +10,20 @@ set + DOM anatomy).
 The build contract is [`docs/DESIGN-mvp.md`](docs/DESIGN-mvp.md) (v2.1
 FINAL — design-audit + code-review rounds folded). `../shell-variants/`
 remains the full spec-18 study; this app is the deliberately small sibling:
-~28 source files vs 100+, 343 tests vs ~1340, 13 stories vs 117 (PR69 refresh; R22: the drag-machinery retirement — 358 → 334 with the retired-law nets).
+~29 source files vs 100+, 353 tests vs ~1340, 13 stories vs 117 (PR69
+refresh; the test lineage: 358 → 333 at the R22 drag-machinery retirement
+(user directive) → 343 with the review-loop nets → 353 with the R23 seal
+round's otProject bridge nets).
+
+**The seam family (R23 seal round — the transport-readiness docs):**
+[`docs/OT-SEAMS.md`](docs/OT-SEAMS.md) — the timeline-ops seam map (the
+14-row op map + the swap path, now with the executable conversion half);
+[`docs/CORE-SEAMS.md`](docs/CORE-SEAMS.md) — the WHOLE-surface audit (the
+engine/timeline/audio/project/chrome seams, the store partition, the
+transport map, the audited-absent register);
+[`docs/LAW-NET-INVENTORY.md`](docs/LAW-NET-INVENTORY.md) — the law corpus
+census + the 60-testid census (the crawl's C1/C4 acceptance lists, spec 14
+pre-C1).
 
 ## Run it
 
@@ -19,7 +32,7 @@ npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-
 npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
                     #   run via `python3 scripts/dev3000.py` double-fork daemon so it
                     #   survives the per-toolcall process reaping — plain nohup/setsid die)
-npm test            # vitest — 7 files / 343 tests (jsdom)
+npm test            # vitest — 8 files / 353 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # the FULL dev server on :3000 (run via `python3
@@ -441,6 +454,9 @@ src/
   lib/geometry.ts        the interaction laws (pure, fully tested)
   lib/timecode.ts        MM:SS.d formatting
   lib/mockData.ts        seed doc + media (deterministic)
+  lib/otProject.ts       the OT bridge projection (toTicks/projectClip —
+                         the registered OT-SEAMS §1.6/§3.4 laws, tested;
+                         the C1 sceneBridge copies it verbatim)
   lib/filmstrip.ts       SVG filmstrip/thumbnail generators
   state/useMini.ts       doc + ui + history + drag session (Zustand)
   shell/                 Topbar, MediaPool, Viewer, Inspector, Toast
@@ -449,5 +465,7 @@ src/
   test/setup.ts          jsdom pointer shims + store reset + RTL cleanup
 ```
 
-`data-testid` grammar: `mini-*`. Storybook viewports: 1920×1080 (default),
+`data-testid` grammar: `mini-*` (60 static + 14 templated families — the
+full census + the C1 mapping contract: `docs/LAW-NET-INVENTORY.md` §2.2).
+Storybook viewports: 1920×1080 (default),
 1440×900, 1280×800 (floor).

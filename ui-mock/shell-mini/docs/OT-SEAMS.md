@@ -10,15 +10,6 @@ library, the ops rename, they don't redesign.
 
 **Reference state studied (R19, re-read R20):** `src/lib/timeline/headless/api.ts`
 (the 24-command wire surface, `{ok, code}` contract), `types/index.ts`
-> **R21 (user P0 revert, 2026-09-06):** the drag rows below describe the
-> R19/R20 drag rounds — **RETIRED by the user's directive** ("the last two
-> rounds of drag changes made things worse"). The shipped drag law is the
-> R18k neighbor clamp again (the mover clamps between same-track
-> neighbors, the preview is the commit, plain history entries; no
-> insert-push, no escape, no minted tracks). The rows are kept as the
-> seam MAP for a future, USER-REQUESTED retry; the mini no longer
-> implements them. The one surviving law: neighbors never move mid-gesture.
-
 (SceneTracks, element fields), `ops/group-move.ts` (resolveGroupMove,
 resolveExistingTrackMove, canApplyMovesToExistingTracks, resolveNewTrackMove,
 snapGroupEdges), `placement/index.ts` (wouldElementOverlap /
@@ -28,6 +19,22 @@ mutated during a drag, threshold 5px, up-within-threshold = cancel,
 groupMoveResult null → no commit; drop-target.ts). The R20 pass re-derived
 the drag law from this source directly — the R19 "insert-push" improvisation
 is gone (see §1.3).
+
+> **R21 (user P0 revert, 2026-09-06):** the drag rows below describe the
+> R19/R20 drag rounds — **RETIRED by the user's directive** ("the last two
+> rounds of drag changes made things worse"). The shipped drag law is the
+> R18k neighbor clamp again (the mover clamps between same-track
+> neighbors, the preview is the commit, plain history entries; no
+> insert-push, no escape, no minted tracks). The rows are kept as the
+> seam MAP for a future, USER-REQUESTED retry; the mini no longer
+> implements them. The one surviving law: neighbors never move mid-gesture.
+
+**The seam family (R23 seal round):** this file carries the TIMELINE-OPS
+seam. The whole-surface audit (engine/audio/project/chrome/view seams,
+the store partition, the transport map) lives in `docs/CORE-SEAMS.md`;
+the law corpus + testid census (the C1/C4 acceptance lists) in
+`docs/LAW-NET-INVENTORY.md`. The conversion laws of §1.6/§3 below are
+EXECUTABLE since R23: `src/lib/otProject.ts` (unit-pinned — see §3).
 
 ---
 
@@ -67,6 +74,16 @@ user's live verdict).
 
 ## 3. The swap path (mockup → library)
 
+0. **The executable half (R23).** The registered conversion laws are CODE
+   now: `src/lib/otProject.ts` — `toTicks`/`fromTicks` (the §3.4 time base,
+   NEAREST-TICK rounding policy — pointer-committed times may be off-grid),
+   `projectClip`/`projectClipBack` (the §1.6 element model, both directions,
+   tick-arithmetic trim invariant). Unit-pinned by 10 tests that travel
+   with the module as the bridge's acceptance floor. **Honest role:** this
+   repo is not a package — the app cannot import it; the C1 sceneBridge
+   COPIES it verbatim, then binds the real OT element field names (the
+   C1-entry decision — the track-shape mapping main/overlay/audio is
+   registered in CORE-SEAMS S6, deliberately NOT decided in mock code).
 1. **Store ops → commands.** Each `useMini` doc action in §1 maps 1:1 to a
    `TimelineCommand` (renames + param shapes only; the validation outcomes
    are already aligned — reject/conflict semantics, media-bounded trims,

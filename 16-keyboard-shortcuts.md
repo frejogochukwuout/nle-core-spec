@@ -13,7 +13,7 @@
 
 **BASE (accepted, pinned 2026-09-07):**
 - nle-test-app @ `e662759` — 83/83, tsc 0. The app's landed key surface: JKL/split/delete/home per the OT Wave B migration.
-- The mini's editing keys — `ui-mock/shell-mini` (333 tests) + the law register `ui-mock/shell-mini/docs/OT-SEAMS.md`.
+- The mini's editing keys — `ui-mock/shell-mini` (353 tests) + the law register `ui-mock/shell-mini/docs/OT-SEAMS.md`.
 - C22 ledger state: ~54 of ~178 rows implemented; the ledger lives in `.agents/SPEC-REVISION-CANDIDATES.md` §C + the mocks.
 
 **GAP (the work — owner + phase per spec 14; the register is spec 14 §4.1):**
@@ -21,7 +21,7 @@
 - The crawl's editing keyboard surface + undo/redo exposure — MiniShell owns the editing keys (C1; acceptance: the mini's key laws re-expressed as app-side tests, the LAW-NET-INVENTORY corpus).
 - W-ops keymap surfaces for the new op families (W-ops; acceptance: keymap rows + nle-ui sync).
 
-**ACCEPTANCE & TEST PLAN:** §9 (Test Verification) + Appendix A (the flat registry for enumeration) are this spec's battery; BASE acceptance = the cited suites at the cited pins (app 83; mini 333) — the regression role. GAP acceptance is per-row above; facet rows in spec 17 §13A.
+**ACCEPTANCE & TEST PLAN:** §9 (Test Verification) + Appendix A (the flat registry for enumeration) are this spec's battery; BASE acceptance = the cited suites at the cited pins (app 83; mini 353) — the regression role. GAP acceptance is per-row above; facet rows in spec 17 §13A.
 
 ---
 

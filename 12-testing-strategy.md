@@ -11,11 +11,11 @@
 **BASE (accepted, pinned 2026-09-07):**
 - The methodology landed — this spec's INFRASTRUCTURE layer: virtual framebuffer (§3.2), pixel verification (§5), audio verification (§6), WYSIWYG (§7), property-based testing (§8), CI configs (§11/§17), asset scripts (§15/§16). The umbrella methodology is superseded by spec 17; the domain specifics here (workers/audio mechanics) feed 01/02/20's Testing sections.
 - EXECUTING via spec 17 v1.3 §0A (the acceptance-executability law) — this spec's mechanics are what 17's recipes run on.
-- The fleet's suites at the R22 pins (spec 17 §13A.7's re-tier row): nle-engine 356/356 @ `f68ab8c`; OT 459/459 @ `05584d8`; WDC 740/740 @ `fe05d85` (consumed @ `5570321`); nle-ui 640 @ `dba8d52` (the app consumes @ `752991d`); nle-test-app 83/83 @ `e662759`; ui-mock/shell-mini 333 + shell-variants 1,334.
+- The fleet's suites at the R22 pins (spec 17 §13A.7's re-tier row): nle-engine 356/356 @ `f68ab8c`; OT 459/459 @ `05584d8`; WDC 740/740 @ `fe05d85` (consumed @ `5570321`); nle-ui 640 @ `dba8d52` (the app consumes @ `752991d`); nle-test-app 83/83 @ `e662759`; ui-mock/shell-mini 353 + shell-variants 1,334.
 
 **GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
-- LAW-NET-INVENTORY (owner: nle-core-spec, gates pre-C1/pre-C4): the crawl's acceptance corpus distilled from the mini's 333-test net (acceptance: `ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md` exists + the C1/C4 gates consume it).
-- The crawl app's test authoring, ~130–180 laws (owner: nle-test-app, phase C4) (acceptance: the inventory's corpus checked row-by-row).
+- LAW-NET-INVENTORY (owner: nle-core-spec, gates pre-C1/pre-C4): the crawl's acceptance corpus distilled from the mini's 353-test net (acceptance: `ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md` exists + the C1/C4 gates consume it). LANDED at the R23 seal round: the census (128 law-family census units / 8 files / 353 tests) + the disposition totals (31 HOLDS-on-OT tests; 322 app-side authoring tests / 115 units) + the 60-static + 14-templated testid census.
+- The crawl app's test authoring — the exact scope is now counted (owner: nle-test-app, phase C4): 322 app-side authoring tests across 115 law-family census units per `ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md` §2.3-§2.4 (supersedes the earlier ~130-180 law estimate) (acceptance: the inventory's corpus checked row-by-row).
 - W-audio offline-parity threshold pins + the null rig (owner: app+WDC+engine, phase W-audio) (acceptance: max deviation ≤ −60 dBFS any channel).
 - W-color grade-math parity pins (owner: app+engine, phase W-color) (acceptance: the mock's W4 math vs the engine's output on the same fixtures — max delta ≤ 1 LSB-equivalent).
 - W-n5 real-file decode corpus (owner: nle-engine, phase W-n5 — PENDING user re-affirmation of D6) (acceptance: decode round-trip pins on the real-file corpus).
