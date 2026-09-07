@@ -8,6 +8,14 @@ to an OT surface, and every divergence is registered here with its reason
 and the downstream swap path. The goal: when the mock graduates to the real
 library, the ops rename, they don't redesign.
 
+> **R24 mapping note (fleet R24, 2026-09-08):** the wire census is re-based at OT
+> code pin `c15a629` — the 30-name R23 count is now **24 UI-routed verbs + 6
+> documented exceptions** (W11's M49C coverage gate, machine-checked; re-declares
+> mechanically per the tsc-lockstep law). D25-bridge citations in this corpus →
+> the D26 census discipline: the app's `timeline-port/` is a census-governed
+> converging mirror, not a retiring fork. The op-map rows below (keyed to the
+> 24-name era) remain the seam map — names unchanged.
+
 **Reference state studied (R19, re-read R20):** `src/lib/timeline/headless/api.ts`
 (the 30-command wire surface (the R23 census — was 24 at the R22 pin; OT-SEAMS rows keyed to the 24-name era), `{ok, code}` contract), `types/index.ts`
 (SceneTracks, element fields), `ops/group-move.ts` (resolveGroupMove,
