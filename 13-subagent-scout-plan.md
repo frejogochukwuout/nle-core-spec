@@ -1,21 +1,22 @@
 # 13 — Sub-Agent Scout Plan: Stream Breakdown, Prompts, Audit, Deliverables
 
 > **Round-7 note:** the `/home/z/my-project/download/nle-spec/` paths below are the original working locations from the Round-1-6 sessions (historical record — the repo now lives at `/home/z/my-project/nle-core-spec/` and on GitHub). This document is the process record for Rounds 1-6; Round 7's process is documented in `README.md` and `audits/ROUND-7-AUDITS.md`.
-**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the scout protocol is the operating practice, executing per round; future charters are spec 14 phase-entry decisions); Plan for dispatching sub-agents to refine the spec with code references
+**Status:** v-next (Round 23 — the R23 re-baseline: the scout protocol is the operating practice, executing per round — the R23 per-file audit fleet (20 agents, one per spec file) is its newest execution; future charters are the PLAN's phase-entry decisions (`IMPLEMENTATION-PLAN.md`, per D23 — spec 14 is retired to the redirect stub, its phase ladders re-homed per the D24 mapping). Round 22 lineage: the §0 forward inventory + the R22 re-baseline — the same operating-practice ruling, at the R22 pins); Plan for dispatching sub-agents to refine the spec with code references
 **Spec file:** `13-subagent-scout-plan.md`
 
 ---
 
-## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+## 0. FORWARD INVENTORY (the R22 posture law, D20 — what needs to be done; the BASE is accepted, not re-explained; re-baselined at R23 per the D24 ladder)
 
 **BASE (accepted, pinned 2026-09-07):**
-- The protocol is EXECUTING — the §3 workflow (scout → audit → integration review) + §7 worklog IS the operating practice for per-round research agents: R15's four scouts (the A/B/N amendment set — landed as the "(Round 15 amendment)" markers across the specs), R22's two adversarial reviewers, the mockup stream's research contracts.
-- Its downstream product at the R22 pins (the specs this process produced, executing): nle-engine @ `f68ab8c` 356/356, OT @ `05584d8` 459/459, WDC @ `fe05d85` 740/740, nle-ui @ `dba8d52` 640, nle-test-app @ `e662759` 83/83, ui-mock/shell-mini 355 + shell-variants 1,334 (nle-core-spec).
+- The protocol is EXECUTING — the §3 workflow (scout → audit → integration review) + §7 worklog IS the operating practice for per-round research agents: R15's four scouts (the A/B/N amendment set — landed as the "(Round 15 amendment)" markers across the specs), R22's two adversarial reviewers, the mockup stream's research contracts, and since the R22 re-baseline: **R23's two adversarial review rounds** (ARCH-R23 — the plan/bridge rulings review ×10 findings + the plan-doc executability review ×15, both GO-WITH-AMENDMENTS, both folded) and **the R23 per-file audit fleet — the newest scout pattern** (the user's "one sub-agent per file… so they have focus" directive): 20 agents — 00-master + the 19 numbered specs (01-20 minus the retired 14) — each with repo-level focus, editing ONLY its own file, NO git (the orchestrator commits per batch), findings to `audits/fleet-r23/NN.report.md`; the battery re-baselines the pin world once, centrally, after the fleet (`IMPLEMENTATION-PLAN.md` §8 is the charter — THIS audit round is that protocol executing).
+- The protocol's methodology carries the seal artifacts' rules (CORE-SEAMS / LAW-NET-INVENTORY, the R23 seal): the **evidence-citation rule** (an upstream-holds claim requires a REGISTERED evidence row — never a bare assertion), the **census counting rule** (declared == actual; the counts sum auditable against the live runner), and the **split rule** (a mixed-verdict unit splits into per-disposition rows — no unit carries two); battery_r23 enforces the same spine (scrape-don't-substring — the live suite is scraped, never text-matched; count-discipline).
+- Its downstream product at the R23 pins (the specs this process produced, executing; 2026-09-07, the R23 fleet re-pin — 00-master's fleet table is the pin canon, D21: HEAD + consumer pins both): nle-engine @ `b8c6f88` 440/440 (the RR1-A fade-clamp SPAN round; N2b/W2/S3 landed), OT @ `222532c` 489/489 (359 in-page + 130 real-mouse; the runner's report json is the count authority — S3 `setTracksMuted` + the F1 whole-codebase hardening + M45/M46), WDC @ `494f6ff` 759/759 (W2 + the whole-CR rounds; the drift-gate now fails-on-drift), nle-ui @ `85dcf57` 648 (F3/F7 + the kind-aware mute-all pin), nle-test-app @ `70e99f0` 117/117 (the W3 JKL audio half + RR1-B), ui-mock/shell-mini 355 (sealed) + shell-variants 1,521 (the live count at the fleet's window; 00-master's 1470 is the R23-pin-era canon figure — the battery's central post-fleet re-baseline reconciles) (nle-core-spec). R22 lineage: engine `f68ab8c` 356, OT `05584d8` 459, WDC `fe05d85` 740, nle-ui `dba8d52` 640, app `e662759` 83, variants 1,334 — the fleet moved under every R22 pin.
 
-**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
-- No standing gap — the protocol continues per round; the next chartered scouts (if any) are PHASE-ENTRY decisions, not standing charters: the FCPXML parser+corpus choice at R-fcpxml entry; the W-n5 real-file corpus at user re-affirmation of D6 (owner: the orchestrator's charter, per spec 14's phase-entry artifacts) (acceptance: the phase-entry artifact recorded in spec 14 BEFORE the phase's work starts).
+**GAP (the work — owner + phase in the D24 ladder vocabulary per `IMPLEMENTATION-PLAN.md` (was: per spec 14 — retired, the stub's §-redirect table resolves the old citations); acceptance in parentheses):**
+- No standing gap — the no-gap ruling re-verified at the R23 fleet audit and it still holds: the protocol continues per round; the next chartered scouts (if any) are PHASE-ENTRY decisions, not standing charters: the FCPXML parser+corpus choice at **r5** entry (was R-fcpxml — the interchange phase-entry artifact); the real-file decode corpus at user re-affirmation of D6 → **r4** (was W-n5; user-gated) (owner: the orchestrator's charter, per the plan's phase-entry gates — `IMPLEMENTATION-PLAN.md` §2) (acceptance: the phase-entry artifact recorded in the plan BEFORE the phase's work starts). The R23 fleet protocol itself is NOT a gap row — it is executing (this audit is one of its 20 agents; its only residue is the battery's central post-fleet re-baseline, S-spec's row).
 
-**ACCEPTANCE & TEST PLAN:** no Testing section of its own — the test is process-shaped: every chartered round leaves its §7 worklog entry + audit trail in this repo BEFORE the phase's code work starts; spec 17 §13A consumes the scouts' output via each spec's Testing section, not directly; battery posture: the pins above stay green (the specs this protocol produced keep executing).
+**ACCEPTANCE & TEST PLAN:** no Testing section of its own — the test is process-shaped: every chartered round leaves its §7 worklog entry + audit trail in this repo BEFORE the phase's code work starts (the R23 fleet's equivalent trail: the per-file findings reports in `audits/fleet-r23/`); spec 17 §13A consumes the scouts' output via each spec's Testing section, not directly; battery posture (battery_r23, the successor): the pins above stay green (the specs this protocol produced keep executing), the live suites SCRAPED not substring-matched, declared == actual (count-discipline) — during the fleet window both phase vocabularies are accepted, tightening to the D24 set at the fleet's close.
 
 ---
 
@@ -899,7 +900,7 @@ After the full scout process, the final spec set is:
 ├── 10-fcpxml-export.md → renamed to 10-fcpxml-export.md
 ├── 11-cloud-render.md → renamed to 11-cloud-render.md
 ├── 12-testing-strategy.md → renamed to 12-testing-strategy.md
-├── 14-implementation-phases.md (already written — see next file)
+├── 14-implementation-phases.md (already written — see next file; RETIRED at R23 to the redirect stub — THE plan is now IMPLEMENTATION-PLAN.md at the repo root, per D23)
 └── audits/ (audit reports, kept for reference)
     ├── 01-core-engine.audit.md
     ├── 02-workers-threading.audit.md
@@ -939,4 +940,4 @@ The architect can read the worklog to track progress across all scouts.
 
 ---
 
-**End of `13-subagent-scout-plan.md`.** Next: `14-implementation-phases.md`.
+**End of `13-subagent-scout-plan.md`.** Next: `14-implementation-phases.md` (retired at R23 — the redirect stub; THE plan is `IMPLEMENTATION-PLAN.md` at the repo root, per D23).

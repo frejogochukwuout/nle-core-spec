@@ -1,7 +1,7 @@
 # 16 — Keyboard Shortcuts: Comprehensive Interaction Spec
 
 **Stream:** Keyboard interaction layer (UI → engine command bus)
-**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the app's landed key surface @ `e662759` 83/83 + the mini's editing keys are the BASE; the gap is the C22 long tail + C1/W-ops surfaces); v1.1 (Round 15 amendment pass — A1/A6/N8/N11/N12/N15 resolutions + C2-extension registration per `.agents/SPEC-REVISION-CANDIDATES.md`, ARCH-R15 §4; original v1.0 authored under task TEST-03)
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the app's landed key surface + the mini's editing keys are the BASE; the gap is the C22 long tail + C1/W-ops surfaces); **R23 audit round (this pass): the BASE re-pinned to the 2026-09-07 fleet HEADs (app `70e99f0` 117/117, nle-ui `85dcf57` 648, OT `222532c` 489, mini 355 sealed, variants 1470), the §0 GAP register re-tagged to the D24 ladder (ARCH-R23: C1(f)→K3, W-ops→r1, R-polish→r5), the live key-surface census added (the five surfaces below), and the OT-side keyboard-laws gap registered (the K/B/J-L divergences + the fork's keymap deltas)**; v1.1 (Round 15 amendment pass — A1/A6/N8/N11/N12/N15 resolutions + C2-extension registration per `.agents/SPEC-REVISION-CANDIDATES.md`, ARCH-R15 §4; original v1.0 authored under task TEST-03)
 **Primary teacher:** FCP/Premiere/DaVinci Resolve muscle-memory conventions + FreeCut `config/hotkeys.ts` + OpenCut-classic `OC-Actions/definitions.ts`
 **Consumers:** UI keyboard handler (`src/ui/keyboard/`), test harness (`tests/e2e/keyboard.spec.ts`), cheat-sheet modal (`src/ui/cheat-sheet/`)
 **Predecessor:** `05-timeline.md` §19 (unified shortcut table — ~50 actions)
@@ -9,19 +9,25 @@
 
 ---
 
-## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+## 0. FORWARD INVENTORY (the R22 posture, re-baselined by the R23 audit fleet — what needs to be done; the BASE is accepted, not re-explained)
 
-**BASE (accepted, pinned 2026-09-07):**
-- nle-test-app @ `e662759` — 83/83, tsc 0. The app's landed key surface: JKL/split/delete/home per the OT Wave B migration.
-- The mini's editing keys — `ui-mock/shell-mini` (355 tests) + the law register `ui-mock/shell-mini/docs/OT-SEAMS.md`.
-- C22 ledger state: ~54 of ~178 rows implemented; the ledger lives in `.agents/SPEC-REVISION-CANDIDATES.md` §C + the mocks.
+**BASE (accepted, re-pinned 2026-09-07 — the R23 audit fleet; the five live key surfaces):**
+- nle-test-app @ `70e99f0` — **117/117**, tsc 0 (was `e662759` 83/83 at R22). The app's landed key surface: (a) the PORT keymap (`src/timeline-port/hooks/use-keybindings.ts` — the opencut-classic 24-row map: Space/K play, L/J JKL shuttle, ⇧L/⇧J fixed 2×, ←/→ frame-step, ⇧←/→ 1 s/5 s jump, Home/Enter/End, S split, Q/W split-side, Backspace/Delete + ⇧ ripple-delete, N snap, ⌘A select-all, ⌘D duplicate, B bookmark, Escape cancel-then-deselect; the port's ctrl+z / ctrl+shift+z / ctrl+y rows are REMOVED — the shell owns undo, D22b); (b) **the W3 JKL half landed** (`3f351bc`, design `docs/design-jkl-audio-follow.md` v1.1): the port's tap-accel ladder (1×→2×→4× inside 500 ms; K pauses with the rate persisted — the engine law; ⇧L/⇧J bypass at 2×) drives `core.setPlaybackRate` directly (capture-phase); the audio scheduler composes the transport rate (varispeedRate = elementRate × rate; one stop+reschedule per rate change; r < 0 = silent reverse); the routed `setShuttle` round-trips through the mirror (`engineService.setPlaybackRate`; contract surface — no production caller, the port's keymap owns JKL in the engine world); (c) the shell-owner undo law (nle-ui's useShortcuts ⌘Z/⇧⌘Z/⌘Y → the timelineRouter facade: engine history first, store domain second).
+- The mini's editing keys — `ui-mock/shell-mini` (355 tests, the R23 seal) + the law registers: `docs/CORE-SEAMS.md` **S9** (useKeys: Space/S/[/]/Del/±/0/Home/Esc + the form-control skip + the C1/C16 laws) + `docs/LAW-NET-INVENTORY.md`'s App.test.tsx row (the keyboard-on-shell laws: **C1** Space-yields-to-native-button, **C16** auto-repeat gate, **C46** clip-is-a-button, **C49** the advertised zoom keys). The mini's `[`/`]` = cutHead/cutTail (trim-to-playhead, ripple-pref-aware — the R18e form; §3.4's ⌥[ / ⌥] ripple chords live in the nle-ui/variants shells instead).
+- nle-ui @ `85dcf57` — 648/648. The package's shell keymap: `src/hooks/useShortcuts.ts` + `src/lib/shortcutMap.ts` (**53 cheat-sheet rows** — the honest implemented-set ledger, §8.6 single-source discipline) + the CheatSheet modal (§7.3, auto-generated). The **engine-owned yield law (D22b)**: router-attached → the port keymap owns the plain NLE editing keys (incl. the shifted ⇧J/⇧L/⇧Backspace/⇧←→ — the W3/F5 double-fire fix); the shell keeps the ⌘-family, pages, markers, ⌥-family, F6.
+- The variants track (1470 tests) — the page-key grammar: **⌘1-⌘5** (Edit/Color/Deliver/Audio/FX — R23-WA's ⌘5 row), the **FX tool joins the tool radio with NO plain key** (V/B/T/Y/U/R own the radio; the FX entry + the ⌘5 chord own the FX surface), **Escape exits** (FX tool → select; audio focus → edit); `src/lib/shortcutMap.ts` 56 rows (adds ⌘5 + the source-mode `,`/`.` insert/overwrite rows, R20-W2 C46).
+- OT @ `222532c` — 489/489. **The CANONICAL keymap now lives in the tree**: `src/components/timeline/hooks/use-keybindings.ts` (the 24-row opencut-classic map — incl. the ctrl+z / ctrl+shift+z / ctrl+y undo rows OT keeps; l/j = discrete ±1 s jumps; K = play/pause toggle) + the in-page real-keyboard suites (**M24**: S split, Space + rAF ticker, follow-scroll, arrows + Home/End, Delete + Ctrl+Z, B bookmark, text-input guard; **M28's** keyboard half: k/l/j jumps, ⇧arrow 5 s, q/w split sides, Enter, Backspace, n snap, ⌘a, Escape, ⌘d, ⌘y/⌘⇧z redo).
+- C22 ledger state: the ledger row reads "42→~60 bindings implemented" (`.agents/SPEC-REVISION-CANDIDATES.md` §C C22); the live cheat-sheet ledgers count **53 rows (nle-ui) / 56 rows (variants)** of this spec's **181-row Appendix A universe** — the remainder is the r5 long tail (the old "~54 of ~178" claim is retired: both sides stale).
 
-**GAP (the work — owner + phase per spec 14; the register is spec 14 §4.1):**
-- Keymap long tail (R-polish; acceptance: the C22 ledger closed row-by-row + spec 17 facet rows).
-- The crawl's editing keyboard surface + undo/redo exposure — MiniShell owns the editing keys (C1; acceptance: the mini's key laws re-expressed as app-side tests, the LAW-NET-INVENTORY corpus).
-- W-ops keymap surfaces for the new op families (W-ops; acceptance: keymap rows + nle-ui sync).
+**GAP (the work — owner + acceptance; phase tags per the D24 verification ladder, ARCH-R23 — spec 14 §4's per-domain registers are RETIRED, this §0 is the register):**
+- **K3 (was C1(f)) — the crawl's editing keyboard surface + undo/redo exposure.** MiniShell owns the editing keys (CORE-SEAMS S9, the w1-prep/S-package C0 chrome row carries the component; the KEY laws are K3). Landed since R22: the app's port keymap, the W3 JKL engine-rate ladder, the shell-owner undo law (D22b). **Remains:** the mini's key laws re-expressed as app-side tests over the canonical tree — the LAW-NET-INVENTORY corpus (the keyboard-on-shell families C1/C16/C46/C49 + the history family: cap + no-op guard + selection healing). Acceptance: the corpus rows green app-side (the K3 gate; ordering law: the DOM-structural half after the D25 swap, the store/policy halves ∥).
+- **K3 (NEW — the OT-side keyboard-laws census, registered this round).** The canonical OT keymap vs THIS spec's map diverge on three rows: **K** (OT + the app port: play/pause TOGGLE vs §3.1's pause-only), **B** (OT + the app port: bookmark-at-playhead vs §3.2's razor tool), **J/L** (OT: discrete ±1 s jumps vs §3.1's shuttle — the app fork already carries the shuttle ladder). Plus: the app fork's keymap deltas are the D25 bridge's keyboard-class PORT-LOCAL set (the JKL ladder + the removed undo rows); the mini's **C16 auto-repeat gate (`e.repeat`) is NOT in the OT/app keymap** — a held S machine-guns splits there (live-proven in the mini; the canonical tree needs the gate or the app-side re-expression pins it). Disposition: the D25 bridge upstreams/decides ownership; K3 re-points the app-side key tests at the canonical tree. Owner: S-ot (bridge) + S-app (K3).
+- **r5 (was R-polish) — the keymap long tail.** Acceptance: the C22 ledger closed row-by-row (53/56 of 181 rows implemented today) + spec 17 facet rows.
+- **r1 (was W-ops) — keymap surfaces for the new op families** (slip/slide/roll/rateStretch wave 1; retime/freezeFrame/rangeRemoval wave 2). Acceptance: keymap rows + nle-ui sync (the S-package workstream's r1 queue row).
+- **The D25 bridge (was spec 14 §4.1's OT-side halves, re-homed).** The view-config surface — zoom-ladder config (the ± keys' ladder constant) + ripple-toggle semantics exposure (the ⌥R mode's engine-side semantics). The keyboard-side consumers: §3.8's zoom rows + §3.2's Option+R row. Owner: S-ot (the bridge work order's item 3).
+- **K3 (the page-key grammar reconciliation).** The live mock grammar (⌘1=Edit / ⌘2=Color / ⌘3=Deliver / ⌘4=Audio / ⌘5=FX; the FX tool radio; Escape exits) vs §3.8's ⌘1-⌘4 (⌘3 = "Effects workspace" — the collision). R23-WA landed the ⌘5 row + the spec-side registration note; the ⌘3 reconciliation is PENDING (the variants' wrap note). Acceptance: §3.8 amended (or the deviation registered in SPEC-REVISION-CANDIDATES) + the app-side page-key tests at K3.
 
-**ACCEPTANCE & TEST PLAN:** §9 (Test Verification) + Appendix A (the flat registry for enumeration) are this spec's battery; BASE acceptance = the cited suites at the cited pins (app 83; mini 355) — the regression role. GAP acceptance is per-row above; facet rows in spec 17 §13A.
+**ACCEPTANCE & TEST PLAN:** §9 (Test Verification) + Appendix A (the flat registry for enumeration) are this spec's battery; BASE acceptance = the cited suites at the cited pins (**app 117; mini 355; nle-ui 648**; the OT in-page M24/M28 real-keyboard suites at `222532c`) — the regression role. GAP acceptance is per-row above; facet rows in spec 17 §13A.
 
 ---
 
@@ -157,6 +163,8 @@ Organized by category. For each shortcut:
 
 **JKL multi-tap semantics:** `J` and `L` are stateful — each consecutive press within 500 ms of the previous increments speed by 1× (capped at 4×). Pressing `K` or `Space` resets the counter. The resolver tracks tap-count in a closure; the emitted `EngineCommand` always carries the absolute target rate, not a delta, so tests can assert directly on rate.
 
+**R23 live-surface census (the JKL family, where it landed):** the ladder above is LIVE in three of the five surfaces — the app's port keymap (`use-keybindings.ts` + `use-timeline-actions.ts`: tap-accel 1×→2×→4× inside 500 ms, direction change restarts at 1×, ⇧L/⇧J fixed 2×, **K pauses with the rate PERSISTED — the engine's documented law**, the mock clock's reset was the deliberate divergence), the nle-ui mock (store-world `setShuttle`, mock-only — yields to the port in the engine world, D22b), and the variants' mock. The W3 round (`70e99f0`) made the AUDIO follow the transport rate (varispeedRate = elementRate × rate, one reschedule per rate change, silent reverse). **OT's canonical keymap is the outlier:** `l`/`j` = discrete ±1 s jumps (the classic map), `K` = play/pause TOGGLE — both diverge from this spec's rows; the app fork's JKL rows are the D25 bridge's keyboard-class PORT-LOCAL deltas (see §0's GAP register). K-then-J/L ½× slow-mo remains unimplemented everywhere (ledger C20).
+
 ### 3.2 Tools
 
 | Key | Action | EngineCommand | Context | FCP equiv |
@@ -178,6 +186,8 @@ Organized by category. For each shortcut:
 **`toggleSnap` greenfield (audit Issue #14):** snap is a UI-layer concern (timeline viewport snapping during drag/trim/move). Spec 01's `TimelineManager` interface does not have a `toggleSnap` method. This spec therefore routes `toggleSnap` to `uiStore.timeline.toggleSnap()` (Zustand) — see §8.3 resolver + §12 cross-reference. The flag is 📝 NEW greenfield on the UI store; spec 01 may absorb it in a future revision. `toggleRipple` is NOT greenfield — `engine.command.isRippleEnabled` IS on EditorCore (spec 01 §3.1 line 215).
 
 **R-key resolution (Round 15 amendment, A6):** `R` selects the ripple **TOOL** (`selectTool {tool:'ripple'}`, matching spec 18 §4.5's tool inventory — spec 15 §4.3.45's enum member); ripple **MODE** — the global editing pref that makes delete/insert/trim ops ripple — is NOT a tool: it rides `Option+R` above (or a transport-cluster toggle in 18 §4.5) and persists as `TimelineViewState.rippleMode` (spec 09 §3.1 — a view-level UI pref, both homes stated: ⌥R is the binding, `rippleMode` is the stored state). This collapses the three prior claimants: 16 §3.2's old `R` = mode toggle, 18 §4.5's ripple tool, and spec 15 §13.5's registry example mapping `R` → `selectTool razor` (that example row is corrected by this resolution — razor is `B` per §3.2; the 15-side text fix rides the R15 spec pass). The mock's binding (`R` → `setTool('ripple')`) implements this form.
+
+**FX tool + the radio (R23-WA, DESIGN-R23 D-A1/ruling 18):** the variants' FX tool joins the edit-tool radio (select/blade/roll/slip/slide/ripple/**fx**) with **NO plain key of its own** — V/B/T/Y/U/R own the six plain rungs; the FX entry is reachable via the radio and the `⌘5` FX-page chord. Spec 18 §4.5's tool union is the owner of the seventh member; this spec keeps §3.2's six plain keys unchanged. (The live behavior: the FX tool implies `fxMode`; leaving the FX page re-seats a stranded fx tool to select; Escape exits the FX tool — the existing tool-escape rung covers it for free.)
 
 ### 3.3 Selection
 
@@ -317,6 +327,8 @@ Organized by category. For each shortcut:
 | `Cmd+;` | Toggle grid overlay in preview | (UI state) | Always | (none) |
 
 **Fullscreen-preview conflict:** FCP uses `Cmd+Ctrl+F` for fullscreen; the binding `Cmd+Shift+F` here matches FreeCut's "open Scene Browser". Resolution: `Cmd+Shift+F` = **fullscreen preview** (more common in browser context where there is no separate Scene Browser window). Scene Browser opens via `Cmd+Option+B`.
+
+**R23 page-key reconciliation (PENDING — the live grammar vs these rows):** the shipped mock grammar (nle-ui + the variants) is `⌘1` Edit / `⌘2` Color / `⌘3` **Deliver** / `⌘4` Audio / `⌘5` **FX** (R23-WA) — this table's `⌘3` = "Effects workspace" collides with the live `⌘3` = Deliver, and the live surfaces add a fifth page (FX) this table lacks. The registered disposition (the variants' R23-WA wrap note): the FX page took spec 16's free `⌘5` chord; the `⌘3` reconciliation (Effects-workspace renamed/re-homed vs Deliver) is the pending edit — resolution rides the seal round or the SPEC-REVISION-CANDIDATES registration (see §0's GAP register row). `Escape` exits the Audio focus page and the FX tool back to Edit (the live law; §3.2's tool-escape row + §3.13's modal row generalize it).
 
 ### 3.9 Project / File
 
@@ -1488,6 +1500,8 @@ export function isTextInput(target: HTMLElement | null): boolean {
 }
 ```
 
+**R23 live-guard census (the input/overlay family as shipped — each law is netted in its owner repo):** the skip list in every live surface adds **`SELECT`** (the mini's R18k review P2-4: a focused track-binding dropdown must keep its own keys — Space opens it, typing finds options); the **OS auto-repeat `e.repeat` gate** (the mini's C16: one S-hold = one split; NOT yet in the OT/app keymap — see §0's GAP row); the **native-control yield** (the mini's C1: Space on a focused `button`/`a` yields to the browser's own activation — ARIA-role elements do NOT yield); the **overlay/modal gate** (OT + the app: while a context menu, dialog, or any `[data-modal]` element is open, ALL timeline shortcuts are suppressed — the menu's own Escape closes it); **Escape-in-typable blurs first** (OT: the blur runs before the typable guard swallows the key); the **focused-playhead arrow ownership** (OT: the focused playhead component owns ←/→ frame-stepping; the global binding would double-apply); and the **Alt guard** (OT: no binding uses Alt — an Alt-held combo belongs to the OS/browser and must not be preventDefault-ed). The mock-vs-spec gap on the Cmd-combos-in-fields question is registered as ledger C1 (SPEC-REVISION-CANDIDATES §C: the mock suppresses everything mid-field; this §8.5 keeps `Cmd+` alive).
+
 ### 8.6 ShortcutMap
 
 The `ShortcutMap` is a `Map<ShortcutKey, ShortcutDescriptor[]>` (note: array of descriptors per key — see Issue #8 resolution below) with these features:
@@ -2067,20 +2081,20 @@ Each `EngineCommand` type maps to one or more manager methods on `EditorCore` **
 
 ---
 
-## 13. Implementation Phasing
+## 13. Implementation Phasing (R23 re-base — the old phase rows kept, dual-tagged to the D24 ladder)
 
-This spec is implemented across the phases defined in `14-implementation-phases.md`:
+**[R23 note: `14-implementation-phases.md` is RETIRED to a redirect stub (D23) — `IMPLEMENTATION-PLAN.md` at the spec-repo root is THE plan. The historical phase rows below are kept for lineage and re-tagged per the D24 verification ladder (ARCH-R23): the crawl's app-behavior rows → **K3** (programmatic), the fidelity rows → **w1**, op depth → **r1**, the long-tail/polish rows → **r5**. This spec's live acceptance rows are §0's GAP register — this table is the coarse map only.]**
 
-| Phase | What's built | Shortcuts included |
-|---|---|---|
-| Phase 2 (timeline MVP) | Playback + basic edit | §3.1 (playback), §3.2 (tools: V, B), §3.3 (Tab/Esc), §3.4 (Cmd+B, Delete, Backspace), §3.10 (undo/redo) |
-| Phase 3 (full ops) | All NLE ops | §3.4 (full), §3.6 (nudge), §3.5 (track ops) |
-| Phase 4 (effects + color) | Effects pipeline | §3.11 (effects) |
-| Phase 5 (keyframes) | Keyframe panel | §3.12 (keyframes) |
-| Phase 6 (polish) | Cheat sheet, ARIA | §3.13 (help), §7 (accessibility) |
-| v2 (customization) | Remap UI | §7.4, §8.6 `mergeOverrides` |
+| Old phase (spec 14, retired) | D24 stage | What's built | Shortcuts included |
+|---|---|---|---|
+| Phase 2 (timeline MVP) | **K3** (the app-behavior nets; the surface already exists — the app's port keymap + the shell) | Playback + basic edit | §3.1 (playback), §3.2 (tools: V, B), §3.3 (Tab/Esc), §3.4 (Cmd+B, Delete, Backspace), §3.10 (undo/redo) — LIVED: the port's 24-row map + the W3 JKL half + the D22b undo law |
+| Phase 3 (full ops) | **K3** (composes) + **r1** (op depth: slip/slide/roll/rateStretch, retime/freezeFrame/rangeRemoval) | All NLE ops | §3.4 (full), §3.6 (nudge), §3.5 (track ops) |
+| Phase 4 (effects + color) | **r3**-adjacent (the color instruments) + K3 (the panel rows' app tests) | Effects pipeline | §3.11 (effects) |
+| Phase 5 (keyframes) | **r1/r6**-adjacent (keyframe ops) + K3 | Keyframe panel | §3.12 (keyframes) |
+| Phase 6 (polish) | **r5** (interchange + polish — the keymap long tail) | Cheat sheet, ARIA | §3.13 (help), §7 (accessibility) — LIVED: the cheat sheet is real in nle-ui/variants (§7.3's single-source discipline) |
+| v2 (customization) | **r5** | Remap UI | §7.4, §8.6 `mergeOverrides` |
 
-Phase 2's exit criteria (per `14-implementation-phases.md` line 308: "Keyboard shortcuts work") is satisfied when all Phase-2 shortcuts in the table above pass their tests (§9).
+The old "Phase 2 exit criteria" ("Keyboard shortcuts work") is answered by the K3 gate today: the app's key surface at `70e99f0` (117/117 — the S1 JKL pins, the S2 delete/undo round-trips) + the mini's law corpus (355) + the OT in-page real-keyboard suites (M24/M28 at `222532c`) are the crawl's evidence; the REMAINING rows are §0's GAP register (the K3 re-expression, the OT-side census, the r5 long tail, the r1 surfaces).
 
 ---
 
@@ -2322,13 +2336,15 @@ For implementers. Each `EngineCommand` type maps to a `Command` subclass (or dir
 | `exportFrame` | `engine.command.apply({type:'exportFrame'})` → `ExportFrameCommand` (spec 15 §4.3.76) | `src/commands/export/export-frame.ts` |
 | (all playback / UI-store ops) | direct manager calls / `uiStore.*` setters | (no Command class) |
 
-**Greenfield files** (marked "greenfield" above) are new — they do not exist in OpenCut-classic and must be authored as part of this spec's implementation. See `14-implementation-phases.md` Phase 3 for scheduling. Spec-15-canonical type renames (`deleteTrack`, `upsertKeyframes`, `removeKeyframes`, `retimeKeyframe`, `copyClipboardEntry`, `buildPasteClipboardCommand`, `closeProject`) reflect alignment with `15-wire-protocol.md` §4 — files keep their existing OpenCut-classic file paths (e.g., `remove-track.ts`) but the EngineCommand discriminator uses the spec-15 name.
+**Greenfield files** (marked "greenfield" above) are new — they do not exist in OpenCut-classic and must be authored as part of this spec's implementation. Scheduling (R23 re-base): the composites that are app-side behavior (the `splitAndRemove`/ripple composes) author at **K3** over `timeline.trim`/`rippleDelete` (the GAP-W-ops rows); the op-depth families (slip/slide/roll/rateStretch/retime/freezeFrame/rangeRemoval) queue at **r1** (S-ot's workstream) — see `IMPLEMENTATION-PLAN.md` §3. Spec-15-canonical type renames (`deleteTrack`, `upsertKeyframes`, `removeKeyframes`, `retimeKeyframe`, `copyClipboardEntry`, `buildPasteClipboardCommand`, `closeProject`) reflect alignment with `15-wire-protocol.md` §4 — files keep their existing OpenCut-classic file paths (e.g., `remove-track.ts`) but the EngineCommand discriminator uses the spec-15 name.
 
 ---
 
 ## 16. Appendix C — Test Matrix
 
 Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status column tracks implementation. **Counts aligned to Appendix A's 181-row canonical registry** (see Appendix A footer for the collapsing rule that derives ~110 unique actions).
+
+**[R23 status note: the "Tests written: 0" column tracks THIS spec's planned app-side Playwright enumeration corpus (the K3/r5 target) — it is still 0 as a named suite. The crawl's keyboard NETS, however, are real and green in their owner repos (the verification layer moved under the R22 plan): the app's vitest pins (`GluedShell.test.tsx` S1/S2 — the JKL ladder, the delete/undo round-trips; 117/117), the mini's LAW-NET law tests (C1/C16/C46/C49 + Space/Escape; 355 sealed), nle-ui's useShortcuts.test.tsx (648), the variants' useShortcuts/shortcutMap tests (1470), and OT's in-page real-keyboard suites (M24 + M28's keyboard half, `222532c`). The 181-row enumeration corpus lands with the K3 re-expression (the mini's key laws re-expressed app-side) + the r5 long tail. The per-category phase tags below are the OLD spec-14 ladder — see §13's D24 re-base.]**
 
 | Category | Tests planned | Tests written | Status |
 |---|---|---|---|
@@ -2353,15 +2369,15 @@ Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status co
 
 ## 17. Code References — nle-engine (reference, NOT canon)
 
-nle-engine has NO keyboard layer — it is engine + headless API only (its own Decision 9: "No React dependency in engine core"). Everything in this spec is SPEC-ONLY relative to the engine; the rows below document what the engine does provide that an implementer will attach a keyboard handler to. Where engine and spec conflict, **the spec wins**. Full reconciliation: `19-code-references.md`.
+nle-engine has NO keyboard layer — it is engine + headless API only (its own Decision 9: "No React dependency in engine core"). Everything in this spec is SPEC-ONLY relative to the engine; the rows below document what the engine does provide that an implementer will attach a keyboard handler to. Where engine and spec conflict, **the spec wins**. Full reconciliation: `19-code-references.md`. **[R23 re-verified at `b8c6f88` — every verdict STANDS; the file:line citations refreshed (the playback/player and headless/api files live under `src/lib/nle/` now):]**
 
 | Spec 16 section | nle-engine file:line | Verified quote | Status | Note |
 |---|---|---|---|---|
-| §3 entire inventory | `src/app/page.tsx` (grep) | only match: `compositionKeyframe pass=${pass}` | SPEC-ONLY | No `keydown`/`keyup` handler anywhere in the engine (incl. the test page); FreeCut's `config/hotkeys.ts` (this spec's primary teacher) was not ported |
-| §8 handler architecture | `scripts/run-nle-tests.mjs:122` | `await page.waitForSelector('button:has-text("Run All Milestones")'` | SPEC-ONLY | The only UI input the engine's harness exercises is one button click; `page.keyboard` is never used |
-| §3.1 JKL / setRate | `playback/player.ts:652` | `this._clock.playbackRate = rate;` | ALIGNED (underneath) | The rate machinery a JKL resolver would drive exists in Player; only the key→command layer is missing |
-| §3.2 tool keys → selectTool | `headless/api.ts:767` | `case 'addText': {` | ENGINE-GAP | No tool/selection model on the engine's wire surface (`selectTool`, `selectElements`, `marqueeSelect` have no counterpart) |
-| §3.12 keyframes | `headless/api.ts:893` | `const r = actions.addKeyframe({` | ALIGNED | `addKeyframe {itemId, property, frame, value, easing}` is wire-drivable today |
+| §3 entire inventory | `src/app/page.tsx:5794` (grep) | only match: `compositionKeyframe pass=${pass}` | SPEC-ONLY | No `keydown`/`keyup` handler anywhere in the NLE surface (the only keydown listeners in the tree are the shadcn-style UI kit's `components/ui/sidebar.tsx:108`/carousel — not the NLE); FreeCut's `config/hotkeys.ts` (this spec's primary teacher) was not ported |
+| §8 handler architecture | `scripts/run-nle-tests.mjs:167` | `await page.waitForSelector('button:has-text("Run All Milestones")'` | SPEC-ONLY | The only UI input the engine's harness exercises is one button click; `page.keyboard` is never used |
+| §3.1 JKL / setRate | `src/lib/nle/playback/player.ts:994-995` | `setPlaybackRate(rate: number): void { this._clock.playbackRate = rate;` | ALIGNED (underneath) | The rate machinery a JKL resolver would drive exists in Player (the `ratechange` event forwards from the clock, player.ts:606-607); the key→command layer is missing engine-side — the APP's port keymap drives it through the vendored OT (`core.setPlaybackRate`, W3-verified) |
+| §3.2 tool keys → selectTool | `src/lib/nle/headless/api.ts:793` | `case 'addText': {` | ENGINE-GAP | No tool/selection model on the engine's wire surface (`selectTool`, `selectElements`, `marqueeSelect` have no counterpart) |
+| §3.12 keyframes | `src/lib/nle/headless/api.ts:919` | `const r = actions.addKeyframe({` | ALIGNED | `addKeyframe {itemId, property, frame, value, easing}` is wire-drivable today |
 | §9 test recipes | `gaps/audit/G-test-coverage.md:248` | `A thrown error inside any test block escapes` | CORRECTIVE | No per-test isolation in the engine harness — §9's assert-on-command patterns are the upgrade |
 
 ---
@@ -2377,7 +2393,7 @@ nle-engine has NO keyboard layer — it is engine + headless API only (its own D
 - Spec 10 (FCPXML export): handoff target — drives FCP-convention choice (§2.1, §11)
 - Spec 11 (cloud render): `exportMaster` destination
 - Spec 12 (testing strategy): test patterns, property-based testing
-- Spec 14 (implementation phases): phasing (§13)
+- Spec 14 (implementation phases): **RETIRED to a redirect stub (D23)** — the phasing content lives in `IMPLEMENTATION-PLAN.md` (this spec's §13 re-based; the old phase rows dual-tagged to the D24 ladder)
 - Spec 15 (`15-wire-protocol.md`, TEST-02 shipped, Round-7 amended): canonical `EngineCommand` discriminated union (78 types, §4.1) + command→manager-method mapping (§4.2) + `apply()` dispatcher (§4.4) + export commands (§4.3.74-76) and `renameProject`/`deleteProject` (§4.3.77-78). Spec 16's §8.3 reproduces the spec-15-overlapping types for local compilation; spec 15 is normative.
 - Spec 18 (UI shell): panel/tool controls that emit this spec's shortcuts and UI-layer commands (§0.2); the cheat-sheet modal (§7.3) lives in the shell's help surface (spec 18 §4.8).
 - Spec 19 (code references): the keyboard layer is SPEC-ONLY vs nle-engine (no keyboard code exists there) — see spec 19 §11's map.

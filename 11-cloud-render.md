@@ -1,7 +1,7 @@
 # 11 — Cloud Render: Headless Chrome + Real GPU + ffmpeg at Edges
 
 **Stream:** Cloud render pipeline
-**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the contract stands as design-only; R-cloud is unchartered — a non-goal until the user re-scopes it); Refined (SCOUT-11) — primary teacher FreeCut `src/headless/main.ts` (1293 LOC) + FreeCut `headless/` directory (24 driver files) + our own design
+**Status:** v-next (Round 23 — the fleet re-audit: R-cloud → **r6, unchartered** per D24's non-blocking tail — a non-goal until the user re-scopes it; zero cloud-SERVICE code re-verified at the R23 pins, while the design's two browser-side halves — the headless harness API + the in-browser WebCodecs/mediabunny encode path (this spec's §11.4 Path A) — are now LANDED engine-side at `b8c6f88` 440/440; see §0 BASE + the §14R R23 note; Round 22 — the §0 forward inventory + the R22 re-baseline: the contract stands as design-only; R-cloud unchartered); Refined (SCOUT-11) — primary teacher FreeCut `src/headless/main.ts` (1293 LOC) + FreeCut `headless/` directory (24 driver files) + our own design
 **Primary teacher:** FreeCut `headless/main.ts` + our own design
 **Spec file:** `11-cloud-render.md`
 
@@ -9,13 +9,16 @@
 
 ## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
 
-**BASE (accepted, pinned 2026-09-07):**
-- The cloud render DESIGN (§1-§18 + the Testing section): headless Chrome + real GPU + ffmpeg at the edges, the WYSIWYG contract (§11) — DESIGN-ONLY, honest: the fleet has ZERO cloud code (no repo pin; nothing shipped, nothing to regress).
+**BASE (accepted, pinned 2026-09-07; line-pins re-verified at the R23 HEADs):**
+- The cloud render DESIGN (§1-§18 + the Testing section): headless Chrome + real GPU + ffmpeg at the edges, the WYSIWYG contract (§11), the two-path encode strategy (§11.4) — DESIGN-ONLY, the design-of-record for an unchartered stream.
+- **Zero cloud-SERVICE code re-verified at the R23 pins** (engine `b8c6f88` 440/440 tsc 0 · OT `222532c` 489 · WDC `494f6ff` 759 · nle-ui `85dcf57` 648 · app `70e99f0` 117 — grepped): no Node render driver/server, no render queue, no ffmpeg subprocess, no S3/RemoteStorage, no Dockerfile/RunPod surface, no real-GPU flag set anywhere. The engine's own driver is Xvfb+SwiftShader software-WebGPU **by design** (its Decision 12); its P3 "Node-side HTTP headless driver" gap is still open (`gaps/audit/MASTER.md:166`). Nothing shipped, nothing to regress.
+- **The design's browser-side halves are REAL in the engine at HEAD (new since the R22 pin; the honest refinement of the old "fleet has ZERO cloud code" claim):** (a) the headless harness — `src/lib/nle/headless/api.ts` (2,757 LOC; the 9-method `window.freecut`-shaped `NleHeadlessApi` with `AbortSignal` support + `HARNESS_READY_PREDICATE`, mounted in-page with the REAL render adapter at the m24.9/m26.10 browser milestones); (b) the in-browser encode path = this spec's §11.4 **Path A** — `src/lib/nle/export/` (orchestrator 936 / settings 368 / audio-mixdown 369 / contracts 92 LOC; Wave 5B Export M1 + Stage 2 audio + m29 A/V mux; WebCodecs+mediabunny; decode-verified incl. pixel parity vs `renderFrameOffscreen` — see `gaps/audit/MASTER.md` rows 5B/5B-S2/5B-S2C). Path B (the ffmpeg raw-frame pipe, §11.4/§17), the queue/server/storage layer (§8-§10), the real-GPU flag set + RunPod/Dockerfile (§4.1/§18) remain SPEC-ONLY.
+- The UI-side activation reference: the Deliver pages' render-queue mock (nle-ui `src/components/pages/DeliverPage.tsx` + in-repo `ui-mock/shell-variants/src/components/pages/DeliverPage.tsx` — the "Cloud render (headless Chrome + GPU)" preset badge, honest-mock static queued rows, "render queue is mock — no encode runs"; the file headers cite "specs 10-11").
 
-**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
-- **NONE scheduled.** R-cloud is unchartered, a non-goal until the user re-scopes it (spec 14 §3.3; phase: R-cloud — unchartered; acceptance: n/a until re-scoped by user). Do not invent work.
+**GAP (the work — owner + phase per the D24 ladder; acceptance in parentheses):**
+- **NONE scheduled.** R-cloud → **r6 — unchartered** (was R-cloud, spec-14 §3.3's RUN row — the retired stub's §-redirect re-points it to `IMPLEMENTATION-PLAN.md` §2's r6 row: "cloud render UNCHARTERED unless the user re-scopes"; D24's non-blocking tail), a non-goal until the user re-scopes it. Acceptance: n/a until re-scoped by the user. Do not invent work. [This row IS the retired spec-14 §4 R-cloud row's home — the unchartered ruling re-homed per D23.3/D24; the battery's spec-11 (with 13) no-gap-rows exemption stays honored: this row is the honest register. Owner at activation time: n/a (a new cloud service repo or an app-side seam — the re-scope decides).]
 
-**ACCEPTANCE & TEST PLAN:** activation-time only — the Testing section + spec 17 §13A cloud-render facet rows run IF AND ONLY IF R-cloud is chartered; until then the posture row above is the whole story.
+**ACCEPTANCE & TEST PLAN:** activation-time only — the Testing section + spec 17 §13A's cloud-render facet rows (WYSIWYG / memory ceiling / 4K + 8K render time — re-verified present at its matrix) run IF AND ONLY IF the stream is chartered (r6 entry); until then the posture row above is the whole story. The Tier-2/3 fixtures, the `docker/Dockerfile.cloud-render` + RunPod template (§18), and the Deliver-page CTA → `POST /api/render` wiring are authored at activation time (the standing UI reference: the two DeliverPages' render-queue mock, §0 BASE above).
 
 ---
 
@@ -1437,20 +1440,22 @@ FreeCut's harness downloads via Playwright's download API to local disk; it does
 
 ### 14R. Code References — nle-engine (reference, NOT canon)
 
-> nle-engine has **no cloud render** — `src/lib/nle/headless/api.ts` (2,820 LOC) is the closest reference. The engine's Xvfb+SwiftShader headless setup (its Decision 12) is an ALIGNED reference for this spec's headless-Chrome infrastructure; the cloud pipeline itself is SPEC-ONLY. Full reconciliation: `19-code-references.md`.
+> nle-engine has **no cloud-SERVICE render** (re-verified at `b8c6f88` — see §0 BASE) — but it DOES carry both browser-side halves this spec designs against: `src/lib/nle/headless/api.ts` (2,757 LOC, the harness API) + `src/lib/nle/export/` (this spec's §11.4 Path A encode path, decode-verified). The engine's Xvfb+SwiftShader headless setup (its Decision 12) is an ALIGNED reference for this spec's headless-Chrome infrastructure; the cloud pipeline (driver/queue/ffmpeg/server/S3) remains SPEC-ONLY. Full reconciliation: `19-code-references.md`.
 
 | Spec section | Engine file:line | Verified quote | Status | Note |
 |---|---|---|---|---|
-| §4.1 GPU flags | `scripts/run-nle-tests.mjs:30` | `'--use-webgpu-adapter=swiftshader',` | CORRECTIVE | Engine forces software WebGPU by design; spec's real-GPU flags win for cloud render |
+| §4.1 GPU flags | `scripts/run-nle-tests.mjs:66` | `'--use-webgpu-adapter=swiftshader',` | CORRECTIVE | Engine forces software WebGPU by design; spec's real-GPU flags win for cloud render |
 | Xvfb prerequisite | `.agents/DECISIONS.md:226` | `` `--headless=new` alone returns `null` from `requestAdapter()`. `` | ALIGNED (CI) | Xvfb mandatory even headless; spec §4.1 gains the CI-fallback note |
-| §15.K 9-method surface | `src/lib/nle/headless/api.ts:88` | `export interface NleHeadlessApi {` | ALIGNED | Mirrors FreeCut's `window.freecut` surface |
+| §15.K 9-method surface | `src/lib/nle/headless/api.ts:111` | `export interface NleHeadlessApi {` | ALIGNED | Mirrors FreeCut's `window.freecut` surface |
 | §11.2 StaticClock | `.agents/DECISIONS.md:29` | `The `Clock` class derives time from `AudioContext.currentTime`` | CORRECTIVE | One real-time clock only; spec's StaticClock render entry is required |
-| §14 single-frame delivery | `src/lib/nle/headless/api.ts:95` | `Grab one frame as an image blob (default: full-res PNG).` | ALIGNED | renderFrame → PNG blob matches the frame-grab pattern |
-| HTTP driver | `gaps/audit/MASTER.md:101` | `Node-side HTTP headless driver + workspace writer lock` | ENGINE-GAP | Listed P3 in engine; spec 15 §8 is the contract |
+| §14 single-frame delivery | `src/lib/nle/headless/api.ts:118` | `Grab one frame as an image blob (default: full-res PNG).` | ALIGNED | renderFrame → PNG blob matches the frame-grab pattern |
+| HTTP driver | `gaps/audit/MASTER.md:166` | `Node-side HTTP headless driver + workspace writer lock` | ENGINE-GAP | Listed P3 in engine; spec 15 §8 is the contract |
 | §10 crash recovery | — | COULD-NOT-VERIFY | SPEC-ONLY | No queue/supervisor in engine |
 | §18 Docker/RunPod | — | COULD-NOT-VERIFY (no Dockerfile) | SPEC-ONLY | FreeCut's Dockerfile remains the reference |
 | Error-path discipline | `gaps/audit/G-test-coverage.md:26` | `Total error/boundary ≈ 12/128 (9%).` | CORRECTIVE | Spec's explicit failure-state assertions are the bar |
 | CI smoke reference | `scripts/run-nle-tests.mjs:8` | `headless Chrome REQUIRES Xvfb` | ALIGNED | Working Xvfb + software-Vulkan reference for the smoke tier |
+
+> **R23 re-verification (2026-09-07, `b8c6f88` 440/440):** zero cloud-service code re-verified by grep across all five repos (only false positives: the engine's S3A wave-tags + the two mock DeliverPages). Line pins re-based: `headless/api.ts` 2,820→**2,757** LOC, `NleHeadlessApi` :88→**:111**, the frame-grab doc :95→**:118**, MASTER's P3 HTTP-driver row :101→**:166**, the SwiftShader flag :30→**:66** (the runner grew a T6 count-pins header; its flag list now also carries `--use-vulkan=swiftshader` + `--enable-unsafe-swiftshader` — software WebGPU by design, unchanged). `run-nle-tests.mjs:8`, `DECISIONS.md:29/:226`, `G-test-coverage.md:26` re-verified in place. **NEW landed seams the design consumes:** `export/orchestrator.ts:524` `createRenderAdapter` (the RenderAdapter seam this spec's §5.1 `createRenderEngine` design anticipates — wired REAL at page.tsx's m24.9/m26.10 harness mounts), `export/contracts.ts` (FX-4 moved `NleExportSettings`/`NleRenderWarning`/`NleRenderProgress` here from headless/api.ts), `export/audio-mixdown.ts` (Stage-2 offline mix), m29 A/V mux, and the abort contract (`NleRenderOptions.signal` → `DOMException('Render cancelled','AbortError')`, netted by `tests/vitest/engine/render-abort.test.ts`). Still-open ENGINE-GAPs (this spec's activation-time dependencies): the Node-side HTTP headless driver + workspace writer lock (P3), worker offload + OPFS (Stage 3), smart-copy/remux (Stage 5) per `gaps/audit/C-export-encode.md`.
 
 ---
 
