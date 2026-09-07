@@ -18,7 +18,7 @@ export const MAX_HISTORY = 50;
  *  preserved with one new rung between each pair (×1.5 ladder):
  *  24 36 48 72 96 144 192 288 384. Default zoomStep = 2 (48pps — the
  *  R18 default pps survives the renumber). At 24pps a min-duration clip
- *  (12px) is smaller than its own 14px trim zone (registered constraint). */
+ *  (12px) is smaller than its own 20px trim zone (deviation #33). */
 export const PPS_STEPS = [24, 36, 48, 72, 96, 144, 192, 288, 384] as const;
 export const DEFAULT_ZOOM_STEP = 2;
 
