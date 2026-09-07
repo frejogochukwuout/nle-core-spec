@@ -97,7 +97,7 @@ runtime copy if missing, relaunches; kill→restore→public-200 verified
 live. A localhost curl is a FALSE PASS for public liveness — probe
 `/annotakit/api/health` and the real public URL.
 
-83 stories across 10 groups — every shell region, chrome strip, timeline
+120 stories across 10 groups — every shell region, chrome strip, timeline
 leaf, mixer surface, page, overlay, and primitive is surfaced (the R15 wave
 added the deterministic meter/knob/tier/zoom/snap-indicator review frames):
 
@@ -105,11 +105,12 @@ added the deterministic meter/knob/tier/zoom/snap-indicator review frames):
 |---|---|
 | `AppShell.stories.tsx` | Full shell on each page: Edit / Audio Focus / Color / FX (R23-WA — browser + inspector + fxMode timeline) / Deliver |
 | `Variants.stories.tsx` | Presets A / B / C as complete shells — the fixed, screenshot-friendly A/B/C comparison (per-dimension exploration stays in the app's ctrl+\` overlay) |
-| `Chrome.stories.tsx` | Toolbar2 ×3, AppDock ×5 (R23-WA: +FX), TimelineToolbar ×7 (incl. R15 zoom-cluster dynamic-min/max + live master micro-meter), SceneTabs ×2, TrackHeader columns ×3 (audio-focus minifaders + R15-A4 audio micro-meters), Effects-on FX-page full shell (R23-WA re-point) |
+| `Chrome.stories.tsx` | Toolbar2 ×3, AppDock ×5 (R23-WA: +FX), TimelineToolbar ×8 (R15 zoom-cluster dynamic-min/max + live master micro-meter; R23-WB density-on), SceneTabs ×2, TrackHeader columns ×3 (audio-focus minifaders + R15-A4 audio micro-meters), Effects-on FX-page full shell (R23-WA re-point) |
 | `Mixer.stories.tsx` | Mixer dock (full side-by-side + bridge rail + collapsed), the R15 deterministic-levels variants (full dock / bridge / solo strip — A2 clip, master peak-held via `__setLevel`), ChannelStrip solo + compact, Channel editor, Sound library |
 | `Timeline.stories.tsx` | Timeline default + blocks clip-style, **FX mode** (R23-WA — receded clips, seam/head/tail zones, the interactive transition box), clip anatomy states (selected / offline / fades / locked / badges), ruler + markers, R15-T1 CapCut ruler tiers (46/120/240 px/s), R15-T5 snap indicator (mid-drag play step) |
 | `Shell.stories.tsx` (title "Shell/Components") | Media pool grid/list, Viewer, Inspector ×4 tabs, status-strip autosave states, toast region, open context menu, cheat sheet |
 | `Overlays.stories.tsx` | Confirm dialogs (scene delete / multi-delete), ErrorBoundary crash fallback, Variant explorer open, toast error/persist + max-3 stack |
+| `Color.stories.tsx` | Color family: inspector ×3 tabs + timeline target, the R23-WB console row (TimelineCompact + tabbed ScopesDock, standby), the Stills Gallery (D-B4), Nodes as the viewer-region surface (D-B2, × restores the viewer), the standalone node graph, GradedViewer (canvas + scopes console, real traces), qualifier eyedropper, decode-failure row |
 | `Pages.stories.tsx` | Color page, Deliver page (+ preset pick), Channel editor empty state, **FX page** (R23-WA — browser & inspector rails + the fxMode timeline) |
 | `Regions.stories.tsx` | Viewer ×4 (program / overlays-hidden / safe-guides / zoom), Media pool offline + no-results, Inspector empty + multi-select mixed |
 | `Primitives.stories.tsx` | Fader (fixed / fill-height / R15 scale column + unity notch + master cap), the R15-A1 generic Knob dial states (min / detent zone / center / max), PanKnob, StripMeter (static / playing / R15 deterministic levels via the engine's `__setLevel`) |
@@ -160,6 +161,16 @@ the overlay — deviations are surfaced, never hidden.
   transition boxes + fade objects trim by edge-drag / ±1-frame keys, Delete
   removes the selected FX object (removeTransition / removeFade — real,
   delete-aware, undoable)
+- **Color view (R23-WB, issues #90–#97)**: the scopes console is the TABBED
+  ScopesDock in the timeline-area console row beside the compact strip (Luma
+  WFM / RGB Parade / Vector / Histogram — one scope at the panel's full size,
+  F6 stop 7); the Nodes toggle swaps the node graph INTO the viewer region
+  (header = grade target, × restores the viewer); the density toggle (compact
+  strip ↔ full tracks) sits in the timeline toolbar on EVERY page (compact
+  defaults on color — the 55% ↔ 40% mainbody law rides it); the color left
+  dock is the STILLS GALLERY (cards with node-count chips, visible Save Still
+  — the old ⌥-click promoted —, delete, honest .drx toast; stills live in the
+  store as view state and apply through one undoable setGrade)
 - Splitters resize panels; double-click resets (§3.2)
 - `?` opens the keyboard cheat-sheet modal
 
@@ -168,6 +179,34 @@ tests can target the same surface.
 
 ## Known spec deviations (intentional, for reaction)
 
+- **R23-WB (mixer toggle: Edit + Audio only — #92 supersedes #73):** issue
+  #73's R22-era "mixer renders on ALL pages" is reversed for the color page
+  (and FX/deliver) per issue #92 + DESIGN-R23 Part IX ruling 15: the Toolbar2
+  Mixer toggle is DOM-absent off Edit/Audio, and entering color collapses an
+  open mixer (the setPage exit law) so no console is left unclosable on a
+  page without its toggle.
+- **R23-WB (W4c scopes-simultaneity reversal):** R20-W4c's "colorists watch
+  all four scopes at once under the viewer" law is REVERSED by issues
+  #90/#95 (DESIGN-R23 D-B1): the scopes are TABS in the timeline-area
+  console row — ONE scope at the panel's full size, never the squeezed
+  row/2×2 layouts; the R22 4-state machine (off/collapsed/row/grid) and
+  colorScopesLastVisual are removed (ruling 13 — the state narrows to
+  off|open; any non-'off' value migrates to 'open').
+- **R23-WB (scopes stale-frame honesty, ruling 14):** while the node graph
+  owns the viewer region (D-B2) the viewer publishes no NEW graded frames —
+  the ScopesDock keeps drawing the LAST published frame and its status line
+  says so ("stale — node graph owns the viewer"); registered per DESIGN-R23
+  Part IX ruling 14.
+- **R23-WB (#96 compact trackhead — the honest 24px scope):** the compact
+  strip's track badge is a real select-track button carrying the track name
+  as its title, but it holds selection + name ONLY — no mute/solo/lock stack
+  at 16–24px lane heights (DESIGN-R23 Part II D-B3's registered scope; the
+  full TrackHeader owns those controls).
+- **R23-WB (Stills Gallery boundaries):** the .drx / PowerGrade export button
+  carries the honest render-round toast — the grade record (mockGrades) is
+  real and apply/save/delete are store-backed, but no .drx bytes are written
+  (D-B4's registered boundary); stills stay clip-level presets (gap C59) and
+  the card thumbnail is a grade-derived gradient, not a decoded frame.
 - **R23-WA (no viewer-side transition rendering):** transitions/fades edit
   through the FX surface (seam zones, transition boxes, fade objects, the FX
   inspector's numeric params) but the program viewer does NOT render the

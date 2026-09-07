@@ -36,8 +36,10 @@ export const AudioFocus: StoryObj = {
   ),
 };
 
-/** Color page — R20-W4b composition: console in the timeline area, color
- *  sections in the rail, node graph in the left dock, scope strip below. */
+/** Color page — the R23-WB composition: Stills gallery in the left dock,
+ *  the graded viewer center (node graph while toggled), ColorInspector rail,
+ *  the compact strip + tabbed ScopesDock console row (consoles stay OFF by
+ *  default — #77/#93; see the Color stories for their open states). */
 export const Color: StoryObj = {
   name: 'Full Shell — Color',
   render: () => <FullShell patch={{ page: 'color' }} />,

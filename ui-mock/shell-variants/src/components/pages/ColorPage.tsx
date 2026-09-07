@@ -1,26 +1,27 @@
-/* ColorPage — spec 18 §4.8 color-focus mode. R22 REWRITE (DESIGN-R22 D1):
-   the grading surface composition the user directed (issues #77/#78/#79):
+/* ColorPage — spec 18 §4.8 color-focus mode. R22 REWRITE (DESIGN-R22 D1) →
+   R23-WB (DESIGN-R23 track B, issues #90–#97) — the color composition's
+   REFINEMENTS:
      - the COLOR INSPECTOR (right rail) — the ONE grading surface, tabs
-       [Primaries|Curves|Qualifier] under this one inspector panel (#78);
-     - the SCOPES DOCK (ColorScopeStrip, store-driven off/collapsed/row/grid)
-       — a minimized + toggled console under the viewer, never permanent
-       (#77); REAL traces from the graded frame bus (W4c, #76);
-     - the NODE GRAPH DOCK (NodeGraphDock) — the global/separate-view console
-       beside the compact timeline, toggled like the mixer (#78);
-     - TIMELINE COMPACT — the #75 generalized frozen strip (V/A/T coded);
-     - the AppShell composes them (the color page swaps Timeline for
-       TimelineCompact + the docks; the viewer is the dominant center).
+       [Primaries|Curves|Qualifier] under this one inspector panel (#78) —
+       unchanged;
+     - the SCOPES DOCK (ScopesDock) moved UNDER→OUT: the tabbed console now
+       lives in the TIMELINE-AREA CONSOLE ROW beside the compact strip
+       (#90/#95, D-B1; ColorScopeStrip deleted; one scope at a time);
+     - the NODE GRAPH renders as the VIEWER-REGION surface (#93, D-B2;
+       NodeGraphDock deleted; the AppShell swaps Viewer ⇄ ColorNodeGraph);
+     - TIMELINE COMPACT is the default on color, with the EVERY-PAGE density
+       toggle (#94, D-B3) + the real trackhead select button (#96);
+     - the left dock is the STILLS GALLERY (#91/#97, D-B4 — stills only).
    This module is the composition's import line (re-exports) + a thin
    standalone wrapper for stories.
 
    Gap ledger: C50 (grade sidecar) real; C52 superseded by this layout;
    C52/C53/C54/C55/C56 from R20-W4 all survive (the panels are unchanged);
-   C59 (stills are clip-level presets, not node snapshots) — D7. */
+   C59 (stills are clip-level presets, not node snapshots) — D7 → D-B4. */
 
 export { ColorInspector } from './color/ColorInspector';
 export { ColorNodeGraph } from './color/ColorNodeGraph';
-export { NodeGraphDock } from './color/NodeGraphDock';
-export { ColorScopeStrip, useScopeSource } from './color/ColorScopeStrip';
+export { ScopesDock, useScopeSource } from './color/ScopesDock';
 export { WheelsPanel } from './color/WheelsPanel';
 export { CurvesPanel } from './color/CurvesPanel';
 export { QualifierPanel } from './color/QualifierPanel';

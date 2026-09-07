@@ -1167,20 +1167,31 @@ describe('R23-WA: the FX engine gates (fxMode renders the zones; absence otherwi
     expect(screen.getByTestId('fx-seam-el-1-el-2')).toBeInTheDocument();
     expect(screen.getByTestId('fx-seam-el-2-el-3')).toBeInTheDocument();
     expect(screen.queryByTestId('fx-seam-el-3-el-4')).not.toBeInTheDocument();
-    // D-A2.3's LETTER: head/tail = the TRACK's first/last element — el-3 is
-    // NOT the last (el-4 is, but it is virtualized off-window at boot → its
-    // tail zone virtualizes with it, the clips' own law)
-    expect(screen.getByTestId('fx-head-el-1')).toBeInTheDocument();
-    expect(screen.queryByTestId('fx-tail-el-3')).not.toBeInTheDocument();
+    // D-A2.3's LETTER: head/tail = the TRACK's first/last element. The
+    // tr-main first/last carry SEEDED demo fades (el-1 fadeIn 0.5 / el-4
+    // fadeOut 1.0 — D-A3's fixture), so per R23-WA-REV P3 #5 their zones do
+    // NOT render: the fade OBJECTS are the surfaces (selection + trim).
+    // The zone law still has a live target: the OVERLAY's un-faded text clip
+    // el-5 owns both its track edges.
+    expect(screen.queryByTestId('fx-head-el-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('fade-object-el-1-in')).toBeInTheDocument();
     expect(screen.queryByTestId('fx-tail-el-4')).not.toBeInTheDocument();
-    // the audio lane's single clip owns BOTH edges (seeded fades → click-select)
-    expect(screen.getByTestId('fx-head-el-6')).toBeInTheDocument();
-    expect(screen.getByTestId('fx-tail-el-6')).toBeInTheDocument();
+    expect(screen.getByTestId('fx-head-el-5')).toBeInTheDocument();
+    expect(screen.getByTestId('fx-tail-el-5')).toBeInTheDocument();
+    // el-3 is mid-track — NEVER a head or tail zone
+    expect(screen.queryByTestId('fx-head-el-3')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fx-tail-el-3')).not.toBeInTheDocument();
+    // the audio lane's single clip owns BOTH edges — seeded audioFadeIn/Out
+    // mean the objects answer, not zones (R23-WA-REV P3 #5)
+    expect(screen.queryByTestId('fx-head-el-6')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fx-tail-el-6')).not.toBeInTheDocument();
+    expect(screen.getByTestId('fade-object-el-6-in')).toBeInTheDocument();
+    expect(screen.getByTestId('fade-object-el-6-out')).toBeInTheDocument();
     // LOCKED lanes are inert (tr-audio-2) — the marquee/trim lock law
     expect(screen.queryByTestId('fx-head-el-7')).not.toBeInTheDocument();
   });
 
-  it('the tail zone follows the TRACK\'s last element through scroll (D-A2.3: never the visible subset\'s)', () => {
+  it("the zones virtualize with the clips' window (scroll-follow) + el-4's fade object mounts on scroll", () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
     const scrollTo = (x: number) => {
       const sc = scrollEl();
@@ -1188,11 +1199,15 @@ describe('R23-WA: the FX engine gates (fxMode renders the zones; absence otherwi
       fireEvent.scroll(sc);
     };
     // scroll the window right so el-4 [24, 30) s = [1104, 1380) px enters:
-    // window [scroll−200, scroll+1100] — el-4's tail zone mounts with it
+    // window [scroll−200, scroll+1100] — el-4's fade-out OBJECT mounts with
+    // it (its tail zone never exists — the seeded fadeOut owns the edge)
     scrollTo(900);
-    expect(screen.getByTestId('fx-tail-el-4')).toBeInTheDocument();
-    // el-1 is culled left — its head zone virtualizes away (the clips' law)
-    expect(screen.queryByTestId('fx-head-el-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('fade-object-el-4-out')).toBeInTheDocument();
+    // el-1 + el-5 are culled left — el-1's fade object and el-5's head/tail
+    // zones virtualize away (the clips' own window law)
+    expect(screen.queryByTestId('fade-object-el-1-in')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fx-head-el-5')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fx-tail-el-5')).not.toBeInTheDocument();
     // and the mid-track el-3 NEVER gains a head or tail zone (its in-edge is
     // not a track head; its out-edge not a track tail)
     expect(screen.queryByTestId('fx-head-el-3')).not.toBeInTheDocument();
@@ -1272,19 +1287,19 @@ describe('R23-WA: head/tail zone click law (half-open fade zones, #104/#105)', (
     expect(store().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-5', side: 'in' });
   });
 
-  it('a head zone WITH a fade (the fixture demo fades): click SELECTS the object — no doc write', () => {
+  it('R23-WA-REV P3 #5: an element WITH a fade renders NO zone — its fade OBJECT is the select surface (pointerdown selects, no doc write)', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
     const pastBefore = store().past.length;
-    const zone = screen.getByTestId('fx-head-el-1');
-    expect(zone.getAttribute('aria-label')).toContain('Select fade in');
-    fireEvent.click(zone);
+    expect(screen.queryByTestId('fx-head-el-1')).not.toBeInTheDocument(); // the zone is gone
+    const obj = screen.getByTestId('fade-object-el-1-in');
+    fireEvent.pointerDown(obj, { button: 0, pointerId: 5 });
     expect(store().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-1', side: 'in' });
     expect(store().past.length).toBe(pastBefore);
   });
 
-  it('the audio tail zone selects its seeded fade (the audioFade domain)', () => {
+  it('the audio fade object selects its seeded fade on pointerdown (the audioFade domain)', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
-    fireEvent.click(screen.getByTestId('fx-tail-el-6'));
+    fireEvent.pointerDown(screen.getByTestId('fade-object-el-6-out'), { button: 0, pointerId: 5 });
     expect(store().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-6', side: 'out' });
   });
 });
@@ -1295,7 +1310,7 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
     const box = screen.getByTestId('transition-el-2');
     expect(box).toHaveAttribute('role', 'slider');
     expect(box).toHaveAttribute('tabindex', '0');
-    expect(box).toHaveAttribute('aria-valuemin', '0');
+    expect(box).toHaveAttribute('aria-valuemin', '2'); // 0.1 s × 24 fps — the domain floor (R23-WA-REV P3 #8)
     expect(box).toHaveAttribute('aria-valuemax', '48'); // 2 s × 24 fps
     expect(box).toHaveAttribute('aria-valuenow', '18'); // 0.75 s = 18 frames
     expect(box).toHaveAttribute('aria-valuetext', '0.75s');
@@ -1303,7 +1318,7 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
     expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' });
   });
 
-  it('keyboard trim: ±1 frame, ⇧ ×10, Home 0, End the 2s domain max (the fade-object grammar cloned)', () => {
+  it('keyboard trim: ±1 frame, ⇧ ×10, Home the 0.1s floor, End the 2s domain max (the fade-object grammar cloned)', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
     const box = screen.getByTestId('transition-el-2');
     const dur = () => scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration;
@@ -1314,7 +1329,7 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
     fireEvent.keyDown(box, { key: 'ArrowLeft' });
     expect(dur()).toBeCloseTo(28 / 24, 10);
     fireEvent.keyDown(box, { key: 'Home' });
-    expect(dur()).toBe(0); // the floor law
+    expect(dur()).toBe(0.1); // the domain FLOOR — matches the Inspector's Duration row min (R23-WA-REV P3 #8), never a ghost 0s box
     fireEvent.keyDown(box, { key: 'End' });
     expect(dur()).toBe(2); // the domain max
     // each keypress mints its own undo entry (bracket-nudge semantics)
@@ -1326,15 +1341,33 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
     const handle = screen.getByTestId('transition-trim-r-el-2');
     const pastBefore = store().past.length;
     // cut at 17s × 46pps = 782px content x; jsdom's scroll rect collapses to
-    // identity (the fade-object drag tests' own geometry fallback)
+    // identity (the fade-object drag tests' own geometry fallback).
+    // ×2 mapping (R23-WA-REV P1): the cut-CENTERED box puts the right edge at
+    // cut + dur·pps/2, so duration = 2 × (pointer − cut)/pps — the edge then
+    // tracks the cursor 1:1.
     fireEvent.pointerDown(handle, { button: 0, pointerId: 9 });
-    fireEvent.pointerMove(handle, { pointerId: 9, buttons: 1, clientX: 828 }); // 828-782 = 46px = 1s
+    // 23px past the cut → raw = 2·23/46 = 1.0 s
+    fireEvent.pointerMove(handle, { pointerId: 9, buttons: 1, clientX: 805 });
     expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration).toBe(0.75); // NOT committed mid-drag
-    fireEvent.pointerMove(handle, { pointerId: 9, buttons: 1, clientX: 874 }); // 2s raw → clamped by the drag's own max
+    // 92px past the cut → raw = 4 s → clamped by the drag's own 2s max
+    fireEvent.pointerMove(handle, { pointerId: 9, buttons: 1, clientX: 874 });
     fireEvent.pointerUp(handle, { pointerId: 9 });
     expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration).toBe(2);
     expect(store().past.length).toBe(pastBefore + 1); // ONE entry for the whole gesture
     expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' }); // the drag also selects
+  });
+
+  it('grab-continuity (R23-WA-REV P1): a grab AT the actual edge + a sub-frame move is a frame-snapped NO-OP — the box never collapses to half', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const handle = screen.getByTestId('transition-trim-r-el-2');
+    // el-2's 0.75 s box: right edge = 782 + 0.75·46/2 = 799.25 px
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 11, clientX: 799.25 });
+    // 0.4 px inward: raw = 2·(799.65−782)/46 = 0.767 s → frame-snaps to 18/24
+    // = 0.75 — the pre-×2 code mapped this to ~0.38 s (the collapse bug)
+    fireEvent.pointerMove(handle, { pointerId: 11, buttons: 1, clientX: 799.65 });
+    fireEvent.pointerUp(handle, { pointerId: 11 });
+    expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration).toBe(0.75);
+    expect(store().past.length).toBe(0); // the commit's no-op guard — no history entry
   });
 
   it('a press-release WITHOUT movement is a no-op (no commit, no history entry)', () => {
@@ -1349,6 +1382,28 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
 });
 
 describe('R23-WA: fxMode recedes the clip-edit surfaces (the context-menu router)', () => {
+  it('R23-WA-REV P2 #2: blade + fxMode — clip clicks SELECT, never split (the recede law beats the tool)', () => {
+    boot({ tool: 'blade', fxMode: true, selection: [] });
+    const clip = screen.getByTestId('clip-el-1');
+    expect(clip.style.cursor).toBe('pointer'); // the recede cursor, not the blade crosshair
+    const pastBefore = store().past.length;
+    fireEvent.click(clip, { clientX: 100 });
+    expect(store().selection).toEqual(['el-1']); // selected — the FX inspector shows the effect stack
+    expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements).toHaveLength(4); // NO split — the doc is untouched
+    expect(store().past.length).toBe(pastBefore);
+  });
+
+  it('R23-WA-REV P3 #4: a transition box on a LOCKED lane stays inert (no slider role, no handles)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    // lock tr-main AFTER boot (el-2's transition box lives there) — the
+    // header's own command route (toggleTrackCmd, the §4.9 menu's law)
+    act(() => { useUi.getState().toggleTrackCmd('sc-1', 'tr-main', 'locked'); });
+    const box = screen.getByTestId('transition-el-2');
+    expect(box).not.toHaveAttribute('role', 'slider');
+    expect(box).not.toHaveAttribute('tabindex', '0');
+    expect(screen.queryByTestId('transition-trim-r-el-2')).not.toBeInTheDocument();
+  });
+
   it('right-click on a clip in fxMode NEVER opens the clip menu — the surface menu answers (D-A2.1)', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
     fireEvent.contextMenu(screen.getByTestId('clip-el-1'), { clientX: 30, clientY: 30 });

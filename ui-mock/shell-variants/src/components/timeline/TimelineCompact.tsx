@@ -3,8 +3,10 @@
    LaneStrip. The reviewer: "this as the most compact view for timeline is
    actually quite nice ... overall this is a timeline style that can be
    generalized" — so it is a FIRST-CLASS reusable component now:
-     - the COLOR page mounts it where the full Timeline sits (frozen, click =
-       grade target + selection).
+     - R23-WB (DESIGN-R23 D-B3, issue #94): the AppShell mounts it on ANY
+       page while the density resolves compact (auto = color + deliver;
+       the TimelineToolbar's toggle overrides per session — "this super
+       compact mode we should allow to be used everywhere").
    R23-WA (DESIGN-R23 Part IX ruling 8): the seamMode stub + prop RETIRE —
      the FX timeline is the FULL Timeline in fxMode (seam zones need real
      lane pixel geometry), never the compact strip. The stub's "reserved
@@ -15,6 +17,13 @@
    24 / audio 16 / caption 20, audio dimmed) · 30px badge column ·
    click-to-target clips (NO trim/drag/resize handles ever — the surface is
    frozen by law).
+
+   R23-WB (DESIGN-R23 D-B3, issue #96 — ruling 19): the badge cell is a REAL
+   button now — click = select the track (the selectedTrackId domain, the
+   same write TrackHeader performs); title carries the track name ("trackhead
+   not working … ideally it can still move" read as selection + name). The
+   honest 24px scope: selection + name ONLY — no mute/solo stack fits a 16–24px
+   lane (registered in the README deviation ledger).
 
    R22-D6 V/A/T color coding (issue #75 "we need some meaningful color coding
    still even for V vs. A vs. T etc. track type difference"): the clips paint
@@ -60,6 +69,11 @@ export function TimelineCompact({ clipClick = 'grade' }: TimelineCompactProps) {
   const playhead = useUi((s) => s.playhead);
   const setSelection = useUi((s) => s.setSelection);
   const setColorGradeTarget = useUi((s) => s.setColorGradeTarget);
+  /* R23-WB (D-B3/#96): the trackhead selection domain — the badge cell
+     writes selectedTrackId (the TrackHeader seam; on color the rail stays
+     the grade surface — the honest registered limit). */
+  const selectedTrackId = useUi((s) => s.selectedTrackId);
+  const selectTrack = useUi((s) => s.selectTrack);
   /* reactive target: the selection's first element is the highlighted clip
      (the grade target resolves via the store's resolver elsewhere; the strip
      subscribes to the selection so a re-target repaints immediately). */
@@ -113,8 +127,23 @@ export function TimelineCompact({ clipClick = 'grade' }: TimelineCompactProps) {
             const tone = clipTint[track.kind];
             return (
               <div key={track.id} data-testid={`shell-timeline-compact-lane-${track.id}`} className={`flex ${dim ? 'opacity-55' : ''}`} style={{ height: h }}>
-                <div aria-hidden className="sticky left-0 z-[2] flex shrink-0 items-center justify-center border-r border-hairline bg-panel" style={{ width: BADGE_W }}>
-                  <span className="mono text-[9px] font-semibold leading-none" style={{ color: tone.badge }}>{track.badge}</span>
+                {/* #96 (ruling 19): the badge cell is a REAL trackhead button —
+                    click = selectTrack + title = the track name; the honest
+                    24px scope carries selection + name ONLY (no mute/solo
+                    stack at this lane height — registered) */}
+                <div className="sticky left-0 z-[2] flex shrink-0 border-r border-hairline bg-panel" style={{ width: BADGE_W, height: h }}>
+                  <button
+                    type="button"
+                    data-testid={`shell-timeline-compact-track-${track.id}`}
+                    className="flex h-full w-full items-center justify-center hover:bg-[var(--hover-overlay)]"
+                    style={{ ...(selectedTrackId === track.id ? { background: 'var(--hover-overlay)' } : {}) }}
+                    title={track.name}
+                    aria-label={`Select track ${track.name}`}
+                    aria-pressed={selectedTrackId === track.id}
+                    onClick={() => selectTrack(track.id)}
+                  >
+                    <span className="mono text-[9px] font-semibold leading-none" style={{ color: tone.badge }}>{track.badge}</span>
+                  </button>
                 </div>
                 <div className="relative flex-1 border-b border-[#222]" style={{ background: dim ? '#15161a' : '#1d1e22' }}>
                   {track.elements.map((el) => {

@@ -207,7 +207,8 @@ audited count; spec 14's C2 row enumerates them).
 
 **15 templated families** (cardinality = the live doc; expansion rule
 stated per family — C1's DOM-structural gate ("the enumerated testid
-census present") checks the static 60 + the families' presence):
+census present") checks the 59 APP-EMITTED static ids + the families'
+presence — mini-clip-harness is story-surface-only, per the note above):
 
 | Template | Expansion | Where |
 |---|---|---|

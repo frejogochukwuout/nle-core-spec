@@ -132,7 +132,7 @@ function TlToolbarStory({ patch }: { patch?: UiPatch }) {
   return (
     <>
       <StoreBoot patch={patch} />
-      <Bar label="timeline toolbar — tools · snap/link/lock · markers · zoom · mixer · master">
+      <Bar label="timeline toolbar — tools · snap/link/lock · markers · density · zoom · mixer · master">
         <TimelineToolbar />
       </Bar>
     </>
@@ -167,6 +167,15 @@ export const TimelineToolbarMixerFull: StoryObj = {
 export const TimelineToolbarMasterMuted: StoryObj = {
   name: 'Timeline toolbar — master muted',
   render: () => <TlToolbarStory patch={{ masterMuted: true }} />,
+};
+
+/** R23-WB (D-B3/#94): the DENSITY toggle in its pressed state — compact
+ *  strip ↔ full tracks, on every page. Reviews the toggled-state contrast
+ *  of the new icon button (the strip it mounts has its own Color stories).
+ */
+export const TimelineToolbarDensityOn: StoryObj = {
+  name: 'Timeline toolbar — density toggle on (compact)',
+  render: () => <TlToolbarStory patch={{ timelineCompact: 'on' }} />,
 };
 
 /* ---- R15 T1: the zoom cluster against the DYNAMIC minimum (spec-05 §5.2) ---

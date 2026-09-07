@@ -1,10 +1,16 @@
 /* TimelineToolbar — spec 18 §4.5: tool cluster (radio, spec 16 keys),
    snap/link/lock toggles, marker cluster, zoom cluster, master audio.
-   Mock's sync-bin/auto-sync/dyntrim dropped (§8.10 / §8.9). */
+   Mock's sync-bin/auto-sync/dyntrim dropped (§8.10 / §8.9).
+   R23-WB (DESIGN-R23 D-B3; issue #94): the DENSITY toggle — compact strip
+   ↔ full tracks, available on EVERY page ("this super compact mode we
+   should allow to be used everywhere"); the pressed state reads the ONE
+   store resolver (resolveTimelineCompact) so the button never lies about
+   what is rendered, and the click writes the user's per-session override
+   ('on'/'off'; 'auto' remains the boot default per page). */
 
 import { useRef } from 'react';
-import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, AudioLines, PanelRight, SlidersHorizontal } from 'lucide-react';
-import { useUi, type ToolId } from '../../state/useUiStore';
+import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, AudioLines, PanelRight, SlidersHorizontal, Rows3 } from 'lucide-react';
+import { useUi, resolveTimelineCompact, type ToolId } from '../../state/useUiStore';
 import { sceneDuration } from '../../lib/mockData';
 import { StripMeter } from '../mixer/MixerPrimitives';
 import { mixerStateLabel } from '../mixer/MixerDock';
@@ -82,6 +88,10 @@ export function TimelineToolbar() {
   const mixerState = useUi((s) => s.mixerState);
   const page = useUi((s) => s.page);
   const cycleMixerState = useUi((s) => s.cycleMixerState);
+  /* R23-WB (D-B3): the density law — the ONE resolver, shared with the
+     AppShell's mount decision (they can never disagree). */
+  const compact = useUi((s) => resolveTimelineCompact(s));
+  const setTimelineCompact = useUi((s) => s.setTimelineCompact);
   const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
   const pushToast = useUi((s) => s.pushToast);
   const menu = useContextMenu(); // §4.9 marker-color dropdown (R14 no-op sweep)
@@ -147,6 +157,22 @@ export function TimelineToolbar() {
         <svg width="16" height="13" viewBox="0 0 24 18" fill="none" stroke="currentColor" strokeWidth="1.6">
           <rect x="1" y="1" width="22" height="4" /><rect x="1" y="7" width="22" height="4" /><rect x="1" y="13" width="22" height="4" />
         </svg>
+      </button>
+
+      {/* R23-WB (D-B3/#94): the density toggle — compact strip (frozen) ↔
+          full tracks, on EVERY page. aria-pressed is the RESOLVED state
+          (honest — it reflects the timeline actually rendered); the click
+          writes the per-session override, so 'auto' only survives until the
+          user speaks. */}
+      <button
+        className={`icon-btn ${compact ? 'toggled' : ''}`}
+        data-testid="shell-timeline-toolbar-btn-density"
+        data-tip="Compact strip (frozen) ↔ full tracks"
+        aria-label="Toggle compact timeline"
+        aria-pressed={compact}
+        onClick={() => setTimelineCompact(compact ? 'off' : 'on')}
+      >
+        <Rows3 size={14} strokeWidth={1.8} />
       </button>
 
       <div className="grow" />

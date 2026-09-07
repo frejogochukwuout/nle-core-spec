@@ -54,7 +54,7 @@ Every manifest entry is tagged `layer`, and `vlm-review` reviews in
   isolated on the canvas.
 - **shell** — full-shell composites: `Shell/AppShell`, `Shell/Variants`, and
   any story whose name starts with `Full Shell` (e.g. Chrome's
-  "Full Shell — Effects panel on").
+  "Full Shell — Effects (FX page)").
 
 ## Known laws (do not "fix" these away)
 

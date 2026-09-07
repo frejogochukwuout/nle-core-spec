@@ -41,6 +41,35 @@ describe('TimelineToolbar', () => {
     expect(store().fxMode).toBe(true);
   });
 
+  /* R23-WB (DESIGN-R23 D-B3, issue #94): the DENSITY toggle — compact
+     strip ↔ full tracks, on EVERY page; aria-pressed reads the ONE store
+     resolver (honest); the click writes the per-session override. */
+  it('R23-WB: the density toggle is honest per page (auto: pressed on color, unpressed on edit) and writes the override', () => {
+    boot({ page: 'edit' });
+    const density = screen.getByTestId('shell-timeline-toolbar-btn-density');
+    expect(density).toHaveAttribute('aria-pressed', 'false');
+    expect(store().timelineCompact).toBe('auto');
+    fireEvent.click(density);
+    expect(store().timelineCompact).toBe('on'); // the user's word overrides 'auto'
+    expect(density).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(density);
+    expect(store().timelineCompact).toBe('off');
+    expect(density).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('R23-WB (#94): the toggle renders on EVERY page (edit/color/audio/fx/deliver)', () => {
+    for (const p of ['edit', 'color', 'audio', 'fx', 'deliver'] as const) {
+      const { unmount } = boot({ page: p });
+      expect(screen.getByTestId('shell-timeline-toolbar-btn-density')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Toggle compact timeline' })).toHaveAttribute(
+        'aria-pressed',
+        p === 'color' || p === 'deliver' ? 'true' : 'false', // the auto resolution, honestly
+      );
+      unmount();
+    }
+    useUi.setState({ page: 'edit', timelineCompact: 'auto' });
+  });
+
   it('clicking a tool switches the store tool and the radio state (spec 16 B/V keys)', () => {
     boot({});
     fireEvent.click(screen.getByTestId('shell-timeline-toolbar-tool-blade'));

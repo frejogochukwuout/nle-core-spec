@@ -10,8 +10,9 @@
    changes are rAF-COOLESCED (scheduleCoalesced — one grade per frame);
    graded outputs ride W4a's GradedImageCache keyed
    elementId|stack-hash|src-hash. The graded buffer is PUBLISHED to the
-   scope bus (gradedFrameBus) so ColorScopeStrip draws real traces from the
-   exact frame the user sees.
+   scope bus (gradedFrameBus) so the ScopesDock (R23-WB: the tabbed console
+   in the timeline-area console row, D-B1) draws real traces from the exact
+   frame the user sees.
 
    State rows (spec 18 §4.2 ported to the canvas path): loading skeleton
    while the still decodes, decode-failure + Retry (re-key re-attempt),

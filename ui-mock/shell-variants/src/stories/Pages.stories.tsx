@@ -23,10 +23,11 @@ export default meta;
 
 /* ---- color page (spec 18 §4.8) --------------------------------------------- */
 
-/** R20-W4b: the color page's RAIL = the clip-level color sections (W3
- *  grammar, store-bound to the grade target); the wheels/curves/qualifier
- *  live in the TIMELINE-AREA console (see Color stories) and the scope
- *  strip sits under the viewer. */
+/** R20-W4b → R23-WB: the color page's RAIL = the ONE grading surface (the
+ *  W3 grammar, store-bound to the grade target — wheels/curves/qualifier as
+ *  tabs under this one inspector panel); the tabbed ScopesDock console row
+ *  and the node-graph viewer surface live in the timeline area / viewer
+ *  region of the shell (see Color stories for their solo geometry). */
 export const ColorPageStory: StoryObj = {
   name: 'Color page — inspector rail',
   parameters: { layout: 'padded' },

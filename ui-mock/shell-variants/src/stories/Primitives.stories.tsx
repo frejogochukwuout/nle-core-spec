@@ -11,7 +11,7 @@
    randomness, transient holds re-armed).
    NOTE — the Effects library is deliberately NOT here: EffectsPanel is
    internal to AppShell.tsx (not an exported component); its review surface is
-   the 'Chrome/Full Shell — Effects panel on' story (a full shell with the
+   the 'Chrome/Full Shell — Effects (FX page)' story (a full shell on the
    panels patch). */
 
 import { useState } from 'react';
