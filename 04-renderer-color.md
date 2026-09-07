@@ -1,7 +1,7 @@
 # 04 — Renderer & Color: WebGPU, 10-bit Pipeline, Scene-Linear Color Management (REFINED)
 
 **Stream:** GPU rendering pipeline + color management
-**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the renderer stack is engine BASE @ `f68ab8c` 356/356; the color instruments (S-engine) + CPU transition fallback (R-engine-p2) are the forward work); Refined spec — sub-agent scout SCOUT-04 has verified all claims against FreeCut + OpenCut-classic source
+**Status:** v-next (Round 23 — the per-file audit fleet's re-verify: the §0 BASE re-pinned to the R23 HEADs (engine `b8c6f88` 440/440; the N1 composition-frame family, the OT placeholder compositor, the app ProgramCanvas, and the variants' R23 W-B color wave now in BASE; §13D's engine refs re-verified — the Wave 4A round fixed the port's two P0s, two rows flipped), the GAP rows re-tagged per D24 (W-color→r3, R-engine-p2→r6) + the retired spec-14 §4.2 runtime rows re-homed into §0; Round 22's §0 posture + re-baseline stand — the color instruments (S-engine, consumed at r3) + the grade-math binding (r3) + the projector parity corpus (S-engine ∥ crawl) + CPU transition fallback (r6) are the forward work); Refined spec — sub-agent scout SCOUT-04 has verified all claims against FreeCut + OpenCut-classic source
 **Primary teacher:** FreeCut `gpu-*` infrastructure (to be ported to 10-bit scene-linear) + OpenCut-classic Rust `compositor/` shaders
 **Seed file:** `04-renderer-color.md`
 **Refined by:** SCOUT-04 (general-purpose scout)
@@ -9,18 +9,22 @@
 
 ---
 
-## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained. R23 fleet re-verified 2026-09-07 against the live HEADs; phase tags re-based per D24)
 
-**BASE (accepted, pinned 2026-09-07):**
-- nle-engine @ `f68ab8c` — 356/356 vitest, tsc 0 — the renderer stack: the WebGPU compositor, the 44-effect registry, real A/V export (vendors OT @ `3420b5f`, WDC @ `5570321`).
-- MOCK-side design reference (pinned in-repo, NOT shipping code): `ui-mock/shell-variants` @ 1,334 tests — the W4 wave (`src/lib/color/`: colorSpace / gradeMath / qualifierMath / scopesMath; spec-08-exact math + real scopes data). Its engine binding is W-color.
+**BASE (accepted, re-verified @ the R23 pins — engine `b8c6f88`, OT `222532c`, app `70e99f0`, variants `e89cd65`):**
+- nle-engine @ `b8c6f88` — **440/440 vitest, tsc 0** (was 356 @ `f68ab8c` at the R22 pin) — the renderer stack: the WebGPU compositor (`gpu/compositor.ts`), the **44-effect registry** (43 in `effects/pipeline.ts` + `gpu-lut` in `effects/lut.ts`), real A/V export; vendors OT @ `a4e971d` + WDC @ `f446512` (git submodules, CORE-ONLY alias discipline). **Landed since the R22 pin (all inside the 440):** the **N1 composition-frame bridge family** (`bridge/composition-frame.ts` — `buildCompositionFrame` pure composition math + `paintCompositionFrame` thin Canvas2D painter; pinned in `bridge-seams.test.ts`), the **W1 meter bridge** (`bridge/realtime-engine.ts`'s real `onMeter` push + `onBusMeter`), the RR1-A fade-clamp SPAN + toSorted consumer-compat rounds, N2b keyframed volume (`37cdd28`), the S3 seam-audit wave, and the K2 seeds (engine-in-the-middle cross-module suites: `timeline-edit-ops` / `video-sync` / `bridge-seams` / `planner`).
+- opencut-timeline @ `222532c` — 489/489 — **the placeholder compositor** (`src/lib/timeline/render/placeholder-compositor.ts`: Canvas2D solid-color composition behind `setTracks()` + `renderFrame(t)`, pixel-verified by M12's `readCenterPixel` in `testing/milestones-view.ts`; the file's own header names THIS spec's renderer as the real engine that plugs in behind the same contract — only the painter changes).
+- nle-test-app @ `70e99f0` — 117/117 — **ProgramCanvas** (`src/ProgramCanvas.tsx`): the app's program monitor hosting the engine's N1 composition seam (the live core scene + D2e sidecars + the hash-color virtual-media resolver; jsdom pins the composition math via the data attributes).
+- MOCK-side design reference (pinned in-repo, NOT shipping code): `ui-mock/shell-variants` @ `e89cd65` — **1,521 tests** (the live count; 00-master's 1470 is its own R23-pin-era figure, pre-W-C/D/E — the battery's central post-fleet re-baseline reconciles) — the W4 wave (`src/lib/color/`: colorSpace / gradeMath / qualifierMath / scopesMath + gradedImage; spec-08-exact math + real scopes data) **+ the R23 W-B color wave LANDED (`db58d8d`)**: ScopesDock (the four scope TABS — Luma WFM / RGB Parade / Vector / Histogram — in the timeline-area console row), the nodes-in-viewer surface (ColorNodeGraph owns the viewer region), StillsPanel (the DaVinci-style Gallery of clip-level grade records), and the `timelineCompact` auto|on|off density toggles — **the mock-side reference half of r3's parity gates**. Negative result (the mini's `CORE-SEAMS.md` audited-absent register): the mini carries NO color instruments — S-engine's scope (GAP row 1).
 
-**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
-- **The color instruments — scopes (waveform/vectorscope), secondary qualifier, power window — have ZERO engine code today.** Engine; S-engine (∥ crawl, 4-6 wk; acceptance: each instrument's engine milestone green, consumed + pinned at W-color — S-engine builds, W-color consumes).
-- **CPU transition renderers as export fallback.** Engine; R-engine-p2, non-blocking (acceptance: the per-item engine milestone, written when queued, green).
-- Register: spec 14 §4.2 + §3.2 W-color — the worklist; acceptance lives here.
+**GAP (the work — owner + phase per the D24 ladder / `IMPLEMENTATION-PLAN.md` §2, dual-tagged with the retired spec-14 vocabulary; acceptance in parentheses):**
+- **The color instruments — scopes (waveform/vectorscope), secondary qualifier, power window — have ZERO engine code today** (re-verified @ `b8c6f88`: the only engine mentions are the FreeCut wire-schema strings `gpu-power-window` / `gpu-secondary-qualifier` in `headless/api.ts`'s `GPU_EFFECT_TYPES` — the byte-identical wire contract, NOT implementations — plus one param-metadata comment; the engine's P2 backlog still lists "scopes (waveform/vectorscope)"). Engine; **S-engine (∥ crawl, 4-6 wk — the ARCH-R22 reviewed register; acceptance: each instrument's engine milestone green, consumed + pinned at r3 (was W-color) — S-engine builds, r3 consumes; scopes plot engine data, qualifier + window apply in the linear-light pipeline)**.
+- **The grade-math binding + parity** — bind the W4 mock math (spec-08-exact) to the engine's real pixels. App+engine; **r3 (was W-color** — the plan's r3 row: "the W4 grade-math binding + parity; the S-engine instruments consumed"; **acceptance: grade-math parity pins — the mock's W4 math vs the engine's output on the same fixtures, max delta ≤ 1 LSB-equivalent**). The math-side row is spec 08 §0's binding row; THIS row owns the renderer-pipeline surface it lands on (the §5.2/§16.3 linear-light working textures + the §6.2 color-pipeline shaders).
+- **The projector parity corpus — the N1 composition-frame family's formal S4 suite** (the SceneTracks→ingestion translator + the parity corpus; the retired spec-14 §4.2 row, re-homed here). Engine, additive at `src/lib/nle/` (the bridge family is the seed); **S-engine (∥ crawl**; acceptance: the formal parity suite green over the composition-frame family at the app's seam shapes).
+- **CPU transition renderers as export fallback** (~1,450 LOC per the engine's P2 backlog). Engine; **r6 (was R-engine-p2), non-blocking** — the tail that also carries the ShapeItem/Lottie/Subtitle/Controller surfacing (acceptance: the per-item engine milestone, written when queued, green).
+- Register: `IMPLEMENTATION-PLAN.md` §2 (r3's row + the D24 mapping in ARCH-R23) + §3 (the S-engine workstream) — the worklist; acceptance lives here (spec 14 retired to the redirect stub; its §4.2 runtime rows are re-homed above).
 
-**ACCEPTANCE & TEST PLAN:** §17 (the executable contract; §12 = the preserved intent list) + spec 17 §13A facet rows + the battery's posture checks; BASE rows' acceptance = the cited suite at the cited pin (regression role).
+**ACCEPTANCE & TEST PLAN:** §17 (the executable contract; §12 = the preserved intent list) + spec 17 §13A facet rows + the battery's posture checks; the r3 grade-math parity pins are the binding row's own gate; BASE rows' acceptance = the cited suite at the cited pin (regression role).
 
 ---
 
@@ -540,7 +544,7 @@ class WebGPURenderer implements Renderer {
 }
 ```
 
-**Pass-discipline rule (normative, Round 7):** every `applyEffects`/`applyMask`/`composite` step MUST consume pool-acquired textures and never return a texture owned by the pass; outputs are released at `recycleFrame()`. (The reference port's two live P0 bugs are exactly this failure: singleton `return this._pongTexture;` at nle-engine effects/pipeline.ts:5107, and mask combine textures shared across clips at gpu/mask-manager.ts:477.)
+**Pass-discipline rule (normative, Round 7):** every `applyEffects`/`applyMask`/`composite` step MUST consume pool-acquired textures and never return a texture owned by the pass; outputs are released at `recycleFrame()`. (Originally motivated by the reference port's two P0 bugs of exactly this failure class — the effects singleton `return this._pongTexture;` and the cross-clip-shared mask combine textures. **R23 re-verify @ `b8c6f88`: BOTH are fixed engine-side by Wave 4A** — `applyToTexture`/`apply` now return caller-owned per-call outputs, never the internal ping-pong (`effects/pipeline.ts:5204-5206`: "Wave 4A contract change: the returned texture is a NEWLY-CREATED, caller-owned texture … NEVER the pipeline's internal ping-pong"), and `getMaskResult` returns per-call combined-mask textures with the cross-clip bleed gone (`gpu/mask-manager.ts:647-670`, "Wave 4A (P0.2)"). The rule stands — the port's fix is the rule realized, not its retirement.)
 
 ### 7.2 Bind group caching (key optimization)
 
@@ -725,7 +729,7 @@ For 8K (7680×4320), multiply by 4: ~1.3 GB per frame working set. Still fits in
 
 **Verified:** All of FreeCut's `src/infrastructure/gpu-*/` uses **`rgba8unorm`** exclusively. No 16-bit, no 10-bit, no HDR. No color management whatsoever. See §13 for the per-file LOC table and §16 for the texture format chain.
 
-nle-engine (clean-room FreeCut port) reproduces this 8-bit baseline — 29 `rgba8unorm` sites across 7 GPU files; the corrective mapping is in §13D and `19-code-references.md`.
+nle-engine (clean-room FreeCut port) reproduces this 8-bit baseline — **46 `rgba8unorm` sites across 10 files under `src/lib/nle` @ `b8c6f88`** (32 of them in the 7 gpu/-family files: gpu/compositor, gpu/mask-manager, gpu/texture-pool, gpu/glyph-atlas-text-pipeline, gpu/row-alignment, effects/pipeline, effects/lut; the R22-era figure was 29 across 7 — the engine grew 356→440 tests, the 8-bit baseline did not move); the corrective mapping is in §13D and `19-code-references.md`.
 
 **Per-directory summary:**
 
@@ -1180,22 +1184,24 @@ device.lost.then(() => {
 
 ### 13D. Code References — nle-engine (reference, NOT canon)
 
-> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room FreeCut-port **in-between reference, NOT canon** — it inherits FreeCut patterns this spec corrects (its GPU pipeline is 8-bit `rgba8unorm` throughout: 29 sites across 7 files). Where engine code conflicts with this spec, **the spec wins** (Decision 5). Full reconciliation: `19-code-references.md`.
+> The private **nle-engine** repo (github.com/bearachprema/nle-engine) is a clean-room FreeCut-port **in-between reference, NOT canon** — it inherits FreeCut patterns this spec corrects (its GPU pipeline is 8-bit `rgba8unorm` throughout: **46 sites across 10 files @ `b8c6f88`** — 32 in the 7 gpu/-family files). Where engine code conflicts with this spec, **the spec wins** (Decision 5). Full reconciliation: `19-code-references.md`.
+>
+> *(R23 fleet re-verify: the repo moved from the SCOUT-04 snapshot — 37,958 LOC / 124 tests — to **440/440 vitest, tsc 0, ~54,700 LOC under `src/lib/nle`**; the line refs below are refreshed to `b8c6f88`, the scout-era refs live in git history. Two rows flip status: the engine's own Wave 4A round fixed the port's P0.1/P0.2 — noted inline.)*
 
 | Spec section | Engine file:line | Verified quote | Status | Note |
 |---|---|---|---|---|
-| §5.1 r16uint Y/U/V planes | `src/lib/nle/playback/player.ts:1263` | `format: 'rgba8unorm',` | CORRECTIVE | 8-bit source textures; spec's 10-bit per-plane r16uint path wins |
-| §5.2 rgba16float working | `src/lib/nle/gpu/compositor.ts:981` | `format: 'rgba8unorm',` | CORRECTIVE | 8-bit ping-pong; linear-light rgba16float wins |
-| §5.3 canvas config | `src/lib/nle/gpu/device.ts:71` | `_canvasFormat = navigator.gpu.getPreferredCanvasFormat();` | CORRECTIVE | Never sets colorSpace; spec's rgba10a2unorm + display-p3 wins |
+| §5.1 r16uint Y/U/V planes | `src/lib/nle/gpu/compositor.ts:1797` | `format: 'rgba8unorm',` | CORRECTIVE | 8-bit source uploads (`uploadRgba` at :1790, called from `playback/player.ts:1630`); spec's 10-bit per-plane r16uint path wins |
+| §5.2 rgba16float working | `src/lib/nle/gpu/compositor.ts:1257` | `format: 'rgba8unorm',` | CORRECTIVE | 8-bit ping-pong (`_ensurePingPong`); linear-light rgba16float wins |
+| §5.3 canvas config | `src/lib/nle/gpu/device.ts:79` | `_canvasFormat = navigator.gpu.getPreferredCanvasFormat();` | CORRECTIVE | Never sets colorSpace; spec's rgba10a2unorm + display-p3 wins |
 | LUT data texture | `src/lib/nle/effects/lut.ts:314` | `Format: rgba8unorm.` | CORRECTIVE | 8-bit LUT; spec ports to 16-bit |
-| §8.2 blend modes | `src/lib/nle/gpu/compositor.ts:32` | `export const BLEND_MODE_INDEX: Record<BlendMode, number> = {` | CORRECTIVE | 25-mode WGSL, 8-bit gamma space; spec's linear-light math wins |
-| §7.3 TexturePool | `src/lib/nle/gpu/texture-pool.ts:190` | `acquire(width: number, height: number, format: GPUTextureFormat = 'rgba8unorm'): GPUTexture {` | CORRECTIVE | Pool ported but dead code; adopt discipline, change default format |
-| §7.1 effect pass outputs | `src/lib/nle/effects/pipeline.ts:5107` | `return this._pongTexture;` | CORRECTIVE | Singleton return (engine P0.1); spec's per-layer outputs win |
-| §8.4 mask invert-once | `src/lib/nle/gpu/mask-manager.ts:478` | `invertNext: mask.shape.shape.maskInvert === true,` | CORRECTIVE | Shader + CPU double-invert (engine P0.2); spec's invert-once wins |
-| §7.1 all item types | `src/lib/nle/playback/player.ts:1038` | `if (clip.type !== 'video') continue;` | CORRECTIVE | Non-video items dropped; spec's dispatch wins |
-| §11.12 device loss | `src/lib/nle/gpu/device.ts:61` | `console.error('[GpuDevice] Device lost!', info.reason, info.message);` | ENGINE-GAP | Logs only; no recovery loop |
-| 8K support | `src/lib/nle/gpu/device.ts:56` | `maxTextureDimension2D: 4096,` | ENGINE-GAP | 4096 cap vs spec's 8K tests |
-| Transitions baseline | `src/lib/nle/transitions/pipeline.ts:115` | `this.format = 'rgba8unorm';` | CORRECTIVE | FreeCut 8-bit baseline reproduced |
+| §8.2 blend modes | `src/lib/nle/gpu/compositor.ts:33` | `export const BLEND_MODE_INDEX: Record<BlendMode, number> = {` | CORRECTIVE | 25-mode WGSL, 8-bit gamma space; spec's linear-light math wins |
+| §7.3 TexturePool | `src/lib/nle/gpu/texture-pool.ts:190` | `acquire(width: number, height: number, format: GPUTextureFormat = 'rgba8unorm'): GPUTexture {` | CORRECTIVE | Pool LIVE since Wave 4A (player + mask-manager acquire/release — the pass-discipline round); change default format |
+| §7.1 effect pass outputs | `src/lib/nle/effects/pipeline.ts:5204` | `Wave 4A contract change: the returned texture is a NEWLY-CREATED, caller-owned texture` | **PORT-FIXED (Wave 4A)** | The singleton `return this._pongTexture;` P0.1 is GONE @ `b8c6f88` — per-call caller-owned outputs; the spec's per-layer-outputs law is now the port's own contract |
+| §8.4 mask invert-once | `src/lib/nle/gpu/mask-manager.ts:724` | `invertNext: mask.shape.shape.maskInvert === true,` | **PORT-FIXED (Wave 4A)** | The CPU+shader double-invert P0.2 is GONE — invert travels exactly once (the flag on the single-mask path / `invertNext` in the combine chain); per-call combine outputs kill the cross-clip share |
+| §7.1 all item types | `src/lib/nle/playback/player.ts:1575` | `if (clip.type !== 'video' && clip.type !== 'image') continue;` | CORRECTIVE | Dispatch now covers video/image/text/composition (Waves 4C/4D); sticker/graphic still skipped; spec's dispatch wins |
+| §11.12 device loss | `src/lib/nle/gpu/device.ts:67` | `console.error('[GpuDevice] Device lost!', info.reason, info.message);` | ENGINE-GAP | Logs + resets init state (Wave 5C — a later `initGpu()` re-initializes); still no automatic recovery loop |
+| 8K support | `src/lib/nle/gpu/device.ts:59` | `maxTextureDimension2D: 4096,` | ENGINE-GAP | 4096 cap vs spec's 8K tests |
+| Transitions baseline | `src/lib/nle/transitions/pipeline.ts:116` | `this.format = 'rgba8unorm';` | CORRECTIVE | FreeCut 8-bit baseline reproduced |
 
 ---
 
