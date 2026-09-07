@@ -1,8 +1,8 @@
 # 18 — UI Shell: Application Layout, Panels & Interaction Contracts (DaVinci-derived, simplified)
 
 **Stream:** UI shell / application chrome
-**Status:** v1.4 (Round 22 — the finality round: the §0 forward inventory + the R22 drag-law notice in §16.2 + the MVP-vehicle re-pointing in §16.3; v1.3 Round 19 amendment: §16 designates ui-mock/shell-mini the first shippable MVP — OT-seam-tracked ops, embedding contract, R18e→R19 iterated feature inventory folded per explicit user directive; v1.2 Round 15 amendment pass — A1/A5/B2/B4/N2/N3/N4/N5/N6/N7/N9/N10/N12-class resolutions + testid census + annotakit-for-app charter, per `.agents/SPEC-REVISION-CANDIDATES.md` + ARCH-R15 §4; v1.1 Round 8 — cloudcut UX-spec integration: per-panel state rows, context menus §4.9, pointer/cursor grammar §5A, error & notification UX §6.4, visual-language deepening §9, a11y floor §11, UX-scope code references §13; ours-wins policy applied to all 25 contradictions, SCOUT-R8-C §3)
-**Date:** 2026-09-02 (v1.0 Round 7; v1.3 2026-09-06)
+**Status:** v1.5 (Round 23 — the per-file audit fleet's re-verify against the live repos: the BASE re-pinned to the R23 HEADs (variants 1,334 → 1,521+ [1,542 at the W-F wrap]; nle-ui `dba8d52`/640 → `85dcf57`/648 with the F3/F7 real-gain laws + the kind-aware mute-all pin; app `e662759`/83 → `70e99f0`/117 with the W3 JKL seam); the GAP register re-keyed per ARCH-R23 D24/D25 (C0 → w1-prep/S-package; the grammar split's TOKEN half → w1, STRUCTURAL half → crawl-tail; C1(b-f)+C2-behavior → K3; C4 → K4 + w1-entry; R-polish → r5; W-color → r3; W-ops keymaps → r1; the mock retirement triggers → post-K4/w1); the retired spec-14 §4.4/§4.6 shell rows re-homed into §0 (the OT S-round queue; the W-ops keymap surfaces; the retirement triggers); §16.3 re-pointed at `IMPLEMENTATION-PLAN.md` (spec 14 retired to the stub, D23); the R23 seal artifacts (CORE-SEAMS 26 seams / LAW-NET-INVENTORY census) reflected in §0/§13/§16. v1.4 (Round 22 — the finality round: the §0 forward inventory + the R22 drag-law notice in §16.2 + the MVP-vehicle re-pointing in §16.3; v1.3 Round 19 amendment: §16 designates ui-mock/shell-mini the first shippable MVP — OT-seam-tracked ops, embedding contract, R18e→R19 iterated feature inventory folded per explicit user directive; v1.2 Round 15 amendment pass — A1/A5/B2/B4/N2/N3/N4/N5/N6/N7/N9/N10/N12-class resolutions + testid census + annotakit-for-app charter, per `.agents/SPEC-REVISION-CANDIDATES.md` + ARCH-R15 §4; v1.1 Round 8 — cloudcut UX-spec integration: per-panel state rows, context menus §4.9, pointer/cursor grammar §5A, error & notification UX §6.4, visual-language deepening §9, a11y floor §11, UX-scope code references §13; ours-wins policy applied to all 25 contradictions, SCOUT-R8-C §3)
+**Date:** 2026-09-02 (v1.0 Round 7; v1.3 2026-09-06; v1.5 2026-09-07 — the R23 fleet re-verify)
 **Spec file:** `18-ui-shell.md`
 **Consumers:** Implementation team (UI layer), spec 05 (timeline internals), spec 16 (keyboard bindings), spec 15 (command dispatch), spec 17 (Tier 3 UI tests)
 **UX source material:** cloudcut-nle `ux-spec` branch v1.3.5 (28 files — the prior iteration's app-layer UX spec; integrated Round 8 per the ours-wins contradiction policy; the cloudcut-nle main branch is the UX/app-scope reference codebase, §13)
@@ -12,24 +12,30 @@
 ## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
 
 **BASE (accepted, pinned 2026-09-07):**
-- The full-shell DESIGN (§3-§15): region geometry, panel inventory, gesture→command contracts, state rows, a11y floor — the design of record, validated in `ui-mock/shell-variants` (1,334 tests, real color math, W4 real pipelines) and PRODUCTIZED as the `nle-ui` package (`dba8d52`; consumer pin `752991d`; 640 tests, engine-free, boundary-script-gated).
-- The mini DESIGN + law register (§16, `ui-mock/shell-mini` @ 355 tests — 333 at the R22 retirement, +10 review-loop nets, +12 R23 seal + fix-round nets; OT-SEAMS seam map; annotakit live review surface).
-- The app assembly skeleton: `AppShell` + slots (`timelineRegion`/`programMonitor`/`mediaDragSource`) + ProgramCanvas (engine N1) wired in `nle-test-app` @ `e662759` (83 tests).
+- The full-shell DESIGN (§3-§15): region geometry, panel inventory, gesture→command contracts, state rows, a11y floor — the design of record, validated in `ui-mock/shell-variants` (1,521+ tests — 1,542 at the R23 W-F wrap: the W-A FX surface + the W-B color wave + the W-C/D/E polish waves + the W-F deliver view; real color math, W4 real pipelines; the **VLM visual net** `scripts/vlm-capture.mjs`/`vlm-review.mjs`/`vlm-run.sh` — the walk/run design reference) and PRODUCTIZED as the `nle-ui` package (`85dcf57`; consumer pin re-read live: the app's `vendor/nle-ui` @ `85dcf57`; **648 tests**, engine-free, boundary-script-gated; **F3/F7 the real-gain laws** — the clip-gain slider (ChannelEditor) and the Inspector's Gain both write the true dB law over `el.volume` [display 20·log10, commit 10^(dB/20) clamped ≥ 0.001 — exactly §4.4's B2 display-side-dB law] + the kind-aware mute-all convergence pin; the §10 `shell-*` testid family already emitting).
+- The mini DESIGN + law register (§16, `ui-mock/shell-mini` @ 355 tests — 333 at the R22 retirement, +10 review-loop nets, +12 R23 seal + fix-round nets; the R23 seal artifacts: `docs/CORE-SEAMS.md` [the 26-seam whole-surface audit — §E S22-S26 the chrome/view seams, the 5-class store partition, the C0-C4 transport map, the audited-absent register] + `docs/LAW-NET-INVENTORY.md` [128 census units / 355 tests — 33 HOLDS / 322 authored; Part B the chrome-side corpus: App 60 / MediaPool 19 / timecode 8 / waveform 7 / otProject 12; the testid census 60 static (59 app-emitted) + 15 templated] + the OT-SEAMS seam map + `RH-skin-extraction.md`; annotakit live review surface).
+- The app assembly skeleton: `AppShell` + slots (`timelineRegion`/`programMonitor`/`mediaDragSource`) + ProgramCanvas (engine N1) + the OT-tree `EngineMount` wired in `nle-test-app` @ `70e99f0` (**117 tests**; the GluedShell assembly; the W3 JKL transport seam — `setPlaybackRate` routed through the timelineRouter, ⇧J/⇧L yielding to the port's keymap; RR1-B). The timeline port is a **FORK of OT's canonical `src/components/timeline/` tree (39 files) — retiring per D25**: the PORT-LOCAL props upstream into OT as optional injectables, the app vendors the canonical tree (`vendor/nle-timeline` two-path UPSTREAM.lock), the fork deletes file-by-file (the drift evidence: the fork is ≥2 upstream waves behind — pre-F1).
 
-**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
-- **MiniShell** — the mini chrome family in nle-ui (C0; package tests + boundary script + Storybook render).
-- **The crawl app's chrome surfaces** — inspector/pool/topbar/toast/splitter laws realized engine-wired (C1-C2; the LAW-NET-INVENTORY corpus checked row-by-row).
-- **The full-shell chrome gaps** — the keymap long tail (~54 of ~178 rows; C22 ledger), i18n (C12), tooltip dismiss (C11), type-scale deltas (C14), strip badges (C15) (R-polish; spec 17 facet rows).
-- **The color page's REAL engine binding** — the mock's W4 math bound to the engine pipeline (W-color; grade-math parity pins).
-- **The a11y + NFR floor on the APP** (not the mocks): §11 audit at R-polish; §12 perf budgets enforced by the battery.
+**GAP (the work — owner + phase per the D24 verification ladder [crawl K1-K4 / walk w1-w3 / run r1-r6 — `IMPLEMENTATION-PLAN.md` §2; spec 14 retired R23, its §-redirect table resolves the old C/W/R tags — dual-tagged through the fleet window]; acceptance in parentheses):**
+- **MiniShell** — the mini chrome family in nle-ui: Topbar/Inspector frame/MediaPool frame/Splitter+R18j laws/Toast role=alert/Viewer frame + tokens/qc- CSS, slots-compatible per CORE-SEAMS S22 (package-owned placeholder state, NO mini-store port, zero engine imports — the boundary script) (**C0 → w1-prep / S-package**; rides ∥ crawl — package-level programmatic gates; acceptance: package tests incl. the ported chrome laws + the boundary script + MiniShell renders in the package Storybook). Verified still-open @ `85dcf57` — no MiniShell component exists in the package yet.
+- **The grammar's TOKEN half (D25.3a)** — the mini theme mode on OT's CSS-variable surface (`globals.css` `:root` + the `theme.ts` constants; mechanical theming over OT's existing semantic-class surface) (owner S-ot, **w1-entry** — the ordering law: crawl = structure + behavior, w1 = tokens + fidelity; acceptance: OT's `/view` runner renders the mini skin — THE gold sample, contingent on both grammar halves).
+- **The grammar's STRUCTURAL half (D25.3b)** — the additive OT-side components: the **testid-emission convention** (a default-off `data-testid` prop family — OT's components emit ZERO testids today; K3's DOM-structural gate is the 59-static + 15-templated census), the track-head column, the minimized strip, the compact/pill mode, the tools-row deltas (filmstrip/audiolane/minimize/delete/nudge) (owner S-ot, **crawl-tail** — additive-optional, classic defaults M-pinned; acceptance: the components exist in OT's tree with zero classic-UI change).
+- **The crawl app's chrome surfaces — the behavior half** — inspector/pool/topbar/toast/splitter/viewer+transport laws realized engine-wired (**C1(b,c,d,e,f) + C2-behavior → K3**; the LAW-NET-INVENTORY corpus checked row-by-row — 322 authored + 33 projection pins; the testid-census DOM-structural gate lands AFTER the D25 swap + OT's testid layer [the ordering law]; the store/policy halves may author ∥ the bridge against the injection-point contracts). C1(a) — the qc- restyle — is the TOKEN half above (w1); C2's viewer FRAME visuals → **w1**.
+- **C4's mini-parity gate** — the automated e2e (import → cut → play → export, zero mock paths) → **K4**; the human side-by-side + the annotakit review-loop config for the app → **w1-entry** (the side-by-side is **app-vs-OT-runner** — two renderings of ONE tree per D25.4, the VLM net pointed at both; not app-vs-mock).
+- **The OT S-round queue** (filed in nle-ui's `.agents/PLAN.md`, ∥ crawl): P-widen — the `patch` wire member grows `transitionOut` (the engine carries the transition on the element; today the app's Inspector transition edits refresh only on the next doc rebuild — the registered staleness); P-lock-route — `toggleTrackCmd('locked')` routes to the engine (the engine lock is the SSOT; the app's store-side write is mirror-clobbered). Verified still-open @ `85dcf57`.
+- **The full-shell chrome gaps** — the keymap long tail (~54 of ~178 rows; C22 ledger), i18n (C12), tooltip dismiss (C11), type-scale deltas (C14), strip badges (C15) (**R-polish → r5**; spec 17 facet rows).
+- **W-ops keymap surfaces** — the new op families' key surfaces in nle-ui (**W-ops → r1**; spec 16's keymap rows).
+- **The color page's REAL engine binding** — the mock's W4 math bound to the engine pipeline (**W-color → r3**; grade-math parity pins; the variants' R23 W-B color wave is the design reference).
+- **The a11y + NFR floor on the APP** (not the mocks): §11 audit + §12 perf budgets (**R-polish → r5**; enforced by the battery).
+- **The mock retirement triggers** — the mini + variants mocks stay alive until the app matches their fidelity (port-then-swap; the law text lives in 00-master's standing-laws per D23.2) (**post-K4 / post-w1** — was post-C4/post-walk).
 
-**ACCEPTANCE & TEST PLAN:** spec 17 §13A facet matrix (Tier 3 UI rows) + §14.4 step 0; the mini's law net (LAW-NET-INVENTORY.md — the C1/C4 acceptance lists, pre-C1/pre-C4 deliverables); the battery's posture checks; the annotakit review loop on the crawl app (C4).
+**ACCEPTANCE & TEST PLAN:** spec 17 §13A facet matrix (Tier 3 UI rows) + §14.4 step 0; the mini's law net (LAW-NET-INVENTORY.md — K3's acceptance list: the pre-C1 timeline-law deliverable LANDED at the R23 seal [33 HOLDS-on-OT verified]; the pre-C4 corpus is the K3/K4 re-expression target); the battery's posture checks; the annotakit review loop on the app at w1-entry (the human rounds' review surface).
 
 ---
 
 ## 0A. TL;DR
 
-This spec defines the application shell — the layout regions, panel inventory, and interaction contracts of the editor UI. It is derived from the DaVinci Resolve layout clone committed at `ui-mock/davinci_resolve_ui_mock.html`, **deliberately simplified** to match our much smaller scope: the menu bar is removed, the inspector is reduced from 6 tabs to 4, and the 7-page dock collapses to 3 pages (Edit / Color / Deliver). Every panel is a thin `EngineCommand` generator over the spec 15 wire protocol — no panel calls a manager method directly, and no panel holds engine state. The timeline area's internals (component hierarchy, virtualization, drag state machines) are owned by spec 05; this spec owns everything that *surrounds* them. **v1.1** integrates the cloudcut UX-spec's applicable material (per-panel state rows, the five context menus, the pointer/cursor grammar, error & notification UX, visual-language depth, the a11y floor, perf budgets) under the ours-wins contradiction policy — every rejection is registered, not silently dropped. **v1.3 (R19)** adds §16: shell-mini is designated the first shippable MVP — the minimal complete editing surface with OT-seam-tracked timeline logic and an embedding contract — landing before the full shell.
+This spec defines the application shell — the layout regions, panel inventory, and interaction contracts of the editor UI. It is derived from the DaVinci Resolve layout clone committed at `ui-mock/davinci_resolve_ui_mock.html`, **deliberately simplified** to match our much smaller scope: the menu bar is removed, the inspector is reduced from 6 tabs to 4, and the 7-page dock collapses to 3 pages (Edit / Color / Deliver). Every panel is a thin `EngineCommand` generator over the spec 15 wire protocol — no panel calls a manager method directly, and no panel holds engine state. The timeline area's internals (component hierarchy, virtualization, drag state machines) are owned by spec 05; this spec owns everything that *surrounds* them. **v1.1** integrates the cloudcut UX-spec's applicable material (per-panel state rows, the five context menus, the pointer/cursor grammar, error & notification UX, visual-language depth, the a11y floor, perf budgets) under the ours-wins contradiction policy — every rejection is registered, not silently dropped. **v1.3 (R19)** adds §16: shell-mini is designated the first shippable MVP — the minimal complete editing surface with OT-seam-tracked timeline logic and an embedding contract — landing before the full shell. **v1.5 (R23):** the timeline-UI grammar lands on OT's CANONICAL React tree in two halves (D25 — the token half at w1, the structural half in the crawl window); the app's timeline-port fork retires; the gold sample is OT's `/view` runner at mini theme; the phase vocabulary re-keys per the D24 verification ladder (crawl/walk/run — `IMPLEMENTATION-PLAN.md`).
 
 ---
 
@@ -459,7 +465,7 @@ Contrast floors are §9's table; the 4.5:1 body-text and 3:1 non-text minimums a
 - **Sample project (§4.10)**: loads via `loadProject` with the committed fixture; empty-state CTA + cheat-sheet footer both reach it — same fixture as spec 17 §13A.6, never forked.
 Mouse-drag tests are reserved for the translation layer itself (hit-testing, thresholds) — everything else asserts through commands, per the UI-interaction-tax rules (spec 17 §2.5 / SKILL.md).
 
-**Review loop — annotakit-for-app charter (Round 15 amendment, N-note):** the mock's n (annotakit) review loop — C/R pin-comment threads on the review surface, digest/export, optional GitHub-issue mirror — is chartered for the APP build (ARCH-R15 §4 impact map + §2.6 punch list; SCOUT-R15-D §8): a **config change** (review-surface wiring + `ANNOTAKIT_GH_TOKEN`), **NOT a port** — the app re-uses the same review infrastructure the 14 mock review rounds rehearsed (the mock is ported at A3 and retires as a repo after A7; the review loop outlives it). Tier-3 tests stay Playwright — the review loop is human-in-the-loop UX review infrastructure, not a test tier.
+**Review loop — annotakit-for-app charter (Round 15 amendment, N-note):** the mock's n (annotakit) review loop — C/R pin-comment threads on the review surface, digest/export, optional GitHub-issue mirror — is chartered for the APP build (ARCH-R15 §4 impact map + §2.6 punch list; SCOUT-R15-D §8): a **config change** (review-surface wiring + `ANNOTAKIT_GH_TOKEN`), **NOT a port** — the app re-uses the same review infrastructure the 14 mock review rounds rehearsed (the mock is ported at A3 and retires as a repo after A7; the review loop outlives it). Tier-3 tests stay Playwright — the review loop is human-in-the-loop UX review infrastructure, not a test tier. **(R23/D24 re-tag: the app-side config lands at w1-entry — the human test rounds' review surface; the A3/A7 labels above are the R15-era phase lineage, resolved via `IMPLEMENTATION-PLAN.md` §7's lineage table.)**
 
 ```bash
 # Run Tier 3 shell tests only
@@ -479,8 +485,9 @@ npx playwright test tests/ui/shell && npx vitest run tests/unit/shell-selectors
 | OpenCut-classic timeline (in-shell region) | spec 05 §16 inventory | The timeline-area internals this shell frames |
 | FreeCut per-element op UI | spec 05 §18 inventory | Trim/stretch/fade handle components consumed by §5's contracts |
 | **nle-engine** | — | **No shell code exists** (engine has no React UI beyond its test harness page) — the shell is greenfield |
-| **shell-mini (first MVP, R19)** | `ui-mock/shell-mini/` (this repo) | The §16 MVP: compact shell + timeline whose ops track the OT seam map (`docs/OT-SEAMS.md`); deviations register in its README; 302 vitest + live annotakit review surface |
-| **opencut-timeline** | `src/lib/timeline/controllers/` + `view/` | The interaction-controller + view-math reference for the timeline region's drag/zoom/ruler behavior behind §4.7 (spec 05 §16.5) — components pending its W4 |
+| **shell-mini (first MVP, R19)** | `ui-mock/shell-mini/` (this repo) | The §16 MVP: compact shell + timeline whose ops track the OT seam map (`docs/OT-SEAMS.md`); deviations register in its README; 355 vitest (sealed) + the R23 seal docs (`CORE-SEAMS.md` 26 seams; `LAW-NET-INVENTORY.md` the corpus census) + live annotakit review surface |
+| **nle-ui (the productized package)** | `/home/z/my-project/nle-ui` (the private-source package; the app pins it via `vendor/nle-ui` @ `85dcf57`) | The full-shell chrome family productized: `AppShell` + slots, Toolbar2/MediaPool/Viewer/Inspector/AppDock/StatusStrip/ToastRegion/CheatSheet, the mixer family (ChannelEditor — the F3 real-gain slider), Color/Deliver pages; 648 tests, engine-free by law (the boundary script); F3/F7 the real-gain laws + the kind-aware mute-all pin; the §10 `shell-*` testid family emitting |
+| **opencut-timeline** | `src/components/timeline/` (39 files / ~7,700 LOC — **THE canonical React timeline UI tree, D25**) + `src/lib/timeline/` (core) + `src/app/view/` (the `/view` miniature editor shell: library panel + compositor preview + the timeline; deterministic fixtures; `window.__VIEW_TEST__` hooks; 359 in-page + 130 real-mouse suites — 489/489 @ `222532c`) | The timeline-area internals this shell frames (spec 05 §16.5) + the gold-sample host for the mini theme (D25.4 — `/view` at mini theme once both grammar halves land) |
 
 > Reconciliation policy: `19-code-references.md` (canon hierarchy; cloudcut-nle = UX/app-scope tier-3 reference like nle-engine is for the engine side).
 
@@ -523,8 +530,12 @@ is the same product's minimal cut: every ESSENTIAL NLE operation is live
 transport · timeline, plus inspector), and the whole surface tracks the
 opencut-timeline seam map (`ui-mock/shell-mini/docs/OT-SEAMS.md`) so the
 mock's timeline logic is a projection of the editing-domain engine, not an
-improvisation. When the real library lands, the ops rename, they do not
-redesign (OT-SEAMS §3, the swap path).
+improvisation. (The R23 seal widened the map to the WHOLE surface —
+`docs/CORE-SEAMS.md`, 26 seams: timeline S1-S10, engine S11-S15, audio
+S16-S17, project-asset S18-S21, chrome/view S22-S26 — plus the 5-class
+store partition, the C0-C4 transport map, and the audited-absent register:
+every seam states its transport landing.) When the real library lands, the
+ops rename, they do not redesign (OT-SEAMS §3, the swap path).
 
 shell-mini is additionally the EMBEDDING vehicle: the app is a **window
 onto a project** (track binding: one bound video + one audio lane, or a
@@ -578,8 +589,10 @@ customization point (exit/parent/export handshakes live in the host).
 
 1. **Canon hierarchy unchanged**: where shell-mini and this spec disagree,
    this spec wins and the delta is REGISTERED — the live deviation
-   register is `ui-mock/shell-mini/README.md` §"What's OUT" (27 entries
-   through R19), the seam reasoning is `docs/OT-SEAMS.md`. The mock does
+   register is `ui-mock/shell-mini/README.md` §"What's OUT" (39 entries
+   through the R22 drag-law retirement; 27 at R19), the seam reasoning is
+   `docs/OT-SEAMS.md` (timeline ops) + `docs/CORE-SEAMS.md` (the whole
+   surface, R23). The mock does
    not amend this section silently; the R19 round folded the wave
    feedback into this section by explicit user directive.
 2. **Interaction contracts (§5)**: the mini's ops are the §5 table's
@@ -597,13 +610,26 @@ customization point (exit/parent/export handshakes live in the host).
    not a competing design. Panel vocabulary (pool/inspector/viewer/
    timeline) is shared so the mini grows INTO the full shell rather than
    beside it.
-5. **The MVP vehicle (R22 amendment — the finality round):** the first
-   FULLY-WORKING MVP is the **crawl app** (spec 14 §3.1 C0-C4): the
+5. **The MVP vehicle (R22 amendment — the finality round; phase tags
+   re-keyed R23 per D24/D25):** the first
+   FULLY-WORKING MVP is the **crawl app** (the crawl's K1-K4 ladder —
+   `IMPLEMENTATION-PLAN.md` §2; spec 14 retired R23, its §3.1 C0-C4 tags
+   resolve via the stub's §-redirect table): the
    shell-mini grammar rendered by `nle-ui`'s `MiniShell` + the app repo's
-   engine-wired surfaces (OT timeline via EngineMount, engine composition
-   via ProgramCanvas, WDC audio) — the mini MOCK is the design reference,
+   engine-wired surfaces (the timeline is **OT's canonical React tree
+   vendored** per D25 — the app's `timeline-port` fork retires, its
+   PORT-LOCAL props upstreamed as optional injectables; EngineMount stays
+   as the app adapter over the canonical tree's injection points; engine
+   composition via ProgramCanvas, WDC audio) — the mini MOCK is the design
+   reference,
    law register (its test net re-expressed as the crawl app's acceptance
-   corpus), and live review surface until the crawl app reaches parity
-   (the port-then-swap law; retirement decision post-C4). The mock itself
-   does not ship.
+   corpus — K3's acceptance list), and live review surface until the
+   crawl app reaches parity
+   (the port-then-swap law; retirement decision **post-K4 / post-w1**). The
+   mock itself
+   does not ship. The grammar itself lands ON the canonical tree in two
+   halves (§0 GAP rows; D25.3): tokens at w1, structure in the crawl
+   window; **the gold sample is OT's `/view` runner at mini theme, and
+   the w1 side-by-side is app-vs-OT-runner — two renderings of ONE tree**
+   (D25.4).
 
