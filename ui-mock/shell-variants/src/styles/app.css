@@ -110,7 +110,16 @@ body {
   white-space: nowrap;
 }
 .toolbtn:hover { background: var(--hover-overlay); color: var(--text-primary); }
-.toolbtn.active { color: var(--text-primary); background: var(--active-overlay); }
+/* th_mtr0qmax (#56, R23 wrap): the ON state must be PERCEIVABLE — the old
+   --active-overlay swap measured only ~3% per channel against the resting
+   bg (rgb(52,52,58) vs rgb(44,44,46) live) and read as "no visual change".
+   The ON treatment is now the accent tint + hairline ring (the same
+   accent-selection family the dock tabs carry). */
+.toolbtn.active {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-selection) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-selection) 48%, transparent);
+}
 
 .icon-btn {
   display: flex; align-items: center; justify-content: center;
@@ -420,7 +429,11 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
     border-radius: var(--radius);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
     padding: 3px 0;
-    z-index: 93;
+    /* th_mtr0rlq7 (#57, R23 wrap): 105 — ABOVE the timeline's root-level
+       z-100 playhead (the marker-color menu opened from the viewer's
+       palette extended over the timeline block and the red line painted
+       across it). Modal order preserved: confirm 106 > menu 105. */
+    z-index: 105;
     animation: menu-in var(--motion-base) ease;
   }
   .menu-item {
@@ -525,14 +538,16 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
   .toast-close:hover { color: var(--text-primary); background: var(--hover-overlay); }
 
   /* ---- destructive confirm (§6.4): focus-trapped alertdialog ----
-     R23-FIX (review-sweep R-d, R5-P3#8): the backdrop climbs 94 → 97 —
-     ABOVE the window-too-small overlay (z 95) so a confirm opened under a
-     shrunken window stays reachable/answerable (the old ladder left the
-     overlay eating the dialog's hits). Still below ErrorBoundary 99. */
+     R23-FIX (review-sweep R-d, R5-P3#8 + the wrap-round #57 follow-up):
+     the backdrop climbs 94 → 106 — above the window-too-small overlay
+     (z 95) AND above the context menus (105, th_mtr0rlq7) so a confirm
+     opened from a menu action stays the top modal — above the timeline's
+     root-level playhead band (z 100) too, which is correct for a
+     full-app modal. */
   .confirm-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 97;
+    z-index: 106;
     display: flex;
     align-items: center;
     justify-content: center;

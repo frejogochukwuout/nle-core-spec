@@ -57,10 +57,12 @@ describe('app.css cascade-layer discipline (R20-W0)', () => {
    reliable channel into the cascade). ---------- */
 const tokens = readFileSync(resolve(process.cwd(), 'src/styles/tokens.css'), 'utf8');
 
-describe('R23-FIX R-d + item 12: the z-ladder + the danger contrast pairs', () => {
-  it('R-d: .confirm-backdrop climbs 94 → 97 — ABOVE the window-too-small overlay (95), below the failure boundary (99)', () => {
-    expect(/\.confirm-backdrop\s*\{[^}]*z-index:\s*97\s*;/.test(css)).toBe(true);
+describe('R23-FIX R-d + item 12 + the wrap-round #57: the z-ladder + the danger contrast pairs', () => {
+  it('R-d + th_mtr0rlq7 (#57): .confirm-backdrop 106 > .menu-pop 105 > the window-too-small overlay (95) > toasts — the modal order holds over the root-level timeline band', () => {
+    expect(/\.confirm-backdrop\s*\{[^}]*z-index:\s*106\s*;/.test(css)).toBe(true);
+    expect(/\.menu-pop\s*\{[^}]*z-index:\s*105\s*;/.test(css)).toBe(true);
     expect(/z-index:\s*94\s*;/.test(css)).toBe(false); // the old rung is gone everywhere
+    expect(/z-index:\s*93\s*;/.test(css)).toBe(false); // the menu's old rung is gone too
   });
 
   it('R-d: the toast-close button reaches the 24px hit floor (was 18px; the glyph is unchanged)', () => {

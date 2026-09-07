@@ -187,7 +187,11 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, scale = f
   const setFromEvent = useCallback((clientY: number, fine: boolean) => {
     const box = trackRef.current?.getBoundingClientRect();
     if (!box || !drag.current) return;
-    const dPos = ((drag.current.startY - clientY) / box.height) * (fine ? 0.25 : 1);
+    /* th_mtr0prj5 (#55, R23 wrap): the thumb must FOLLOW the pointer —
+     * pos is 0..1 FROM THE TOP, so dragging UP (clientY decreasing) must
+     * DECREASE pos (toward the top = louder). The old (startY − clientY)
+     * sign had the thumb run AWAY from the cursor — physically reversed. */
+    const dPos = ((clientY - drag.current.startY) / box.height) * (fine ? 0.25 : 1);
     onChange(clamp(posToDb(drag.current.startPos + dPos), MODEL_MIN, MODEL_MAX));
   }, [onChange]);
 
