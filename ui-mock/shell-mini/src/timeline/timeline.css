@@ -913,7 +913,7 @@
 }
 
 /* R18j (thread #13): the same ghost in the minimized sub-rows — pill
-   radius, no top/bottom inset (the 14px rows have none to give) */
+   radius, no top/bottom inset (the 20px rows have none to give) */
 .qc-drop-outline--min {
   top: 0;
   bottom: 0;
