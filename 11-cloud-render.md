@@ -1,9 +1,21 @@
 # 11 — Cloud Render: Headless Chrome + Real GPU + ffmpeg at Edges
 
 **Stream:** Cloud render pipeline
-**Status:** Refined (SCOUT-11) — primary teacher FreeCut `src/headless/main.ts` (1293 LOC) + FreeCut `headless/` directory (24 driver files) + our own design
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the contract stands as design-only; R-cloud is unchartered — a non-goal until the user re-scopes it); Refined (SCOUT-11) — primary teacher FreeCut `src/headless/main.ts` (1293 LOC) + FreeCut `headless/` directory (24 driver files) + our own design
 **Primary teacher:** FreeCut `headless/main.ts` + our own design
 **Spec file:** `11-cloud-render.md`
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- The cloud render DESIGN (§1-§18 + the Testing section): headless Chrome + real GPU + ffmpeg at the edges, the WYSIWYG contract (§11) — DESIGN-ONLY, honest: the fleet has ZERO cloud code (no repo pin; nothing shipped, nothing to regress).
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- **NONE scheduled.** R-cloud is unchartered, a non-goal until the user re-scopes it (spec 14 §3.3; phase: R-cloud — unchartered; acceptance: n/a until re-scoped by user). Do not invent work.
+
+**ACCEPTANCE & TEST PLAN:** activation-time only — the Testing section + spec 17 §13A cloud-render facet rows run IF AND ONLY IF R-cloud is chartered; until then the posture row above is the whole story.
 
 ---
 

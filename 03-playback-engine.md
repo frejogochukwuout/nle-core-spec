@@ -1,11 +1,26 @@
 # 03 — Playback Engine: Clock, Decode, Sync, Scrubbing, Varispeed (REFINED)
 
 **Stream:** Real-time playback pipeline
-**Status:** Refined spec — sub-agent scout SCOUT-03 has verified all claims against FreeCut + OpenCut-classic source
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: engine playback + OT's S1 transport policy + the app's ticker/JKL/loop mirror accepted as BASE; forward = W-media's event staircase + the C2 viewer/transport binding); Refined spec — sub-agent scout SCOUT-03 has verified all claims against FreeCut + OpenCut-classic source
 **Primary teacher:** FreeCut `Clock.ts` + OpenCut-classic `PlaybackManager`
 **Seed file:** `03-playback-engine.md`
 **Refined by:** SCOUT-03 (general-purpose scout)
 **Date:** 2026-08-22
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- nle-engine @ `f68ab8c` — 356/356 vitest, tsc 0 — the engine's playback core landed: clock/transport + the av-link dispatch + the real audio crossfade paths, in-suite at this pin. Vendors OT @ `3420b5f`, WDC @ `5570321`.
+- opencut-timeline (OT) @ `05584d8` — 459/459 (329 in-page + 130 real-mouse across 14 phases), tsc 0 — the S1 transport policy: playbackRate/loopRegion/anti-drift/atomic boundary pause.
+- nle-test-app @ `e662759` — 83/83, tsc 0 — the app's ticker/JKL/loop mirror: real transport consumers over the engine clock (EngineMount + ProgramCanvas + the WDC audio host).
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- The event staircase playhead rows at full scope — every spec 15 §9.5 row published + consumed + pinned — W-media (app) (acceptance: staircase suite green).
+- The crawl's viewer/transport binding — playhead ownership = engine clock truth — C2 (app) (acceptance: scrub/play/seek real, no mock clock).
+
+**ACCEPTANCE & TEST PLAN:** §12 (the seed intent list, preserved verbatim) + the unnumbered `## Testing` section at file end (Tier 1/2/3 + property — frame accuracy, AV drift, scrub latency, varispeed pitch); spec 17 §13A facet rows (the §3.1 "Playback (frame-accurate)", "Varispeed (pitch preservation)", "Scrubbing latency" matrix rows); the R22 battery's posture checks (BASE rows re-verified at their pins — the regression role).
 
 ---
 

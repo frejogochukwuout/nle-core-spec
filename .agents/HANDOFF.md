@@ -1,47 +1,47 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-02, end of Round 9 (pushed @ `4bc8c4d`)
-**Scope of this file:** IMMEDIATE next session ONLY. Long horizon lives in `.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`.
+**Written:** 2026-09-07, end of the R22 finality session. **READ THIS SECTION FIRST — everything below the `-----` divider is R18-era serving/environment detail that is still ACCURATE as background (env layout, :3000 ownership, annotakit kit, mirror repo) but predates R19-R22.**
 
----
+## Current state (R22 — the spec set is FINAL; the crawl is next)
 
-## Restore context first (10 min)
+- **The user's finality directive is COMPLETE**: the spec + plan are audited and final. The five rulings are in `audits/ARCH-R22-finality.md` (v3, twice adversarially reviewed + integration-reviewed, all amendments folded): **D18** keep the nle-ui package + nle-test-app consumer split (the app is promoted to THE APP; GitHub rename recommended non-blocking); **D19** the crawl/walk/run plan; **D20** the posture law (every spec's §0 = BASE pinned / GAP with owner+phase+acceptance / ACCEPTANCE & TEST PLAN); **D21** the seven-repo pin world (HEAD pins AND consumer pins, both classes); **D22** the drag-law freeze (the verbatim R18k law — the user's R22 full-retirement directive).
+- **spec 14 IS the plan** (v2.1): C0-C4 crawl → W-ops/media/n5/audio/project/color walk → R-fcpxml/polish/engine-p2/cloud run. **Crawl ≈ 10-14 wk solo / 7-9 two-dev.** The six-stream parallelization map + critical path live in §3.4. All 21 specs re-typed to the forward posture; the fleet re-pinned to 2026-09-07 (engine `f68ab8c` 356 / OT `05584d8` 459 / WDC `fe05d85` 740 / nle-ui `dba8d52` 640 / app `e662759` 83 / mini 333 / variants 1334); **battery_r22 58/58 green** (the standing battery — run it after every spec round).
+- **The mockup streams are ACTIVE siblings** (three mid-round races this session — merge-first always): the mini track executed the user's FULL drag-machinery retirement (R22 `7286122` — the R18k law verbatim) and then closed its review loop at **ZERO findings at all severities** (see the mini section below; 343 tests); the variants track landed R20 W0-W6 + an R22 W0 color-view rewrite (user P0). **The mini is now the crawl's LAW REGISTER (OT-SEAMS + the 343-test net); the variants is the walk's design reference.** Neither mock ships; both retire per the port-then-swap law (spec 14 §4.6).
 
-1. `/home/z/my-project/worklog.md` — tail (Round-9 record)
-2. `audits/ARCH-R9-three-domain-strategy.md` — **the round's ruling** (three domains; read §2-5 for the reasoning, §7 for the seal watch items)
-3. `00-master-spec.md` — Decisions 12/13/14 + §2.5 doc governance (v5.0)
-4. `.agents/PLAN.md` — seal-round priority order
-5. Repo states + PATs: see worklog Round-9 bootstrap entry (NOTE: a second PAT was issued for the three bearachprema repos — engine/OT/web-daw-core; the spec repo PAT is unchanged)
+## Mini-track R22 state (the drag retirement + the ZERO-findings review loop — COMPLETE)
 
-## Repository states at handoff
+- **The user's drag directive is COMPLETE**: "fully clean up any timeline drag related handling done in the last two-three sessions to the one before that — it was actually better back then" → R22 `7286122` (−761 lines): the R18k pointer law verbatim in behavior. RETIRED: both-edges magnet + frozen field, trim ghost, commit-at-UP, the pending-gesture window family, the C19 tick freeze, the scrub-surface edge auto-scroll, the scrub unmount sweeps. KEPT (README #39): the clamp law, the R18i CLIP edge auto-scroll, capture guards, the C9 lock-release sweep, minimal pointercancel hygiene, every non-drag PR-69 fix. Register: `ui-mock/shell-mini/README.md` deviation #39.
+- **PR #69 re-verified**: 53/56 fixed, 3 retired-by-directive (C8/C19/C53 — honest replies drafted), 0 regressed. **THE REVIEW LOOP CLOSED AT ZERO**: 10 opus rounds (R4-a → R13) took 11 → 10 → 5 → 5 → 2 → 3 → 12 → 3 → **0** findings; the one behavioral defect (R5-b P2: the split/cut fallback broke the selection XOR law) was fixed in R6; everything after was R18→R22-era comment/doc staleness, closed class-by-class with mutation-verified nets. R13 verdict: "EXIT: zero findings at all severities."
+- **Gates**: tsc clean (incl. the noUnusedLocals probe), **343/343** (7 files), vite + storybook builds green; live-verified through :3001 (clamp law, single-edge magnet + guide, edge-park-no-glide, keys-live-after-scrub, zero console errors). HEAD on main `ad62c6e`; PR branch `shell-mini-review` synced at `9f3b06e`; every push merged-first with the racing variants sibling.
+- **OPEN ITEMS (next session):** (1) the GitHub API/web surface for `frejogechukwuout/nle-core-spec` went dark ~2026-09-06 23:05 (REST + GraphQL + web 404 while git push/fetch WORK — the sibling kept pushing; /user/repos + search still list it). The R22 retirement replies for C8/C19/C53 + a PR-level summary are STAGED at `/home/z/my-project/scripts/pr69-r22-notice.py` — fire it when the API recovers. (2) The GitLab mirror (ansgareutychisO/nle-core-spec) lags at `31d659d`: the GLPAT is unrecoverable from disk (lived in the lost session's askpass helper; the GitHub PAT gets 401/403 there ×5) — ask the user to re-supply to resume mirroring. (3) The worklog copy protocol: `/home/z/my-project/worklog.md` == `/tmp/my-project/worklog.md` (synced at close).
 
-| Repo | Commit | Notes |
-|---|---|---|
-| nle-core-spec (canon) | `4bc8c4d` | Round 9 complete: 21 specs (00-20) + ARCH-R9 + R9 review + battery_r9 48/48 |
-| nle-engine | `624a76b` | Waves 4A→5C complete: 202/202, 25/25 milestones, ~47k LOC, real A/V export. **M1.5 audio wiring (vendor/web-daw-core) NOT yet landed** — it is the next convergence duty (Decision 13) |
-| opencut-timeline | `4e39b67` | **"FINAL as a distilled opencut timeline"** — 297/297, components+controllers+hardening landed, SEAMS.md written. Remaining: P3 polish + **C7 rename (open)** |
-| web-daw-core | `bc68ee0` | 737/737, M1 bridge + triangle de-risk landed. M1.5 engine-side wiring open; M2 (mixer surface) not started |
-| cloudcut-nle | `ux-spec` @ `9b9f68a` | Integrated ours-wins (spec 18 v1.1); watch for branch evolution |
+## Variants-track R22 state (the COLOR VIEW REWRITE — the user's P0, COMPLETE)
 
-All four repos are ACTIVELY DEVELOPED ("still finalizing" per the user) — `git fetch`/`git pull` every one before any analysis; re-baseline line-number citations with fresh greps (R8 lesson: every engine citation moved; R9 confirmed it again with 4D-B→5C).
+- **The user's color directive is COMPLETE**: "the color grade view is a disaster... need to completely rewrite" → R22 W0-W5 landed and pushed (W0 the color composition rewrite + Toolbar2; W2 mixer #71/#72/#81; W3 insert modes #83; W4 the source trim seam #84/#85; W5 the deliver restructure #88/#89). 1349/1349 tests, tsc clean, builds green; live-verified through the public URL.
+- **The R22 color architecture (DESIGN-R22 v2, audited 2× — read the reference HTML canon FIRST every color round)**: media pool left (Pool|Stills) / the VIEWER dominant center / the ColorInspector ([Primaries|Curves|Qualifier] tabs — the ONE grading surface; ColorConsole + ColorInspectorRail DELETED) / TimelineCompact (V/A/T token-coded, #75) + NodeGraphDock (clipped + scrollable, #74) in the timeline area / the scopes a 4-state console (off/collapsed/row/grid, default OFF).
+- **All 19 review threads (#71-#89) RESOLVED** with fix evidence (`ui-mock/shell-variants/scripts/r22-resolve-threads.mjs`). The GH issue mirror hit transient GitHub-connectivity failures at close (000s on the PATCHes — the daemon's fetch failed too); background retry loops were left running. VERIFY at session start: `curl localhost:3000/annotakit/api/health` → ghSync.pending == 0; if not, POST /sync + re-run the close loop for issues #71-#89.
+- **W6 (the Effect/transition view, #82) is REGISTERED not built** — the design lives in DESIGN-R22's W6 section: the FX page (TimelineCompact seamMode: frozen tracks, hoverable seams → transition objects; head/tail → fades; transition-specific inspector; effects assets left; the LeftDock Effects tab + panels.effects retire in that wave). The fade objects still block tracks today.
+- **R22 gotchas worth remembering**: (1) `[data-tip]::after` tooltips at opacity:0 extend scroll extents — ONLY display:none removes them in Chromium (visibility:hidden does NOT); (2) percentage heights in a content-based flex parent resolve indefinite → fixed pixel budgets; (3) absolutely-positioned nodes never extend a scroll region — the canvas box carries explicit extents; (4) the storybook iframe can lock at a stale 1920px width — force the iframe chain widths for honest screenshots.
 
-## Next session's task: the SEAL ROUND (or a Round-9 delta if repos advanced)
+## Next session scope (immediate — THE CRAWL begins)
 
-Default scope = `.agents/PLAN.md`'s seal priority order (which equals 19 §12 + ARCH-R9 §7). First actions:
+1. **Pre-C1 (the spec-side deliverable, BEFORE any crawl code):** write `ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md` — distill the mini's 333-test net into (a) the timeline-law subset (every law marked HOLDS-on-OT / GAP-with-owner) for C1's entry, (b) the full corpus + the ~60-testid census for C4's entry. Source: the mini's test files + `docs/OT-SEAMS.md` + README deviations. [spec 14 §4.6 row 1]
+2. **C0 (nle-ui):** the `MiniShell` chrome family port (Topbar/Inspector frame/MediaPool frame/Splitter+R18j laws/Toast role=alert/Viewer frame + tokens/qc- CSS; slots-compatible; the package-owned minimal placeholder region; zero engine imports — the boundary script gates). Source grammar: `ui-mock/shell-mini/docs/RH-skin-extraction.md` + the mini's components. [spec 14 §3.1 C0]
+3. **The queues are live in both directions:** nle-ui carries the OT S-round queue (patch.transitionOut widening + lock router route — filed at `dba8d52`); the engine's N2b design round + the S-engine color instruments (scopes/qualifier/power-window — zero engine code, 4-6 wk) + the projector parity corpus can all ride ∥ crawl. The app-side crawl work (C1+) starts after C0 + pre-C1.
+4. **User-gated decisions to surface when the user next appears:** D6 re-affirmation (W-n5 real media decode), the nle-test-app → nle-app rename (recommended), the narrative-compression pass (registered honest limit — the §0A residue; only if the user wants the bodies compressed).
 
-1. **Fetch/pull all repos; diff engine vs `624a76b`, OT vs `4e39b67`, web-daw-core vs `bc68ee0`.** The user said all three are "still finalizing" — a delta is LIKELY. If any advanced: scout the delta FIRST (its HANDOFF/gaps/DECISIONS docs), then apply the seal items against the new state. Pay special attention to: engine `vendor/web-daw-core` appearing (M1.5!), OT's C7 rename (types losing their `timeline.*` prefixes), web-daw-core M1.5/M2 movement.
-2. **If M1.5 landed in the engine**: verify per ARCH-R9 §7.1 (submodule + parity gate + EXECUTED AudioMixer retirement + audio-mix.ts end-state) — this is PLAN item 1 and the biggest single seal event.
-3. **If nothing moved**: the C7-rename charter and the decision-reconciliation sign-off lines (PLAN items 3-4) are pure spec-side work — safe to start immediately.
+## Standing laws (battery-enforced now)
 
-## Round-9 mechanics to reuse
+- The posture law (D20): every gap row carries owner + phase + acceptance; BASE rows carry pin+suite+count; count discipline (declared == actual at the pins).
+- The pin world (D21): HEAD pins AND consumer pins, both classes (the battery checks them separately — don't conflate).
+- The drag law (D22): the R18k law verbatim is the WHOLE drag law; the retired machinery (ghosts/commit-at-UP/pending-gesture/tick-freeze/scrub-edge-auto-scroll) stays retired; the OT-SEAMS tombstoned rows re-open ONLY by user request.
 
-- **The challenge round pattern**: when the user pushes back on an architecture, re-derive from measured facts (LOC matrices, test assets, who-owns-what tables), not from prior-round conclusions — the R9 rulings each started with a fresh evidence table (ARCH-R9 §1).
-- **The domain-decomposition lens**: overlap between two repos is resolved by asking "is this ONE domain duplicated, or TWO domains that each need a home?" — the answer differs for timeline (was duplicate → merged) vs audio (two domains → layered seam).
-- **Battery discipline**: fix → full battery re-run → recalibrate; exempt-window logic must look BEFORE AND AFTER each hit (R9 lesson: a `superseded` marker 240 chars after a phrase is still context).
-- **Rename mechanics** (if another suffix-era ever appears): git rm seed + git mv + header self-reference rewrite + path sed on LIVE docs only, historical round records untouched.
+-----
 
-## Standing cautions
+## What is LIVE right now (the headline — R18 layout; still accurate)
 
-- Never edit web-daw-core's `copy`-class files by hand (file-class law; sync overwrites).
-- The spec set is now CONTRACT + GAP + ACCEPTANCE (Decision 14): new spec text should state boundary contracts, deltas, and acceptance — not re-describe internals the repos already document (their SKILL/DECISIONS docs).
-- The 6 historical round records keep their point-in-time `.refined.md` paths **by design** — do "fix" them.
+- **The public preview URL IS the full Storybook dev server (R18, user directive):** `https://preview-chat-<chat_id>.space-z.ai/` (the hostname embeds THIS chat's id from the gateway metadata) → edge → Caddy :81 → localhost:3000 → **`storybook dev -p 3000`** (`scripts/sb3000.py`, double-fork daemon, PPID=1, `core.allowedHosts: true`). Same-origin means everything works through the real edge: manager UI, story tree, story selection, iframe canvases, `/index.json` (30 stories), HMR, deep links (`/?path=/story/…`). Verified end-to-end post-switch (browser pass: story DOM renders, zero page errors) + a live kill→restore→public-200 cycle.
+- **The app is the localhost dev surface on :3001** (`scripts/dev3000.py`; `vite.config.ts` port 3001) — for the agent dev loop only, NOT public.
+- **Pin-comment review surface LIVE (R18b):** storybook-annotakit v0.5 is vendored at `vendor/storybook-annotakit/` (dist tracked — boots without building), FIRST in `.storybook/main.ts` addons. At the public URL the toolbar carries Pin (⌥C) / Region (⌥R) / Threads (⌥D) / Hide (⌥L), and reviewer pins are same-origin REST through the edge — verified live (thread created via the public URL's own API, visible in the manager UI, drawer badge, delete → tombstone → orphan-branch push → GH issue closed). Store: `.git/annotakit/threads.db` (branch-switch-proof) → orphan `annotakit` branch on GitHub — **SHARED with the sibling stream's env** (their `db=annotakit@shell-variants` commits appear in the branch log; the kit's logical merge reconciles both) — plus a 1:1 GitHub-issue mirror. Agent surface: `GET /annotakit/api/health` → agentSurfaces (rest + digests + github); `GET /annotakit/api/threads`, `/export?format=md`, POST/DELETE threads, POST `/sync`. Token: `.env` in shell-mini (gitignored — **recreate after a recycle**: PAT from chat + `ANNOTAKIT_GH_REPO=melodietexoss/shell-mini-review` + `ANNOTAKIT_GH_LABEL=mini` + `ANNOTAKIT_GH_SCOPE=4c1120aa|src/(timeline|shell)/` — see the R18h bullet).
+- **R18e/R18f — the feedback wave (annotakit issues #7-#16, ALL fixed + thread-resolved):** ripple edit (toggle, delete/end-trim/start-trim follower-shift laws, snapshot-idempotent previews, delta-quantize + floor overlap guard); RH cut styles `[`/`]` (裁剪开始/裁剪结束, ripple-aware).
+- **The sibling streams own their repos**: nle-engine / opencut-timeline / web-daw-core / nle-ui / nle-test-app all have live `.agents/` docs + worklogs — read THEIR HANDOFFs before touching their domains; file cross-repo work as queues, never unilaterally.

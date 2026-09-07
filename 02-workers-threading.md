@@ -1,7 +1,7 @@
 # 02 — Workers & Threading: Worker Pool, AudioWorklet, Threading Discipline (Refined)
 
 **Stream:** Off-main-thread execution
-**Status:** Refined spec (sub-agent scout SCOUT-02)
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the worker laws landed + tested in the engine's 356/356 @ `f68ab8c`; the remaining work is genuinely thin — R-engine-p2-class); Refined spec (sub-agent scout SCOUT-02)
 **Primary teacher:** FreeCut — `ManagedWorker*` abstraction + worker inventory + 1 AudioWorklet
 **Secondary teacher:** OpenCut-classic — transcription worker + mediabunny `VideoSampleSink` API surface
 **Spec file:** `02-workers-threading.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
@@ -9,7 +9,20 @@
 
 ---
 
-## 0. Refined Sections Map
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- nle-engine @ `f68ab8c` — 356/356 vitest, tsc 0 — this spec's worker/threading model landed + tested: the worker laws (§4 ManagedWorker/pool/session, §5 memory discipline, §7 AudioWorklet, §8 per-worker specs) are in-suite at this pin. Vendors OT @ `3420b5f`, WDC @ `5570321`.
+- nle-test-app @ `e662759` — 83/83, tsc 0 — the audio-thread-side consumption proof: real audio crossfades + the WDC audio host running in the app.
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- The remaining work is genuinely thin — one honest row: worker-pool surfacing for the new P2 engine features (ShapeItem/Lottie/Subtitle/Controller, CPU transition renderers) — R-engine-p2 (engine, non-blocking) (acceptance: per-item milestones when queued). The only other pending worker surface — the §8.1 decode worker — rides W-n5 (PENDING user re-affirmation of D6).
+
+**ACCEPTANCE & TEST PLAN:** §12 (the six test classes) + the unnumbered `## Testing` section at file end (Tier 1 mocked-worker logic / Tier 2 real-worker browser rows); spec 17 §13A facet rows (the §3.1 "Worker lifecycle" + "AudioWorklet message protocol" matrix rows); the R22 battery's posture checks (356/356 at the pin — the regression role).
+
+---
+
+## 0A. Refined Sections Map
 
 | § | Section | Status |
 |---|---|---|

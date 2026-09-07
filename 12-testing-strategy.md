@@ -1,8 +1,27 @@
 # 12 — Testing Strategy: Virtual Framebuffer, Pixel Verification, Audio Waveform Checks
 
 **Stream:** Test infrastructure & verification strategy
-**Status:** Refined (SCOUT-12) — open questions resolved (§12), corrections verified (§14), CI/runner configs + asset scripts audited (audits/12-testing-strategy.audit.md — PASS-WITH-CAVEAT, issues applied). Round-8 note: the umbrella methodology (tier definitions, facet coverage matrix, NFR verification recipes, error-path census, a11y spot suite) lives in `17-test-plan.md` v1.1 §13A — this spec owns the INFRASTRUCTURE layer (virtual framebuffer, pixel/audio verification mechanics, CI configs) that 17's recipes execute on; NFR measurements per 00-master §6A run through the jobs defined here.
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the methodology is landed and executing via spec 17 v1.3; the R22 fleet pins are the baseline, the law-net corpus is the next gap); Refined (SCOUT-12) — open questions resolved (§12), corrections verified (§14), CI/runner configs + asset scripts audited (audits/12-testing-strategy.audit.md — PASS-WITH-CAVEAT, issues applied). Round-8 note: the umbrella methodology (tier definitions, facet coverage matrix, NFR verification recipes, error-path census, a11y spot suite) lives in `17-test-plan.md` v1.1 §13A — this spec owns the INFRASTRUCTURE layer (virtual framebuffer, pixel/audio verification mechanics, CI configs) that 17's recipes execute on; NFR measurements per 00-master §6A run through the jobs defined here.
 **Spec file:** `12-testing-strategy.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- The methodology landed — this spec's INFRASTRUCTURE layer: virtual framebuffer (§3.2), pixel verification (§5), audio verification (§6), WYSIWYG (§7), property-based testing (§8), CI configs (§11/§17), asset scripts (§15/§16). The umbrella methodology is superseded by spec 17; the domain specifics here (workers/audio mechanics) feed 01/02/20's Testing sections.
+- EXECUTING via spec 17 v1.3 §0A (the acceptance-executability law) — this spec's mechanics are what 17's recipes run on.
+- The fleet's suites at the R22 pins (spec 17 §13A.7's re-tier row): nle-engine 356/356 @ `f68ab8c`; OT 459/459 @ `05584d8`; WDC 740/740 @ `fe05d85` (consumed @ `5570321`); nle-ui 640 @ `dba8d52` (the app consumes @ `752991d`); nle-test-app 83/83 @ `e662759`; ui-mock/shell-mini 333 + shell-variants 1,334.
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- LAW-NET-INVENTORY (owner: nle-core-spec, gates pre-C1/pre-C4): the crawl's acceptance corpus distilled from the mini's 333-test net (acceptance: `ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md` exists + the C1/C4 gates consume it).
+- The crawl app's test authoring, ~130–180 laws (owner: nle-test-app, phase C4) (acceptance: the inventory's corpus checked row-by-row).
+- W-audio offline-parity threshold pins + the null rig (owner: app+WDC+engine, phase W-audio) (acceptance: max deviation ≤ −60 dBFS any channel).
+- W-color grade-math parity pins (owner: app+engine, phase W-color) (acceptance: the mock's W4 math vs the engine's output on the same fixtures — max delta ≤ 1 LSB-equivalent).
+- W-n5 real-file decode corpus (owner: nle-engine, phase W-n5 — PENDING user re-affirmation of D6) (acceptance: decode round-trip pins on the real-file corpus).
+- R-fcpxml fixture corpus (owner: nle-test-app, phase R-fcpxml) (acceptance: exports validate vs the chosen reference parser on the corpus).
+
+**ACCEPTANCE & TEST PLAN:** §18 (the meta plan) + the `## Testing` meta-test section (infra regressions caught FIRST per 17 §9.3's CI ordering); spec 17 §13A is the LIVE facet matrix — this spec points there, not to a static table; battery posture: the R22 suite pins above stay green.
 
 ---
 
