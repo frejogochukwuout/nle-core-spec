@@ -1524,3 +1524,35 @@ port), not what any env currently runs.
     not unilaterally bumped here"), not a unilateral re-pin that would drift
     again before their wrap. Shared canon + separate owners = queue it, note
     it, never race it.
+
+## Round-23 Spec-Track Meta-Learnings (the plan-separation + audit-fleet session)
+
+### 106. The per-file audit fleet is the user's answer to spec-vs-code drift
+When the user says "audit each spec file against upstream, one sub-agent per file or even less so they have focus": the protocol that works — one agent per file, each charged (a) BASE re-verify (b) GAP re-check (c) retired-content re-homing (d) phase re-tag (e) new-work reflection, with HARD rules (edit ONLY your file, no git, no test runs, findings to a per-file report). Dispatch in parallel waves of 5; the ORCHESTRATOR commits per wave and runs the battery. The focus dividend is real: agents found what whole-file sweeps miss (an R22 overclaim, never-existed register rows, engine-side P0 fixes the spec never flipped). Cross-wave coherence is NOT a per-agent duty — it's the orchestrator's integration round (see #114).
+
+### 107. Briefings are hypotheses — instruct agents to verify the briefing itself
+Three of my fleet briefings carried errors (a TRACK_MUTED wire code that didn't exist; a "14+ commits behind" figure that was really one commit; a "vendor mechanism already exists" overclaim). Every agent that code-verified its brief caught the error and corrected me. Standing rule for fleet prompts: "the counts/pins given here were live-verified this round — but verify FEATURES by reading code; if the briefing and the code disagree, the CODE wins and flag the discrepancy in your report."
+
+### 108. The pin-typo class — count checks pass on misspelled pins
+A transposed pin (b8c6c88 vs b8c6f88) survives every count-consistency check ("440" appears elsewhere in the file). Battery checks must assert the pin STRINGS are correctly spelled in the register files, not just that counts match. The class generalizes: any identifier repeated 90+ times is one edit away from a typo that structural checks can't see — grep for the exact string in the files that own it.
+
+### 109. "Executable plan" has a concrete bar: per-track first-action/inputs/gates/done-state + the cold-executor simulation
+The user's "there's not even a single entry point to execute, let alone per track" defines the bar. A plan row is executable when a fresh agent can simulate a first day WITHOUT asking anything: which repo, which orientation files, which FIRST action, which gates tell it the step is done. The adversarial test that works: walk the first day in the prompt and report the FIRST block point — every block point found is a P1 finding. Orientation cells must be verified to EXIST (a "read its .agents/HANDOFF.md" instruction for a repo with no .agents/ is a 5-minute block).
+
+### 110. Crawl/walk/run as VERIFICATION DEPTH, not build scope
+The user's redefinition ("crawl is not even shell-mini… programmatically verify every part of the ui / app behavior… before any human test is needed") resolves cleanly when the ladder labels HOW WORK IS VERIFIED: crawl = programmatic nets (module / combined / app-behavior / the e2e exit), walk = humans enter (with the human-required gates REGISTERED with reasons — the user's named class only), run = full product depth. Code lands continuously in every stream; a stage's exit gate is what sequences. This frame also tells you where any given deliverable belongs: split it by verification class (the behavior half to crawl, the visual-fidelity half to walk).
+
+### 111. The fork-retirement decision needs the diff TRIAGE, not just the diff size
+For any "retire the fork, consume upstream" question: count the diff lines, then CLASSIFY them — (1) parameterization (injectable props → upstream as optional props), (2) surgery (real divergence → adapters or rejection), (3) MISSED upstream (the fork silently lacks the parent's later hardening — the drift machine's proof), (4) fork-local bug-fixes (upstream them). Class (3) is the strongest argument FOR retirement and the least visible without the triage; it also becomes the post-swap verification checklist.
+
+### 112. Retire a widely-cited doc with a §-redirect stub, not a delete
+When a corpus cites "spec 14 §3.1/§4.6" in dozens of places, deleting the file breaks every citation. The pattern: the file becomes a redirect tombstone carrying a §-redirect TABLE (every §N → where it lives now) + the lineage tombstone (the plan eras). The battery then checks the stub's completeness. Citations keep resolving; history stays auditable; the content's new home is singular.
+
+### 113. Dual-vocabulary windows for phase migrations
+Re-tagging phase vocabulary across 20 files (C0-C4/W-*/R-* → K1-K4/w1-w3/r1-r6) can't be atomic. The pattern: the battery accepts BOTH vocabularies during the migration window (each file's fleet agent re-tags its own), the transitional dual-tag convention ("r1 (was W-ops)") keeps prose honest, and the battery TIGHTENS to the new set at the fleet's close — the tightening is a registered step, not a hope.
+
+### 114. Per-file agents cannot see cross-file contradictions — the integration round is not optional
+Two fleet agents re-counted the same git lag differently (one copied the plan's stale "14+", one ran the git count) — both files were individually excellent and jointly contradictory. The integration review's job: pin/count sweeps across ALL files, vocabulary coherence, cross-ref resolution, plan↔specs agreement, 3 random blind-spot spot-checks, and the fleet reports' REMAINS-OPEN aggregation (contradictions vs honest-open-work). Budget it after every fleet; it found 5 fixes at 71/71-green.
+
+### 115. The artifact's own runner output is the count authority — scrape the report, not the prose
+OT's in-page runner writes download/timeline-test-report.json (total 489, 51 suites) — that file beats every spec's "489" and even the commit messages ("486" at the same SHA). The count-discipline law extends to repo-generated reports: the battery should read the artifact's own output (report json, vitest json) wherever one exists, and spec prose should CITE the report file as the authority. Related: ±1 bucket splits (359+130 vs 360+129) are convention questions — pick one, keep it corpus-wide, note the alternative.
