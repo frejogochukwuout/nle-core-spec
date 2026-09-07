@@ -798,7 +798,7 @@
   pointer-events: none;
 }
 
-/* trim zones — 14px edge strips, the clip edge IS the handle (R18h,
+/* trim zones — 20px edge strips (PR69 C11 raised them from 14), the clip edge IS the handle (R18h,
    threads #8/#9/#10; REVISITED R18i thread #10 repost after living with
    it: the dark-scrim shade "messes up with the filmstrip too much" —
    REMOVED. The affordance is now a 2px accent line exactly AT the edge,
@@ -1058,7 +1058,7 @@
   color: rgba(255, 255, 255, 0.82);
 }
 
-/* trim zones inside a pill: narrower (the pill is only 12px tall) and
+/* trim zones inside a pill: narrower (the pill is 18px tall) and
    fully rounded to match the pill ends */
 .qc-track-item--pill .qc-track-item__trim {
   width: 10px;
