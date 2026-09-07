@@ -53,9 +53,14 @@ export function RangeBand({ duration, pps }: { duration: number; pps: number }) 
   const inLive = bandDrag?.side === 'in' ? bandDrag.t : loop.start;
   const outLive = bandDrag?.side === 'out' ? bandDrag.t : loop.end;
 
-  /* the ordering-law commit — cloned verbatim from Ruler's applyBracket
-     (itself the markIn/markOut formula): in edge drags out along, out edge
-     drags in along, never inverted. Clamped to [0, duration]. */
+  /* the ordering-law commit — the SAME max/min formula as Ruler's
+     applyBracket and markIn/markOut (in drags out along, out drags in
+     along, never inverted). NOT a verbatim clone of the Ruler's gesture:
+     the Ruler writes the store LIVE on every pointermove; this band keeps
+     ruling-21 LOCAL preview state and commits ONCE per gesture. Both
+     writers clamp to [0, duration] (the band always did — an export range
+     cannot exceed the timeline; the Ruler gained the same upper cap in
+     R23-FIX R3-P3#9, so the three-writer seam finally agrees). */
   const commitBand = (side: 'in' | 'out', t: number) => {
     const v = Math.max(0, Math.min(snapToFrame(t), duration));
     useUi.setState((s) =>

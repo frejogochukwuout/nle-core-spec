@@ -369,6 +369,21 @@ describe('Clip', () => {
     expect(el('el-2').sourceStart).toBeCloseTo(4.0, 5); // 3.0 + 1.0
   });
 
+  /* R23-FIX (review-sweep item 13, R3-P2#2): both trim handles carry z-[4] —
+     above the fade objects (z-[3]), level with the affordance below — so a
+     selected clip's corner trim gesture wins the shared hit zone. The old
+     DOM order + z-3 let a fade object eat the handle's pointer events; the
+     comment at Clip.tsx ~:1252 falsely claimed the zones were disjoint.
+     Style-level pin (jsdom has no hit-testing). */
+  it('R23-FIX item 13: both trim handles carry z-[4] — above the fade objects, level with the affordance', () => {
+    boot({}); // selection ['el-2'] — the seeded fadeIn makes the head-zone competition live
+    expect(screen.getByTestId('clip-trim-l-el-2')).toHaveClass('z-[4]');
+    expect(screen.getByTestId('clip-trim-r-el-2')).toHaveClass('z-[4]');
+    // the fade object sits BELOW: its z-[3] loses the shared corner to the handle
+    const fadeObj = screen.getByTestId('fade-object-el-2-in');
+    expect(fadeObj).toHaveClass('z-[3]');
+  });
+
   /* ---- R15 T4: trim laws at the gesture level ---- */
 
   it("R15 T4 NEIGHBOR BOUND: the left edge cannot extend past the previous clip's end — clamped, no write", () => {

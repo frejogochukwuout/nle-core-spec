@@ -135,8 +135,14 @@ export function DeliverPage() {
       </div>
 
       {/* the standard-grammar body: presets left · preview/queue center ·
-          the deliver inspector right (R22 W5, #88/#89) */}
-      <div className="flex min-h-0 flex-1">
+          the deliver inspector right (R22 W5, #88/#89).
+          R23-FIX (review-sweep item 8, R2-F6/R5-P2-3): the row carries
+          overflow-x-auto + min-w-0 — the three regions keep their minimums
+          (280+flex+340 ≥ ~900px), so a narrow shell used to CLIP the row
+          with no scroll reachable (the queue + settings fell off the right
+          edge). The row now scrolls honestly; Pages.stories'
+          narrow-container story already claimed this — now true. */}
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-x-auto">
 
         {/* ---- LEFT: PRESETS ONLY (min 260px) — #89 ----------------------- */}
         <div data-testid="shell-deliver-queue" className="flex w-[280px] min-w-[260px] shrink-0 flex-col border-r border-hairline">
@@ -153,6 +159,8 @@ export function DeliverPage() {
                     key={p.id}
                     onClick={() => setPreset(p.id)}
                     data-testid={`shell-deliver-preset-${p.id}`}
+                    aria-pressed={active}
+                    aria-label={`${p.name} export preset`}
                     className={`flex min-h-[78px] flex-col items-start gap-1.5 rounded-[var(--radius)] border px-2.5 py-2.5 text-left transition-colors ${
                       active ? 'border-accent bg-accent/10' : 'border-soft hover:bg-[var(--hover-overlay)]'
                     }`}
@@ -179,8 +187,19 @@ export function DeliverPage() {
             <div className="scroll-y min-h-0 flex-1 px-5 py-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <LoaderCircle size={13} className="animate-spin text-accent" aria-hidden="true" />
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Render queue — rendering</span>
+                  {/* R23-FIX (item 9, R2-F7): the spinner + "rendering"
+                      label ride renderActive — the queue view is reachable
+                      while IDLE (the header toggle / a past-renders review),
+                      and an idle queue claiming "rendering" was a lying
+                      header. Idle = plain "Render queue" label, no spin. */}
+                  {renderActive ? (
+                    <>
+                      <LoaderCircle size={13} className="animate-spin text-accent" aria-hidden="true" />
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Render queue — rendering</span>
+                    </>
+                  ) : (
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Render queue</span>
+                  )}
                 </div>
                 <span className="text-[10px] text-tfaint" data-tip="The queued row is the honest mock — no encode runs; the preview returns when the mock completes">mock render</span>
               </div>

@@ -187,6 +187,20 @@ describe('Ruler in/out brackets (R14 draggable edges)', () => {
     expect(store().loop.start).toBe(1); // pulled along — same markOut formula
     fireEvent.pointerUp(outB(), { pointerId: 3 });
   });
+
+  /* R23-FIX (review-sweep R3-P3#9): applyBracket's UPPER clamp — bracket
+     writes now cap at the scene duration (a page-beyond clientX used to push
+     loop.end past the timeline; the deliver range band's twin ALWAYS clamped
+     to [0, duration], so the Ruler was the loose writer of the three-writer
+     loop seam — markIn/markOut/bracket/band). */
+  it('R23-FIX R3-P3#9: a bracket drag beyond the timeline CAPS at the duration (the three-writer seam agrees)', () => {
+    boot({});
+    fireEvent.pointerDown(outB(), { pointerId: 3, button: 0 });
+    fireEvent.pointerMove(outB(), { pointerId: 3, buttons: 1, clientX: 1500 }); // 32.6 s — past the 30 s tail
+    expect(store().loop.end).toBe(30); // capped at the content tail, never past it
+    expect(store().loop.start).toBe(2); // the ordering law is untouched
+    fireEvent.pointerUp(outB(), { pointerId: 3 });
+  });
 });
 
 /* ---------- R15 T8 (R15-F1 FIX 4c/4d/4e): ruler-scrub laws ---------- */

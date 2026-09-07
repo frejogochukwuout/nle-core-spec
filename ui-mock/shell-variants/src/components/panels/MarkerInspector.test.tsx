@@ -30,9 +30,16 @@ describe('MarkerInspector (R19 marker v2)', () => {
     expect(screen.getAllByRole('tab')).toHaveLength(8);
   });
 
-  it('no marker selected → renders nothing (the rail swap routes it away)', () => {
-    const { container } = boot({ selectedMarkerId: null, selection: [] });
-    expect(container.firstChild).toBeNull();
+  /* R23-FIX (review-sweep item 2, R2-F1) RE-PINNED: the old pin asserted the
+     silent `return null` — the stale-id blank-rail bug's other half. The
+     store now clears the marker domain at every scene-switch clear-site, and
+     the panel itself answers any residual null/stale mount with the HONEST
+     one-liner (belt-and-braces; in the composed shell the R-a rail swap
+     routes the panel away entirely when the domain is null). */
+  it('no marker selected → the honest empty row (R23-FIX item 2 re-pin — never a silent null)', () => {
+    boot({ selectedMarkerId: null, selection: [] });
+    expect(screen.getByTestId('shell-marker-inspector-empty')).toHaveTextContent('Marker not found — it was removed');
+    expect(screen.queryByTestId('shell-marker-inspector')).toBeNull(); // the field set never renders
   });
 
   it('name round-trip: typing commits through updateMarker (50ms settle law, blur settles)', () => {

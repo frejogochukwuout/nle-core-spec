@@ -74,10 +74,16 @@ export function Toolbar2() {
      (page) — so its label, icon, and whether it renders at all are exactly
      the dock's real content per page. DELIVER's null entry HIDES the
      button (ruling 16: DeliverPage owns its presets rail; a toggle there
-     would lie). The label never drifts from the dock again (#80/#100). */
+     would lie). The label never drifts from the dock again (#80/#100).
+     R23-FIX (review-sweep R-c, item 11): the toggle renders ONLY on the
+     gatedByPool pages (edit + color). The audio + fx pages own the whole
+     left slot — the dock mounts regardless of the pool flag — so a toggle
+     there would claim a toggle it can't perform (the pool flag gates
+     nothing on those pages; the lying-control #100 law). DOM-absent, never
+     display:none. */
   const dock = leftDockContent(page);
-  const showLeft = dock !== null;
-  const leftIcon = dock ? <dock.icon size={14} strokeWidth={1.7} /> : null; // deliver: never rendered
+  const showLeft = dock !== null && dock.gatedByPool;
+  const leftIcon = dock ? <dock.icon size={14} strokeWidth={1.7} /> : null; // audio/fx/deliver: never rendered
   const leftLabel = dock?.label ?? '';
 
   /* the Scopes toggle: off ↔ open — the R22 4-state machine and its
@@ -92,12 +98,13 @@ export function Toolbar2() {
      ONLY — DOM-absent on color/fx/deliver (the display:none law). */
   const showMixer = page === 'edit' || page === 'audio';
 
-  /* dense DOM order: the left asset toggle (DELIVER hides it — ruling 16,
-     D-D1), then (color only) scopes, nodes, then (edit+audio only) mixer,
-     then inspector. The indices are CONTIGUOUS over the buttons that
-     actually render (a hole where the left toggle's index would sit on
-     deliver — or between nodes and inspector on color — strands the
-     arrows: the wrap math counts rendered buttons). */
+  /* dense DOM order: the left asset toggle (audio/fx/deliver hide it —
+     ruling 16 + the R-c slot-ownership law), then (color only) scopes,
+     nodes, then (edit+audio only) mixer, then inspector. The indices are
+     CONTIGUOUS over the buttons that actually render (a hole where the
+     left toggle's index would sit on audio/fx/deliver — or between nodes
+     and inspector on color — strands the arrows: the wrap math counts
+     rendered buttons). */
   let next = 0;
   const iLeft = showLeft ? next++ : -1;
   const iScopes = page === 'color' ? next++ : -1;
@@ -135,10 +142,11 @@ export function Toolbar2() {
           page, not an OS window; faux window chrome answered nothing and read
           as removable decoration (reviewer: "remove these"). */}
 
-      {/* R23-WD (D-D1, ruling 16): the left asset toggle — DOM-ABSENT on
-          deliver (leftDockContent returns null; DeliverPage owns its own
-          presets rail). Everywhere else the label + icon come from the table
-          so the button always names the dock it opens. */}
+      {/* R23-WD (D-D1, ruling 16 + R23-FIX R-c): the left asset toggle —
+          DOM-ABSENT on deliver (leftDockContent null) AND on audio/fx
+          (gatedByPool false — those pages own the slot unconditionally;
+          the toggle would lie). Edit + color keep the table-driven label
+          + icon so the button always names the dock it opens. */}
       {showLeft && (
         <button
           {...roverProps(iLeft)}

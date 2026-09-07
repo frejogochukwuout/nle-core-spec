@@ -796,17 +796,25 @@ describe('R23-WC D-C2 (#99): the channel-selected rail law', () => {
     expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
   });
 
-  it('ruling 10 — the branch applies on ANY page: the FX page rail yields to a focused channel', () => {
+  it('R23-FIX R-a RE-PIN — the FX page rail WINS over a carried strip focus (page rails outrank a focus that page owns no toggle for)', () => {
+    /* R-a (review-sweep): the chain is marker/caption → page rails →
+       channelRailLive → Inspector, so a carried stripFocus no longer swaps
+       the FX page's rail (the old ruling-10 test pinned the prior order —
+       the page's own surface now answers; the #99 case still holds on the
+       EDIT page, which has no page rail). */
     renderAppShell({ page: 'fx', fxMode: true, selection: [], stripFocus: 'tr-audio-1' });
+    expect(screen.getByTestId('shell-fxinspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+    // the focus is still LIVE in the store — returning to EDIT routes it
+    act(() => { useUi.setState({ page: 'edit' }); });
     expect(screen.getByTestId('shell-channel-editor')).toBeInTheDocument();
-    expect(screen.queryByTestId('shell-fxinspector')).not.toBeInTheDocument();
   });
 
-  it('ruling 10 — the COLOR page rail yields too, and a clip selection restores it (priority law)', () => {
+  it('R23-FIX R-a RE-PIN — the COLOR page rail wins over a carried focus too; a clip selection keeps it (priority law)', () => {
     renderAppShell({ page: 'color', selection: [], stripFocus: 'tr-audio-1' });
-    expect(screen.getByTestId('shell-channel-editor')).toBeInTheDocument();
-    expect(screen.queryByTestId('shell-color-inspector')).not.toBeInTheDocument();
-    // clip selection beats the carried focus — the page's own rail returns
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+    // clip selection keeps the page's own rail (unchanged law)
     act(() => { useUi.setState({ selection: ['el-1'] }); });
     expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
@@ -822,5 +830,124 @@ describe('R23-WC D-C2 (#99): the channel-selected rail law', () => {
     renderAppShell({ selection: [], stripFocus: 'tr-audio-404' });
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+  });
+});
+
+/* ---------- R23-FIX (review-sweep): the R-a rail hoist + the R-c left-dock
+   table mount + the R-b FX density + the scene-switch marker clear —
+   the review round's new shell laws, pinned at the composition level ---------- */
+
+describe('R23-FIX R-a: marker/caption rails hoist above the page rails', () => {
+  it('the marker rail is reachable on the COLOR page (the old chain buried it under the page default)', () => {
+    renderAppShell({ page: 'color', selection: [], selectedMarkerId: 'mk-2' });
+    expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-inspector')).not.toBeInTheDocument();
+    // Done exits the domain → the page default returns
+    fireEvent.click(screen.getByTestId('shell-marker-inspector-done'));
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+  });
+
+  it('the marker rail is reachable on the FX page too (an ACTIVE selection is newer intent than the page default)', () => {
+    renderAppShell({ page: 'fx', fxMode: true, selection: [], selectedMarkerId: 'mk-2' });
+    expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-fxinspector')).not.toBeInTheDocument();
+  });
+
+  it('the caption rail hoists on color: a single caption-track selection swaps the rail there', () => {
+    renderAppShell({ page: 'color', selection: ['cap-3'] });
+    expect(screen.getByTestId('shell-caption-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-inspector')).not.toBeInTheDocument();
+  });
+
+  it('the page default still owns the rail when no domain is live (the hoist changes nothing else)', () => {
+    renderAppShell({ page: 'color', selection: [], selectedMarkerId: null });
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+    document.querySelectorAll('body > [data-appshell-host]').forEach((el) => el.remove());
+    renderAppShell({ page: 'fx', fxMode: true, selection: [] });
+    expect(screen.getByTestId('shell-fxinspector')).toBeInTheDocument();
+  });
+});
+
+describe('R23-FIX R-c: the left-dock slot is table-driven (audio + fx own it)', () => {
+  it('the AUDIO slot mounts the SoundLibrary with the pool flag OFF (gatedByPool: false)', () => {
+    renderAppShell({ page: 'audio', panels: { mediaPool: false, effects: false, inspector: true } });
+    expect(screen.getByTestId('shell-soundlibrary')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument();
+  });
+
+  it('the FX slot mounts the FxBrowser with the pool flag OFF', () => {
+    renderAppShell({ page: 'fx', fxMode: true, panels: { mediaPool: false, effects: false, inspector: true } });
+    expect(screen.getByTestId('shell-fxbrowser')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument();
+  });
+
+  it('the Toolbar2 left toggle is DOM-absent on audio + fx (the slot is unconditional — no toggle to lie)', () => {
+    for (const p of ['audio', 'fx', 'deliver'] as const) {
+      renderAppShell({ page: p, ...(p === 'fx' ? { fxMode: true } : {}) });
+      expect(screen.queryByTestId('shell-toolbar-btn-mediapool')).toBeNull();
+      document.querySelectorAll('body > [data-appshell-host]').forEach((el) => el.remove());
+    }
+    // edit keeps the gated toggle (pinned above; the pool flag gates there)
+    renderAppShell({ page: 'edit', panels: { mediaPool: false, effects: false, inspector: true } });
+    expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument(); // gated OFF
+  });
+
+  it('edit + color stay gated by the pool flag exactly as before', () => {
+    for (const p of ['edit', 'color'] as const) {
+      renderAppShell({ page: p, panels: { mediaPool: false, effects: false, inspector: true } });
+      expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('shell-stills')).not.toBeInTheDocument();
+      document.querySelectorAll('body > [data-appshell-host]').forEach((el) => el.remove());
+      renderAppShell({ page: p, panels: { mediaPool: true, effects: false, inspector: true } });
+      expect(p === 'edit'
+        ? screen.getByTestId('shell-mediapool')
+        : screen.getByTestId('shell-stills')).toBeInTheDocument();
+      document.querySelectorAll('body > [data-appshell-host]').forEach((el) => el.remove());
+    }
+  });
+});
+
+describe('R23-FIX R-b: the FX page forces the full Timeline', () => {
+  it("fx + the user's 'on' override STILL resolves full tracks (the resolver wins over the session word on fx)", () => {
+    renderAppShell({ page: 'fx', fxMode: true, timelineCompact: 'on' });
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
+    // and the density toggle is DOM-absent there (no control claims the override)
+    expect(screen.queryByTestId('shell-timeline-toolbar-btn-density')).toBeNull();
+  });
+});
+
+describe('R23-FIX item 2: the scene switch clears the marker domain — the rail is never blank', () => {
+  it('selecting a marker, then switching scenes, returns the rail to the page default (no stale blank MarkerInspector)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ selection: [], selectedMarkerId: 'mk-2' });
+    expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
+    await user.click(screen.getByTestId('shell-scene-tab-sc-2'));
+    expect(store().activeSceneId).toBe('sc-2');
+    expect(store().selectedMarkerId).toBe(null); // the 7th clear-site law
+    expect(screen.queryByTestId('shell-marker-inspector')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument(); // honest default, never blank
+  });
+});
+
+describe('R23-FIX R5-P3#5: the F6 guard', () => {
+  it('F6 never steals focus from a text field (INPUT/SELECT/TEXTAREA/contentEditable)', () => {
+    renderAppShell();
+    const field = screen.getByLabelText('Search media'); // the pool's search input
+    field.focus();
+    // a real browser dispatches keydown on the FOCUSED element — it bubbles
+    // to the window listener; the guard reads e.target (the field)
+    fireEvent.keyDown(field, { key: 'F6', bubbles: true, cancelable: true });
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('F6 with a modifier passes through (no preventDefault on OS/browser chords)', () => {
+    renderAppShell();
+    const chord = new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true, metaKey: true });
+    fireEvent(window, chord);
+    expect(chord.defaultPrevented).toBe(false);
+    // plain F6 still cycles (the normative rung)
+    fireEvent(window, new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true }));
+    expect(document.activeElement?.className).toContain('shell-region');
   });
 });

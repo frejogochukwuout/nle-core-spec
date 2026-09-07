@@ -89,6 +89,13 @@ export function Viewer({ duration }: { duration: number }) {
      is the timeline monitor. */
   const viewerMode = useUi((s) => s.viewerMode);
   const sourceMediaId = useUi((s) => s.sourceMediaId);
+  /* R23-FIX (review-sweep item 7, R2-F5): the source-range readout
+     SUBSCRIBES to sourceRanges — it previously read useUi.getState()
+     mid-render, so a keyboard trim (SourceRangeBar / the in-out buttons)
+     committed a new range and the readout kept the stale string until an
+     unrelated re-render. Reactive selector = the readout follows every
+     writer (the store is the single source). */
+  const sourceRange = useUi((s) => (sourceMediaId ? s.sourceRanges[sourceMediaId] : undefined));
   const exitSourcePreview = useUi((s) => s.exitSourcePreview);
   const page = useUi((s) => s.page);
   const sourceMode = viewerMode === 'source';
@@ -558,8 +565,8 @@ export function Viewer({ duration }: { duration: number }) {
             </div>
           )}
           <span className="mono shrink-0 text-[11px] text-tmuted" data-testid="shell-viewer-source-duration">
-            {sourceMediaId && sourceDur != null && useUi.getState().sourceRanges[sourceMediaId]
-              ? `Range ${tc(useUi.getState().sourceRanges[sourceMediaId]!.in)}–${tc(useUi.getState().sourceRanges[sourceMediaId]!.out)} · ${tc(useUi.getState().sourceRanges[sourceMediaId]!.out - useUi.getState().sourceRanges[sourceMediaId]!.in)} of ${tc(sourceDur)}`
+            {sourceMediaId && sourceDur != null && sourceRange
+              ? `Range ${tc(sourceRange.in)}–${tc(sourceRange.out)} · ${tc(sourceRange.out - sourceRange.in)} of ${tc(sourceDur)}`
               : `Source duration ${sourceDur !== null ? tc(sourceDur) : '— still image'}`}
           </span>
           <div className="flex flex-1 items-center justify-end" />

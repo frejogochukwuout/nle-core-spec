@@ -2,15 +2,18 @@
    snap/link/lock toggles, marker cluster, zoom cluster, master audio.
    Mock's sync-bin/auto-sync/dyntrim dropped (§8.10 / §8.9).
    R23-WB (DESIGN-R23 D-B3; issue #94): the DENSITY toggle — compact strip
-   ↔ full tracks, available on EVERY page ("this super compact mode we
-   should allow to be used everywhere"); the pressed state reads the ONE
-   store resolver (resolveTimelineCompact) so the button never lies about
-   what is rendered, and the click writes the user's per-session override
-   ('on'/'off'; 'auto' remains the boot default per page).
+   ↔ full tracks, available on every page EXCEPT FX ("this super compact
+   mode we should allow to be used everywhere"); the pressed state reads
+   the ONE store resolver (resolveTimelineCompact) so the button never lies
+   about what is rendered, and the click writes the user's per-session
+   override ('on'/'off'; 'auto' remains the boot default per page).
    R23-WD (DESIGN-R23 D-D2; issue #108, Part IX ruling 15): the PER-PAGE
    cluster matrix — [research-informed: Resolve's pages carry different
    toolbars: Color has no timeline toolbar (the filmstrip replaces it),
-   Deliver none, Cut/Edit carry the editing tools]. Our first-pass matrix:
+   Deliver none, Cut/Edit carry the editing tools]. Our first-pass matrix
+   (R23-FIX review-sweep R-b: the FX density cell is ✗ now — D-A1/ruling 8
+   wins over the matrix's density row; the design doc's matrix row is
+   updated to match):
 
      cluster               | Edit | Color | Audio | FX | Deliver |
      ----------------------|------|-------|-------|----|---------|
@@ -18,7 +21,7 @@
      snap                  |  ✔  |   —   |   ✔   | —  |    —    |
      link / lock           |  ✔  |   —   |   —   | —  |    —    |
      markers               |  ✔  |   —   |   —   | —  |    —    |
-     density               |  ✔  |   ✔   |   ✔   | ✔  |    ✔    |
+     density               |  ✔  |   ✔   |   ✔   | ✗  |    ✔    |
      zoom                  |  ✔  |   ✔   |   ✔   | ✔  | ✔ (read-mostly) |
      mixer state           |  ✔  |   —   |   ✔   | —  |    —    |
      master audio          |  ✔  |   —   |   ✔   | —  |    —    |
@@ -91,10 +94,11 @@ import { zoomToSlider, sliderToZoomPps } from '../../lib/pixel';
 import { zoomBus } from '../../lib/zoomController';
 
 /* R23-WD (D-D2/#108): the per-page cluster matrix — the table above, in
-   code. density + zoom stay true on EVERY page (the D-B3 law + the live
-   zoom contract); the flags exist anyway so the code mirrors the design
-   table 1:1 and a future page MUST decide. Record<Page, …> is exhaustive
-   by construction. */
+   code. density + zoom ride on every page EXCEPT FX's density (R23-FIX
+   R-b: the FX page forces the full Timeline — the resolver returns false
+   there and the toggle is DOM-absent so no control can claim otherwise);
+   the flags exist anyway so the code mirrors the design table 1:1 and a
+   future page MUST decide. Record<Page, …> is exhaustive by construction. */
 interface PageClusters {
   tools: boolean;   /* the 8-tool radio (+ the FX tool, D-A1) */
   snap: boolean;    /* the magnet — Edit + Audio (Audio needs snap for clip
@@ -102,7 +106,8 @@ interface PageClusters {
                        link domain) */
   linkLock: boolean;/* link A/V + lock-all — Edit only */
   markers: boolean; /* add-marker + marker-color — Edit only */
-  density: boolean; /* the D-B3 toggle — every page */
+  density: boolean; /* the D-B3 toggle — every page EXCEPT fx (R-b: the FX
+                       timeline is the full Timeline, always) */
   zoom: boolean;    /* the zoom cluster — every page (read-mostly on deliver:
                        the deliver timeline is live, so zoom still works) */
   mixer: boolean;   /* mixer-state — Edit + Audio (ruling 15) */
@@ -112,7 +117,7 @@ const CLUSTERS: Record<Page, PageClusters> = {
   edit:    { tools: true,  snap: true,  linkLock: true,  markers: true,  density: true, zoom: true, mixer: true,  master: true },
   color:   { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, mixer: false, master: false },
   audio:   { tools: false, snap: true,  linkLock: false, markers: false, density: true, zoom: true, mixer: true,  master: true },
-  fx:      { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, mixer: false, master: false },
+  fx:      { tools: false, snap: false, linkLock: false, markers: false, density: false, zoom: true, mixer: false, master: false },
   deliver: { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, mixer: false, master: false },
 };
 
@@ -238,12 +243,16 @@ export function TimelineToolbar() {
       </button>
 
       {/* R23-WB (D-B3/#94): the density toggle — compact strip (frozen) ↔
-          full tracks, on EVERY page (the matrix keeps it ✔ everywhere).
-          aria-pressed is the RESOLVED state (honest — it reflects the
-          timeline actually rendered); the click writes the per-session
-          override, so 'auto' only survives until the user speaks.
-          R23-WD (D-D2): the wiring is untouched — only its render gate reads
-          the matrix. */}
+          full tracks, on every page EXCEPT fx.
+          R23-FIX (review-sweep R-b, R3-P2#3): on the FX page the toggle is
+          DOM-ABSENT — the page forces the full Timeline (seam hit-zones +
+          transition boxes need real lane geometry; ruling 8), so a toggle
+          there would advertise a compact strip the page can never render
+          (the lying-control law; the resolver ignores the override on fx).
+          Elsewhere: aria-pressed is the RESOLVED state (honest — it
+          reflects the timeline actually rendered); the click writes the
+          per-session override, so 'auto' only survives until the user
+          speaks. R23-WD (D-D2): only the render gate reads the matrix. */}
       {m.density && (
         <button
           className={`icon-btn ${compact ? 'toggled' : ''}`}

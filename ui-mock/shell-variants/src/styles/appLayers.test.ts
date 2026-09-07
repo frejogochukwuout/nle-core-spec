@@ -50,3 +50,31 @@ describe('app.css cascade-layer discipline (R20-W0)', () => {
     expect(/(^|\})\s*button\s*\{[^}]*background\s*:\s*none/.test(unlayered)).toBe(false);
   });
 });
+
+/* ---------- R23-FIX (review-sweep R-d + item 12): the z-ladder bumps + the
+   --danger contrast pairs. jsdom runs css:false, so these laws pin at the
+   source-text level (this file's own precedent — file reads are the only
+   reliable channel into the cascade). ---------- */
+const tokens = readFileSync(resolve(process.cwd(), 'src/styles/tokens.css'), 'utf8');
+
+describe('R23-FIX R-d + item 12: the z-ladder + the danger contrast pairs', () => {
+  it('R-d: .confirm-backdrop climbs 94 → 97 — ABOVE the window-too-small overlay (95), below the failure boundary (99)', () => {
+    expect(/\.confirm-backdrop\s*\{[^}]*z-index:\s*97\s*;/.test(css)).toBe(true);
+    expect(/z-index:\s*94\s*;/.test(css)).toBe(false); // the old rung is gone everywhere
+  });
+
+  it('R-d: the toast-close button reaches the 24px hit floor (was 18px; the glyph is unchanged)', () => {
+    expect(/\.toast-close\s*\{[^}]*height:\s*24px\s*;/.test(css)).toBe(true);
+    expect(/\.toast-close\s*\{[^}]*width:\s*24px\s*;/.test(css)).toBe(true);
+    expect(/\.toast-close\s*\{[^}]*height:\s*18px\s*;/.test(css)).toBe(false);
+  });
+
+  it('item 12 (R1-P2-3): the --danger-text tint (#ec5d62) exists beside the base --danger token', () => {
+    expect(/--danger:\s*#e5484d\s*;/.test(tokens)).toBe(true); // the base token stays the semantic source
+    expect(/--danger-text:\s*#ec5d62\s*;/.test(tokens)).toBe(true); // the lighter AA text fork
+  });
+
+  it('item 12 (R1-P2-4): .confirm-btn.danger darkens to #cf2f37 — ~5:1 with its white 12px label', () => {
+    expect(/\.confirm-btn\.danger\s*\{[^}]*background:\s*#cf2f37\s*;/.test(css)).toBe(true);
+  });
+});

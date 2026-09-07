@@ -316,6 +316,26 @@ describe('Viewer source preview mode (R19 th_mto3504c)', () => {
     expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Source duration — still image');
   });
 
+  /* R23-FIX (review-sweep item 7, R2-F5): the source-range readout SUBSCRIBES
+     to sourceRanges — the old useUi.getState() mid-render read kept the stale
+     string until an unrelated re-render happened. The keyboard trim's store
+     writer (setSourceRangeIn — the same seam the SourceRangeBar's Arrow-key
+     grammar commits through) updates the readout with NO other trigger. */
+  it('R23-FIX item 7: a trim commit updates the range readout reactively (no unrelated re-render needed)', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    render(<Viewer duration={DUR} />);
+    // no range yet: the honest full-duration readout
+    expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Source duration 00:01:35:05');
+    // the keyboard trim's writer commits a range (m-02 = 95.2 s)
+    act(() => { useUi.getState().setSourceRangeIn('m-02', 10); });
+    const readout = screen.getByTestId('shell-viewer-source-duration');
+    expect(readout).toHaveTextContent('Range 00:00:10:00'); // the IN edge follows the commit
+    expect(readout).not.toHaveTextContent('Source duration'); // the stale branch is gone
+    // and the OUT writer moves the tail the same way (one seam, every writer)
+    act(() => { useUi.getState().setSourceRangeOut('m-02', 60); });
+    expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('00:00:10:00–00:01:00:00 · 00:00:50:00 of 00:01:35:05');
+  });
+
   it('missing source id (defensive): honest missing row, never a broken img', () => {
     useUi.setState({ viewerMode: 'source', sourceMediaId: null });
     const { container } = render(<Viewer duration={DUR} />);

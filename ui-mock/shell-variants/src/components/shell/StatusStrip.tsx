@@ -68,36 +68,52 @@ export function StatusStrip() {
       style={{ height: 12, minHeight: 12 }}
       data-testid="shell-status"
     >
-      {saveState === 'saving' && (
-        <span data-testid="shell-status-save" className="flex items-center gap-1 text-tmuted">
-          <span className="h-[5px] w-[5px] animate-pulse rounded-full bg-[var(--mk-yellow)]" />
-          Saving…
-        </span>
-      )}
-      {saveState === 'saved' && (
-        <span data-testid="shell-status-save" className="flex items-center gap-1">
-          <span className="h-[5px] w-[5px] rounded-full bg-[var(--mk-green)]" />
-          Saved {secsAgo === 0 ? 'just now' : `${secsAgo}s ago`}
-        </span>
-      )}
-      {saveState === 'failed' && (
-        <button
-          data-testid="shell-status-save"
-          onClick={retrySave}
-          className="flex items-center gap-1 rounded-[2px] px-1 text-[var(--danger)] underline decoration-dotted hover:bg-[var(--hover-overlay)]"
-          aria-label="Save failed — retry"
-        >
-          <span className="h-[5px] w-[5px] rounded-full bg-[var(--danger)]" />
-          Save failed — click to retry
-        </button>
-      )}
-      <span aria-live="polite" className="mono">
+      {/* R23-FIX (R1-P3): the SAVE chip is one persistent role=status live
+          region — Saving… → Saved/failed transitions are announced politely
+          (the old three siblings unmounted/remounted per state, so a state
+          flip was never a content change a live region could announce).
+          R23-FIX (item 10, R1-P2-1): leading-[12px] everywhere — the 12px
+          band cannot hold an 11px font's default ~15px line box, so the
+          strip's children overflowed it vertically. Text size stays at the
+          spec's 11px floor (§3.1). */}
+      <span role="status" data-testid="shell-status-save" className="flex items-center gap-1 leading-[12px]">
+        {saveState === 'saving' && (
+          <>
+            <span className="h-[5px] w-[5px] animate-pulse rounded-full bg-[var(--mk-yellow)]" aria-hidden="true" />
+            <span className="text-tmuted">Saving…</span>
+          </>
+        )}
+        {saveState === 'saved' && (
+          <>
+            <span className="h-[5px] w-[5px] rounded-full bg-[var(--mk-green)]" aria-hidden="true" />
+            <span>Saved {secsAgo === 0 ? 'just now' : `${secsAgo}s ago`}</span>
+          </>
+        )}
+        {saveState === 'failed' && (
+          /* R23-FIX (item 12, R1-P2-3): the retry control's text uses
+             --danger-text (the lighter #ec5d62 tint) — raw --danger
+             (#e5484d) measures ~4.0:1 on the shell bg, under WCAG AA for
+             11px text; the tint clears 4.5:1 (deviation-registered: a
+             text-tint fork of the danger token). The aria-label carries
+             the full label-in-name (the visible text + the action,
+             WCAG 2.5.3). */
+          <button
+            onClick={retrySave}
+            className="flex items-center gap-1 rounded-[2px] px-1 text-[var(--danger-text)] underline decoration-dotted hover:bg-[var(--hover-overlay)]"
+            aria-label="Save failed — click to retry save"
+          >
+            <span className="h-[5px] w-[5px] rounded-full bg-[var(--danger)]" aria-hidden="true" />
+            Save failed — click to retry
+          </button>
+        )}
+      </span>
+      <span aria-live="polite" className="mono leading-[12px]">
         {selection.length > 0 ? `${selection.length} clip${selection.length > 1 ? 's' : ''} selected` : 'no selection'}
       </span>
-      <span className="mono">{tc(sceneDuration(scene))}</span>
+      <span className="mono leading-[12px]">{tc(sceneDuration(scene))}</span>
       <span className="grow" />
-      <span className="mono">{Math.round(pxPerSec)} px/s</span>
-      <span className="mono">OPFS · local</span>
+      <span className="mono leading-[12px]">{Math.round(pxPerSec)} px/s</span>
+      <span className="mono leading-[12px]">OPFS · local</span>
     </div>
   );
 }

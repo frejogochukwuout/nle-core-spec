@@ -241,6 +241,68 @@ describe('selection semantics', () => {
     expect(S().activeSceneId).toBe('sc-2');
     expect(S().selection).toEqual([]);
   });
+
+  /* ---------- R23-FIX (review-sweep): the domain-clear law closes its gaps ---------- */
+
+  it('R23-FIX item 2 (R2-F1): scene switch clears the marker domain — the 7th clear-site law', () => {
+    act(() => { S().setActiveScene('sc-1'); });
+    act(() => { S().selectMarker('mk-2'); });
+    expect(S().selectedMarkerId).toBe('mk-2');
+    act(() => { S().setActiveScene('sc-2'); });
+    /* marker ids are scene-scoped (scene.markers): a carried id resolved to
+       nothing in the new scene and the AppShell rail swap mounted a BLANK
+       MarkerInspector (the stale-id blank-rail bug, R2-F1/R5-P2-1) */
+    expect(S().selectedMarkerId).toBe(null);
+    act(() => { S().setActiveScene('sc-1'); }); // restore for the siblings below
+  });
+
+  it('R23-FIX item 2: deleting the ACTIVE scene clears the marker domain too (it is a scene switch)', () => {
+    act(() => { S().setActiveScene('sc-1'); });
+    act(() => { S().selectMarker('mk-2'); });
+    act(() => { S().deleteScene('sc-1'); });
+    expect(S().activeSceneId).toBe('sc-2');
+    expect(S().selectedMarkerId).toBe(null); // never a stale blank rail on the successor scene
+    act(() => { S().undo(); }); // restore sc-1 (the undo-history suite's own pattern)
+    expect(S().activeSceneId).toBe('sc-1');
+  });
+
+  it('R23-FIX item 3 (R5-P2-2): Tab selection clears the marker domain (+ track + project mode)', () => {
+    /* the prior state a Tab walk can hit: marker rail live + a selection
+       cursor + project mode on (booted directly — the domain writers can't
+       co-live through their own APIs, but the neighbor writer must clear
+       them from ANY prior state, the same spread setSelection carries) */
+    act(() => {
+      useUi.setState({ activeSceneId: 'sc-1', selection: ['el-2'], selectedMarkerId: 'mk-2', selectedTrackId: 'tr-audio-1', inspectorProjectMode: true });
+    });
+    act(() => { S().selectNeighbors(1); }); // Tab → el-3
+    expect(S().selection).toEqual(['el-3']);
+    expect(S().selectedMarkerId).toBe(null); // the marker domain died with the fresh clip selection
+    expect(S().selectedTrackId).toBe(null);
+    expect(S().inspectorProjectMode).toBe(false); // a domain change exits project mode
+  });
+
+  it('R23-FIX item 3: ⌘A (selectTrackElements) exits project mode + clears the marker domain', () => {
+    act(() => {
+      useUi.setState({ activeSceneId: 'sc-1', selection: ['el-2'], selectedMarkerId: 'mk-1', inspectorProjectMode: true });
+    });
+    act(() => { S().selectTrackElements('tr-main', false); });
+    expect(S().selection).toEqual(['el-1', 'el-2', 'el-3', 'el-4']);
+    expect(S().inspectorProjectMode).toBe(false); // ⌘A exits project mode — same spread setSelection uses
+    expect(S().selectedMarkerId).toBe(null);
+    expect(S().selectedTrackId).toBe(null);
+  });
+
+  it('R23-FIX item 3: the effect domain rides the Tab survival law (alive while its clip IS the selection, dead when it leaves)', () => {
+    act(() => { useUi.setState({ activeSceneId: 'sc-1', selection: ['el-1'] }); });
+    act(() => { S().selectEffect('el-1', 'fx-1'); });
+    act(() => { S().selectNeighbors(-1); }); // clamps at el-1 (first on main) — the clip survives the write
+    expect(S().selection).toEqual(['el-1']);
+    expect(S().selectedEffectId).toBe('fx-1'); // alive — its clip IS the new selection (D4.2)
+    act(() => { S().selectNeighbors(1); }); // Tab → el-2: the effect's clip left the selection
+    expect(S().selection).toEqual(['el-2']);
+    expect(S().selectedEffectId).toBe(null); // dead — the same law setSelection carries
+    expect(S().selectedEffectClipId).toBe(null);
+  });
 });
 
 /* ---------- media pool selection ---------- */
@@ -2359,7 +2421,7 @@ describe('R23-WB D-B3: the timeline density law (timelineCompact + the ONE resol
     expect(resolveTimelineCompact(S())).toBe(false);
   });
 
-  it("the user's 'on'/'off' override wins on EVERY page (per-session, not a pref)", () => {
+  it("the user's 'on'/'off' override wins on every page EXCEPT fx (per-session, not a pref)", () => {
     act(() => { S().setTimelineCompact('on'); });
     act(() => { S().setPage('edit'); });
     expect(resolveTimelineCompact(S())).toBe(true); // compact on edit — #94 "everywhere"
@@ -2368,6 +2430,22 @@ describe('R23-WB D-B3: the timeline density law (timelineCompact + the ONE resol
     expect(resolveTimelineCompact(S())).toBe(false); // full tracks on color — the #94 ask
     act(() => { S().setTimelineCompact('auto'); });
     expect(S().timelineCompact).toBe('auto');
+  });
+
+  /* R23-FIX (review-sweep R-b, R3-P2#3 — RE-PINNED): the FX page forces the
+     FULL Timeline — even the user's 'on' override yields there (D-A1/ruling 8:
+     seam hit-zones + transition boxes need real lane pixel geometry). The old
+     "wins on EVERY page" law above was the D-D2 matrix's density row; ruling 8
+     supersedes it for fx (the matrix + the toolbar's DOM-absence are updated
+     to match — see TimelineToolbar.test). */
+  it("R23-FIX R-b: fx + the user's 'on' override STILL resolves the full Timeline (the resolver is the single writer of the truth)", () => {
+    act(() => { S().setTimelineCompact('on'); });
+    act(() => { S().setPage('fx'); });
+    expect(resolveTimelineCompact(S())).toBe(false); // the page beats the session word on fx
+    act(() => { S().setPage('edit'); });
+    expect(resolveTimelineCompact(S())).toBe(true); // the override still works everywhere else
+    act(() => { S().setTimelineCompact('auto'); });
+    act(() => { S().setPage('edit'); });
   });
 });
 

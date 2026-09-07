@@ -616,4 +616,25 @@ describe('R23-WA: the FX section embeds at the TOP of the Edit-page rail (D-A4)'
     expect(screen.queryByTestId('transition-presentation')).not.toBeInTheDocument();
     expect(screen.getByTestId('shell-track-sheet')).toHaveAttribute('data-via', 'fallback');
   });
+
+  /* R23-FIX (review-sweep item 4, R2-F2): the entity chip names the FX OBJECT
+     while the FX domain holds — the branch rides BEFORE the fallbackTrack, so
+     the chip never claims the playhead-derived active-track sheet while the
+     FX rail is editing a transition/fade (the lying-chip-during-FX-ownership
+     bug). */
+  it('R23-FIX item 4: a transition-owned chip — entity fx-object, name = the presentation, typeLabel transition (never the fallback track)', () => {
+    boot({ selection: [], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+    const chip = screen.getByTestId('inspector-entity-chip');
+    expect(chip).toHaveAttribute('data-entity', 'fx-object');
+    expect(screen.getByTestId('inspector-entity-name')).toHaveTextContent('Cross Dissolve');
+    expect(screen.getByTestId('inspector-entity-type')).toHaveTextContent('transition');
+    expect(chip.querySelector('[data-testid="inspector-entity-name"]')).not.toHaveTextContent('V1'); // not the fallback track sheet title
+  });
+
+  it('R23-FIX item 4: a fade-owned chip — "Fade In — {clip name}", typeLabel fade', () => {
+    boot({ selection: [], selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'in' } });
+    expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'fx-object');
+    expect(screen.getByTestId('inspector-entity-name')).toHaveTextContent('Fade In — A012_C034_beach_wide'); // el-1's clip name
+    expect(screen.getByTestId('inspector-entity-type')).toHaveTextContent('fade');
+  });
 });

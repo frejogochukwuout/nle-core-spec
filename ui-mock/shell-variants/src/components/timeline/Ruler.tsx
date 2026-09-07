@@ -204,7 +204,12 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
      loop pegs the playback tick; the R13 hang). */
   const bracketDrag = useRef<'in' | 'out' | null>(null);
   const applyBracket = (side: 'in' | 'out', t: number) => {
-    const v = Math.max(0, snapToFrame(t));
+    /* R23-FIX (review-sweep R3-P3#9): the upper clamp — bracket writes now
+       cap at the scene duration (a drag or a page-beyond clientX used to
+       push loop.end past the timeline; the deliver range band's twin has
+       ALWAYS clamped, so the Ruler was the loose writer of the three-
+       writer seam). */
+    const v = Math.max(0, Math.min(snapToFrame(t), duration));
     useUi.setState((s) =>
       side === 'in'
         ? { loop: { ...s.loop, start: v, end: Math.max(s.loop.end, v) } }

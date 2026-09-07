@@ -279,4 +279,53 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(S().toasts[1]).toMatchObject({ kind: 'info', title: 'Retry Beach Doc — v2 master.mp4' });
     expect(S().toasts[1].detail).toBe('render queue is mock — no encode runs');
   });
+
+  /* R23-FIX (review-sweep item 8, R2-F6/R5-P2-3): the three-region row keeps
+     its minimums (280+flex+340 ≥ ~900px), so a narrow shell CLIPPED the row
+     with no scroll reachable. The row now carries overflow-x-auto + min-w-0 —
+     jsdom has no layout engine, so the pin is class-level (the CSS law itself
+     is the observable; Pages.stories' narrow-container story claims the same
+     behavior and now tells the truth). */
+  it('R23-FIX item 8: the region row scrolls horizontally instead of clipping (overflow-x-auto + min-w-0 on the row)', () => {
+    render(<DeliverPage />);
+    const row = screen.getByTestId('shell-deliver-queue').parentElement as HTMLElement;
+    expect(row).toHaveClass('overflow-x-auto');
+    expect(row).toHaveClass('min-w-0');
+    // the three regions still keep their minimums — scrollable, not squashed
+    expect(screen.getByTestId('shell-deliver-queue')).toHaveClass('min-w-[260px]');
+    expect(screen.getByTestId('shell-deliver-settings')).toHaveClass('min-w-[300px]');
+    // the row is the DIRECT parent of all three regions (the scroll surface owns them)
+    expect(screen.getByTestId('shell-deliver-preview').parentElement).toBe(row);
+    expect(screen.getByTestId('shell-deliver-settings').parentElement).toBe(row);
+  });
+
+  /* R23-FIX (review-sweep item 9, R2-F7): the queue header's spinner +
+     'rendering' label ride renderActive — the queue view is reachable while
+     IDLE (the header toggle / past-renders review), and an idle queue
+     claiming 'rendering' was a lying header. */
+  it('R23-FIX item 9: the idle queue header is the honest "Render queue" (no spinner); queueing flips it to rendering', async () => {
+    const user = userEvent.setup();
+    render(<DeliverPage />);
+    await openQueue(user);
+    const center = screen.getByTestId('shell-deliver-summary');
+    expect(within(center).getByText('Render queue')).toBeInTheDocument(); // idle header — the honest label
+    expect(center.querySelector('.animate-spin')).toBeNull(); // no spinner while idle
+    // queueing an export appends a queued job → renderActive → the label + spinner flip ON
+    await user.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+    expect(within(center).getByText('Render queue — rendering')).toBeInTheDocument();
+    expect(center.querySelector('.animate-spin')).not.toBeNull();
+  });
+
+  /* R23-FIX (review-sweep R4-P3#9): the preset tiles are honest pressed-state
+     buttons — aria-pressed + a label-in-name that carries the preset name. */
+  it('R23-FIX R4-P3#9: preset tiles carry aria-pressed + label-in-name (the active tile is the pressed one)', async () => {
+    const user = userEvent.setup();
+    render(<DeliverPage />);
+    const master = screen.getByTestId('shell-deliver-preset-master');
+    expect(master).toHaveAttribute('aria-pressed', 'false');
+    expect(master).toHaveAttribute('aria-label', 'Master · H.264 export preset');
+    await user.click(master);
+    expect(master).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('shell-deliver-preset-fcpxml')).toHaveAttribute('aria-pressed', 'false'); // one at a time
+  });
 });

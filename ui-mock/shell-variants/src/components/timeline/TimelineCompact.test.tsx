@@ -107,6 +107,22 @@ describe('TimelineCompact — click-to-target (the color page law)', () => {
     expect(screen.getByTestId('shell-timeline-compact-clip-el-1')).toHaveAttribute('aria-pressed', 'true');
   });
 
+  /* R23-FIX (review-sweep R3-P3#8): the clip click is PAGE-AWARE — 'grade'
+     retargeting is the COLOR page's law; every other page gets honest
+     selection-only with a 'select clip' label (the old copy claimed "set
+     grade target" on pages that have no grade surface — a lying label). The
+     AppShell passes 'select' on every non-color page. */
+  it('R23-FIX R3-P3#8: clipClick="select" — plain selection, honest labels (no grade-surface copy)', () => {
+    setStore({ page: 'edit', selection: [], colorGradeTarget: 'timeline' });
+    render(<TimelineCompact clipClick="select" />);
+    expect(screen.getByTestId('shell-timeline-compact')).toHaveAttribute('aria-label', 'Compact timeline (frozen — click a clip to select it)');
+    const clip = screen.getByTestId('shell-timeline-compact-clip-el-1');
+    expect(clip).toHaveAttribute('aria-label', 'A012_C034_beach_wide — select clip'); // honest copy, no grade-surface claim
+    fireEvent.click(clip);
+    expect(S().selection).toEqual(['el-1']);
+    expect(S().colorGradeTarget).toBe('timeline'); // NEVER re-targeted off the color page
+  });
+
   it('the playhead marker rides the strip at the store playhead (read-only)', () => {
     const { container } = mount({ playhead: 4 });
     // the marker is the w-px absolute with the accent background

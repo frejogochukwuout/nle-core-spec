@@ -66,8 +66,11 @@ describe('TimelineToolbar', () => {
     expect(density).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('R23-WB (#94): the toggle renders on EVERY page (edit/color/audio/fx/deliver)', () => {
-    for (const p of ['edit', 'color', 'audio', 'fx', 'deliver'] as const) {
+  /* R23-FIX (review-sweep R-b, R3-P2#3 — RE-PINNED): the toggle renders on
+     every page EXCEPT fx (the FX page forces the full Timeline; a toggle
+     there would advertise a compact strip the page can never render). */
+  it('R23-WB (#94) + R23-FIX R-b: the toggle renders on edit/color/audio/deliver and is DOM-ABSENT on fx', () => {
+    for (const p of ['edit', 'color', 'audio', 'deliver'] as const) {
       const { unmount } = boot({ page: p });
       expect(screen.getByTestId('shell-timeline-toolbar-btn-density')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Toggle compact timeline' })).toHaveAttribute(
@@ -76,6 +79,10 @@ describe('TimelineToolbar', () => {
       );
       unmount();
     }
+    // fx: DOM-absent — the resolver returns false on fx, no control may claim otherwise
+    const { unmount } = boot({ page: 'fx' });
+    expect(screen.queryByTestId('shell-timeline-toolbar-btn-density')).toBeNull();
+    unmount();
     useUi.setState({ page: 'edit', timelineCompact: 'auto' });
   });
 
@@ -296,8 +303,9 @@ describe('R14: tool radiogroup arrow-key navigation (spec 18 §11.1)', () => {
    cluster matrix, pinned at DOM level. Every hidden cluster is DOM-ABSENT
    (queryByTestId/queryByRole → null — never display:none, so the F6/rover
    dense laws hold). Matrix: Edit = full; Color = density + zoom; Audio =
-   snap + density + zoom + mixer + master; FX = density + zoom; Deliver =
-   density + zoom (read-mostly). */
+   snap + density + zoom + mixer + master; FX = zoom (R23-FIX R-b: the
+   density toggle is DOM-absent — the page forces the full Timeline);
+   Deliver = density + zoom (read-mostly). */
 describe('R23-WD (D-D2/#108): the per-page TimelineToolbar cluster matrix', () => {
   /** every cluster's DOM probes — null probe = the cluster is DOM-absent */
   const probes = {
@@ -376,9 +384,10 @@ describe('R23-WD (D-D2/#108): the per-page TimelineToolbar cluster matrix', () =
     expect(vseps(container)).toBe(3); // snap|zoom, zoom|mixer, mixer|master
   });
 
-  it('FX = density + zoom ONLY — no mixer, no master (ruling 15: Edit + Audio own the mixer clusters)', () => {
+  it('FX = zoom ONLY (R23-FIX R-b: the density toggle is DOM-absent — the page forces the full Timeline) — no mixer, no master (ruling 15)', () => {
     const { container } = boot({ page: 'fx' });
-    expect(probes.density()).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-toolbar-btn-density')).toBeNull(); // null-safe probe (getBy throws when absent)
+    expect(screen.queryByRole('button', { name: 'Toggle compact timeline' })).toBeNull();
     expect(probes.zoom()).toBeInTheDocument();
     expect(probes.mixer()).toBeNull();
     expect(probes.master()).toBeNull();

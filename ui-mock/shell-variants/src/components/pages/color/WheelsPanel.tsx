@@ -34,6 +34,7 @@ import { MicroSlider, NumCell, ReadCell } from './controls';
 import { useGradeRecord, type GradeRecord } from './useGradeTarget';
 import { useGradingToast, useHonestToast } from './useHonestToast';
 import { DEFAULT_GRADE, hsv2rgb, yrgbReadout, type WheelId, type YrgbReadout } from '../../../lib/color';
+import { clamp } from '../../../lib/timecode';
 import type { GradePatch } from '../../../state/useUiStore';
 
 /** one-field store write helper (typed patch — computed keys stay strict). */
@@ -363,7 +364,12 @@ export function WheelsPanel() {
               className="shrink-0 text-center"
               format={c.fmt}
               onFirstTouch={tell}
-              onCommit={(v) => setGrade(fieldPatch(c.key, v))}
+              /* R23-FIX (review-sweep R4-P3#7): NumCell is free-text and
+                 clamps NOWHERE — the typed value used to reach setGrade raw
+                 (typing 999 into Contrast wrote 999). The seam clamps to the
+                 row's own min/max (the MicroSlider twins' domain), so the
+                 typed path and the drag path agree. */
+              onCommit={(v) => setGrade(fieldPatch(c.key, clamp(v, c.min, c.max)))}
             />
             {c.bar ? (
               <div aria-hidden className="h-[2px] min-w-0 flex-1 rounded-[1px]" style={{ background: c.bar }} />
@@ -411,7 +417,7 @@ export function WheelsPanel() {
               className="shrink-0 text-center"
               format={c.fmt}
               onFirstTouch={tell}
-              onCommit={(v) => setGrade(fieldPatch(c.key, v))}
+              onCommit={(v) => setGrade(fieldPatch(c.key, clamp(v, c.min, c.max)))} /* R23-FIX R4-P3#7 — the master-row twin of the clamp above */
             />
             <MicroSlider
               ariaLabel={c.label}

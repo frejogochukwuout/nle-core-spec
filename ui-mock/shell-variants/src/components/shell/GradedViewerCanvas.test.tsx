@@ -284,6 +284,26 @@ describe('GradedViewerCanvas — the qualifier (C54)', () => {
     expect(S().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Eyedropper needs a target' });
     expect(S().qualifierPickerOn).toBe(true); // still armed — nothing consumed
   });
+
+  /* R23-FIX (review-sweep item 17, R4-P2#2): the picker hint rides
+     bottom-2 right-2 — it used to sit at right-2 top-2, exactly where the
+     Viewer's res/fps badge (1920×1080 · 24p — Viewer.tsx:368, `absolute
+     right-2 top-2`) renders over the canvas, so the two chips collided over
+     the picker's frame. jsdom has no overlap geometry: the pin compares the
+     class positions (the hint's corner is the badge-free bottom-right; the
+     raw-source chip owns the source mode's bottom-LEFT). */
+  it('R23-FIX item 17: the armed picker hint sits bottom-right (badge-free corner), away from the Viewer\'s top-right res/fps badge', async () => {
+    boot({ qualifierPickerOn: true, selection: [] });
+    render(<GradedViewerCanvas mediaId="m-02" elementId="el-2" mode="program" />);
+    await flushGrade();
+    const hint = screen.getByTestId('shell-viewer-canvas-picker-hint');
+    expect(hint.className).toContain('bottom-2');
+    expect(hint.className).toContain('right-2');
+    expect(hint.className).not.toContain('top-2'); // the OLD position — the badge's corner
+    // the store's picker flag is live (both surfaces render in the composed Viewer)
+    expect(S().qualifierPickerOn).toBe(true);
+    expect(screen.getByTestId('shell-viewer-canvas')).toBeInTheDocument();
+  });
 });
 
 describe('GradedViewerCanvas — the scope-bus seam', () => {

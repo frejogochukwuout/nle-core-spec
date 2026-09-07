@@ -512,21 +512,27 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 18px;
-    width: 18px;
+    /* R23-FIX (R1-P3): 24px hit floor (was 18px — under the house target
+       law; the 11px glyph is unchanged — hit target ≠ visual size). */
+    height: 24px;
+    width: 24px;
     flex-shrink: 0;
-    margin: -2px -2px 0 0;
+    margin: -4px -4px 0 0;
     border-radius: var(--radius-sm);
     color: var(--text-muted);
     transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
   }
   .toast-close:hover { color: var(--text-primary); background: var(--hover-overlay); }
 
-  /* ---- destructive confirm (§6.4): focus-trapped alertdialog ---- */
+  /* ---- destructive confirm (§6.4): focus-trapped alertdialog ----
+     R23-FIX (review-sweep R-d, R5-P3#8): the backdrop climbs 94 → 97 —
+     ABOVE the window-too-small overlay (z 95) so a confirm opened under a
+     shrunken window stays reachable/answerable (the old ladder left the
+     overlay eating the dialog's hits). Still below ErrorBoundary 99. */
   .confirm-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 94;
+    z-index: 97;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -557,7 +563,15 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
     transition: opacity var(--motion-fast) ease, background-color var(--motion-fast) ease;
   }
   .confirm-btn:hover { opacity: 0.88; }
-  .confirm-btn.danger { background: var(--danger); color: #fff; }
+  .confirm-btn.danger {
+    /* R23-FIX (review-sweep item 12, R1-P2-4): darker danger bg for the
+       WHITE 12px label — #cf2f37 measures ~5:1 vs white (the old
+       var(--danger) #e5484d was ~3.9:1, under WCAG AA). Registered as a
+       deliberate pair deviation: the BUTTON fill diverges from the
+       --danger token so its white text passes. */
+    background: #cf2f37;
+    color: #fff;
+  }
   .confirm-btn.primary { background: var(--accent-selection); color: var(--accent-contrast); }
   .confirm-btn.ghost {
     color: var(--text-primary);

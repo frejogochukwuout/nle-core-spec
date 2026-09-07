@@ -156,7 +156,11 @@ function RangeWidget({
             e.preventDefault();
             onFirstTouch();
             if (which === 'lo') onCommit(min, hi);
-            else onCommit(lo, min + 2 * (span / 100));
+            /* R23-FIX (review-sweep item 16, R4-P2#1): Home on the HI handle
+               clamps to the separation law — hi >= lo + 2% AND >= min + 2%.
+               The old write (min + 2·span/100) could land BELOW lo, inverting
+               lo/hi (pinned: satHigh >= satLow after Home on hi). */
+            else onCommit(lo, Math.max(lo + 2 * (span / 100), min + 2 * (span / 100)));
           } else if (e.key === 'End') {
             e.preventDefault();
             onFirstTouch();

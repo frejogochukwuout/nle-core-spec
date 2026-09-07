@@ -68,9 +68,11 @@ const clipTint: Record<TrackKind, { border: string; tint: string; badge: string 
 };
 
 export interface TimelineCompactProps {
-  /** Which grade target a clip click selects. 'grade' (the color page law:
-   *  setSelection + re-target clip mode). */
-  clipClick?: 'grade';
+  /** What a clip click does. 'grade' (the COLOR page law: setSelection +
+   *  re-target clip mode); 'select' (every other page: plain selection —
+   *  R23-FIX R3-P3#8, the honest per-page label: a "set grade target"
+   *  label on pages with no grade surface was a lying affordance). */
+  clipClick?: 'grade' | 'select';
   /** R23-WF (D-F1, #107): mount the 32px interactive in/out RANGE BAND as
    *  the head row instead of the read-only 22px ruler. The deliver
    *  composition's ask ("just the head range selection should be normal
@@ -103,16 +105,25 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
 
   const clickClip = (id: string) => {
     setSelection([id]);
-    if (clipClick === 'grade') setColorGradeTarget('clip'); // lane clicks re-target the clip mode
+    /* R23-FIX (R3-P3#8): the grade RE-TARGET write rides only the color
+       mount — on other pages the strip is a selector (the AppShell passes
+       'select'; nothing else writes colorGradeTarget from here). */
+    if (clipClick === 'grade') setColorGradeTarget('clip');
   };
 
   return (
     <div
+      /* R23-FIX (R3-P3#7): the same id the full Timeline carries — the two
+         surfaces never coexist, so SceneTabs' aria-controls="shell-timeline"
+         always resolves (see Timeline.tsx). */
+      id="shell-timeline"
       data-testid="shell-timeline-compact"
       className="flex h-full min-h-0 w-full flex-col bg-panel"
       aria-label={rangeBand
         ? 'Compact timeline (lanes frozen — the export range band above is interactive)'
-        : 'Compact timeline (frozen — click a clip to target it)'}
+        : clipClick === 'grade'
+          ? 'Compact timeline (frozen — click a clip to target it)'
+          : 'Compact timeline (frozen — click a clip to select it)'}
     >
       <div className="scroll-x flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-hidden" style={{ background: '#191a1d' }}>
         <div className="relative" style={{ width: contentW }}>
@@ -176,9 +187,9 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
                         key={el.id}
                         type="button"
                         data-testid={`shell-timeline-compact-clip-${el.id}`}
-                        aria-label={`${el.name} — set grade target`}
+                        aria-label={`${el.name} — ${clipClick === 'grade' ? 'set grade target' : 'select clip'}`}
                         aria-pressed={isTarget}
-                        title={`${el.name} — click to target`}
+                        title={`${el.name} — click to ${clipClick === 'grade' ? 'target' : 'select'}`}
                         className={`absolute top-[1px] overflow-hidden rounded-[2px] border text-left text-[9px] leading-none ${isTarget ? 'z-[1] border-[var(--accent-selection)]' : ''}`}
                         style={{
                           left: el.startTime * pps,

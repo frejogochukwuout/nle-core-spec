@@ -45,26 +45,30 @@ function ToolbarStory({ patch }: { patch?: UiPatch }) {
   return (
     <>
       <StoreBoot patch={patch} />
-      <Bar label="toolbar2 — traffic dots · panel toggles · project title · inspector/fullscreen">
+      {/* R23-FIX (R1-P3 — the stale caption): "traffic dots ·
+          inspector/fullscreen" named chrome removed in R19 (th_mtoyslr9 /
+          th_mtoyu8bl) — the caption now names what actually renders. */}
+      <Bar label="toolbar2 — left dock toggle · project title · console toggles · inspector">
         <Toolbar2 />
       </Bar>
     </>
   );
 }
 
-/** Edit page with every panel toggle pressed — the fully-active chrome state
- *  (the store default keeps effects off; this pins it on so the pressed
- *  styling of all three toolbtns is screenshottable in one frame). */
+/** Edit page with the panel toggles pressed — the fully-active chrome state
+ *  (R23-FIX R1-P3 effects-patch cleanup: panels.effects is DEAD view state —
+ *  dropped from the patch; mediaPool/inspector still pin the pressed
+ *  styling of the real toolbtns in one frame). */
 export const ToolbarDefault: StoryObj = {
   name: 'Toolbar — default (Edit page, all panels on)',
-  render: () => <ToolbarStory patch={{ page: 'edit', panels: { mediaPool: true, effects: true, inspector: true } }} />,
+  render: () => <ToolbarStory patch={{ page: 'edit', panels: { mediaPool: true, inspector: true } }} />,
 };
 
-/** All three toggles off: unpressed toolbtn styling, and the centered project
- *  title cluster must keep centering with nothing flanking it but the dots. */
+/** Both toggles off: unpressed toolbtn styling, and the centered project
+ *  title cluster must keep centering with nothing flanking it. */
 export const ToolbarPanelsOff: StoryObj = {
   name: 'Toolbar — all panels toggled off',
-  render: () => <ToolbarStory patch={{ panels: { mediaPool: false, effects: false, inspector: false } }} />,
+  render: () => <ToolbarStory patch={{ panels: { mediaPool: false, inspector: false } }} />,
 };
 
 /** Audio page: the strip is page-invariant by design (page swaps live in the
@@ -170,12 +174,14 @@ export const TimelineToolbarMasterMuted: StoryObj = {
 };
 
 /** R23-WB (D-B3/#94): the DENSITY toggle in its pressed state — compact
- *  strip ↔ full tracks, on every page. Reviews the toggled-state contrast
- *  of the new icon button (the strip it mounts has its own Color stories).
+ *  strip ↔ full tracks, on every page EXCEPT fx (R23-FIX R-b: the FX page
+ *  forces the full Timeline — the toggle is DOM-absent there; this story
+ *  boots the EDIT page). Reviews the toggled-state contrast of the new icon
+ *  button (the strip it mounts has its own Color stories).
  */
 export const TimelineToolbarDensityOn: StoryObj = {
   name: 'Timeline toolbar — density toggle on (compact)',
-  render: () => <TlToolbarStory patch={{ timelineCompact: 'on' }} />,
+  render: () => <TlToolbarStory patch={{ page: 'edit', timelineCompact: 'on' }} />,
 };
 
 /* ---- R15 T1: the zoom cluster against the DYNAMIC minimum (spec-05 §5.2) ---
@@ -389,5 +395,7 @@ export const TrackHeadersMicroMeters: StoryObj = {
 export const FullShellEffectsPanel: StoryObj = {
   name: 'Full Shell — Effects (FX page)',
   parameters: { layout: 'fullscreen' },
-  render: () => <FullShell patch={{ page: 'fx', fxMode: true, panels: { mediaPool: true, effects: true, inspector: true } }} />,
+  /* R23-FIX (R1-P3 effects-patch cleanup): the dead panels.effects flag is
+     dropped from the patch (it mounts nothing post-retirement). */
+  render: () => <FullShell patch={{ page: 'fx', fxMode: true, panels: { mediaPool: true, inspector: true } }} />,
 };

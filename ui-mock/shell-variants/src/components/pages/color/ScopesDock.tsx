@@ -113,7 +113,11 @@ export function ScopesDock() {
 
   /* redraw at the 10fps throttle: a frame arriving inside the window is
      deferred (latest-wins), the timer is cleared on every new frame; a TAB
-     switch re-runs the effect so the newly mounted canvas paints at once */
+     switch re-runs the effect so the newly mounted canvas paints at once.
+     R23-FIX (review-sweep R4-P3#11): `mode` riding the deps is now PINNED
+     (ScopesDock.test — a dock kept mounted through off→open with the frame
+     already on the bus repaints on the flip; without mode in the deps the
+     effect never re-runs and the canvas stays blank). */
   useEffect(() => {
     if (!frame) return;
     /* `mode` rides the deps (R23-WB-REV P3 #1): a solo mount at 'off'
@@ -215,6 +219,7 @@ export function ScopesDock() {
       <div
         id="shell-color-scopes-panel"
         role="tabpanel"
+        tabIndex={0} /* R23-FIX (review-sweep R4-P3#4): the WAI-ARIA tabs pattern makes the panel focusable so keyboard users can move INTO the controlled surface (not just between the tabs). */
         aria-labelledby={`shell-color-scopes-tab-${active}`}
         data-testid={`shell-color-scope-${active}`}
         className="relative min-h-0 flex-1 overflow-hidden"

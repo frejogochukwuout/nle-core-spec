@@ -309,6 +309,28 @@ describe('ScopesDock — real traces from a red graded frame (§3.7, re-homed)',
     expect(bgFills()).toBe(2); // the LATEST frame drew once
   });
 
+  /* R23-FIX (review-sweep R4-P3#11): `mode` rides the draw-effect deps — a
+     dock kept mounted through off→open (the frame already on the bus, no new
+     publish) repaints the FRESH canvas on the flip. Without mode in the deps
+     the effect never re-runs (frame/active/drawNow all unchanged) and the
+     remounted canvas stays blank. The off→open cycle mounts a NEW canvas
+     node (the whole subtree unmounts at null — the registry log restarts),
+     so the background-fill count is the per-draw marker. */
+  it('R23-FIX R4-P3#11: a dock kept mounted through off→open repaints on the flip (mode rides the effect deps)', async () => {
+    publish(red()); // the frame is already on the bus BEFORE the mount
+    renderDock();
+    await act(async () => { vi.advanceTimersByTime(0); });
+    const bgFills = () => ops('waveform', 'fillRect').filter((a) => a[0] === 0 && a[1] === 0 && a[2] === 320 && a[3] === 160).length;
+    expect(bgFills()).toBe(1); // the mount painted
+    act(() => { useUi.setState({ colorScopesState: 'off' }); });
+    expect(screen.queryByTestId('shell-color-scope-waveform-canvas')).toBeNull(); // the canvas unmounted
+    act(() => { useUi.setState({ colorScopesState: 'open' }); });
+    expect(screen.getByTestId('shell-color-scope-waveform-canvas')).toBeInTheDocument(); // a FRESH node
+    expect(bgFills()).toBe(0); // nothing yet — the immediate path needs the effect re-run
+    await act(async () => { vi.advanceTimersByTime(SCOPE_THROTTLE_MS + 10); }); // covers the deferred path too
+    expect(bgFills()).toBe(1); // the mode flip re-ran the draw effect — the fresh canvas painted
+  });
+
   it('a tab switch mid-throttle paints the newly mounted canvas immediately (no dead scope)', async () => {
     renderDock();
     act(() => { publish(red()); });

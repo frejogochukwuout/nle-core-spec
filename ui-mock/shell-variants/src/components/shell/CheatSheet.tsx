@@ -87,7 +87,12 @@ export function CheatSheet() {
   return (
     <div
       data-testid="shell-cheatsheet"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 backdrop-blur-[2px]"
+      /* R23-FIX (review-sweep R-d, R5-P3#8): z 70 → 86 — above the toast
+         region (85) so an error toast can no longer sit ON the modal the
+         user is trying to close (the toast's own close button overlapped
+         the sheet's search row). Still below menus (93) / confirm (97) /
+         the failure boundary (99). */
+      className="fixed inset-0 z-[86] flex items-center justify-center bg-black/55 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-label="Keyboard cheat sheet"

@@ -110,6 +110,10 @@ export function MicroSlider({
       aria-valuemax={max}
       aria-valuenow={Math.round(clamp(shown, min, max) * 1000) / 1000}
       aria-valuetext={valueText}
+      /* R23-FIX (review-sweep R4-P3#5): aria-orientation="horizontal" — the
+         slider's grammar is a horizontal track (the Fader/PanBox twins
+         already declare theirs; the attr is part of the §11.3 contract). */
+      aria-orientation="horizontal"
       className={`relative cursor-ew-resize select-none ${v.hit} ${className}`}
       onPointerDown={(e) => {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);

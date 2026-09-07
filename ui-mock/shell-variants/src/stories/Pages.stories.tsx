@@ -84,8 +84,11 @@ export const DeliverMasterPreset: StoryObj = {
 };
 
 /** Narrow-container fallback (the pre-Wave-III 340px rail mount): the three
- *  regions keep their minimums and the row scrolls instead of clipping — the
- *  honest transition state until the shell routes the whole mainbody. */
+ *  regions keep their minimums and the row scrolls instead of clipping.
+ *  R23-FIX (review-sweep item 8, R2-F6): this claim is TRUE since the fix —
+ *  the region row carries overflow-x-auto + min-w-0 (the three minimums sum
+ *  ≥ ~900px; before the fix the row clipped with no scroll reachable, and
+ *  this comment described an aspirational state). */
 export const DeliverPageRail: StoryObj = {
   name: 'Deliver page — narrow container (rail fallback)',
   parameters: { layout: 'padded' },

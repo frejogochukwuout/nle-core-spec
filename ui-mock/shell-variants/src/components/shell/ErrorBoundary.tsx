@@ -8,7 +8,7 @@
    feedback channel. Mounted in App.tsx around <AppShell/> only — the debug
    overlay and cheat sheet stay alive after a crash. */
 
-import { Component, useState, type ErrorInfo, type ReactNode } from 'react';
+import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { TriangleAlert, RotateCcw, Copy, Check } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 
@@ -38,6 +38,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, BoundarySt
 
 function FailurePanel({ error, componentStack }: { error: Error; componentStack: string | null }) {
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
+  /* R23-FIX (R1-P3): focus the panel once on mount (see the JSX note). */
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { panelRef.current?.focus(); }, []);
 
   const copyDiagnostics = async () => {
     const text = [
@@ -57,7 +60,14 @@ function FailurePanel({ error, componentStack }: { error: Error; componentStack:
 
   return (
     <div
+      ref={panelRef}
       role="alert"
+      /* R23-FIX (review-sweep R1-P3 — ErrorBoundary focus): the panel takes
+         focus on mount (tabIndex -1) — a crash used to leave focus on the
+         dead element/body, so keyboard users (and the crash's own Reload /
+         Copy controls) started from nowhere; the focus also lands the
+         role=alert announcement. */
+      tabIndex={-1}
       className="fixed inset-0 z-[99] flex flex-col items-center justify-center gap-3 bg-app/95 px-6 text-center"
       data-testid="shell-failure-boundary"
     >

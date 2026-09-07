@@ -35,6 +35,10 @@ describe('Timeline', () => {
   it('renders one lane per track, the in-window clips, and the header column (spec 05 §12 lanes / 18 §4.7)', () => {
     boot({});
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    // R23-FIX (R3-P3#7): SceneTabs' aria-controls="shell-timeline" resolves —
+    // the id exists on the mounted root (was dangling since R19; the compact
+    // strip carries the same id — the two surfaces never coexist)
+    expect(document.getElementById('shell-timeline')).toBe(screen.getByTestId('shell-timeline'));
     // readout-style header zone carries the big TC readout
     expect(screen.getByTestId('shell-timeline-tc')).toHaveTextContent('00:00:16:00');
     const headers = screen.getByTestId('shell-track-headers');
@@ -160,6 +164,10 @@ describe('Timeline', () => {
     expect(laneOf('el-1').style.height).toBe('40px'); // main capped at 40
     expect(laneOf('el-5').style.height).toBe('28px'); // overlay capped at 28
     expect(laneOf('el-6').style.height).toBe('96px'); // audio 60 × 1.6
+    // R23-FIX (review-sweep R5-P3#6): the caption lane is EXEMPT from the 28px
+    // cap — its own law (gap C34) is 32px (24px parchment chips + insets);
+    // capping it to 28 squashed the chips mid-audio-focus
+    expect(laneOf('cap-1').style.height).toBe('32px');
   });
 
   it('the blocks clip-style variant swaps to the compact 40/34/28 lanes (spec 05 §12.2 blocks)', () => {
@@ -227,6 +235,56 @@ describe('Timeline', () => {
     boot({});
     expect(screen.getByTestId('transition-el-2')).toHaveAttribute('aria-label', 'Crossfade transition, 0.75 seconds');
     expect(screen.queryByTestId('transition-el-1')).not.toBeInTheDocument(); // only el-2 carries one
+  });
+
+  /* R23-FIX (review-sweep item 1, R3-P1#1): the box is CLICK-THROUGH outside
+     fxMode — it used to eat edit-mode trim/marquee gestures that passed under
+     its 40px-height z-7 rectangle (rendered on EVERY lane, inert but
+     pointer-hungry). elementFromPoint-style hit assertions are jsdom-
+     impossible, so the inline style is the law's observable. Registered loss:
+     the edit-mode title tooltip on the box is click-through-unavailable — the
+     seam zone's data-tip + the fx-mode box carry the info. */
+  it('R23-FIX item 1: pointerEvents "none" outside fxMode, "auto" in fxMode — the box never eats edit gestures', () => {
+    const editTree = boot({});
+    expect(screen.getByTestId('transition-el-2').style.pointerEvents).toBe('none');
+    editTree.unmount();
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    expect(screen.getByTestId('transition-el-2').style.pointerEvents).toBe('auto');
+    // the locked guard: a transition seeded onto LOCKED tr-audio-2 stays inert
+    // even in fxMode (pointerEvents none — the lane's own lock law)
+    act(() => {
+      useUi.setState({
+        scenes: store().scenes.map((sc) => sc.id !== 'sc-1' ? sc : {
+          ...sc,
+          tracks: sc.tracks.map((t) => t.id !== 'tr-audio-2' ? t : {
+            ...t,
+            elements: t.elements.map((e) => e.id !== 'el-7' ? e : {
+              ...e,
+              transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 },
+            }),
+          }),
+        }),
+      });
+    });
+    expect(screen.getByTestId('transition-el-7').style.pointerEvents).toBe('none'); // locked lane — never a gesture target
+  });
+
+  /* R23-FIX (review-sweep item 15, R3-P2#4): the boxes ride the clips'
+     virtualization window (clipVisible) — an offscreen box used to escape
+     virtualization and keep its z-7 pointer surface mounted over lanes the
+     user scrolled to. High zoom + scroll are the two cull paths. */
+  it('R23-FIX item 15: high zoom OR a far scroll culls the offscreen transition box (the clips\' own window law)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    expect(screen.getByTestId('transition-el-2')).toBeInTheDocument(); // el-2 [391,782]px is in the boot window [−200,1100]
+    // high zoom: the cut at 17 s moves to 17·5000 px — far outside the window
+    act(() => { useUi.getState().setZoom(5000); });
+    expect(screen.queryByTestId('transition-el-2')).not.toBeInTheDocument();
+    act(() => { useUi.getState().setZoom(46); });
+    expect(screen.getByTestId('transition-el-2')).toBeInTheDocument(); // back in
+    // far scroll: window [scroll−200, scroll+1100] — scroll 1000 starts past el-2's 782px end
+    act(() => { scrollEl().scrollLeft = 1000; });
+    fireEvent.scroll(scrollEl());
+    expect(screen.queryByTestId('transition-el-2')).not.toBeInTheDocument();
   });
 
   /* fixes th_mto31dyp — Resolve-style transition restyle */

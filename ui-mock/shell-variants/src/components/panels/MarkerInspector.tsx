@@ -46,7 +46,19 @@ export function MarkerInspector() {
 
   const scene = scenes.find((x) => x.id === activeSceneId) ?? scenes[0];
   const m = scene?.markers.find((x) => x.id === selectedMarkerId);
-  if (!scene || !m) return null; // routed only on marker selection (AppShell rail swap)
+  /* R23-FIX (review-sweep item 2, R2-F1): the stale-id state gets an HONEST
+     one-line panel, never a silent `return null` — the rail swap mounted
+     this panel for a REASON (selectedMarkerId holds), so a blank rail was
+     a lie about why. The store now clears the domain at every scene-switch
+     clear-site, so this row is belt-and-braces for any future stale path
+     (the honest-empty law, same shape as the Inspector's empty row). */
+  if (!scene || !m) {
+    return (
+      <div data-testid="shell-marker-inspector-empty" className="flex h-full w-full items-center justify-center bg-shell px-4 text-center">
+        <p className="text-[11.5px] text-tmuted">Marker not found — it was removed</p>
+      </div>
+    );
+  }
 
   const dur = sceneDuration(scene) || 30;
   const isRange = m.duration !== undefined && m.duration > 0;

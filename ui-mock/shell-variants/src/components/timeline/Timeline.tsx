@@ -270,7 +270,11 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
     <div
       className="absolute top-[2px] flex items-center justify-center overflow-hidden rounded-[2px]"
       style={{
-        left: cut - w / 2,
+        /* R23-FIX (review-sweep R3-P3#5): the left edge centers on the
+           RENDERED width (Math.max(w, 14)) — the sub-0.3s floor renders the
+           14px minimum box, but left used the raw w/2, so a minimum box sat
+           off-center by (14 − w)/2 px (the glyph + handles shifted left). */
+        left: cut - Math.max(w, 14) / 2,
         width: Math.max(w, 14),
         height: h - 4,
         zIndex: 7,
@@ -279,6 +283,15 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
         boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
         ...(fxMode && selected ? { outline: '1.5px solid var(--accent-selection)', outlineOffset: 0 } : {}),
         ...(fxMode ? { cursor: 'pointer' } : {}),
+        /* R23-FIX (review-sweep item 1, R3-P1#1): the box is CLICK-THROUGH
+           outside fxMode — it used to eat edit-mode trim/marquee gestures
+           that passed under its 40px-height z-7 rectangle (the box rendered
+           on EVERY lane, inert but pointer-hungry). Registered loss: the
+           edit-mode title tooltip on the box is now click-through-
+           unavailable — the seam zone's data-tip + the fx-mode box carry
+           the info (elementFromPoint-style hit assertions are jsdom-
+           impossible; the style-level pin carries the law). */
+        pointerEvents: fxMode && !locked ? 'auto' : 'none',
       }}
       title={`Crossfade · ${tr.presentation} · ${tr.duration}s`}
       aria-label={`Crossfade transition, ${tr.duration} seconds`}
@@ -326,8 +339,13 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
         <>
           <div
             data-testid={`transition-trim-l-${el.id}`}
-            className="absolute inset-y-0 left-0"
-            style={{ width: 6, cursor: 'ew-resize' }}
+            /* R23-FIX (review-sweep R3-P3#6): 12px hit zones (was 6px inside
+               the edge) offset 3px OUTSIDE the box edge — hit target ≠
+               visual; the 0.1s floor box is 14px wide so the two 12px zones
+               meet at its middle (the right zone wins the 4px overlap,
+               last-in-DOM). */
+            className="absolute inset-y-0"
+            style={{ left: -3, width: 12, cursor: 'ew-resize' }}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
               e.stopPropagation();
@@ -355,8 +373,8 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
           />
           <div
             data-testid={`transition-trim-r-${el.id}`}
-            className="absolute inset-y-0 right-0"
-            style={{ width: 6, cursor: 'ew-resize' }}
+            className="absolute inset-y-0" /* R23-FIX R3-P3#6 — see the left handle */
+            style={{ right: -3, width: 12, cursor: 'ew-resize' }}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
               e.stopPropagation();
@@ -632,8 +650,16 @@ export function Timeline() {
         : base;
     const sized = trackHeightOverrides[trackId] ?? auto;
     // audio focus: audio lanes ×1.6, video/overlay compress (design doc §3.2)
-    // — applied on the OVERRIDE-then-PREF'D height so the axes compose
-    if (audioLaneBoost) return kind === 'audio' ? Math.round(sized * 1.6) : kind === 'main' ? Math.min(sized, 40) : Math.min(sized, 28);
+    // — applied on the OVERRIDE-then-PREF'D height so the axes compose.
+    // R23-FIX (review-sweep R5-P3#6): the CAPTION lane is exempt from the
+    // 28px cap — its own law (gap C34, line ~622) is 32px (24px parchment
+    // chips + insets); capping it to 28 squashed the chips mid-audio-focus.
+    if (audioLaneBoost) {
+      if (kind === 'audio') return Math.round(sized * 1.6);
+      if (kind === 'caption') return Math.max(sized, 32);
+      if (kind === 'main') return Math.min(sized, 40);
+      return Math.min(sized, 28);
+    }
     return sized;
   };
   const laneHeight = (track: TrackJSON): number => laneHeightOf(track.id, track.kind);
@@ -1115,7 +1141,12 @@ export function Timeline() {
   }, [insertPreview, pxPerSec]);
 
   return (
-    <div data-testid="shell-timeline" className="flex min-h-0 flex-1 overflow-hidden">
+    /* R23-FIX (review-sweep R3-P3#7): id="shell-timeline" — SceneTabs'
+       aria-controls="shell-timeline" referenced an id that existed on NO
+       element (a dangling reference since R19). TimelineCompact carries the
+       same id — the two surfaces never coexist, so the reference always
+       resolves to whichever timeline is mounted. */
+    <div id="shell-timeline" data-testid="shell-timeline" className="flex min-h-0 flex-1 overflow-hidden">
       {/* ---- track headers column ---- */}
       <div
         id="track-headers"
@@ -1402,8 +1433,13 @@ export function Timeline() {
                     R23-WA (D-A2.4): the box is INTERACTIVE in fxMode (the
                     fade-object grammar cloned — click selects into the FX
                     domain, edge-drag/keyboard trim the duration); inert
-                    title/aria-only otherwise (today's behavior). */}
-                {track.elements.filter((e) => e.transitionOut).map((e) => (
+                    title/aria-only otherwise (today's behavior).
+                    R23-FIX (review-sweep item 15, R3-P2#4): the boxes ride
+                    the clips' virtualization window (clipVisible) — an
+                    offscreen box used to escape virtualization and keep its
+                    z-7 pointer surface mounted over lanes the user scrolled
+                    to (pinned: high zoom + scroll → offscreen box absent). */}
+                {track.elements.filter((e) => e.transitionOut && clipVisible(e)).map((e) => (
                   <TransitionBox
                     key={`tr-${e.id}`}
                     el={e}

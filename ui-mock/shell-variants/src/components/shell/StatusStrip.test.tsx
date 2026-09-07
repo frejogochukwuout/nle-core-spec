@@ -11,6 +11,10 @@ import { useUi } from '../../state/useUiStore';
 
 const S = () => useUi.getState();
 const save = () => screen.getByTestId('shell-status-save');
+/* R23-FIX (review-sweep R1-P3): the failed state's retry BUTTON is now a
+   CHILD of the persistent role=status chip (the old testid-on-button
+   shape died with the live-region restructure — re-pinned honestly). */
+const retry = () => screen.getByRole('button', { name: 'Save failed — click to retry save' });
 
 describe('StatusStrip (spec 18 §6.3 autosave)', () => {
   it('boot: saved state + live readouts (1 clip, 30 s, 46 px/s)', () => {
@@ -26,20 +30,55 @@ describe('StatusStrip (spec 18 §6.3 autosave)', () => {
     render(<StatusStrip />);
     act(() => { S().addMarker(21); }); // any scenes change starts the cycle
     expect(save()).toHaveTextContent('Saving…');
+    /* R23-FIX (R1-P3): the chip is ONE persistent role=status live region —
+       the saving→saved flip is a CONTENT change on the SAME element, so
+       polite announcement is possible (the old three siblings each
+       unmounted, which no live region can announce). */
+    expect(save()).toHaveAttribute('role', 'status');
     await waitFor(() => expect(save()).toHaveTextContent(/^Saved/), { timeout: 2000 });
+    expect(save()).toHaveAttribute('role', 'status'); // the same element survived the flip
   });
 
-  it('simulated failure → the retry button; retry succeeds and bumps saveAttempt', async () => {
+  /* R23-FIX (review-sweep item 10, R1-P2-1): style-level pin — the save chip
+     and every readout span carry leading-[12px] (line-height inherits, so
+     the 11px children's line box fits the 12px band; the aria-hidden 5px
+     dots have no line box to hold). */
+  it('R23-FIX item 10: the strip\'s children carry leading-[12px] — the 12px band holds its line box', () => {
+    render(<StatusStrip />);
+    expect(save().className).toContain('leading-[12px]');
+    expect(screen.getByText('46 px/s').className).toContain('leading-[12px]');
+    expect(screen.getByText('OPFS · local').className).toContain('leading-[12px]');
+    expect(screen.getByText('1 clip selected').className).toContain('leading-[12px]');
+    expect(screen.getByText('00:00:30:00').className).toContain('leading-[12px]');
+  });
+
+  it('simulated failure → the retry button (inside the status chip); retry succeeds and bumps saveAttempt', async () => {
     useUi.setState({ simulateSaveFail: true });
     render(<StatusStrip />);
     act(() => { S().addMarker(21); });
     await waitFor(() => expect(save()).toHaveTextContent('Save failed'), { timeout: 2000 });
-    expect(save().tagName).toBe('BUTTON'); // the failed state IS the retry affordance
-    expect(save()).toHaveAttribute('aria-label', 'Save failed — retry');
-    fireEvent.click(save());
+    /* R23-FIX (R1-P3 re-pin): the chip STAYS the role=status span; the
+       failed state renders the retry button as its child (label-in-name:
+       the aria-label carries the visible text + the action). */
+    expect(save().tagName).toBe('SPAN');
+    expect(save()).toHaveAttribute('role', 'status');
+    expect(retry()).toBeInTheDocument();
+    expect(retry()).toHaveAccessibleName('Save failed — click to retry save');
+    fireEvent.click(retry());
     expect(S().saveAttempt).toBe(1);
     expect(S().simulateSaveFail).toBe(false);
     await waitFor(() => expect(save()).toHaveTextContent(/^Saved/), { timeout: 2000 });
+  });
+
+  /* R23-FIX (review-sweep item 12, R1-P2-3): the retry control's text rides
+     the --danger-text TINT (deviation-registered lighter fork for AA);
+     style-level pin — jsdom cannot compute contrast. */
+  it('R23-FIX item 12: the failed retry text uses the --danger-text tint (the AA text fork), not raw --danger', async () => {
+    useUi.setState({ simulateSaveFail: true });
+    render(<StatusStrip />);
+    act(() => { S().addMarker(21); });
+    await waitFor(() => expect(save()).toHaveTextContent('Save failed'), { timeout: 2000 });
+    expect(retry().className).toContain('text-[var(--danger-text)]');
   });
 
   it('selection readout follows the store (aria-live)', () => {

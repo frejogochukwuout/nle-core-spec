@@ -12,6 +12,11 @@ import { ChannelEditor } from './ChannelEditor';
 import { renderPlain, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 import { __setLevel } from '../../lib/meterEngine';
+/* R23-FIX (review-sweep item 6, R2-F4): the SHARED dB map — re-pinned to
+   the log law (the suite's old −4/−13 dB pins were the LINEAR map's
+   (v·20)−20 and contradicted Inspector.test's log pins on the SAME
+   ElementJSON.volume field; one map, both suites now agree). */
+import { volToDb, dbToVol, VOL_DB_MIN, VOL_DB_MAX } from '../shell/Inspector';
 
 const boot = (patch: UiPatch = {}) => {
   if (Object.keys(patch).length) useUi.setState(patch);
@@ -31,7 +36,7 @@ describe('ChannelEditor', () => {
   it('CLIP section shows the selected audio element with its S-layer fields (design doc §3.2)', () => {
     boot({ selection: ['el-7'], stripFocus: 'tr-audio-2', page: 'audio' });
     expect(screen.getByText('interview_marina')).toBeInTheDocument();
-    expect(screen.getByLabelText('Clip gain')).toHaveValue(-4); // (0.8 × 20) − 20
+    expect(screen.getByLabelText('Clip gain')).toHaveValue(20 * Math.log10(0.8)); // R23-FIX item 6: the SHARED log map — 0.8 → −1.94 dB
     expect(screen.getByLabelText('Audio fade in')).toHaveValue(0);
     expect(screen.getByLabelText('Audio fade out')).toHaveValue(0);
     expect(screen.getByTestId('channel-automation-placeholder')).toBeInTheDocument(); // M2 non-goal note
@@ -90,16 +95,16 @@ describe('ChannelEditor', () => {
 
   it('NumFields resync on selection change — no stale display, no stale write (R13 CodeRabbit fix)', () => {
     boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
-    expect(screen.getByLabelText('Clip gain')).toHaveValue(-4);   // el-7 volume 0.8 → −4 dB
+    expect(screen.getByLabelText('Clip gain')).toHaveValue(20 * Math.log10(0.8));   // el-7 volume 0.8 → −1.94 dB (log map)
     expect(screen.getByLabelText('Audio fade in')).toHaveValue(0);
-    // switch the CLIP section to el-6 (volume 0.35 → −13 dB, fades 1.0 / 2.0)
+    // switch the CLIP section to el-6 (volume 0.35 → −9.1 dB, fades 1.0 / 2.0)
     act(() => { useUi.setState({ selection: ['el-6'] }); });
     expect(screen.getByText('ocean_ambience')).toBeInTheDocument();
-    expect(screen.getByLabelText('Clip gain')).toHaveValue(-13);  // remounted, not the stale −4
+    expect(screen.getByLabelText('Clip gain')).toHaveValue(20 * Math.log10(0.35));  // remounted, not the stale −1.94
     expect(screen.getByLabelText('Audio fade in')).toHaveValue(1);
     expect(screen.getByLabelText('Audio fade out')).toHaveValue(2);
-    // blur without editing: the uncontrolled field must NOT write el-7's −4
-    // into el-6 (the original bug) — it re-commits el-6's own −13 dB
+    // blur without editing: the uncontrolled field must NOT write el-7's −1.94
+    // into el-6 (the original bug) — it re-commits el-6's own −9.1 dB
     fireEvent.blur(screen.getByLabelText('Clip gain'));
     expect(el('el-6').volume).toBeCloseTo(0.35, 6);
     expect(el('el-7').volume).toBe(0.8); // untouched
@@ -107,9 +112,9 @@ describe('ChannelEditor', () => {
 
   /* ---------- R23-WC D-C1 (#98): the uniform clip-row grammar ---------- */
   it('R23-WC D-C1 (#98): every CLIP param row = label + NumField + slider + readout — one anatomy for all three', () => {
-    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' }); // volume 0.35 → −13 dB, fades 1.0 / 2.0
+    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' }); // volume 0.35 → −9.1 dB, fades 1.0 / 2.0
     for (const [label, readout] of [
-      ['Gain dB', '-13.0 dB'],
+      ['Gain dB', volToDb(0.35).toFixed(1) + ' dB'],
       ['Fade in', '1.0 s'],
       ['Fade out', '2.0 s'],
     ] as const) {
@@ -144,16 +149,29 @@ describe('ChannelEditor', () => {
   it('R23-WC D-C1: the gain slider writes the S-layer volume in dB (commit on release), the readout stays in dB', () => {
     boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' });
     const slider = screen.getByLabelText('Clip gain slider (commit on release)');
+    expect(slider).toHaveAttribute('min', String(VOL_DB_MIN)); // R23-FIX item 6: the SHARED −24..+12 domain (was −48)
+    expect(slider).toHaveAttribute('max', String(VOL_DB_MAX));
     fireEvent.change(slider, { target: { value: '-6' } });
     expect(screen.getByTestId('channel-clip-readout-Gain dB')).toHaveTextContent('-6.0 dB');
     fireEvent.pointerUp(slider);
-    expect(el('el-6').volume).toBeCloseTo(0.7, 6); // (−6 + 20) / 20
+    expect(el('el-6').volume).toBeCloseTo(dbToVol(-6), 6); // R23-FIX item 6: 10^(−6/20), the log map
     expect(screen.getByTestId('channel-clip-readout-Gain dB')).toHaveTextContent('-6.0 dB');
     // the fade-out twin commits the same way
     const out = screen.getByLabelText('Audio fade out slider (commit on release)');
     fireEvent.change(out, { target: { value: '4' } });
     fireEvent.pointerUp(out);
     expect(el('el-6').audioFadeOut).toBe(4);
+  });
+
+  /* R23-FIX (review-sweep item 6, R2-F4 — the cross-surface parity pin): the
+     editor's gain row and the Inspector's Audio tab edit the SAME
+     ElementJSON.volume through the SAME exported map — the two suites used
+     to pin contradictory laws (linear here, log there). */
+  it('R23-FIX item 6: the gain row rides the SHARED map — ChannelEditor and the Inspector agree on 0.8 → 20·log10(0.8) dB', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    expect(screen.getByLabelText('Clip gain')).toHaveValue(volToDb(0.8));
+    // the write side inverts through the same dbToVol the Inspector uses
+    expect(dbToVol(volToDb(0.35))).toBeCloseTo(0.35, 10);
   });
 
   it('R23-WC D-C1: the readout resyncs on an external write (NumField commit) — no stale display', () => {

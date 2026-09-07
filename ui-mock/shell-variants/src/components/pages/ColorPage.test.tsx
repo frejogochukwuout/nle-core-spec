@@ -318,6 +318,22 @@ describe('QualifierPanel (C54 — spec 08 §8.1 store-driven keyer)', () => {
     expect(S().mockGrades['el-2'].qualifier?.lumaHigh).toBeCloseTo(0.6, 5);
   });
 
+  /* R23-FIX (review-sweep item 16, R4-P2#1): Home on the HI handle clamps
+     to the separation law — hi >= lo + 2% AND >= min + 2%. The old write
+     (min + 2·span/100) landed BELOW a high lo, inverting lo/hi. Pin: with
+     satLow at 0.9, Home on hi keeps satHigh >= satLow. */
+  it('R23-FIX item 16: Home on the hi handle never inverts lo/hi (satHigh >= satLow)', () => {
+    mountQualifier();
+    const lo = input('Saturation Low');
+    fireEvent.change(lo, { target: { value: '90' } });
+    fireEvent.blur(lo);
+    expect(S().mockGrades['el-2'].qualifier?.satLow).toBeCloseTo(0.9, 5);
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Saturation range high' }), { key: 'Home' });
+    const q = S().mockGrades['el-2'].qualifier!;
+    expect(q.satHigh).toBeCloseTo(0.92, 5); // lo + 2% — the separation law wins
+    expect(q.satHigh).toBeGreaterThanOrEqual(q.satLow); // never inverted
+  });
+
   it('invert + strength + secondary corrections all write the qualifier record', () => {
     mountQualifier();
     fireEvent.click(screen.getByTestId('shell-color-qualifier-invert'));

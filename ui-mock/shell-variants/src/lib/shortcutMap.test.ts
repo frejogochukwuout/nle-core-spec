@@ -4,8 +4,10 @@
    binding has exactly one row, with unique kebab-case action ids and a
    valid group. */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { SHORTCUT_GROUPS, SHORTCUT_MAP } from './shortcutMap';
+import { SHORTCUT_GROUPS, SHORTCUT_MAP, type ShortcutRow } from './shortcutMap';
 
 describe('SHORTCUT_MAP integrity', () => {
   it('action ids are unique kebab-case', () => {
@@ -104,5 +106,102 @@ describe('R23-WA: the ⌘5 FX page row (spec 16\'s free chord)', () => {
     expect(row.keys).toBe('⌘5');
     expect(row.group).toBe('Panels');
     expect(row.desc).toContain('FX page');
+  });
+});
+
+/* ---------- R23-FIX (review-sweep R5-P3#7): the doc fixes + the exhaustive
+   twin-parity contract (every documented row ↔ a real dispatch in the hook) ---------- */
+
+describe('R23-FIX R5-P3#7: doc fixes + the exhaustive twin parity', () => {
+  it('the zoom-step row says 1.7× — the R15-1 canonical factor (matching ZOOM_BUTTON_FACTOR + the toolbar ±)', () => {
+    const row = SHORTCUT_MAP.find((r) => r.action === 'timeline-zoom-step')!;
+    expect(row.desc).toContain('1.7×');
+    expect(row.desc).not.toContain('1.5×'); // the stale factor is gone
+  });
+
+  it('the clips-delete desc documents the FX-first path (ruling 22: a selected transition/fade object deletes before the clips)', () => {
+    const row = SHORTCUT_MAP.find((r) => r.action === 'clips-delete')!;
+    expect(row.desc).toContain('transition');
+    expect(row.desc).toContain('fade');
+    expect(row.desc).toContain('ruling 22');
+  });
+
+  /* THE EXHAUSTIVE TWIN-PARITY TEST. Forward: every documented row (except
+     the toolbar-button row + F6 — Toolbar2/AppShell own those) must have a
+     matching key dispatch in hooks/useShortcuts.ts. Reverse: every dispatch
+     token in the hook must be documented (with an explicit alias list for
+     hardware/code-form twins). Checked at the source-text level — the hook
+     is a ~430-line switch; its quoted-key comparisons ARE the dispatch
+     inventory (the appLayers.test precedent: source reads are the reliable
+     channel for whole-file contracts). */
+  const hook = readFileSync(resolve(process.cwd(), 'src/hooks/useShortcuts.ts'), 'utf8');
+
+  /** one documented binding label → the hook tokens its dispatch must carry */
+  function tokensForRow(row: ShortcutRow): string[] {
+    if (row.keys === 'toolbar button' || row.keys.startsWith('F6')) return []; // exempt: other surfaces
+    const out: string[] = [];
+    for (let part of row.keys.split(' / ')) {
+      part = part.replace(/\s*\([^)]*\)/g, '').trim(); // drop "(⇧ ×10)" / "(source mode)"
+      const isAlt = part.includes('⌥');
+      const bare = part.replace(/[⌘⇧⌥]/g, '').trim();
+      if (bare === '') continue;
+      if (isAlt) { // ⌥ combos dispatch on e.code (Mac alt-key layouts remap e.key)
+        if (bare === 'X') out.push('KeyX');
+        else if (bare === 'M') out.push('KeyM');
+        else if (bare === '[') out.push('BracketLeft');
+        else if (bare === ']') out.push('BracketRight');
+        continue;
+      }
+      if (bare === 'Space') { out.push(' '); continue; }
+      if (bare === 'Esc') { out.push('Escape'); continue; }
+      if (bare === 'PageDn') { out.push('PageDown'); continue; }
+      const mapped = bare === '←' ? 'ArrowLeft' : bare === '→' ? 'ArrowRight'
+        : bare === '↑' ? 'ArrowUp' : bare === '↓' ? 'ArrowDown'
+        : bare === '−' ? '-' : bare;
+      out.push(mapped.length === 1 && /[A-Z]/.test(mapped) ? mapped.toLowerCase() : mapped);
+    }
+    return out;
+  }
+
+  /** the hook's dispatch inventory: every quoted key it compares against */
+  const dispatchTokens = new Set<string>();
+  for (const re of [/case\s+'([^']+)'/g, /key\s*===\s*'([^']+)'/g, /lower\s*===\s*'([^']+)'/g, /code\s*===\s*'([^']+)'/g]) {
+    for (const m of hook.matchAll(re)) {
+      // the regex reads RAW source: key === '\\' captures the two literal
+      // backslashes of the escape — normalize to the one-char key it names
+      dispatchTokens.add(m[1]!.length === 2 && m[1] === '\\\\' ? '\\' : m[1]!);
+    }
+  }
+
+  /** implemented-but-aliased twins — every entry names its documented owner */
+  const ALIASES: Record<string, string> = {
+    Backspace: "the clips-delete row's hardware alias (case 'Backspace' joins Delete)",
+    '=': "the timeline-zoom-step row's shifted-form alias of +",
+  };
+
+  it('forward parity: EVERY documented binding has a dispatch token in useShortcuts (no cheat-sheet lies)', () => {
+    const misses: string[] = [];
+    for (const row of SHORTCUT_MAP) {
+      for (const tok of tokensForRow(row)) {
+        if (tok === '\\') {
+          // the ⌘\ row: the hook compares key === '\\' (escaped in source)
+          if (!hook.includes("'\\\\'")) misses.push(`${row.action}: \\`);
+          continue;
+        }
+        if (!dispatchTokens.has(tok)) misses.push(`${row.action}: ${tok}`);
+      }
+    }
+    expect(misses).toEqual([]);
+  });
+
+  it('reverse parity: every dispatch token in useShortcuts is documented (or a registered alias)', () => {
+    const documented = new Set<string>();
+    for (const row of SHORTCUT_MAP) for (const tok of tokensForRow(row)) documented.add(tok);
+    const misses: string[] = [];
+    for (const tok of dispatchTokens) {
+      if (documented.has(tok) || tok in ALIASES) continue;
+      misses.push(tok);
+    }
+    expect(misses).toEqual([]);
   });
 });

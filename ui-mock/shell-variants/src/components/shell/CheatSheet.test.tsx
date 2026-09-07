@@ -123,4 +123,14 @@ describe('CheatSheet (spec 16 §7.3)', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true, shiftKey: true }));
     expect(document.activeElement).toBe(close);
   });
+
+  /* R23-FIX (review-sweep R-d, R5-P3#8): z 70 → 86 — above the toast region
+     (85) so an error toast can no longer sit ON the modal the user is trying
+     to close; still below menus (93) / confirm (97) / the failure boundary
+     (99). Class-level pin (the ladder is a Tailwind arbitrary value). */
+  it('R23-FIX R-d: the sheet rides z-[86] — above toasts (85), below menus/confirm/boundary', () => {
+    renderShell(<CheatSheet />, { patch: { cheatOpen: true } });
+    expect(screen.getByTestId('shell-cheatsheet')).toHaveClass('z-[86]');
+    expect(screen.getByTestId('shell-cheatsheet')).not.toHaveClass('z-[70]'); // the old rung is gone
+  });
 });

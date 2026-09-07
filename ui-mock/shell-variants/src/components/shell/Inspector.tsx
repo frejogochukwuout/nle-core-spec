@@ -85,11 +85,16 @@ type MockTransform = typeof DEFAULT_MT;
 
 /* R19 audio dB↔linear maps (audio_editor_ui reference) — unchanged.
    spec 09's ElementJSON.volume is a LINEAR gain multiplier (unity 1.0 =
-   0 dB); display uses 20·log10, edits write 10^(dB/20). */
-const VOL_DB_MIN = -24;
-const VOL_DB_MAX = 12;
-const volToDb = (v: number) => Math.max(VOL_DB_MIN, v > 1e-5 ? 20 * Math.log10(v) : VOL_DB_MIN);
-const dbToVol = (db: number) => 10 ** (db / 20);
+   0 dB); display uses 20·log10, edits write 10^(dB/20).
+   R23-FIX (review-sweep item 6, R2-F4): EXPORTED — the ChannelEditor's
+   clip-gain row mapped dB LINEARLY ((v·20)−20), so the two surfaces that
+   edit the SAME ElementJSON.volume field pinned CONTRADICTORY laws
+   (0.8 → −1.9 dB here, −4 dB there). One map, both consumers; the range
+   aligns to −24..+12 too (the ChannelEditor carried −48..+12). */
+export const VOL_DB_MIN = -24;
+export const VOL_DB_MAX = 12;
+export const volToDb = (v: number) => Math.max(VOL_DB_MIN, v > 1e-5 ? 20 * Math.log10(v) : VOL_DB_MIN);
+export const dbToVol = (db: number) => 10 ** (db / 20);
 
 /* R19 EQ display: 4 fixed bands, ±24 dB (62/250/1K/4K/16K corners — mockData) */
 const EQ_ZERO: [number, number, number, number] = [0, 0, 0, 0];
@@ -1507,6 +1512,26 @@ export function Inspector() {
     ? single.effects?.find((f) => f.id === selectedEffectId) ?? null
     : null;
 
+  /* R23-FIX (review-sweep item 4, R2-F2): the FX-OBJECT entity branch —
+     while the FX selection domain holds, the chip names the OBJECT (the
+     transition's presentation / the fade side + its clip), never the
+     playhead-derived fallback track. The old chain fell through to
+     fallbackTrack the moment the clip selection was empty, so the chip
+     claimed the active-track sheet while the FX rail was editing a
+     transition — a lying chip during FX ownership. */
+  const fxObjHit = selectedFxObject ? findElement(scenes, selectedFxObject.elementId) : null;
+  const fxObjChip = selectedFxObject && fxObjHit
+    ? {
+      entity: 'fx-object',
+      icon: Sparkles as ComponentType<{ size?: number; strokeWidth?: number }>,
+      color: 'var(--accent-selection)',
+      name: selectedFxObject.kind === 'transition'
+        ? fxObjHit.element.transitionOut?.presentation ?? 'Transition'
+        : `${selectedFxObject.side === 'in' ? 'Fade In' : 'Fade Out'} — ${fxObjHit.element.name}`,
+      typeLabel: selectedFxObject.kind,
+    }
+    : null;
+
   /** fan-out write — mock: one write per element; real shell = one coalesced
       updateElements batch (spec 15 §7 / spec 06 §4.6) */
   const setFieldAll = (patch: Partial<ElementJSON>) => {
@@ -1586,7 +1611,9 @@ export function Inspector() {
   const showBlend = showTransform; // composite section rides the spatial law
 
   /* the entity the chip represents (priority: project > track > effect >
-     multi > clip > fallback-track > empty) */
+     multi > clip > fx-object > fallback-track > empty — R23-FIX item 4:
+     the fx-object branch rides BEFORE the fallbackTrack so an owned FX
+     object never reads as the active track) */
   const chip = inspectorProjectMode
     ? { entity: 'project', icon: FolderCog as ComponentType<{ size?: number; strokeWidth?: number }>, color: 'var(--text-muted)', name: 'Project', typeLabel: 'read-only' }
     : selectedTrack
@@ -1597,9 +1624,11 @@ export function Inspector() {
           ? { entity: 'multi', icon: Layers as ComponentType<{ size?: number; strokeWidth?: number }>, color: 'var(--text-muted)', name: `${els.length} clips selected`, typeLabel: 'multi-select' }
           : single
             ? { entity: 'clip', icon: TYPE_ICON[single.type], color: TYPE_COLOR[single.type], name: single.name, typeLabel: single.type }
-            : fallbackTrack
-              ? { entity: 'track', icon: Layers as ComponentType<{ size?: number; strokeWidth?: number }>, color: TRACK_COLOR[fallbackTrack.kind], name: trackSheetTitle(fallbackTrack), typeLabel: `${TRACK_KIND_LABEL[fallbackTrack.kind]} · active` }
-              : { entity: 'empty', icon: Layers as ComponentType<{ size?: number; strokeWidth?: number }>, color: 'var(--text-muted)', name: 'Nothing to inspect', typeLabel: 'empty' };
+            : fxObjChip
+              ? fxObjChip
+              : fallbackTrack
+                ? { entity: 'track', icon: Layers as ComponentType<{ size?: number; strokeWidth?: number }>, color: TRACK_COLOR[fallbackTrack.kind], name: trackSheetTitle(fallbackTrack), typeLabel: `${TRACK_KIND_LABEL[fallbackTrack.kind]} · active` }
+                : { entity: 'empty', icon: Layers as ComponentType<{ size?: number; strokeWidth?: number }>, color: 'var(--text-muted)', name: 'Nothing to inspect', typeLabel: 'empty' };
 
   return (
     <div data-testid="shell-inspector" className="flex h-full w-full min-h-0 min-w-0 flex-col bg-shell">

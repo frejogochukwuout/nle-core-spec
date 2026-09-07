@@ -787,7 +787,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
        the FX view clip clicks select the clip (the FX inspector shows its
        effect stack, D-A2.1); a split is an edit-domain mutation the recede
        law forbids. (fxMode + blade is reachable: the tool radio renders on
-       every page and the fx page keeps fxMode across tool changes.) */
+       the EDIT page — R23-WD's D-D2 matrix — and the fx page keeps fxMode
+       across tool changes while the radio stays armed from a prior Edit
+       visit; R23-FIX R3-P3#11 fixed the stale "renders on every page"
+       claim.) */
     if (tool === 'blade' && !fxMode) {
       const rect = ref.current?.getBoundingClientRect();
       if (!rect) return;
@@ -1251,8 +1254,12 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
            commit per gesture.
            Below 6px the object unmounts (a 0-width fade renders no object;
            the Inspector "Fade in" field creates one). Trim handles sit OUTSIDE
-           the clip edges (±4px) so the head object never fights them — the
-           narrow-clip crowding is visual only, hit zones stay disjoint.
+           the clip edges (±4px) — same HEAD ZONE, so the two ARE in pointer
+           competition: the handles carry z-[4] (above the fade objects'
+           z-[3], level with the affordance below) so a selected clip's trim
+           gesture wins the shared corner — the R3-P2#2 finding (the old
+           comment claimed the hit zones were disjoint; they never were,
+           DOM order + z-3 let the fade object eat the handle's events).
            R23-WA (D-A3): the objects joined the FX domain — the selection
            ring (accent outline, the clip-selected grammar's accent) renders
            while selectedFxObject points at THIS side. ---- */}
@@ -1362,7 +1369,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
         <>
           <div
             data-testid={`clip-trim-l-${el.id}`}
-            className="absolute inset-y-0"
+            /* R23-FIX (review-sweep item 13, R3-P2#2): z-[4] — above the fade
+               objects (z-[3]), level with the trim affordance; the handle
+               owns the clip-corner hit zone again (pinned at style level). */
+            className="absolute inset-y-0 z-[4]"
             style={{ left: -4, width: 8, cursor: 'w-resize' }}
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -1379,7 +1389,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
           />
           <div
             data-testid={`clip-trim-r-${el.id}`}
-            className="absolute inset-y-0"
+            className="absolute inset-y-0 z-[4]" /* R23-FIX item 13 — see the left handle */
             style={{ right: -4, width: 8, cursor: 'e-resize' }}
             onPointerDown={(e) => {
               e.stopPropagation();

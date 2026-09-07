@@ -32,6 +32,11 @@ import { mediaById, type ElementJSON } from '../../lib/mockData';
 import { ROLE_LABEL, dbLabel, type Role } from '../../state/mockMixer';
 import { useMeter } from '../../lib/meterEngine';
 import { Fader, PanKnob, StripMeter, HeadroomReadout, FaderGridlines } from './MixerPrimitives';
+/* R23-FIX (review-sweep item 6, R2-F4): the SHARED dB↔linear map + domain
+   bounds from the Inspector (the one map for ElementJSON.volume — the old
+   local linear mapping ((v·20)−20 / (db+20)/20) contradicted the
+   Inspector's log law on the SAME field). */
+import { volToDb, dbToVol, VOL_DB_MIN, VOL_DB_MAX } from '../shell/Inspector';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -221,15 +226,19 @@ export function ChannelEditor() {
                 {el.type === 'audio' ? <Waves size={11} className="text-[var(--type-audio)]" /> : <Music2 size={11} className="text-[var(--type-video)]" />}
                 <span className="min-w-0 flex-1 truncate text-[11px] text-tprimary">{el.name}</span>
               </div>
+              {/* R23-FIX (item 6, R2-F4): the gain row rides the SHARED log
+                  map + the Inspector's −24..+12 domain (was a linear
+                  (v·20)−20 map over −48..+12 — the contradictory-law bug).
+                  dbToVol(−24) ≈ 0.063 so the floor never writes ~0. */}
               <ClipParamRow
                 label="Gain dB"
                 keyId={el.id}
-                value={((el.volume ?? 1) * 20 - 20)}
-                min={-48} max={12} step={0.5}
+                value={volToDb(el.volume ?? 1)}
+                min={VOL_DB_MIN} max={VOL_DB_MAX} step={0.5}
                 fmt={(dbv) => dbv.toFixed(1) + ' dB'}
                 numAria="Clip gain"
                 sliderAria="Clip gain slider (commit on release)"
-                onCommit={(dbv) => setElementField(el.id, { volume: Math.max(0.001, (dbv + 20) / 20) })} />
+                onCommit={(dbv) => setElementField(el.id, { volume: dbToVol(dbv) })} />
               <ClipParamRow
                 label="Fade in"
                 keyId={el.id}

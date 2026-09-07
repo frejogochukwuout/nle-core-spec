@@ -380,21 +380,29 @@ export function ColorNodeGraph() {
           </button>
         </div>
         <div className="flex items-center gap-1.5">
+          {/* R23-FIX (review-sweep R4-P3#3): the page dots are 16px hit
+              buttons with the 6px visual dot INSIDE (hit target ≠ visual —
+              the old 6×6 buttons were sub-target pointer pebbles). */}
           {[1, 2].map((p) => (
             <button
               key={p}
               type="button"
               aria-label={`Node page ${p}`}
               aria-pressed={page === p}
-              className="h-[6px] w-[6px] rounded-full transition-colors"
-              style={{ background: page === p ? '#fff' : '#444' }}
+              className="flex h-[16px] w-[16px] items-center justify-center rounded-full transition-colors"
               onClick={() => {
                 if (p !== page) {
                   setPage(p);
                   tell(); // single page in the mock — honest, not silent
                 }
               }}
-            />
+            >
+              <span
+                aria-hidden="true"
+                className="h-[6px] w-[6px] rounded-full transition-colors"
+                style={{ background: page === p ? '#fff' : '#444' }}
+              />
+            </button>
           ))}
         </div>
         <div className="flex items-center gap-4">

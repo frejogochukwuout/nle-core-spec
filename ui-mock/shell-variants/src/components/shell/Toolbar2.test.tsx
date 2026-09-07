@@ -74,10 +74,17 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
     expect(screen.queryByRole('button', { name: 'Project' })).toBeNull();
   });
 
-  it('R22-D5 (#80) → R23-WB (D-B4/#91): the left toggle follows the page asset domain (Sound Library on audio, Stills on color)', () => {
+  /* R23-FIX (review-sweep R-c, item 11 — RE-PINNED): the left toggle
+     renders on the gatedByPool pages ONLY (edit + color). Audio + FX own
+     the whole left slot unconditionally (the dock mounts regardless of the
+     pool flag), so a toggle there would claim a toggle it cannot perform —
+     DOM-absent, the lying-control #100 law. */
+  it('R22-D5 (#80) → R23-FIX R-c: the left toggle follows the page asset domain (Stills on color, Media Pool on edit; audio/fx own the slot — no toggle)', () => {
     useUi.setState({ page: 'audio' });
     const { getByRole, rerender } = renderPlain(<Toolbar2 />);
-    expect(getByRole('button', { name: 'Sound Library' })).toBeInTheDocument();
+    // AUDIO owns the slot — the toggle is DOM-absent (the SoundLibrary IS the dock)
+    expect(screen.queryByTestId('shell-toolbar-btn-mediapool')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sound Library' })).toBeNull();
     useUi.setState({ page: 'color' });
     rerender(<Toolbar2 />);
     expect(getByRole('button', { name: 'Stills' })).toBeInTheDocument();
@@ -88,8 +95,11 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
     expect(screen.queryByRole('button', { name: 'Stills' })).toBeNull();
     useUi.setState({ page: 'fx' });
     rerender(<Toolbar2 />);
-    expect(getByRole('button', { name: 'Effects' })).toBeInTheDocument();
+    // FX owns the slot too — no "Effects" toggle (the FxBrowser IS the dock)
+    expect(screen.queryByRole('button', { name: 'Effects' })).toBeNull();
     useUi.setState({ page: 'edit' });
+    rerender(<Toolbar2 />);
+    expect(screen.getByRole('button', { name: 'Media Pool' })).toBeInTheDocument();
   });
 
   /* R22-D3 (#73) → R23-WB (D-B1): the console toggles — Scopes off↔open, Nodes
@@ -269,29 +279,35 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
 
 /* ---------- R23-WA (DESIGN-R23 D-A1/D-D1): the FX page's toolbar face ---------- */
 
-describe('R23-WA: the left toggle names the FX dock content (D-D1: "Effects" on fx)', () => {
-  it('the fx page label reads Effects — the dock routes to the FxBrowser', () => {
+/* ---------- R23-WA → R23-FIX (review-sweep R-c, item 11 — RE-PINNED): the
+   FX page's left dock is UNCONDITIONAL (gatedByPool: false) — the toggle
+   that used to carry its "Effects" label is DOM-absent there (the
+   FxBrowser IS the dock; a toggle would lie). The dock routing itself is
+   pinned in LeftDock.test + AppShell.test. ---------- */
+
+describe('R23-FIX R-c: the FX page owns the left slot — no toggle, dense rover', () => {
+  it('the fx page renders NO left toggle (the slot is unconditional — the label tests moved to the dock suites)', () => {
     useUi.setState({ page: 'fx' });
-    const { getByRole, rerender } = renderPlain(<Toolbar2 />);
-    expect(getByRole('button', { name: 'Effects' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Media Pool' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Sound Library' })).toBeNull();
+    const { rerender } = renderPlain(<Toolbar2 />);
+    expect(screen.queryByTestId('shell-toolbar-btn-mediapool')).toBeNull();
+    for (const label of ['Effects', 'Media Pool', 'Sound Library', 'Stills']) {
+      expect(screen.queryByRole('button', { name: label })).toBeNull();
+    }
     useUi.setState({ page: 'edit' });
     rerender(<Toolbar2 />);
     expect(screen.getByRole('button', { name: 'Media Pool' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Effects' })).toBeNull(); // edit keeps the honest pool name
   });
 
-  it('the fx label joins the dense arrow roving in DOM order (the F6/rover laws stay dense)', () => {
+  it('the fx-page rover stays dense — Inspector is the ONLY button and the single tab stop (like deliver)', () => {
     useUi.setState({ page: 'fx' });
     renderPlain(<Toolbar2 />);
-    const fxLabel = screen.getByRole('button', { name: 'Effects' });
-    fireEvent.keyDown(fxLabel, { key: 'ArrowRight' });
-    // the next button in DOM order takes the tab stop (leftLabel is first)
-    expect(fxLabel).toHaveAttribute('tabindex', '-1');
-    const stopped = screen.getAllByRole('button').find((b) => b.getAttribute('tabindex') === '0');
-    expect(stopped).toBeDefined();
-    expect(stopped).not.toBe(fxLabel);
+    const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(1); // Inspector alone — no hole where the toggle sat
+    expect(buttons[0]).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(buttons[0], { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(buttons[0]); // one-button wrap math
+    useUi.setState({ page: 'edit' });
   });
 });
 
@@ -299,33 +315,42 @@ describe('R23-WA: the left toggle names the FX dock content (D-D1: "Effects" on 
    leftDockContent table drives the left toggle ---------- */
 
 describe('R23-WD (D-D1): the leftDockContent table drives the left toggle', () => {
-  it('the label law per page — the toggle renders exactly the table label on edit/color/audio/fx', () => {
+  /* R23-FIX R-c RE-PIN: the label law covers the GATED pages (edit + color)
+     — the un-gated pages (audio/fx) own the slot, no toggle to label. */
+  it('the label law on the gated pages — the toggle renders exactly the table label on edit/color; audio/fx render NO toggle', () => {
     const { rerender } = renderPlain(<Toolbar2 />);
-    for (const p of ['edit', 'color', 'audio', 'fx'] as const) {
+    for (const p of ['edit', 'color'] as const) {
       act(() => { useUi.setState({ page: p }); });
       rerender(<Toolbar2 />);
       const c = leftDockContent(p)!;
       expect(screen.getByRole('button', { name: c.label })).toBeInTheDocument();
     }
+    for (const p of ['audio', 'fx'] as const) {
+      act(() => { useUi.setState({ page: p }); });
+      rerender(<Toolbar2 />);
+      expect(screen.queryByTestId('shell-toolbar-btn-mediapool')).toBeNull();
+    }
     act(() => { useUi.setState({ page: 'edit' }); });
   });
 
-  it('the ICON follows the table too (panel-left / image / audio-waveform / sparkles)', () => {
+  it('the ICON follows the table on the gated pages (panel-left on edit, image on color)', () => {
     const { rerender } = renderPlain(<Toolbar2 />);
     const iconClass = () =>
       screen.getByTestId('shell-toolbar-btn-mediapool').querySelector('svg')!.getAttribute('class') ?? '';
     act(() => { useUi.setState({ page: 'color' }); });
     rerender(<Toolbar2 />);
     expect(iconClass()).toContain('lucide-image');
-    act(() => { useUi.setState({ page: 'audio' }); });
-    rerender(<Toolbar2 />);
-    expect(iconClass()).toContain('lucide-audio-waveform');
-    act(() => { useUi.setState({ page: 'fx' }); });
-    rerender(<Toolbar2 />);
-    expect(iconClass()).toContain('lucide-sparkles');
     act(() => { useUi.setState({ page: 'edit' }); });
     rerender(<Toolbar2 />);
     expect(iconClass()).toContain('lucide-panel-left');
+    // the un-gated pages render no toggle at all (R-c) — no icon to follow
+    act(() => { useUi.setState({ page: 'audio' }); });
+    rerender(<Toolbar2 />);
+    expect(screen.queryByTestId('shell-toolbar-btn-mediapool')).toBeNull();
+    act(() => { useUi.setState({ page: 'fx' }); });
+    rerender(<Toolbar2 />);
+    expect(screen.queryByTestId('shell-toolbar-btn-mediapool')).toBeNull();
+    act(() => { useUi.setState({ page: 'edit' }); });
   });
 
   it('DELIVER: the left toggle is DOM-ABSENT (ruling 16 — DeliverPage owns its own presets rail)', () => {

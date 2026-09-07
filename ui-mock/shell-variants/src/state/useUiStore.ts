@@ -199,8 +199,15 @@ export function gradeOf(s: Pick<UiState, 'mockGrades'>, id: string): MockGrade {
  * mounts the strip), full tracks elsewhere; 'on'/'off' are the user's
  * per-session overrides. Both consumers (the AppShell mount decision + the
  * TimelineToolbar toggle's honest aria-pressed) read THIS so they can never
- * disagree about what is rendered. */
+ * disagree about what is rendered.
+ * R23-FIX (review-sweep R-b, R3-P2#3 — supersedes the D-D2 matrix's density
+ * row for FX): the FX page FORCES the full Timeline — even the user's 'on'
+ * override yields there (D-A1/ruling 8: seam hit-zones and transition boxes
+ * need real lane pixel geometry; the compact strip is frozen by law). The
+ * density toggle is DOM-absent on the FX page, so no control can claim the
+ * override there; the resolver is the single writer of the truth.) */
 export function resolveTimelineCompact(s: Pick<UiState, 'timelineCompact' | 'page'>): boolean {
+  if (s.page === 'fx') return false; // R-b: the FX timeline is the FULL Timeline
   if (s.timelineCompact === 'on') return true;
   if (s.timelineCompact === 'off') return false;
   return s.page === 'color' || s.page === 'deliver';
@@ -1048,6 +1055,12 @@ export const useUi = create<UiState>((set, get) => ({
       /* R23-WA: the FX domain dies with the scene switch (stale element ids —
          the same law as the effect/track domains). */
       selectedFxObject: null,
+      /* R23-FIX (review-sweep item 2, R2-F1/R5-P2-1 — the 7th clear-site
+         law): the MARKER domain dies with the scene switch too. Marker ids
+         are scene-scoped (scene.markers), so a carried selectedMarkerId
+         resolved to nothing in the new scene and the AppShell rail swap
+         mounted a BLANK MarkerInspector (the stale-id blank-rail bug). */
+      selectedMarkerId: null,
       ...(sc ? { lockAll: sc.tracks.every((t) => t.locked) } : {}),
     };
   }),
@@ -1073,7 +1086,10 @@ export const useUi = create<UiState>((set, get) => ({
     if (idx === -1 || scenes.length <= 1) return;
     scenes.splice(idx, 1);
     const s = get();
-    if (s.activeSceneId === id) set({ activeSceneId: scenes[Math.max(0, idx - 1)].id, selection: [] });
+    /* R23-FIX (item 2): deleting the ACTIVE scene is a scene switch — the
+       marker domain clears with it (the 7th clear-site law; a stale id
+       would otherwise blank the rail on the newly active scene). */
+    if (s.activeSceneId === id) set({ activeSceneId: scenes[Math.max(0, idx - 1)].id, selection: [], selectedMarkerId: null });
     return scenes;
   }),
   /* R23-WA (Part IX ruling 2 — fxMode single source): setTool is the writer
@@ -1401,13 +1417,32 @@ export const useUi = create<UiState>((set, get) => ({
     const grown = [...s.selection.filter((x) => !group.includes(x)), ...group];
     return { selection: grown, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...domainClear(grown) };
   }),
+  /* R23-FIX (review-sweep item 3, R5-P2-2): selectTrackElements (⇧⌘A / the
+     trackhead select-all) and selectNeighbors (Tab/⇧Tab) now route through
+     the SAME domain-clear spread setSelection/selectElement use — a fresh
+     clip selection is a DOMAIN CHANGE, so the marker/track domains must die
+     and project mode must exit (a Tab walk away from a marker left the rail
+     showing the marker inspector with a clip selected — the bypass bug). */
   selectTrackElements: (trackId, additive) => set((s) => {
     const sc = s.scenes.find((x) => x.id === s.activeSceneId);
     const track = sc?.tracks.find((t) => t.id === trackId);
     const ids = (track?.elements ?? []).map((e) => e.id);
-    if (!additive) return { selection: ids };
-    const merged = new Set([...s.selection, ...ids]);
-    return { selection: [...merged] };
+    /* the shared survival laws, cloned from selectElement :1386-1394 — the
+       effect + FX-object domains survive ONLY while their clip stays in the
+       new selection (D4.2 / D-A3). */
+    const fxClear = (next: string[]): Partial<UiState> =>
+      s.selectedEffectClipId !== null && !next.includes(s.selectedEffectClipId)
+        ? { selectedEffectId: null, selectedEffectClipId: null } : {};
+    const fxObjClear = (next: string[]): Partial<UiState> =>
+      s.selectedFxObject !== null && !next.includes(s.selectedFxObject.elementId)
+        ? { selectedFxObject: null } : {};
+    const domainClear = (next: string[]): Partial<UiState> => ({ ...fxClear(next), ...fxObjClear(next) });
+    if (!additive) return { selection: ids, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...domainClear(ids) };
+    const merged = [...new Set([...s.selection, ...ids])];
+    /* additive-grow = selectElement's own law (line ~1417): the marker/track
+       domains die with ANY fresh clip selection; the effect/fx-object domains
+       ride the survival law above. */
+    return { selection: merged, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...domainClear(merged) };
   }),
   selectNeighbors: (dir) => set((s) => {
     const sc = s.scenes.find((x) => x.id === s.activeSceneId);
@@ -1416,7 +1451,19 @@ export const useUi = create<UiState>((set, get) => ({
     if (els.length === 0) return {};
     const cur = s.selection[0] ? els.findIndex((e) => e.id === s.selection[0]) : -1;
     const next = cur === -1 ? (dir === 1 ? 0 : els.length - 1) : clamp(cur + dir, 0, els.length - 1);
-    return { selection: [els[next].id] };
+    const group = [els[next]!.id];
+    /* item 3: the domain-clear spread (see selectTrackElements above) — the
+       effect domain survives iff its clip IS the new neighbor selection. */
+    return {
+      selection: group,
+      selectedMarkerId: null,
+      selectedTrackId: null,
+      inspectorProjectMode: false,
+      ...(s.selectedEffectClipId !== null && !group.includes(s.selectedEffectClipId)
+        ? { selectedEffectId: null, selectedEffectClipId: null } : {}),
+      ...(s.selectedFxObject !== null && !group.includes(s.selectedFxObject.elementId)
+        ? { selectedFxObject: null } : {}),
+    };
   }),
   setZoom: (px) => set((s) => ({ pxPerSec: clamp(px, Math.max(MIN_PPS, s.zoomMinPps), MAX_PPS) })),
   // dynamic min (spec-05 §5.2): view state write from the Timeline's live

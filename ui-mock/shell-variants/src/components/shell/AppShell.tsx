@@ -20,6 +20,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useUi, resolveGradeTargetId, resolveTimelineCompact } from '../../state/useUiStore';
+import { leftDockContent } from './leftDockContent';
 import { Toolbar2 } from './Toolbar2';
 import { MixerDock } from '../mixer/MixerDock';
 import { LeftDock } from './LeftDock';
@@ -202,11 +203,19 @@ function AppShellInner() {
   /* spec 18 §6.4: "unsaved changes" browser prompt while edits are pending */
   useBeforeUnloadGuard();
 
-  /* F6 panel-focus cycling — spec 18 §11.5 (normative) */
+  /* F6 panel-focus cycling — spec 18 §11.5 (normative).
+     R23-FIX (review-sweep R5-P3#5): the F6 rung gets the §8.5 text-input
+     guard + a modifier guard — pressing F6 while TYPING in a field
+     (INPUT/SELECT/TEXTAREA/contentEditable) used to rip focus out from
+     under the user, and browser/OS F6 chords (⌘F6 etc.) were swallowed by
+     preventDefault. Plain F6 on a non-field target keeps cycling. */
   const regionsRef = useRef<(HTMLElement | null)[]>([]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'F6') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return; // OS/browser chords pass through
+      const tgt = e.target as HTMLElement | null;
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'SELECT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return;
       e.preventDefault();
       const regions = regionsRef.current.filter(Boolean) as HTMLElement[];
       if (regions.length === 0) return;
@@ -251,14 +260,15 @@ function AppShellInner() {
   /* R23-WC (DESIGN-R23 D-C2, issue #99 + Part IX ruling 10 — the
      channel-selected law): a focused mixer strip (stripFocus — the mixer's
      own domain, not selectedTrackId) + NO live selection routes the right
-     rail to the ChannelEditor on ANY page ("if we are selecting channel then
-     you should just show channel editor"). Priority: clip selection (the
-     edit domain — served by each page's own rail) > strip focus (this
-     branch) > page default. The branch yields to every live selection
-     domain — marker, caption, FX-object, track — because an ACTIVE
-     selection is newer intent than a carried focus; a stale stripFocus id
-     (scene switch, deleted track) resolves to no audio track and never
-     fires. */
+     rail to the ChannelEditor ("if we are selecting channel then you
+     should just show channel editor"). The branch yields to every live
+     selection domain — marker, caption, FX-object, track — because an
+     ACTIVE selection is newer intent than a carried focus; a stale
+     stripFocus id (scene switch, deleted track) resolves to no audio track
+     and never fires. R23-FIX (R-a): on the color/fx/audio pages the PAGE
+     RAIL now outranks a carried focus too (see the rightPanel chain) —
+     only the EDIT page (no page rail of its own) routes a carried
+     stripFocus here. */
   const stripFocus = useUi((s) => s.stripFocus);
   const selectedFxObject = useUi((s) => s.selectedFxObject);
   const selectedTrackId = useUi((s) => s.selectedTrackId);
@@ -291,15 +301,26 @@ function AppShellInner() {
   /* R23-WA (D-A1): the FX page's right rail = the FxInspector (the param
      surface for the selected transition / fade / clip-effect-stack); the
      rail swap rides the SAME panels.inspector gate + inspectorW splitter
-     as every other page. R23-WC: the D-C2 branch rides FIRST (strip focus
-     outranks the page default — ruling 10), then the page rails. */
+     as every other page. R23-WC: the D-C2 branch rides FIRST on edit (no
+     page rail there), then the page rails — see the R-a chain below. */
+  /* R23-FIX (review-sweep R-a, items 5/R2-F3/R5-P3-4 — the rail priority
+     hoist): marker/caption branches hoist ABOVE the page branches. An
+     ACTIVE selection domain is NEWER intent than the page default — the
+     D-C2 philosophy applied to its own edge (the old chain buried the
+     marker rail under the color/fx/audio page rails, so selecting a marker
+     on those pages left the rail showing the page default while the marker
+     domain held — a lying rail). New chain: selectedMarkerId →
+     captionSelected → page rails (color/fx/audio) → channelRailLive →
+     Inspector. channelRailLive therefore no longer yields to a carried
+     stripFocus on the audio/fx/color pages (their page rails win; the audio
+     page rail IS the ChannelEditor, so #99's own case is unchanged). */
   const rightPanel: ReactNode =
-    channelRailLive ? <ChannelEditor />
+    selectedMarkerId ? <MarkerInspector />
+    : captionSelected ? <CaptionInspector />
     : page === 'color' ? <ColorInspector />
     : page === 'fx' ? <FxInspector />
     : page === 'audio' ? <ChannelEditor />
-    : selectedMarkerId ? <MarkerInspector />
-    : captionSelected ? <CaptionInspector />
+    : channelRailLive ? <ChannelEditor />
     : <Inspector />;
 
   return (
@@ -327,18 +348,31 @@ function AppShellInner() {
           </div>
         ) : (
           <>
-            {/* R19: one LeftDock surface (th_mtoyt5fv "use the same area as
-                bin") — Pool|Effects tabs in the mediaW slot. R22-D1: the
-                COLOR page keeps the media pool here (Pool|Stills tabs) — the
-                node graph no longer steals this slot (issue #77). */}
-            {(panels.mediaPool || panels.effects) && (
-              <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
-                <LeftDock />
-              </div>
-            )}
-            {(panels.mediaPool || panels.effects) && (
-              <VSplitter onDrag={(dx) => setMediaW(dx === 0 ? 280 : useUi.getState().mediaW + dx)} />
-            )}
+            {/* R23-FIX (review-sweep R-c, items 11/R1-P2-2/R2-F13): the
+                left-dock mount is TABLE-DRIVEN — `const dock =
+                leftDockContent(page); show = !!dock && (!dock.gatedByPool
+                || panels.mediaPool)`. Audio + FX OWN the slot (gatedByPool:
+                false → always mounted — the Fairlight law); Edit + Color
+                stay gated by the mediaPool flag; Deliver hides (null entry —
+                DeliverPage owns the mainbody). The old `panels.mediaPool ||
+                panels.effects` read was a dead-flag gate: with the pool off,
+                the AUDIO page lost its Sound Library (a frozen surface) and
+                the FX page its browser — the flag never governed those
+                slots. panels.effects is now unread here (dead view state,
+                README row). */}
+            {(() => {
+              const dock = leftDockContent(page);
+              const showLeftDock = !!dock && (!dock.gatedByPool || panels.mediaPool);
+              if (!showLeftDock) return null;
+              return (
+                <>
+                  <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
+                    <LeftDock />
+                  </div>
+                  <VSplitter onDrag={(dx) => setMediaW(dx === 0 ? 280 : useUi.getState().mediaW + dx)} />
+                </>
+              );
+            })()}
 
             <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region panel-shadow flex min-h-0 min-w-0 flex-1 flex-col">
               {/* R23-WB (D-B2, #93): while the nodes console is on, the node
@@ -419,7 +453,17 @@ function AppShellInner() {
         <SceneTabs />
         <div className="flex min-h-0 flex-1">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {compact ? <TimelineCompact rangeBand={page === 'deliver'} /> : <Timeline />}
+            {compact ? (
+              /* R23-FIX (R3-P3#8): the compact strip's clip click is
+                 page-aware — 'grade' retargeting is the COLOR page's law;
+                 every other page gets honest selection-only with a
+                 'select clip' label (the old copy claimed "set grade
+                 target" on pages that have no grade surface — a lying
+                 label). */
+              <TimelineCompact rangeBand={page === 'deliver'} clipClick={page === 'color' ? 'grade' : 'select'} />
+            ) : (
+              <Timeline />
+            )}
           </div>
           {/* F6 region slot [6] on color = the SCOPES DOCK (D-B1 — inherited
               from the retired NodeGraphDock; single-writer per index, a
