@@ -271,10 +271,11 @@ Run it at boot or any time; safe twice.
    inspector — a still has no intrinsic length; a placement's extent is
    an edit decision (shown as the clip Duration).
 14. **Topbar is a downstream customization point** (R18j, thread #17 —
-   see the section below): slim 36px chrome-only bar; the placeholder
+   see the section below): slim chrome-only bar (36px at R18j; **40px
+   since R20 thread #30** — `--mini-topbar-h`); the placeholder
    brand + Export stub are EXPLICITLY meant to be swapped by the host
    product, not extended. R18k (thread #22): the Export CTA is sized
-   FOR the slim bar (26px — 5px breathing room top/bottom; the old 34px
+   FOR the slim bar (26px — breathing room top/bottom; the old 34px
    sat flush against the borders and read as overflow).
 15. **Active chip contrast over RH's own** (R18k, thread #4): RH's
    active tool chip is 6.5% white on a 5.2% toolbar surface — the

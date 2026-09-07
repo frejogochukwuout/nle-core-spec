@@ -912,7 +912,7 @@
   pointer-events: none;
 }
 
-/* R18j (thread #13): the same ghost in the minimized sub-rows — pill
+/* R18j (thread #13): the same ghost in the minimized pill row — pill
    radius, no top/bottom inset (the 20px rows have none to give) */
 .qc-drop-outline--min {
   top: 0;
@@ -922,11 +922,12 @@
 
 /* ---- R18j (thread #13): the minimized timeline strip --------------
    Toolbar hidden, one compact strip: slim ruler (every-other label,
-   no ticks) + two thin pill sub-rows (V over A — separate rows so
-   overlapped ranges never stack or steal each other's clicks). The
+   no ticks) + the VIDEO pill row (R18k thread #21: audio sub-rows left
+   the strip — the video pills get the whole strip height). The
    playhead stays fully scrubbable; the pills drag/trim through the
-   SAME ClipItem gesture engine (compact render). Layout: a 30px
-   expand rail on the left + the shared scroll surface. */
+   SAME ClipItem gesture engine (compact render). Layout: a 34px
+   expand rail on the left (R19 thread #48: --canvas-editor-action-size)
+   + the shared scroll surface. */
 .qc-timeline.is-minimized {
   flex: 0 0 auto; /* sized by content, never stretched */
 }

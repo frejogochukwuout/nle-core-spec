@@ -98,10 +98,10 @@ const TRACK_HEAD_W = 44;
  *  padding, playhead overlay left, lane/drop/gesture origin) flows
  *  through THIS constant, so the whole law moves as one. */
 const RENDER_ORIGIN_PX = 2 + TRACK_HEAD_W;
-/** R18k: the compact strip's own origin — no head rail there (the 30px
- *  expand button sits OUTSIDE the scroll as a flex sibling), so pills /
- *  marks / playhead keep the classic 10px. Keeping the strip at 10 (vs
- *  46) means toggling minimize moves t=0 by just 6px, not 36. */
+/** R18k: the compact strip's own origin — no head rail there (the 34px
+ *  expand button — R19 thread #48's --canvas-editor-action-size — sits
+ *  OUTSIDE the scroll as a flex sibling in the toggle slot), so pills /
+ *  marks / playhead keep the classic 10px. */
 const MIN_ORIGIN_PX = 10;
 
 /* ---------- tools row (RH-verbatim look, R18e additions) ---------- */
@@ -1072,12 +1072,13 @@ function Lane({
 }
 
 /* ---------- R18j (thread #13): minimized sub-row --------------------
- * One thin pill row per track inside the single compact strip. V and A
- * keep separate sub-rows (never stacked on each other) so overlapped
- * time ranges stay individually clickable — the reviewer's "collapse
- * the two tracks V/A into a single timeline, each clip more like pills".
- * Pool drags still land: the row validates kind routing and inserts at
- * the pointer's time (same insertionAt law as the full lanes). */
+ * One thin pill row per track inside the single compact strip. R18k
+ * (thread #21): the strip renders the VIDEO pills only — audio is an
+ * expanded-mode surface (the audio className branch below stays as
+ * defensive parity with the full lanes, but Timeline filters the lanes
+ * before mapping MinLane). Pool drags still land: the row validates
+ * kind routing and inserts at the pointer's time (same insertionAt law
+ * as the full lanes). */
 
 function MinLane({
   track,
@@ -1448,10 +1449,11 @@ export function Timeline({ style }: { style?: CSSProperties }) {
   }, [zoomStep]);
 
   /* ---- R18j (thread #13): the minimized strip ----------------------
-   * Toolbar hidden, ruler slimmed (every-other label), V/A pills in one
-   * compact strip, playhead fully scrubbable, clips draggable/trimmable
+   * Toolbar hidden, ruler slimmed (every-other label), the VIDEO pills
+   * in one compact strip (R18k: audio sub-rows are expanded-mode only),
+   * playhead fully scrubbable, clips draggable/trimmable
    * (ClipItem compact reuses the whole gesture engine), pool drags land
-   * on the sub-rows. The expand rail is mode-aware like the panel rails:
+   * on the pill row. The expand rail is mode-aware like the panel rails:
    * under viewerMax it EXITS max mode; otherwise it un-minimizes. */
   if (timelineMinimized) {
     return (

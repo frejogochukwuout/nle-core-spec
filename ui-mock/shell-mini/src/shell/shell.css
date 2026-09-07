@@ -26,7 +26,8 @@
 
 .mini-topbar__title {
   color: var(--canvas-editor-text-strong);
-  /* R18j (thread #17): 13 → 12 to sit right in the slimmer 36px bar */
+  /* R18j (thread #17): 13 → 12 to sit right in the slimmer bar (40px
+     since R20 thread #30 — --mini-topbar-h) */
   font-size: 12px;
   font-weight: 650;
   white-space: nowrap;

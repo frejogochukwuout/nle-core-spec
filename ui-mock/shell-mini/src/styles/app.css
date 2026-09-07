@@ -114,9 +114,9 @@ body {
 /* green brand CTA — Export only (D10.5).
    R18k (thread #22): the topbar slimmed to 36px (R18j) but the CTA kept
    its 34px height — 1px of clearance each side, flush against the panel
-   borders, reading as overflow in the thin bar. 26px + 12px font in the
-   36px bar (34px interior after the 1px panel borders) = 4px breathing
-   room per side. */
+   borders, reading as overflow in the thin bar. 26px + 12px font left
+   generous breathing room (7px per side since R20's 40px
+   --mini-topbar-h). */
 .mini-cta {
   height: 26px;
   padding: 0 12px;
