@@ -461,7 +461,9 @@
 }
 
 /* R18g (threads #24/#25): RH-style transport row BELOW the video —
-   grid [1fr auto 1fr]: timecode left · play center · media name right.
+   grid [1fr auto 1fr]: timecode left · play center · (the right slot
+   is the ASPECT CONTROLLER since R18j thread #16 — the media name
+   lives in the pool card + inspector; see .mini-viewer__aspect below).
    Replaces both the in-stage info overlay (name + big tc) and the
    topbar transport (moved here wholesale). */
 .mini-viewer__transport {
