@@ -1140,3 +1140,220 @@ describe('R20-W6FIX P2-1: placeOnTop minted-track ghost renders at the INSERT li
     expect(ghost.style.top).toBe('46px'); // zone 44 + 2 — lane 1 (the overlay)
   });
 });
+
+/* ---------- R23-WA (DESIGN-R23 D-A2): the FX engine — seam/head/tail zones
+   + the interactive transition boxes. Rendered ONLY while fxMode (the store's
+   single-source flag); zones are BUTTONS with honest labels; the transition
+   box clones the fade-object grammar (slider role + frame-unit aria, ±1
+   frame steps, ONE commit per gesture — Part IX rulings 3/21). ---------- */
+
+describe('R23-WA: the FX engine gates (fxMode renders the zones; absence otherwise)', () => {
+  it('fxMode OFF (default boot): NO seam zones, NO head/tail zones, the transition box stays the inert marker', () => {
+    boot({});
+    expect(screen.queryAllByTestId(/^fx-seam-/)).toHaveLength(0);
+    expect(screen.queryAllByTestId(/^fx-head-/)).toHaveLength(0);
+    expect(screen.queryAllByTestId(/^fx-tail-/)).toHaveLength(0);
+    const box = screen.getByTestId('transition-el-2');
+    expect(box).not.toHaveAttribute('role', 'slider');
+    expect(box).not.toHaveAttribute('tabindex', '0');
+    expect(screen.queryByTestId('transition-trim-r-el-2')).not.toBeInTheDocument();
+  });
+
+  it('fxMode ON (the FX tool): zones render on every unlocked lane — butt-spliced seams + head/tail per track', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    // the tr-main seams: el-1|el-2 (8.5s) + el-2|el-3 (17s); el-3|el-4 rides
+    // el-4's virtualization cull (900px jsdom viewport — the zones share the
+    // clips' window law)
+    expect(screen.getByTestId('fx-seam-el-1-el-2')).toBeInTheDocument();
+    expect(screen.getByTestId('fx-seam-el-2-el-3')).toBeInTheDocument();
+    expect(screen.queryByTestId('fx-seam-el-3-el-4')).not.toBeInTheDocument();
+    // D-A2.3's LETTER: head/tail = the TRACK's first/last element — el-3 is
+    // NOT the last (el-4 is, but it is virtualized off-window at boot → its
+    // tail zone virtualizes with it, the clips' own law)
+    expect(screen.getByTestId('fx-head-el-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('fx-tail-el-3')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fx-tail-el-4')).not.toBeInTheDocument();
+    // the audio lane's single clip owns BOTH edges (seeded fades → click-select)
+    expect(screen.getByTestId('fx-head-el-6')).toBeInTheDocument();
+    expect(screen.getByTestId('fx-tail-el-6')).toBeInTheDocument();
+    // LOCKED lanes are inert (tr-audio-2) — the marquee/trim lock law
+    expect(screen.queryByTestId('fx-head-el-7')).not.toBeInTheDocument();
+  });
+
+  it('the tail zone follows the TRACK\'s last element through scroll (D-A2.3: never the visible subset\'s)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const scrollTo = (x: number) => {
+      const sc = scrollEl();
+      act(() => { sc.scrollLeft = x; });
+      fireEvent.scroll(sc);
+    };
+    // scroll the window right so el-4 [24, 30) s = [1104, 1380) px enters:
+    // window [scroll−200, scroll+1100] — el-4's tail zone mounts with it
+    scrollTo(900);
+    expect(screen.getByTestId('fx-tail-el-4')).toBeInTheDocument();
+    // el-1 is culled left — its head zone virtualizes away (the clips' law)
+    expect(screen.queryByTestId('fx-head-el-1')).not.toBeInTheDocument();
+    // and the mid-track el-3 NEVER gains a head or tail zone (its in-edge is
+    // not a track head; its out-edge not a track tail)
+    expect(screen.queryByTestId('fx-head-el-3')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fx-tail-el-3')).not.toBeInTheDocument();
+  });
+
+  it('zones are honest BUTTONS (a11y): labelled, hover widens the seam 12→24px + shows the + affordance', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const seam = screen.getByTestId('fx-seam-el-1-el-2');
+    expect(seam.tagName).toBe('BUTTON');
+    expect(seam.getAttribute('aria-label')).toContain('Add Cross Dissolve');
+    expect(seam.style.width).toBe('12px');
+    fireEvent.mouseEnter(seam);
+    expect(seam.style.width).toBe('24px');
+    expect(seam.textContent).toBe('+'); // the affordance appears on hover
+    fireEvent.mouseLeave(seam);
+    expect(seam.style.width).toBe('12px');
+  });
+});
+
+describe('R23-WA: seam-zone click law (apply-default / select-existing)', () => {
+  it('a seam with NO transition: click applies the default crossfade AND selects the new object', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    fireEvent.click(screen.getByTestId('fx-seam-el-1-el-2'));
+    const el1 = scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-1')!;
+    expect(el1.transitionOut).toEqual({
+      type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5,
+    });
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-1' });
+    // the box for the NEW transition renders interactive (fxMode)
+    expect(screen.getByTestId('transition-el-1')).toHaveAttribute('role', 'slider');
+  });
+
+  it('a seam WITH a transition: click SELECTS it — no doc write, no new history entry', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const pastBefore = store().past.length;
+    const zone = screen.getByTestId('fx-seam-el-2-el-3');
+    expect(zone.getAttribute('aria-label')).toContain('Select transition');
+    fireEvent.click(zone);
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' });
+    expect(store().past.length).toBe(pastBefore);
+  });
+
+  it('a Transition browser row dropped on a seam applies that presentation', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const dt = {
+      types: ['application/x-nle-effect'],
+      getData: () => JSON.stringify({ name: 'Dip to Black', cat: 'Transition' }),
+      dropEffect: 'copy',
+    };
+    const seam = screen.getByTestId('fx-seam-el-1-el-2');
+    fireEvent.dragOver(seam, { dataTransfer: dt });
+    fireEvent.drop(seam, { dataTransfer: dt });
+    const el1 = scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-1')!;
+    expect(el1.transitionOut!.presentation).toBe('Dip to Black');
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-1' });
+  });
+
+  it('a non-Transition row dropped on a seam is refused with the honest toast (fade presets drop on clip bodies)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const dt = {
+      types: ['application/x-nle-effect'],
+      getData: () => JSON.stringify({ name: 'Fade In 1s', cat: 'Fade' }),
+      dropEffect: 'copy',
+    };
+    fireEvent.drop(screen.getByTestId('fx-seam-el-1-el-2'), { dataTransfer: dt });
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Seam drops take transitions' });
+  });
+});
+
+describe('R23-WA: head/tail zone click law (half-open fade zones, #104/#105)', () => {
+  it('a head zone with NO fade: click applies a 0.5s fade and selects the new object', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    fireEvent.click(screen.getByTestId('fx-head-el-5')); // the text clip has no fades
+    const el5 = scene1().tracks.find((t) => t.id === 'tr-overlay-1')!.elements[0]!;
+    expect(el5.fadeIn).toBe(0.5);
+    expect(store().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-5', side: 'in' });
+  });
+
+  it('a head zone WITH a fade (the fixture demo fades): click SELECTS the object — no doc write', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const pastBefore = store().past.length;
+    const zone = screen.getByTestId('fx-head-el-1');
+    expect(zone.getAttribute('aria-label')).toContain('Select fade in');
+    fireEvent.click(zone);
+    expect(store().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-1', side: 'in' });
+    expect(store().past.length).toBe(pastBefore);
+  });
+
+  it('the audio tail zone selects its seeded fade (the audioFade domain)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    fireEvent.click(screen.getByTestId('fx-tail-el-6'));
+    expect(store().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-6', side: 'out' });
+  });
+});
+
+describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', () => {
+  it('the slider contract: role=slider, frame-unit aria-valuenow, focusable, click-selects into the FX domain', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const box = screen.getByTestId('transition-el-2');
+    expect(box).toHaveAttribute('role', 'slider');
+    expect(box).toHaveAttribute('tabindex', '0');
+    expect(box).toHaveAttribute('aria-valuemin', '0');
+    expect(box).toHaveAttribute('aria-valuemax', '48'); // 2 s × 24 fps
+    expect(box).toHaveAttribute('aria-valuenow', '18'); // 0.75 s = 18 frames
+    expect(box).toHaveAttribute('aria-valuetext', '0.75s');
+    fireEvent.pointerDown(box, { button: 0, pointerId: 7 });
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' });
+  });
+
+  it('keyboard trim: ±1 frame, ⇧ ×10, Home 0, End the 2s domain max (the fade-object grammar cloned)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const box = screen.getByTestId('transition-el-2');
+    const dur = () => scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration;
+    fireEvent.keyDown(box, { key: 'ArrowRight' });
+    expect(dur()).toBeCloseTo(19 / 24, 10); // +1 frame
+    fireEvent.keyDown(box, { key: 'ArrowRight', shiftKey: true });
+    expect(dur()).toBeCloseTo(29 / 24, 10); // +10 frames
+    fireEvent.keyDown(box, { key: 'ArrowLeft' });
+    expect(dur()).toBeCloseTo(28 / 24, 10);
+    fireEvent.keyDown(box, { key: 'Home' });
+    expect(dur()).toBe(0); // the floor law
+    fireEvent.keyDown(box, { key: 'End' });
+    expect(dur()).toBe(2); // the domain max
+    // each keypress mints its own undo entry (bracket-nudge semantics)
+    expect(store().past.length).toBe(5);
+  });
+
+  it('edge-drag trim: clamp-commit — LOCAL preview, ONE setTransition commit per gesture (ruling 21)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const handle = screen.getByTestId('transition-trim-r-el-2');
+    const pastBefore = store().past.length;
+    // cut at 17s × 46pps = 782px content x; jsdom's scroll rect collapses to
+    // identity (the fade-object drag tests' own geometry fallback)
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 9 });
+    fireEvent.pointerMove(handle, { pointerId: 9, buttons: 1, clientX: 828 }); // 828-782 = 46px = 1s
+    expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration).toBe(0.75); // NOT committed mid-drag
+    fireEvent.pointerMove(handle, { pointerId: 9, buttons: 1, clientX: 874 }); // 2s raw → clamped by the drag's own max
+    fireEvent.pointerUp(handle, { pointerId: 9 });
+    expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration).toBe(2);
+    expect(store().past.length).toBe(pastBefore + 1); // ONE entry for the whole gesture
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' }); // the drag also selects
+  });
+
+  it('a press-release WITHOUT movement is a no-op (no commit, no history entry)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const handle = screen.getByTestId('transition-trim-l-el-2');
+    const pastBefore = store().past.length;
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 9 });
+    fireEvent.pointerUp(handle, { pointerId: 9 });
+    expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration).toBe(0.75);
+    expect(store().past.length).toBe(pastBefore);
+  });
+});
+
+describe('R23-WA: fxMode recedes the clip-edit surfaces (the context-menu router)', () => {
+  it('right-click on a clip in fxMode NEVER opens the clip menu — the surface menu answers (D-A2.1)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    fireEvent.contextMenu(screen.getByTestId('clip-el-1'), { clientX: 30, clientY: 30 });
+    expect(screen.queryByTestId('shell-menu-clip')).not.toBeInTheDocument();
+    // the empty-lane surface menu is the answer (its rows are lane-level commands)
+    expect(screen.getByTestId('shell-menu-timeline-empty')).toBeInTheDocument();
+  });
+});

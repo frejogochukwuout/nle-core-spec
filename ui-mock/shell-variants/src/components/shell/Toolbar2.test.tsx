@@ -225,3 +225,31 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     useUi.setState({ page: 'edit' });
   });
 });
+
+/* ---------- R23-WA (DESIGN-R23 D-A1/D-D1): the FX page's toolbar face ---------- */
+
+describe('R23-WA: the left toggle names the FX dock content (D-D1: "Effects" on fx)', () => {
+  it('the fx page label reads Effects — the dock routes to the FxBrowser', () => {
+    useUi.setState({ page: 'fx' });
+    const { getByRole, rerender } = renderPlain(<Toolbar2 />);
+    expect(getByRole('button', { name: 'Effects' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Media Pool' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sound Library' })).toBeNull();
+    useUi.setState({ page: 'edit' });
+    rerender(<Toolbar2 />);
+    expect(screen.getByRole('button', { name: 'Media Pool' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Effects' })).toBeNull(); // edit keeps the honest pool name
+  });
+
+  it('the fx label joins the dense arrow roving in DOM order (the F6/rover laws stay dense)', () => {
+    useUi.setState({ page: 'fx' });
+    renderPlain(<Toolbar2 />);
+    const fxLabel = screen.getByRole('button', { name: 'Effects' });
+    fireEvent.keyDown(fxLabel, { key: 'ArrowRight' });
+    // the next button in DOM order takes the tab stop (leftLabel is first)
+    expect(fxLabel).toHaveAttribute('tabindex', '-1');
+    const stopped = screen.getAllByRole('button').find((b) => b.getAttribute('tabindex') === '0');
+    expect(stopped).toBeDefined();
+    expect(stopped).not.toBe(fxLabel);
+  });
+});

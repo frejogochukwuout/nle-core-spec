@@ -10,6 +10,9 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ColorPage } from '../components/pages/ColorPage';
 import { DeliverPage } from '../components/pages/DeliverPage';
 import { ChannelEditor } from '../components/mixer/ChannelEditor';
+import { FxBrowser } from '../components/fx/FxBrowser';
+import { FxInspector } from '../components/fx/FxInspector';
+import { Timeline } from '../components/timeline/Timeline';
 import { StoreBoot, PanelBox } from './decorators';
 
 const meta: Meta = {
@@ -109,6 +112,47 @@ export const ChannelEditorEmpty: StoryObj = {
       <PanelBox width={340} height={700}>
         <ChannelEditor />
       </PanelBox>
+    </>
+  ),
+};
+
+/* ---- R23-WA (DESIGN-R23 D-A1): the FX page components -------------------- */
+
+/** The FX page's three-region composition at component geometry: the
+ *  FxBrowser (left, 280px — the dock width law) beside the FxInspector rail
+ *  (340px) with the el-2 transition selected (the parametric state).
+ *  The full shell composes them via AppShell — see Shell/AppShell's
+ *  “Full Shell — FX”. */
+export const FxPageStory: StoryObj = {
+  name: 'FX page — browser & inspector',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ page: 'fx', fxMode: true, selection: [], selectedFxObject: { kind: 'transition', elementId: 'el-2' } }} />
+      <div className="flex gap-2">
+        <PanelBox width={280} height={700}>
+          <FxBrowser />
+        </PanelBox>
+        <PanelBox width={340} height={700}>
+          <FxInspector />
+        </PanelBox>
+      </div>
+    </>
+  ),
+};
+
+/** The FX engine's timeline at lane geometry: the full Timeline with fxMode
+ *  booted (tool 'fx') — clips receded, seam/head/tail zones live, fade
+ *  objects on every main-track clip, the el-2 transition box interactive. */
+export const FxTimeline: StoryObj = {
+  name: 'FX page — timeline (fxMode)',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ page: 'fx', fxMode: true, tool: 'fx', selection: [] }} />
+      <div className="h-[420px] w-[1100px] overflow-hidden">
+        <Timeline />
+      </div>
     </>
   ),
 };

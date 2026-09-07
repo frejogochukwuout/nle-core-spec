@@ -76,6 +76,14 @@ export interface ElementJSON {
   markers?: ClipMarker[];
   audioFadeIn?: number;
   audioFadeOut?: number;
+  /* R23-WA (DESIGN-R23 D-A3): the domain-neutral clip fade — video = opacity
+     ramp, audio = level ramp (Resolve's clip fade handles). Audio clips KEEP
+     audioFadeIn/Out (seeded fixtures + mixer laws read them — the R23-B
+     correction); the effective fade an element renders is ONE selector,
+     effectiveFade() below, so the writer (store setFade) and the renderer
+     (Clip fade-objects) can never disagree about which field owns a side. */
+  fadeIn?: number;
+  fadeOut?: number;
   effects?: EffectJSON[];
   transitionOut?: TransitionJSON;
   linkedTo?: string; // A/V link (spec 05 §12.3)
@@ -175,11 +183,17 @@ const scene1: SceneJSON = {
         {
           id: 'el-1', type: 'video', trackId: 'tr-main', name: 'A012_C034_beach_wide', startTime: 0, duration: 8.5,
           sourceStart: 12.0, sourceDuration: 8.5, mediaId: 'm-01', speed: 1, opacity: 1,
+          /* R23-WA demo fades (DESIGN-R23 D-A3 fixture): the main-track video
+             clips carry fadeIn/fadeOut so the FX view paints fade objects on
+             first paint — head zone el-1@0, tail zone el-4@30, fade pairs at
+             the seams. Values are frame-clean @24 fps. */
+          fadeIn: 0.5, fadeOut: 0.75,
           effects: [{ id: 'fx-1', name: 'Gaussian Blur', enabled: false }],
         },
         {
           id: 'el-2', type: 'video', trackId: 'tr-main', name: 'Marina interview', startTime: 8.5, duration: 8.5,
           sourceStart: 3.0, sourceDuration: 8.5, mediaId: 'm-02', speed: 1, opacity: 1,
+          fadeIn: 0.75, fadeOut: 0.5,
           transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.75, alignment: 0.5 },
           linkedTo: 'el-7',
           markers: [
@@ -190,11 +204,13 @@ const scene1: SceneJSON = {
         {
           id: 'el-3', type: 'video', trackId: 'tr-main', name: 'drone_launch', startTime: 17.0, duration: 7.0,
           sourceStart: 0, sourceDuration: 7.0, mediaId: 'm-03', speed: 1, opacity: 1,
+          fadeIn: 0.5, fadeOut: 0.5,
           markers: [{ id: 'cm-3', offset: 1.0, label: 'Launch', color: 'orange' }],
         },
         {
           id: 'el-4', type: 'video', trackId: 'tr-main', name: 'sunset_timelapse', startTime: 24.0, duration: 6.0,
           sourceStart: 0, sourceDuration: 6.0, mediaId: 'm-05', speed: 1, opacity: 0.9,
+          fadeIn: 0.5, fadeOut: 1.0,
         },
       ],
     },
@@ -281,6 +297,23 @@ export const project: Project = {
   media,
   loop: { start: 2.0, end: 28.0 },
 };
+
+/** R23-WA (DESIGN-R23 D-A3): the ONE effective-fade selector — audio
+ *  elements read audioFadeIn/audioFadeOut (the seeded domain), every other
+ *  kind reads fadeIn/fadeOut. Clip objects render it; the store's setFade /
+ *  removeFade write through the mirrored field picker (fieldOfFade) so the
+ *  model has a single owner per side. */
+export function effectiveFade(el: ElementJSON, side: 'in' | 'out'): number {
+  if (el.type === 'audio') return (side === 'in' ? el.audioFadeIn : el.audioFadeOut) ?? 0;
+  return (side === 'in' ? el.fadeIn : el.fadeOut) ?? 0;
+}
+
+/** The field ElementJSON carries a side's fade on (the writer twin of
+ *  effectiveFade — same law, same module, single source). */
+export function fieldOfFade(el: ElementJSON, side: 'in' | 'out'): 'audioFadeIn' | 'audioFadeOut' | 'fadeIn' | 'fadeOut' {
+  if (el.type === 'audio') return side === 'in' ? 'audioFadeIn' : 'audioFadeOut';
+  return side === 'in' ? 'fadeIn' : 'fadeOut';
+}
 
 export function sceneDuration(s: SceneJSON): number {
   let end = 0;

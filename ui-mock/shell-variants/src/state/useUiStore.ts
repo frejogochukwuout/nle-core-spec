@@ -8,7 +8,7 @@
    keyboard-completeness fields. */
 
 import { create } from 'zustand';
-import { project, sceneDuration, mediaById, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation, type ElementType } from '../lib/mockData';
+import { project, sceneDuration, mediaById, fieldOfFade, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation, type ElementType } from '../lib/mockData';
 import { clamp, snapToFrame } from '../lib/timecode';
 import { PPS_MIN as MIN_PPS, PPS_MAX as MAX_PPS } from '../lib/pixel';
 import { trackAcceptsElement, spansOverlap, zeroAnchorShift, dragRejectionToast, type GroupMoveFail } from '../lib/timelinePlacement';
@@ -46,8 +46,27 @@ import { createMixerScene, type MockMixerScene, type MixerTrackSettings, type Du
 import { DEFAULT_GRADE, DEFAULT_QUALIFIER, type GradeParams, type QualifierParams } from '../lib/color';
 import type { CurveSet } from '../components/pages/color/curveMath';
 
-export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch';
-export type Page = 'edit' | 'color' | 'audio' | 'deliver';
+/* R23-WA (DESIGN-R23 D-A1/D-A2): the FX tool joins the edit-tool union —
+   activating it flips the Timeline into fxMode (the transition/fade engine);
+   the FX PAGE renders the same engine via the page coupling (single source:
+   setTool + setPage are the ONLY writers of fxMode — see the actions). */
+export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' | 'stretch' | 'fx';
+/* R23-WA (D-A1): the FX page — the dedicated workflow view (left dock = FX
+   browser, right rail = FX inspector, timeline area = the full Timeline in
+   fxMode). Dock order: Edit / Color / Audio / FX / Deliver (⌘5). */
+export type Page = 'edit' | 'color' | 'audio' | 'fx' | 'deliver';
+/* R23-WA (D-A3): the FX selection domain — a seam transition or a clip fade
+   object. Mirrors the R20-W3 domain laws: mutually exclusive with the other
+   selection domains (clears at every existing clear-site), kept alive by
+   selectElement/setSelection while its element stays selected (the effect
+   domain's own survival law), cleared by removeTransition/removeFade and the
+   scene switch (stale ids). */
+export interface SelectedFxObject {
+  kind: 'transition' | 'fade';
+  elementId: string;
+  /** fade side (fade objects only — a transition has none) */
+  side?: 'in' | 'out';
+}
 export type ToastKind = 'info' | 'success' | 'error' | 'persist';
 /* R20-W1 (DESIGN-R20 D1.4): 'bridge' renamed 'meters' — the minimized
    state is now full-height thin meter COLUMNS, not a stacked rail. */
@@ -424,6 +443,15 @@ interface UiState {
   viewerSafeGuides: boolean; // action/title safe-area guides (Frame)
   loop: { start: number; end: number };
   selection: string[];
+  /* R23-WA (DESIGN-R23 D-A2/D-A3): the FX/transition engine's view state —
+     ONE flag, written ONLY by setTool (fx tool ⇔ fxMode off the FX page) and
+     setPage (fx page owns it; leaving resets). While on: clips recede, seam
+     /head/tail zones render, transition boxes become interactive. View
+     state, never snapshotted. */
+  fxMode: boolean;
+  /* R23-WA (D-A3): the FX selection domain (see the SelectedFxObject comment
+     at the type). View state, never snapshotted. */
+  selectedFxObject: SelectedFxObject | null;
   /* R20-W3 (DESIGN-R20 D4.2): the track/effect selection domains — mirrors
      of the R19 selectedMarkerId domain-swap law. selectTrack clears the clip
      selection + marker + effect domains; selectEffect keeps its clip selected
@@ -618,6 +646,12 @@ interface UiState {
   selectElement: (id: string, additive: boolean) => void;
   selectTrackElements: (trackId: string, additive: boolean) => void;
   selectNeighbors: (dir: 1 | -1) => void;
+  /* R23-WA (DESIGN-R23 D-A3): the FX-object selection write — clears the
+   * marker/track/effect domains (the effect⇄fx-object swap — both are
+   * clip-children, one at a time) but KEEPS the clip selection (the
+   * fade-object pointerdown selects the clip first, exactly the
+   * selectEffect mirror). */
+  selectFxObject: (sel: SelectedFxObject) => void;
   setZoom: (px: number) => void;
   setZoomMin: (pps: number) => void;
   zoomStep: (factor: number) => void;
@@ -730,6 +764,20 @@ interface UiState {
   trimToPlayhead: (edge: 'l' | 'r', ripple: boolean) => void;
   setElementField: (id: string, patch: Partial<ElementJSON>) => void;
   setTransition: (id: string, patch: Partial<NonNullable<ElementJSON['transitionOut']>>) => void;
+  /* R23-WA (DESIGN-R23 D-A3): the ONE effective-fade writer for BOTH fade
+   * domains (audio elements → audioFadeIn/Out, everything else →
+   * fadeIn/Out; the field picker is mockData.fieldOfFade — single owner).
+   * History-backed with the store-owned clamp [0, clip duration]; no-op
+   * writes (same value) mint NO history entry (the gesture clamp-commit
+   * law's twin). */
+  setFade: (id: string, side: 'in' | 'out', seconds: number) => void;
+  /* R23-WA: DELETE-AWARE removal — setElementField's Object.assign cannot
+   * unset (R23-B correction 1), so both removes DELETE the field (the
+   * undefined→delete grammar from insertPlan) under withHistory, and clear
+   * a pointing selectedFxObject (the removeEffect belt-and-braces
+   * precedent). */
+  removeFade: (id: string, side: 'in' | 'out') => void;
+  removeTransition: (id: string) => void;
   setEffectParam: (elementId: string, fxId: string, param: string, value: number) => void;
   addEffectToElement: (elementId: string, fx: Omit<EffectJSON, 'id'>) => void;
   removeEffect: (elementId: string, fxId: string) => void;
@@ -877,11 +925,20 @@ export const useUi = create<UiState>((set, get) => ({
   qualifierPreviewOn: false,
   qualifierPickerOn: false,
   selectedColorNodeId: 'primary',
+  fxMode: false, // R23-WA: the FX engine flag (setTool/setPage are the writers)
+  selectedFxObject: null, // R23-WA: the FX selection domain
 
   setPage: (p) => set((s) => ({
     page: p,
     // leaving audio focus by ANY route resets the lane boost (design §3.3)
     ...(s.page === 'audio' && p !== 'audio' ? { audioLaneBoost: false } : {}),
+    /* R23-WA (DESIGN-R23 Part IX ruling 2): entering the FX page sets fxMode,
+       leaving it resets — the fx-page exit law (the audioLaneBoost pattern).
+       A stranded FX TOOL would lie about the timeline mode after the reset,
+       so the exit also re-seats it to select (one transition, one writer —
+       the radio never claims fxMode that no longer holds). */
+    fxMode: p === 'fx',
+    ...(s.page === 'fx' && p !== 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
   })),
   setActiveScene: (id) => set((s) => {
     // lockAll is scene-derived view state — re-derive on switch so the toolbar
@@ -902,6 +959,9 @@ export const useUi = create<UiState>((set, get) => ({
       selectedTrackId: null,
       selectedEffectId: null,
       selectedEffectClipId: null,
+      /* R23-WA: the FX domain dies with the scene switch (stale element ids —
+         the same law as the effect/track domains). */
+      selectedFxObject: null,
       ...(sc ? { lockAll: sc.tracks.every((t) => t.locked) } : {}),
     };
   }),
@@ -930,7 +990,12 @@ export const useUi = create<UiState>((set, get) => ({
     if (s.activeSceneId === id) set({ activeSceneId: scenes[Math.max(0, idx - 1)].id, selection: [] });
     return scenes;
   }),
-  setTool: (t) => set({ tool: t }),
+  /* R23-WA (Part IX ruling 2 — fxMode single source): setTool is the writer
+     OFF the FX page (fx tool ⇔ fxMode); ON the FX page the PAGE owns the
+     flag, so tool changes there never kill the engine (the page has no
+     Escape rung — a page, not a mode; Escape's tool→select rung stays
+     harmless there). */
+  setTool: (t) => set((s) => ({ tool: t, fxMode: s.page === 'fx' ? true : t === 'fx' })),
   toggleSnap: () => set((s) => ({ snap: !s.snap })),
   toggleLink: () => set((s) => ({ link: !s.link })),
   toggleLockAll: () => {
@@ -996,12 +1061,14 @@ export const useUi = create<UiState>((set, get) => ({
     selectedMarkerId: id,
     /* mutual exclusivity (one selection domain at a time): picking a marker
        clears the clip selection so the inspector rail swaps domains cleanly.
-       R20-W3: the track/effect domains clear too (selectTrack law's mirror). */
+       R20-W3: the track/effect domains clear too (selectTrack law's mirror).
+       R23-WA: the FX domain joins the clear (all six sites — D-A3). */
     ...(id ? {
       selection: [],
       selectedTrackId: null,
       selectedEffectId: null,
       selectedEffectClipId: null,
+      selectedFxObject: null,
       inspectorProjectMode: false,
     } : {}),
   })),
@@ -1197,6 +1264,12 @@ export const useUi = create<UiState>((set, get) => ({
     ...(s.selectedEffectClipId !== null && !ids.includes(s.selectedEffectClipId)
       ? { selectedEffectId: null, selectedEffectClipId: null }
       : {}),
+    /* R23-WA: the FX domain survives while its element stays selected (the
+       effect domain's own survival law, mirrored — the fade-object press
+       selects the clip AND the object in one gesture). */
+    ...(s.selectedFxObject !== null && !ids.includes(s.selectedFxObject.elementId)
+      ? { selectedFxObject: null }
+      : {}),
     inspectorProjectMode: false,
   })),
   selectElement: (id, additive) => set((s) => {
@@ -1216,19 +1289,25 @@ export const useUi = create<UiState>((set, get) => ({
     const group = pairOf(id);
     /* R20-W3 domain laws: a fresh clip selection clears the marker/track
        domains and exits project mode; the effect domain survives only when
-       its clip stays in the new selection (toggle-off drops it). */
+       its clip stays in the new selection (toggle-off drops it). R23-WA:
+       the FX domain rides the same survival law. */
     const keepFx = (next: string[]) =>
       s.selectedEffectClipId !== null && next.includes(s.selectedEffectClipId);
     const fxClear = (next: string[]): Partial<UiState> =>
       (keepFx(next) ? {} : { selectedEffectId: null, selectedEffectClipId: null });
-    if (!additive) return { selection: group, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...fxClear(group) };
+    const keepFxObj = (next: string[]) =>
+      s.selectedFxObject !== null && next.includes(s.selectedFxObject.elementId);
+    const fxObjClear = (next: string[]): Partial<UiState> =>
+      (keepFxObj(next) ? {} : { selectedFxObject: null });
+    const domainClear = (next: string[]): Partial<UiState> => ({ ...fxClear(next), ...fxObjClear(next) });
+    if (!additive) return { selection: group, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...domainClear(group) };
     const groupSelected = group.every((x) => s.selection.includes(x));
     if (groupSelected) {
       const next = s.selection.filter((x) => !group.includes(x));
-      return { selection: next, ...fxClear(next) };
+      return { selection: next, ...domainClear(next) };
     }
     const grown = [...s.selection.filter((x) => !group.includes(x)), ...group];
-    return { selection: grown, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...fxClear(grown) };
+    return { selection: grown, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...domainClear(grown) };
   }),
   selectTrackElements: (trackId, additive) => set((s) => {
     const sc = s.scenes.find((x) => x.id === s.activeSceneId);
@@ -1281,6 +1360,7 @@ export const useUi = create<UiState>((set, get) => ({
       selectedMarkerId: null,
       selectedEffectId: null,
       selectedEffectClipId: null,
+      selectedFxObject: null, // R23-WA: the FX domain dies with the track takeover
       inspectorProjectMode: false,
     } : {}),
   })),
@@ -1292,8 +1372,21 @@ export const useUi = create<UiState>((set, get) => ({
        * the track + marker domains clear, project mode exits */
       selectedTrackId: null,
       selectedMarkerId: null,
+      /* R23-WA: the FX⇄effect domain swap — both are clip-children, one
+       * sub-domain at a time (selecting effect params retires the FX target). */
+      selectedFxObject: null,
       inspectorProjectMode: false,
     } : {}),
+  })),
+  /* R23-WA (DESIGN-R23 D-A3): the FX-object selection write — the selectEffect
+     mirror (clip selection survives; marker/track/effect domains clear). */
+  selectFxObject: (sel) => set((s) => ({
+    selectedFxObject: sel,
+    selectedMarkerId: null,
+    selectedTrackId: null,
+    selectedEffectId: null,
+    selectedEffectClipId: null,
+    inspectorProjectMode: false,
   })),
   toggleInspectorProjectMode: () => set((s) => ({ inspectorProjectMode: !s.inspectorProjectMode })),
   toggleMasterMute: () => set((s) => ({ masterMuted: !s.masterMuted })),
@@ -1360,6 +1453,13 @@ export const useUi = create<UiState>((set, get) => ({
     }
     return {
       page: 'audio',
+      /* R23-WA (Part IX ruling 2 — the fx-page exit law): this action writes
+         `page` RAW (it seeds mixer state in the same commit), so it must
+         carry setPage's coupling itself — leaving the FX page resets fxMode
+         and re-seats a stranded FX tool, else the audio page would render
+         the FX engine's seam zones on a page that never asked for them. */
+      fxMode: false,
+      ...(s.page === 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
       mixer,
       mixerState: 'full',
       audioLaneBoost: true,
@@ -1367,7 +1467,15 @@ export const useUi = create<UiState>((set, get) => ({
       stripFlash: trackId ? Date.now() : s.stripFlash,
     };
   }),
-  exitAudioFocus: () => set({ page: 'edit', audioLaneBoost: false }),
+  /* R23-WA (ruling 2, same law): exit lands on Edit — not the FX page — so
+     the engine must be off there too (belt-and-braces: exit is only
+     reachable from the audio page, where fxMode is already false). */
+  exitAudioFocus: () => set((s) => ({
+    page: 'edit',
+    audioLaneBoost: false,
+    fxMode: false,
+    ...(s.page === 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
+  })),
   setMixerState: (m) => set({ mixerState: m }),
   cycleMixerState: () => set((s) => {
     // R20-W1 (DESIGN-R20 D1.4, thread #61): Edit — collapsed → meters →
@@ -1850,7 +1958,15 @@ export const useUi = create<UiState>((set, get) => ({
         }
       }
     }
-    set((st) => ({ selection: st.selection.filter((id) => !removedIds.includes(id)) }));
+    set((st) => ({
+      selection: st.selection.filter((id) => !removedIds.includes(id)),
+      /* R23-WA belt-and-braces (the removeEffect precedent): a deleted
+         element's FX object dies with it — a stale selectedFxObject would
+         point at nothing. */
+      ...(st.selectedFxObject !== null && removedIds.includes(st.selectedFxObject.elementId)
+        ? { selectedFxObject: null }
+        : {}),
+    }));
     return scenes;
   }),
   duplicateElements: (ids, at) => withHistory(set, get, (scenes) => {
@@ -1965,6 +2081,49 @@ export const useUi = create<UiState>((set, get) => ({
     if (!hit || hit.track.locked) return;
     if (!hit.el.transitionOut) hit.el.transitionOut = { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 };
     Object.assign(hit.el.transitionOut, patch);
+    return scenes;
+  }),
+  /* R23-WA (DESIGN-R23 D-A3): the ONE effective-fade writer — history-backed,
+     store-owned clamp [0, clip duration], frame-snapped (the fade-object
+     grammar's grid). No-op writes mint NO history entry (the gesture's own
+     no-op guard's belt-and-braces twin). */
+  setFade: (id, side, seconds) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, id);
+    if (!hit || hit.track.locked) return;
+    const field = fieldOfFade(hit.el, side);
+    const t = clamp(snapToFrame(seconds), 0, hit.el.duration);
+    if ((hit.el[field] ?? 0) === t) return; // no-op — no history entry
+    hit.el[field] = t;
+    return scenes;
+  }),
+  /* R23-WA: DELETE-AWARE fade removal (Object.assign cannot unset — R23-B
+     correction 1). Clears a pointing selectedFxObject inside the same
+     history entry (the removeEffect belt-and-braces pattern; the set() runs
+     BEFORE withHistory's own set, so both land in one React commit). */
+  removeFade: (id, side) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, id);
+    if (!hit || hit.track.locked) return;
+    const field = fieldOfFade(hit.el, side);
+    if (hit.el[field] === undefined) return; // nothing to remove — no history
+    delete hit.el[field];
+    const s = get();
+    if (s.selectedFxObject?.kind === 'fade' && s.selectedFxObject.elementId === id && s.selectedFxObject.side === side) {
+      set({ selectedFxObject: null });
+    }
+    return scenes;
+  }),
+  /* R23-WA: DELETE-AWARE transition removal — the Inspector's disabled
+     "Remove transition" boundary dies with this action (the mock's reason
+     was the missing store seam, now real). */
+  removeTransition: (id) => withHistory(set, get, (scenes) => {
+    const hit = findEl(scenes, id);
+    if (!hit || hit.track.locked) return;
+    if (hit.el.transitionOut === undefined) return; // nothing to remove
+    delete hit.el.transitionOut;
+    const s = get();
+    if (s.selectedFxObject?.kind === 'transition' && s.selectedFxObject.elementId === id) {
+      set({ selectedFxObject: null });
+    }
     return scenes;
   }),
   addTrack: (kind, position, refTrackId) => withHistory(set, get, (scenes) => {

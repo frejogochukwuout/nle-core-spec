@@ -1,16 +1,21 @@
 /* AppDock — spec 18 §4.8: brand left, page dock center, cheat-sheet +
-   settings right. FOUR pages in this study: Edit / Color / Audio (the
+   settings right. FIVE pages in this study: Edit / Color / Audio (the
    audio-focus mode per docs/DESIGN-audio-mode.md — occupies spec 16 §3.8's
-   orphaned ⌘4 binding) / Deliver. Icon-only in resolve theme, icon+label in
-   studio/light; aria-label keeps the accessible name regardless of label. */
+   orphaned ⌘4 binding) / FX (R23-WA DESIGN-R23 D-A1 — the transitions &
+   fades workflow view, ⌘5) / Deliver. Icon-only in resolve theme, icon+label
+   in studio/light; aria-label keeps the accessible name regardless of label. */
 
-import { ScissorsLineDashed, Palette, AudioLines, Send, Keyboard, Settings2, House } from 'lucide-react';
+import { ScissorsLineDashed, Palette, AudioLines, Blend, Send, Keyboard, Settings2, House } from 'lucide-react';
 import { useUi, type Page } from '../../state/useUiStore';
 
 const PAGES: { id: Page; label: string; icon: typeof ScissorsLineDashed; tip: string }[] = [
   { id: 'edit', label: 'Edit', icon: ScissorsLineDashed, tip: 'Edit — rough cut (⌘1)' },
   { id: 'color', label: 'Color', icon: Palette, tip: 'Color — grading (⌘2)' },
   { id: 'audio', label: 'Audio', icon: AudioLines, tip: 'Audio focus — BGM / SFX mixing (⌘4)' },
+  /* R23-WA (D-A1): FX BETWEEN audio and deliver. Icon = Blend (lucide's
+     two-overlapping-frames glyph — Sparkles is the effects-rows icon and
+     must stay distinct; the transition marker keeps its own SVG). */
+  { id: 'fx', label: 'FX', icon: Blend, tip: 'FX — transitions & fades (⌘5)' },
   { id: 'deliver', label: 'Deliver', icon: Send, tip: 'Deliver — export & handoff (⌘3)' },
 ];
 

@@ -62,6 +62,31 @@ export const BlocksStyle: StoryObj = {
   ),
 };
 
+/** R23-WA (DESIGN-R23 D-A2): the FX ENGINE — the full Timeline with the fx
+ *  tool booted: clips receded to 45% (trim/drag/context-menu off), seam
+ *  zones on every butt-spliced cut (el-1|el-2, el-2|el-3 with the transition
+ *  box, el-3|el-4), head/tail half zones on the first/last element per
+ *  track, fade objects on every main-track clip (the demo fades), and the
+ *  el-2 transition box selectable + trimmable. Hover a seam to see the 12→
+ *  24px zone + the '+' affordance. */
+export const FxMode: StoryObj = {
+  name: 'Timeline — FX mode (seam zones & objects)',
+  parameters: { layout: 'fullscreen' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ tool: 'fx', fxMode: true, selection: [] }} />
+      <div className="flex h-screen flex-col bg-app">
+        <div className="mono flex h-[40px] shrink-0 items-center px-3 text-[11px] text-tmuted">
+          ( timeline toolbar + scene tabs sit here in the real shell — the FX page mounts this exact Timeline )
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Timeline />
+        </div>
+      </div>
+    </>
+  ),
+};
+
 /* ---- clip anatomy states (Clip rendered directly with mock props) --------- */
 
 const mainLane: TrackJSON = {

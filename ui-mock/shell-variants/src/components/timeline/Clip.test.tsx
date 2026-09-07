@@ -1075,3 +1075,115 @@ describe('R19 caption chips (gap C34 — the tr-caption lane)', () => {
     expect(screen.getByTestId('clip-cap-3').style.outline).toContain('var(--accent-selection)');
   });
 });
+
+/* ---------- R23-WA (DESIGN-R23 D-A2/D-A3): the FX engine's clip face ----------
+   The recede law (clips dim to 45%, trim/drag/context-menu OFF, clicks keep
+   selecting) + the fade-object grammar's new FX-domain membership (the press
+   writes selectedFxObject; the ring mirrors the match) + the video fade
+   objects (effectiveFade: fadeIn/fadeOut for non-audio kinds) + the Fades
+   browser-row drop parser (setFade, never addEffectToElement — R23-B note 21). */
+
+describe('R23-WA: fxMode recede (D-A2.1 — the edit gestures are OFF, clicks still select)', () => {
+  it('a SELECTED clip renders NO trim handles in fxMode; the body dims to 45%', () => {
+    boot({ selection: ['el-2'], tool: 'fx', fxMode: true });
+    expect(screen.queryByTestId('clip-trim-l-el-2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('clip-trim-r-el-2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('clip-trim-afford-el-2')).not.toBeInTheDocument();
+    expect(screen.getByTestId('clip-el-2').style.opacity).toBe('0.45');
+    // the fade objects above stay full-strength (the engine's edit targets)
+    expect(screen.getByTestId('fade-object-el-2-in').style.opacity).toBe('');
+  });
+
+  it('a plain click still selects the clip (the FX inspector then shows its effect stack)', () => {
+    boot({ selection: [], tool: 'fx', fxMode: true });
+    fireEvent.click(screen.getByTestId('clip-el-1'));
+    expect(store().selection).toEqual(['el-1']);
+    expect(store().selectedFxObject).toBeNull(); // a clip click alone writes NO FX object
+  });
+
+  it('the keyboard clip-menu route is OFF in fxMode (Shift+F10 never opens the edit menu)', () => {
+    boot({ selection: ['el-2'], tool: 'fx', fxMode: true });
+    fireEvent.keyDown(screen.getByTestId('clip-el-2'), { key: 'F10', shiftKey: true });
+    expect(screen.queryByTestId('shell-menu-clip')).not.toBeInTheDocument();
+  });
+
+  it('regression law: OUT of fxMode the selected clip still mounts its trim handles', () => {
+    boot({ selection: ['el-2'] }); // fxMode false — today's grammar unchanged
+    expect(screen.getByTestId('clip-trim-l-el-2')).toBeInTheDocument();
+    expect(screen.getByTestId('clip-trim-r-el-2')).toBeInTheDocument();
+    expect(screen.getByTestId('clip-el-2').style.opacity).toBe('');
+  });
+});
+
+describe('R23-WA: the fade objects — video fades + the FX-domain membership (D-A3)', () => {
+  it('video clips render fade objects from fadeIn/fadeOut (the demo fades; el-1: 0.5s in / 0.75s out at 46pps)', () => {
+    boot({});
+    const inObj = screen.getByTestId('fade-object-el-1-in');
+    const outObj = screen.getByTestId('fade-object-el-1-out');
+    expect(inObj).toHaveAttribute('role', 'slider');
+    expect(inObj.getAttribute('aria-valuenow')).toBe('12');  // 0.5 s × 24 — frame units
+    expect(outObj.getAttribute('aria-valuenow')).toBe('18'); // 0.75 s × 24
+    expect(inObj.style.width).toBe('23px'); // 0.5 × 46
+    expect(outObj.style.width).toBe('34.5px'); // 0.75 × 46
+    // every main-track video clip carries the demo pair
+    for (const id of ['el-1', 'el-2', 'el-3']) {
+      expect(screen.getByTestId(`fade-object-${id}-in`)).toBeInTheDocument();
+      expect(screen.getByTestId(`fade-object-${id}-out`)).toBeInTheDocument();
+    }
+    // a clip with NO fades renders no objects (the text clip el-5)
+    expect(screen.queryByTestId('fade-object-el-5-in')).toBeNull();
+  });
+
+  it('pressing a fade object selects the clip AND writes the FX domain (one gesture, the pair survives)', () => {
+    boot({ selection: [], tool: 'fx', fxMode: true });
+    fireEvent.pointerDown(screen.getByTestId('fade-object-el-1-in'), { button: 0, pointerId: 3 });
+    expect(store().selection).toEqual(['el-1']);
+    expect(store().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-1', side: 'in' });
+    fireEvent.pointerUp(screen.getByTestId('fade-object-el-1-in'), { pointerId: 3 }); // no-op release — no commit
+    expect(el('el-1').fadeIn).toBe(0.5);
+    expect(store().past).toHaveLength(0);
+  });
+
+  it('the selection ring renders ONLY on the matching object (the FX-domain mirror)', () => {
+    boot({ selection: ['el-1'], selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'in' } });
+    expect(screen.getByTestId('fade-object-el-1-in').style.outline).toContain('var(--accent-selection)');
+    expect(screen.getByTestId('fade-object-el-1-out').style.outline).toBe('');
+  });
+
+  it('the drag commit routes the store\'s setFade seam (store-owned clamp; audio stays the audioFade domain)', () => {
+    boot({});
+    const obj = screen.getByTestId('fade-object-el-6-in');
+    fireEvent.pointerDown(obj, { button: 0, pointerId: 3 });
+    fireEvent.pointerMove(obj, { pointerId: 3, buttons: 1, clientX: 115 });
+    fireEvent.pointerUp(obj, { pointerId: 3 });
+    expect(el('el-6').audioFadeIn).toBe(2.5); // audio element → audioFadeIn (fieldOfFade)
+    expect(store().past).toHaveLength(1); // ONE commit for the whole gesture
+  });
+});
+
+describe('R23-WA: the Fades browser-row drop parser (D-A5 — setFade, never addEffectToElement)', () => {
+  it('a "Fade In 1s" row dropped on a clip writes fadeIn=1; a Fade Out row writes fadeOut', () => {
+    boot({});
+    fireEvent.drop(screen.getByTestId('clip-el-3'), { dataTransfer: fxPayload('Fade In 1s', 'Fade') });
+    expect(el('el-3').fadeIn).toBe(1);
+    expect(el('el-3').fadeOut).toBe(0.5); // the other side untouched
+    expect(el('el-3').effects ?? []).toHaveLength(0); // never a stack entry
+    fireEvent.drop(screen.getByTestId('clip-el-3'), { dataTransfer: fxPayload('Fade Out 2s', 'Fade') });
+    expect(el('el-3').fadeOut).toBe(2);
+    expect(store().past).toHaveLength(2); // one setFade per drop
+  });
+
+  it('a bare "Fade In" row (no duration suffix) defaults to 0.5s (the parser\'s preset floor)', () => {
+    boot({});
+    fireEvent.drop(screen.getByTestId('clip-el-5'), { dataTransfer: fxPayload('Fade In', 'Fade') });
+    expect(el('el-5').fadeIn).toBe(0.5);
+  });
+
+  it('an unknown fade row is refused with the honest toast; nothing commits', () => {
+    boot({});
+    fireEvent.drop(screen.getByTestId('clip-el-3'), { dataTransfer: fxPayload('Fade Sideways', 'Fade') });
+    expect(store().toasts.at(-1)!.title).toBe('Unknown fade preset');
+    expect(el('el-3').fadeIn).toBe(0.5); // untouched
+    expect(store().past).toHaveLength(0);
+  });
+});

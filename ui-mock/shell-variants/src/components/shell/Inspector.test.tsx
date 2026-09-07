@@ -423,7 +423,7 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expect(screen.getByTestId('transition-presentation')).toHaveValue('Cross Dissolve');
   });
 
-  it('transition editor: presentation select + duration commit + disabled Remove (mock boundary)', () => {
+  it('transition editor: presentation select + duration commit + LIVE Remove (R23-WA removeTransition)', () => {
     boot({ selection: ['el-2'] }); // fixture transitionOut on el-2
     const select = screen.getByTestId('transition-presentation');
     expect(select).toHaveValue('Cross Dissolve');
@@ -434,8 +434,13 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     fireEvent.change(dur, { target: { value: '1.5' } }); // seconds form of the shared parser
     fireEvent.keyDown(dur, { key: 'Enter' });
     expect(el('el-2').transitionOut!.duration).toBe(1.5);
-    expect(screen.getByRole('button', { name: 'Remove transition (unavailable in mock)' }))
-      .toHaveAttribute('aria-disabled', 'true');
+    /* R23-WA (DESIGN-R23 D-A3): Remove is LIVE now — removeTransition is a
+       real delete-aware store action; the old "unavailable in mock" pin died
+       with the boundary (R23-B correction 1: the patch type can't unset). */
+    const remove = screen.getByRole('button', { name: 'Remove transition' });
+    expect(remove).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(remove);
+    expect(el('el-2').transitionOut).toBeUndefined();
   });
 
   it('mixed transition multi-select: __mixed__ sentinel, one change writes both', () => {
@@ -580,5 +585,35 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expect(blend).toHaveValue('Screen'); // local state — no model field (documented)
     expect(el('el-2').opacity).toBe(1); // blend never touches the doc slice
     expect(screen.getByLabelText('Opacity value')).toHaveValue('100%');
+  });
+});
+
+/* ---------- R23-WA (DESIGN-R23 D-A4): the FX editor embedded in the Edit rail ---------- */
+
+describe('R23-WA: the FX section embeds at the TOP of the Edit-page rail (D-A4)', () => {
+  it('a selected fade object: the Fade editor rides FIRST, the clip\'s own sections stay below', () => {
+    boot({ selection: ['el-1'], selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'in' } });
+    // the shared section form (the FX page's rail mounts the SAME component)
+    expect(screen.getByRole('button', { name: 'Remove fade in' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Duration value')).toHaveValue('0.50s');
+    // the clip's edit sections still render below (one scroll, D4.1)
+    expect(hasSection('transform')).toBe(true);
+  });
+
+  it('a selected transition with NO clip selection OWNS the body (no track-sheet fallback, no empty state)', () => {
+    boot({ selection: [], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+    expect(screen.getByTestId('transition-presentation')).toHaveValue('Cross Dissolve');
+    expect(screen.queryByTestId('shell-track-sheet')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-inspector-state-empty')).not.toBeInTheDocument();
+  });
+
+  it('the embed clears when the FX domain clears (selectMarker law) — the normal rail returns', () => {
+    boot({ selection: [], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+    act(() => { S().selectMarker('mk-1'); });
+    // the marker domain took over — the FX editor unmounts, the empty-selection
+    // fallback sheet returns (the AppShell swaps the whole rail for markers;
+    // this panel's own fallback law is the observable here)
+    expect(screen.queryByTestId('transition-presentation')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-track-sheet')).toHaveAttribute('data-via', 'fallback');
   });
 });

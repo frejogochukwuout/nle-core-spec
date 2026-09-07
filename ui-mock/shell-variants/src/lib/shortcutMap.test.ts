@@ -94,3 +94,15 @@ describe('shortcut parity with useShortcuts (twin contract)', () => {
     expect(row.desc).toContain('4×');
   });
 });
+
+/* ---------- R23-WA (DESIGN-R23 D-A1 / ruling 18): the FX page chord ---------- */
+
+describe('R23-WA: the ⌘5 FX page row (spec 16\'s free chord)', () => {
+  it('documents the FX page binding next to the ⌘1-4 page family', () => {
+    const row = SHORTCUT_MAP.find((r) => r.action === 'panels-page-fx')!;
+    expect(row).toBeDefined();
+    expect(row.keys).toBe('⌘5');
+    expect(row.group).toBe('Panels');
+    expect(row.desc).toContain('FX page');
+  });
+});

@@ -142,7 +142,18 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           }
           return;
         case 'Delete':
-        case 'Backspace':
+        case 'Backspace': {
+          /* R23-WA (Part IX ruling 22): the FX rung FIRST — a selected FX
+             object deletes its transition/fade (delete-aware + domain-clear
+             in-store), then the selection branch keeps today's clip law.
+             The isGestureActive guard above already swallowed mid-drag hits. */
+          if (s.selectedFxObject) {
+            e.preventDefault();
+            const o = s.selectedFxObject;
+            if (o.kind === 'transition') s.removeTransition(o.elementId);
+            else s.removeFade(o.elementId, o.side ?? 'in');
+            return;
+          }
           if (s.selection.length === 0) return;
           e.preventDefault();
           // §6.4: multi-delete ≥ 5 elements confirms first — same dialog as
@@ -165,6 +176,7 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           }
           s.deleteElements(s.selection, e.shiftKey); // ⇧Delete = ripple
           return;
+        }
         case 'Escape':
           if (s.page === 'audio') s.exitAudioFocus();
           else if (s.tool !== 'select') s.setTool('select');
@@ -251,6 +263,15 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           // spec 16 §3.8's orphaned "Audio workspace" binding gets its surface
           e.preventDefault();
           s.page === 'audio' ? s.exitAudioFocus() : s.enterAudioFocus('shortcut');
+          return;
+        }
+        /* R23-WA (DESIGN-R23 D-A1 / ruling 18): ⌘5 = the FX page — spec 16's
+           ⌘5 is free; the spec's ⌘3 "Effects workspace" reconciliation row
+           lands in SPEC-REVISION-CANDIDATES at wrap (the mock's ⌘3=Deliver
+           predates). Set-only (a page, not a toggle) — the ⌘1/⌘2/⌘3 grammar. */
+        if (key === '5') {
+          e.preventDefault();
+          s.setPage('fx');
           return;
         }
         if (lower === 's') {

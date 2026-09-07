@@ -26,7 +26,7 @@
    directive (#73). */
 
 import { useRef, useState } from 'react';
-import { PanelLeft, Activity, Layers, SlidersHorizontal, AudioWaveform } from 'lucide-react';
+import { PanelLeft, Activity, Layers, SlidersHorizontal, AudioWaveform, Sparkles } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { project } from '../../lib/mockData';
 
@@ -78,9 +78,11 @@ export function Toolbar2() {
 
   /* #80: the left toggle's label follows the page's asset domain — the
      audio page's slot really is the Sound Library (LeftDock routes there),
-     so the button must not lie. */
-  const leftLabel = page === 'audio' ? 'Sound Library' : 'Media Pool';
-  const LeftIcon = page === 'audio' ? AudioWaveform : PanelLeft;
+     so the button must not lie. R23-WA: the FX page's slot is the effects
+     browser (D-A5/D-D1 — LeftDock routes there); the label reads "Effects"
+     per the D-D1 content table (the dock's own header names the surface). */
+  const leftLabel = page === 'audio' ? 'Sound Library' : page === 'fx' ? 'Effects' : 'Media Pool';
+  const LeftIcon = page === 'audio' ? AudioWaveform : page === 'fx' ? Sparkles : PanelLeft;
 
   /* the Scopes toggle: off ↔ last-visual-state (row/grid — D3); aria-pressed
      honest while any visual state is live. */

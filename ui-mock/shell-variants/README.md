@@ -103,14 +103,14 @@ added the deterministic meter/knob/tier/zoom/snap-indicator review frames):
 
 | Story file | What it covers |
 |---|---|
-| `AppShell.stories.tsx` | Full shell on each page: Edit / Audio Focus / Color / Deliver |
+| `AppShell.stories.tsx` | Full shell on each page: Edit / Audio Focus / Color / FX (R23-WA — browser + inspector + fxMode timeline) / Deliver |
 | `Variants.stories.tsx` | Presets A / B / C as complete shells — the fixed, screenshot-friendly A/B/C comparison (per-dimension exploration stays in the app's ctrl+\` overlay) |
-| `Chrome.stories.tsx` | Toolbar2 ×3, AppDock ×4, TimelineToolbar ×7 (incl. R15 zoom-cluster dynamic-min/max + live master micro-meter), SceneTabs ×2, TrackHeader columns ×3 (audio-focus minifaders + R15-A4 audio micro-meters), Effects-panel-on full shell |
+| `Chrome.stories.tsx` | Toolbar2 ×3, AppDock ×5 (R23-WA: +FX), TimelineToolbar ×7 (incl. R15 zoom-cluster dynamic-min/max + live master micro-meter), SceneTabs ×2, TrackHeader columns ×3 (audio-focus minifaders + R15-A4 audio micro-meters), Effects-on FX-page full shell (R23-WA re-point) |
 | `Mixer.stories.tsx` | Mixer dock (full side-by-side + bridge rail + collapsed), the R15 deterministic-levels variants (full dock / bridge / solo strip — A2 clip, master peak-held via `__setLevel`), ChannelStrip solo + compact, Channel editor, Sound library |
-| `Timeline.stories.tsx` | Timeline default + blocks clip-style, clip anatomy states (selected / offline / fades / locked / badges), ruler + markers, R15-T1 CapCut ruler tiers (46/120/240 px/s), R15-T5 snap indicator (mid-drag play step) |
+| `Timeline.stories.tsx` | Timeline default + blocks clip-style, **FX mode** (R23-WA — receded clips, seam/head/tail zones, the interactive transition box), clip anatomy states (selected / offline / fades / locked / badges), ruler + markers, R15-T1 CapCut ruler tiers (46/120/240 px/s), R15-T5 snap indicator (mid-drag play step) |
 | `Shell.stories.tsx` (title "Shell/Components") | Media pool grid/list, Viewer, Inspector ×4 tabs, status-strip autosave states, toast region, open context menu, cheat sheet |
 | `Overlays.stories.tsx` | Confirm dialogs (scene delete / multi-delete), ErrorBoundary crash fallback, Variant explorer open, toast error/persist + max-3 stack |
-| `Pages.stories.tsx` | Color page, Deliver page (+ preset pick), Channel editor empty state |
+| `Pages.stories.tsx` | Color page, Deliver page (+ preset pick), Channel editor empty state, **FX page** (R23-WA — browser & inspector rails + the fxMode timeline) |
 | `Regions.stories.tsx` | Viewer ×4 (program / overlays-hidden / safe-guides / zoom), Media pool offline + no-results, Inspector empty + multi-select mixed |
 | `Primitives.stories.tsx` | Fader (fixed / fill-height / R15 scale column + unity notch + master cap), the R15-A1 generic Knob dial states (min / detent zone / center / max), PanKnob, StripMeter (static / playing / R15 deterministic levels via the engine's `__setLevel`) |
 
@@ -150,9 +150,16 @@ the overlay — deviations are surfaced, never hidden.
 - Zoom slider genuinely rescales time→px geometry; snapping magnet (N) toggles snap; tool keys V/B/T/Y/U
 - Media pool: live search (200ms debounce), sort, grid/list, offline-asset badge
 - Inspector: 4 spec-18 tabs, source-asset card, selection-driven
-- Color, Audio + Deliver pages swap the right rail (page dock: 4 pages —
-  Edit / Color / Audio / Deliver, ⌘1–⌘4: spec 18 §4.8's three pages plus the
-  audio-focus 4th page per docs/DESIGN-audio-mode.md — see R11 below)
+- Color, Audio + **FX** + Deliver pages swap the right rail (page dock: 5
+  pages — Edit / Color / Audio / FX / Deliver, ⌘1–⌘3 + ⌘5: spec 18 §4.8's three
+  pages plus the audio-focus 4th page per docs/DESIGN-audio-mode.md, plus the
+  R23-WA FX page per docs/.agents/design/r23-fx-view-and-revision.md D-A1)
+- **FX surface (R23-WA, both doors one engine)**: the FX page (⌘5 — browser /
+  viewer / FX inspector / full timeline in fxMode) AND the Edit-page FX tool;
+  seam hit-zones add/select transitions, head/tail zones add/select fades,
+  transition boxes + fade objects trim by edge-drag / ±1-frame keys, Delete
+  removes the selected FX object (removeTransition / removeFade — real,
+  delete-aware, undoable)
 - Splitters resize panels; double-click resets (§3.2)
 - `?` opens the keyboard cheat-sheet modal
 
@@ -161,6 +168,17 @@ tests can target the same surface.
 
 ## Known spec deviations (intentional, for reaction)
 
+- **R23-WA (no viewer-side transition rendering):** transitions/fades edit
+  through the FX surface (seam zones, transition boxes, fade objects, the FX
+  inspector's numeric params) but the program viewer does NOT render the
+  transition compositing itself — the canvas stays the honest single-frame
+  mock; the model (`transitionOut` / fade fields) is the truth. Registered
+  per DESIGN-R23 Part I.5 (the round's honest boundary).
+- **R23-WA (FX tool suppresses viewer overlays):** activating the Edit-page
+  FX tool hides the viewer's drag/trim overlay affordances via the EXISTING
+  `tool !== 'select'` law (the blade/roll path) — intentional, so the FX
+  tool reads as a mode exactly like the other edit tools (DESIGN-R23 Part IX
+  ruling 17).
 - **R20-W6 (retarget same-kind law):** the insert-media selection fallback
   retargets only when the selected clip's ELEMENT TYPE equals the source's
   mapped type (video↔video / audio↔audio / image↔image), per

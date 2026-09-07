@@ -15,12 +15,30 @@ const boot = (patch: UiPatch = {}) => {
 const scene1 = () => store().scenes.find((s) => s.id === 'sc-1')!;
 
 describe('TimelineToolbar', () => {
-  it('is a labelled toolbar with a 7-tool radio cluster (spec 18 §4.5 tool cluster)', () => {
+  it('is a labelled toolbar with an 8-tool radio cluster (spec 18 §4.5 + R23-WA FX tool)', () => {
     boot({});
     expect(screen.getByRole('toolbar', { name: 'Timeline toolbar' })).toBeInTheDocument();
     const group = screen.getByRole('radiogroup', { name: 'Edit tool' });
-    expect(within(group).getAllByRole('radio')).toHaveLength(7);
+    expect(within(group).getAllByRole('radio')).toHaveLength(8);
     expect(screen.getByTestId('shell-timeline-toolbar-tool-select')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  /* R23-WA (DESIGN-R23 D-A1, Part IX ruling 2): the FX tool couples fxMode —
+     the setTool single source. Selecting it flips the engine on; selecting
+     any other tool flips it off; on the FX PAGE the page owns the flag. */
+  it('R23-WA: the FX tool joins the radio — clicking it couples fxMode on, another tool off (ruling 2)', () => {
+    boot({});
+    const fxBtn = screen.getByTestId('shell-timeline-toolbar-tool-fx');
+    fireEvent.click(fxBtn);
+    expect(store().tool).toBe('fx');
+    expect(store().fxMode).toBe(true);
+    expect(fxBtn).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-tool-blade'));
+    expect(store().fxMode).toBe(false);
+    // on the FX page tool changes never kill the engine (the page owns it)
+    useUi.setState({ page: 'fx', fxMode: true });
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-tool-blade'));
+    expect(store().fxMode).toBe(true);
   });
 
   it('clicking a tool switches the store tool and the radio state (spec 16 B/V keys)', () => {

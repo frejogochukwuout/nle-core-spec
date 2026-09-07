@@ -40,13 +40,16 @@
      shell sends one coalesced updateElements batch (spec 15 §7).
    - Effect reorder patches the effects array via setElementField; real
      shell = reorderEffect (spec 15 §4.3.55).
-   - transitionOut removal has no store action → disabled with a tooltip.
+   - R23-WA: removeTransition EXISTS now (DESIGN-R23 D-A3) — the transition
+     Remove row is LIVE (the old "no store action" boundary is dead).
    - The minimal Project sheet (D4.4 DESCOPED) is a read-only summary —
      project-level editing lands with C58; the timeline grade is NEVER
      edited here (single owner = ColorConsole).
    - NumberField/ParamRow/Group/LiveText are EXPORTED: the R19 rail panels
      (MarkerInspector/CaptionInspector) reuse the exact same field
-     contracts instead of forking them. */
+     contracts instead of forking them. R23-WA: EffectsSection +
+     TransitionSection are exported too — the FX inspector (components/fx/)
+     reuses them (one component, two frames — the anti-duplication law). */
 
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import {
@@ -60,6 +63,12 @@ import {
 } from '../../lib/mockData';
 import { ROLE_LABEL, type MixerTrackSettings, type Role } from '../../state/mockMixer';
 import { clamp, parseTc, tc } from '../../lib/timecode';
+/* R23-WA (DESIGN-R23 D-A4): the Edit page embeds the FX page's section form
+   while the FX selection domain holds. The import is CYCLIC by design
+   (FxInspector imports this file's shared sections) — safe in ESM because
+   every cross-binding is a hoisted `export function` referenced only at
+   render time, never at module-init time. */
+import { FxInspectorSection } from '../fx/FxInspector';
 
 /* ---- shared bits ------------------------------------------------------ */
 
@@ -104,8 +113,10 @@ function defaultsFor(def: EffectDef): Record<string, number> {
   return out;
 }
 
-/** next element on the same track — "a cut follows" (transition visibility) */
-function nextOnTrack(elements: ElementJSON[], el: ElementJSON): ElementJSON | null {
+/** next element on the same track — "a cut follows" (transition visibility).
+ *  R23-WA: EXPORTED — the FX inspector's transition mode feeds the shared
+ *  TransitionSection and needs the same neighbor law. */
+export function nextOnTrack(elements: ElementJSON[], el: ElementJSON): ElementJSON | null {
   const end = el.startTime + el.duration;
   const following = elements.filter((e) => e.id !== el.id && e.startTime >= end - 1e-6);
   following.sort((a, b) => a.startTime - b.startTime);
@@ -776,9 +787,11 @@ function FxParamRow({ el, fx, p }: { el: ElementJSON; fx: EffectJSON; p: ParamDe
    R20-W3 D4.2: each effect row is CLICKABLE — selecting the effect swaps the
    entity chip (breadcrumb: track > clip > effect) and its params expand IN
    PLACE (accordion; the row carries aria-expanded + aria-current). The
-   enabled toggle / reorder / remove actions ride the row header as before. */
+   enabled toggle / reorder / remove actions ride the row header as before.
+   R23-WA: EXPORTED — the FX inspector's clip mode reuses this exact section
+   (D-A4/#105 "selecting the clip itself will just inspect Effects"). */
 
-function EffectsSection({ el, selectedFxId }: { el: ElementJSON; selectedFxId: string | null }) {
+export function EffectsSection({ el, selectedFxId }: { el: ElementJSON; selectedFxId: string | null }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const toggleEffect = useUi((s) => s.toggleEffect);
   const removeEffect = useUi((s) => s.removeEffect);
@@ -935,10 +948,14 @@ function EffectsSection({ el, selectedFxId }: { el: ElementJSON; selectedFxId: s
   );
 }
 
-/* ---- Transition section ------------------------------------------------- */
+/* ---- Transition section -------------------------------------------------
+   R23-WA: EXPORTED (the FX inspector's transition mode reuses it verbatim —
+   one component, two frames); the Remove row is LIVE via the store's new
+   removeTransition (delete-aware + clears the pointing FX selection). */
 
-function TransitionSection({ els, nextEl }: { els: ElementJSON[]; nextEl: ElementJSON | null }) {
+export function TransitionSection({ els, nextEl }: { els: ElementJSON[]; nextEl: ElementJSON | null }) {
   const setTransition = useUi((s) => s.setTransition);
+  const removeTransition = useUi((s) => s.removeTransition);
   const trs = els.map((e) => e.transitionOut).filter((t): t is TransitionJSON => t != null);
 
   if (trs.length !== els.length) {
@@ -1007,14 +1024,16 @@ function TransitionSection({ els, nextEl }: { els: ElementJSON[]; nextEl: Elemen
         title="0 = starts at the cut · 100 = ends at the cut · 50 = centered on the cut"
       />
       <div className="flex items-center justify-end">
-        {/* mock: the store has no removeTransition action and the patch type
-            can't express "unset" — disabled with the reason, not type-unsafe */}
+        {/* R23-WA (DESIGN-R23 D-A3): LIVE — removeTransition is a real store
+            action now (delete-aware + history + clears the pointing FX
+            selection); the old disabled row's "mock: removal needs store
+            action" reason died with the action. The removal writes every
+            selected element that carries one (the fan-out law). */}
         <button
           type="button"
-          aria-disabled="true"
-          data-tip="mock: removal needs store action"
           className="mini-btn"
-          aria-label="Remove transition (unavailable in mock)"
+          aria-label="Remove transition"
+          onClick={() => els.forEach((el) => el.transitionOut && removeTransition(el.id))}
         >
           <X size={12} strokeWidth={1.6} /> Remove transition
         </button>
@@ -1446,6 +1465,10 @@ export function Inspector() {
   const selectedTrackId = useUi((s) => s.selectedTrackId);
   const selectedEffectId = useUi((s) => s.selectedEffectId);
   const selectedEffectClipId = useUi((s) => s.selectedEffectClipId);
+  /* R23-WA (D-A4): the FX domain — when it holds, the body's FIRST section is
+     the FX editor (the FX page rail's own section form; the clip's sections
+     keep rendering below — the fade-object press selects clip AND object). */
+  const selectedFxObject = useUi((s) => s.selectedFxObject);
   const inspectorProjectMode = useUi((s) => s.inspectorProjectMode);
   const setElementField = useUi((s) => s.setElementField);
   const pushToast = useUi((s) => s.pushToast);
@@ -1628,9 +1651,12 @@ export function Inspector() {
           <ProjectSheet />
         ) : selectedTrack && scene ? (
           <TrackSheet scene={scene} track={selectedTrack} via="selected" />
-        ) : els.length === 0 ? (
+        ) : els.length === 0 && !selectedFxObject ? (
           /* ACTIVE-TRACK fallback (th_mto5fdf6): the R19 feature, now via the
-             SAME TrackSheet component the track domain uses */
+             SAME TrackSheet component the track domain uses. R23-WA: an FX
+             object with no clip selection OWNS the body (the transition-box
+             click never selects a clip) — the FX editor below is the content,
+             not a track sheet. */
           scene && fallbackTrack ? <TrackSheet scene={scene} track={fallbackTrack} via="fallback" /> : (
             <div className="flex h-full items-center justify-center text-[13px] text-tmuted" data-testid="shell-inspector-state-empty">
               Nothing to inspect
@@ -1638,6 +1664,11 @@ export function Inspector() {
           )
         ) : (
           <div key={els.map((e) => e.id).join('·')} className="flex flex-col">
+            {/* R23-WA (D-A4): the FX editor rides FIRST while the FX domain
+                holds — one component, two frames (the FX page's rail mounts
+                the same FxInspectorSection; ColorInspector/ColorInspectorRail
+                duplication is the law this clone avoids). */}
+            {selectedFxObject && <FxInspectorSection />}
             {/* ---- source card (single, media-bearing) ---- */}
             {!multi && single?.mediaId && <SourceCard el={single} />}
 

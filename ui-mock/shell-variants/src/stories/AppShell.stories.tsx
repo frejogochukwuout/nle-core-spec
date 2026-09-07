@@ -1,7 +1,8 @@
-/* AppShell stories — the four page modes of the full spec-18 §3 layout.
-   Fullscreen; the store defaults already give "media pool + inspector on".
-   The window-too-small overlay is CSS-driven (media query) and is
-   deliberately not a story — preview it by resizing the browser. */
+/* AppShell stories — the five page modes of the full spec-18 §3 layout
+   (R23-WA: FX joins — DESIGN-R23 D-A1). Fullscreen; the store defaults
+   already give "media pool + inspector on". The window-too-small overlay is
+   CSS-driven (media query) and is deliberately not a story — preview it by
+   resizing the browser. */
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FullShell } from './decorators';
@@ -46,6 +47,17 @@ export const Color: StoryObj = {
 export const Deliver: StoryObj = {
   name: 'Full Shell — Deliver',
   render: () => <FullShell patch={{ page: 'deliver' }} />,
+};
+
+/** R23-WA (DESIGN-R23 D-A1): the FX page — FxBrowser in the left dock,
+ *  Viewer center, FxInspector rail, the FULL Timeline in fxMode (seam zones
+ *  + fade objects + the el-2 transition box live). mainbody 40% (ruling 1).
+ *  StoreBoot patches state directly, so fxMode rides the patch (the actions
+ *  are the single WRITER — stories boot view state, the same law as every
+ *  other patch). */
+export const Fx: StoryObj = {
+  name: 'Full Shell — FX',
+  render: () => <FullShell patch={{ page: 'fx', fxMode: true, selection: [], selectedFxObject: { kind: 'transition', elementId: 'el-2' } }} />,
 };
 
 /* ---- R19 reference-integration stories ---- */
