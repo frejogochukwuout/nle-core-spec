@@ -11,7 +11,7 @@
 import type { ArgTypes, Meta, StoryObj } from '@storybook/react-vite';
 import { Timeline, ToolsRow, ClipItem } from '../timeline/Timeline';
 import { ppsFor } from '../lib/geometry';
-import { seedDoc, TRACK_VIDEO, TRACK_AUDIO } from '../lib/mockData';
+import { seedDoc } from '../lib/mockData';
 import { StoreArgs, docFor, selectionFor, type Patch } from './storyKit';
 
 const meta: Meta = {
