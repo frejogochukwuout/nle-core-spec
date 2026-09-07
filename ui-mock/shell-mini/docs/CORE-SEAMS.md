@@ -27,6 +27,15 @@ owner + phase + acceptance are stated (the posture law, spec 00 D20).
 
 ---
 
+> **R24 mapping note (ARCH-R24 D26/D29, fleet R24):** the wire census re-based — the
+> 30-name count is now **24 routed verbs + 6 documented exceptions** (`WIRE_COMMAND_TYPES`
+> @ OT `c15a629`, M49C machine-checked); this file's "30-command wire surface" citations
+> read accordingly. The D25-bridge citations (port-local-props upstreaming; the S1/S7 swap
+> paths) are superseded by D26's **census/carrier discipline** — the app's timeline-port is
+> a converging mirror (39 mirrors + host), and the structural-half instrument is OT's frozen
+> `data-test=` convention (68 sites), not a new testid emission. The R23 note (below) still
+> governs the phase mapping.
+
 ## 1. The seam inventory
 
 ### A. Timeline-domain seams (target: opencut-timeline @ `05584d8`)
