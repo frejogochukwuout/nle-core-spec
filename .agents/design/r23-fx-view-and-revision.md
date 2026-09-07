@@ -442,7 +442,7 @@ Deliver has none, Cut/Edit carry the editing tools]. Our matrix:
 | edit tools radio | ✔ (+ FX tool) | — | — | — | — |
 | snap/link/lock | ✔ | — | snap | — | — |
 | markers | ✔ | — | — | — | — |
-| density toggle | ✔ | ✔ | ✔ | ✔ | ✔ |
+| density toggle | ✔ | ✔ | ✔ | ✗ (R23-FIX R-b: the FX page forces the full Timeline — D-A1/ruling 8) | ✔ |
 | zoom cluster | ✔ | ✔ | ✔ | ✔ | ✔ (read-mostly) |
 | mixer state | ✔ | — | ✔ | — | — |
 | master audio | ✔ | — | ✔ | — | — |

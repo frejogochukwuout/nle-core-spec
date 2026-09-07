@@ -179,6 +179,16 @@ tests can target the same surface.
 
 ## Known spec deviations (intentional, for reaction)
 
+- **R23-FIX (review-sweep item 12, R1-P2-3/4 — the --danger contrast
+  pairs):** two deliberate divergences from the raw `--danger` (#e5484d)
+  token for WCAG AA: (a) `--danger-text` #ec5d62 — a lighter TINT used only
+  for danger TEXT on shell/panel backgrounds (the StatusStrip retry link;
+  raw #e5484d measures ~4.0:1 on the shell, the tint clears 4.5:1); (b)
+  `.confirm-btn.danger` background #cf2f37 — a DARKER fill so its white
+  12px label measures ~5:1 (raw #e5484d was ~3.9:1). Fills/borders
+  elsewhere keep the base token; both forks are registered here per the
+  deviation law (the token itself stays the semantic source).
+
 - **R23-WB (mixer toggle: Edit + Audio only — #92 supersedes #73):** issue
   #73's R22-era "mixer renders on ALL pages" is reversed for the color page
   (and FX/deliver) per issue #92 + DESIGN-R23 Part IX ruling 15: the Toolbar2
