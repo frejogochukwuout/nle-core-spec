@@ -1407,3 +1407,58 @@ port), not what any env currently runs.
     with an owner and a trigger (compression rides each spec's next substantive amendment)
     instead of silently claiming completeness — the integration reviewer's test for
     "absolutely final" is exactly this honesty.
+
+## R22-variants meta-learnings (the COLOR VIEW REWRITE + all-view revision round)
+
+90. **READ THE REFERENCE CANON BEFORE DESIGNING — with your own eyes.** The R20 color
+    failure mode: the PANELS were reference-faithful but the COMPOSITION was invented
+    (the node graph stole the media pool's slot; an always-on scope strip starved the
+    viewer inside a 320px mainbody; TWO surfaces duplicated one grade). The user's
+    verdict named it exactly: "no one has the memory of the original reference and no
+    one bothered to look." The R22 fix started by READING every ui-mock HTML in full
+    (they are 20-64KB hand-authored mocks — readable in one sitting) BEFORE writing a
+    design line. The auditor's provenance-labeling demand then forced every D1 element
+    to declare [reference-faithful] / [repo-precedent] / [user-directed invention] —
+    invented composition is now visible at review time, not at user-review time.
+91. **Compute the pixel budget BEFORE committing the layout to paper.** v1's scopes
+    grid was "max(240px, 45%)" — the audit's arithmetic showed 34% of a 320px-min
+    mainbody minus 26px headers minus per-cell 32px headers ≈ 30px canvases (a
+    degenerate scope the user had PRAISED as impressive). Same for the node dock: the
+    reference workspace is ~1010×250, not "640×268 fits ~300px". Any height/width spec
+    in a design doc must be run against the registered floor (1280×800) with the real
+    chrome subtracted (toolbar 34 + tabs 26 + status 12 + dock 42 ≈ 160px fixed).
+92. **The DOM/CSS gotchas that cost an hour each — now laws:**
+    (a) an always-laid-out absolutely-positioned box (opacity:0 tooltip!) EXTENDS the
+    ancestor's scroll extent; visibility:hidden does NOT remove it in Chromium; ONLY
+    display:none does (verified live both ways — the #71 phantom scroll gap);
+    (b) a percentage height resolves indefinite inside a content-based flex parent →
+    fixed pixel budgets for bounded consoles (the scopes blew the mainbody out to 625px);
+    (c) absolutely-positioned nodes never extend a scroll region — give the canvas box
+    explicit width/height extents;
+    (d) a flex item's default min-width:auto lets CONTENT block shrinking (the compact
+    wrapper overflowed 414px until min-w-0);
+    (e) the storybook manager iframe can lock at a stale 1920px width after viewport
+    resizes — force the iframe chain's widths for honest screenshots.
+93. **The "existing seam" claim must be grep-verified.** Two v1 design claims died in
+    the seam audit: "the planner already accepts a source range" (it hardcodes
+    sourceStart:0) and "extract the SVG icons" (already extracted verbatim in
+    editModeIcons.tsx). Every "X already exists" in a design doc needs a file+line
+    citation from THIS session's grep, not last round's memory.
+94. **The user's "you only showed two buttons" was an OVERFLOW-COLLAPSE illusion** —
+    all 7 buttons existed; a <560px ResizeObserver hid 5 in a kebab. When a reviewer
+    reports a MISSING control, FIRST check width-driven collapse/overflow logic, then
+    check the actual mode set. (The inverse also held: the reviewer "saw" a
+    non-functional button that WAS wired — always answer the premise honestly in the
+    fix note: "it was wired to a read-only stub" — while still honoring the directive.)
+95. **Keep the "which surface owns X" question first-class.** The whole color disaster
+    reduced to ownership drift: the wheels lived in BOTH a timeline-area console and a
+    right rail; the timeline grade had one editor but two surfaces. The #78/#79
+    directives resolved it as a TABLE (clip-level → inspector tabs; global/separate →
+    toggleable console). Write that table explicitly in the design doc so every future
+    panel has one answer.
+96. **Background retry loops are the honest way to close a flaky-network session**:
+    GitHub PATCHes returning 000 (the daemon's own fetch failing identically) at wrap
+    time → leave nohup retry loops + logs (/tmp/gh-close-retry.log) running, write the
+    VERIFY step into the HANDOFF (ghSync.pending == 0 at next session start), and never
+    block the wrap on a third-party outage.
+
