@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DeliverPage } from './DeliverPage';
+import { TimelineCompact } from '../timeline/TimelineCompact';
 import { useUi } from '../../state/useUiStore';
 
 const S = () => useUi.getState();
@@ -84,12 +85,50 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     const rangeBlock = screen.getByTestId('shell-deliver-range');
     expect(rangeBlock).toHaveTextContent('00:00:02:00 → 00:00:28:00'); // boot loop {2, 28}
     expect(screen.getByText('In → Out range selection')).toBeInTheDocument();
-    expect(screen.getByText(/set I\/O on the timeline/)).toBeInTheDocument();
+    expect(screen.getByText(/set I\/O at the playhead/)).toBeInTheDocument();
     // moving the timeline I/O moves the deliver readout + the select option
     act(() => { useUi.setState({ loop: { start: 5, end: 20 } }); });
     expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:05:00 → 00:00:20:00');
     const select = screen.getByLabelText('Export range') as HTMLSelectElement;
     expect(within(select).getByRole('option', { name: /00:00:05:00 – 00:00:20:00/ })).toBeInTheDocument();
+  });
+
+  /* R23-WF (DESIGN-R23 D-F1, #107): the export range stays STORE-driven —
+   * the 32px range band (TimelineCompact's deliver head row, mounted in the
+   * shell's timeline area) writes the SAME s.loop seam markIn/markOut and the
+   * Ruler brackets write, so this page's readout follows the band's edits
+   * with no prop/threading of its own. Both surfaces render in one tree to
+   * pin the seam (the shell mounts them; here the co-mount stands in). */
+  it('R23-WF: the readout follows the range band’s drag commit — one seam, every readout moves', () => {
+    render(
+      <>
+        <DeliverPage />
+        <TimelineCompact rangeBand />
+      </>,
+    );
+    expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:02:00 → 00:00:28:00');
+    // a full band gesture: down → local preview (store untouched) → ONE commit
+    fireEvent.pointerDown(screen.getByTestId('shell-deliver-range-band-in'), { pointerId: 2, button: 0 });
+    fireEvent.pointerMove(screen.getByTestId('shell-deliver-range-band-in'), { pointerId: 2, buttons: 1, clientX: 138 }); // 3 s
+    expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:02:00 → 00:00:28:00'); // mid-gesture: still the old range
+    fireEvent.pointerUp(screen.getByTestId('shell-deliver-range-band-in'), { pointerId: 2 });
+    expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:03:00 → 00:00:28:00');
+    // the In→Out select option carries the same seam (no second source)
+    const select = screen.getByLabelText('Export range') as HTMLSelectElement;
+    expect(within(select).getByRole('option', { name: /00:00:03:00 – 00:00:28:00/ })).toBeInTheDocument();
+  });
+
+  it('R23-WF: the band’s keyboard commits move the readout too (the band is a first-class loop writer)', () => {
+    render(
+      <>
+        <DeliverPage />
+        <TimelineCompact rangeBand />
+      </>,
+    );
+    fireEvent.keyDown(screen.getByTestId('shell-deliver-range-band-out'), { key: 'ArrowLeft' });
+    // 28 s − 1 frame = frame 671 → 00:00:27:23 (the readout follows the commit)
+    expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:02:00 → 00:00:27:23');
+    expect(useUi.getState().loop).toEqual({ start: 2, end: 671 / 24 });
   });
 
   it('center summary shows the active timeline name and the right region owns the settings selects', async () => {

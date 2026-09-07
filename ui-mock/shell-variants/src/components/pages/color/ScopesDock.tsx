@@ -116,6 +116,10 @@ export function ScopesDock() {
      switch re-runs the effect so the newly mounted canvas paints at once */
   useEffect(() => {
     if (!frame) return;
+    /* `mode` rides the deps (R23-WB-REV P3 #1): a solo mount at 'off'
+       flipped to 'open' with the frame already on the bus must repaint —
+       in-app the AppShell gates the mount, but a future unconditional
+       consumer must not paint a stale/blank canvas on the state flip. */
     const elapsed = performance.now() - lastDrawRef.current;
     if (elapsed >= SCOPE_THROTTLE_MS) {
       lastDrawRef.current = performance.now();
@@ -127,7 +131,7 @@ export function ScopesDock() {
       drawNow();
     }, SCOPE_THROTTLE_MS - elapsed);
     return () => window.clearTimeout(t);
-  }, [frame, active, drawNow]);
+  }, [frame, active, drawNow, mode]);
 
   /* the ARIA tabs pattern (roving tabindex — the house law): one tab stop,
      ←/→ switch the scope (wrapping), aria-selected carries the active panel */

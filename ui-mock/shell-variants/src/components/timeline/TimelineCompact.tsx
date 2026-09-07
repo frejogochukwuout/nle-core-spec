@@ -30,10 +30,20 @@
    with the reference-derived tokens (--clip-video / --clip-audio-a /
    --clip-text — the davinci mock's own clip colors, theme-variant-aware) on
    the border + tint + badge so the strip reads at 24px lane height. The
-   previous all-grey #2a2b31 is dead. */
+   previous all-grey #2a2b31 is dead.
+
+   R23-WF (DESIGN-R23 D-F1, issue #107): on the DELIVER composition the
+   22px read-only ruler head row is REPLACED by the 32px interactive
+   in/out RANGE BAND (RangeBand.tsx — the export range = the loop seam;
+   the drag grammar cloned from the Ruler brackets per ruling 21). The
+   LANES stay frozen on every page — the band is the strip's one
+   interactive head surface, asked for only by the deliver mount
+   (AppShell passes rangeBand on the deliver branch); every other page
+   keeps the ruler. */
 
 import { useUi, useActiveScene } from '../../state/useUiStore';
 import { getRulerConfig, formatRulerLabel, shouldShowLabel } from '../../lib/rulerTiers';
+import { RangeBand } from './RangeBand';
 
 /* ---------- geometry (C51 compact set, unchanged) ---------- */
 
@@ -61,9 +71,15 @@ export interface TimelineCompactProps {
   /** Which grade target a clip click selects. 'grade' (the color page law:
    *  setSelection + re-target clip mode). */
   clipClick?: 'grade';
+  /** R23-WF (D-F1, #107): mount the 32px interactive in/out RANGE BAND as
+   *  the head row instead of the read-only 22px ruler. The deliver
+   *  composition's ask ("just the head range selection should be normal
+   *  height"); the lanes stay frozen either way — the band is the strip's
+   *  one interactive head surface, and only the deliver mount asks for it. */
+  rangeBand?: boolean;
 }
 
-export function TimelineCompact({ clipClick = 'grade' }: TimelineCompactProps) {
+export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: TimelineCompactProps) {
   const scene = useActiveScene();
   const pps = useUi((s) => s.pxPerSec);
   const playhead = useUi((s) => s.playhead);
@@ -94,30 +110,37 @@ export function TimelineCompact({ clipClick = 'grade' }: TimelineCompactProps) {
     <div
       data-testid="shell-timeline-compact"
       className="flex h-full min-h-0 w-full flex-col bg-panel"
-      aria-label="Compact timeline (frozen — click a clip to target it)"
+      aria-label={rangeBand
+        ? 'Compact timeline (lanes frozen — the export range band above is interactive)'
+        : 'Compact timeline (frozen — click a clip to target it)'}
     >
       <div className="scroll-x flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-hidden" style={{ background: '#191a1d' }}>
         <div className="relative" style={{ width: contentW }}>
-          {/* 22px ruler (read-only — scrubbing stays in the viewer transport;
-              the playhead marker shows the current position) */}
-          <div data-testid="shell-timeline-compact-ruler" className="sticky left-0 flex" style={{ height: RULER_H }}>
-            <div aria-hidden className="sticky left-0 z-[2] shrink-0 border-r border-hairline bg-panel" style={{ width: BADGE_W, height: RULER_H }} />
-            <div className="relative flex-1" style={{ height: RULER_H, background: 'var(--bg-shell)' }}>
-              {ticks.map((t) => {
-                const show = shouldShowLabel(t, labelInterval);
-                return (
-                  <div key={t} className="absolute bottom-0 top-0" style={{ left: t * pps }}>
-                    <span aria-hidden className="absolute bottom-[1px] block h-[4px] w-px" style={{ background: '#555' }} />
-                    {show && (
-                      <span className="mono absolute left-[4px] top-[1px] whitespace-nowrap text-[9px] leading-[9px] text-tmuted">
-                        {formatRulerLabel(t)}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+          {/* head row — D-F1 (#107): on deliver the 32px interactive RANGE
+              BAND replaces the 22px read-only ruler (the export range = the
+              loop seam; the lanes below stay frozen on every page) */}
+          {rangeBand ? (
+            <RangeBand duration={duration} pps={pps} />
+          ) : (
+            <div data-testid="shell-timeline-compact-ruler" className="sticky left-0 flex" style={{ height: RULER_H }}>
+              <div aria-hidden className="sticky left-0 z-[2] shrink-0 border-r border-hairline bg-panel" style={{ width: BADGE_W, height: RULER_H }} />
+              <div className="relative flex-1" style={{ height: RULER_H, background: 'var(--bg-shell)' }}>
+                {ticks.map((t) => {
+                  const show = shouldShowLabel(t, labelInterval);
+                  return (
+                    <div key={t} className="absolute bottom-0 top-0" style={{ left: t * pps }}>
+                      <span aria-hidden className="absolute bottom-[1px] block h-[4px] w-px" style={{ background: '#555' }} />
+                      {show && (
+                        <span className="mono absolute left-[4px] top-[1px] whitespace-nowrap text-[9px] leading-[9px] text-tmuted">
+                          {formatRulerLabel(t)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* mini lanes: video 24 / caption 20 / audio 16 dimmed (C51) — each
               kind now carries its V/A/T color coding (D6, #75) */}

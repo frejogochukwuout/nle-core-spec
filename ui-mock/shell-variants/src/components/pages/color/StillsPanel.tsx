@@ -38,9 +38,11 @@ import { findElement } from '../../../lib/mockData';
 
 /* the node-count chip: the grade pipeline the record actually carries —
    PRIMARY (always) + the Secondary qualifier node when present + the
-   Curves node when non-identity. Derived, honest, never a fake count. */
+   Curves node when non-identity. Derived, honest, never a fake count.
+   Non-identity = ANY control point off the diagonal (R23-WB-REV P3 #4:
+   `length > 2` missed a 2-point non-identity curve). */
 const nodeCountOf = (st: Still): number =>
-  1 + (st.grade.qualifier ? 1 : 0) + (st.grade.curves && st.grade.curves.master.length > 2 ? 1 : 0);
+  1 + (st.grade.qualifier ? 1 : 0) + (st.grade.curves && st.grade.curves.master.some((p) => p.x !== p.y) ? 1 : 0);
 
 /** the still "thumbnail" — a swatch derived from its grade's temp/tint/sat
  *  (honest: a preview chip, not a decoded frame; the real gallery renders

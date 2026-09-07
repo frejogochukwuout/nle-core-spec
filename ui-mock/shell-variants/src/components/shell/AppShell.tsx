@@ -277,10 +277,16 @@ function AppShellInner() {
      default to 40% (336px of lanes vs a ~200px row at 55% would clip 60% —
      the filmstrip needs the lane room). The user's drag (mainBodyUserSet)
      always wins and persists. The FX page stays at the 40% EDIT default
-     (ruling 1); deliver's own 50% rebalance is Wave F's (D-F1). */
+     (ruling 1). R23-WF (D-F1, #107): deliver rebalances the same way —
+     50% while the compact strip (with its range band head row) carries the
+     timeline area ("the shorter timeline area can leave more room for
+     export settings too"), 40% when full tracks are asked for (the same
+     filmstrip lane-room law, deliver-shaped). */
   const mainBodyHeight = mainBodyH !== 0
     ? mainBodyH
-    : page === 'color' && !mainBodyUserSet ? (compact ? '55%' : '40%') : '40%';
+    : page === 'color' && !mainBodyUserSet ? (compact ? '55%' : '40%')
+    : page === 'deliver' && !mainBodyUserSet ? (compact ? '50%' : '40%')
+    : '40%';
   const effectiveInspectorW = page === 'color' && !inspectorWUserSet ? 420 : inspectorW;
   /* R23-WA (D-A1): the FX page's right rail = the FxInspector (the param
      surface for the selected transition / fade / clip-effect-stack); the
@@ -413,7 +419,7 @@ function AppShellInner() {
         <SceneTabs />
         <div className="flex min-h-0 flex-1">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {compact ? <TimelineCompact /> : <Timeline />}
+            {compact ? <TimelineCompact rangeBand={page === 'deliver'} /> : <Timeline />}
           </div>
           {/* F6 region slot [6] on color = the SCOPES DOCK (D-B1 — inherited
               from the retired NodeGraphDock; single-writer per index, a
