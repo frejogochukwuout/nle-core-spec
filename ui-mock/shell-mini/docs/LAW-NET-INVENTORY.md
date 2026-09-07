@@ -176,7 +176,13 @@ disposition totals corpus-wide are in §2.3 (the audited arithmetic).
 ### 2.2 The testid census (Part C)
 
 **60 static testids** (from the source census; C1's testid-mapping source,
-C2's 12 viewer testids included):
+C2's 12 viewer testids included). NOTE: `mini-clip-harness` is
+STORY-SURFACE-ONLY (the Clip-anatomy story's render harness,
+`src/stories/Timeline.stories.tsx` — no app component emits it, no test
+queries it): the C1 DOM-structural gate checks the **59 app-emitted**
+static ids + the 15 templated families; the harness id is a
+storybook-only anatomy surface (excluded from the app gate, kept in the
+census for completeness):
 
 `mini-root, mini-topbar, mini-btn-export, mini-pool, mini-pool-collapsed,
 mini-pool-empty, mini-pool-head-video, mini-pool-list, mini-viewer,

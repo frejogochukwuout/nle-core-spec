@@ -14,3 +14,4 @@ storybook-static/
 # <git-common-dir>/annotakit/threads.db — inside .git/, never in the work tree)
 *.db-wal
 *.db-shm
+.vitest/

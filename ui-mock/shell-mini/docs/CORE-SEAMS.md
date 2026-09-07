@@ -78,7 +78,7 @@ owner + phase + acceptance are stated (the posture law, spec 00 D20).
 | S23 | **View geometry / scroll / zoom** | `RENDER_ORIGIN_PX`/`MIN_ORIGIN_PX`/`TRACK_HEAD_W`/`EDGE_PX`/`SCROLL_SPEED_PX` constants + the ruler-extent ResizeObserver law (`setRulerEnd` publication, `endTime = max(contentEnd, 8, viewportTime)`) + C7a zoom-anchoring + minimize/expand scroll preservation + `labelStepFor` (all in `Timeline.tsx`/`geometry.ts`) | the app's timeline view (the C1 port tree ~2,400 LOC + the ~1,100-line qc- CSS translation) | **GAP-with-owner — C1** (component-local laws, uncataloged until now — this row is their registration) | C1's port reproduces them; the LAW-NET-INVENTORY Timeline families are the nets |
 | S24 | **CSS/token surface** | `styles/tokens.css` (RH-verbatim `--canvas-*` + `--mini-*` aliases + the documented radius deviations w/ provenance) + `timeline/timeline.css` (the qc- anatomy port — C1's CSS translation source) + `shell/shell.css` + `styles/app.css` | nle-ui's package-owned tokens (C0) + the app's qc- tree (C1) | **CLEAN** (the extraction provenance chain: RH-skin-extraction.md → tokens.css → the deviation register README #7) | C0/C1 port the CSS files directly (the largest ported artifact class) |
 | S25 | **Test/review infrastructure** | `test/setup.ts` (PointerEvent/capture/rAF shims + store reset + `__resetClipIds`) + `stories/storyKit.tsx` (`StoreArgs` global-store patching, `docFor` variants) | the app's re-expressed corpus (C4) + the annotakit review surface config (C4 row) | **CLEAN** (the shims are the corpus's documented contracts; the story kit is the stories' control law) | C4 re-expresses the corpus against the app; the annotakit config is "the strongest reusable mock asset" (spec 14 C4) |
-| S26 | **Testids** | 60 static `mini-*` + 15 templated families (the census: LAW-NET-INVENTORY §2.2) | the app's testid emission (7 exist today → the C1 mapping) | **CLEAN** (the census is the mapping source) | C1(b): the app emits the same ids (the DOM-structural gate checks the census) |
+| S26 | **Testids** | 60 static `mini-*` + 15 templated families (the census: LAW-NET-INVENTORY §2.2 — 59 of the 60 are app-emitted; `mini-clip-harness` is story-surface-only, excluded from the app DOM gate) | the app's testid emission (7 exist today → the C1 mapping) | **CLEAN** (the census is the mapping source) | C1(b): the app emits the same ids (the DOM-structural gate checks the census) |
 
 ## 2. The store partition (the transport map for `useMini`)
 
@@ -126,8 +126,11 @@ enumerating the absences):
 - **Audio meters** — W1 meter taps (landed engine-side); no meter UI here.
 - **JKL/shuttle transport** — the OT S-round transport policy (C2 verifies);
   the mini's transport is play/pause/seek only.
-- **Markers/bookmarks** — OT has them (the magnet row notes OT's
-  keyframe+bookmark magnets); the mini has none — C1-entry scope decision.
+- **Timeline edit-position markers/bookmarks** — OT has them (the magnet
+  row notes OT's keyframe+bookmark magnets); the mini has none (NOT the
+  track-head marker BADGES — `mini-track-marker-${track.id}` is the
+  V1/A1 lane-head selection surface, present and censused) — C1-entry
+  scope decision.
 - **fps/frame-snap** — the registered no-fps decision (deviation #4);
   `timecode.ts` is the declared single seam; flips at W-media.
 - **Multi-select / marquee** — the single-subject XOR law (S7) is the

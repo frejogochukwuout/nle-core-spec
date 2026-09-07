@@ -3,7 +3,7 @@
    sceneBridge copies this module verbatim, and these nets travel with it
    as the bridge's acceptance floor (spec 14 §3.1 C1 row (d)).
 
-   Portability note (the copy-verbatim role): 3 of these tests consume
+   Portability note (the copy-verbatim role): 2 of these tests consume
    the mini's seed corpus (`seedDoc`) + mock `Media` literals carrying
    mini-mock fields (name/kind/hue) — the C1 copy either vendors the seed
    fixtures or swaps those tests' data; the other tests are self-contained

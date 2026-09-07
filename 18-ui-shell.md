@@ -13,7 +13,7 @@
 
 **BASE (accepted, pinned 2026-09-07):**
 - The full-shell DESIGN (§3-§15): region geometry, panel inventory, gesture→command contracts, state rows, a11y floor — the design of record, validated in `ui-mock/shell-variants` (1,334 tests, real color math, W4 real pipelines) and PRODUCTIZED as the `nle-ui` package (`dba8d52`; consumer pin `752991d`; 640 tests, engine-free, boundary-script-gated).
-- The mini DESIGN + law register (§16, `ui-mock/shell-mini` @ 355 tests — 333 at the R22 retirement, +10 review-loop nets, +10 seal nets; OT-SEAMS seam map; annotakit live review surface).
+- The mini DESIGN + law register (§16, `ui-mock/shell-mini` @ 355 tests — 333 at the R22 retirement, +10 review-loop nets, +12 R23 seal + fix-round nets; OT-SEAMS seam map; annotakit live review surface).
 - The app assembly skeleton: `AppShell` + slots (`timelineRegion`/`programMonitor`/`mediaDragSource`) + ProgramCanvas (engine N1) wired in `nle-test-app` @ `e662759` (83 tests).
 
 **GAP (the work — owner + phase per spec 14; acceptance in parentheses):**

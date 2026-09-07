@@ -116,7 +116,7 @@ check("mini count staleness sweep: no live 333 claims in the spec set", lambda: 
     "stale 333"))
 check("LAW-NET-INVENTORY exists + carries the exact census", lambda: (
     os.path.exists("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md")
-    and "353" in open("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md").read()
+    and "355" in open("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md").read()
     and "115" in open("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md").read(), "inventory"))
 check("CORE-SEAMS exists (the whole-surface seam audit)", lambda: (
     os.path.exists("ui-mock/shell-mini/docs/CORE-SEAMS.md"), "core-seams"))
