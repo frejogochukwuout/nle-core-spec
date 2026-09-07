@@ -42,3 +42,18 @@
 - **Pin-comment review surface LIVE (R18b):** storybook-annotakit v0.5 is vendored at `vendor/storybook-annotakit/` (dist tracked — boots without building), FIRST in `.storybook/main.ts` addons. At the public URL the toolbar carries Pin (⌥C) / Region (⌥R) / Threads (⌥D) / Hide (⌥L), and reviewer pins are same-origin REST through the edge — verified live (thread created via the public URL's own API, visible in the manager UI, drawer badge, delete → tombstone → orphan-branch push → GH issue closed). Store: `.git/annotakit/threads.db` (branch-switch-proof) → orphan `annotakit` branch on GitHub — **SHARED with the sibling stream's env** (their `db=annotakit@shell-variants` commits appear in the branch log; the kit's logical merge reconciles both) — plus a 1:1 GitHub-issue mirror. Agent surface: `GET /annotakit/api/health` → agentSurfaces (rest + digests + github); `GET /annotakit/api/threads`, `/export?format=md`, POST/DELETE threads, POST `/sync`. Token: `.env` in shell-mini (gitignored — **recreate after a recycle**: PAT from chat + `ANNOTAKIT_GH_REPO=melodietexoss/shell-mini-review` + `ANNOTAKIT_GH_LABEL=mini` + `ANNOTAKIT_GH_SCOPE=4c1120aa|src/(timeline|shell)/` — see the R18h bullet).
 - **R18e/R18f — the feedback wave (annotakit issues #7-#16, ALL fixed + thread-resolved):** ripple edit (toggle, delete/end-trim/start-trim follower-shift laws, snapshot-idempotent previews, delta-quantize + floor overlap guard); RH cut styles `[`/`]` (裁剪开始/裁剪结束, ripple-aware).
 - **The sibling streams own their repos**: nle-engine / opencut-timeline / web-daw-core / nle-ui / nle-test-app all have live `.agents/` docs + worklogs — read THEIR HANDOFFs before touching their domains; file cross-repo work as queues, never unilaterally.
+
+-----
+
+## R23.5 — the stale-serving ops fix (2026-09-07 evening, after R23's close)
+
+**Incident:** the user reported the public review URL showed NOTHING from R23. The container had recycled; boot-restore relaunched the daemon from the runtime copy, which was still the R22-era tree (R23 never reached it — the previous session's runtime sync died with its container). GitHub was at f63b15c; the runtime served 117 stories (R23 = 123), no FX files at all.
+
+**Fixed this session (commit 5578391 + the boot-restore patch):**
+- Runtime re-synced from origin/main (rsync, runtime-only state protected: .git/annotakit store, .env, node_modules, dist, logs). Live now: 123 stories, 8 FX stories, page switcher Edit/Color/Audio/FX/Deliver, zero console errors, VLM-verified FX composition, edge probe 200.
+- The 4 absolute-path self-loop symlinks (r23-analysis/shots/{color,mixer,pages,shell-components} → /home/z/my-project/...) REMOVED from git — they ELOOP-crashed vite's watcher when synced into the runtime (the crash appeared as "Storybook ready" then death).
+- boot-restore.sh rewritten: repo restore → best-effort GitHub fast-forward (PAT from .env, never logged) → stamp-gated CODE-SYNC repo→runtime (ELOOP guard, deps-drift npm ci, runtime-only state protected) → health-exit → relaunch. A recycle now self-heals instead of resurrecting stale code.
+- /home/sync bundle refreshed (newest nle-core-spec-*.bundle wins the boot restore).
+- Pushed: GitHub 5578391 + the follow-up commit; GitLab synced (ansgareutychisO/nle-core-spec — NOTE: the mirror namespace is ansgareutychisO, not the GitHub org).
+
+**Verification law (SKILL #122):** the wrap gate is the live index.json story count vs the repo's, probed through the public URL — not the jsdom suite.
