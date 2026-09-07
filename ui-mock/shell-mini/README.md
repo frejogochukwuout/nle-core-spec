@@ -90,7 +90,7 @@ Run it at boot or any time; safe twice.
   The clip's left edge is the only magnet candidate (nearest target within
   12px wins — C17); targets are the LIVE neighbor edges + playhead; an
   engaged magnet paints the 2px snap guide at the target; Esc restores
-  the pre-drag doc. All six `setPointerCapture` sites guarded (untrusted
+  the pre-drag doc. All five `setPointerCapture` sites guarded (untrusted
   pointers throw NotFoundError — live-caught). Programmatic `moveClip`
   keeps the OT wire law: overlap ⇒ REFUSE + honest toast (nudge routes
   it too).
