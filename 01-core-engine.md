@@ -1,9 +1,26 @@
 # 01 — Core Engine: `EditorCore`, Managers, Contracts, Two Entry Points
 
 **Stream:** Core engine architecture
-**Status:** Refined by sub-agent scout (SCOUT-01) — open questions answered with source code references
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: engine core @ `f68ab8c` 356/356, the 453-name API freeze + layer fence, accepted as BASE; forward = the S-engine parity corpus, the W-ops union façade, W-audio N2b, W-n5 decode, R-engine-p2 items); Refined by sub-agent scout (SCOUT-01) — open questions answered with source code references
 **Primary teacher:** OpenCut-classic `EditorCore` pattern + FreeCut `deps/` contracts
 **Spec file:** `01-core-engine.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- nle-engine @ `f68ab8c` — 356/356 vitest, tsc 0 — this spec's core architecture contract landed: the 453-name API freeze + layer fence; the N1-N4 bridge seam family (composition-frame → the app's real ProgramCanvas, flattener volume/mute, cut-centered transition windows → real audio crossfades, av-link); W1 meter bridge. Vendors OT @ `3420b5f`, WDC @ `5570321`.
+- nle-test-app @ `e662759` — 83/83, tsc 0 — the consumption proof: EngineMount + ProgramCanvas render real frames through the N1 seam; real audio crossfades + av-link dispatch.
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- The projector parity corpus — the N1 composition-frame family's formal S4 suite: SceneTracks→ingestion translator + parity corpus — S-engine (∥ crawl) (acceptance: parity green on the corpus, engine CI).
+- The union façade — the 78-union service slice, JSON-RPC re-typed internal per D12.2 — W-ops (OT) (acceptance: dispatch-complete + typed NOT_IMPLEMENTED).
+- N2b keyframed volume (per-segment gain automation) — W-audio (app+WDC+engine) (acceptance: per-segment gain automation pins + mixdown parity).
+- Real media decode (registry + decode → VirtualMediaAsset) — W-n5 (engine), PENDING user re-affirmation of D6 (acceptance: decode round-trip pins on a real-file corpus).
+- ShapeItem/Lottie/Subtitle/Controller surfacing + CPU transition renderers — R-engine-p2 (engine, non-blocking) (acceptance: per-item milestones when queued).
+
+**ACCEPTANCE & TEST PLAN:** §8 (the intent list) + the unnumbered `## Testing` section at file end (Tier 1/2/3 + property — the executable contract); spec 17 §13A facet rows (§13A.4 wire-protocol conformance for the union façade; §13A.5 projector property tests for the parity corpus); the R22 battery's posture checks (BASE rows re-verified at their pins — the regression role).
 
 ---
 

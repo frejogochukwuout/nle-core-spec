@@ -1,13 +1,26 @@
 # 10 — FCPXML Export: Format, Mappings, Handoff Contract (Refined)
 
 **Stream:** FCPXML exporter
-**Status:** Refined by sub-agent scout (SCOUT-10-RETRY) — open questions answered with DTD + Apple doc references
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: design-of-record only — zero FCPXML code in the fleet, the whole module is R-fcpxml greenfield); Refined by sub-agent scout (SCOUT-10-RETRY) — open questions answered with DTD + Apple doc references
 **Primary teacher:** Apple FCPXML 1.10 DTD (mirrored in CommandPost repo) + Apple developer docs + project model
 **Spec file:** `10-fcpxml-export.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 
 ---
 
-## 0. Refined-Spec Notes (new section by scout)
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- This spec IS the design-of-record: the FCPXML 1.10 shape rules (the DTD-not-XSD finding, §14), the §4 ProjectJSON→FCPXML mappings (asset/clip/lane/marker/transition/`timeMap`), the §6 validation strategy, the §8 limitations — the contract text stays the acceptance form.
+- Honest posture — ZERO FCPXML code in the fleet: nle-engine @ `f68ab8c` (356/356 vitest, tsc 0) exports mp4/webm A/V only; no FCPXML writer, parser, or fixture corpus exists anywhere (app included). The BASE is the CONTRACT, not an implementation.
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- The whole module (owner: nle-test-app, phase R-fcpxml): greenfield exporter + validation; the parser+fixture-corpus choice is the PHASE-ENTRY artifact — decided at entry, recorded in spec 14 BEFORE work starts (acceptance: the export validates vs the chosen reference parser on the corpus + the deliver e2e).
+
+**ACCEPTANCE & TEST PLAN:** §15 (the seed intent list) + the `## Testing` section (the executable contract); the §15 items 3–5 manual FCP/Resolve/Premiere open tests ride the phase's deliver gate; spec 17 §13A's FCPXML matrix rows; battery posture: no suite exists to hold — the phase-entry corpus CREATES the regression net.
+
+---
+
+## 0A. Refined-Spec Notes (new section by scout)
 
 This file extends the seed `10-fcpxml-export.md`. Sections 1–9 are re-stated verbatim with light inline annotations. Section 10 (Open Questions) is fully rewritten with concrete answers backed by:
 
@@ -1662,7 +1675,7 @@ The `<sequence>` element only allows `(note?, spine, metadata?)` as children (DT
 
 The `start` attribute is relative to the parent clip's local timeline (not the sequence timeline).
 
-**Action:** Move marker emission into the clip-building functions (`buildAssetClip`, `buildAudioClip`, etc.). For project-level markers (not attached to a specific clip), emit them on the closest preceding clip in the spine, or on a `<gap>` element placed at the marker's timecode.
+**Action:** Move marker emission into the clip-building functions (`buildAssetClip`, `buildAudioClip`, etc.). For scene-scoped markers not attached to a specific clip (per the A2 amendment — markers are PER SCENE, not project-level), emit them on the closest preceding clip in the spine, or on a `<gap>` element placed at the marker's timecode.
 
 ### Correction #11: Seed's `media-rep kind="original-mediarep"` is wrong; valid kinds are `original-media` and `proxy-media`
 

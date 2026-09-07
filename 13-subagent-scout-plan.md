@@ -1,8 +1,21 @@
 # 13 — Sub-Agent Scout Plan: Stream Breakdown, Prompts, Audit, Deliverables
 
 > **Round-7 note:** the `/home/z/my-project/download/nle-spec/` paths below are the original working locations from the Round-1-6 sessions (historical record — the repo now lives at `/home/z/my-project/nle-core-spec/` and on GitHub). This document is the process record for Rounds 1-6; Round 7's process is documented in `README.md` and `audits/ROUND-7-AUDITS.md`.
-**Status:** Plan for dispatching sub-agents to refine the spec with code references
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the scout protocol is the operating practice, executing per round; future charters are spec 14 phase-entry decisions); Plan for dispatching sub-agents to refine the spec with code references
 **Spec file:** `13-subagent-scout-plan.md`
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- The protocol is EXECUTING — the §3 workflow (scout → audit → integration review) + §7 worklog IS the operating practice for per-round research agents: R15's four scouts (the A/B/N amendment set — landed as the "(Round 15 amendment)" markers across the specs), R22's two adversarial reviewers, the mockup stream's research contracts.
+- Its downstream product at the R22 pins (the specs this process produced, executing): nle-engine @ `f68ab8c` 356/356, OT @ `05584d8` 459/459, WDC @ `fe05d85` 740/740, nle-ui @ `dba8d52` 640, nle-test-app @ `e662759` 83/83, ui-mock/shell-mini 333 + shell-variants 1,334 (nle-core-spec).
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- No standing gap — the protocol continues per round; the next chartered scouts (if any) are PHASE-ENTRY decisions, not standing charters: the FCPXML parser+corpus choice at R-fcpxml entry; the W-n5 real-file corpus at user re-affirmation of D6 (owner: the orchestrator's charter, per spec 14's phase-entry artifacts) (acceptance: the phase-entry artifact recorded in spec 14 BEFORE the phase's work starts).
+
+**ACCEPTANCE & TEST PLAN:** no Testing section of its own — the test is process-shaped: every chartered round leaves its §7 worklog entry + audit trail in this repo BEFORE the phase's code work starts; spec 17 §13A consumes the scouts' output via each spec's Testing section, not directly; battery posture: the pins above stay green (the specs this protocol produced keep executing).
 
 ---
 

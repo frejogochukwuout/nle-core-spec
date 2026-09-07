@@ -1,0 +1,663 @@
+/* ViewerPanel — spec 18 §4.3: viewer-toolbar (zoom/TC/fps/safe-area + overlay
+   toggle), video-frame (letterboxed program frame + DOM overlays, hidden while
+   tool-drag, toggleable), scrub-row (12px: in/out band + clip boundary ticks +
+   hover TC + playhead marker), transport-row (32px: CENTER = jump/step/play
+   cluster, RIGHT = loop, mark-in I, mark-out O, add-marker M + compact palette).
+   WebGPU canvas stand-in = static frame of the element under the playhead.
+   R19: dual-purpose SOURCE PREVIEW MODE (th_mto3504c, spec 18 §4.3 v1.1) —
+   viewerMode 'source' swaps the chrome to a raw-asset poster view; caption
+   overlay chips (caption-track elements under the playhead).
+   R20-W2 (D2 / issues #63+#64): the 7 edit functions moved INTO the source
+   transport row as the horizontal SourceEditBar — the program-monitor
+   EditOverlay dock is REMOVED (the program monitor is a clean full-frame
+   output; the bar's mount point is the source-mode transport). */
+
+import { useEffect, useRef, useState } from 'react';
+import { Play, Pause, ChevronDown, ChevronLeft, ChevronRight, SkipBack, SkipForward, Repeat, Flag, Frame, Eye, X } from 'lucide-react';
+import { useUi } from '../../state/useUiStore';
+import { mediaById, type ElementJSON, type SceneJSON, type TrackJSON } from '../../lib/mockData';
+import { snapToFrame, tc } from '../../lib/timecode';
+import { getWaveform } from '../../lib/waveform';
+import { SourceEditBar } from './SourceEditBar';
+import { GradedViewerCanvas } from './GradedViewerCanvas';
+import { SourceRangeBar } from './SourceRangeBar';
+
+/* multi-track law (R14): scan ALL tracks of the kind, topmost wins — the
+   single-find version hid clips on a second Video/Text track (addTrack makes
+   them) from the viewer. Same contract as elementAtTime in lib/mockData. */
+function mainElementAt(scene: SceneJSON, time: number): ElementJSON | null {
+  const kindTracks = scene.tracks.filter((tr) => tr.kind === 'main');
+  for (let i = kindTracks.length - 1; i >= 0; i--) {
+    const hit = kindTracks[i].elements.find((e) => time >= e.startTime && time < e.startTime + e.duration);
+    if (hit) return hit;
+  }
+  return null;
+}
+function overlayElementAt(scene: SceneJSON, time: number): ElementJSON | null {
+  const kindTracks = scene.tracks.filter((tr) => tr.kind === 'overlay');
+  for (let i = kindTracks.length - 1; i >= 0; i--) {
+    const hit = kindTracks[i].elements.find((e) => time >= e.startTime && time < e.startTime + e.duration);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/* R19 caption overlay: caption-track elements covering the playhead, ALL
+   caption tracks scanned, track order preserved (first = primary language).
+   Half-open [start, end) like every other at-time probe in the shell. */
+function captionHitsAt(scene: SceneJSON, time: number): { track: TrackJSON; el: ElementJSON }[] {
+  return scene.tracks
+    .filter((t) => t.kind === 'caption')
+    .flatMap((t) =>
+      t.elements
+        .filter((e) => time >= e.startTime && time < e.startTime + e.duration)
+        .map((el) => ({ track: t, el })));
+}
+
+function MarkIcon({ dir }: { dir: 'l' | 'r' }) {
+  return (
+    <svg width="11" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      {dir === 'l' ? <polygon points="19 5 19 19 5 12" /> : <polygon points="5 5 5 19 19 12" />}
+    </svg>
+  );
+}
+
+const MARKER_PALETTE = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'] as const;
+/* the store's plain flag-click / M cycles an 8-color wheel (spec 16 §3.7);
+   the compact palette shows the first 6 — aria-checked marks the color a
+   plain click would add next (honest radio state, no fake default) */
+const MARKER_CYCLE = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'] as const;
+
+export function Viewer({ duration }: { duration: number }) {
+  const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
+  const playhead = useUi((s) => s.playhead);
+  const playing = useUi((s) => s.playing);
+  const loop = useUi((s) => s.loop);
+  const loopEnabled = useUi((s) => s.loopEnabled);
+  const tool = useUi((s) => s.tool);
+  const setPlayhead = useUi((s) => s.setPlayhead);
+  const togglePlay = useUi((s) => s.togglePlay);
+  const nudge = useUi((s) => s.nudgePlayhead);
+  const markIn = useUi((s) => s.markIn);
+  const markOut = useUi((s) => s.markOut);
+  const addMarker = useUi((s) => s.addMarker);
+  const setLoopEnabled = useUi((s) => s.setLoopEnabled);
+
+  /* th_mto3504c — spec 18 §4.3 v1.1 source preview: the monitor is
+     dual-purpose; 'source' shows the raw asset poster (entered by the pool
+     selection law in MediaPool / the clip menu 'Open in viewer'), 'program'
+     is the timeline monitor. */
+  const viewerMode = useUi((s) => s.viewerMode);
+  const sourceMediaId = useUi((s) => s.sourceMediaId);
+  const exitSourcePreview = useUi((s) => s.exitSourcePreview);
+  const page = useUi((s) => s.page);
+  const sourceMode = viewerMode === 'source';
+  const sourceMedia = sourceMode ? mediaById(sourceMediaId ?? undefined) : undefined;
+  const sourceDur = sourceMedia?.duration ?? null;
+
+  const scrubRef = useRef<HTMLDivElement>(null);
+  const markerRef = useRef<HTMLSpanElement>(null);
+  const [hoverX, setHoverX] = useState<number | null>(null);
+  const [zoom, setZoom] = useState('Fit');
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // viewer UI prefs — store-level (spec 18 §4.3): testable/pinnable mock state
+  const overlaysOn = useUi((s) => s.viewerOverlays);
+  const safeGuides = useUi((s) => s.viewerSafeGuides);
+  const toggleOverlays = useUi((s) => s.toggleViewerOverlays);
+  const toggleSafeGuides = useUi((s) => s.toggleViewerSafeGuides);
+
+  const el = mainElementAt(scene, playhead);
+  const overlayEl = overlayElementAt(scene, playhead);
+  const img = el ? mediaById(el.mediaId) : undefined;
+  const boundaries = scene.tracks.find((t) => t.kind === 'main')?.elements ?? [];
+  /* R19 caption overlay data: caption elements covering the playhead
+     (program mode only — source preview shows the raw asset instead) */
+  const captionHits = sourceMode ? [] : captionHitsAt(scene, playhead);
+
+  /* §4.2 viewer state rows (R14):
+     - LOADING: when the resolved program element's mediaId CHANGES (a cut),
+       a first-frame skeleton row shows for ~600 ms (mock decode) before the
+       program image renders. The initial resolve at mount skips the theater
+       — a boot has no "previous frame" to decode away from. Real shell:
+       EngineEvents first-frame per spec 09 §6.1.
+     - ERROR: the program <img> onError flips to the decode-failure row
+       (spec 18 §4.2 viewer error row) with a Retry that clears the state and
+       re-attempts by re-keying the img; one error toast per failure. */
+  const [frameLoading, setFrameLoading] = useState(false);
+  const [decodeFailed, setDecodeFailed] = useState(false);
+  const [imgKey, setImgKey] = useState(0);
+  const prevMediaRef = useRef<string | null | undefined>(undefined);
+  const mediaId = el?.mediaId ?? null;
+  useEffect(() => {
+    const prev = prevMediaRef.current;
+    prevMediaRef.current = mediaId;
+    if (prev === undefined || prev === mediaId) return; // boot or unchanged
+    setDecodeFailed(false); // a new frame means the old failure is stale
+    setFrameLoading(true);
+    const t = setTimeout(() => setFrameLoading(false), 600);
+    return () => clearTimeout(t); // a further cut restarts the window
+  }, [mediaId]);
+  const pushToast = useUi((s) => s.pushToast);
+  const onImgError = () => {
+    setDecodeFailed(true);
+    pushToast({ kind: 'error', title: 'Media failed to decode', detail: 'program frame failed to decode — check the media pool (spec 18 §4.2)' });
+  };
+  const retryDecode = () => {
+    setDecodeFailed(false);
+    setImgKey((k) => k + 1); // re-key → the img remounts and re-attempts
+  };
+
+  /* duration 0 (empty scene) would render NaN% — every pct() caller paints
+     0% instead (R13 fix: NaN-safe empty scene) */
+  const pct = (t: number) => (duration > 0 ? `${(t / duration) * 100}%` : '0%');
+
+  /* palette dismissal while open (R13 fix): outside pointerdown closes (the
+     trigger + palette span is the safe zone); Esc closes via a CAPTURE
+     listener that stops propagation — the global Esc ladder in useShortcuts
+     deselects, this popover consumes Esc locally (CheatSheet pattern). */
+  useEffect(() => {
+    if (!paletteOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); setPaletteOpen(false); }
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (markerRef.current && !markerRef.current.contains(e.target as Node)) setPaletteOpen(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [paletteOpen]);
+
+  const seekFromEvent = (clientX: number) => {
+    const box = scrubRef.current?.getBoundingClientRect();
+    if (!box) return;
+    // frame-grid discipline: seeks land ON the frame grid like every other
+    // playhead mover (R13 review: raw pixel-derived times landed off-grid)
+    setPlayhead(snapToFrame(((clientX - box.left) / box.width) * duration));
+  };
+
+  /* fit-anchored magnification ladder — honest labels for what the code
+     does: Fit = letterbox-fill (1× fit width), the rest multiply the fit
+     width (overflow-auto lets ≥2× scroll). The old 50/100/200% labels were
+     container-percentages, not magnifications (R13 fix). */
+  const zoomOptions = ['Fit', '1.25×', '1.5×', '2×', '4×'] as const;
+  // R20 (thread th_mtp93qp5 / GH #66): 1.25× added — a fine-grained step the
+  // reviewer asked for; DEVIATION from spec 18 §3.3's Fit/1.5/2/4 ladder
+  // (registered in README deviations register).
+  const m = zoom === 'Fit' ? 1 : zoom === '1.25×' ? 1.25 : zoom === '1.5×' ? 1.5 : zoom === '2×' ? 2 : 4;
+  const zoomStyle: React.CSSProperties = zoom === 'Fit'
+    ? { width: '100%' }
+    : { width: `${m * 100}%`, maxWidth: 'none', maxHeight: 'none', flexShrink: 0 };
+
+  /* overlays hidden while a tool drag is active (spec 18 §4.3/§9) */
+  const hideOverlays = !overlaysOn || tool !== 'select';
+
+  return (
+    <div data-testid="shell-viewer" className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-shell">
+      {/* viewer-toolbar (28px) — th_mto3504c: SOURCE mode swaps the chrome to
+          exit-control + asset name + SOURCE chip + the asset's OWN res/fps
+          (honest: a 4K/30 source says 4K/30); program keeps the §4.3 contract */}
+      {sourceMode ? (
+        <div className="relative flex items-center gap-2 border-b border-hairline px-2 text-[11px]" style={{ height: 28, minHeight: 28 }}>
+          <button
+            type="button"
+            className="icon-btn !h-[20px] shrink-0"
+            onClick={exitSourcePreview}
+            data-tip="Back to program"
+            aria-label="Back to program"
+          >
+            <X size={13} strokeWidth={1.7} />
+          </button>
+          <span className="min-w-0 truncate font-semibold text-tprimary" title={sourceMedia?.name}>
+            {sourceMedia?.name ?? 'Source media missing'}
+          </span>
+          <span
+            data-testid="shell-viewer-source-chip"
+            className="mono shrink-0 rounded-sm border px-1 text-[10px] font-bold uppercase tracking-[0.08em]"
+            style={{ borderColor: 'var(--accent-selection)', color: 'var(--accent-selection)' }}
+          >
+            SOURCE
+          </span>
+          <div className="grow" />
+          {sourceMedia?.width ? <span className="tc-chip">{sourceMedia.width}×{sourceMedia.height}</span> : null}
+          {sourceMedia?.fps ? <span className="tc-chip">{sourceMedia.fps} fps</span> : null}
+        </div>
+      ) : (
+      <div className="relative flex items-center gap-2 border-b border-hairline px-2 text-[11px]" style={{ height: 28, minHeight: 28 }}>
+        <select aria-label="Viewer zoom" value={zoom} onChange={(e) => setZoom(e.target.value)} className="field cursor-pointer py-0">
+          {zoomOptions.map((z) => <option key={z}>{z}</option>)}
+        </select>
+        <span className="tc-chip" data-testid="shell-viewer-tc">{tc(playhead)}</span>
+        <div className="grow" />
+        <span className="tc-chip">1920×1080</span>
+        <span className="tc-chip">24 fps</span>
+        <button
+          className={`icon-btn !h-[20px] ${overlaysOn ? 'toggled' : ''}`}
+          data-tip="Toggle in-canvas overlays"
+          aria-label="Toggle in-canvas overlays"
+          aria-pressed={overlaysOn}
+          onClick={toggleOverlays}
+        >
+          <Eye size={13} strokeWidth={1.6} />
+        </button>
+        <button
+          className={`icon-btn !h-[20px] ${safeGuides ? 'toggled' : ''}`}
+          data-tip="Safe area guides (UI pref)"
+          aria-label="Toggle safe area guides"
+          aria-pressed={safeGuides}
+          onClick={toggleSafeGuides}
+        >
+          <Frame size={13} strokeWidth={1.6} />
+        </button>
+      </div>
+      )}
+
+      {/* video-frame — letterboxed monitor: PROGRAM (program monitor + DOM
+          overlays) or SOURCE (asset poster, object-contain letterbox) */}
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-frame p-4">
+        <div
+          className="relative aspect-video max-h-full max-w-full overflow-hidden rounded-[var(--radius)] bg-black"
+          style={zoomStyle}
+        >
+        {sourceMode ? (
+          /* ---- SOURCE PREVIEW (th_mto3504c, spec 18 §4.3 v1.1) ----
+             letterboxed poster (object-contain); audio assets show the same
+             deterministic waveform grammar the pool uses; a small caption
+             names the mode honestly — the poster is NOT played back. */
+          <>
+            {sourceMedia && sourceMedia.type !== 'audio' && !sourceMedia.offline ? (
+              page === 'color' ? (
+                /* R20-W4c (D3): the color page's source preview is the graded
+                   canvas surface too — but the stack is EMPTY (the raw,
+                   ungraded asset; color-layout §3.6 divergence). */
+                <GradedViewerCanvas mediaId={sourceMediaId} elementId={null} mode="source" />
+              ) : (
+              <img
+                src={sourceMedia.thumbnail}
+                alt={`Source preview: ${sourceMedia.name}`}
+                className="h-full w-full object-contain"
+                onError={() => pushToast({ kind: 'error', title: 'Source preview failed to decode', detail: 'poster decode failed — check the media pool (spec 18 §4.2)' })}
+              />
+              )
+            ) : sourceMedia?.type === 'audio' ? (
+              <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] px-10">
+                <svg width="100%" height={96} preserveAspectRatio="none" aria-hidden="true" className="max-h-[60%]">
+                  {getWaveform(sourceMedia.id, 96, { amplitude: 0.9 }).map((b, i, all) => (
+                    <rect
+                      key={i}
+                      x={`${i * (100 / all.length)}%`}
+                      y={48 - b.max * 48}
+                      width={`${100 / all.length - 0.5}%`}
+                      height={Math.max(1, (b.max + b.min) * 48)}
+                      fill="var(--waveform)"
+                      opacity={0.85}
+                      rx={0.5}
+                    />
+                  ))}
+                </svg>
+              </div>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] text-[13px] text-[#9a9aa5]">
+                {sourceMedia?.offline ? 'Media offline' : 'No source media — select a pool card'}
+              </div>
+            )}
+            <span
+              data-testid="shell-viewer-source-caption"
+              className="mono pointer-events-none absolute bottom-2 left-2 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white/85"
+            >
+              Source preview — spec 18 §4.3 v1.1
+            </span>
+          </>
+        ) : (
+          <>
+          {/* one name, one channel: real alt text (alt="" would mark the
+              monitor decorative and drop the name from the a11y tree —
+              R13 review caught alt="" + aria-label conflicting).
+              R20-W4c (D3): on the COLOR page the image surface is the graded
+              <canvas> (GradedViewerCanvas — decode→grade stack→encode, rAF
+              coalesced); every OTHER page keeps this <img> (the program
+              monitor boundary — 60+ Viewer tests pin it). */}
+          {page === 'color' ? (
+            <GradedViewerCanvas mediaId={el?.mediaId ?? null} elementId={el?.id ?? null} mode="program" />
+          ) : img && !img.offline ? (
+            frameLoading ? (
+              /* §4.2 loading row: first-frame decode skeleton (pulse) */
+              <div data-testid="shell-viewer-state-loading" role="status" className="flex h-full w-full animate-pulse items-center justify-center bg-[#0a0a0c] text-[13px] text-[#9a9aa5]">
+                Loading first frame…
+              </div>
+            ) : decodeFailed ? (
+              /* §4.2 viewer error row: decode failure + retry re-attempt */
+              <div data-testid="shell-viewer-state-error" role="alert" className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[#0a0a0c] text-[13px] text-[#9a9aa5]">
+                <span>Media failed to decode — check the pool</span>
+                <button type="button" onClick={retryDecode} className="underline decoration-dotted hover:text-white" aria-label="Retry decoding the program frame">
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <img key={imgKey} src={img.thumbnail} alt={`Program monitor: ${el?.name ?? 'empty'}`} className="h-full w-full object-cover" onError={onImgError} />
+            )
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-[#0a0a0c] text-[13px] text-[#9a9aa5]">
+              {/* theme-invariant on-canvas text: the monitor surround is always
+                  near-black, so the light theme's --text-muted (3.1:1 here) must
+                  not leak onto it — fixed #9a9aa5 measures ~7:1 (R13 review) */}
+              {img?.offline ? 'Media offline' : 'No media — import or drop a file'}
+            </div>
+          )}
+
+          {/* in-canvas overlays (spec 18 §4.3) — hidden while tool-drag, toggleable */}
+          {!hideOverlays && (
+            <div className="pointer-events-none absolute left-2 top-2 flex flex-col gap-1 text-[11px] font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+              {el && (
+                <span className="mono">{el.name} · {tc(el.sourceStart ?? 0)}–{tc((el.sourceStart ?? 0) + el.duration)}</span>
+              )}
+            </div>
+          )}
+          {!hideOverlays && (
+            <div className="pointer-events-none absolute right-2 top-2 flex gap-1.5 text-[11px] font-medium text-white/80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+              <span className="mono">1920×1080</span>
+              <span className="mono">24p</span>
+            </div>
+          )}
+
+          {/* text overlay element composited over the frame */}
+          {overlayEl && (
+            <div className="pointer-events-none absolute bottom-[14%] left-1/2 -translate-x-1/2 text-center">
+              <span className="text-[20px] font-semibold uppercase tracking-[0.22em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
+                {overlayEl.name}
+              </span>
+            </div>
+          )}
+
+          {/* R19 caption overlay (edit page, program mode): chips for
+              caption-track elements under the playhead — bottom-anchored
+              centered column, bg-black/75 + white 12px, rounded 3px, max-w
+              80%. A SECOND overlapping caption renders under in yellow-400
+              (the FR reference line). TODO(bilingual pairing): the real impl
+              pairs an EN caption with its FR sibling across tracks by overlap;
+              the mock renders the active captions in track order — index > 0
+              takes the second-language styling. */}
+          {page === 'edit' && captionHits.length > 0 && (
+            <div
+              data-testid="shell-viewer-caption"
+              className="pointer-events-none absolute bottom-[7%] left-1/2 flex w-[80%] -translate-x-1/2 flex-col items-center gap-1"
+              aria-live="off"
+            >
+              {captionHits.map(({ el: capEl }, i) => (
+                <span
+                  key={capEl.id}
+                  className="rounded-[3px] bg-black/75 px-2 py-0.5 text-center text-[12px] leading-snug"
+                  style={i > 0 ? { color: '#facc15' } : undefined}
+                >
+                  {capEl.text}
+                </span>
+              ))}
+            </div>
+          )}
+
+      {/* R20-W2 (D2 / issue #63): the program-monitor EditOverlay dock is
+          REMOVED — the edit functions belong to the SOURCE transport row
+          (SourceEditBar, mounted below); the program monitor is a clean
+          full-frame output (the old dock also covered ~44px of the image). */}
+
+      {/* safe-area guides (viewer UI pref) — broadcast convention:
+              90% action-safe + 80% title-safe centered rects, thin lines
+              (labels: 10px strip-family floor + drop-shadow like the
+              other in-canvas chips — spec 18 §11.12 / §9) */}
+          {safeGuides && (
+            <div className="pointer-events-none absolute inset-0" data-testid="shell-viewer-safe-guides" aria-hidden="true">
+              <div className="absolute inset-[5%] border border-white/45" />
+              <div className="absolute inset-[10%] border border-white/25" />
+              <span className="absolute left-[5.5%] top-[5.5%] mono text-[10px] font-medium text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+                action safe 90%
+              </span>
+              <span className="absolute left-[10.5%] bottom-[10.5%] mono text-[10px] font-medium text-white/55 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+                title safe 80%
+              </span>
+            </div>
+          )}
+          </>
+        )}
+
+        </div>
+      </div>
+
+      {/* scrub-row — SOURCE mode (R22 #84/#85): the in/out TRIM RANGE bar
+          (dual handles + the range band — one clamped view-state write per
+          drag step; the trimmed range rides the insert planner). Stills (no
+          duration) keep the honest static band (th_mto3504c). The program
+          mode keeps the timeline scrub row below. */}
+      {sourceMode ? (
+        sourceMediaId ? (
+          <SourceRangeBar mediaId={sourceMediaId} />
+        ) : (
+          <div
+            className="relative flex shrink-0 items-center border-t border-hairline px-2"
+            style={{ height: 14, minHeight: 14 }}
+            data-testid="shell-viewer-scrub"
+            aria-label="Source duration (static preview)"
+          >
+            <div className="relative h-full w-full">
+              <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 rounded-sm bg-[var(--border-soft)]" />
+            </div>
+          </div>
+        )
+      ) : (
+      <div
+        ref={scrubRef}
+        className="relative flex shrink-0 cursor-pointer items-center border-t border-hairline px-2"
+        style={{ height: 12, minHeight: 12 }}
+        onPointerDown={(e) => {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          seekFromEvent(e.clientX);
+        }}
+        onPointerMove={(e) => {
+          setHoverX(e.clientX - (scrubRef.current?.getBoundingClientRect().left ?? 0));
+          if (e.buttons === 1) seekFromEvent(e.clientX);
+        }}
+        onPointerLeave={() => setHoverX(null)}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          // slider contract (spec 18 §11.3): the scrub row is keyboard-operable —
+          // ←/→ nudge ±1 frame (⇧ ×10), Home/End jump (same grammar as the
+          // transport keys; R13 review: role=slider was keyboard-dead)
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            useUi.getState().nudgePlayhead((e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1));
+          } else if (e.key === 'Home' || e.key === 'End') {
+            e.preventDefault();
+            useUi.getState().setPlayhead(e.key === 'Home' ? 0 : duration);
+          }
+        }}
+        role="slider"
+        aria-label="Scrub timeline"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(duration * 24)}
+        aria-valuenow={Math.round(playhead * 24)}
+        aria-valuetext={tc(playhead)}
+        data-testid="shell-viewer-scrub"
+      >
+        <div className="relative h-full w-full">
+          {/* track */}
+          <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 rounded-sm bg-[var(--border-soft)]" />
+          {/* in/out + loop range band — dimmed, never erased */}
+          <div
+            className="absolute top-1/2 h-[2px] -translate-y-1/2 rounded-sm"
+            style={{ left: pct(loop.start), width: `calc(${pct(loop.end)} - ${pct(loop.start)})`, background: 'var(--accent-selection)', opacity: loopEnabled ? 0.85 : 0.3 }}
+          />
+          {/* clip boundary ticks */}
+          {boundaries.map((b) => (
+            <div key={b.id} className="absolute top-1/2 h-[5px] w-px -translate-y-1/2 bg-tfaint" style={{ left: pct(b.startTime) }} />
+          ))}
+          {/* playhead marker — dedicated time color */}
+          <div data-testid="shell-viewer-scrub-playhead" className="absolute top-1/2 h-[11px] w-[2px] -translate-y-1/2 rounded-sm" style={{ left: pct(playhead), background: 'var(--playhead)' }} />
+          {/* hover TC tooltip — floats above the row */}
+          {hoverX !== null && (
+            <span
+              className="mono pointer-events-none absolute -top-[14px] -translate-x-1/2 rounded-sm border border-strong bg-inset px-1 text-[11px] text-tmuted"
+              style={{ left: hoverX }}
+            >
+              {tc((hoverX / (scrubRef.current?.clientWidth || 1)) * duration)}
+            </span>
+          )}
+        </div>
+      </div>
+      )}
+
+      {/* transport-row (32px, spec 18 §4.3): CENTER = transport cluster,
+          RIGHT = loop + marks + marker palette. SOURCE mode (th_mto3504c):
+          LEFT = the SourceEditBar (R20-W2: the 7 one-shot edit functions,
+          reference icons, hover-placement preview arming), RIGHT = the
+          static source duration TC — honest (no fake playback of a poster;
+          the mark/loop ops belong to the program timeline). */}
+      {sourceMode ? (
+        <div className="relative flex shrink-0 items-center gap-2 px-2" style={{ height: 32, minHeight: 32 }} data-testid="shell-viewer-transport">
+          <div className="flex min-w-0 flex-1 items-center">
+            <SourceEditBar />
+          </div>
+          {/* R22 #84/#85: the trim-edit controls — set in/out at the range
+              head/tail + clear; the playhead-position variants are honest
+              mocks of the Resolve grammar (the source poster has no
+              playhead — the buttons clamp to the current range ends). */}
+          {sourceMediaId && sourceDur != null && (
+            <div role="group" aria-label="Source trim controls" className="flex shrink-0 items-center gap-1" data-testid="shell-source-trim-controls">
+              <button
+                type="button"
+                className="icon-btn !h-[20px] !w-[22px] !text-[13px] !font-bold"
+                data-tip="Trim in — set the range start (drag the IN handle for fine trim)"
+                aria-label="Set source in point"
+                data-testid="shell-source-trim-in"
+                onClick={() => useUi.getState().setSourceRangeIn(sourceMediaId, useUi.getState().sourceRanges[sourceMediaId]?.in ?? 0)}
+              >
+                <span aria-hidden>[</span>
+              </button>
+              <button
+                type="button"
+                className="icon-btn !h-[20px] !w-[22px] !text-[13px] !font-bold"
+                data-tip="Trim out — set the range end (drag the OUT handle for fine trim)"
+                aria-label="Set source out point"
+                data-testid="shell-source-trim-out"
+                onClick={() => useUi.getState().setSourceRangeOut(sourceMediaId, useUi.getState().sourceRanges[sourceMediaId]?.out ?? sourceDur)}
+              >
+                <span aria-hidden>]</span>
+              </button>
+              <button
+                type="button"
+                className="icon-btn !h-[20px] !w-[20px] !text-[12px] !font-bold"
+                data-tip="Clear the trim range — the full source inserts again"
+                aria-label="Clear source trim range"
+                data-testid="shell-source-trim-clear"
+                onClick={() => useUi.getState().clearSourceRange(sourceMediaId)}
+              >
+                <span aria-hidden>×</span>
+              </button>
+            </div>
+          )}
+          <span className="mono shrink-0 text-[11px] text-tmuted" data-testid="shell-viewer-source-duration">
+            {sourceMediaId && sourceDur != null && useUi.getState().sourceRanges[sourceMediaId]
+              ? `Range ${tc(useUi.getState().sourceRanges[sourceMediaId]!.in)}–${tc(useUi.getState().sourceRanges[sourceMediaId]!.out)} · ${tc(useUi.getState().sourceRanges[sourceMediaId]!.out - useUi.getState().sourceRanges[sourceMediaId]!.in)} of ${tc(sourceDur)}`
+              : `Source duration ${sourceDur !== null ? tc(sourceDur) : '— still image'}`}
+          </span>
+          <div className="flex flex-1 items-center justify-end" />
+        </div>
+      ) : (
+      <div className="relative flex shrink-0 items-center px-2" style={{ height: 32, minHeight: 32 }} data-testid="shell-viewer-transport">
+        <div className="flex flex-1 items-center" />
+
+        <div className="flex items-center gap-2">
+          <button className="icon-btn !h-[20px] !w-[20px]" onClick={() => setPlayhead(0)} data-tip="Go to start (Home)" aria-label="Go to start">
+            <SkipBack size={13} strokeWidth={1.6} />
+          </button>
+          <button className="icon-btn !h-[20px] !w-[20px]" onClick={() => nudge(-1)} data-tip="Step back 1 frame (←)" aria-label="Step back one frame">
+            <ChevronLeft size={14} strokeWidth={1.6} />
+          </button>
+          <button
+            className="flex h-[24px] w-[28px] items-center justify-center rounded-[var(--radius)] transition-colors"
+            onClick={togglePlay}
+            data-testid="shell-viewer-btn-play"
+            data-tip="Play / Pause (Space)"
+            aria-label="Play or pause"
+            style={{
+              color: 'var(--text-primary)',
+              background: playing ? 'var(--active-overlay)' : 'var(--bg-inset)',
+              border: `1px solid ${playing ? 'var(--border-strong)' : 'var(--border-soft)'}`,
+            }}
+          >
+            {playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-[2px]" />}
+          </button>
+          <button className="icon-btn !h-[20px] !w-[20px]" onClick={() => nudge(1)} data-tip="Step forward 1 frame (→)" aria-label="Step forward one frame">
+            <ChevronRight size={14} strokeWidth={1.6} />
+          </button>
+          <button className="icon-btn !h-[20px] !w-[20px]" onClick={() => setPlayhead(duration)} data-tip="Go to end (End)" aria-label="Go to end">
+            <SkipForward size={13} strokeWidth={1.6} />
+          </button>
+        </div>
+
+        <div className="flex flex-1 items-center justify-end gap-1">
+          <button className="icon-btn !h-[20px] !w-[20px]" onClick={markIn} data-tip="Mark in (I)" aria-label="Mark in">
+            <MarkIcon dir="l" />
+          </button>
+          <button className="icon-btn !h-[20px] !w-[20px]" onClick={markOut} data-tip="Mark out (O)" aria-label="Mark out">
+            <MarkIcon dir="r" />
+          </button>
+          <button
+            className={`icon-btn !h-[20px] !w-[20px] ${loopEnabled ? 'toggled' : ''}`}
+            onClick={() => setLoopEnabled(!loopEnabled)}
+            data-tip="Loop playback (⌘⇧G)"
+            aria-label="Toggle loop playback"
+            aria-pressed={loopEnabled}
+          >
+            <Repeat size={13} strokeWidth={1.6} />
+          </button>
+          {/* marker button + compact color palette (spec 18 §4.3) */}
+          <span ref={markerRef} className="relative flex items-center">
+            <button
+              className="icon-btn !h-[20px] !w-[20px]"
+              onClick={() => { addMarker(playhead); setPaletteOpen(false); }}
+              onContextMenu={(e) => { e.preventDefault(); setPaletteOpen(!paletteOpen); }}
+              data-tip="Add marker (M · right-click for colors)"
+              aria-label="Add marker"
+              aria-haspopup="menu"
+              aria-expanded={paletteOpen}
+            >
+              <Flag size={13} strokeWidth={1.6} />
+            </button>
+            {/* explicit keyboard-open path: a labelled chevron toggle next to
+                the flag (R13 fix — the palette was right-click-only) */}
+            <button
+              className="icon-btn !h-[20px] !w-[16px]"
+              onClick={() => setPaletteOpen(!paletteOpen)}
+              data-tip="Marker color palette"
+              aria-label="Marker color"
+              aria-haspopup="menu"
+              aria-expanded={paletteOpen}
+            >
+              <ChevronDown size={11} strokeWidth={1.8} />
+            </button>
+            {paletteOpen && (
+              <span className="absolute right-0 top-[110%] z-50 flex items-center gap-1 rounded-[var(--radius)] border border-strong bg-inset p-1" role="menu" aria-label="Marker color">
+                {MARKER_PALETTE.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={c === MARKER_CYCLE[scene.markers.length % MARKER_CYCLE.length]}
+                    aria-label={`Marker color ${c}`}
+                    className="h-[12px] w-[12px] rounded-full border border-black/40 hover:scale-110"
+                    style={{ background: `var(--mk-${c})` }}
+                    onClick={() => { addMarker(playhead, c); setPaletteOpen(false); }}
+                  />
+                ))}
+              </span>
+            )}
+          </span>
+        </div>
+      </div>
+      )}
+    </div>
+  );
+}

@@ -1,17 +1,35 @@
 # 18 — UI Shell: Application Layout, Panels & Interaction Contracts (DaVinci-derived, simplified)
 
 **Stream:** UI shell / application chrome
-**Status:** v1.1 (Round 8 — cloudcut UX-spec integration: per-panel state rows, context menus §4.9, pointer/cursor grammar §5A, error & notification UX §6.4, visual-language deepening §9, a11y floor §11, UX-scope code references §13; ours-wins policy applied to all 25 contradictions, SCOUT-R8-C §3)
-**Date:** 2026-09-02 (v1.0 Round 7)
+**Status:** v1.4 (Round 22 — the finality round: the §0 forward inventory + the R22 drag-law notice in §16.2 + the MVP-vehicle re-pointing in §16.3; v1.3 Round 19 amendment: §16 designates ui-mock/shell-mini the first shippable MVP — OT-seam-tracked ops, embedding contract, R18e→R19 iterated feature inventory folded per explicit user directive; v1.2 Round 15 amendment pass — A1/A5/B2/B4/N2/N3/N4/N5/N6/N7/N9/N10/N12-class resolutions + testid census + annotakit-for-app charter, per `.agents/SPEC-REVISION-CANDIDATES.md` + ARCH-R15 §4; v1.1 Round 8 — cloudcut UX-spec integration: per-panel state rows, context menus §4.9, pointer/cursor grammar §5A, error & notification UX §6.4, visual-language deepening §9, a11y floor §11, UX-scope code references §13; ours-wins policy applied to all 25 contradictions, SCOUT-R8-C §3)
+**Date:** 2026-09-02 (v1.0 Round 7; v1.3 2026-09-06)
 **Spec file:** `18-ui-shell.md`
 **Consumers:** Implementation team (UI layer), spec 05 (timeline internals), spec 16 (keyboard bindings), spec 15 (command dispatch), spec 17 (Tier 3 UI tests)
 **UX source material:** cloudcut-nle `ux-spec` branch v1.3.5 (28 files — the prior iteration's app-layer UX spec; integrated Round 8 per the ours-wins contradiction policy; the cloudcut-nle main branch is the UX/app-scope reference codebase, §13)
 
 ---
 
-## 0. TL;DR
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
 
-This spec defines the application shell — the layout regions, panel inventory, and interaction contracts of the editor UI. It is derived from the DaVinci Resolve layout clone committed at `ui-mock/davinci_resolve_ui_mock.html`, **deliberately simplified** to match our much smaller scope: the menu bar is removed, the inspector is reduced from 6 tabs to 4, and the 7-page dock collapses to 3 pages (Edit / Color / Deliver). Every panel is a thin `EngineCommand` generator over the spec 15 wire protocol — no panel calls a manager method directly, and no panel holds engine state. The timeline area's internals (component hierarchy, virtualization, drag state machines) are owned by spec 05; this spec owns everything that *surrounds* them. **v1.1** integrates the cloudcut UX-spec's applicable material (per-panel state rows, the five context menus, the pointer/cursor grammar, error & notification UX, visual-language depth, the a11y floor, perf budgets) under the ours-wins contradiction policy — every rejection is registered, not silently dropped.
+**BASE (accepted, pinned 2026-09-07):**
+- The full-shell DESIGN (§3-§15): region geometry, panel inventory, gesture→command contracts, state rows, a11y floor — the design of record, validated in `ui-mock/shell-variants` (1,334 tests, real color math, W4 real pipelines) and PRODUCTIZED as the `nle-ui` package (`dba8d52`; consumer pin `752991d`; 640 tests, engine-free, boundary-script-gated).
+- The mini DESIGN + law register (§16, `ui-mock/shell-mini` @ 333 tests post-R22-retirement; OT-SEAMS seam map; annotakit live review surface).
+- The app assembly skeleton: `AppShell` + slots (`timelineRegion`/`programMonitor`/`mediaDragSource`) + ProgramCanvas (engine N1) wired in `nle-test-app` @ `e662759` (83 tests).
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- **MiniShell** — the mini chrome family in nle-ui (C0; package tests + boundary script + Storybook render).
+- **The crawl app's chrome surfaces** — inspector/pool/topbar/toast/splitter laws realized engine-wired (C1-C2; the LAW-NET-INVENTORY corpus checked row-by-row).
+- **The full-shell chrome gaps** — the keymap long tail (~54 of ~178 rows; C22 ledger), i18n (C12), tooltip dismiss (C11), type-scale deltas (C14), strip badges (C15) (R-polish; spec 17 facet rows).
+- **The color page's REAL engine binding** — the mock's W4 math bound to the engine pipeline (W-color; grade-math parity pins).
+- **The a11y + NFR floor on the APP** (not the mocks): §11 audit at R-polish; §12 perf budgets enforced by the battery.
+
+**ACCEPTANCE & TEST PLAN:** spec 17 §13A facet matrix (Tier 3 UI rows) + §14.4 step 0; the mini's law net (LAW-NET-INVENTORY.md — the C1/C4 acceptance lists, pre-C1/pre-C4 deliverables); the battery's posture checks; the annotakit review loop on the crawl app (C4).
+
+---
+
+## 0A. TL;DR
+
+This spec defines the application shell — the layout regions, panel inventory, and interaction contracts of the editor UI. It is derived from the DaVinci Resolve layout clone committed at `ui-mock/davinci_resolve_ui_mock.html`, **deliberately simplified** to match our much smaller scope: the menu bar is removed, the inspector is reduced from 6 tabs to 4, and the 7-page dock collapses to 3 pages (Edit / Color / Deliver). Every panel is a thin `EngineCommand` generator over the spec 15 wire protocol — no panel calls a manager method directly, and no panel holds engine state. The timeline area's internals (component hierarchy, virtualization, drag state machines) are owned by spec 05; this spec owns everything that *surrounds* them. **v1.1** integrates the cloudcut UX-spec's applicable material (per-panel state rows, the five context menus, the pointer/cursor grammar, error & notification UX, visual-language depth, the a11y floor, perf budgets) under the ours-wins contradiction policy — every rejection is registered, not silently dropped. **v1.3 (R19)** adds §16: shell-mini is designated the first shippable MVP — the minimal complete editing surface with OT-seam-tracked timeline logic and an embedding contract — landing before the full shell.
 
 ---
 
@@ -101,7 +119,7 @@ Splitters are the only layout-mutation surface: one horizontal (main body ↔ ti
 
 ### 3.3 The viewer canvas mount
 
-The WebGPU canvas mounts inside `#video-frame`'s `.frame-inner` (letterboxed). Its CSS size drives the render descriptor's output dimensions (spec 04 §7.1 `initialize(canvas…)`); device pixel ratio is respected (canvas backing store = CSS size × DPR, clamped to 2× for 4K-safety). The viewer-toolbar's zoom select offers Fit / 50% / 100% / 200%; zoom changes re-letterbox without changing render resolution except at explicit 100%/200% (which re-render at the backing-store size — spec 04 §16.2 cache rules still apply).
+The WebGPU canvas mounts inside `#video-frame`'s `.frame-inner` (letterboxed). Its CSS size drives the render descriptor's output dimensions (spec 04 §7.1 `initialize(canvas…)`); device pixel ratio is respected (canvas backing store = CSS size × DPR, clamped to 2× for 4K-safety). The viewer-toolbar's zoom select offers **Fit / 1.5× / 2× / 4×** — magnification multiples of the fit width (Round 15 amendment, C7, replacing the unanchored Fit/50%/100%/200% ladder: the old "percent" semantics had no pixel anchor — the R13 honesty fix documented that the prior mock's "100%" was in fact 2× fit, the exposure this ladder corrects). `Fit` letterbox-fills (1× fit); 1.5×/2×/4× multiply the fit width and overflow-scroll when larger than the frame; zoom changes re-letterbox without changing render resolution except when a multiple overflows the frame (which re-renders at the backing-store size — spec 04 §16.2 cache rules still apply).
 
 ## 4. Panel Inventory
 
@@ -109,7 +127,7 @@ Each panel entry below lists: contents, behaviors, engine bindings, and simplifi
 
 ### 4.1 toolbar2 — secondary toolbar (`shell-toolbar`)
 
-Left cluster: `Media Pool` toggle (`btn-mediapool`), `Effects` toggle (`btn-effects`) — both panel-visibility toggles routed to the UI store. The mock's `Index` and `Sound Library` buttons are dropped (§8). Center: project title (read-only; double-click opens project metadata in the Deliver page's project section). Right cluster: `Inspector` toggle (`btn-inspector`, default on), fullscreen-viewer toggle (mock's first icon button). The mock's `Mixer` and `Metadata` buttons are dropped (§8).
+Left cluster: `Media Pool` toggle (`btn-mediapool`), `Effects` toggle (`btn-effects`) — both panel-visibility toggles routed to the UI store (the Effects panel's contents/contract are §4.11 — Round 15 amendment, N9). The mock's `Index` and `Sound Library` buttons are dropped (§8). Center: project title (read-only; double-click opens project metadata in the Deliver page's project section). Right cluster: `Inspector` toggle (`btn-inspector`, default on), fullscreen-viewer toggle (mock's first icon button). The mock's `Mixer` and `Metadata` buttons are dropped (§8).
 
 ### 4.2 MediaPoolPanel (`shell-mediapool`)
 
@@ -119,10 +137,10 @@ The only panel the mockup doesn't draw (it exposes just the toggle) — DaVinci'
 - **Clip grid/list**: one card per `MediaAsset` (spec 09 §7): thumbnail, name, duration (TC format, spec 03 §4), type badge (V/A), resolution, fps badge when ≠ project fps. List/grid toggle is a UI-store pref. **Sort modes** (v1.1): name / duration / import date / type — ascending + descending, sort state persisted with the view pref; footer shows live counts (`N clips · M:SS total`) — counted from the snapshot, never cached (the reference repo's static footer is our warning case).
 - **Search**: text filter over name, 200 ms debounce, clear button; the empty-search result state is a distinct state row (below).
 - **Selection & drag**: single-select (click), multi-select (shift/cmd-click). Drag a clip onto a track lane → `insertElement` with `PlacementStrategy` resolved by drop position (spec 06 §5.9 / spec 05 §8.9). **Drag feedback (v1.1)**: drag ghost = thumbnail + name; the cursor flips to `copy` over a valid lane and `not-allowed` over an incompatible lane (audio asset over video track — the placement compatibility table, spec 06 §5.9); the hovered target track highlights its lane background.
-- **Double-click**: selects and scrolls the timeline to the first element using that asset (reveal); source-preview playback is deferred (§8.5).
+- **Double-click**: selects and scrolls the timeline to the first element using that asset (reveal); source-preview playback is deferred (§8.5). (One gesture, one meaning — R15/B4: reveal is the double-click's ONLY meaning; the source-preview triggers live in §4.3.)
 - **Context menu**: Reveal in timeline, Rename (`renameMediaAsset` if spec 15 defines it; else asset metadata edit via `updateElements`-class command — final call at seal round), Remove (`removeMediaAsset`), Properties (opens inspector's read-only file info section).
 - **Missing-asset error state (v1.1)**: assets whose backing file fails the OPFS existence check render a warning badge + red clip stripe downstream; the relink flow is v2 (no wire command exists — §8.14). Badge text: "Media offline".
-- **Metadata display**: bounded to spec 09's `MediaRecord` fields (name, type, duration, resolution, fps, size, importedAt) — no bins, no smart bins (schema change, v2 rejection §8.14).
+- **Metadata display**: bounded to spec 09's `MediaRecord` fields (name, type, duration, resolution, fps, size, importedAt) — no bins, no smart bins (schema change, v2 rejection §8.14). (Round 15 amendment, N3: `importedAt` is ISO 8601 and is ADDED to 09 §3.1's `MediaRecord` by the parallel R15 09-side amendment — this field list anticipated it; `size` stays numeric bytes and the SHELL formats it into display strings ("1.8 GB") for cards and Properties — formatted sizes are never persisted; the import-date sort mode consumes `importedAt`.)
 - **A11y**: `listbox`/`option` semantics with `aria-activedescendant` for the focused card; arrow-key navigation moves focus (not selection — Enter/Space selects); the count footer is a `aria-live="polite"` region announcing result-set changes from search/sort.
 
 **State rows (v1.1 — every panel has them; happy-path content above applies only to the ready state):**
@@ -135,16 +153,16 @@ The only panel the mockup doesn't draw (it exposes just the toggle) — DaVinci'
 | Inspector | "Nothing to inspect" (mock default) | (n/a) | — |
 | Deliver (no clips) | "Timeline is empty — nothing to export" | job-progress rows | failed job row + Retry (§6.4) |
 
-Every state row is testable: `data-testid="shell-<panel>-state-<state>"` (§10).
+Every state row is testable: `data-testid="shell-<panel>-state-<state>"` (§10). The viewer's family is enumerated in full (Round 15 amendment — testid census): `shell-viewer-state-empty` / `shell-viewer-state-loading` / `shell-viewer-state-error` — `shell-viewer-state-empty` joins the census explicitly (the mock shipped loading/error rows but rendered the empty row without its testid; ARCH-R15 §2.6 registers the mock patch, and Tier-3 empty-state assertions target this id).
 
 ### 4.3 ViewerPanel (`shell-viewer`)
 
 - **viewer-toolbar** (28px): zoom select (§3.3), current TC chip (`#viewer-tc-current`, mono font), project fps chip, safe-area toggle (UI pref; overlays are DOM, not GPU — spec 04 §16.5 note).
 - **In-canvas overlays (v1.1, DOM over canvas)**: top-left = active clip name + its TC in/out; top-right = resolution + fps chips. Hidden while a tool-drag is active on the timeline (no motion while tracking, §9); toggleable via viewer-toolbar.
 - **video-frame**: the WebGPU canvas (spec 04). Letterboxed; degraded-renderer banner (spec 00 §5) renders as a DOM strip under the canvas, not inside it.
-- **scrub-row**: playhead scrubber. Input: pointer down + move (throttled to rAF) → `seek` commands (coalesced per spec 05 §8.2's preview-commit pattern); release commits final `seek`. **Richness (v1.1)**: the scrubber renders the in/out + loop range as a shaded band (from `setLoop` state — no dedicated in/out model, spec 16 §3.4 note), clip-boundary ticks (thin marks at element edges from the snapshot), click-to-seek anywhere in the row, and a hover TC tooltip. Distinct icons for jump-start vs step-back (a common reference-repo conflation).
-- **transport-row** (32px): center cluster = step-back, play/pause (`btn-play` → `play`/`pause`), step-fwd, jump-start, jump-end; right cluster = loop (`btn-loop` → `setLoop`), mark-in `I`, mark-out `O` (→ `setLoop` start/end halves — no dedicated in/out-point commands, spec 16 §3.4 note; spec 03 §3.4 is the playback-side consumer), add-marker `M` (→ `addMarker` + color from a compact palette). Keyboard parity is total (spec 16 §3.4-3.7) — the buttons exist for discoverability, the shortcuts for speed; both must dispatch identical commands (state-WYSIWYG test, spec 17 §6.1).
-- **Fallback source-preview (v1.1, deferred-dual-viewer stand-in)**: double-clicking a media-pool asset (or the inspector's source card) can play the raw asset via a plain `<video>` element swapped over the canvas — media-asset playback, no timeline state involved. This is the cheap interim for §8.5's deferred dual viewer: it gives editors source-matching without modeling a second program monitor. Not a spec 15 command surface — a UI-layer affordance reading only `MediaRecord` metadata; exiting restores the program canvas on the next frame.
+- **scrub-row**: playhead scrubber. Input: pointer down + move (throttled to rAF) → `seek` commands (coalesced per spec 05 §8.2's preview-commit pattern); release commits final `seek`. **Richness (v1.1)**: the scrubber renders the in/out + loop range as a shaded band (from `setLoop` state — no dedicated in/out model, spec 16 §3.1 note), clip-boundary ticks (thin marks at element edges from the snapshot), click-to-seek anywhere in the row, and a hover TC tooltip. Distinct icons for jump-start vs step-back (a common reference-repo conflation). **Inverted-window handling (Round 15 amendment, N5):** an inverted window (start > end) renders the band EMPTY and playback ignores it (no loop, no hang) — the scrubber itself cannot create one (dragging a half past the other moves the far half, the mock's R14 inversion law), and if corrupt state ever produces one it is displayed-and-skipped, never fatal; cross-ref 15 §13.15's N5 row (the invariant lives there — §4.3.29 was never amended; end > start validated / halves swapped).
+- **transport-row** (32px): center cluster = step-back, play/pause (`btn-play` → `play`/`pause`), step-fwd, jump-start, jump-end; right cluster = loop (`btn-loop` → `setLoop`), mark-in `I`, mark-out `O` (→ `setLoop` start/end halves — no dedicated in/out-point commands, spec 16 §3.1 note (citation corrected R15, N12 — the note lives in §3.1, not §3.4; 05 §11.2's dedicated in/out model is retired by that resolution); spec 03 §3.4 is the playback-side consumer), add-marker `M` (→ `addMarker` + color from a compact palette). Keyboard parity is total (spec 16 §3.4-3.7) — the buttons exist for discoverability, the shortcuts for speed; both must dispatch identical commands (state-WYSIWYG test, spec 17 §6.1).
+- **Fallback source-preview (v1.1, deferred-dual-viewer stand-in)**: triggered from the CLIP MENU's **"Open in viewer"** item (§4.9) or the inspector source-card's play button — it plays the raw asset via a plain `<video>` element swapped over the canvas — media-asset playback, no timeline state involved. (Round 15 amendment, B4: double-click on a pool card is §4.2's reveal and NOTHING else — one gesture, one meaning; the v1.1 text's "double-clicking a media-pool asset … can play the raw asset" claimed the same gesture a second time and is withdrawn.) This is the cheap interim for §8.5's deferred dual viewer: it gives editors source-matching without modeling a second program monitor. Not a spec 15 command surface — a UI-layer affordance reading only `MediaRecord` metadata; exiting restores the program canvas on the next frame.
 
 ### 4.4 InspectorPanel (`shell-inspector`)
 
@@ -153,11 +171,11 @@ Mock has 6 tabs (video/audio/effects/transition/image/file); we ship **4**:
 | Tab | Visible when | Contents (all model-backed, spec 09 ceiling) |
 |---|---|---|
 | **Video** | video/comp element selected | Transform: position X/Y, scale %, rotation°, opacity %, flip H/V (→ transform-resolver fields, spec 07 §5.4); Speed: rate % + preserve-pitch toggle (→ retime family, spec 06 §5.11) |
-| **Audio** | audio-bearing element selected | Gain dB, pan, fade-in/fade-out seconds (→ spec 03 §9 / spec 09 audio fields) |
+| **Audio** | audio-bearing element selected | Volume %, pan (−100..100), fade-in/fade-out seconds (→ spec 03 §9 / spec 09 §3.1 audio fields) |
 | **Effects** | any element selected | Effect list (add/remove/reorder/toggle + param editors) → `addEffect`/`updateEffect`/`removeEffect`/`reorderEffect`/`toggleEffect` (spec 15 §4.3.52-56) |
 | **Transition** | transition selected (or boundary focus) | Presentation picker (27 registry entries, spec 07 §6.3), duration, alignment (→ `updateTransition`, spec 15 §4.3.62) |
 
-Inspector edits are **commit-on-release** (slider drag) / **commit-on-enter** (numeric field) with live preview via the same preview-commit coalescing as timeline drags (spec 06 §4.6). Multi-selection shows the common-parameter subset with "mixed" indicators. Nothing selected → "Nothing to inspect" (mock's default text). The mock's `image` and `file` tabs are dropped (§8.6-8.7).
+Inspector edits are **commit-on-release** (slider drag) / **commit-on-enter** (numeric field) with live preview via the same preview-commit coalescing as timeline drags (spec 06 §4.6). Multi-selection shows the common-parameter subset with "mixed" indicators. Nothing selected → "Nothing to inspect" (mock's default text). The mock's `image` and `file` tabs are dropped (§8.6-8.7). (Round 15 amendment, B2: the audio tab's field set is Volume % + pan −100..100 + fades — reading 09 §3.1's `volume` (linear 0..1, presented as %) and `pan` (−100..100, ADDED to ElementJSON by the parallel R15 09-side amendment, cross-ref); "Gain dB" is withdrawn — no dB field exists in 09 and dB conversion is display-side only. `preservePitch` joins the same 09 amendment; its editor stays on the Video tab's Speed row — a retime concern — while the field backs both.)
 
 **Field contracts (v1.1):**
 
@@ -170,7 +188,13 @@ Inspector edits are **commit-on-release** (slider drag) / **commit-on-enter** (n
 
 ### 4.5 timeline-toolbar (`shell-timeline-toolbar`)
 
-Tool cluster (radio group; mirrors spec 15's tool enum exactly — spec 16 §3.2 bindings in parens): Select (A), Blade (B), Roll (T), Ripple (R), Slip (,'), Slide (S), Rate-stretch (→ `selectTool` command; the mock's `dyntrim` is dropped, §8.9). Toggle cluster: Snapping magnet (`btn-magnet`, N — **UI-store**, spec 16 §0.2), Link A/V (`btn-linklock` — UI-store), Lock all tracks (`btn-track-lock` → per-track `toggleTrackLock` fan-out, undoable as a batch, spec 15 §7). Marker cluster: add-marker button + color presets. Zoom cluster: zoom-to-fit, zoom-to-selection, slider (UI-store viewport state, spec 05 §5). Master audio: mute + volume slider (→ master bus gain, spec 03 §9's audio graph). The mock's sync-bin/auto-sync buttons are dropped (§8.10).
+Tool cluster (radio group; honors spec 15 §4.3.45's tool enum — **nine tools** — exactly; Round 15 amendment, N2: the v1.1 text listed seven while claiming exact parity, and the mock likewise ships seven (C23)): Select (V), Razor/Blade (B), Roll (T), Ripple (R), Slip (Y), Slide (U), Rate-stretch, Hand (H), Zoom (Z) — spec 16 §3.2 bindings in parens where a key exists (rate-stretch is toolbar-only, no §3.2 key; v1.1's A/,',/S letters were the DaVinci mockup's — corrected to 16 §3.2's V/Y/U). Hand and zoom are keyboard-only (H/Z), toolbar-excluded per the removal ledger (§8.15). All dispatch `selectTool`; the mock's `dyntrim` is dropped (§8.9). Toggle cluster: Snapping magnet (`btn-magnet`, N — **UI-store**, spec 16 §0.2), Link A/V (`btn-linklock` — UI-store), Lock all tracks (`btn-track-lock` → per-track `toggleTrackLock` fan-out, undoable as a batch, spec 15 §7). Marker cluster: add-marker button + color presets. Zoom cluster: zoom-to-fit, zoom-to-selection, slider (UI-store viewport state, spec 05 §5). Master audio: mute + volume slider (→ master bus gain, spec 03 §9's audio graph). The mock's sync-bin/auto-sync buttons are dropped (§8.10).
+
+**Toggle-cluster contracts (Round 15 amendments):**
+
+- **N4 — Link A/V gate (`btn-linklock`):** link-OFF suspends BOTH linked-selection propagation (05 §12.3: selecting one of a linked pair selects only the clicked element) AND sync-lock move-following (06 §6: a linked partner no longer follows moves). The flag is VIEW-level (this UI-store toggle); the links themselves are DOC-level (`ElementJSON.linkedTo`, added to 09 §3.1 by the parallel R15 09-side amendment) — turning the toggle off never edits or deletes doc-level links, it only gates their behavioral consequences for this view.
+- **N6 — Lock-all (`btn-track-lock`):** set-all semantics — a click sets EVERY track to the clicked target from any mixed state; the pressed state is DERIVED (`every(track.locked)`, so mixed states read un-pressed); the fan-out stays one undoable batch (spec 15 §7). After undo/redo the shell RE-DERIVES view flags (this pressed state and every other §6.2 view flag) from the restored snapshot — view state follows doc state through history restores (closes the R13 mock bug where undo left the flag stale).
+- **Ripple mode is NOT a toolbar concern (A6, R15):** ripple the *tool* sits in the tool cluster above (`R`); ripple *mode* — the global editing pref — is a view-level flag bound to `Option+R` (spec 16 §3.2) and persisted as `TimelineViewState.rippleMode` (spec 09 §3.1); it gets no toolbar toggle unless a seal round adds one.
 
 ### 4.6 timeline-tabs (`shell-timeline-tabs`) — scene tabs
 
@@ -178,7 +202,7 @@ The mock's timeline tabs map to our **scenes** (spec 09 §6: multi-scene project
 
 ### 4.7 timeline-area (`shell-timeline`) & track-headers (`shell-track-headers`)
 
-The region's internals belong to spec 05 (component hierarchy §4, zoom/scroll §5, virtualization §6, clip rendering §7, interactions §8, track headers §10). The shell fixes: the 160px header column (big TC readout in `#track-headers` mirrors the viewer TC; per-track M/S/lock/visibility buttons → `toggleTrackMute`/`toggleTrackSolo`/`toggleTrackLock`/`toggleTrackVisibility` commands; the mock's per-track waveform/clip-view toggle is a UI pref), and the scroll container's native scrollbars (the mock's custom 14px `#hscrollbar-row` is deferred, §8.11). The playhead line + head render per spec 05 §11.
+The region's internals belong to spec 05 (component hierarchy §4, zoom/scroll §5, virtualization §6, clip rendering §7, interactions §8, track headers §10). The shell fixes: the 160px header column (big TC readout in `#track-headers` mirrors the viewer TC; per-track M/S/lock buttons on ALL track kinds, plus visibility (V) on NON-AUDIO kinds only → `toggleTrackMute`/`toggleTrackSolo`/`toggleTrackLock`/`toggleTrackVisibility` commands (Round 15 amendment, A5: M/S/L render on every track kind — solo on video/text/overlay = monitor-solo semantics, 18's shape wins over 05 §10's "no S on video"; V renders only where 05 §10 permits it, non-audio — correcting this spec's unqualified v1.1 list in BOTH directions; the mock ships exactly this shape); the mock's per-track waveform/clip-view toggle is a UI pref), and the scroll container's native scrollbars (the mock's custom 14px `#hscrollbar-row` is deferred, §8.11). The playhead line + head render per spec 05 §11.
 
 ### 4.8 app-dock (`shell-dock`)
 
@@ -188,11 +212,11 @@ Left: brand mark + app name. Center: page dock — **three pages, not seven**: `
 
 Five context menus, each item command-backed (the §5 rule: no menu item without a spec 15 type or explicit `(UI)` tag). All open on right-click and on **Shift+F10** with focus in the surface (keyboard route is normative, §11). Menu chrome: DOM popup, 220px, 28px items, shortcut labels right-aligned, separators between groups, Escape/outside-click closes, focus returns to opener. `data-testid="shell-menu-<name>"` + items `shell-menu-<name>-<item>`.
 
-**Clip menu** (right-click a selected element; multi-select = whole selection): Cut `⌘X` · Copy `⌘C` · Paste at playhead `⌘V` — `cut`/`copy`/`paste` (spec 15 §4.3.68-70) ⫽ Duplicate `⌘D` — `duplicate` ⫽ Split at playhead `⌘B` — `split` ⫽ Delete `⌫` — `delete` ⫽ Ripple delete `⇧⌫` — `delete {ripple:true}` (spec 16 §3.4 defaults: Delete leaves gap — flag this in the cheat sheet, reference C8) ⫽ ⫽ Remove Effects — batched `removeEffect` ⫽ Add Transition… — opens inspector Transition tab ⫽ Rename — inline edit → `updateElements {name}` ⫽ Reveal in Media Pool — (UI) navigation.
+**Clip menu** (right-click a selected element; multi-select = whole selection): Cut `⌘X` · Copy `⌘C` · Paste at playhead `⌘V` — `cut`/`copy`/`paste` (spec 15 §4.3.68-70) ⫽ Duplicate `⌘D` — `duplicate` ⫽ Split at playhead `⌘B` — `split` ⫽ Delete `⌫` — `delete` ⫽ Ripple delete `⇧⌫` — `delete {ripple:true}` (spec 16 §3.4 defaults: Delete leaves gap — flag this in the cheat sheet, reference C8; A1 resolved R15: 16 §3.4 now matches this row — `Delete`/`Backspace` plain-delete aliases, `⇧Delete` the only ripple chord) ⫽ ⫽ Remove Effects — batched `removeEffect` ⫽ Add Transition… — opens inspector Transition tab ⫽ Rename — inline edit → `updateElements {name}` ⫽ Reveal in Media Pool — (UI) navigation ⫽ Open in viewer — (UI) the v1 source-preview trigger (§4.3, R15/B4; double-click on a pool card stays §4.2's reveal).
 
 **Track-header menu** (right-click a track): Add Track Above/Below — `addTrack {index}` ⫽ Delete Track — `deleteTrack` (with-clips confirmation, §6.4) ⫽ Rename Track — inline → `updateElements`-class (track name) ⫽ ⫽ Mute `M`-click · Solo · Lock — `toggleTrackMute/Solo/Lock` ⫽ Height: Compact/Normal/Tall — (UI) pref.
 
-**Ruler menu** (right-click the ruler): Add Marker — `addMarker` ⫽ Go to Marker › (submenu, first 5 + More) — `seek` ⫽ Clear Markers in View — batched `deleteMarker` ⫽ ⫽ Mark In `I` / Mark Out `O` — `setLoop` halves ⫽ Clear In/Out — `setLoop {start:null, end:null}` (note the halves semantics — "clear out" clears `end`, not `start`; the reference-repo bug is the test case).
+**Ruler menu** (right-click the ruler): Add Marker — `addMarker` ⫽ Go to Marker › (submenu, first 5 + More) — `seek` ⫽ Clear Markers in View — batched `deleteMarker` ⫽ ⫽ Mark In `I` / Mark Out `O` — `setLoop` halves ⫽ Clear In/Out — `setLoop {start:null, end:null}` (note the halves semantics — "clear out" clears `end`, not `start`; the reference-repo bug is the test case). (Round 15 amendment, N10: plain click/drag on the ruler SEEKs (05 §8.6 — the §5 gesture row) — markers are added via `M` (spec 16 §3.7), §4.5's marker button + color palette, and THIS menu; 05 §11.1's "Click on ruler to add marker" clause is retired by this resolution (R15 — the 05-side edit lands in the parallel pass). Right-click / Shift+F10 is the ruler's only menu route.)
 
 **Media-pool menu** (clip card): Insert at Playhead `,`-equivalent button — `insertElement {strategy:'explicit'}` ⫽ Reveal in Timeline — (UI) navigation ⫽ Rename / Remove / Properties — as §4.2.
 
@@ -203,6 +227,15 @@ Cross-track-type drags already fail at placement (spec 06 §5.9) — the menus a
 ### 4.10 Sample project (v1.1)
 
 A built-in 30-second demo project (3 video clips + 1 text + 1 audio + one crossfade) ships as a `ProjectJSON` fixture (spec 09) + committed media manifests, loadable from the media-pool empty state and the cheat-sheet modal's footer. It doubles as the Tier-2/3 test fixture (spec 17 §5.3's committed-asset rule + §13A.6 — the same file the tests load, never a fork), and it is the onboarding path: "the empty state teaches" (source principle 7). No tour, no settings modal, no help menu (§8.12 stands).
+
+### 4.11 EffectsPanel (`shell-effects`) (v1.2 — Round 15 amendment, N9)
+
+The effects library rail — 220px, toggleable, docked in the main-body row between the media pool (and its splitter) and the viewer; §3.1's diagram shows the left stack collapsed (the rail rides between pool and viewer when toggled on). The §4.1 `btn-effects` toggle is the mouse route; the keyboard route is `Option+2` (spec 16 §3.8 — ⌘1–⌘4 stay page switches; the ⌥-form avoids that collision). Contents and contract:
+
+- **Registry list**: one row per registry entry, grouped by category — video effects from spec 08 §3's effect-type inventory, transitions from spec 07 §6.3's 27-entry presentation registry (the mock ships an 8-row Blur/Stylize/Transition subset as the review-surface shape). Rows: `data-testid="shell-effects-row-<slug>"`; the panel root is `shell-effects` (§10).
+- **Drag-to-clip contract (the real apply path)**: drag a row onto a timeline clip — effect rows issue `addEffect` on the dropped clip (spec 15 §4.3.52); transition rows issue `updateTransition` on the clip's boundary (spec 15 §4.3.62). The drag payload is a fixed MIME contract: type `application/x-nle-effect`, JSON body `{ name, cat }` (the mock's pinned shape). Drag feedback follows §4.2's lane grammar (`copy` cursor + ghost); incompatible drops reject per spec 06 §5.9. One drop = one undoable command — the drop IS the commit (no preview-commit).
+- **Click fallback**: a row click is an honest `info` toast (§6.4, N7's class) pointing at the drag path + the inspector's Effects tab (where param editing lives) — keyboard-operable, never a silent no-op (the mock's R14 fix).
+- **F6 region status (conditional)**: the rail joins §11.5's F6 cycle only while visible (between media pool and viewer); hidden = not a focus stop — conditional membership keeps the cycle stable for SR users.
 
 ## 5. Interaction Contracts (gesture → `EngineCommand`)
 
@@ -224,12 +257,13 @@ Every mutation the shell can perform is expressed here. This table is normative:
 | Inspector transition edit | live | `updateTransition` | |
 | Transport play/pause | — | `play` / `pause` | |
 | Scrub bar / viewer drag | seek preview | `seek` (throttled + final commit) | spec 05 §8.6 |
+| Ruler click / drag | playhead preview | `seek` (throttled + final commit) | spec 05 §8.6; plain click/drag on the ruler SEEKs — no marker-on-click (Round 15 amendment, N10: markers via `M`, §4.5's button/palette, §4.9's ruler menu; 05 §11.1's click-to-add retired R15) |
 | Step ±1 frame | — | `seek` ±1 frame | spec 16 §3.5 parity |
 | Loop toggle | — | `setLoop { start, end }` | |
-| Mark in / out (I / O) | region shading | `setLoop` start/end (spec 16 §3.4 note) | spec 03 §3.4 |
+| Mark in / out (I / O) | region shading | `setLoop` start/end halves (spec 16 §3.1 note — citation corrected R15/N12; 05 §11.2's dedicated model retired by that resolution) | spec 03 §3.4 |
 | Add marker (M) | pin | `addMarker` | color from palette |
-| Track header M / S / lock / eye | immediate | `toggleTrackMute` / `toggleTrackSolo` / `toggleTrackLock` / `toggleTrackVisibility` | |
-| Tool buttons (A/B/T/R/S/…) | cursor change | `selectTool` | spec 15 tool enum |
+| Track header M / S / lock / eye | immediate | `toggleTrackMute` / `toggleTrackSolo` / `toggleTrackLock` / `toggleTrackVisibility` | M/S/L all kinds, eye non-audio only (§4.7, R15/A5) |
+| Tool buttons (V/B/T/R/Y/U/…) | cursor change | `selectTool` | spec 15 tool enum (nine tools — letters corrected to 16 §3.2's, R15/N2) |
 | Scene tab select / + / close | — | `switchToScene` / `createScene` / `deleteScene` | §4.6 |
 | Undo / redo (toolbar + Z / Y) | — | `undo` / `redo` | |
 | Deliver: Export FCPXML | progress toast | `exportFCPXML { format, bundleMedia }` | artifact via `CommandResult.data` (spec 15 §14.11) |
@@ -291,7 +325,7 @@ The 12px status strip (§3.1) is now owned: left segment = autosave state driven
 
 ### 6.4 Error & Notification UX (v1.1)
 
-**Toast conventions**: success = 4 s auto-dismiss; warning = 6 s; error = persists until dismissed (max 3 stacked, oldest collapses to an icon row). Toasts live in a fixed region `role="status"` (success/warning) / `role="alert"` (error); the notification region never steals focus. `data-testid="shell-toast-<n>"`.
+**Toast conventions**: success = 4 s auto-dismiss; warning = 6 s; error = persists until dismissed (max 3 stacked, oldest collapses to an icon row); **info = 4 s, `role="status"` (Round 15 amendment, N7 — the class this section's own rows already needed: "Nothing to undo" below, import/deliver notices; the mock's `info`/`persist` split is the proven shape)**. Toasts live in a fixed region `role="status"` (success/warning/info) / `role="alert"` (error); the notification region never steals focus. `data-testid="shell-toast-<n>"`.
 
 **Error-class → presentation table** (typed over spec 15 §6.3's `CommandError.code`; presentation only — the engine never renders):
 
@@ -301,7 +335,7 @@ The 12px status strip (§3.1) is now owned: left segment = autosave state driven
 | Command rejected — state conflict (`OVERLAP_REJECTED`, `MAIN_TRACK_CONSTRAINT`, `TRACK_NOT_EMPTY`, `LOCKED_*`) | invalid-op feedback: message naming the blocker ("Cannot move — blocked by locked clip") + `not-allowed` cursor on the source control; no toast spam (one per gesture, not per rejected preview) |
 | Rejected no-op (`NOOP`) | silent UI-internal handling — the gesture simply produced no state change; no toast (surfacing it is noise) |
 | Not-found (`ELEMENT_NOT_FOUND` — stale refs after external mutation) | auto-refresh snapshot + retry once + toast if still failing |
-| Undo boundary (`NOTHING_TO_UNDO`/`NOTHING_TO_REDO`) | brief "Nothing to undo" toast (4 s) — not an error class visually |
+| Undo boundary (`NOTHING_TO_UNDO`/`NOTHING_TO_REDO`) | brief "Nothing to undo" `info` toast (4 s — the N7 kind, R15; not an error class visually) |
 | Render/export job failure (spec 11 job states) | Deliver-page row turns failed-state + **Retry** button (re-issues the export command); toast (error) |
 | Asset missing (`MEDIA_MISSING`-class) | pool badge + clip red stripe (§4.2) + toast once per asset |
 | Storage failure (OPFS errors, spec 09 §11) | save-chip error state (§6.3) + toast (error, persist) with retry |
@@ -342,6 +376,7 @@ The shell is a React 19 tree; the engine import is a pure TS module (spec 01 §6
 | 8.12 | Workspace save/custom layouts | Removed | Fixed dock + splitters (§3.2); workspace persistence is a v2+ feature at the earliest |
 | 8.13 | Audio meters panel | Deferred | Master mute/volume in timeline-toolbar now; meters need the meter worker tap (spec 02) — v2 |
 | 8.14 | Bins / smart bins in media pool; relink flow; Ctrl+drag-duplicate; Alt+drag-slip; MP4/EDL/JSON/MP3 export formats; LUFS/EQ/dynamics; light theme; first-run tour | **Rejected (v1.1 register — from the UX source, ours-wins)** | Schema changes (bins), missing wire commands (relink/EDL/…), contradiction C11/C14/C15, scope rejections per 00 §1; each entry lives in SCOUT-R8-C §6's rejection register — future PRs cite it instead of re-litigating |
+| 8.15 | Hand / zoom tools as toolbar buttons (§4.5) | **Toolbar-excluded (keyboard-only)** (R15/N2) | The §4.5 tool cluster carries the seven editing tools; Hand/Zoom remain spec 16 §3.2 keyboard bindings (H/Z) and honored spec 15 §4.3.45 enum members shell-wide — re-add as buttons only if pointer-space panning demands it |
 
 ## 9. Theming & Design Tokens
 
@@ -376,7 +411,7 @@ Spacing on an 8px grid (4px half-steps inside dense bars); control heights: 24px
 
 ## 10. `data-testid` Conventions (spec 17 Tier 3 contract)
 
-- Panel roots: `shell-<panel>` → `shell-toolbar`, `shell-mediapool`, `shell-viewer`, `shell-inspector`, `shell-timeline-toolbar`, `shell-timeline-tabs`, `shell-track-headers`, `shell-timeline`, `shell-dock`, `shell-color`, `shell-deliver`.
+- Panel roots: `shell-<panel>` → `shell-toolbar`, `shell-mediapool`, `shell-effects` (§4.11, R15/N9), `shell-viewer`, `shell-inspector`, `shell-timeline-toolbar`, `shell-timeline-tabs`, `shell-track-headers`, `shell-timeline`, `shell-dock`, `shell-color`, `shell-deliver`.
 - Controls: `shell-<panel>-<control>` → `shell-viewer-btn-play`, `shell-viewer-scrub`, `shell-timeline-toolbar-btn-snap`, `shell-timeline-toolbar-tool-blade`, `shell-inspector-tab-video`, `shell-track-3-btn-mute`, `shell-scene-tab-2`, `shell-deliver-btn-export-fcpxml`.
 - Elements inside the timeline follow **spec 05's** existing conventions (05 §8.x) — this spec adds only the shell frame around them.
 - Panel state rows (v1.1): `shell-<panel>-state-<empty|loading|error|noresult>` (§4.2 table); context menus + items: `shell-menu-<name>[-<item>]` (§4.9); toasts: `shell-toast-<n>` (§6.4); save chip: `shell-status-save` (§6.3).
@@ -388,7 +423,7 @@ Spacing on an 8px grid (4px half-steps inside dense bars); control heights: 24px
 2. **Focus management**: panel toggles move focus into the revealed panel; dialog close restores focus to opener; timeline drag interactions are pointer-only by nature but every commit has a keyboard route (trim via numeric inspector fields, move via frame-step + nudge commands per spec 16).
 3. **Roles**: `application` landmark on the shell; `tablist`/`tab` for inspector tabs and scene tabs; `slider` for scrub/zoom/volume (with `aria-valuetext` in TC format); `grid` semantics inside the timeline are spec 05 §11's concern.
 4. **Announcements**: live regions per §6.4's toast roles; media-pool count footer (§4.2) is `aria-live="polite"`.
-5. **F6 panel-focus cycling (+ Shift+F6 reverse)** — normative: F6 cycles focus among the major regions (toolbar → media pool → viewer → inspector → timeline → dock), 2px visible focus outline on the region container when it holds focus. This is the keyboard navigator for an `application` landmark that has no Tab-order of its own.
+5. **F6 panel-focus cycling (+ Shift+F6 reverse)** — normative: F6 cycles focus among the major regions (toolbar → media pool → [effects rail, §4.11, while visible] → viewer → inspector → timeline → dock; the conditional effects stop is the R15/N9 amendment), 2px visible focus outline on the region container when it holds focus. This is the keyboard navigator for an `application` landmark that has no Tab-order of its own.
 6. **tablist ↔ tabpanel pairing**: every `tab` sets `aria-controls` to its panel id; panels carry `role="tabpanel"` + `aria-labelledby` back-reference (inspector tabs, scene tabs).
 7. **Grid/listbox arrow navigation + `aria-activedescendant`**: media pool (§4.2), marker submenus (§4.9); focus moves without selection; Enter/Space activates.
 8. **Canvas accessibility**: the viewer canvas gets an `aria-label` updated at ≤ 1 Hz ("Playing — 00:00:12:04, Clip2") and a throttle-limited TC live region mirrors it for screen readers; the timeline's DOM surfaces (ruler as `role="slider"`) are spec 05 §11's.
@@ -424,6 +459,8 @@ Contrast floors are §9's table; the 4.5:1 body-text and 3:1 non-text minimums a
 - **Sample project (§4.10)**: loads via `loadProject` with the committed fixture; empty-state CTA + cheat-sheet footer both reach it — same fixture as spec 17 §13A.6, never forked.
 Mouse-drag tests are reserved for the translation layer itself (hit-testing, thresholds) — everything else asserts through commands, per the UI-interaction-tax rules (spec 17 §2.5 / SKILL.md).
 
+**Review loop — annotakit-for-app charter (Round 15 amendment, N-note):** the mock's n (annotakit) review loop — C/R pin-comment threads on the review surface, digest/export, optional GitHub-issue mirror — is chartered for the APP build (ARCH-R15 §4 impact map + §2.6 punch list; SCOUT-R15-D §8): a **config change** (review-surface wiring + `ANNOTAKIT_GH_TOKEN`), **NOT a port** — the app re-uses the same review infrastructure the 14 mock review rounds rehearsed (the mock is ported at A3 and retires as a repo after A7; the review loop outlives it). Tier-3 tests stay Playwright — the review loop is human-in-the-loop UX review infrastructure, not a test tier.
+
 ```bash
 # Run Tier 3 shell tests only
 npx playwright test tests/ui/shell --project=chromium
@@ -442,6 +479,7 @@ npx playwright test tests/ui/shell && npx vitest run tests/unit/shell-selectors
 | OpenCut-classic timeline (in-shell region) | spec 05 §16 inventory | The timeline-area internals this shell frames |
 | FreeCut per-element op UI | spec 05 §18 inventory | Trim/stretch/fade handle components consumed by §5's contracts |
 | **nle-engine** | — | **No shell code exists** (engine has no React UI beyond its test harness page) — the shell is greenfield |
+| **shell-mini (first MVP, R19)** | `ui-mock/shell-mini/` (this repo) | The §16 MVP: compact shell + timeline whose ops track the OT seam map (`docs/OT-SEAMS.md`); deviations register in its README; 302 vitest + live annotakit review surface |
 | **opencut-timeline** | `src/lib/timeline/controllers/` + `view/` | The interaction-controller + view-math reference for the timeline region's drag/zoom/ruler behavior behind §4.7 (spec 05 §16.5) — components pending its W4 |
 
 > Reconciliation policy: `19-code-references.md` (canon hierarchy; cloudcut-nle = UX/app-scope tier-3 reference like nle-engine is for the engine side).
@@ -469,3 +507,101 @@ npx playwright test tests/ui/shell && npx vitest run tests/unit/shell-selectors
 ---
 
 **End of `18-ui-shell.md`.** Next: `19-code-references.md`.
+
+## 16. shell-mini — the first shippable MVP (R19 amendment)
+
+**Status:** v1.3 amendment (Round 19, user directive). This section promotes
+`ui-mock/shell-mini` from "a design mock" to **the first MVP of the NLE app**
+— the minimal-but-complete editing surface that ships BEFORE the full shell
+(§3-§15) and is designed from the start to EMBED into host workflows.
+
+### 16.1 Positioning
+
+The full shell (this spec's §3-§15) is the desktop-class target. shell-mini
+is the same product's minimal cut: every ESSENTIAL NLE operation is live
+(see 16.2), the chrome is a compact three-region layout (pool · viewer +
+transport · timeline, plus inspector), and the whole surface tracks the
+opencut-timeline seam map (`ui-mock/shell-mini/docs/OT-SEAMS.md`) so the
+mock's timeline logic is a projection of the editing-domain engine, not an
+improvisation. When the real library lands, the ops rename, they do not
+redesign (OT-SEAMS §3, the swap path).
+
+shell-mini is additionally the EMBEDDING vehicle: the app is a **window
+onto a project** (track binding: one bound video + one audio lane, or a
+single video lane in video-only mode), with a host-injected binding lock —
+an embedded environment pins the pair and the chrome reduces accordingly
+(hidden track heads, no selector). The topbar is the documented downstream
+customization point (exit/parent/export handshakes live in the host).
+
+### 16.2 The MVP surface (iterated R18e → R22 through the live review loop)
+
+> **R22 (user directive — the full drag-machinery retirement):** the drag law
+> is the verbatim **R18k pointer law** and NOTHING else: the mover CLAMPS
+> between same-track neighbors (the preview is the commit; one plain history
+> entry); the magnet is **single-edge, live-field** (the moving clip's LEFT
+> edge; targets = neighbor edges + the LIVE playhead; nearest within 12px
+> wins); the UP seals the **last previewed** state. RETIRED (by explicit user
+> order, 2026-09-07): both-edge magnet + frozen gesture field, trim ghost
+> edges, commit-at-UP, pending-gesture windows, tick freeze, scrub-surface
+> edge auto-scroll. The paragraphs below that describe the R19 law are kept
+> as HISTORY — the operative law is this notice + `docs/OT-SEAMS.md` rows
+> 1/2/3 (R22 state).
+
+- **Timeline**: 9-step zoom ladder; ruler scrub + playhead drag; ripple edit
+  (delete/trim follower laws, snapshot-idempotent previews); RH cut styles
+  `[`/`]` at the playhead; split `S`; snap = edit-point magnet (pro-NLE
+  convention; per the R22 notice: single-edge, live-field); trim-as-edge
+  (14px zones, 2px accent affordance, trim-mode shade; per the R22 notice:
+  the media bounds are the law, the ghost-edge paint is retired);
+  filmstrip ↔
+  color-block bodies; real waveforms; pool→timeline DnD (gap-fit law).
+- **~~R19 drag law~~ (RETIRED — see the R22 notice above):** free drag with
+  insert-push + commit-at-UP were both retired by user directive (R21
+  partial revert + R22 full retirement); the operative law is the R18k clamp
+  (neighbors frozen; one entry; programmatic moves follow the OT wire law —
+  overlap ⇒ refuse + toast).
+- **Track binding window** (16.1): marker badges / binding selectors /
+  hidden-when-locked head law; empty-lane + head click select the track
+  (the inspector's track card).
+- **Viewer + transport**: RH grammar ([tc | play | aspect] under the
+  stage); **the scrub bar row** (full-width, center-aligned with the play
+  button; drag/click + keyboard slider semantics) and seek controls
+  (to-start; to-current-clip-head with edit-point walk-back).
+- **Layout states**: pool/inspector collapse to whole-surface 30px rails;
+  timeline minimizes to a live pill strip; viewer-max composes all three
+  with exact-layout restore.
+- **Cross-cutting**: undo/redo (snapshot family), keyboard surface
+  (S/[/]/Del/±/0/Home/Space/Esc with the form-control skip law), honest
+  toasts at every refusal, WCAG-aware focus/aria on interactive surfaces.
+
+### 16.3 Contract relationship
+
+1. **Canon hierarchy unchanged**: where shell-mini and this spec disagree,
+   this spec wins and the delta is REGISTERED — the live deviation
+   register is `ui-mock/shell-mini/README.md` §"What's OUT" (27 entries
+   through R19), the seam reasoning is `docs/OT-SEAMS.md`. The mock does
+   not amend this section silently; the R19 round folded the wave
+   feedback into this section by explicit user directive.
+2. **Interaction contracts (§5)**: the mini's ops are the §5 table's
+   minimal subset, shaped to the OT command surface (OT-SEAMS §1); when
+   the wire protocol's editing subset ships, the mini's store actions
+   become command emitters.
+3. **Testing (§12 / spec 17 Tier 3)**: the mini carries 333 vitest tests
+   (post the R22 drag-machinery retirement; the `mini-*` `data-testid`
+   grammar per §10) + the live annotakit pin-comment review surface; its
+   gates (tsc, vitest, vite build, storybook build) run on every change.
+4. **The full shell (§3-§15)** remains the design of record for the
+   desktop-class app; the mini's compact chrome is a REGISTERED scope cut,
+   not a competing design. Panel vocabulary (pool/inspector/viewer/
+   timeline) is shared so the mini grows INTO the full shell rather than
+   beside it.
+5. **The MVP vehicle (R22 amendment — the finality round):** the first
+   FULLY-WORKING MVP is the **crawl app** (spec 14 §3.1 C0-C4): the
+   shell-mini grammar rendered by `nle-ui`'s `MiniShell` + the app repo's
+   engine-wired surfaces (OT timeline via EngineMount, engine composition
+   via ProgramCanvas, WDC audio) — the mini MOCK is the design reference,
+   law register (its test net re-expressed as the crawl app's acceptance
+   corpus), and live review surface until the crawl app reaches parity
+   (the port-then-swap law; retirement decision post-C4). The mock itself
+   does not ship.
+

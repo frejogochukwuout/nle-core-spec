@@ -1,11 +1,27 @@
 # 08 — Color Grading: Wheels, Curves, LUT, Qualifier, Power Window, Scopes (REFINED)
 
 **Stream:** Color grading effects & UI
-**Status:** Refined spec — sub-agent scout SCOUT-08 has verified all claims against FreeCut + OpenCut-classic source
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the spec-08-exact math is verified in the variants mock (W4); binding it to the engine (W-color) + the S-engine instruments are the forward work); Refined spec — sub-agent scout SCOUT-08 has verified all claims against FreeCut + OpenCut-classic source
 **Primary teacher:** FreeCut `gpu-effects/effects/color.ts` (1546 LOC, ported to scene-linear, 16-bit) + `gpu-effects/effects/lut.ts` + `gpu-effects/effects/keying.ts` + `shared/utils/gpu-curves.ts` + `gpu-effects/common.ts` + `gpu-scopes/*`
 **Seed file:** `08-color-grading.md`
 **Refined by:** SCOUT-08 (general-purpose scout)
 **Date:** 2026-08-22
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-07):**
+- The spec-08-exact math, verified in the variants mock: `ui-mock/shell-variants` @ 1,334 tests — the W4a libraries (`src/lib/color/`: colorSpace sRGB LUTs, gradeMath with the EXACT §4.2 14-step op order, qualifierMath, scopesMath; 167 dedicated tests). MOCK-side, pinned in-repo — design reference, not shipping code.
+- The mock's GradedViewerCanvas runs the real pipeline: decode → grade → encode at ≤960×540, rAF-coalesced (§12's cache strategy realized).
+- nle-engine @ `f68ab8c` — 356/356 vitest, tsc 0 — the 44-effect registry + WebGPU compositor: the engine landing pad W-color binds into (its color ops are FreeCut-baseline 8-bit/gamma, §15A — the binding is the correction).
+
+**GAP (the work — owner + phase per spec 14; acceptance in parentheses):**
+- **W-color — bind the W4 math to the ENGINE pipeline.** Owner app+engine (acceptance: grade-math parity pins — the mock's W4 math vs the engine's output on the same fixtures, max delta ≤ 1 LSB-equivalent).
+- **The engine-side instruments — scopes, secondary qualifier, power window (zero engine code today).** Engine; S-engine ∥ crawl (acceptance: each instrument's engine milestone green; consumed + pinned at W-color — scopes plot engine data).
+- **Timeline-grade vs clip-grade sequential law — REGISTERED; keep as pointer:** shell-variants R20-W4c / `docs/r20/color-layout.md` §3.6 — `[clipGrade] → [timelineGrade]`, each a full application in sequence, not a params merge; the spec-side ruling is the C50 follow-up.
+
+**ACCEPTANCE & TEST PLAN:** §19 (the executable contract; §14 = the intent list) + spec 17 §13A facet rows + the battery's posture checks; the W-color parity pins are the binding's own gate; BASE acceptance = the cited suites at the cited pins (regression role).
 
 ---
 
