@@ -14,6 +14,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { act } from 'react';
 import userEvent from '@testing-library/user-event';
 import { Toolbar2 } from './Toolbar2';
+import { leftDockContent } from './leftDockContent';
 import { renderPlain } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 
@@ -291,5 +292,74 @@ describe('R23-WA: the left toggle names the FX dock content (D-D1: "Effects" on 
     const stopped = screen.getAllByRole('button').find((b) => b.getAttribute('tabindex') === '0');
     expect(stopped).toBeDefined();
     expect(stopped).not.toBe(fxLabel);
+  });
+});
+
+/* ---------- R23-WD (DESIGN-R23 D-D1; #100/#106/#91 + ruling 16): the
+   leftDockContent table drives the left toggle ---------- */
+
+describe('R23-WD (D-D1): the leftDockContent table drives the left toggle', () => {
+  it('the label law per page — the toggle renders exactly the table label on edit/color/audio/fx', () => {
+    const { rerender } = renderPlain(<Toolbar2 />);
+    for (const p of ['edit', 'color', 'audio', 'fx'] as const) {
+      act(() => { useUi.setState({ page: p }); });
+      rerender(<Toolbar2 />);
+      const c = leftDockContent(p)!;
+      expect(screen.getByRole('button', { name: c.label })).toBeInTheDocument();
+    }
+    act(() => { useUi.setState({ page: 'edit' }); });
+  });
+
+  it('the ICON follows the table too (panel-left / image / audio-waveform / sparkles)', () => {
+    const { rerender } = renderPlain(<Toolbar2 />);
+    const iconClass = () =>
+      screen.getByTestId('shell-toolbar-btn-mediapool').querySelector('svg')!.getAttribute('class') ?? '';
+    act(() => { useUi.setState({ page: 'color' }); });
+    rerender(<Toolbar2 />);
+    expect(iconClass()).toContain('lucide-image');
+    act(() => { useUi.setState({ page: 'audio' }); });
+    rerender(<Toolbar2 />);
+    expect(iconClass()).toContain('lucide-audio-waveform');
+    act(() => { useUi.setState({ page: 'fx' }); });
+    rerender(<Toolbar2 />);
+    expect(iconClass()).toContain('lucide-sparkles');
+    act(() => { useUi.setState({ page: 'edit' }); });
+    rerender(<Toolbar2 />);
+    expect(iconClass()).toContain('lucide-panel-left');
+  });
+
+  it('DELIVER: the left toggle is DOM-ABSENT (ruling 16 — DeliverPage owns its own presets rail)', () => {
+    act(() => { useUi.setState({ page: 'deliver' }); });
+    renderPlain(<Toolbar2 />);
+    expect(screen.queryByTestId('shell-toolbar-btn-mediapool')).toBeNull();
+    for (const label of ['Media Pool', 'Stills', 'Sound Library', 'Effects']) {
+      expect(screen.queryByRole('button', { name: label })).toBeNull();
+    }
+    // the toolbar itself survives — title center + Inspector right
+    expect(screen.getByTestId('shell-toolbar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Inspector' })).toBeInTheDocument();
+    act(() => { useUi.setState({ page: 'edit' }); });
+  });
+
+  it('DELIVER: the rover stays dense — Inspector is the ONLY button and the single tab stop', () => {
+    act(() => { useUi.setState({ page: 'deliver' }); });
+    renderPlain(<Toolbar2 />);
+    const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(1); // Inspector alone — no hole where the toggle sat
+    expect(buttons[0]).toHaveAttribute('tabindex', '0');
+    // the wrap math clamps on a one-button toolbar: arrows never strand focus
+    fireEvent.keyDown(buttons[0], { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(buttons[0]);
+    act(() => { useUi.setState({ page: 'edit' }); });
+  });
+
+  it('deliver → edit: the toggle returns with its tab stop at index 0 (the table is read per render)', () => {
+    act(() => { useUi.setState({ page: 'deliver' }); });
+    const { rerender } = renderPlain(<Toolbar2 />);
+    expect(screen.queryByTestId('shell-toolbar-btn-mediapool')).toBeNull();
+    act(() => { useUi.setState({ page: 'edit' }); });
+    rerender(<Toolbar2 />);
+    expect(screen.getByRole('button', { name: 'Media Pool' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Media Pool' })).toHaveAttribute('tabindex', '0');
   });
 });

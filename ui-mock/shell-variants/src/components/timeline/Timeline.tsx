@@ -28,7 +28,7 @@ import {
   type PlannedTrack,
 } from '../../lib/timelinePlacement';
 import { createEdgeAutoScroll } from '../../lib/edgeScroll';
-import { zoomController, createWheelZoomAccumulator } from '../../lib/zoomController';
+import { zoomController, zoomBus, createWheelZoomAccumulator } from '../../lib/zoomController';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
 import { Clip, buildClipMenuItems, CAPTION_PARCHMENT, EFFECT_DRAG_TYPE, type ClipDragEvent, type ClipDragHost } from './Clip';
@@ -37,6 +37,9 @@ import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/
 import { POOL_DRAG_TYPE, isDroppable } from '../shell/MediaPool';
 import { useConfirm } from '../shell/ConfirmDialog';
 import { useInsertPreview } from '../../hooks/useInsertPreview';
+/* R23-WE D-E2 (#102): the preview MODE BADGE's name source — the hovered
+   mode button's own label, exported by the bar (single source). */
+import { MODE_LABELS } from '../shell/SourceEditBar';
 
 /* R15 T3 — the drop-target PREVIEW the Timeline renders while a cross-track
    drag is engaged. `ghosts` are content-space boxes at the RESOLVED target
@@ -381,6 +384,12 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
     </div>
   );
 }
+
+
+/* R23-WE (DESIGN-R23 D-E2, #102): the preview-visibility floor — an armed
+   preview's ghost span must render at least this wide; below it the zoom
+   floor bumps (once per arm) so the preview is actually legible. */
+const PREVIEW_MIN_SPAN_PX = 24;
 
 
 export function Timeline() {
@@ -1052,6 +1061,59 @@ export function Timeline() {
     return left + el.duration * pxPerSec >= scrollLeft - 200 && left <= scrollLeft + (viewportW || 900) + 200;
   };
 
+  /* ---- R23-WE (DESIGN-R23 D-E2, #102): the preview-visibility law. The
+     W3 preview span could land OFFSCREEN — ruling 20: the "no animated
+     effects" report was the offscreen ghost, and the auto-scroll fixes
+     both clauses. While an armed preview plan holds:
+     (a) AUTO-SCROLL — one rAF AFTER PAINT, scrollIntoView({inline:'nearest'})
+         the ghost span into #timeline-scroll's view (the ghost ref below;
+         the layer's own anim stays W3's fade+slide).
+     (b) ZOOM FLOOR — a ghost narrower than PREVIEW_MIN_SPAN_PX at the
+         current pps bumps zoom through the bus (targetPps = 24/dur) so it
+         renders ≥ 24 px. ONE bump per ARM (arm key = mediaId+mode): the
+         plan's identity re-mints on every playhead/loop/selection change,
+         and a re-mint must never become a continuous zoom creep.
+     (c) the MODE BADGE renders in the layer below (the ghost's head).
+     The REFUSAL path (ok:false — NO geometry ever paints) scrolls to the
+     PLAYHEAD instead, the exact playhead-follow-scroll law from the
+     playing case below, so the refusal is legible in place (the bar's
+     tip/status carry the why; the scroll shows the where). */
+  const previewGhostRef = useRef<HTMLDivElement | null>(null);
+  const previewBumpedArmRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!insertPreview) {
+      previewBumpedArmRef.current = null; // cleared arm — a fresh one may claim its bump again
+      return;
+    }
+    const ghost = insertPreview.ok ? insertPreview.geometry.ghost : undefined;
+    if (ghost && ghost.dur > 0) {
+      const armKey = `${insertPreview.mediaId}:${insertPreview.mode}`;
+      if (ghost.dur * pxPerSec < PREVIEW_MIN_SPAN_PX && previewBumpedArmRef.current !== armKey) {
+        previewBumpedArmRef.current = armKey;
+        zoomBus(PREVIEW_MIN_SPAN_PX / ghost.dur, { duration }); // one bump per arm
+      }
+    }
+    const raf = requestAnimationFrame(() => {
+      if (ghost) {
+        previewGhostRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+      } else {
+        const sc = scrollRef.current;
+        if (!sc) return;
+        const px = playhead * pxPerSec;
+        const viewW = sc.clientWidth;
+        if (px < sc.scrollLeft || px > sc.scrollLeft + viewW) {
+          sc.scrollLeft = Math.max(0, Math.min(px - viewW / 2, sc.scrollWidth - viewW));
+          setScrollLeft(sc.scrollLeft); // keep the ruler's virtualization window live
+        }
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+    // pxPerSec re-runs the leg AFTER a zoom-floor bump so the scroll tracks
+    // the re-rendered geometry; playhead/duration reach this via the plan's
+    // identity (useInsertPreview re-mints on every atom it reads).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insertPreview, pxPerSec]);
+
   return (
     <div data-testid="shell-timeline" className="flex min-h-0 flex-1 overflow-hidden">
       {/* ---- track headers column ---- */}
@@ -1401,7 +1463,10 @@ export function Timeline() {
                ok:false renders NOTHING here — the refusal lives in the
                source bar's tip + status line (never paint geometry the op
                won't perform). All pieces aria-hidden: the a11y route is the
-               toolbar's role=status description, not this layer. ---- */}
+               toolbar's role=status description, not this layer.
+               R23-WE D-E2 (#102): the layer also owns the visibility law —
+               the ghost ref (auto-scroll target) + the MODE BADGE at the
+               ghost's head (the effects live above, by the seam). ---- */}
           {insertPreview?.ok && insertPreview.geometry.ghost && (() => {
             const g = insertPreview.geometry.ghost;
             /* R20-W6FIX (P2-1): a plan that MINTS a track (placeOnTop with
@@ -1427,8 +1492,10 @@ export function Timeline() {
                     honored by the override in app.css. */}
                 {/* ghost clip — the reference .clip-ghost law: 2px dashed
                     border (≈#646464 → --border-strong token), radius 4,
-                    ghostBg(type) fill (contract §3.2) */}
+                    ghostBg(type) fill (contract §3.2). The ref is the D-E2
+                    auto-scroll target (scrollIntoView rAF after paint). */}
                 <div
+                  ref={previewGhostRef}
                   data-testid="insert-preview-ghost"
                   data-track-id={g.trackId}
                   data-start={g.start}
@@ -1441,6 +1508,28 @@ export function Timeline() {
                     opacity: 0.9,
                   }}
                 />
+                {/* R23-WE D-E2 (#102): the MODE BADGE — the hovered mode's
+                    name at the ghost's HEAD, the same dark-pill grammar as
+                    the speed badge (reference §1.3). Chrome laws: pointer-
+                    events none + aria-hidden (the a11y route is the bar's
+                    role=status line); it mounts ONLY with the preview layer
+                    — no preview, no badge (the display:none law for hidden
+                    chrome: absence, never an opacity stub). With a speed
+                    pill (fitToFill) it drops a row below it at the head. */}
+                <div
+                  data-testid="insert-preview-mode-badge"
+                  aria-hidden="true"
+                  className="absolute pointer-events-none whitespace-nowrap rounded-[10px]"
+                  style={{
+                    left: gLeft + 4,
+                    top: g.speed !== undefined ? laneTop + 24 : laneTop + 4,
+                    padding: '1px 8px',
+                    background: 'rgba(17,17,17,.62)', border: '1px solid rgba(255,255,255,.28)',
+                    color: '#fff', fontSize: 10, fontWeight: 700,
+                  }}
+                >
+                  {MODE_LABELS[insertPreview.mode]}
+                </div>
                 {/* fit-to-fill speed badge — reference gauge SVG (verbatim)
                     + the computed rate on the ghost (§1.3 badge styles) */}
                 {g.speed !== undefined && (

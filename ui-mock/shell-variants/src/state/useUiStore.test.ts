@@ -444,6 +444,26 @@ describe('audio focus', () => {
     expect(S().stripInsertsOn['tr-audio-2']).toBe(true);
     expect(S().mixerFloorWarned).toBe(false); // D1.3 one-toast flag boots clear
   });
+
+  /* R23-WC (DESIGN-R23 D-C3; issue #70): the full dock's master/bus bank
+     meters-only collapse — view state in the stripArm precedent's law, never
+     inside a withHistory snapshot (the undo round-trip is the pin). */
+  it('masterBusCollapsed (D-C3/#70): boots expanded, toggles, and never rides a snapshot', () => {
+    expect(S().masterBusCollapsed).toBe(false); // the bank boots FULL strips
+    act(() => { S().toggleMasterBus(); });
+    expect(S().masterBusCollapsed).toBe(true);
+    // a doc mutation mints a history entry; undoing it must NOT revert the
+    // flag (the snapshot slice stays scenes/activeSceneId/lockAll/selection/
+    // mockGrades — view state rides no snapshot)
+    const pastBefore = S().past.length;
+    act(() => { S().toggleTrackCmd('sc-1', 'tr-audio-1', 'solo'); });
+    expect(S().past.length).toBe(pastBefore + 1);
+    act(() => { S().undo(); });
+    expect(S().past.length).toBe(pastBefore);
+    expect(S().masterBusCollapsed).toBe(true); // survived the undo round-trip
+    act(() => { S().toggleMasterBus(); });
+    expect(S().masterBusCollapsed).toBe(false);
+  });
 });
 
 describe('mixer sidecar patches (immutability discipline)', () => {

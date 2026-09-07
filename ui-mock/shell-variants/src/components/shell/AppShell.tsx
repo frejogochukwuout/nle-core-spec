@@ -248,6 +248,29 @@ function AppShellInner() {
      same resolver the inspector/console share — they can never disagree). */
   const nodeGraphTarget = useUi((s) => gradeTargetLabel(s.scenes, resolveGradeTargetId(s)));
 
+  /* R23-WC (DESIGN-R23 D-C2, issue #99 + Part IX ruling 10 — the
+     channel-selected law): a focused mixer strip (stripFocus — the mixer's
+     own domain, not selectedTrackId) + NO live selection routes the right
+     rail to the ChannelEditor on ANY page ("if we are selecting channel then
+     you should just show channel editor"). Priority: clip selection (the
+     edit domain — served by each page's own rail) > strip focus (this
+     branch) > page default. The branch yields to every live selection
+     domain — marker, caption, FX-object, track — because an ACTIVE
+     selection is newer intent than a carried focus; a stale stripFocus id
+     (scene switch, deleted track) resolves to no audio track and never
+     fires. */
+  const stripFocus = useUi((s) => s.stripFocus);
+  const selectedFxObject = useUi((s) => s.selectedFxObject);
+  const selectedTrackId = useUi((s) => s.selectedTrackId);
+  const channelRailLive =
+    stripFocus != null
+      && selection.length === 0
+      && !selectedMarkerId
+      && !captionSelected
+      && !selectedFxObject
+      && !selectedTrackId
+      && scene.tracks.some((t) => t.id === stripFocus && t.kind === 'audio');
+
   /* R22-D8/D2 → R23-WB (Part IX ruling 11 — the mainbody interaction law):
      the color page wants a TALL mainbody (55%) ONLY while the compact strip
      carries the timeline area; flipping to FULL TRACKS on color drops the
@@ -262,9 +285,11 @@ function AppShellInner() {
   /* R23-WA (D-A1): the FX page's right rail = the FxInspector (the param
      surface for the selected transition / fade / clip-effect-stack); the
      rail swap rides the SAME panels.inspector gate + inspectorW splitter
-     as every other page. */
+     as every other page. R23-WC: the D-C2 branch rides FIRST (strip focus
+     outranks the page default — ruling 10), then the page rails. */
   const rightPanel: ReactNode =
-    page === 'color' ? <ColorInspector />
+    channelRailLive ? <ChannelEditor />
+    : page === 'color' ? <ColorInspector />
     : page === 'fx' ? <FxInspector />
     : page === 'audio' ? <ChannelEditor />
     : selectedMarkerId ? <MarkerInspector />

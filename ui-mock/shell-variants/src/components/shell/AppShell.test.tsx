@@ -706,3 +706,64 @@ describe('R19 rail routing: marker / caption selection swaps the inspector (AppS
     expect(screen.queryByTestId('shell-caption-inspector')).not.toBeInTheDocument();
   });
 });
+
+/* ---------- R23-WC (DESIGN-R23 D-C2 + Part IX ruling 10, #99): the
+   channel-selected rail law. A focused mixer strip (stripFocus) + NO clip
+   selection routes the right rail to the ChannelEditor on ANY page; the
+   priority is clip selection (the edit domain) > strip focus > page default,
+   and every ACTIVE selection domain (marker / caption / FX object / track)
+   outranks a carried focus. ---------- */
+describe('R23-WC D-C2 (#99): the channel-selected rail law', () => {
+  it('clicking a strip with no clip selected routes the EDIT rail to the ChannelEditor — no "clip not selected" complaint', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ mixerState: 'full', selection: [] });
+    // nothing live yet: the edit page's default rail (Inspector) shows
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
+    await user.click(screen.getByTestId('mixer-strip-A2'));
+    expect(store().stripFocus).toBe('tr-audio-2');
+    expect(screen.getByTestId('shell-channel-editor')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
+    // the #99 death: the editor's CLIP section is HIDDEN (no empty hole), the
+    // focused channel's TRACK section is the content
+    expect(screen.queryByTestId('shell-channel-editor-state-noclip')).toBeNull();
+    expect(screen.getByText('BGM')).toBeInTheDocument(); // A2's role chip
+  });
+
+  it('priority: a clip selection outranks the strip focus (the edit domain wins)', () => {
+    renderAppShell({ mixerState: 'full', selection: ['el-6'], stripFocus: 'tr-audio-2' });
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+    // the clip deselects → the branch takes over (clip selection > focus)
+    act(() => { useUi.setState({ selection: [] }); });
+    expect(screen.getByTestId('shell-channel-editor')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
+  });
+
+  it('ruling 10 — the branch applies on ANY page: the FX page rail yields to a focused channel', () => {
+    renderAppShell({ page: 'fx', fxMode: true, selection: [], stripFocus: 'tr-audio-1' });
+    expect(screen.getByTestId('shell-channel-editor')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-fxinspector')).not.toBeInTheDocument();
+  });
+
+  it('ruling 10 — the COLOR page rail yields too, and a clip selection restores it (priority law)', () => {
+    renderAppShell({ page: 'color', selection: [], stripFocus: 'tr-audio-1' });
+    expect(screen.getByTestId('shell-channel-editor')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-inspector')).not.toBeInTheDocument();
+    // clip selection beats the carried focus — the page's own rail returns
+    act(() => { useUi.setState({ selection: ['el-1'] }); });
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+  });
+
+  it('an ACTIVE marker selection outranks a carried strip focus (the R19 rail law preserved)', () => {
+    renderAppShell({ selection: [], selectedMarkerId: 'mk-2', stripFocus: 'tr-audio-1' });
+    expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+  });
+
+  it('a stale stripFocus id (no audio track in the active scene) never fires the branch', () => {
+    renderAppShell({ selection: [], stripFocus: 'tr-audio-404' });
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+  });
+});

@@ -38,10 +38,15 @@
    Per-track M/S/L in the meters state is intentionally dots-only — the rail
    is a glance surface and the track headers + strip RSM rows carry the same
    store commands. F6-region: the dock joins the focus cycle as the 7th
-   region (registered in AppShell). */
+   region (registered in AppShell).
+
+   R23-WC (DESIGN-R23 D-C3; issue #70 — the R20-era carry-over): the FULL
+   dock's master + aux-bus bank carries its OWN meters-only collapse
+   (store view-state masterBusCollapsed, the stripArm survival law) —
+   independent of the channel strips and of the 3-state cycle. */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AudioLines, PanelLeft, PanelRight } from 'lucide-react';
+import { AudioLines, Gauge, PanelLeft, PanelRight } from 'lucide-react';
 import { useUi, type MixerDockState, type Page } from '../../state/useUiStore';
 import { ChannelStrip, AuxStrip, MasterStrip, ROLE_BAR } from './ChannelStrip';
 import type { Role } from '../../state/mockMixer';
@@ -98,6 +103,66 @@ function useRowBudget(ref: React.RefObject<HTMLDivElement | null>, needPx: numbe
     return () => ro.disconnect();
   }, [ref, needPx, tracks]);
   return maxW;
+}
+
+/* ---------- R23-WC (D-C3, #70): the master/bus bank's meters-only columns
+   The full dock's right bank (2 aux + master) collapses to thin meter
+   COLUMNS — the MetersDock's D1.4 grammar (badge + full-height stereo
+   meter; the master keeps its one real store command, the M mute, exactly
+   like the meters dock's master column; the buses carry an ON/OFF display
+   mirror — the full strips own the commands). Independent of the channel
+   strips: their tier/anatomy is untouched by this collapse. ---------- */
+function BusMeterCol({ bus }: { bus: 'a1' | 'a2' }) {
+  const settings = useUi((s) => s.mixer.buses[bus]);
+  return (
+    <div
+      data-testid={`mixer-bank-col-${bus}`}
+      role="group"
+      aria-label={`Aux ${bus} meter`}
+      className="flex w-[24px] shrink-0 flex-col items-center gap-1 py-1"
+      title={`Aux ${bus} ${settings.name} — return ${settings.returnGain} dB${settings.on ? '' : ' · bus off'}`}
+    >
+      <span className="mono text-[10px] font-semibold uppercase text-tmuted">{bus === 'a1' ? 'A1' : 'A2'}</span>
+      <div className="flex min-h-0 w-full flex-1 justify-center">
+        {/* R15-A2: ONE engine key per bus — 'auxA'/'auxB' (unified registry) */}
+        <StripMeter trackId={bus === 'a1' ? 'auxA' : 'auxB'} db={settings.returnGain} width={8} fillHeight label={`Aux ${bus}`} />
+      </div>
+      <span
+        data-testid={`mixer-bank-on-${bus}`}
+        className={`h-[4px] w-[4px] rounded-full ${settings.on ? 'bg-[var(--solo)]' : 'bg-strong'}`}
+        title={`Bus ${settings.on ? 'on' : 'off'} — expand the bank for the ON/OFF toggle`}
+      />
+    </div>
+  );
+}
+
+function MasterMeterCol() {
+  const masterMuted = useUi((s) => s.masterMuted);
+  const masterVolume = useUi((s) => s.masterVolume);
+  const toggleMasterMute = useUi((s) => s.toggleMasterMute);
+  const db = masterMuted ? -60 : masterVolume * 66 - 60;
+  return (
+    <div
+      data-testid="mixer-bank-col-master"
+      role="group"
+      aria-label="Master meter column"
+      className="flex w-[30px] shrink-0 flex-col items-center gap-1 py-1"
+    >
+      <span className="mono text-[10px] font-semibold uppercase tracking-wide text-tprimary">MST</span>
+      <div className="flex min-h-0 w-full flex-1 justify-center">
+        <StripMeter trackId="master" db={db} width={8} fillHeight label="Master" />
+      </div>
+      <button
+        onClick={toggleMasterMute}
+        aria-pressed={masterMuted}
+        aria-label="Master mute"
+        data-tip="Master mute"
+        className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${masterMuted ? 'border-[var(--mute-warn)] bg-[var(--mute-warn)] text-black' : 'border-strong bg-inset text-tmuted'}`}
+      >
+        M
+      </button>
+    </div>
+  );
 }
 
 /* ---------- meters dock (D1.4 — thread #61 redesign) ---------- */
@@ -223,6 +288,11 @@ function FullDock() {
   const setStripFocus = useUi((s) => s.setStripFocus);
   const cycleMixerState = useUi((s) => s.cycleMixerState);
   const page = useUi((s) => s.page);
+  /* R23-WC (D-C3, #70): the master/bus bank's OWN meters-only collapse —
+     read here so the bank + its control stay in sync across the dock's
+     state cycles (the stripArm survival law). */
+  const masterBusCollapsed = useUi((s) => s.masterBusCollapsed);
+  const toggleMasterBus = useUi((s) => s.toggleMasterBus);
   /* R20-W6FIX (P2-2): same law as the meters dock — the collapse control's
      pressed state is DERIVED (open = mixerState !== 'collapsed'), not the
      bare always-true attribute it used to carry. */
@@ -275,6 +345,9 @@ function FullDock() {
   const narrow = maxW !== null && maxW < audio.length * 86;
 
   const collapseLabel = mixerStateLabel('full', page);
+  /* D-C3 (#70) — B4's state-naming law for the bank control: current state
+     + next stop; pressed = the meters-only state (the toggle's effect). */
+  const bankLabel = `Master/buses: ${masterBusCollapsed ? 'meters only' : 'full strips'} (click for ${masterBusCollapsed ? 'full strips' : 'meters only'})`;
 
   // strip-focus flash (escalation gesture feedback) — 1.2s ring, same as v2.1
   useEffect(() => {
@@ -293,17 +366,31 @@ function FullDock() {
       role="group"
       aria-label="Audio mixer"
     >
-      {/* dock header — vertical label + the state-aware collapse control (B4) */}
+      {/* dock header — vertical label + the state-aware collapse control (B4)
+          + the master/bus bank's own meters-only toggle (R23-WC D-C3, #70 —
+          independent of the channel strips and of the 3-state cycle) */}
       <div className="relative flex w-[22px] shrink-0 flex-col items-center justify-between border-r border-hairline py-1.5">
-        <button
-          onClick={() => cycleMixerState()}
-          className="icon-btn icon-btn-sm"
-          data-tip={collapseLabel}
-          aria-label={collapseLabel}
-          aria-pressed={open /* P2-2: explicit boolean, derived from state */}
-        >
-          <PanelLeft size={12} strokeWidth={1.7} />
-        </button>
+        <div className="flex flex-col items-center gap-1">
+          <button
+            onClick={() => cycleMixerState()}
+            className="icon-btn icon-btn-sm"
+            data-tip={collapseLabel}
+            aria-label={collapseLabel}
+            aria-pressed={open /* P2-2: explicit boolean, derived from state */}
+          >
+            <PanelLeft size={12} strokeWidth={1.7} />
+          </button>
+          <button
+            onClick={() => toggleMasterBus()}
+            className="icon-btn icon-btn-sm"
+            data-testid="mixer-masterbus-toggle"
+            data-tip={bankLabel}
+            aria-label={bankLabel}
+            aria-pressed={masterBusCollapsed /* honest: pressed = meters-only */}
+          >
+            <Gauge size={12} strokeWidth={1.7} />
+          </button>
+        </div>
         <span
           className="mono select-none text-[10px] font-semibold uppercase tracking-[0.18em] text-tfaint"
           style={{ writingMode: 'vertical-rl' }}
@@ -335,10 +422,22 @@ function FullDock() {
       {/* aux returns + master PINNED to the dock's right edge — the dock's
           right region always carries the return/master bank cleanly, never
           dead space and never scrolled away under the channel row (fixes
-          th_mto63f99) */}
-      <AuxStrip bus="a1" tier={tier} narrow={narrow} stripH={dockH ?? undefined} />
-      <AuxStrip bus="a2" tier={tier} narrow={narrow} stripH={dockH ?? undefined} />
-      <MasterStrip tier={tier} narrow={narrow} stripH={dockH ?? undefined} />
+          th_mto63f99). R23-WC (D-C3, #70): the bank collapses to meters-only
+          columns via its OWN toggle — the channel strips above are untouched
+          (the independence law). */}
+      {masterBusCollapsed ? (
+        <>
+          <BusMeterCol bus="a1" />
+          <BusMeterCol bus="a2" />
+          <MasterMeterCol />
+        </>
+      ) : (
+        <>
+          <AuxStrip bus="a1" tier={tier} narrow={narrow} stripH={dockH ?? undefined} />
+          <AuxStrip bus="a2" tier={tier} narrow={narrow} stripH={dockH ?? undefined} />
+          <MasterStrip tier={tier} narrow={narrow} stripH={dockH ?? undefined} />
+        </>
+      )}
     </div>
   );
 }
