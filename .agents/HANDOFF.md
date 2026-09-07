@@ -1,6 +1,14 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-07, end of the R23 spec-track round. **READ THIS SECTION FIRST — everything below the `-----` divider is R18-era serving/environment detail that is still ACCURATE as background (env layout, :3000 ownership, annotakit kit, mirror repo) but predates R19-R23.**
+**Written:** 2026-09-07, end of the R23 round (BOTH tracks: the spec-track separation/fleet + the variants-track FX view + review sweep). **READ THIS SECTION FIRST — everything below the `-----` divider is R18-era serving/environment detail that is still ACCURATE as background (env layout, :3000 ownership, annotakit kit, mirror repo) but predates R19-R23.**
+
+## Variants-track R23 state (the FX/TRANSITION VIEW + the review sweep — COMPLETE, 1595/1595)
+
+- **The user's thrice-iterated FX directive is DONE** (#103/#104/#105): DESIGN-R23 v2 (`.agents/design/r23-fx-view-and-revision.md`, web-researched + 2 adversarial audits + 22 binding amendment rulings in Part IX). THE RULING: **both surfaces, one engine** — the FX page (AppDock 5 pages, ⌘5; FxBrowser left / Viewer center / FxInspector right / the full Timeline in fxMode at 40% mainbody) + the FX tool in the Edit toolbar (Esc exits). Seam/head/tail hit-zones, interactive transition boxes, clip recede, fadeIn/fadeOut model fields, the selectedFxObject domain (7-site law).
+- **All six tracks landed** (the 19 issues #90–#108 + #70 + 3 mid-round threads): the color refinements (ScopesDock tabs in the timeline area / nodes-in-viewer / the density toggle everywhere / the Stills Gallery with the clip-level answer IN the UI), the mixer/inspector polish, the per-page shell semantics (leftDockContent table + the D-D2 toolbar matrix), the preview visibility law, the deliver RangeBand.
+- **The review sweep (the user's component-at-a-time directive) is the standing instrument**: the VLM net (`scripts/vlm-capture.mjs` + `vlm-review.mjs` + `vlm-run.sh` + `console-sweep.cjs` — 123 stories at the 1280×800 floor; findings in `r23-analysis/`) + the 5 family-review reports (worklog R23-R1..R5) + the fix round (2 P1s + 15 P2s + 4 rulings, `r23-analysis/review-findings.md` is the consolidated ledger). **Adopt the VLM net for every future visual round — it caught real bugs the jsdom suite cannot see (z-order/hit-target collisions, invisible state deltas).**
+- **Gates at close:** tsc 0; **1595/1595** (61 files; 1349 → +246 net); vite + SB builds green; live console-sweep 0 errors on all 5 pages; 22/22 threads resolved (GH mirror closed, pending 0).
+- **R24 next:** the user's reaction round on the FX view + compositions; the registered-only polish list (`r23-analysis/review-findings.md` — fade-label occlusion, wheel-hue keyboard path, color chrome hex debt, compact-strip playhead follow); the 62 legacy mini-era threads in the shared annotakit db; KEEP the process: design-doc → dual audits → waves → per-wave review → the VLM sweep at wrap.
 
 ## Current state (R23 — the plan is SEPARATED, audited, and executable; the execution begins)
 

@@ -17,6 +17,24 @@
 
 ---
 
+## Round 23 (2026-09-07) — shell-variants: the FX/TRANSITION VIEW + the review-sweep round (COMPLETE)
+
+**User ask:** "check all the latest issues… the transition/effects one seems missed — do a focused design deep dive to find the optimal design after design/review/audit rounds; categorize into tracks and have sub-agents do deep design/implement/test/review iterations till polished… initially you should dive in to understand all the major issues and which part of codebase these apply to; once finalized… thorough code/UX review one ui component at a time… rely on visual tests (wire in VLM) to feed in the storybook views (from ui primitives first all the way to whole app shell views)."
+
+**Landed (all pushed, 1595/1595, tsc+builds green, live-verified, 22/22 threads resolved incl. GH mirror):**
+- **THE FLAGSHIP — the FX/transition surface (issues #103/#104/#105, thrice-iterated):** DESIGN-R23 v2 (`.agents/design/r23-fx-view-and-revision.md` — web-researched DaVinci/NLE workflows + 2 parallel fresh-context audits (design + seam), 3 blockers + 22 amendment rulings folded). THE RULING: **BOTH surfaces, ONE engine** — the FX page (AppDock 5 pages + ⌘5: FxBrowser left / Viewer center / FxInspector right / full Timeline in fxMode at 40% mainbody) + the FX tool in the Edit toolbar (8 tools, setTool coupling, Esc exits). The engine: seam hit-zones (12→24px hover, click = default crossfade or select-existing), head/tail half-open fade zones, transition boxes interactive (select + edge-drag ±1-frame trim + Delete), clips recede (45% opacity, edit gestures off, click = effect stack). Model: fadeIn/fadeOut clip fields + setFade/removeFade/removeTransition (delete-aware) + selectedFxObject domain (7-site mutual exclusivity). The user's #105 mental model implemented verbatim (hover seam → add; clip select → Effects not Transitions).
+- **The color track (#90–#97):** ScopesDock (the timeline-area console, 4 TABS, one scope full-size — the squeeze dies); nodes-in-viewer (the × close surface, the timeline dock retired); the density toggle everywhere (55%↔40% mainbody interaction law); StillsPanel = the DaVinci Gallery (clip-level apply ANSWERED in the UI, Save Still, colorStills store home); the stills-only color dock; the mixer hidden on color.
+- **The mixer/inspector track (#98/#99/#70):** the uniform ClipParamRow grammar; the channel-selected rail law (stripFocus, any page); the master/bus meters-only collapse.
+- **The shell-semantics track (#100/#106/#108):** the ONE leftDockContent(page) table; the D-D2 per-page TimelineToolbar cluster matrix (researched, DOM-absent hidden clusters).
+- **The timeline-visuals track (#101/#102):** thin brackets (hit zones unchanged); the preview visibility law (auto-scroll + the 24px zoom floor + the mode badge — the offscreen-span root cause of "animated effects now none").
+- **The deliver track (#107):** TimelineCompact + the 32px RangeBand (the bracket grammar) + the 50% mainbody.
+- **THE REVIEW SWEEP (the user's one-component-at-a-time directive):** the VLM visual net (scripts/vlm-capture/review — 123 stories captured at the 1280×800 floor, findings JSON; the console-sweep gate) + 5 fresh-context family reviewers (primitives+chrome / panels+inspector / timeline / mixer+color / appshell+store), each reading every file IN FULL with live measurements and triaging every VLM finding (REAL-BUG / STORY-ARTIFACT / DESIGN-INTENT). The fix round: 2 real P1s (the inert transition box blocking edit-mode trims; the scene-switch blank rail) + 15 P2s + the P3 quick-win batch + 4 orchestrator rulings (R-a rail hoist / R-b FX density / R-c table-driven dock / R-d z-ladder) — 1595/1595.
+- **The mid-round reviewer wave (th_mtr0*):** the fader drag REVERSAL (tests had pinned the inverted math — re-pinned with the physical law), the invisible toolbtn ON state (measured 3% delta → the accent tint + ring), the context menu under the root-level z-100 playhead (the 104/105/106 ladder).
+
+**Standing next (R24):** the user's reaction round on the FX view + the color/deliver compositions; the registered-only list (r23-analysis/review-findings.md — VLM caption artifact, fade-label occlusion, wheel-hue keyboard, chrome hex debt, compact playhead follow); the 62 legacy open threads in the shared annotakit db (mini-stream era); the spec-side entries live in IMPLEMENTATION-PLAN.md (the sibling stream's tracks).
+
+---
+
 ## Round 23 (2026-09-07) — shell-mini: the seal round (COMPLETE)
 
 **User ask (verbatim intent):** the three directives above + "any outstanding gaps / issues / next steps you see fit in this hopefully final / seal round".
