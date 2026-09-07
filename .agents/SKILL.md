@@ -1462,3 +1462,65 @@ port), not what any env currently runs.
     VERIFY step into the HANDOFF (ghSync.pending == 0 at next session start), and never
     block the wrap on a third-party outage.
 
+97. **The seal-round discipline for transport-readiness deliverables** (R23-mini):
+    code = REGISTERED facts only, docs = recommendations + open decisions. The
+    otProject bridge encodes exactly what OT-SEAMS registers (the ×120000 time
+    base, the in-point-0 trim formula) and NOTHING else — the unregistered
+    parts (the SceneTracks track mapping, the OT field names) stay REGISTERED
+    C1-ENTRY DECISIONS in the docs, never invented in mock code. A seam module
+    that guesses field shapes becomes dead code at integration time.
+98. **The count-coherence convention**: when a round both changes a test
+    corpus AND re-pins its declared count, land ALL test changes FIRST, then
+    ONE scripted re-pin sweep, then run the gate battery LAST — a final sed
+    after the last battery run silently breaks a check (the exit round caught
+    exactly this: my LAW-NET 353→355 edit ran after the 66/66 run, taking the
+    battery to 65/66 undetected by me).
+99. **Text-substring count checks are drift-blind; SCRAPE the live suite.**
+    "declared == actual" enforced by `"355" in specs[18]` passes forever while
+    the corpus drifts to 360. The battery now runs vitest --reporter=json,
+    deletes the report file first (never read a stale one), parses
+    numPassedTests + testResults, and asserts against DECLARED constants. The
+    same applies to census math: parse the doc's tables and validate the sums,
+    don't substring-check the totals.
+100. **grep filters can MASK the very class you're sweeping for.** The
+    stale-333 sweep grepped `333` with a `-vE "1334|..."` exclusion — which
+    silently dropped every "mini 333, variants 1334" line (they all contain
+    1334). The fresh-context auditor's narrower pattern (mini 333|333
+    tests|...) found 5 more masked claims. When sweeping for count X, grep
+    WITHOUT exclusions first, then adjudicate each hit's era (history-ledger
+    vs current-state) — never let a convenience filter pre-classify.
+101. **Audit your own claimed fixes against the diff, not the intent.** The
+    fix round CLAIMED "markers disambiguation landed" but never applied the
+    edit — the confirmation round's `grep 'edit-position' → zero hits` caught
+    the no-op. Every fix-round commit message should be verifiable by
+    grep-able tokens the NEXT reviewer can check mechanically.
+102. **A "P2 premise inversion" is the highest-value class a fresh-context
+    audit finds.** CORE-SEAMS claimed toggleTrackMute "has NO OT command
+    today" while spec 15 §4.1A registers it as OT-IMPLEMENTED (the element-
+    level pair is the pending wire addition) — I had read the spec WRONG and
+    written the inversion with a confident citation. When a doc cites a spec
+    for a claim, re-read the cited LINE, not the memory of it.
+103. **Story-surface testids are phantom ids for app DOM gates.** The static
+    testid census included mini-clip-harness (a story anatomy harness — no
+    app component emits it, no test queries it); a C1 gate built on "the
+    static 60" would demand an id the ported app can never emit. Census =
+    59 app-emitted + the story-surface id annotated out. Same class both
+    directions: a MISSING templated family (the 15th, the collapsed-lane
+    placeholder) leaves the gate unable to check a family the corpus itself
+    depends on. Census work needs source-grep on BOTH static and template
+    forms, with an emission-site check per id.
+104. **The era-qualifier pattern for dated sections carrying current
+    numbers**: a spec section scoped "R22 re-baseline (2026-09-07)" that
+    carries the CURRENT mini count needs an inline qualifier ("mini 355
+    (current-tracked — the R23 seal census; 333 at the R22 re-baseline)")
+    rather than a silent bump — the dated scope header stays true AND the
+    number is current. The convention: history-ledger surfaces (ARCH, the
+    mini's own docs) keep era-marked values; live spec sections carry
+    current + qualifier.
+105. **Sibling-domain discipline under count drift**: the variants' in-repo
+    count moved to 1425 mid-round (their W-A landing) while the shared spec
+    set still says 1334 — the right move is a REGISTERED convention (the
+    battery's honest-scope note: "the sibling re-pins at their round wrap;
+    not unilaterally bumped here"), not a unilateral re-pin that would drift
+    again before their wrap. Shared canon + separate owners = queue it, note
+    it, never race it.
