@@ -147,8 +147,10 @@ Run it at boot or any time; safe twice.
   height, genuinely overflow+scroll — R18g feedback #17: the old cards
   squashed to vertical-fit), viewer (clip-under-playhead in a SQUARE
   screen-well + an RH-grammar transport row below the video: timecode
-  left · play center · media name right, grid [1fr auto 1fr]), inspector
-  (read-only facts + nudge ±0.5s + a structured empty state), toasts,
+  left · play center · aspect controller right (R18j thread #16 — the
+  media name lives in the pool card + inspector), grid [1fr auto 1fr]),
+  inspector (read-only facts + nudge ±0.5s + a structured empty state),
+  toasts,
   and RESIZABLE PANELS (R18d, feedback #13): pool/inspector width
   splitters + a timeline-height splitter (drag up → lanes grow taller,
   real NLE behavior; double-click resets; keyboard ±8px / shift ±32px).
@@ -234,8 +236,9 @@ Run it at boot or any time; safe twice.
    paints at the engaged magnet target. The main-row gutter is 8px
    (splitters live in it) vs the root's 12px — registered.
 7. **Tightened radii** (R18g, feedback #18/#21/#22): the RH-verbatim
-   geometry tokens are overridden (panel 20→8, control 8→4, clip 2, video
-   frame 0) — the reviewer's live judgment over the snapshot's roundness.
+   geometry tokens are overridden (panel 20→8, control 8→4, clip 2→6
+   re-tuned R18i thread #11, video frame 0) — the reviewer's live
+   judgment over the snapshot's roundness.
    Original values kept inline in tokens.css for provenance.
 8. **Trim affordance: edge lines, no handle bars** (R18h → revised
    R18i, threads #8/#9/#10 + the #10 repost): the RH reference draws
