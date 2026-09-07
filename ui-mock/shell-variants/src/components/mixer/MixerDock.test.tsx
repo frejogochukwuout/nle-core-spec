@@ -381,3 +381,87 @@ describe('MixerDock height tiers (D1.3)', () => {
     });
   });
 });
+
+/* ---------- R23-WC (DESIGN-R23 D-C3; issue #70): the master/bus bank's
+   meters-only collapse — its OWN toggle, independent of the channel strips
+   and of the dock-level 3-state cycle (store view-state masterBusCollapsed,
+   the stripArm survival law). ---------- */
+describe('R23-WC D-C3 (#70): master/bus bank meters-only collapse', () => {
+  it('the bank toggle carries the B4 law: state-naming label + honest pressed state + its own glyph', () => {
+    boot({ mixerState: 'full' });
+    const btn = screen.getByTestId('mixer-masterbus-toggle');
+    expect(btn).toHaveAttribute('aria-pressed', 'false'); // boots FULL strips
+    expect(btn.getAttribute('aria-label')).toBe('Master/buses: full strips (click for meters only)');
+    expect(btn.querySelector('svg')!.getAttribute('class')).toContain('lucide-gauge'); // distinct from the cycle controls
+    // it lives in the dock header (the B4 state-controls rail), a sibling of
+    // the dock-level cycle control — not a per-strip control
+    expect(btn.parentElement).toBe(screen.getByRole('button', { name: 'Mixer: full strips (click to close)' }).parentElement);
+  });
+
+  it('collapsing the bank swaps aux/master STRIPS for meters-only columns; the CHANNEL strips stay full (#70 independence)', () => {
+    boot({ mixerState: 'full' });
+    fireEvent.click(screen.getByTestId('mixer-masterbus-toggle'));
+    expect(store().masterBusCollapsed).toBe(true);
+    expect(screen.queryByTestId('mixer-strip-aux-a1')).toBeNull();
+    expect(screen.queryByTestId('mixer-strip-aux-a2')).toBeNull();
+    expect(screen.queryByTestId('mixer-strip-master')).toBeNull();
+    // the columns: badge + full-height meter (MetersDock D1.4 grammar); the
+    // master keeps its one real store command (M mute); meters share the ONE
+    // engine keys — same values as the meters dock / toolbar views
+    const masterCol = screen.getByTestId('mixer-bank-col-master');
+    expect(within(masterCol).getByText('MST')).toBeInTheDocument();
+    expect(within(masterCol).getByRole('button', { name: 'Master mute' })).toBeInTheDocument();
+    expect(within(masterCol).getByTitle(/Master: -8\.5 dB/)).toBeInTheDocument();
+    const a1 = screen.getByTestId('mixer-bank-col-a1');
+    expect(within(a1).getByText('A1')).toBeInTheDocument();
+    expect(within(a1).getByTitle(/Aux a1: -6\.0 dB/)).toBeInTheDocument();
+    expect(screen.getByTestId('mixer-bank-col-a2')).toBeInTheDocument();
+    // INDEPENDENCE: the channel strips keep their full anatomy (the collapse
+    // never touches the channel tier/layout — that is #70's whole point)
+    expect(screen.getByTestId('mixer-strip-A1')).toBeInTheDocument();
+    expect(screen.getByTestId('mixer-strip-A2')).toBeInTheDocument();
+    expect(within(screen.getByTestId('mixer-strip-A2')).getByTestId('strip-input')).toBeInTheDocument();
+  });
+
+  it('the collapsed bus columns mirror the store values (return gain + ON/OFF dot)', () => {
+    boot({ mixerState: 'full' });
+    fireEvent.click(screen.getByTestId('mixer-masterbus-toggle'));
+    // mockMixer boots: a1 Reverb −6 dB ON, a2 Spare 0 dB OFF
+    expect(screen.getByTitle('Aux a1 Reverb — return -6 dB')).toBeInTheDocument();
+    expect(screen.getByTitle('Aux a2 Spare — return 0 dB · bus off')).toBeInTheDocument();
+    act(() => { useUi.getState().setAuxBus('a1', { returnGain: -12, on: false }); });
+    expect(screen.getByTitle('Aux a1 Reverb — return -12 dB · bus off')).toBeInTheDocument();
+  });
+
+  it('the bank toggle is a round-trip: expanding restores the full aux/master bank', () => {
+    boot({ mixerState: 'full' });
+    fireEvent.click(screen.getByTestId('mixer-masterbus-toggle'));
+    fireEvent.click(screen.getByTestId('mixer-masterbus-toggle'));
+    expect(store().masterBusCollapsed).toBe(false);
+    expect(screen.getByTestId('mixer-strip-aux-a1')).toBeInTheDocument();
+    expect(screen.getByTestId('mixer-strip-aux-a2')).toBeInTheDocument();
+    expect(screen.getByTestId('mixer-strip-master')).toBeInTheDocument();
+    expect(within(screen.getByTestId('mixer-strip-master')).getByTestId('mixer-readout-master')).toBeInTheDocument();
+    expect(screen.queryByTestId('mixer-bank-col-master')).toBeNull();
+  });
+
+  it('independence from the dock 3-state cycle: the collapse survives full → collapsed → meters → full (stripArm law)', () => {
+    boot({ mixerState: 'full' });
+    fireEvent.click(screen.getByTestId('mixer-masterbus-toggle'));
+    // cycle the DOCK away and back — the bank's own state survives (it never
+    // rides the cycle; only the channels' tiers were the cycle's business)
+    act(() => { useUi.getState().cycleMixerState(); }); // full → collapsed (edit page)
+    expect(screen.queryByTestId('mixer-dock-full')).toBeNull();
+    act(() => { useUi.getState().cycleMixerState(); }); // collapsed → meters
+    act(() => { useUi.getState().cycleMixerState(); }); // meters → full
+    expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument();
+    expect(screen.queryByTestId('mixer-strip-master')).toBeNull(); // still meters-only
+    expect(screen.getByTestId('mixer-bank-col-master')).toBeInTheDocument();
+    expect(store().masterBusCollapsed).toBe(true);
+  });
+
+  it('the meters state carries no bank toggle (the whole dock is meters-only already)', () => {
+    boot({ mixerState: 'meters' });
+    expect(screen.queryByTestId('mixer-masterbus-toggle')).toBeNull();
+  });
+});

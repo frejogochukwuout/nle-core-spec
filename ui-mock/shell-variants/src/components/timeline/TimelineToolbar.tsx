@@ -6,11 +6,33 @@
    should allow to be used everywhere"); the pressed state reads the ONE
    store resolver (resolveTimelineCompact) so the button never lies about
    what is rendered, and the click writes the user's per-session override
-   ('on'/'off'; 'auto' remains the boot default per page). */
+   ('on'/'off'; 'auto' remains the boot default per page).
+   R23-WD (DESIGN-R23 D-D2; issue #108, Part IX ruling 15): the PER-PAGE
+   cluster matrix — [research-informed: Resolve's pages carry different
+   toolbars: Color has no timeline toolbar (the filmstrip replaces it),
+   Deliver none, Cut/Edit carry the editing tools]. Our first-pass matrix:
+
+     cluster               | Edit | Color | Audio | FX | Deliver |
+     ----------------------|------|-------|-------|----|---------|
+     edit tools radio (+FX)|  ✔  |   —   |   —   | —  |    —    |
+     snap                  |  ✔  |   —   |   ✔   | —  |    —    |
+     link / lock           |  ✔  |   —   |   —   | —  |    —    |
+     markers               |  ✔  |   —   |   —   | —  |    —    |
+     density               |  ✔  |   ✔   |   ✔   | ✔  |    ✔    |
+     zoom                  |  ✔  |   ✔   |   ✔   | ✔  | ✔ (read-mostly) |
+     mixer state           |  ✔  |   —   |   ✔   | —  |    —    |
+     master audio          |  ✔  |   —   |   ✔   | —  |    —    |
+
+   Every hidden cluster is DOM-ABSENT (never display:none — the F6/rover
+   dense laws); the vseps ride along (a separator between two clusters
+   renders only when BOTH clusters render — an absent cluster never leaves
+   a dangling bar). The mixer-state + master-audio clusters hide on color
+   AND fx AND deliver (ruling 15: Edit + Audio only). The view-options
+   button is the pre-matrix house button — it stays on every page. */
 
 import { useRef } from 'react';
 import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, AudioLines, PanelRight, SlidersHorizontal, Rows3 } from 'lucide-react';
-import { useUi, resolveTimelineCompact, type ToolId } from '../../state/useUiStore';
+import { useUi, resolveTimelineCompact, type Page, type ToolId } from '../../state/useUiStore';
 import { sceneDuration } from '../../lib/mockData';
 import { StripMeter } from '../mixer/MixerPrimitives';
 import { mixerStateLabel } from '../mixer/MixerDock';
@@ -68,6 +90,37 @@ const TOOLS: { id: ToolId; tip: string; icon: React.ReactNode }[] = [
 import { zoomToSlider, sliderToZoomPps } from '../../lib/pixel';
 import { zoomBus } from '../../lib/zoomController';
 
+/* R23-WD (D-D2/#108): the per-page cluster matrix — the table above, in
+   code. density + zoom stay true on EVERY page (the D-B3 law + the live
+   zoom contract); the flags exist anyway so the code mirrors the design
+   table 1:1 and a future page MUST decide. Record<Page, …> is exhaustive
+   by construction. */
+interface PageClusters {
+  tools: boolean;   /* the 8-tool radio (+ the FX tool, D-A1) */
+  snap: boolean;    /* the magnet — Edit + Audio (Audio needs snap for clip
+                       placement; no link/lock — audio tracks carry no A/V
+                       link domain) */
+  linkLock: boolean;/* link A/V + lock-all — Edit only */
+  markers: boolean; /* add-marker + marker-color — Edit only */
+  density: boolean; /* the D-B3 toggle — every page */
+  zoom: boolean;    /* the zoom cluster — every page (read-mostly on deliver:
+                       the deliver timeline is live, so zoom still works) */
+  mixer: boolean;   /* mixer-state — Edit + Audio (ruling 15) */
+  master: boolean;  /* master mute/volume/meter/DIM — Edit + Audio (ruling 15) */
+}
+const CLUSTERS: Record<Page, PageClusters> = {
+  edit:    { tools: true,  snap: true,  linkLock: true,  markers: true,  density: true, zoom: true, mixer: true,  master: true },
+  color:   { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, mixer: false, master: false },
+  audio:   { tools: false, snap: true,  linkLock: false, markers: false, density: true, zoom: true, mixer: true,  master: true },
+  fx:      { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, mixer: false, master: false },
+  deliver: { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, mixer: false, master: false },
+};
+
+/* the right-side clusters in DOM order — drives the vsep law (a separator
+   renders only BETWEEN two present clusters) */
+const RIGHT_CLUSTER_ORDER = ['tools', 'snapGroup', 'markers', 'zoom', 'mixer', 'master'] as const;
+type RightCluster = (typeof RIGHT_CLUSTER_ORDER)[number];
+
 export function TimelineToolbar() {
   const tool = useUi((s) => s.tool);
   const setTool = useUi((s) => s.setTool);
@@ -96,6 +149,29 @@ export function TimelineToolbar() {
   const pushToast = useUi((s) => s.pushToast);
   const menu = useContextMenu(); // §4.9 marker-color dropdown (R14 no-op sweep)
   const sliderRef = useRef<HTMLInputElement>(null); // magnifier focuses the zoom slider
+
+  /* R23-WD (D-D2): this page's row of the cluster matrix — every hidden
+     cluster below is DOM-ABSENT (not display:none). */
+  const m = CLUSTERS[page];
+
+  /* the vsep law: a separator renders only between two PRESENT right-side
+     clusters (order: tools, snap/link/lock, markers, zoom, mixer, master).
+     An absent cluster takes its separators with it — a dangling bar would
+     read as a phantom divider and violate the dense-DOM law. */
+  const clusterOn: Record<RightCluster, boolean> = {
+    tools: m.tools,
+    snapGroup: m.snap || m.linkLock,
+    markers: m.markers,
+    zoom: m.zoom,
+    mixer: m.mixer,
+    master: m.master,
+  };
+  const vsep: Record<RightCluster, boolean> = { tools: false, snapGroup: false, markers: false, zoom: false, mixer: false, master: false };
+  let seenPresent = false;
+  for (const k of RIGHT_CLUSTER_ORDER) {
+    vsep[k] = clusterOn[k] && seenPresent;
+    seenPresent = seenPresent || clusterOn[k];
+  }
 
   /* lane-viewport measurement for the zoom cluster — same source as the ⌘\
      binding (useShortcuts): #timeline-scroll's clientWidth, 900 fallback when
@@ -146,7 +222,9 @@ export function TimelineToolbar() {
     >
       {/* view options — honest mock: the popover isn't specced; density and
           clip-style live in the debug overlay, so the button explains instead
-          of silently doing nothing (R14 no-op sweep) */}
+          of silently doing nothing (R14 no-op sweep). R23-WD (D-D2): this is
+          the one PRE-matrix house button — it is not a matrix cluster and
+          stays on every page. */}
       <button
         className="icon-btn"
         data-testid="shell-timeline-toolbar-btn-view-options"
@@ -160,239 +238,281 @@ export function TimelineToolbar() {
       </button>
 
       {/* R23-WB (D-B3/#94): the density toggle — compact strip (frozen) ↔
-          full tracks, on EVERY page. aria-pressed is the RESOLVED state
-          (honest — it reflects the timeline actually rendered); the click
-          writes the per-session override, so 'auto' only survives until the
-          user speaks. */}
-      <button
-        className={`icon-btn ${compact ? 'toggled' : ''}`}
-        data-testid="shell-timeline-toolbar-btn-density"
-        data-tip="Compact strip (frozen) ↔ full tracks"
-        aria-label="Toggle compact timeline"
-        aria-pressed={compact}
-        onClick={() => setTimelineCompact(compact ? 'off' : 'on')}
-      >
-        <Rows3 size={14} strokeWidth={1.8} />
-      </button>
+          full tracks, on EVERY page (the matrix keeps it ✔ everywhere).
+          aria-pressed is the RESOLVED state (honest — it reflects the
+          timeline actually rendered); the click writes the per-session
+          override, so 'auto' only survives until the user speaks.
+          R23-WD (D-D2): the wiring is untouched — only its render gate reads
+          the matrix. */}
+      {m.density && (
+        <button
+          className={`icon-btn ${compact ? 'toggled' : ''}`}
+          data-testid="shell-timeline-toolbar-btn-density"
+          data-tip="Compact strip (frozen) ↔ full tracks"
+          aria-label="Toggle compact timeline"
+          aria-pressed={compact}
+          onClick={() => setTimelineCompact(compact ? 'off' : 'on')}
+        >
+          <Rows3 size={14} strokeWidth={1.8} />
+        </button>
+      )}
 
       <div className="grow" />
 
-      {/* tool cluster (radio) — §11.1: arrow-key navigation + roving focus */}
-      <div
-        className="flex items-center gap-0.5"
-        role="radiogroup"
-        aria-label="Edit tool"
-        onKeyDown={(e) => {
-          // spec 18 §11.1: "the tool radio group uses arrow-key navigation".
-          // R14: the radios were click/Tab-only — arrow roving was missing.
-          if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-          e.preventDefault();
-          const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1;
-          const idx = TOOLS.findIndex((t) => t.id === tool);
-          const next = (idx + dir + TOOLS.length) % TOOLS.length;
-          setTool(TOOLS[next].id);
-          // rove focus with the checked state (radios: focus follows selection)
-          document.querySelector<HTMLElement>(`[data-testid="shell-timeline-toolbar-tool-${TOOLS[next].id}"]`)?.focus();
-        }}
-      >
-        {TOOLS.map((t) => (
+      {/* tool cluster (radio) — §11.1: arrow-key navigation + roving focus.
+          R23-WD (D-D2): Edit ONLY — the other pages carry no editing tools
+          (Resolve's grammar: Cut/Edit carry the tools); DOM-absent, never
+          display:none. The radio + its 8-tool wiring are otherwise untouched. */}
+      {m.tools && (
+        <div
+          className="flex items-center gap-0.5"
+          role="radiogroup"
+          aria-label="Edit tool"
+          onKeyDown={(e) => {
+            // spec 18 §11.1: "the tool radio group uses arrow-key navigation".
+            // R14: the radios were click/Tab-only — arrow roving was missing.
+            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+            e.preventDefault();
+            const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1;
+            const idx = TOOLS.findIndex((t) => t.id === tool);
+            const next = (idx + dir + TOOLS.length) % TOOLS.length;
+            setTool(TOOLS[next].id);
+            // rove focus with the checked state (radios: focus follows selection)
+            document.querySelector<HTMLElement>(`[data-testid="shell-timeline-toolbar-tool-${TOOLS[next].id}"]`)?.focus();
+          }}
+        >
+          {TOOLS.map((t) => (
+            <button
+              key={t.id}
+              role="radio"
+              aria-checked={tool === t.id}
+              data-testid={`shell-timeline-toolbar-tool-${t.id}`}
+              className={`icon-btn ${tool === t.id ? 'toggled' : ''}`}
+              data-tip={t.tip}
+              aria-label={t.tip}
+              onClick={() => setTool(t.id)}
+            >
+              {t.icon}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* vsep law: renders only between two PRESENT clusters (D-D2) */}
+      {vsep.snapGroup && <div className="vsep" />}
+
+      {/* snap / link / lock — R23-WD (D-D2): snap renders on Edit + Audio
+          (audio needs clip-placement snapping); link/lock are Edit-only
+          (audio tracks carry no A/V link domain). */}
+      {m.snap && (
+        <button
+          id="btn-magnet"
+          className={`icon-btn ${snap ? 'toggled' : ''}`}
+          data-testid="shell-timeline-toolbar-btn-snap"
+          data-tip="Snapping (N)"
+          aria-label="Toggle snapping"
+          aria-pressed={snap}
+          onClick={toggleSnap}
+        >
+          <Magnet size={15} strokeWidth={1.8} />
+        </button>
+      )}
+      {m.linkLock && (
+        <>
           <button
-            key={t.id}
-            role="radio"
-            aria-checked={tool === t.id}
-            data-testid={`shell-timeline-toolbar-tool-${t.id}`}
-            className={`icon-btn ${tool === t.id ? 'toggled' : ''}`}
-            data-tip={t.tip}
-            aria-label={t.tip}
-            onClick={() => setTool(t.id)}
+            className={`icon-btn ${link ? 'toggled' : ''}`}
+            data-tip="Link A/V"
+            aria-label="Toggle A/V link"
+            aria-pressed={link}
+            onClick={toggleLink}
           >
-            {t.icon}
+            <Link2 size={15} strokeWidth={2} />
           </button>
-        ))}
-      </div>
+          <button
+            className={`icon-btn ${lockAll ? 'toggled' : ''}`}
+            data-tip="Lock all tracks"
+            aria-label="Lock all tracks"
+            aria-pressed={lockAll}
+            onClick={toggleLockAll}
+          >
+            <Lock size={13} strokeWidth={1.8} />
+          </button>
+        </>
+      )}
 
-      <div className="vsep" />
+      {/* vsep law: renders only between two PRESENT clusters (D-D2) */}
+      {vsep.markers && <div className="vsep" />}
 
-      {/* snap / link / lock */}
-      <button
-        id="btn-magnet"
-        className={`icon-btn ${snap ? 'toggled' : ''}`}
-        data-testid="shell-timeline-toolbar-btn-snap"
-        data-tip="Snapping (N)"
-        aria-label="Toggle snapping"
-        aria-pressed={snap}
-        onClick={toggleSnap}
-      >
-        <Magnet size={15} strokeWidth={1.8} />
-      </button>
-      <button
-        className={`icon-btn ${link ? 'toggled' : ''}`}
-        data-tip="Link A/V"
-        aria-label="Toggle A/V link"
-        aria-pressed={link}
-        onClick={toggleLink}
-      >
-        <Link2 size={15} strokeWidth={2} />
-      </button>
-      <button
-        className={`icon-btn ${lockAll ? 'toggled' : ''}`}
-        data-tip="Lock all tracks"
-        aria-label="Lock all tracks"
-        aria-pressed={lockAll}
-        onClick={toggleLockAll}
-      >
-        <Lock size={13} strokeWidth={1.8} />
-      </button>
+      {/* markers — R23-WD (D-D2): Edit only. */}
+      {m.markers && (
+        <>
+          <button className="flex items-center gap-1.5 rounded-[var(--radius)] px-1.5 py-1 hover:bg-[var(--hover-overlay)]" data-tip="Add marker (M)" aria-label="Add marker" onClick={() => addMarker(playhead)}>
+            <Flag size={13} strokeWidth={1.8} className="text-[var(--mk-blue)]" />
+          </button>
+          {/* marker-color dropdown (R14 no-op sweep: the color-dot + chevron was
+              dead). Opens the SHARED §4.9 8-color palette row (markerColorItems,
+              the same builder the ruler menu renders) at the button; picking a
+              color adds a colored marker at the playhead. Roving/Esc are the
+              ContextMenu machinery's own. */}
+          <button
+            className="flex items-center gap-1 rounded-[var(--radius)] px-1.5 py-1 hover:bg-[var(--hover-overlay)]"
+            data-testid="shell-timeline-toolbar-btn-marker-color"
+            data-tip="Marker color"
+            aria-label="Marker color options"
+            aria-haspopup="menu"
+            aria-expanded={menu.state !== null}
+            onClick={(e) => {
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              menu.open(
+                r.left, r.bottom + 2,
+                markerColorItems(
+                  (c) => { menu.close(); addMarker(useUi.getState().playhead, c); },
+                  'shell-menu-tb-marker-color',
+                ),
+                'tb-marker-color',
+              );
+            }}
+          >
+            <span className="h-[13px] w-[13px] rounded-full" style={{ background: 'var(--mk-blue)' }} />
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="3"><polyline points="6 9 12 15 18 9" /></svg>
+          </button>
+        </>
+      )}
 
-      <div className="vsep" />
-
-      {/* markers */}
-      <button className="flex items-center gap-1.5 rounded-[var(--radius)] px-1.5 py-1 hover:bg-[var(--hover-overlay)]" data-tip="Add marker (M)" aria-label="Add marker" onClick={() => addMarker(playhead)}>
-        <Flag size={13} strokeWidth={1.8} className="text-[var(--mk-blue)]" />
-      </button>
-      {/* marker-color dropdown (R14 no-op sweep: the color-dot + chevron was
-          dead). Opens the SHARED §4.9 8-color palette row (markerColorItems,
-          the same builder the ruler menu renders) at the button; picking a
-          color adds a colored marker at the playhead. Roving/Esc are the
-          ContextMenu machinery's own. */}
-      <button
-        className="flex items-center gap-1 rounded-[var(--radius)] px-1.5 py-1 hover:bg-[var(--hover-overlay)]"
-        data-testid="shell-timeline-toolbar-btn-marker-color"
-        data-tip="Marker color"
-        aria-label="Marker color options"
-        aria-haspopup="menu"
-        aria-expanded={menu.state !== null}
-        onClick={(e) => {
-          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          menu.open(
-            r.left, r.bottom + 2,
-            markerColorItems(
-              (c) => { menu.close(); addMarker(useUi.getState().playhead, c); },
-              'shell-menu-tb-marker-color',
-            ),
-            'tb-marker-color',
-          );
-        }}
-      >
-        <span className="h-[13px] w-[13px] rounded-full" style={{ background: 'var(--mk-blue)' }} />
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="3"><polyline points="6 9 12 15 18 9" /></svg>
-      </button>
-
-      <div className="vsep" />
+      {/* vsep law: renders only between two PRESENT clusters (D-D2) */}
+      {vsep.zoom && <div className="vsep" />}
 
       {/* zoom cluster (R14 no-op sweep — all three icon buttons were dead).
           R15 T1: fit + ± route through the zoom bus (controller pre-capture /
           two-regime anchoring); the slider maps exponentially against the
           DYNAMIC min (spec-05 §5.2); ± step factor 1.7 (canonical, spec-16
           §3.8 revision R15-1). Magnifier: focuses the zoom slider (distinct
-          honest effect — exposing the slider's keyboard grammar, spec 18 §11.3). */}
-      <button
-        className="icon-btn"
-        data-testid="shell-timeline-toolbar-btn-zoom-fit"
-        data-tip="Zoom to fit (⌘\)"
-        aria-label="Zoom to fit"
-        onClick={() => zoomBus.zoomFit(measureLanes(), sceneDuration(scene))}
-      >
-        <ScanSearch size={15} strokeWidth={1.5} />
-      </button>
-      <button
-        className="icon-btn"
-        data-testid="shell-timeline-toolbar-btn-zoom-selection"
-        data-tip="Zoom to selection"
-        aria-label="Zoom to selection"
-        onClick={zoomToSelection}
-      >
-        <Frame size={14} strokeWidth={1.6} />
-      </button>
-      <button
-        className="icon-btn"
-        data-tip="Focus zoom slider"
-        aria-label="Focus zoom slider"
-        onClick={() => sliderRef.current?.focus()}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" />
-        </svg>
-      </button>
-      <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomBus.zoomOut()} data-tip="Zoom out (−)" aria-label="Zoom out">−</button>
-      <input
-        ref={sliderRef}
-        type="range"
-        min={0}
-        max={100}
-        step={0.5}
-        value={zoomToSlider(pxPerSec, zoomMinPps) * 100}
-        onChange={(e) => zoomBus(sliderToZoomPps(Number(e.target.value) / 100, zoomMinPps))}
-        aria-label="Timeline zoom"
-        aria-valuetext={`${Math.round(pxPerSec)} px/s`} /* §11.3 slider contract */
-        className="w-[90px]"
-      />
-      <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomBus.zoomIn()} data-tip="Zoom in (+)" aria-label="Zoom in">+</button>
-      <span className="mono hidden shrink-0 pl-1 text-[11px] text-tmuted xl:inline">{Math.round(pxPerSec)} px/s</span>
+          honest effect — exposing the slider's keyboard grammar, spec 18 §11.3).
+          R23-WD (D-D2): the ONE cluster present on every page (read-mostly on
+          deliver — the timeline is live there, so zoom still works). */}
+      {m.zoom && (
+        <>
+          <button
+            className="icon-btn"
+            data-testid="shell-timeline-toolbar-btn-zoom-fit"
+            data-tip="Zoom to fit (⌘\)"
+            aria-label="Zoom to fit"
+            onClick={() => zoomBus.zoomFit(measureLanes(), sceneDuration(scene))}
+          >
+            <ScanSearch size={15} strokeWidth={1.5} />
+          </button>
+          <button
+            className="icon-btn"
+            data-testid="shell-timeline-toolbar-btn-zoom-selection"
+            data-tip="Zoom to selection"
+            aria-label="Zoom to selection"
+            onClick={zoomToSelection}
+          >
+            <Frame size={14} strokeWidth={1.6} />
+          </button>
+          <button
+            className="icon-btn"
+            data-tip="Focus zoom slider"
+            aria-label="Focus zoom slider"
+            onClick={() => sliderRef.current?.focus()}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" />
+            </svg>
+          </button>
+          <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomBus.zoomOut()} data-tip="Zoom out (−)" aria-label="Zoom out">−</button>
+          <input
+            ref={sliderRef}
+            type="range"
+            min={0}
+            max={100}
+            step={0.5}
+            value={zoomToSlider(pxPerSec, zoomMinPps) * 100}
+            onChange={(e) => zoomBus(sliderToZoomPps(Number(e.target.value) / 100, zoomMinPps))}
+            aria-label="Timeline zoom"
+            aria-valuetext={`${Math.round(pxPerSec)} px/s`} /* §11.3 slider contract */
+            className="w-[90px]"
+          />
+          <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomBus.zoomIn()} data-tip="Zoom in (+)" aria-label="Zoom in">+</button>
+          <span className="mono hidden shrink-0 pl-1 text-[11px] text-tmuted xl:inline">{Math.round(pxPerSec)} px/s</span>
+        </>
+      )}
 
-      <div className="vsep" />
+      {/* vsep law: renders only between two PRESENT clusters (D-D2) */}
+      {vsep.mixer && <div className="vsep" />}
 
       {/* mixer dock state — R20-W1 (DESIGN-R20 D1.4): Edit cycles
           closed→meters→full→closed; Audio toggles meters↔full. B4: the
           glyph + label reflect the CURRENT state (closed → SlidersHorizontal,
           meters → PanelRight, full → AudioLines strips). No chord (⌘M is
-          spec 16 §3.5 focused-track mute). */}
-      <button
-        className={`icon-btn ${mixerState !== 'collapsed' ? 'toggled' : ''}`}
-        data-tip={mixerStateLabel(mixerState, page)}
-        aria-label={mixerStateLabel(mixerState, page)}
-        aria-pressed={mixerState !== 'collapsed'}
-        onClick={cycleMixerState}
-        data-testid="btn-mixer-state"
-      >
-        {mixerState === 'full' ? (
-          <AudioLines size={14} strokeWidth={1.6} />
-        ) : mixerState === 'meters' ? (
-          <PanelRight size={14} strokeWidth={1.6} />
-        ) : (
-          <SlidersHorizontal size={14} strokeWidth={1.6} />
-        )}
-      </button>
+          spec 16 §3.5 focused-track mute).
+          R23-WD (D-D2, ruling 15): Edit + Audio ONLY — DOM-absent on
+          color/fx/deliver (same law as Toolbar2's Mixer toggle). */}
+      {m.mixer && (
+        <button
+          className={`icon-btn ${mixerState !== 'collapsed' ? 'toggled' : ''}`}
+          data-tip={mixerStateLabel(mixerState, page)}
+          aria-label={mixerStateLabel(mixerState, page)}
+          aria-pressed={mixerState !== 'collapsed'}
+          onClick={cycleMixerState}
+          data-testid="btn-mixer-state"
+        >
+          {mixerState === 'full' ? (
+            <AudioLines size={14} strokeWidth={1.6} />
+          ) : mixerState === 'meters' ? (
+            <PanelRight size={14} strokeWidth={1.6} />
+          ) : (
+            <SlidersHorizontal size={14} strokeWidth={1.6} />
+          )}
+        </button>
+      )}
 
-      <div className="vsep" />
+      {/* vsep law: renders only between two PRESENT clusters (D-D2) */}
+      {vsep.master && <div className="vsep" />}
 
       {/* master audio + always-on micro-meter (design doc §3.2 — zero new regions).
           ⌘M tooltip honesty: spec 16 §3.5 binds ⌘M to FOCUSED-track mute; the
-          mock falls back to master only when nothing is focused (registered). */}
-      <button
-        className={`icon-btn ${masterMuted ? 'toggled' : ''}`}
-        data-tip="Mute focused track (⌘M — master when nothing focused)"
-        aria-label="Mute master"
-        aria-pressed={masterMuted}
-        onClick={toggleMasterMute}
-      >
-        {masterMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-      </button>
-      {/* R15-A2: the shared engine's ONE master key + the micro-meter variant
-          (14px: 4 coarse chunks, no 3px LED segments, same palette/engine) */}
-      <StripMeter trackId="master" db={masterMuted ? -60 : masterVolume * 66 - 60} height={14} width={4} coarse label="Master" />
-      <input
-        type="range"
-        min={0}
-        max={100}
-        value={Math.round(masterVolume * 100)}
-        onChange={(e) => setMasterVolume(Number(e.target.value) / 100)}
-        className="green-fill w-[70px]"
-        style={{ ['--fill' as string]: `${Math.round(masterVolume * 100)}%` }}
-        aria-label="Master volume"
-        aria-valuetext={`${Math.round(masterVolume * 100)}%`} /* §11.3 slider contract */
-      />
-      {/* DIM chip — display-only (R14 no-op sweep): master dim is M2 (spec 20
-          §12); no local toggle is possible without the audio path, so the chip
-          carries the disabled contract (aria-disabled + tip) instead of
-          pretending to be a live control */}
-      <span
-        aria-disabled="true"
-        data-tip="Master dim is M2 (spec 20 §12) — display-only in the mock"
-        className="shrink-0 rounded-[var(--radius-sm)] border border-strong px-1.5 py-px text-[11px] text-tmuted"
-      >
-        DIM
-      </span>
+          mock falls back to master only when nothing is focused (registered).
+          R23-WD (D-D2, ruling 15): Edit + Audio ONLY — the whole cluster
+          (mute + meter + volume + DIM) is DOM-absent on color/fx/deliver. */}
+      {m.master && (
+        <>
+          <button
+            className={`icon-btn ${masterMuted ? 'toggled' : ''}`}
+            data-tip="Mute focused track (⌘M — master when nothing focused)"
+            aria-label="Mute master"
+            aria-pressed={masterMuted}
+            onClick={toggleMasterMute}
+          >
+            {masterMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+          </button>
+          {/* R15-A2: the shared engine's ONE master key + the micro-meter variant
+              (14px: 4 coarse chunks, no 3px LED segments, same palette/engine) */}
+          <StripMeter trackId="master" db={masterMuted ? -60 : masterVolume * 66 - 60} height={14} width={4} coarse label="Master" />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(masterVolume * 100)}
+            onChange={(e) => setMasterVolume(Number(e.target.value) / 100)}
+            className="green-fill w-[70px]"
+            style={{ ['--fill' as string]: `${Math.round(masterVolume * 100)}%` }}
+            aria-label="Master volume"
+            aria-valuetext={`${Math.round(masterVolume * 100)}%`} /* §11.3 slider contract */
+          />
+          {/* DIM chip — display-only (R14 no-op sweep): master dim is M2 (spec 20
+              §12); no local toggle is possible without the audio path, so the chip
+              carries the disabled contract (aria-disabled + tip) instead of
+              pretending to be a live control */}
+          <span
+            aria-disabled="true"
+            data-tip="Master dim is M2 (spec 20 §12) — display-only in the mock"
+            className="shrink-0 rounded-[var(--radius-sm)] border border-strong px-1.5 py-px text-[11px] text-tmuted"
+          >
+            DIM
+          </span>
+        </>
+      )}
       </div>
       {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
     </>

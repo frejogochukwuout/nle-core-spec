@@ -459,3 +459,48 @@ describe('R20-W5 — full-band in/out bracket handles (th_mtp5tlgu / thread-3)',
     }
   });
 });
+
+/* ---------- R23-WE (DESIGN-R23 D-E1, #101): the trim brackets drop VISUAL
+   weight — 1px stems + a 40%-lighter stroke (color-mix toward transparent)
+   — while the 12px full-band HANDLE hit zones are UNCHANGED. The house law
+   under the whole change: hit target ≠ visual size — the art thins, the
+   grab zone never does (readable at 1280×800 without shouting). ---------- */
+
+describe('R23-WE D-E1 — bracket visual weight (#101: thinner strokes, same hit zones)', () => {
+  const pathOf = (side: 'in' | 'out') =>
+    screen.getByTestId(`shell-ruler-bracket-${side}`).querySelector('svg path')!;
+
+  it('the glyphs drop to 1px stems + a 40%-lighter stroke (color-mix toward transparent, same accent hue)', () => {
+    boot({});
+    for (const side of ['in', 'out'] as const) {
+      const p = pathOf(side);
+      expect(p.getAttribute('stroke-width')).toBe('1'); // was 1.6 — the visual-weight law
+      // 40% lighter = the SAME accent at 60% mixed toward transparent (never a different hue)
+      expect(p.getAttribute('stroke')).toBe('color-mix(in srgb, var(--accent-selection) 60%, transparent)');
+    }
+  });
+
+  it('the 12px full-band HANDLE hit zones are UNCHANGED (hit target ≠ visual size)', () => {
+    boot({});
+    for (const side of ['in', 'out'] as const) {
+      const handle = screen.getByTestId(`shell-ruler-bracket-${side}`);
+      expect(handle.style.width).toBe('12px'); // the target did not shrink with the art
+      expect(handle.style.height).toBe('27px'); // full band (bandTop 30 − 3)
+      expect(handle.style.top).toBe('2px');
+      expect(handle.className).toContain('pointer-events-auto'); // the whole box still grabs
+      expect(handle.className).toContain('cursor-ew-resize');
+      // the VISUAL glyph rides well inside the hit box (8px svg < 12px target)
+      const glyph = handle.querySelector('svg')!;
+      expect(parseFloat(glyph.getAttribute('width')!)).toBeLessThan(12);
+    }
+  });
+
+  it('the thin glyph is still a real bracket (⌐¬ cap + 3 grip ticks) — weight down, shape intact', () => {
+    boot({});
+    for (const side of ['in', 'out'] as const) {
+      const d = pathOf(side).getAttribute('d')!;
+      expect(Array.from(d.matchAll(/M\d+/g)).length).toBe(4); // cap outline + 3 ticks
+      expect(d).toMatch(/L\d+\s1\b/); // the top arm of the bracket cap
+    }
+  });
+});

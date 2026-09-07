@@ -37,9 +37,23 @@ describe('ChannelEditor', () => {
     expect(screen.getByTestId('channel-automation-placeholder')).toBeInTheDocument(); // M2 non-goal note
   });
 
-  it('an empty selection shows the no-clip empty state (spec 18 §4.2 state table)', () => {
+  /* R23-WC (D-C2, #99): the no-clip complaint DIED — the state is the honest
+     onboarding line, and it only mounts when NEITHER a clip selection NOR a
+     channel focus is live (the old "Select an audio clip to edit its level"
+     pin restated). */
+  it('an empty selection with NO strip focus shows the honest onboarding line (D-C2, #99)', () => {
     boot({ selection: [], page: 'audio' });
-    expect(screen.getByTestId('shell-channel-editor-state-noclip')).toHaveTextContent('Select an audio clip');
+    expect(screen.getByTestId('shell-channel-editor-state-noclip')).toHaveTextContent('Select a clip or focus a channel');
+  });
+
+  it('R23-WC D-C2 (#99): a live strip focus kills the no-clip state — the CLIP section hides, no empty hole', () => {
+    boot({ selection: [], stripFocus: 'tr-audio-2', page: 'audio' });
+    expect(screen.queryByTestId('shell-channel-editor-state-noclip')).toBeNull();
+    // the section is GONE (header included — D-C1's zero-param law), not an
+    // empty shell; the focused channel's TRACK section IS the content
+    expect(screen.queryByText('· structure layer')).toBeNull();
+    expect(screen.getByText('BGM')).toBeInTheDocument(); // A2's role chip
+    expect(screen.getByRole('slider', { name: 'A2 fader' })).toBeInTheDocument();
   });
 
   it('the CLIP section switches with the selection — a video clip is audio-bearing (17 §6.1 parity)', () => {
@@ -89,6 +103,67 @@ describe('ChannelEditor', () => {
     fireEvent.blur(screen.getByLabelText('Clip gain'));
     expect(el('el-6').volume).toBeCloseTo(0.35, 6);
     expect(el('el-7').volume).toBe(0.8); // untouched
+  });
+
+  /* ---------- R23-WC D-C1 (#98): the uniform clip-row grammar ---------- */
+  it('R23-WC D-C1 (#98): every CLIP param row = label + NumField + slider + readout — one anatomy for all three', () => {
+    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' }); // volume 0.35 → −13 dB, fades 1.0 / 2.0
+    for (const [label, readout] of [
+      ['Gain dB', '-13.0 dB'],
+      ['Fade in', '1.0 s'],
+      ['Fade out', '2.0 s'],
+    ] as const) {
+      const row = screen.getByTestId(`channel-clip-row-el-6-${label}`);
+      // the grammar, in order: [label span][typed field][range][readout span]
+      const kids = Array.from(row.children);
+      expect(kids).toHaveLength(4);
+      expect((kids[0] as HTMLElement).textContent).toBe(label);
+      expect(kids[1]).toHaveAttribute('type', 'number');
+      expect(kids[2]).toHaveAttribute('type', 'range');
+      expect((kids[3] as HTMLElement).textContent).toBe(readout);
+      expect(kids[3]).toHaveAttribute('data-testid', `channel-clip-readout-${label}`);
+    }
+    // the #98 strangeness is dead: no row carries an empty control slot
+    expect(screen.getByLabelText('Clip gain slider (commit on release)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Audio fade in slider (commit on release)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Audio fade out slider (commit on release)')).toBeInTheDocument();
+  });
+
+  it('R23-WC D-C1: the readout follows the slider drag LIVE; the store commits once on release (§4.4)', () => {
+    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' });
+    const slider = screen.getByLabelText('Audio fade in slider (commit on release)');
+    fireEvent.change(slider, { target: { value: '2.5' } });
+    // mid-gesture: the readout moved, the doc slice has NOT been written
+    expect(screen.getByTestId('channel-clip-readout-Fade in')).toHaveTextContent('2.5 s');
+    expect(el('el-6').audioFadeIn).toBe(1);
+    fireEvent.pointerUp(slider);
+    expect(el('el-6').audioFadeIn).toBe(2.5); // ONE write per gesture
+    expect(screen.getByTestId('channel-clip-readout-Fade in')).toHaveTextContent('2.5 s');
+  });
+
+  it('R23-WC D-C1: the gain slider writes the S-layer volume in dB (commit on release), the readout stays in dB', () => {
+    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' });
+    const slider = screen.getByLabelText('Clip gain slider (commit on release)');
+    fireEvent.change(slider, { target: { value: '-6' } });
+    expect(screen.getByTestId('channel-clip-readout-Gain dB')).toHaveTextContent('-6.0 dB');
+    fireEvent.pointerUp(slider);
+    expect(el('el-6').volume).toBeCloseTo(0.7, 6); // (−6 + 20) / 20
+    expect(screen.getByTestId('channel-clip-readout-Gain dB')).toHaveTextContent('-6.0 dB');
+    // the fade-out twin commits the same way
+    const out = screen.getByLabelText('Audio fade out slider (commit on release)');
+    fireEvent.change(out, { target: { value: '4' } });
+    fireEvent.pointerUp(out);
+    expect(el('el-6').audioFadeOut).toBe(4);
+  });
+
+  it('R23-WC D-C1: the readout resyncs on an external write (NumField commit) — no stale display', () => {
+    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' });
+    const input = screen.getByLabelText('Audio fade out');
+    fireEvent.change(input, { target: { value: '3.5' } });
+    fireEvent.blur(input);
+    expect(el('el-6').audioFadeOut).toBe(3.5);
+    expect(screen.getByTestId('channel-clip-readout-Fade out')).toHaveTextContent('3.5 s');
+    expect((screen.getByLabelText('Audio fade out slider (commit on release)') as HTMLInputElement).defaultValue).toBe('3.5');
   });
 
   it('the G-layer fader/pan respond to the keyboard grammar (design doc §6)', () => {

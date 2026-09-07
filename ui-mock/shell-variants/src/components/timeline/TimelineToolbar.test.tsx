@@ -1,9 +1,13 @@
 /* TimelineToolbar component tests — tool radio cluster (spec 16 keys /
    18 §4.5), snap/link/lock-all toggles, marker + zoom clusters, the mixer
-   dock state cycle (design doc v2.2 §4), and the master-audio cluster. */
+   dock state cycle (design doc v2.2 §4), the master-audio cluster, and the
+   R23-WD (DESIGN-R23 D-D2, #108) per-page cluster matrix — presence /
+   absence pinned at DOM level (every hidden cluster is DOM-ABSENT, never
+   display:none — the F6/rover dense laws). */
 
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
+import { act } from 'react';
 import { TimelineToolbar } from './TimelineToolbar';
 import { renderPlain, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
@@ -35,10 +39,15 @@ describe('TimelineToolbar', () => {
     expect(fxBtn).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(screen.getByTestId('shell-timeline-toolbar-tool-blade'));
     expect(store().fxMode).toBe(false);
-    // on the FX page tool changes never kill the engine (the page owns it)
-    useUi.setState({ page: 'fx', fxMode: true });
-    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-tool-blade'));
+    /* R23-WD (D-D2): on the FX PAGE the radio itself is DOM-ABSENT (the
+       matrix gives the tools to Edit only) — the page owns fxMode, so tool
+       writes can never kill it (ruling 2; the coupling pin goes store-level
+       because the absent radio can no longer fire the click). */
+    act(() => { useUi.setState({ page: 'fx', fxMode: true, tool: 'select' }); });
+    expect(screen.queryByTestId('shell-timeline-toolbar-tool-blade')).toBeNull();
+    act(() => { useUi.getState().setTool('blade'); });
     expect(store().fxMode).toBe(true);
+    act(() => { useUi.setState({ page: 'edit', tool: 'select', fxMode: false }); });
   });
 
   /* R23-WB (DESIGN-R23 D-B3, issue #94): the DENSITY toggle — compact
@@ -280,5 +289,131 @@ describe('R14: tool radiogroup arrow-key navigation (spec 18 §11.1)', () => {
     fireEvent.keyDown(document.activeElement!.parentElement!, { key: 'ArrowLeft' });
     expect(useUi.getState().tool).toBe('select');
     expect(document.activeElement).toBe(first);
+  });
+});
+
+/* R23-WD (DESIGN-R23 D-D2, issue #108 + Part IX ruling 15): the PER-PAGE
+   cluster matrix, pinned at DOM level. Every hidden cluster is DOM-ABSENT
+   (queryByTestId/queryByRole → null — never display:none, so the F6/rover
+   dense laws hold). Matrix: Edit = full; Color = density + zoom; Audio =
+   snap + density + zoom + mixer + master; FX = density + zoom; Deliver =
+   density + zoom (read-mostly). */
+describe('R23-WD (D-D2/#108): the per-page TimelineToolbar cluster matrix', () => {
+  /** every cluster's DOM probes — null probe = the cluster is DOM-absent */
+  const probes = {
+    tools: () => screen.queryByRole('radiogroup', { name: 'Edit tool' }),
+    snap: () => screen.queryByTestId('shell-timeline-toolbar-btn-snap'),
+    link: () => screen.queryByRole('button', { name: 'Toggle A/V link' }),
+    lock: () => screen.queryByRole('button', { name: 'Lock all tracks' }),
+    markers: () => screen.queryByRole('button', { name: 'Add marker' }),
+    markerColor: () => screen.queryByTestId('shell-timeline-toolbar-btn-marker-color'),
+    density: () => screen.getByTestId('shell-timeline-toolbar-btn-density'),
+    zoom: () => screen.getByRole('slider', { name: 'Timeline zoom' }),
+    zoomFit: () => screen.getByTestId('shell-timeline-toolbar-btn-zoom-fit'),
+    mixer: () => screen.queryByTestId('btn-mixer-state'),
+    master: () => screen.queryByRole('button', { name: 'Mute master' }),
+    masterVolume: () => screen.queryByRole('slider', { name: 'Master volume' }),
+    masterMeter: () => screen.queryByTitle(/Master: /),
+    dim: () => screen.queryByText('DIM'),
+  };
+  /** count the cluster separators — the vsep law (a separator renders only
+   *  between two PRESENT clusters; an absent cluster never dangles a bar) */
+  const vseps = (c: HTMLElement) => c.querySelectorAll('.vsep').length;
+
+  it('EDIT = full: tools radio + snap/link/lock + markers + density + zoom + mixer + master', () => {
+    const { container } = boot({ page: 'edit' });
+    expect(within(probes.tools()!).getAllByRole('radio')).toHaveLength(8); // the 8-tool radio is untouched
+    expect(probes.snap()).toBeInTheDocument();
+    expect(probes.link()).toBeInTheDocument();
+    expect(probes.lock()).toBeInTheDocument();
+    expect(probes.markers()).toBeInTheDocument();
+    expect(probes.markerColor()).toBeInTheDocument();
+    expect(probes.density()).toBeInTheDocument();
+    expect(probes.zoom()).toBeInTheDocument();
+    expect(probes.zoomFit()).toBeInTheDocument();
+    expect(probes.mixer()).toBeInTheDocument();
+    expect(probes.master()).toBeInTheDocument();
+    expect(probes.masterVolume()).toBeInTheDocument();
+    expect(probes.masterMeter()).toBeInTheDocument();
+    expect(probes.dim()).toBeInTheDocument();
+    expect(vseps(container)).toBe(5); // between all six right-side clusters
+  });
+
+  it('COLOR = density + zoom ONLY — no tools, no snap, no markers, no mixer, no master (ruling 15)', () => {
+    const { container } = boot({ page: 'color' });
+    expect(probes.tools()).toBeNull();
+    expect(probes.snap()).toBeNull();
+    expect(probes.link()).toBeNull();
+    expect(probes.lock()).toBeNull();
+    expect(probes.markers()).toBeNull();
+    expect(probes.markerColor()).toBeNull();
+    expect(probes.mixer()).toBeNull();
+    expect(probes.master()).toBeNull();
+    expect(probes.masterVolume()).toBeNull();
+    expect(probes.masterMeter()).toBeNull();
+    expect(probes.dim()).toBeNull();
+    // the two every-page clusters survive (the density + zoom law)
+    expect(probes.density()).toBeInTheDocument();
+    expect(probes.zoom()).toBeInTheDocument();
+    expect(probes.zoomFit()).toBeInTheDocument();
+    expect(vseps(container)).toBe(0); // zoom alone — no separators to draw
+  });
+
+  it('AUDIO = snap + density + zoom + mixer + master — NO tools radio, NO link/lock, NO markers', () => {
+    const { container } = boot({ page: 'audio' });
+    expect(probes.snap()).toBeInTheDocument();
+    expect(probes.density()).toBeInTheDocument();
+    expect(probes.zoom()).toBeInTheDocument();
+    expect(probes.mixer()).toBeInTheDocument();
+    expect(probes.master()).toBeInTheDocument();
+    expect(probes.masterVolume()).toBeInTheDocument();
+    expect(probes.dim()).toBeInTheDocument();
+    expect(probes.tools()).toBeNull();
+    expect(probes.link()).toBeNull();
+    expect(probes.lock()).toBeNull();
+    expect(probes.markers()).toBeNull();
+    expect(probes.markerColor()).toBeNull();
+    expect(vseps(container)).toBe(3); // snap|zoom, zoom|mixer, mixer|master
+  });
+
+  it('FX = density + zoom ONLY — no mixer, no master (ruling 15: Edit + Audio own the mixer clusters)', () => {
+    const { container } = boot({ page: 'fx' });
+    expect(probes.density()).toBeInTheDocument();
+    expect(probes.zoom()).toBeInTheDocument();
+    expect(probes.mixer()).toBeNull();
+    expect(probes.master()).toBeNull();
+    expect(probes.masterMeter()).toBeNull();
+    expect(probes.dim()).toBeNull();
+    expect(probes.tools()).toBeNull();
+    expect(probes.snap()).toBeNull();
+    expect(probes.markers()).toBeNull();
+    expect(vseps(container)).toBe(0);
+  });
+
+  it('DELIVER = density + zoom (read-mostly) — and "read-mostly" is NOT disabled: zoom still works (the timeline is live)', () => {
+    const { container } = boot({ page: 'deliver' });
+    expect(probes.density()).toBeInTheDocument();
+    expect(probes.zoom()).toBeInTheDocument();
+    expect(probes.zoomFit()).toBeInTheDocument();
+    expect(probes.tools()).toBeNull();
+    expect(probes.snap()).toBeNull();
+    expect(probes.markers()).toBeNull();
+    expect(probes.mixer()).toBeNull();
+    expect(probes.master()).toBeNull();
+    expect(vseps(container)).toBe(0);
+    // the deliver timeline renders the loop in/out export range — zoom in
+    // still steps ×1.7 through the zoom bus (live, not read-only)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(store().pxPerSec).toBeCloseTo(78.2, 0);
+    useUi.setState({ page: 'edit', pxPerSec: 46 });
+  });
+
+  it('the pre-matrix view-options house button stays on every page (it is not a D-D2 cluster)', () => {
+    for (const p of ['edit', 'color', 'audio', 'fx', 'deliver'] as const) {
+      const { unmount } = boot({ page: p });
+      expect(screen.getByTestId('shell-timeline-toolbar-btn-view-options')).toBeInTheDocument();
+      unmount();
+    }
+    useUi.setState({ page: 'edit' });
   });
 });

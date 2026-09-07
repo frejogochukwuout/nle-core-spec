@@ -76,6 +76,14 @@ const ICONS: Record<InsertMediaMode, EditModeIconComponent> = {
 };
 const withIcon = (d: ModeDef): ModeDef => ({ ...d, Icon: d.Icon ?? ICONS[d.mode] });
 
+/* R23-WE (DESIGN-R23 D-E2, #102): the preview MODE BADGE's name source —
+   derived from the SAME label table the buttons render (single source: the
+   badge never re-spells a mode name; it shows exactly the hovered button's
+   own label). The Timeline's insert-preview layer imports this. */
+export const MODE_LABELS: Record<InsertMediaMode, string> = Object.fromEntries(
+  [...PRIMARY, ...SECONDARY].map((d) => [d.mode, d.label]),
+) as Record<InsertMediaMode, string>;
+
 const DESC_ID = 'shell-source-edit-desc';
 
 interface ModeButtonProps {

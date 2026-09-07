@@ -5,12 +5,13 @@
    (18 §5A). jsdom has no layout: assertions hit conditional rendering,
    store-driven inline styles, and store wiring — never hit-testing geometry. */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { act, createEvent, fireEvent, screen, within } from '@testing-library/react';
 import { Timeline } from './Timeline';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 import { useShortcuts } from '../../hooks/useShortcuts';
+import { zoomController } from '../../lib/zoomController';
 import { sceneDuration } from '../../lib/mockData';
 import { snapToFrame } from '../../lib/timecode';
 import { isGestureActive } from '../../lib/timelinePlacement';
@@ -1138,6 +1139,151 @@ describe('R20-W6FIX P2-1: placeOnTop minted-track ghost renders at the INSERT li
     const ghost = screen.getByTestId('insert-preview-ghost');
     expect(ghost).toHaveAttribute('data-track-id', 'tr-overlay-1');
     expect(ghost.style.top).toBe('46px'); // zone 44 + 2 — lane 1 (the overlay)
+  });
+});
+
+/* ---------- R23-WE (DESIGN-R23 D-E2, #102): the preview-visibility law.
+   The W3 preview span could land OFFSCREEN (ruling 20: the "no animated
+   effects" report was the offscreen ghost — the auto-scroll is the fix for
+   both clauses). Pinned here: (a) AUTO-SCROLL — scrollIntoView({inline:
+   'nearest'}) on the ghost span, ONE rAF AFTER PAINT (never synchronous),
+   re-arming as the plan re-mints; (b) ZOOM FLOOR — a ghost < 24px at the
+   current pps bumps zoom ONCE per ARM through the bus (never a creep);
+   (c) the MODE BADGE at the ghost's head (name per mode, chrome laws,
+   absence when no preview — the display:none law); and the REFUSAL path
+   scrolling to the PLAYHEAD instead so the refusal is legible in place. ---------- */
+
+describe('R23-WE D-E2: the insert-preview visibility law (#102)', () => {
+  const arm = (mediaId: string, mode: 'insert' | 'overwrite' | 'placeOnTop' | 'fitToFill') =>
+    act(() => { useUi.getState().setHoverInsertPreview({ mediaId, mode }); });
+  const disarm = () => act(() => { useUi.getState().setHoverInsertPreview(null); });
+  const nextFrame = () => act(async () => { await new Promise((res) => requestAnimationFrame(res)); });
+
+  it('(a) AUTO-SCROLL: an armed ok-preview scrollIntoView({inline:"nearest"})s the GHOST span — one rAF AFTER paint, never synchronously', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      boot({ playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+      const ghost = screen.getByTestId('insert-preview-ghost');
+      expect(spy).not.toHaveBeenCalled(); // rAF AFTER paint — never a sync scroll
+      await nextFrame();
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0]![0]).toEqual({ inline: 'nearest', block: 'nearest' });
+      expect(spy.mock.contexts[0]).toBe(ghost); // the ghost span is the scroll target
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('(a) AUTO-SCROLL re-tracks: the plan re-mints (playhead move) → the ghost scrollIntoViews again — the preview never drifts offscreen', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      boot({ playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+      await nextFrame();
+      expect(spy).toHaveBeenCalledTimes(1);
+      act(() => { useUi.getState().setPlayhead(17); }); // plan identity re-mints on the playhead atom
+      await nextFrame();
+      expect(spy).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('no armed preview: no badge chrome (the display:none law — absence, never an opacity stub) and no scroll', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      boot({});
+      expect(screen.queryByTestId('insert-preview-mode-badge')).toBeNull();
+      await nextFrame();
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('(c) MODE BADGE: the ghost\'s head carries the hovered mode\'s NAME (Insert) — chrome laws + head geometry', () => {
+    boot({ playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+    const badge = screen.getByTestId('insert-preview-mode-badge');
+    expect(badge).toHaveTextContent('Insert'); // the hovered button's own label
+    expect(badge).toHaveAttribute('aria-hidden', 'true'); // the a11y route is the bar's status line
+    expect(badge.className).toContain('pointer-events-none');
+    // head geometry: the ghost\'s left + 4, the lane\'s top + 4 (ghost 736/46 on the overlay lane)
+    expect(badge.style.left).toBe('740px');
+    expect(badge.style.top).toBe('48px');
+  });
+
+  it('(c) MODE BADGE: the name follows the MODE (Place on Top), never a hardcoded pair', () => {
+    boot({ playhead: 2, hoverInsertPreview: { mediaId: 'm-08', mode: 'placeOnTop' } });
+    expect(screen.getByTestId('insert-preview-mode-badge')).toHaveTextContent('Place on Top');
+  });
+
+  it('(b) ZOOM FLOOR: a ghost already ≥ 24px at the current pps never bumps zoom (no creep)', async () => {
+    const spy = vi.spyOn(zoomController, 'setZoomLevel');
+    try {
+      boot({ playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } }); // 4 s × 46 = 184 px
+      await nextFrame();
+      expect(spy).not.toHaveBeenCalled();
+      expect(store().pxPerSec).toBe(46);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('(b) ZOOM FLOOR: a ghost < 24px bumps zoom ONCE through the bus so it renders ≥ 24px', async () => {
+    const spy = vi.spyOn(zoomController, 'setZoomLevel');
+    try {
+      // 4 s ghost at 5 pps = 20 px < 24 → target 24/4 = 6 pps (the dynamic
+      // content-fit min raises the effective to 7.5 — either way ≥ 24 px)
+      boot({ pxPerSec: 5, playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith(6, { duration: 30 });
+      await nextFrame();
+      expect(store().pxPerSec).toBeGreaterThan(5); // the bump landed through the bus
+      const ghost = screen.getByTestId('insert-preview-ghost');
+      expect(parseFloat(ghost.style.width)).toBeGreaterThanOrEqual(24); // the LAW: renders ≥ 24 px
+      expect(spy).toHaveBeenCalledTimes(1); // one bump, not a creep
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('(b) ZOOM FLOOR: ONE bump per ARM — a mid-arm pps drop does NOT re-bump (guard); a cleared + re-armed preview claims a fresh bump', async () => {
+    const spy = vi.spyOn(zoomController, 'setZoomLevel');
+    try {
+      boot({ pxPerSec: 5, playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+      expect(spy).toHaveBeenCalledTimes(1); // the arm\'s one bump
+      // force the ghost back under the floor MID-ARM — the guard holds
+      act(() => { useUi.setState({ pxPerSec: 5 }); });
+      await nextFrame();
+      expect(spy).toHaveBeenCalledTimes(1); // never continuous
+      expect(store().pxPerSec).toBe(5);
+      // clear + re-arm the SAME preview = a NEW arm → a fresh bump
+      disarm();
+      arm('m-08', 'insert');
+      expect(spy).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('the REFUSAL path (ok:false) scrolls to the PLAYHEAD instead — never a ghost scrollIntoView, no geometry, no badge', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      // fitToFill on the duration-less image source refuses; the playhead
+      // (28 s = 1288 px) is offscreen in the mocked 800px viewport → the
+      // playhead-follow-scroll centers it at 888 (house pattern from the
+      // Ruler edge-scroll pin: mocked clientWidth/scrollWidth)
+      boot({ playhead: 28, hoverInsertPreview: { mediaId: 'm-08', mode: 'fitToFill' } });
+      const sc = scrollEl();
+      Object.defineProperty(sc, 'clientWidth', { value: 800, configurable: true });
+      Object.defineProperty(sc, 'scrollWidth', { value: 5000, configurable: true });
+      await nextFrame();
+      expect(sc.scrollLeft).toBe(888); // centered on the playhead — the refusal is legible in place
+      expect(spy).not.toHaveBeenCalled(); // no ghost to scroll — ok:false paints nothing
+      expect(screen.queryByTestId('insert-preview-layer')).toBeNull();
+      expect(screen.queryByTestId('insert-preview-mode-badge')).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

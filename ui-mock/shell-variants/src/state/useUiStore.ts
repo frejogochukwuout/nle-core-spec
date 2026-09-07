@@ -546,6 +546,17 @@ interface UiState {
   /* R20-W1 D1.3: ONE honest floor-fallback toast per session — the dock
      auto-falls back to the meters state below MIXER_TIER.FLOOR. */
   mixerFloorWarned: boolean;
+  /* R23-WC (DESIGN-R23 D-C3; issue #70 — the R20-era carry-over "probably
+     should have separate collapse / minimize for the master / bus"): the full
+     dock's master + aux-bus bank has its OWN meters-only collapse, INDEPENDENT
+     of the channel strips and of the dock-level 3-state cycle — collapsing
+     the bank never touches the channel strips' tier/anatomy, and cycling the
+     dock collapsed↔meters↔full never resets the bank. View state in the
+     stripArm precedent's law (B6): survives dock unmounts / state cycles /
+     scene switches (stale ids are harmless — the dock resolves per the active
+     scene), NEVER inside a withHistory snapshot (the snapshot slice stays
+     scenes/activeSceneId/lockAll/selection/mockGrades). */
+  masterBusCollapsed: boolean;
   /* spec 18 §4.9 track-header Height rows (Compact/Normal/Tall): GLOBAL lane-
      height pref (null = auto: kind-based trackHeights()). B3 registration: the
      state-home question (per-track vs global) is a seal item — the mock answers
@@ -741,6 +752,9 @@ interface UiState {
   cycleMixerState: () => void;
   toggleStripArm: (trackId: string) => void;
   toggleStripInserts: (trackId: string) => void;
+  /** R23-WC (D-C3/#70): flips masterBusCollapsed — the full dock's master +
+   *  bus bank meters-only collapse (view state, the stripArm precedent). */
+  toggleMasterBus: () => void;
   setAudioLaneBoost: (v: boolean) => void;
   setTrackHeightPref: (p: UiState['trackHeightPref']) => void;
   /** R20-W5 (thread #58): per-track height write. `px` is clamped by the
@@ -970,6 +984,7 @@ export const useUi = create<UiState>((set, get) => ({
   stripArm: {},
   stripInsertsOn: {},
   mixerFloorWarned: false,
+  masterBusCollapsed: false, // R23-WC (D-C3/#70): the bank boots FULL strips
   trackHeightPref: null,
   trackHeightOverrides: {}, // R20-W5: per-track view state, absent = auto
   poolModeFilter: true, // R20-W5: default ON — the audio page boots filtered
@@ -1555,6 +1570,9 @@ export const useUi = create<UiState>((set, get) => ({
   }),
   toggleStripArm: (trackId) => set((s) => ({ stripArm: { ...s.stripArm, [trackId]: !(s.stripArm[trackId] ?? false) } })),
   toggleStripInserts: (trackId) => set((s) => ({ stripInsertsOn: { ...s.stripInsertsOn, [trackId]: !(s.stripInsertsOn[trackId] ?? true) } })),
+  /* R23-WC (D-C3/#70): the master/bus bank's meters-only collapse — plain
+     view-state set (the stripArm law: no withHistory entry, no doc clone). */
+  toggleMasterBus: () => set((s) => ({ masterBusCollapsed: !s.masterBusCollapsed })),
   setAudioLaneBoost: (v) => set({ audioLaneBoost: v }),
   setTrackHeightPref: (p) => set({ trackHeightPref: p }), /* §4.9 Height pref — view state, no history */
   setTrackHeight: (trackId, px) => set((s) => {

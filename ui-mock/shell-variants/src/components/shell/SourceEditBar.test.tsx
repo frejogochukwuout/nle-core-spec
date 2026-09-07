@@ -203,6 +203,33 @@ describe('SourceEditBar — hover-placement preview (C48, ≥150ms dwell, fake t
     }
   });
 
+  it("R23-WE D-E2 (#102): a dwell-armed preview paints the MODE BADGE with the hovered mode's own name (the Timeline carries the layer)", () => {
+    vi.useFakeTimers();
+    try {
+      // the Timeline owns the insert-preview layer (the badge's home) —
+      // mount both, then drive the REAL 150ms dwell path
+      renderShell(
+        <>
+          <Timeline />
+          <SourceEditBar />
+        </>,
+        { patch: { viewerMode: 'source', sourceMediaId: 'm-03', selection: [], playhead: 16 } },
+      );
+      const ovw = screen.getByTestId('shell-source-edit-overwrite');
+      fireEvent.mouseEnter(ovw);
+      act(() => { vi.advanceTimersByTime(150); });
+      const badge = screen.getByTestId('insert-preview-mode-badge');
+      expect(badge).toHaveTextContent('Overwrite'); // the hovered button's own label
+      expect(badge).toHaveAttribute('aria-hidden', 'true'); // chrome, not content
+      // hover-out: the badge leaves WITH the preview — no residue chrome
+      // (the display:none law: absence, never an opacity stub)
+      fireEvent.mouseLeave(ovw);
+      expect(screen.queryByTestId('insert-preview-mode-badge')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('ok:false preview: NO insert-preview-layer geometry + the button tip shows the refusal reason', () => {
     vi.useFakeTimers();
     try {
