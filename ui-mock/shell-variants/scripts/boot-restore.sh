@@ -82,7 +82,7 @@ if [ -n "$REPO_HEAD" ] && [ -f "$REPO/ui-mock/shell-variants/package.json" ]; th
         --exclude '/node_modules/' --exclude '/dist/' \
         --exclude '/.code-sync-stamp' \
         --exclude '/.storybook/annotakit/' \
-        --exclude '/sb3000.log' --exclude '/dev.log' --exclude '/dev.pid' \
+        --exclude 'sb3000.log' --exclude 'dev.log' --exclude 'dev.pid' \
         "$REPO/ui-mock/shell-variants/" "$RUNTIME/"
       # ELOOP guard: self-referential symlinks crash vite's watcher (the
       # R23 shots/ absolute-path links did exactly this once synced into
