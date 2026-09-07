@@ -1017,12 +1017,14 @@ export const useUi = create<UiState>((set, get) => ({
     ...(s.page === 'fx' && p !== 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
     /* R23-WB (DESIGN-R23 D-B5; issue #92 — SUPERSEDES #73's R22-era "mixer
        renders on ALL pages" for the color page, registered in the README
-       deviation ledger): entering the color page collapses the mixer console
-       (the audioLaneBoost exit-law pattern). The Toolbar2 toggle is
-       Edit+Audio only now, so an open mixer carried into color would be
-       unclosable from that page — the exit law keeps every console
-       closable on the page that owns it. */
-    ...(p === 'color' && s.mixerState !== 'collapsed' ? { mixerState: 'collapsed' as MixerDockState } : {}),
+       deviation ledger): entering a page whose toolbar carries NO mixer
+       toggle collapses the console (the audioLaneBoost exit-law pattern).
+       The Toolbar2 toggle is Edit+Audio only now (D-D2/ruling 15), so an
+       open mixer carried into color/fx/deliver would be unclosable from
+       that page's toolbar — the exit law keeps every console closable on
+       the page that owns it. (The dock header's own cycle control stays as
+       the manual close on the pages that DO show it.) */
+    ...(p !== 'edit' && p !== 'audio' && s.mixerState !== 'collapsed' ? { mixerState: 'collapsed' as MixerDockState } : {}),
   })),
   setActiveScene: (id) => set((s) => {
     // lockAll is scene-derived view state — re-derive on switch so the toolbar
@@ -1117,6 +1119,12 @@ export const useUi = create<UiState>((set, get) => ({
     // ordering law (R14): start <= end ALWAYS — an inverted window pegs the
     // playback tick (t >= end resets to start) and the playhead never advances
     // (R13 review found the hang). Setting in past out drags out along.
+    // R23-WF (D-F1, #107): s.loop now has THREE writers — these marks, the
+    // full Ruler's bracket applyBracket, and the deliver range band's
+    // commitBand (TimelineCompact's head row). Every writer carries this
+    // same max/min formula — the honest triple-source risk is pinned at
+    // store level (the R14 ordering-law sweep below, in useUiStore.test)
+    // and per writer in their own component tests.
     const start = snapToFrame(s.playhead);
     return { loop: { ...s.loop, start, end: Math.max(s.loop.end, start) } };
   }),
@@ -1477,7 +1485,7 @@ export const useUi = create<UiState>((set, get) => ({
   setMasterVolume: (v) => set({ masterVolume: clamp(v, 0, 1) }),
   setMediaW: (w) => set({ mediaW: clamp(w, 200, 480) }),
   setInspectorW: (w) => set({ inspectorW: clamp(w, 280, 560), inspectorWUserSet: true }),
-  setMainBodyH: (h) => set({ mainBodyH: h <= 0 ? 0 : clamp(h, 320, 900), mainBodyUserSet: true }), // 0 = auto (page-aware default, R22-D8; spec 18 §3.2)
+  setMainBodyH: (h) => set({ mainBodyH: h <= 0 ? 0 : clamp(h, 320, 900), mainBodyUserSet: h > 0 ? true : false }), // 0 = auto (page-aware default, R22-D8; spec 18 §3.2) — a reset (h≤0, the double-click) CLEARS the user flag so 'auto' honestly resumes (R23-WB-REV P3 #3: the flag stuck and locked the 40% landing)
   setCheatOpen: (v) => set({ cheatOpen: v }),
   setMediaSelection: (ids) => set({ mediaSelection: ids }),
   toggleMediaSelection: (id, additive) => set((s) => {

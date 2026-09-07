@@ -1058,6 +1058,27 @@ describe('R14: loop ordering law (markIn/markOut can never invert)', () => {
     expect(S().loop.end).toBe(1);
     expect(S().loop.start).toBeLessThanOrEqual(1); // was 2 — dragged down
   });
+  /* R23-WF (D-F1, #107): s.loop now has THREE writers — markIn/markOut
+     here, the full Ruler's bracket applyBracket, and the deliver range
+     band's commitBand (TimelineCompact's head row). The honest
+     triple-source risk is pinned AT STORE LEVEL: the ordering law
+     (start <= end) must hold from EVERY writer, so the store's own two
+     writers are swept across the whole playhead domain below (the two
+     component writers' verbatim-formula clones are pinned in their own
+     files: Ruler.test 'ordering law' + TimelineCompact.test's R23-WF
+     band pins). */
+  it('R23-WF: the ordering law holds from the store writers across the whole playhead domain (the triple-source sweep)', () => {
+    for (const t of [0, 0.4, 2, 15.999, 28, 29.9, 30]) {
+      act(() => { S().setPlayhead(t); S().markIn(); });
+      expect(S().loop.start).toBeLessThanOrEqual(S().loop.end);
+      act(() => { S().setPlayhead(t); S().markOut(); });
+      expect(S().loop.start).toBeLessThanOrEqual(S().loop.end);
+    }
+    // the sweep ends at the degenerate full-tail window {30,30}; marking out
+    // at 0 then pulls start down WITH it — the invariant survives every edge
+    act(() => { S().setPlayhead(0); S().markOut(); });
+    expect(S().loop).toEqual({ start: 0, end: 0 });
+  });
 });
 
 describe('R14: split link law (linkedTo never duplicated to both halves)', () => {

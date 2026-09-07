@@ -42,9 +42,13 @@ export function useGradeRecord(): GradeRecord {
   };
 }
 
-/** Human label for the target: clip name, or 'Timeline'. */
+/** Human label for the target: clip name, 'Timeline', or the no-target
+ *  fallback. null (no target live — the node-viewer header case) gets its
+ *  OWN label rather than masquerading as the Timeline grade (R23-WB-REV
+ *  P3 #5: the header claimed "Timeline" when nothing was targeted). */
 export function gradeTargetLabel(scenes: SceneJSON[], targetId: string | null): string {
-  if (targetId == null || targetId === TIMELINE_GRADE_KEY) return 'Timeline';
+  if (targetId == null) return 'No target — click a clip';
+  if (targetId === TIMELINE_GRADE_KEY) return 'Timeline';
   const hit = findElement(scenes, targetId);
-  return hit ? hit.element.name : 'Timeline';
+  return hit ? hit.element.name : 'No target — click a clip';
 }

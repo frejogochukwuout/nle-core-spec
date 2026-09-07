@@ -317,8 +317,13 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     expect(screen.getByTestId('shell-deliver')).toBeInTheDocument();
     // leaving audio focus by any route resets the lane boost (design §3.3)
     expect(store().audioLaneBoost).toBe(false);
-    // D-B3: 'auto' resolves compact on deliver too (the D-F1 seam Wave F fills in)
+    // D-B3: 'auto' resolves compact on deliver — R23-WF (D-F1) fills the seam
+    // in: the compact strip carries the RANGE BAND head row (ruler replaced)
+    // and the mainbody takes deliver's 50% rebalance
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact-ruler')).not.toBeInTheDocument();
+    expect(document.querySelector('.mainbody')).toHaveStyle({ height: '50%' });
     expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('shell-dock-page-edit'));
     expect(store().page).toBe('edit');
@@ -391,6 +396,58 @@ describe('R23-WB (DESIGN-R23 D-B3, issue #94): the timeline density law', () => 
     await user.click(screen.getByTestId('shell-dock-page-color'));
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument(); // the override holds
     expect(store().timelineCompact).toBe('on');
+  });
+});
+
+/* ---------- R23-WF (DESIGN-R23 D-F1, #107): the deliver composition ----------
+   The compact strip (auto → on, D-B3) carries the 32px RANGE BAND head row
+   in place of its ruler, and the mainbody takes deliver's 50% rebalance
+   (the same while-compact interaction law color's 55% rides, ruling 11's
+   shape). The band's own grammar is pinned in TimelineCompact.test. */
+describe('R23-WF (DESIGN-R23 D-F1, #107): the deliver composition', () => {
+  const mainbody = () => document.querySelector('.mainbody') as HTMLElement;
+  const mainbodyH = () => mainbody().style.height;
+
+  it('deliver auto: compact strip + the RANGE BAND head row (ruler replaced) + the 50% mainbody default', () => {
+    renderAppShell({ page: 'deliver' });
+    expect(screen.getByTestId('shell-deliver')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact-ruler')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
+    expect(mainbodyH()).toBe('50%');
+  });
+
+  it('flipping deliver to FULL TRACKS drops the default mainbody to 40% — the band goes WITH the strip (ruling 11, deliver-shaped)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ page: 'deliver' });
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    expect(store().timelineCompact).toBe('off');
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    // the band is the compact strip's head row only — full tracks bring the
+    // full Ruler + its brackets back (the loop seam keeps every writer)
+    expect(screen.queryByTestId('shell-deliver-range-band')).not.toBeInTheDocument();
+    expect(mainbodyH()).toBe('40%');
+    // flipping back restores the band + the 50% default (the user never dragged)
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
+    expect(mainbodyH()).toBe('50%');
+  });
+
+  it('the user-dragged mainBodyH ALWAYS wins on deliver too (the mainBodyUserSet law)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ page: 'deliver', mainBodyH: 500, mainBodyUserSet: true });
+    expect(mainbodyH()).toBe('500px');
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    expect(mainbodyH()).toBe('500px'); // no density flip may steal the user's height
+  });
+
+  it('the band is deliver-only: compact forced ON on edit keeps the ruler (no band leaks to other pages)', () => {
+    renderAppShell({ page: 'edit', timelineCompact: 'on' });
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline-compact-ruler')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-deliver-range-band')).not.toBeInTheDocument();
+    expect(mainbodyH()).toBe('40%'); // edit never carries a page default
   });
 });
 

@@ -446,7 +446,15 @@ Deliver has none, Cut/Edit carry the editing tools]. Our matrix:
 | zoom cluster | ✔ | ✔ | ✔ | ✔ | ✔ (read-mostly) |
 | mixer state | ✔ | — | ✔ | — | — |
 | master audio | ✔ | — | ✔ | — | — |
-| FX tool exit (Esc hint) | ✔ (when fxMode) | — | — | ✔ | — |
+| FX tool exit (Esc hint) | tip-only | — | — | — | — |
+
+(v2 wrap note: the draft "FX tool exit (Esc hint)" row is DEAD as a page
+cluster — Part IX ruling 2 wins (the FX page has no Escape rung; a
+page-level Esc hint would advertise a nonexistent exit; the Edit-page FX
+tool's tip carries the real hint). W-D's three registered P3s for the
+Part VII sweep: markers addable on audio via M with no toolbar control;
+the view-options button not matrix-governed (kept on all pages); the
+vsep-only-between-present-clusters law.)
 
 The toolbar becomes `clusters={page}`-driven; every hidden cluster is
 DOM-absent (not display:none) — the F6/rover laws stay dense. [The

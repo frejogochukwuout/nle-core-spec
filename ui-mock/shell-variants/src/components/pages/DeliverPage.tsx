@@ -304,7 +304,7 @@ export function DeliverPage() {
                 <div className="mono mt-1 text-[12px] text-accent" data-testid="shell-deliver-range">
                   {tc(loop.start)} → {tc(loop.end)}
                 </div>
-                <div className="mt-1 text-[11px] text-tmuted">set I/O on the timeline (I / O at the playhead, or the viewer transport marks)</div>
+                <div className="mt-1 text-[11px] text-tmuted">set I/O at the playhead (I / O keys, the viewer transport marks) or drag the in/out range band on the compact timeline below</div>
               </div>
             </div>
 
