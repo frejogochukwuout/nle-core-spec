@@ -101,3 +101,34 @@ describe('TimelineCompact — click-to-target (the color page law)', () => {
     expect(marker?.className).toContain('z-[3]');
   });
 });
+
+describe('R23-WB (D-B3/#96, ruling 19) — the trackhead badge becomes a REAL button', () => {
+  it('clicking a badge selects the track (the selectedTrackId domain) + carries the track name as title', () => {
+    mount({ selectedTrackId: null });
+    const badge = screen.getByTestId('shell-timeline-compact-track-tr-main');
+    expect(badge.tagName).toBe('BUTTON');
+    expect(badge).toHaveAttribute('title', 'V1'); // tr-main's name
+    expect(badge).toHaveAttribute('aria-label', 'Select track V1');
+    expect(badge).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(badge);
+    expect(S().selectedTrackId).toBe('tr-main');
+    expect(badge).toHaveAttribute('aria-pressed', 'true'); // honest pressed state
+  });
+
+  it('the selectTrack domain law rides the badge: a clip selection clears when a track is taken over', () => {
+    mount({ selection: ['el-2'] });
+    fireEvent.click(screen.getByTestId('shell-timeline-compact-track-tr-audio-1'));
+    expect(S().selectedTrackId).toBe('tr-audio-1');
+    expect(S().selection).toEqual([]); // the 7-domain mutual-exclusivity law
+  });
+
+  it('every lane carries a badge button — audio (16px) and caption (20px) included (the honest 24px scope)', () => {
+    const { container } = mount();
+    const badges = container.querySelectorAll('[data-testid^="shell-timeline-compact-track-"]');
+    expect(badges.length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByTestId('shell-timeline-compact-track-tr-caption')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline-compact-track-tr-audio-1')).toBeInTheDocument();
+    // no mute/solo stack fits these lanes — selection + name ONLY (registered)
+    expect(container.querySelectorAll('[data-testid*="mute"], [data-testid*="solo"]')).toHaveLength(0);
+  });
+});

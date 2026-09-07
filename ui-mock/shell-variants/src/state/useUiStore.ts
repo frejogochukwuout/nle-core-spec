@@ -115,6 +115,29 @@ export const TIMELINE_GRADE_KEY = 'timeline';
 /** GradeParams (spec 08 §4.2, W4a) + the mock curves extension (spec 08 §5). */
 export type MockGrade = GradeParams & { curves?: CurveSet };
 
+/* R23-WB (DESIGN-R23 D-B4; issues #97/#91): a Gallery still — a captured
+ * graded frame of a timeline clip, carried as its grade record (the
+ * gradient thumbnail the panel paints is the honest mock of the decoded
+ * frame). View state — the seeds below are the panel's old fixtures, moved
+ * to the store so stills survive page/tab unmounts (the sourceRanges
+ * precedent); NEVER inside a withHistory snapshot. */
+export interface Still {
+  id: string;
+  name: string;
+  /** The captured clip's source media (thumbnail provenance; null = timeline-level). */
+  mediaId: string | null;
+  grade: MockGrade;
+}
+
+/** R23-WB (D-B4): the seed gallery — the R22-D7 fixtures, re-homed to the
+ *  store (the panel's local useState died with it). */
+const SEED_STILLS: Still[] = [
+  { id: 'still-01', name: 'Marina cool', mediaId: 'm-01', grade: { ...DEFAULT_GRADE, temperature: -18, contrast: 1.08, saturation: 8 } },
+  { id: 'still-02', name: 'Golden hour', mediaId: 'm-01', grade: { ...DEFAULT_GRADE, temperature: 26, tint: 6, saturation: 18, highlights: -6 } },
+  { id: 'still-03', name: 'Bleach lift', mediaId: 'm-04', grade: { ...DEFAULT_GRADE, lift: 0.04, saturation: -32, contrast: 1.22 } },
+  { id: 'still-04', name: 'Night teal', mediaId: 'm-01', grade: { ...DEFAULT_GRADE, temperature: -30, tint: -10, midHue: 190, midAmount: 0.12, pivot: 0.38 } },
+];
+
 /** Partial patch: qualifier merges deeply, curves replaces the set. */
 export type GradePatch = Partial<Omit<MockGrade, 'qualifier' | 'curves'>> & {
   qualifier?: Partial<QualifierParams> | null;
@@ -169,6 +192,18 @@ export function resolveGradeTargetId(s: Pick<UiState, 'colorGradeTarget' | 'sele
 /** Record lookup with the identity default (absent key = DEFAULT_GRADE). */
 export function gradeOf(s: Pick<UiState, 'mockGrades'>, id: string): MockGrade {
   return s.mockGrades[id] ?? DEFAULT_MOCK_GRADE;
+}
+
+/* R23-WB (DESIGN-R23 D-B3; issue #94): the ONE density resolver — 'auto'
+ * means COMPACT on color + deliver (deliver per D-F1's ruling that Wave F
+ * mounts the strip), full tracks elsewhere; 'on'/'off' are the user's
+ * per-session overrides. Both consumers (the AppShell mount decision + the
+ * TimelineToolbar toggle's honest aria-pressed) read THIS so they can never
+ * disagree about what is rendered. */
+export function resolveTimelineCompact(s: Pick<UiState, 'timelineCompact' | 'page'>): boolean {
+  if (s.timelineCompact === 'on') return true;
+  if (s.timelineCompact === 'off') return false;
+  return s.page === 'color' || s.page === 'deliver';
 }
 
 const findEl = (scenes: SceneJSON[], id: string): { el: ElementJSON; track: TrackJSON; scene: SceneJSON } | null => {
@@ -547,18 +582,35 @@ interface UiState {
    *  grading surface moved from the scrapped ColorConsole into the right
    *  rail's ColorInspector per DESIGN-R22 D2). */
   colorInspectorTab: 'primaries' | 'curves' | 'qualifier';
-  /** R22-D3: the scopes console state under the viewer — 'off' = NOT rendered
-   *  (the mixer's collapsed law, the default per issue #77 "shouldn't always
-   *  be there"); 'collapsed' = the 26px header row; 'row' = one 130px band;
-   *  'grid' = the reference's 2×2 quadrant. View state, never snapshotted. */
-  colorScopesState: 'off' | 'collapsed' | 'row' | 'grid';
-  /** R22-D3: the last VISUAL mode the scopes dock showed (row/grid) — the
-   *  Toolbar2 toggle restores it when re-opening from 'off'. */
-  colorScopesLastVisual: 'row' | 'grid';
-  /** R22-D4: the node-graph console dock in the timeline area (the
-   *  mixer-console mechanism; default OFF — "require a separate view ...
-   *  toggled just like mixer console", issue #78). */
+  /** R22-D3 → R23-WB (DESIGN-R23 D-B1; issues #90/#95): the scopes console
+   *  state — 'off' = the dock is NOT rendered at all (the mixer's collapsed
+   *  law, the default per issue #77); 'open' = the tabbed ScopesDock in the
+   *  TIMELINE-AREA console row. The R22 4-state machine (collapsed/row/grid)
+   *  died with the squeeze it defended — the W4c simultaneity law is
+   *  REVERSED by #90/#95 (registered in the README deviation ledger). The
+   *  state is never persisted, so the ruling-13 migration (any legacy
+   *  non-'off' value → 'open') is enforced at the type + every StoreBoot/
+   *  test patch site; colorScopesLastVisual is REMOVED (Part IX ruling 13).
+   *  View state, never snapshotted. */
+  colorScopesState: 'off' | 'open';
+  /** R22-D4 → R23-WB (DESIGN-R23 D-B2; issue #93): the node-graph flag now
+   *  points at the VIEWER-REGION surface — true = ColorNodeGraph replaces
+   *  the Viewer in the mainbody center ("fit better on the preview window …
+   *  we can cross it out just like a normal asset preview"); the timeline-
+   *  area dock died ("stacking next to multi-track is perhaps not a great
+   *  place as we need more space for it"). Toggled from Toolbar2 on color;
+   *  the surface's × restores the viewer. View state, never snapshotted. */
   colorNodesDock: boolean;
+  /** R23-WB (DESIGN-R23 D-B3; issue #94): timeline density — 'auto' resolves
+   *  per page (COMPACT on color + deliver per D-F1, full elsewhere);
+   *  'on'/'off' are the per-session user overrides from the TimelineToolbar's
+   *  density toggle (available on EVERY page — "this super compact mode we
+   *  should allow to be used everywhere"). View state, not a pref (resets on
+   *  reload); never snapshotted. */
+  timelineCompact: 'auto' | 'on' | 'off';
+  /** R23-WB (D-B4; #97/#91): the color page's Gallery — view state, never
+   *  snapshotted (stills survive unmounts; grades are NOT doc data). */
+  colorStills: Still[];
   /** Clip ⇄ Timeline grade-target toggle (C51); 'clip' resolves to selection[0]. */
   colorGradeTarget: 'clip' | 'timeline';
   /** Qualifier matte-preview overlay switch (C54 preview half — W4c renders
@@ -705,11 +757,19 @@ interface UiState {
   setGrade: (id: string, patch: GradePatch) => void;
   resetGrade: (id: string) => void;
   setColorInspectorTab: (tab: UiState['colorInspectorTab']) => void;
-  /** R22-D3: sets the scopes console state (dedicated setter — togglePanel is
-   *  boolean-keyed and cannot carry the tri-state). */
+  /** R22-D3 → R23-WB: sets the scopes console state (dedicated setter —
+   *  togglePanel is boolean-keyed; the 'open' state is the only visual now). */
   setColorScopesState: (state: UiState['colorScopesState']) => void;
-  /** R22-D4: toggles the node-graph console dock. */
+  /** R22-D4 → R23-WB: toggles the node-graph viewer-region surface (D-B2). */
   toggleColorNodesDock: () => void;
+  /** R23-WB (D-B3): the density override write ('auto' | 'on' | 'off'). */
+  setTimelineCompact: (v: UiState['timelineCompact']) => void;
+  /** R23-WB (D-B4): saves a Gallery still from a grade record (the id is
+   *  minted HERE, monotonic over the existing ids — a delete can never cause
+   *  a collision). View-state write, no history entry. */
+  addColorStill: (grade: MockGrade, opts?: { name?: string; mediaId?: string | null }) => Still;
+  /** R23-WB (D-B4): deletes a Gallery still by id. View-state write. */
+  removeColorStill: (id: string) => void;
   setColorGradeTarget: (t: UiState['colorGradeTarget']) => void;
   setQualifierPreviewOn: (v: boolean) => void;
   setQualifierPickerOn: (v: boolean) => void;
@@ -918,9 +978,10 @@ export const useUi = create<UiState>((set, get) => ({
      preview, Primary node selected (C56 default binding). */
   mockGrades: {},
   colorInspectorTab: 'primaries',
-  colorScopesState: 'off', // R22-D3: default OFF (#77 "shouldn't always be there")
-  colorScopesLastVisual: 'grid',
-  colorNodesDock: false,
+  colorScopesState: 'off', // R22-D3/R23-WB: default OFF (#77 "shouldn't always be there")
+  colorNodesDock: false, // R23-WB (D-B2): the viewer-region surface, default OFF
+  timelineCompact: 'auto', // R23-WB (D-B3): per-page resolution until the user toggles
+  colorStills: SEED_STILLS, // R23-WB (D-B4): the Gallery's seed stills (view state)
   colorGradeTarget: 'clip',
   qualifierPreviewOn: false,
   qualifierPickerOn: false,
@@ -939,6 +1000,14 @@ export const useUi = create<UiState>((set, get) => ({
        the radio never claims fxMode that no longer holds). */
     fxMode: p === 'fx',
     ...(s.page === 'fx' && p !== 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
+    /* R23-WB (DESIGN-R23 D-B5; issue #92 — SUPERSEDES #73's R22-era "mixer
+       renders on ALL pages" for the color page, registered in the README
+       deviation ledger): entering the color page collapses the mixer console
+       (the audioLaneBoost exit-law pattern). The Toolbar2 toggle is
+       Edit+Audio only now, so an open mixer carried into color would be
+       unclosable from that page — the exit law keeps every console
+       closable on the page that owns it. */
+    ...(p === 'color' && s.mixerState !== 'collapsed' ? { mixerState: 'collapsed' as MixerDockState } : {}),
   })),
   setActiveScene: (id) => set((s) => {
     // lockAll is scene-derived view state — re-derive on switch so the toolbar
@@ -1547,11 +1616,36 @@ export const useUi = create<UiState>((set, get) => ({
     return scenes;
   }),
   setColorInspectorTab: (tab) => set({ colorInspectorTab: tab }),
-  setColorScopesState: (state) => set((s) => ({
-    colorScopesState: state,
-    ...(state === 'row' || state === 'grid' ? { colorScopesLastVisual: state } : {}),
-  })),
+  setColorScopesState: (state) => set({ colorScopesState: state }),
   toggleColorNodesDock: () => set((s) => ({ colorNodesDock: !s.colorNodesDock })),
+  setTimelineCompact: (v) => set({ timelineCompact: v }),
+  /* R23-WB (D-B4): the Gallery writes — plain view-state `set`, never a
+   *  withHistory entry (the sourceRanges law: stills are captured working
+   *  state, not doc edits; the APPLY path is the one that mints history via
+   *  rec.setGrade). The id counter is monotonic over the live list so a
+   *  delete-then-save can never mint a colliding id. */
+  addColorStill: (grade, opts) => {
+    const s = get();
+    const n = s.colorStills.reduce((m, st) => {
+      const v = Number(st.id.replace(/^still-/, ''));
+      return Number.isFinite(v) ? Math.max(m, v) : m;
+    }, 0) + 1;
+    const still: Still = {
+      id: `still-${String(n).padStart(2, '0')}`,
+      name: opts?.name ?? `Still ${n}`,
+      mediaId: opts?.mediaId ?? null,
+      /* deep copy the record (qualifier + curves are objects — the capture
+         must not alias the live grade the user keeps editing) */
+      grade: {
+        ...grade,
+        ...(grade.qualifier ? { qualifier: { ...grade.qualifier } } : {}),
+        ...(grade.curves ? { curves: { master: grade.curves.master.map((pt) => ({ ...pt })) } } : {}),
+      },
+    };
+    set({ colorStills: [...s.colorStills, still] });
+    return still;
+  },
+  removeColorStill: (id) => set((s) => ({ colorStills: s.colorStills.filter((st) => st.id !== id) })),
   setColorGradeTarget: (t) => set({ colorGradeTarget: t }),
   setQualifierPreviewOn: (v) => set({ qualifierPreviewOn: v }),
   setQualifierPickerOn: (v) => set({ qualifierPickerOn: v }),

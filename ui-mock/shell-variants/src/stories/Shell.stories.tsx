@@ -87,7 +87,12 @@ export const MediaPoolHoverPreview: StoryObj = {
   render: () => <PoolStory patch={{}} />,
 };
 
-/* ---- left dock (R19 th_mtoyt5fv: one tabbed surface in the bin slot) ------ */
+/* ---- left dock (R19 th_mtoyt5fv: one tabbed surface in the bin slot) ------
+   R23-WA-REV P2 #3: the three effects-era stories below were RE-HOMED to
+   the FX page (the Wave A retirement killed the Edit-page Pool|Effects tab
+   + the panels.effects toggle's dock route — the old plays/stories would
+   render a pool-only or empty dock and LIE). The FX-page compositions keep
+   the same review surfaces (the browser rows, the drag affordances) live. */
 
 function LeftDockStory({ patch, width = 280 }: { patch: UiPatch; width?: number }) {
   return (
@@ -100,32 +105,33 @@ function LeftDockStory({ patch, width = 280 }: { patch: UiPatch; width?: number 
   );
 }
 
-/** Both panels on: the tab bar (Media Pool | Effects) in the SAME slot the
- *  bin occupied — no second strip beside it. */
+/** R23-WA-REV P2 #3 — the three effects-era stories RE-HOMED to the FX page
+ *  (the Wave A retirement killed the Edit-page effects tab; these keep the
+ *  same review surfaces — the browser rows + drag affordances — live and
+ *  honest on the page that actually owns them now). */
+
+/** The FX page's dock: the effects browser (Effects / Video Transitions /
+ *  Fades categories) as the slot's ONLY content — no tab bar (#106's law). */
 export const LeftDockTabbed: StoryObj = {
-  name: 'Left dock — Pool|Effects tabs',
+  name: 'Left dock — FX browser (FX page)',
   parameters: { layout: 'padded' },
-  render: () => <LeftDockStory patch={{ panels: { mediaPool: true, effects: true, inspector: true } }} />,
+  render: () => <LeftDockStory patch={{ page: 'fx', fxMode: true }} />,
 };
 
-/** Effects tab active: the effects library swapped INTO the bin slot (the
- *  play step clicks the tab like a reviewer would). */
+/** The browser's transitions category: the 27-presentation registry rows a
+ *  reviewer drags onto timeline seams (the FX engine's drop targets). */
 export const LeftDockEffectsTab: StoryObj = {
-  name: 'Left dock — effects tab active',
+  name: 'Left dock — FX browser rows (transitions + fades)',
   parameters: { layout: 'padded' },
-  play: async ({ canvasElement }) => {
-    canvasElement
-      ?.querySelector<HTMLButtonElement>('[data-testid="shell-leftdock-tab-effects"]')
-      ?.click();
-  },
-  render: () => <LeftDockStory patch={{ panels: { mediaPool: true, effects: true, inspector: true } }} />,
+  render: () => <LeftDockStory patch={{ page: 'fx', fxMode: true }} width={240} />,
 };
 
-/** Effects-only (pool closed): the panel renders alone, no tab bar. */
+/** Narrow dock variant: the browser wraps at 220px (the drag rows keep
+ *  their affordances — the honest minimum-width check). */
 export const LeftDockEffectsOnly: StoryObj = {
-  name: 'Left dock — effects only (no tab bar)',
+  name: 'Left dock — FX browser narrow (220px)',
   parameters: { layout: 'padded' },
-  render: () => <LeftDockStory patch={{ panels: { mediaPool: false, effects: true, inspector: true } }} width={220} />,
+  render: () => <LeftDockStory patch={{ page: 'fx', fxMode: true }} width={220} />,
 };
 
 /** Audio page: the slot is the SoundLibrary (Fairlight-style left dock). */

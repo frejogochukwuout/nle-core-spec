@@ -3,7 +3,7 @@
    of the scopes: pure canvas-2D painters fed by W4a's scopesMath reductions
    (waveformColumns / parade / vectorscopePoints / histogram) and
    qualifierMath.sampleMatte (the viewer's matte overlay). No DOM, no React —
-   the component (ColorScopeStrip / GradedViewerCanvas) owns the elements,
+   the component (ScopesDock / GradedViewerCanvas) owns the elements,
    the a11y labels and the 10fps throttle (spec 08 §11.4).
 
    Drawing contract (§3.7): column-histogram traces with density alpha
@@ -32,7 +32,7 @@ const TRACE = '125,255,160';
 const GRATICULE = 'rgba(140,150,164,0.5)';
 const GRAY_LABEL = 'rgba(160,168,178,0.75)';
 
-/** The four scope panel kinds (the strip's 2×2 grid). */
+/** The four scope panel kinds (the dock's TABS, D-B1). */
 export type ScopeKind = 'waveform' | 'parade' | 'vectorscope' | 'histogram';
 
 /* ------------------------------------------------------------------ *

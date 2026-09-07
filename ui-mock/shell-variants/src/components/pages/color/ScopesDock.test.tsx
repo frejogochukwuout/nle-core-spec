@@ -1,14 +1,17 @@
-/* ColorScopeStrip.test.tsx — R20-W4c (gap C53; color-layout §3.7 + spec 08
-   §11.3/§11.4). The real scopes fed SYNTHETIC graded frames on the bus
-   (the seam the viewer publishes to): red frame → vectorscope trace at
-   ~103° with the spec-08 graticule, waveform/parade column histograms with
-   density alpha + 'lighter' composition, the 10fps throttle, the standby
-   row, the collapse law, and the matte-preview status hint. The 2d context
+/* ScopesDock.test.tsx — R23-WB (DESIGN-R23 D-B1; issues #90/#95). The 12
+   ColorScopeStrip pins RE-HOMED here with the dock (never dropped — the
+   R20-W6 law; ColorScopeStrip.tsx is deleted): the graded-frame bus seam,
+   the real traces from synthetic frames (red → vectorscope ~103° with the
+   spec-08 graticule, waveform/parade column histograms with density alpha +
+   'lighter' composition, the 10fps throttle, the standby row, the
+   matte-preview status hint), plus the NEW tab-law pins (one scope at a
+   time at full panel size, the ARIA tabs roving pattern, the ruling-14
+   stale-frame honesty while the node graph owns the viewer). The 2d context
    is the LOCAL recording stub (src/test/canvas2d). */
 
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { ColorScopeStrip, SCOPE_THROTTLE_MS } from './ColorScopeStrip';
+import { ScopesDock, SCOPE_THROTTLE_MS } from './ScopesDock';
 import { publishGradedFrame, getGradedFrame, subscribeGradedFrame, __clearGradedFrameBus } from './gradedFrameBus';
 import { densityAlpha, VECTORSCOPE_TARGETS, DEFAULT_QUALIFIER } from '../../../lib/color';
 import { drawWaveformScope, drawQualifierMatte } from './scopeDraw';
@@ -21,11 +24,17 @@ const gray = () => makeTestImageData(64, 36, () => [128, 128, 128]);
 const publish = (img: ImageData) =>
   publishGradedFrame({ imageData: img, width: img.width, height: img.height, mediaId: 'm-02', elementId: 'el-2', mode: 'program' as const });
 
-/** R22-D3: solo mounts boot the dock OPEN (the store's 'off' default = the
+/** R23-WB: solo mounts boot the dock OPEN (the store's 'off' default = the
  *  component is not rendered at all — the mixer collapsed law). */
-const renderStrip = () => {
-  act(() => { useUi.setState({ colorScopesState: 'grid' }); });
-  return render(<ColorScopeStrip />);
+const renderDock = () => {
+  act(() => { useUi.setState({ colorScopesState: 'open' }); });
+  return render(<ScopesDock />);
+};
+
+/** the tab-switch helper — one scope at a time means the trace tests must
+ *  first SELECT the scope they assert. */
+const selectTab = (kind: 'waveform' | 'parade' | 'vectorscope' | 'histogram') => {
+  fireEvent.click(screen.getByTestId(`shell-color-scopes-tab-${kind}`));
 };
 
 /* recording ctx for the pure-painter tests (no React) */
@@ -64,7 +73,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   __clearGradedFrameBus();
   stub = stubCanvas2D();
-  useUi.setState({ colorScopesState: 'grid', qualifierPreviewOn: false });
+  useUi.setState({ colorScopesState: 'open', qualifierPreviewOn: false, colorNodesDock: false });
 });
 
 afterEach(() => {
@@ -85,7 +94,7 @@ const fillRectsUnderTrace = (kind: string) => {
   return trace;
 };
 
-describe('the graded-frame bus (the W4c seam)', () => {
+describe('the graded-frame bus (the W4c seam, moved with the dock)', () => {
   it('publish/subscribe/get; unsubscribe stops delivery; __clear resets', () => {
     let seen = 0;
     const off = subscribeGradedFrame(() => { seen++; });
@@ -101,46 +110,114 @@ describe('the graded-frame bus (the W4c seam)', () => {
   });
 });
 
-describe("ColorScopeStrip — standby + collapse (W4b slot laws preserved)", () => {
-  it('no graded frame yet: the four quadrants show the honest no-signal row (no canvas, no ctx)', () => {
-    renderStrip();
-    for (const kind of ['waveform', 'parade', 'vectorscope', 'histogram']) {
-      expect(screen.getByTestId(`shell-color-scope-${kind}`)).toHaveTextContent(/no signal/);
-      expect(screen.queryByTestId(`shell-color-scope-${kind}-canvas`)).toBeNull();
+describe('ScopesDock — the D-B1 tab law (one scope at a time, #95)', () => {
+  it('no graded frame yet: the ACTIVE panel shows the honest no-signal row (no canvas); only one panel in DOM', () => {
+    renderDock();
+    // the default tab is Luma WFM — its panel renders, the other three DO NOT
+    expect(screen.getByTestId('shell-color-scope-waveform')).toHaveTextContent(/no signal/);
+    expect(screen.queryByTestId('shell-color-scope-waveform-canvas')).toBeNull();
+    for (const kind of ['parade', 'vectorscope', 'histogram']) {
+      expect(screen.queryByTestId(`shell-color-scope-${kind}`)).toBeNull();
     }
     expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/standby — no graded frame/);
   });
 
-  it('collapse law: aria-expanded flips, the grid unmounts', () => {
-    renderStrip();
-    const collapse = screen.getByTestId('shell-color-scopes-collapse');
-    expect(collapse).toHaveAttribute('aria-expanded', 'true');
-    fireEvent.click(collapse);
-    expect(screen.queryByTestId('shell-color-scopes-grid')).toBeNull();
-    fireEvent.click(collapse);
-    expect(screen.getByTestId('shell-color-scopes-grid')).toBeInTheDocument();
+  it('a tab click swaps the ONE rendered scope (panel + canvas testids follow, one-scope-at-a-time law)', async () => {
+    renderDock();
+    act(() => { publish(red()); });
+    await act(async () => { vi.advanceTimersByTime(0); });
+    selectTab('vectorscope');
+    await act(async () => { vi.advanceTimersByTime(0); });
+    expect(screen.getByTestId('shell-color-scope-vectorscope-canvas')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-scope-waveform-canvas')).toBeNull();
+    // the panel carries the ARIA tabpanel contract
+    const panel = screen.getByTestId('shell-color-scope-vectorscope');
+    expect(panel).toHaveAttribute('role', 'tabpanel');
+    expect(panel).toHaveAttribute('aria-labelledby', 'shell-color-scopes-tab-vectorscope');
   });
 
+  it('the ARIA tabs pattern (roving tabindex): one tab stop, aria-selected follows, arrows switch + wrap', () => {
+    renderDock();
+    const wf = screen.getByTestId('shell-color-scopes-tab-waveform');
+    const par = screen.getByTestId('shell-color-scopes-tab-parade');
+    const vec = screen.getByTestId('shell-color-scopes-tab-vectorscope');
+    const his = screen.getByTestId('shell-color-scopes-tab-histogram');
+    expect(wf).toHaveAttribute('tabindex', '0');
+    expect(par).toHaveAttribute('tabindex', '-1');
+    expect(wf).toHaveAttribute('aria-selected', 'true');
+    expect(par).toHaveAttribute('aria-selected', 'false');
+    // arrows switch the scope AND move focus (radios: focus follows selection)
+    fireEvent.keyDown(screen.getByRole('tablist', { name: 'Scope views' }), { key: 'ArrowRight' });
+    expect(par).toHaveAttribute('aria-selected', 'true');
+    expect(par).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('tablist', { name: 'Scope views' }), { key: 'ArrowLeft' });
+    expect(wf).toHaveAttribute('aria-selected', 'true');
+    expect(wf).toHaveFocus();
+    // wrap: ← from the first lands on the LAST (Histogram)
+    fireEvent.keyDown(screen.getByRole('tablist', { name: 'Scope views' }), { key: 'ArrowLeft' });
+    expect(his).toHaveAttribute('aria-selected', 'true');
+    expect(his).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('tablist', { name: 'Scope views' }), { key: 'ArrowRight' });
+    expect(wf).toHaveAttribute('aria-selected', 'true');
+    expect(vec).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('the four tabs carry the full-scope labels (Luma WFM / RGB Parade / Vector / Histogram)', () => {
+    renderDock();
+    for (const label of ['Luma WFM', 'RGB Parade', 'Vector', 'Histogram']) {
+      expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("'off' = the dock is not rendered at all (the mixer's collapsed law, solo mount)", () => {
+    act(() => { useUi.setState({ colorScopesState: 'off' }); });
+    const { container } = render(<ScopesDock />);
+    expect(container.firstChild).toBeNull();
+  });
+});
+
+describe('ScopesDock — the status line (the store half stays live)', () => {
   it('a frame on the bus flips the status line to the live geometry + fps', async () => {
-    renderStrip();
+    renderDock();
     act(() => { publish(red()); });
     await act(async () => { vi.advanceTimersByTime(0); });
     expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/64×36 · 10 fps/);
   });
 
   it('the matte-preview hint rides the status line (qualifierPreviewOn)', () => {
-    renderStrip();
+    renderDock();
     act(() => { useUi.setState({ qualifierPreviewOn: true }); });
     expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/matte preview on/);
     act(() => { useUi.setState({ qualifierPreviewOn: false }); });
     expect(screen.getByTestId('shell-color-scopes-status')).not.toHaveTextContent(/matte preview on/);
   });
+
+  it('ruling 14: while the node graph owns the viewer the status line says the frame is STALE', async () => {
+    renderDock();
+    act(() => { publish(red()); });
+    await act(async () => { vi.advanceTimersByTime(0); });
+    expect(screen.getByTestId('shell-color-scopes-status')).not.toHaveTextContent(/stale/);
+    act(() => { useUi.setState({ colorNodesDock: true }); });
+    expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/stale — node graph owns the viewer/);
+    // closing the surface restores the viewer — the hint leaves with it
+    act(() => { useUi.setState({ colorNodesDock: false }); });
+    expect(screen.getByTestId('shell-color-scopes-status')).not.toHaveTextContent(/stale/);
+  });
+
+  it('a frame-less mount never claims stale even with the node surface on (standby is the truth)', () => {
+    act(() => { useUi.setState({ colorNodesDock: true }); });
+    renderDock(); // no frame on the bus at all
+    expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/standby — no graded frame/);
+    expect(screen.getByTestId('shell-color-scopes-status')).not.toHaveTextContent(/stale/);
+  });
 });
 
-describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () => {
+describe('ScopesDock — real traces from a red graded frame (§3.7, re-homed)', () => {
   it('vectorscope: the trace lands at ~103° (BT.601 red), graticule + skin line + labels drawn', async () => {
-    renderStrip();
+    renderDock();
     act(() => { publish(red()); });
+    await act(async () => { vi.advanceTimersByTime(0); });
+    selectTab('vectorscope');
     await act(async () => { vi.advanceTimersByTime(0); });
     // graticule: 3 circles (100/75/25%), crosshair, 6 target boxes, labels
     expect(ops('vectorscope', 'arc')).toHaveLength(3);
@@ -161,7 +238,7 @@ describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () =
   });
 
   it('waveform: BT.601 luma of red (≈76) — one run per column at the matching height, density alpha 1', async () => {
-    renderStrip();
+    renderDock();
     act(() => { publish(red()); });
     await act(async () => { vi.advanceTimersByTime(0); });
     expect(ops('waveform', 'set:globalCompositeOperation')).toContainEqual(['lighter']);
@@ -176,8 +253,10 @@ describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () =
   });
 
   it('parade: three panels with per-channel colors at their x offsets', async () => {
-    renderStrip();
+    renderDock();
     act(() => { publish(red()); });
+    await act(async () => { vi.advanceTimersByTime(0); });
+    selectTab('parade');
     await act(async () => { vi.advanceTimersByTime(0); });
     const colorsSeen: string[] = [];
     let last = '';
@@ -205,8 +284,10 @@ describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () =
   });
 
   it('histogram: three stacked 256-bin tracks draw', async () => {
-    renderStrip();
+    renderDock();
     act(() => { publish(red()); });
+    await act(async () => { vi.advanceTimersByTime(0); });
+    selectTab('histogram');
     await act(async () => { vi.advanceTimersByTime(0); });
     // three zero-axis lines (one per track) + bars in each third
     expect(ops('histogram', 'fillRect').length).toBeGreaterThan(6);
@@ -217,7 +298,7 @@ describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () =
   });
 
   it('THROTTLE (spec 08 §11.4): a second frame inside the window defers ONE draw', async () => {
-    renderStrip();
+    renderDock();
     act(() => { publish(red()); });
     await act(async () => { vi.advanceTimersByTime(0); });
     const bgFills = () => ops('waveform', 'fillRect').filter((a) => a[0] === 0 && a[1] === 0 && a[2] === 320 && a[3] === 160).length;
@@ -226,6 +307,41 @@ describe('ColorScopeStrip — real traces from a red graded frame (§3.7)', () =
     expect(bgFills()).toBe(1); // deferred, nothing yet
     await act(async () => { vi.advanceTimersByTime(SCOPE_THROTTLE_MS); });
     expect(bgFills()).toBe(2); // the LATEST frame drew once
+  });
+
+  it('a tab switch mid-throttle paints the newly mounted canvas immediately (no dead scope)', async () => {
+    renderDock();
+    act(() => { publish(red()); });
+    await act(async () => { vi.advanceTimersByTime(0); });
+    // a second frame DEFERRED (inside the window) — then switch tabs: the
+    // new canvas must paint without waiting a full window
+    act(() => { publish(gray()); });
+    selectTab('vectorscope');
+    await act(async () => { vi.advanceTimersByTime(0); });
+    expect(stub.callsFor(canvasOf('vectorscope')).length).toBeGreaterThan(0);
+  });
+
+  it('a tab switch mounts a FRESH canvas — the new scope never inherits the previous scope\'s recorded draws', async () => {
+    /* regression pin for the R23-WB defect the vectorscope-angle pin caught:
+       React reuses the same <canvas> DOM node across tab switches (same type,
+       same tree position) — the vectorscope testid then resolved to the
+       element carrying the WAVEFORM's recorded trace calls (angle −169°
+       instead of +103°). key={active} mounts a fresh node per scope. */
+    renderDock();
+    act(() => { publish(red()); });
+    await act(async () => { vi.advanceTimersByTime(0); });
+    expect(fillRectsUnderTrace('waveform').length).toBe(64); // the waveform drew its column runs
+    selectTab('vectorscope');
+    await act(async () => { vi.advanceTimersByTime(0); });
+    // the vectorscope canvas's OWN trace cells — all inside the graticule
+    // circle (cx 160, cy 80, r 74 + half a cell): the waveform's runs at
+    // x≈0..317 / y≈112 sit far OUTSIDE and would fail this containment
+    const trace = fillRectsUnderTrace('vectorscope');
+    expect(trace.length).toBeGreaterThan(0);
+    for (const r of trace) {
+      const [x, y] = r.map(Number);
+      expect(Math.hypot(x + 2.5 - 160, y + 2.5 - 80)).toBeLessThan(78);
+    }
   });
 });
 

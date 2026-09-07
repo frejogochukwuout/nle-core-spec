@@ -11,22 +11,21 @@
    (media / effects etc.) under Color view" (#73):
      left:  [Media Pool] — the label follows the page's asset domain (#80:
             "these should change, no longer media pool if you use this to
-            show other panels"): Media Pool on Edit/Color/Deliver, Sound
-            Library on Audio (the slot really gates the SoundLibrary there —
-            the old label lied).
-     right: [Scopes ·color] [Nodes ·color] [Mixer] [Inspector] — the console
-            toggles (the mixer's aria-pressed derives from the REAL
-            mixerState; on the color page the FLOOR auto-degrade is honest).
-   REMOVED: the Effects button (#86 — "this should go away"; effects assets
-   move to the Effect view per #82, W6) and the Project button (#87 — it WAS
-   functional (a read-only ProjectSheet stub, inspectorProjectMode) but read
-   as non-functional; the space now carries the console toggles. The store
-   field stays dead-but-harmless — README deviation row). spec 18 §8's
-   chrome-removal ledger row amended: the Mixer toggle is BACK by user
-   directive (#73). */
+            show other panels"): Media Pool on Edit/Deliver, Sound Library on
+            Audio (the slot really gates the SoundLibrary there — the old
+            label lied), Effects on FX (R23-WA D-D1), Stills on Color
+            (R23-WB D-B4/#91 — the left dock on color is the Stills GALLERY
+            now, so the label names its real content).
+     right: [Scopes ·color] [Nodes ·color] [Mixer ·edit+audio] [Inspector].
+   R23-WB (DESIGN-R23 D-B5, issue #92 — SUPERSEDES #73's "mixer on ALL
+   pages" for the color page, registered in the README deviation ledger):
+   the Mixer toggle renders on EDIT + AUDIO ONLY (DOM-absent on color/fx/
+   deliver — never display:none); entering color collapses the console in
+   setPage (the exit law) so nothing dangles unclosable.
+   REMOVED: the Effects button (#86) and the Project button (#87). */
 
 import { useRef, useState } from 'react';
-import { PanelLeft, Activity, Layers, SlidersHorizontal, AudioWaveform, Sparkles } from 'lucide-react';
+import { PanelLeft, Activity, Layers, SlidersHorizontal, AudioWaveform, Sparkles, ImageIcon } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { project } from '../../lib/mockData';
 
@@ -65,41 +64,54 @@ export function Toolbar2() {
     else if (e.key === 'Home') { e.preventDefault(); focusRover(0); }
     else if (e.key === 'End') { e.preventDefault(); focusRover(n - 1); }
   };
+  /* #80 + R23-WB (D-B4/#91): the left toggle's label follows the page's
+     asset domain — the audio page's slot really is the Sound Library, the
+     FX page's is the effects browser (R23-WA D-A5/D-D1), and the COLOR
+     page's is the Stills gallery (the pool tab died there — the label must
+     not lie about the dock it toggles). */
+  const leftLabel = page === 'audio' ? 'Sound Library' : page === 'fx' ? 'Effects' : page === 'color' ? 'Stills' : 'Media Pool';
+  const LeftIcon = page === 'audio' ? AudioWaveform : page === 'fx' ? Sparkles : page === 'color' ? ImageIcon : PanelLeft;
+
+  /* the Scopes toggle: off ↔ open — the R22 4-state machine and its
+     lastVisual memory died with the squeeze (D-B1; the TABS are the
+     layout now). */
+  const scopesOpen = colorScopesState === 'open';
+  const toggleScopes = () => {
+    setColorScopesState(scopesOpen ? 'off' : 'open');
+  };
+
+  /* R23-WB (D-B5/#92 + Part IX ruling 15): the Mixer toggle is Edit+Audio
+     ONLY — DOM-absent on color/fx/deliver (the display:none law). */
+  const showMixer = page === 'edit' || page === 'audio';
+
+  /* dense DOM order: pool, then (color only) scopes, nodes, then (edit+
+     audio only) mixer, then inspector. The indices are CONTIGUOUS over the
+     buttons that actually render (a hole between nodes and inspector on
+     color — where the mixer's index would sit — strands the arrows: the
+     wrap math counts rendered buttons, so ArrowRight off Nodes would land
+     on the missing index and focus would not move). */
+  let next = 1; // index 0 = the left asset toggle
+  const iScopes = page === 'color' ? next++ : -1;
+  const iNodes = page === 'color' ? next++ : -1;
+  const iMixer = showMixer ? next++ : -1;
+  const iInspector = next;
+  /* the rendered count drives the wrap (End = last rendered index) */
+  const nButtons = iInspector + 1;
+
   /* per-button roving props — indices are DENSE and follow the buttons
      that actually render (the color-only console toggles are absent on
      other pages; holes would strand the arrow cycle). onFocus keeps the
      tab stop synced with real focus so clicks/mouse users don't fight the
-     arrow model. */
+     arrow model. The tab stop is CLAMPED to the rendered count: a page
+     flip can leave a stale rover (color's 4 buttons → edit's 3) — an
+     unclamped stop would leave the toolbar with NO tab stop until the
+     arrows self-heal it. */
+  const stop = Math.min(rover, nButtons - 1);
   const roverProps = (i: number) => ({
     ref: (el: HTMLButtonElement | null) => { btnRefs.current[i] = el; },
-    tabIndex: i === rover ? 0 : -1,
+    tabIndex: i === stop ? 0 : -1,
     onFocus: () => setRover(i),
   });
-
-  /* #80: the left toggle's label follows the page's asset domain — the
-     audio page's slot really is the Sound Library (LeftDock routes there),
-     so the button must not lie. R23-WA: the FX page's slot is the effects
-     browser (D-A5/D-D1 — LeftDock routes there); the label reads "Effects"
-     per the D-D1 content table (the dock's own header names the surface). */
-  const leftLabel = page === 'audio' ? 'Sound Library' : page === 'fx' ? 'Effects' : 'Media Pool';
-  const LeftIcon = page === 'audio' ? AudioWaveform : page === 'fx' ? Sparkles : PanelLeft;
-
-  /* the Scopes toggle: off ↔ last-visual-state (row/grid — D3); aria-pressed
-     honest while any visual state is live. */
-  const scopesOpen = colorScopesState !== 'off';
-  const toggleScopes = () => {
-    const s = useUi.getState();
-    setColorScopesState(scopesOpen ? 'off' : s.colorScopesLastVisual);
-  };
-
-  /* dense DOM order: pool=0, then (color only) scopes, nodes, then mixer,
-     inspector — indices recompute per page so no holes strand the rover */
-  const iScopes = 1;
-  const iNodes = page === 'color' ? 2 : 0;
-  const iMixer = page === 'color' ? 3 : 1;
-  const iInspector = page === 'color' ? 4 : 2;
-  /* the rendered count drives the wrap (End = last rendered index) */
-  const nButtons = page === 'color' ? 5 : 3;
 
   return (
     <div
@@ -137,7 +149,8 @@ export function Toolbar2() {
       </div>
 
       {/* R22-D5 (#73): the console toggles — right side, exactly like the
-          left-side asset toggles. Scopes + Nodes are color-page consoles. */}
+          left-side asset toggles. Scopes + Nodes are color-page consoles
+          (the Nodes toggle now opens the VIEWER-REGION surface, D-B2). */}
       {page === 'color' && (
         <button
           {...roverProps(iScopes)}
@@ -162,17 +175,24 @@ export function Toolbar2() {
           <span>Nodes</span>
         </button>
       )}
-      <button
-        {...roverProps(iMixer)}
-        className={`toolbtn ${mixerState !== 'collapsed' ? 'active' : ''}`}
-        data-testid="shell-toolbar-btn-mixer"
-        aria-pressed={mixerState !== 'collapsed'}
-        title={`Mixer — ${mixerState === 'collapsed' ? 'collapsed' : mixerState}; click cycles collapsed → meters → full`}
-        onClick={cycleMixerState}
-      >
-        <SlidersHorizontal size={14} strokeWidth={1.7} />
-        <span>Mixer</span>
-      </button>
+      {/* R23-WB (D-B5/#92): the Mixer toggle is Edit+Audio ONLY — DOM-absent
+          on the color page ("mixer shouldn't be here in Color Grading view")
+          and on fx/deliver (Part IX ruling 15). The setPage exit law
+          collapses an open mixer when color is entered, so the console is
+          never stranded unclosable on a page without its toggle. */}
+      {showMixer && (
+        <button
+          {...roverProps(iMixer)}
+          className={`toolbtn ${mixerState !== 'collapsed' ? 'active' : ''}`}
+          data-testid="shell-toolbar-btn-mixer"
+          aria-pressed={mixerState !== 'collapsed'}
+          title={`Mixer — ${mixerState === 'collapsed' ? 'collapsed' : mixerState}; click cycles collapsed → meters → full`}
+          onClick={cycleMixerState}
+        >
+          <SlidersHorizontal size={14} strokeWidth={1.7} />
+          <span>Mixer</span>
+        </button>
+      )}
       <button
         {...roverProps(iInspector)}
         className={`toolbtn ${panels.inspector ? 'active' : ''}`}

@@ -12,7 +12,13 @@
    The console header shows the node chip (which surface is being edited).
    Topology/anatomy unchanged: 38px toolbar (arrow/hand tools, page dots,
    Clip chip, zoom look, …), 64px grid workspace, 106×86 cards, ports/edges
-   exactly as before. */
+   exactly as before.
+   R23-WB (DESIGN-R23 D-B2; issue #93): the graph now mounts as the
+   VIEWER-REGION surface (the AppShell swaps it in for the Viewer while
+   colorNodesDock is on — the timeline-area NodeGraphDock is deleted, and
+   with it this component's `docked` prop). The component itself is
+   UNCHANGED: the 706×268 workspace scrolls at natural size (it fits a
+   viewer-region width ≥ 700px and pans below — the #74 law). */
 
 import { useState } from 'react';
 import { Hand, Layers, MousePointer2 } from 'lucide-react';
@@ -264,15 +270,7 @@ const NODE_BINDINGS: Record<string, 'primaries' | 'qualifier'> = {
 
 /* ---------- the graph ---------- */
 
-export interface ColorNodeGraphProps {
-  /** R22-D4: when true the graph renders DOCKED inside the NodeGraphDock —
-   *  the dock owns the toolbar chrome and this component renders ONLY the
-   *  workspace (scrollable at natural size; the dock clips — the #74 fix).
-   *  Standalone (stories/solo mounts) keeps its own 38px toolbar. */
-  docked?: boolean;
-}
-
-export function ColorNodeGraph({ docked = false }: ColorNodeGraphProps) {
+export function ColorNodeGraph() {
   /* honest one-shot toasts: (a) the mock-only graph controls (clip picker,
      page dots, overflow menu; hand tool = gesture deferral), (b) the C56
      deferral — non-bound node kinds are display state. */
@@ -348,16 +346,9 @@ export function ColorNodeGraph({ docked = false }: ColorNodeGraphProps) {
     </div>
   );
 
-  /* R22-D4: docked = the NodeGraphDock owns the chrome; this renders ONLY the
-     workspace (scrollable at natural size; the dock clips — the #74 fix). */
-  if (docked) {
-    return (
-      <div data-testid="shell-color-nodegraph" className="flex h-full min-h-0 w-full flex-col" style={{ background: 'var(--nodegraph-bg)' }}>
-        {workspace}
-      </div>
-    );
-  }
-
+  /* R23-WB (D-B2): the graph renders the SAME standalone anatomy everywhere
+     (its own 38px toolbar + the scrollable workspace); the surface swap —
+     Viewer ⇄ this graph — is the AppShell's job, not a prop. */
   return (
     <div data-testid="shell-color-nodegraph" className="flex h-full min-h-0 w-full min-w-[400px] flex-col" style={{ background: 'var(--nodegraph-bg)' }}>
       {/* 38px toolbar (ref §3.2) */}

@@ -783,7 +783,12 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       return;
     }
     if (locked) return;
-    if (tool === 'blade') {
+    /* R23-WA-REV P2 #2: the blade tool's click-split is fxMode-GATED — in
+       the FX view clip clicks select the clip (the FX inspector shows its
+       effect stack, D-A2.1); a split is an edit-domain mutation the recede
+       law forbids. (fxMode + blade is reachable: the tool radio renders on
+       every page and the fx page keeps fxMode across tool changes.) */
+    if (tool === 'blade' && !fxMode) {
       const rect = ref.current?.getBoundingClientRect();
       if (!rect) return;
       const local = e.clientX - rect.left;
@@ -796,7 +801,9 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
 
   const cursor = locked
     ? 'not-allowed'
-    : tool === 'blade'
+    : fxMode
+      ? 'pointer' // recede law: fxMode clicks select, never trim/split/drag
+      : tool === 'blade'
       ? 'crosshair'
       : dragActive && (drag?.mode === 'move' || drag?.mode === 'slip' || drag?.mode === 'slide')
         ? 'grabbing'

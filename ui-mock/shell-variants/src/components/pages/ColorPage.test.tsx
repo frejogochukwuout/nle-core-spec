@@ -4,17 +4,17 @@
    names verbatim) — every control asserts its STORE WRITE; the YRGB rows
    are DERIVED read-only readouts; the qualifier is the spec-shaped HSL
    keyer params; the curves editor edits the record's curve points; the
-   node graph selection binds to the console's tab routing; the scope strip
-   is REAL since W4c (fed by the graded-frame bus; the seeded-trace dock is
-   deleted, C53) — the strip's own drawing tests live in
-   ColorScopeStrip.test.tsx. */
+   node graph selection binds to the console's tab routing; the scopes are
+   REAL since W4c (fed by the graded-frame bus; the seeded-trace dock is
+   deleted, C53; R23-WB: the strip became the tabbed ScopesDock, D-B1) —
+   the dock's own drawing tests live in ScopesDock.test.tsx. */
 
 import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import {
   ColorPage,
   ColorNodeGraph,
-  ColorScopeStrip,
+  ScopesDock,
   ColorInspector,
   WheelsPanel,
   CurvesPanel,
@@ -417,26 +417,27 @@ describe('ColorNodeGraph (left dock — reference topology kept, C56 binding)', 
   });
 });
 
-describe('ColorScopeStrip (C53 — real since W4c; solo = no bus frame yet)', () => {
-  it('standby quadrants + the live status line + collapse (testids stable from W4b)', () => {
-    act(() => { useUi.setState({ colorScopesState: 'grid' }); }); // R22-D3: solo mounts boot the dock OPEN
-    render(<ColorScopeStrip />);
+describe('ScopesDock (C53 — real since W4c; R23-WB re-home: the tabbed console row, D-B1)', () => {
+  it('standby panel + the live status line + the one-scope-at-a-time tab law (testids stable from W4b)', () => {
+    act(() => { useUi.setState({ colorScopesState: 'open' }); }); // solo mounts boot the dock OPEN
+    render(<ScopesDock />);
     expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
     expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/standby — no graded frame/);
-    for (const kind of ['waveform', 'parade', 'vectorscope', 'histogram']) {
-      expect(screen.getByTestId(`shell-color-scope-${kind}`)).toHaveTextContent(/no signal/);
+    // the default tab's panel renders the honest no-signal row; the others are ABSENT (one at a time)
+    expect(screen.getByTestId('shell-color-scope-waveform')).toHaveTextContent(/no signal/);
+    for (const kind of ['parade', 'vectorscope', 'histogram']) {
+      expect(screen.queryByTestId(`shell-color-scope-${kind}`)).toBeNull();
     }
-    const collapse = screen.getByTestId('shell-color-scopes-collapse');
-    expect(collapse).toHaveAttribute('aria-expanded', 'true');
-    fireEvent.click(collapse);
-    expect(screen.queryByTestId('shell-color-scopes-grid')).toBeNull();
-    fireEvent.click(collapse);
-    expect(screen.getByTestId('shell-color-scopes-grid')).toBeInTheDocument();
+    // the R22 collapse law RE-HOMED as the tab law: switching swaps the ONE panel
+    fireEvent.click(screen.getByTestId('shell-color-scopes-tab-vectorscope'));
+    expect(screen.getByTestId('shell-color-scope-vectorscope')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-scope-waveform')).toBeNull();
+    expect(screen.getByTestId('shell-color-scopes-tab-vectorscope')).toHaveAttribute('aria-selected', 'true');
   });
 
   it('the seam stays live: qualifierPreviewOn shows in the status line', () => {
-    act(() => { useUi.setState({ colorScopesState: 'grid' }); });
-    render(<ColorScopeStrip />);
+    act(() => { useUi.setState({ colorScopesState: 'open' }); });
+    render(<ScopesDock />);
     expect(screen.getByTestId('shell-color-scopes-status')).not.toHaveTextContent(/matte preview on/);
     act(() => { useUi.setState({ qualifierPreviewOn: true }); });
     expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/matte preview on/);

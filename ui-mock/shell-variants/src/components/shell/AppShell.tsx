@@ -7,18 +7,19 @@
    Deliver → export panel) — all at the same resizable inspectorW.
 
    R22 (DESIGN-R22 D1) — the color page composition REWRITTEN (issues
-   #74/#77/#78/#79): the MEDIA POOL stays in the left dock (the node graph
-   no longer steals its slot); the VIEWER is the dominant center surface
-   with the scopes console beneath it only while toggled on (never
-   permanently); the COLOR INSPECTOR (Primaries/Curves/Qualifier tabs) is
-   the one grading surface in the right rail; the timeline area carries the
-   TimelineCompact strip (issue #75) with the NodeGraphDock console beside
-   it (toggleable, the mixer mechanism). Page-aware defaults (D2/D8): the
-   color page's mainbody = 55% and inspector = 420px until the user drags
-   (mainBodyUserSet / inspectorWUserSet — the user's drag always wins). */
+   #74/#77/#78/#79) → R23-WB (DESIGN-R23 track B — #90–#97): the scopes
+   console moved to the TIMELINE-AREA CONSOLE ROW as the tabbed ScopesDock
+   (D-B1, F6 slot [6]); the node graph is the VIEWER-REGION surface while
+   colorNodesDock is on (D-B2 — the Viewer swaps out, a header bar with the
+   target clip + × restores it); the timeline density is the D-B3 store
+   law (compact default on color, the EVERY-PAGE toggle overrides; the
+   mainbody default is 55% ONLY while compact, 40% when full tracks are
+   asked for — the filmstrip needs lane room); the left dock on color is
+   the Stills GALLERY (D-B4/#91). Page-aware defaults (D2/D8): the color
+   page's inspector = 420px until the user drags (inspectorWUserSet). */
 
 import { useEffect, useRef, type ReactNode } from 'react';
-import { useUi } from '../../state/useUiStore';
+import { useUi, resolveGradeTargetId, resolveTimelineCompact } from '../../state/useUiStore';
 import { Toolbar2 } from './Toolbar2';
 import { MixerDock } from '../mixer/MixerDock';
 import { LeftDock } from './LeftDock';
@@ -29,7 +30,9 @@ import { AppDock } from './AppDock';
 import { TimelineToolbar } from '../timeline/TimelineToolbar';
 import { SceneTabs } from '../timeline/SceneTabs';
 import { Timeline } from '../timeline/Timeline';
-import { ColorInspector, ColorScopeStrip, NodeGraphDock } from '../pages/ColorPage';
+import { ColorInspector, ColorNodeGraph, ScopesDock } from '../pages/ColorPage';
+import { gradeTargetLabel } from '../pages/color/useGradeTarget';
+import { Layers, X } from 'lucide-react';
 import { TimelineCompact } from '../timeline/TimelineCompact';
 import { DeliverPage } from '../pages/DeliverPage';
 import { ChannelEditor } from '../mixer/ChannelEditor';
@@ -231,25 +234,30 @@ function AppShellInner() {
      grade target the console edits). */
   const captionSelected = selection.length === 1
     && findElement(scenes, selection[0])?.track.kind === 'caption';
-  /* R22: the console dock view-states (scopes under the viewer; node graph
-     beside the compact timeline) + the user-drag flags for the page-aware
-     defaults below. */
+  /* R22 → R23-WB: the console dock view-states + the user-drag flags for
+     the page-aware defaults below. colorNodesDock re-points at the
+     VIEWER-REGION surface (D-B2); colorScopesState is 'off' | 'open' (D-B1). */
   const colorScopesState = useUi((s) => s.colorScopesState);
   const colorNodesDock = useUi((s) => s.colorNodesDock);
   const mainBodyUserSet = useUi((s) => s.mainBodyUserSet);
   const inspectorWUserSet = useUi((s) => s.inspectorWUserSet);
+  /* R23-WB (D-B3): the density resolution — ONE store resolver shared with
+     the TimelineToolbar's toggle (the honest aria-pressed law). */
+  const compact = useUi((s) => resolveTimelineCompact(s));
+  /* D-B2: the node-graph header names the GRADE TARGET the graph edits (the
+     same resolver the inspector/console share — they can never disagree). */
+  const nodeGraphTarget = useUi((s) => gradeTargetLabel(s.scenes, resolveGradeTargetId(s)));
 
-  /* R22-D8/D2: page-aware defaults — the color page wants a TALL mainbody
-     (the timeline area only carries the compact strip) and the reference's
-     420px inspector; the user's drag (mainBodyUserSet / inspectorWUserSet)
-     always wins and persists. R23-WA (Part IX ruling 1): the FX page stays
-     at the 40% EDIT default — NEVER the color-style 55% (the timeline row
-     carries the FULL Timeline at normal lane heights; seam hit-zones need
-     real pixel geometry — the same honest 16px scroll tolerance Edit
-     carries at the 1280×800 floor). */
+  /* R22-D8/D2 → R23-WB (Part IX ruling 11 — the mainbody interaction law):
+     the color page wants a TALL mainbody (55%) ONLY while the compact strip
+     carries the timeline area; flipping to FULL TRACKS on color drops the
+     default to 40% (336px of lanes vs a ~200px row at 55% would clip 60% —
+     the filmstrip needs the lane room). The user's drag (mainBodyUserSet)
+     always wins and persists. The FX page stays at the 40% EDIT default
+     (ruling 1); deliver's own 50% rebalance is Wave F's (D-F1). */
   const mainBodyHeight = mainBodyH !== 0
     ? mainBodyH
-    : page === 'color' && !mainBodyUserSet ? '55%' : '40%';
+    : page === 'color' && !mainBodyUserSet ? (compact ? '55%' : '40%') : '40%';
   const effectiveInspectorW = page === 'color' && !inspectorWUserSet ? 420 : inspectorW;
   /* R23-WA (D-A1): the FX page's right rail = the FxInspector (the param
      surface for the selected transition / fade / clip-effect-stack); the
@@ -302,16 +310,49 @@ function AppShellInner() {
             )}
 
             <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region panel-shadow flex min-h-0 min-w-0 flex-1 flex-col">
-              {/* R22-D1: the viewer is the DOMINANT surface — nothing renders
-                  beneath it on the color page unless the scopes console is
-                  toggled ON (issue #77's thin-line starvation dies here). */}
-              <div className="min-h-0 flex-1">
-                <Viewer duration={duration} />
-              </div>
-              {/* R22-D3: the scopes console under the viewer — store-driven
-                  (off | collapsed | row | grid); REAL traces from the graded
-                  frame the viewer publishes on the bus (W4c kept, #76). */}
-              {page === 'color' && colorScopesState !== 'off' && <ColorScopeStrip />}
+              {/* R23-WB (D-B2, #93): while the nodes console is on, the node
+                  graph IS the viewer-region surface ("fit better on the
+                  preview window … we can cross it out just like a normal
+                  asset preview") — the header bar names the grade target and
+                  the × restores the Viewer. The F6 stop [2] wrapper is
+                  UNCHANGED (the surface swap stays inside it). While this
+                  surface owns the region the viewer publishes no NEW graded
+                  frames — the ScopesDock honestly draws the LAST one
+                  (ruling 14, registered). */}
+              {page === 'color' && colorNodesDock ? (
+                <div
+                  data-testid="shell-color-nodeviewer"
+                  aria-label="Node graph viewer surface"
+                  className="flex min-h-0 flex-1 flex-col overflow-hidden bg-panel"
+                >
+                  <div className="flex h-[26px] shrink-0 items-center gap-2 border-b border-hairline bg-shell px-2">
+                    <Layers size={12} aria-hidden className="text-tmuted" />
+                    <span className="text-[11px] font-medium text-tprimary">Nodes</span>
+                    <span data-testid="shell-color-nodeviewer-target" className="truncate text-[11px] text-tmuted">
+                      {nodeGraphTarget}
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-btn ml-auto"
+                      data-testid="shell-color-nodeviewer-close"
+                      aria-label="Close node graph and restore the viewer"
+                      data-tip="Restore the viewer"
+                      onClick={() => useUi.getState().toggleColorNodesDock()}
+                    >
+                      <X size={13} strokeWidth={1.8} />
+                    </button>
+                  </div>
+                  {/* the graph at natural size — its own workspace scrolls
+                      (706×268; the region clips below ~700px width) */}
+                  <div className="scroll-both min-h-0 flex-1 overflow-auto">
+                    <ColorNodeGraph />
+                  </div>
+                </div>
+              ) : (
+                <div className="min-h-0 flex-1">
+                  <Viewer duration={duration} />
+                </div>
+              )}
             </div>
 
             {/* right-docked panel: dragging the seam LEFT (dx<0) widens it.
@@ -334,37 +375,29 @@ function AppShellInner() {
       {/* ---- timeline block + console docks (design doc v2.2 §4 — the
           mixer sits SIDE BY SIDE with the multi-track lanes, not under them;
           F6 region slots [6]/[7], single-writer per index) ----
-          R22-D1 (DESIGN-R22): on the COLOR page the timeline lanes are
-          REPLACED by TimelineCompact (the #75 generalized compact strip —
-          frozen, click = grade target) and the NodeGraphDock console sits
-          beside it (toggleable, the mixer mechanism, issue #78). The mixer
-          renders on ALL pages now (issue #73 — Toolbar2 carries the toggle);
-          on the color page at the 55% mainbody its FLOOR auto-degrade is the
-          honest behavior (registered).
-          R23-WA (D-A1): the FX page's timeline area is the FULL Timeline
-          (fxMode via the store's page coupling — NOT TimelineCompact, whose
-          seamMode stub retires this wave; seam hit-zones need real lane
-          geometry). The mixer keeps its side-by-side slot (ruling 15's
-          Edit+Audio-only toggle matrix is Wave D's seam). */}
+          R23-WB (DESIGN-R23 D-B1/D-B3): the timeline lanes resolve through
+          the DENSITY law (compact → TimelineCompact, full → Timeline —
+          compact DEFAULTS on color+deliver, the every-page TimelineToolbar
+          toggle overrides per session, #94); the SCOPES DOCK joins the
+          console row in the F6 slot [6] the NodeGraphDock vacated (the node
+          graph now owns the viewer region while toggled, D-B2). The mixer
+          renders only where its page leaves it open — entering color
+          collapses it (D-B5/#92, the setPage exit law). */}
       <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />
         <div className="flex min-h-0 flex-1">
-          {page === 'color' ? (
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <TimelineCompact />
-            </div>
-          ) : (
-            <Timeline />
-          )}
-          {/* F6 region slots [6]/[7] (spec 18 §11.5 amendment): the VISIBLE
-              timeline-area consoles get focus stops in dock order — the
-              nodes dock first on color, the mixer next; a collapsed/off dock
-              must not leave an invisible zero-width stop in the cycle
-              (single-writer per index, deepest-match law). */}
-          {page === 'color' && colorNodesDock && (
-            <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0" style={{ width: '48%', minWidth: 420 }}>
-              <NodeGraphDock />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {compact ? <TimelineCompact /> : <Timeline />}
+          </div>
+          {/* F6 region slot [6] on color = the SCOPES DOCK (D-B1 — inherited
+              from the retired NodeGraphDock; single-writer per index, a
+              collapsed/off dock never leaves an invisible stop). The dock
+              fills the row's FULL height via flex/min-h-0 (NEVER a % height)
+              and takes the row's flex share (min 320px). */}
+          {page === 'color' && colorScopesState === 'open' && (
+            <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 min-w-[320px] flex-1">
+              <ScopesDock />
             </div>
           )}
           {mixerVisible && (

@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useActiveScene, trackHeights, useUi, mintTrackIds, activeTrackOf } from './useUiStore';
+import { useActiveScene, trackHeights, useUi, mintTrackIds, activeTrackOf, resolveTimelineCompact } from './useUiStore';
 import { resolveGroupMove } from '../lib/timelinePlacement';
 import { project } from '../lib/mockData';
 
@@ -2268,5 +2268,90 @@ describe('R23-WA: removeFade / removeTransition — delete-aware removal (R23-B 
     expect(el('el-2').transitionOut).toBeUndefined();
     act(() => { S().removeTransition('el-2'); }); // truly absent now
     expect(S().past.length).toBe(after + 1); // exactly ONE entry for the real removal
+  });
+});
+
+/* ---------- R23-WB (DESIGN-R23 track B): the color-view store law ---------- */
+
+describe('R23-WB D-B1: the scopes console state (the 4-state machine dies)', () => {
+  it("boots 'off' (nothing permanent in the console row, #77) and toggles off ↔ open", () => {
+    expect(S().colorScopesState).toBe('off');
+    act(() => { S().setColorScopesState('open'); });
+    expect(S().colorScopesState).toBe('open');
+    act(() => { S().setColorScopesState('off'); });
+    expect(S().colorScopesState).toBe('off');
+  });
+});
+
+describe('R23-WB D-B5/#92: entering the color page collapses the mixer (the exit law)', () => {
+  it('an open mixer carried into color collapses; other page entries do not touch it', () => {
+    act(() => { S().setMixerState('full'); });
+    act(() => { S().setPage('color'); });
+    expect(S().page).toBe('color');
+    expect(S().mixerState).toBe('collapsed'); // #92 supersedes #73 for the color page
+    // entering edit/audio leaves the mixer state alone (audio seeds its own via enterAudioFocus)
+    act(() => { S().setMixerState('meters'); });
+    act(() => { S().setPage('edit'); });
+    expect(S().mixerState).toBe('meters');
+  });
+
+  it('staying on color does not fight an external write (the exit law fires on ENTRY only)', () => {
+    act(() => { S().setPage('color'); });
+    expect(S().mixerState).toBe('collapsed');
+    act(() => { S().setPage('color'); }); // a no-op page write must not clobber
+    expect(S().mixerState).toBe('collapsed');
+  });
+});
+
+describe('R23-WB D-B3: the timeline density law (timelineCompact + the ONE resolver)', () => {
+  it("boots 'auto' and resolves per page: compact on color + deliver, full elsewhere", () => {
+    expect(S().timelineCompact).toBe('auto');
+    act(() => { S().setPage('edit'); });
+    expect(resolveTimelineCompact(S())).toBe(false);
+    act(() => { S().setPage('color'); });
+    expect(resolveTimelineCompact(S())).toBe(true);
+    act(() => { S().setPage('deliver'); });
+    expect(resolveTimelineCompact(S())).toBe(true); // deliver per D-F1 (Wave F fills the range band)
+    act(() => { S().setPage('audio'); });
+    expect(resolveTimelineCompact(S())).toBe(false);
+    act(() => { S().setPage('fx'); });
+    expect(resolveTimelineCompact(S())).toBe(false);
+  });
+
+  it("the user's 'on'/'off' override wins on EVERY page (per-session, not a pref)", () => {
+    act(() => { S().setTimelineCompact('on'); });
+    act(() => { S().setPage('edit'); });
+    expect(resolveTimelineCompact(S())).toBe(true); // compact on edit — #94 "everywhere"
+    act(() => { S().setTimelineCompact('off'); });
+    act(() => { S().setPage('color'); });
+    expect(resolveTimelineCompact(S())).toBe(false); // full tracks on color — the #94 ask
+    act(() => { S().setTimelineCompact('auto'); });
+    expect(S().timelineCompact).toBe('auto');
+  });
+});
+
+describe('R23-WB D-B4: the Stills Gallery store home (colorStills — view state)', () => {
+  it('boots the four seed stills (the R22-D7 fixtures, re-homed to the store)', () => {
+    expect(S().colorStills.map((st) => st.id)).toEqual(['still-01', 'still-02', 'still-03', 'still-04']);
+    expect(S().colorStills[0]).toMatchObject({ name: 'Marina cool', mediaId: 'm-01' });
+  });
+
+  it('addColorStill mints a monotonic id + name; removeColorStill drops by id', () => {
+    act(() => { S().removeColorStill('still-02'); });
+    const still = S().addColorStill({ ...S().colorStills[0].grade, exposure: 0.3 });
+    // monotonic over the LIVE list: still-02's slot is free but the mint is still-05 — no collision
+    expect(still.id).toBe('still-05');
+    expect(still.name).toBe('Still 5');
+    expect(S().colorStills.at(-1)?.id).toBe('still-05');
+    expect(S().colorStills).toHaveLength(4);
+    expect(S().addColorStill(S().colorStills[0].grade, { name: 'Named' }).name).toBe('Named');
+  });
+
+  it('the Gallery writes NEVER mint history (the sourceRanges precedent — view state)', () => {
+    const before = S().past.length;
+    act(() => { S().addColorStill(S().colorStills[0].grade); });
+    act(() => { S().removeColorStill('still-01'); });
+    expect(S().past.length).toBe(before);
+    expect(S().colorStills.some((st) => st.id === 'still-01')).toBe(false);
   });
 });

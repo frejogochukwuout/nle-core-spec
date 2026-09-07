@@ -87,9 +87,14 @@ interface DragPreview {
 const SEAM_W = 12;
 const SEAM_HOVER_W = 24;
 /** R23-WA ruling: the duration domain a transition object can be trimmed to —
- *  [0, 2 s] (the Inspector Transition row's own max; Home=0 mirrors the fade
- *  object's floor law, Delete owns removal). Frame-snapped at 24 fps. */
+ *  [0.1, 2 s] (the Inspector Transition row's own min/max — Home lands the
+ *  0.1 floor, never 0; Delete owns removal). Frame-snapped at 24 fps. */
 const TRANSITION_DUR_MAX = 2;
+/* the domain FLOOR — matches the Inspector's TransitionSection Duration
+   row min (0.1 s): keyboard Home / drag floor land here, never 0 (a 0 s
+   transition would render a ghost 14 px box the Inspector cannot
+   reproduce — R23-WA-REV P3 #8) */
+const TRANSITION_DUR_MIN = 0.1;
 
 /** mid-seam zone (D-A2.2): centered on the cut, 12px → 24px on hover; click
  *  applies the DEFAULT transition (setTransition's verified {} = Cross
@@ -165,18 +170,22 @@ function SeamZone({ a, b, h, pxPerSec }: { a: ElementJSON; b: ElementJSON; h: nu
 /** head/tail half-open zone (D-A2.3, issues #104/#105): one-sided 12px at the
  *  FIRST element's in-edge / LAST element's out-edge per track; click applies
  *  a 0.5 s fade (R23-WA ruling: the browser's default preset — the design
- *  names no number) or selects the existing fade object. */
+ *  names no number). When a fade already exists the zone does NOT render —
+ *  the fade object is its own selection+trim surface (see the in-body note). */
 function EdgeFadeZone({ el, side, h, pxPerSec }: { el: ElementJSON; side: 'in' | 'out'; h: number; pxPerSec: number }) {
   const [hover, setHover] = useState(false);
   const has = effectiveFade(el, side) > 0;
+  /* R23-WA-REV P3 #5: when the element already HAS a fade on this side the
+   * zone does NOT render — the fade object itself is the surface (its own
+   * fx-select on pointerdown + its edge-drag grab handles). A 12 px zone
+   * above the object (z 6 vs the object's z 3 inside the clip's stacking
+   * context) would make short fades un-grabbable in the one mode dedicated
+   * to them — clicks/tests target the fade object directly instead. */
+  if (has) return null;
   const left = side === 'in'
     ? el.startTime * pxPerSec
     : (el.startTime + el.duration) * pxPerSec - SEAM_W;
   const onClick = () => {
-    if (has) {
-      useUi.getState().selectFxObject({ kind: 'fade', elementId: el.id, side });
-      return;
-    }
     useUi.getState().setFade(el.id, side, 0.5);
     useUi.getState().selectFxObject({ kind: 'fade', elementId: el.id, side });
   };
@@ -184,12 +193,8 @@ function EdgeFadeZone({ el, side, h, pxPerSec }: { el: ElementJSON; side: 'in' |
     <button
       type="button"
       data-testid={`fx-${side === 'in' ? 'head' : 'tail'}-${el.id}`}
-      data-tip={has
-        ? `Fade ${side} · ${effectiveFade(el, side)}s — click to select`
-        : `Click to add a 0.5 s fade ${side}`}
-      aria-label={has
-        ? `Select fade ${side} at ${el.name} ${side === 'in' ? 'start' : 'end'}`
-        : `Add fade ${side} at ${el.name} ${side === 'in' ? 'start' : 'end'}`}
+      data-tip={`Click to add a 0.5 s fade ${side}`}
+      aria-label={`Add fade ${side} at ${el.name} ${side === 'in' ? 'start' : 'end'}`}
       className="absolute top-0 flex items-center justify-center rounded-[2px]"
       style={{
         left,
@@ -205,7 +210,7 @@ function EdgeFadeZone({ el, side, h, pxPerSec }: { el: ElementJSON; side: 'in' |
       onMouseLeave={() => setHover(false)}
       onClick={onClick}
     >
-      {hover && !has && (
+      {hover && (
         <span aria-hidden="true" className="pointer-events-none text-[12px] font-bold leading-none" style={{ color: 'var(--fade-line)' }}>+</span>
       )}
     </button>
@@ -233,13 +238,15 @@ const capturePointer = (el: HTMLElement, pointerId: number) => {
   try { el.setPointerCapture(pointerId); } catch { /* inactive pointer id */ }
 };
 
-function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON; h: number; pxPerSec: number; fxMode: boolean; selected: boolean }) {
+function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: ElementJSON; h: number; pxPerSec: number; fxMode: boolean; selected: boolean; locked?: boolean }) {
   const tr = el.transitionOut!;
   const cut = (el.startTime + el.duration) * pxPerSec;
   /* clamp-commit drag (Part IX ruling 21): LOCAL preview only, ONE
-   * setTransition commit on release. The grabbed edge tracks the pointer —
-   * the box is cut-centered (the shipped visual), so the duration changes at
-   * 2× the edge dx (alignment stays Inspector-owned). */
+   * setTransition commit on release. The grabbed edge tracks the pointer
+   * 1:1 — the box is cut-centered (left = cut − w/2, the shipped visual),
+   * so the new duration = 2 × the edge's distance from the cut; WITHOUT
+   * the ×2 the first pointermove would collapse the preview to half (the
+   * R23-WA-REV P1 — a grab-at-actual-edge must be a no-op, pinned). */
   const [trDrag, setTrDrag] = useState<{ side: 'l' | 'r'; t: number } | null>(null);
   const dur = trDrag ? trDrag.t : tr.duration;
   const w = dur * pxPerSec;
@@ -249,8 +256,11 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON;
   };
   const trimTo = (e: React.PointerEvent, side: 'l' | 'r') => {
     const x = clientToContentX(e.clientX);
-    const raw = side === 'l' ? (cut - x) / pxPerSec : (x - cut) / pxPerSec;
-    const t = Math.max(0, Math.min(snapToFrame(raw), TRANSITION_DUR_MAX));
+    /* ×2: the cut-centered box puts the edge at dur/2 from the cut — the
+     * pointer-relative mapping must double the distance so the edge tracks
+     * the cursor 1:1 (see the header comment; the R23-WA-REV P1) */
+    const raw = side === 'l' ? (2 * (cut - x)) / pxPerSec : (2 * (x - cut)) / pxPerSec;
+    const t = Math.max(TRANSITION_DUR_MIN, Math.min(snapToFrame(raw), TRANSITION_DUR_MAX));
     setTrDrag({ side, t });
   };
   return (
@@ -270,10 +280,10 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON;
       title={`Crossfade · ${tr.presentation} · ${tr.duration}s`}
       aria-label={`Crossfade transition, ${tr.duration} seconds`}
       data-testid={`transition-${el.id}`}
-      {...(fxMode ? {
+      {...(fxMode && !locked ? {
         role: 'slider',
         tabIndex: 0,
-        'aria-valuemin': 0,
+        'aria-valuemin': Math.round(TRANSITION_DUR_MIN * 24),
         'aria-valuemax': Math.round(TRANSITION_DUR_MAX * 24),
         'aria-valuenow': Math.round(dur * 24),
         'aria-valuetext': `${dur.toFixed(2)}s`,
@@ -288,11 +298,14 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON;
           e.preventDefault();
           e.stopPropagation(); // beat the window playhead-nudge rungs
           let next: number;
-          if (e.key === 'Home') next = 0;
+          /* Home = the domain FLOOR (0.1 s, matching the Inspector's Duration
+             row min — R23-WA-REV P3 #8: a 0 s transition would render a ghost
+             14 px box the Inspector cannot reproduce; End = the domain max) */
+          if (e.key === 'Home') next = TRANSITION_DUR_MIN;
           else if (e.key === 'End') next = TRANSITION_DUR_MAX;
           else {
             const frames = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1);
-            next = Math.max(0, Math.min(snapToFrame(tr.duration + frames / 24), TRANSITION_DUR_MAX));
+            next = Math.max(TRANSITION_DUR_MIN, Math.min(snapToFrame(tr.duration + frames / 24), TRANSITION_DUR_MAX));
           }
           commit(next);
         },
@@ -303,7 +316,10 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON;
         <path d="M3 3 L8.5 7 L3 11 Z" fill="white" opacity="0.92" />
         <path d="M11 3 L5.5 7 L11 11 Z" fill="white" opacity="0.92" />
       </svg>
-      {fxMode && (
+      {/* handles + interactive props gate on fxMode && !locked (the wave's
+          own locked-lane ruling — R23-WA-REV P3 #4: a locked lane's box must
+          not select/drag/keyboard-trim while its store writes no-op) */}
+      {fxMode && !locked && (
         <>
           <div
             data-testid={`transition-trim-l-${el.id}`}
@@ -312,7 +328,11 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON;
             onPointerDown={(e) => {
               if (e.button !== 0) return;
               e.stopPropagation();
-              (e.currentTarget as HTMLElement).focus();
+              /* focus the BOX (the focusable slider that owns the keyboard
+                 grammar) — the bare handle div is not focusable, so a plain
+                 .focus() here was a no-op and arrows fell through to the
+                 window playhead rung (R23-WA-REV register nit) */
+              (e.currentTarget.parentElement as HTMLElement | null)?.focus();
               useUi.getState().selectFxObject({ kind: 'transition', elementId: el.id });
               capturePointer(e.currentTarget as HTMLElement, e.pointerId);
               setTrDrag({ side: 'l', t: tr.duration });
@@ -337,7 +357,8 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON;
             onPointerDown={(e) => {
               if (e.button !== 0) return;
               e.stopPropagation();
-              (e.currentTarget as HTMLElement).focus();
+              /* focus the BOX — see the left handle's note */
+              (e.currentTarget.parentElement as HTMLElement | null)?.focus();
               useUi.getState().selectFxObject({ kind: 'transition', elementId: el.id });
               capturePointer(e.currentTarget as HTMLElement, e.pointerId);
               setTrDrag({ side: 'r', t: tr.duration });
@@ -1232,6 +1253,10 @@ export function Timeline() {
                   // currentTarget ⇒ not a clip / transition marker). Clip drags
                   // stop propagation concerns aside: clips are children, so a
                   // pointerdown on them never reaches this branch.
+                  // R23-WA-REV P3 #6 (registered): the marquee is deliberately
+                  // NOT fxMode-gated — D-A2.1's recede letter names trim/drag/
+                  // context-menu only, and a band select of clips in the FX view
+                  // legally flips the inspector to the aggregate-effects branch.
                   if (e.target !== e.currentTarget || e.button !== 0 || track.locked) return;
                   startMarquee(e);
                 }}
@@ -1323,6 +1348,7 @@ export function Timeline() {
                     h={h}
                     pxPerSec={pxPerSec}
                     fxMode={fxMode}
+                    locked={track.locked}
                     selected={selectedFxObject?.kind === 'transition' && selectedFxObject.elementId === e.id}
                   />
                 ))}

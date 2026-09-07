@@ -173,8 +173,11 @@ describe('mixer dock (design doc v2.2 §4 — side by side with the lanes)', () 
     const dock = screen.getByTestId('mixer-dock-full');
     expect(timeline).toBeInTheDocument();
     expect(dock).toBeInTheDocument();
-    // same flex row: the dock lives inside the timeline block's parent, after it
-    expect(timeline.parentElement).toContainElement(dock);
+    // same flex row: R23-WB (D-B3) wrapped the lanes in their own flex column
+    // (the compact ↔ full swap lives inside it) — the CONSOLE ROW that carries
+    // lanes + dock is two levels up from the timeline surface itself
+    const consoleRow = timeline.parentElement!.parentElement!;
+    expect(consoleRow).toContainElement(dock);
     expect(timeline.compareDocumentPosition(dock)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     // strips: one per audio track (A1, A2) + aux returns + master
     expect(screen.getByTestId('mixer-strip-A1')).toBeInTheDocument();
@@ -197,61 +200,97 @@ describe('mixer dock (design doc v2.2 §4 — side by side with the lanes)', () 
 });
 
 describe('page switching via the AppDock (spec 18 §4.8)', () => {
-  it('Edit → Color: the R22-D1 composition — media pool stays, viewer dominant, inspector = color tabs, compact timeline (issues #77/#78/#79)', async () => {
+  it('Edit → Color: the R23-WB composition — viewer dominant, inspector = color tabs, compact timeline + Stills dock (issues #90–#97)', async () => {
     const user = userEvent.setup();
     renderAppShell();
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     await user.click(screen.getByTestId('shell-dock-page-color'));
     expect(store().page).toBe('color');
-    // timeline area = the compact strip (the full Timeline is GONE on this page)
+    // timeline area = the compact strip under the D-B3 density law (auto → compact on color)
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
     // rail = the ColorInspector (the ONE grading surface, tabs under this panel)
     expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
     expect(screen.getByRole('tablist', { name: 'Color inspector tools' })).toBeInTheDocument();
     expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
-    // left dock = the MEDIA POOL (Pool|Stills) — the node graph NEVER docks here (#77)
+    // left dock = the STILLS GALLERY, no tab bar (#91 — the pool tab died there)
     expect(screen.getByTestId('shell-leftdock')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-leftdock-tab-pool')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-leftdock-tab-stills')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Left dock' })).toBeNull();
+    expect(screen.getByTestId('shell-stills')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument();
+    // the node graph NEVER docks here (#77) — it is the viewer-region surface (D-B2)
     expect(screen.queryByTestId('shell-color-nodegraph')).not.toBeInTheDocument();
-    // the scopes console is OFF by default (nothing permanent under the viewer, #77)
+    // the scopes console is OFF by default (nothing permanent in the console row, #77)
     expect(screen.queryByTestId('shell-color-scopes')).not.toBeInTheDocument();
-    // the node-graph console dock is OFF by default (#78)
-    expect(screen.queryByTestId('shell-color-nodedock')).not.toBeInTheDocument();
+    // the node-graph viewer surface is OFF by default (#93)
+    expect(screen.queryByTestId('shell-color-nodeviewer')).not.toBeInTheDocument();
+    // D-B5/#92: the Mixer toggle is DOM-absent on color (Edit+Audio only)
+    expect(screen.queryByTestId('shell-toolbar-btn-mixer')).toBeNull();
     expect(screen.getByRole('button', { name: 'Color' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('the R22 consoles: Scopes + Nodes toggle from the toolbar (#73), the mixer renders on color too', async () => {
+  it('the R23-WB consoles: the ScopesDock joins the timeline-area console row as TABS; the Nodes toggle swaps the VIEWER (#90/#95/#93)', async () => {
     const user = userEvent.setup();
     renderAppShell({ mixerState: 'full' });
     expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument(); // edit page: side by side
     await user.click(screen.getByTestId('shell-dock-page-color'));
-    // the mixer still renders on the color page (issue #73 — the toggle lives in Toolbar2)
-    expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument();
-    // the scopes console: off → grid via the toolbar toggle, then minimize from the header
+    // D-B5/#92 (the #73 reversal): entering color COLLAPSES the mixer — the
+    // dock does not render there, and its toggle is DOM-absent
+    expect(store().mixerState).toBe('collapsed');
+    expect(screen.queryByTestId('mixer-dock-full')).not.toBeInTheDocument();
+    // the scopes console: off → open via the toolbar toggle; the dock sits in
+    // the TIMELINE-AREA CONSOLE ROW (beside the compact strip), TABS, one
+    // scope at a time — never the squeezed under-viewer strip
     await user.click(screen.getByTestId('shell-toolbar-btn-scopes'));
     expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-scopes-grid')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-scopes-layout-grid')).toHaveAttribute('aria-pressed', 'true');
-    // row layout: the 1×4 band
-    await user.click(screen.getByTestId('shell-color-scopes-layout-row'));
-    expect(screen.getByTestId('shell-color-scopes-layout-row')).toHaveAttribute('aria-pressed', 'true');
-    // minimize: the grid unmounts, the header row survives
-    await user.click(screen.getByTestId('shell-color-scopes-collapse'));
-    expect(screen.queryByTestId('shell-color-scopes-grid')).not.toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
-    // the nodes console dock: the workspace is scrollable + the dock clips (#74)
+    // the D-B1 geometry law: the console-row wrapper takes the row's flex
+    // share (flex-1 + the 320px floor) and the dock fills it by
+    // flex/min-h-0 — NEVER a % height (the R22 percentage-in-flex law)
+    const scopes = screen.getByTestId('shell-color-scopes');
+    const rowShare = scopes.parentElement!;
+    expect(rowShare).toHaveClass('min-w-[320px]');
+    expect(rowShare).toHaveClass('flex-1');
+    expect(scopes).toHaveClass('h-full');
+    expect(scopes).toHaveClass('min-h-0');
+    expect(scopes.style.height).toBe('');
+    expect(screen.getByTestId('shell-color-scopes-tab-waveform')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('shell-color-scope-waveform')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-scope-vectorscope')).toBeNull();
+    await user.click(screen.getByTestId('shell-color-scopes-tab-vectorscope'));
+    expect(screen.getByTestId('shell-color-scope-vectorscope')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-scope-waveform')).toBeNull();
+    // the compact strip still owns the timeline lanes beside the dock
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    // the nodes console: the toggle swaps the VIEWER REGION — the header
+    // names the grade target, × restores the viewer (D-B2)
     await user.click(screen.getByTestId('shell-toolbar-btn-nodes'));
-    expect(screen.getByTestId('shell-color-nodedock')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-nodeviewer')).toBeInTheDocument();
     expect(screen.getByTestId('shell-color-nodegraph')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-nodeviewer-target')).toHaveTextContent('Marina interview');
+    expect(screen.queryByTestId('shell-viewer')).toBeNull();
+    await user.click(screen.getByTestId('shell-color-nodeviewer-close'));
+    expect(screen.queryByTestId('shell-color-nodeviewer')).toBeNull();
+    expect(screen.getByTestId('shell-viewer')).toBeInTheDocument();
     // leaving color restores the standard timeline + drops the consoles
     await user.click(screen.getByTestId('shell-dock-page-edit'));
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('shell-color-nodedock')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-nodeviewer')).not.toBeInTheDocument();
     expect(screen.queryByTestId('shell-color-scopes')).not.toBeInTheDocument();
+  });
+
+  it('D-B2: the nodes surface keeps its F6 stop [2] — the wrapper survives the swap (the surface swap stays inside it)', () => {
+    renderAppShell({ page: 'color', colorNodesDock: true });
+    expect(screen.queryByTestId('shell-viewer')).toBeNull();
+    // three F6s walk toolbar → left dock → the CENTER region; the third stop
+    // is still the mainbody center wrapper — now hosting the node surface
+    // (the region did not multiply, vanish, or lose its place in the cycle)
+    for (let i = 0; i < 3; i++) {
+      fireEvent(window, new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true }));
+    }
+    expect(document.activeElement?.contains(screen.getByTestId('shell-color-nodeviewer'))).toBe(true);
+    expect(document.activeElement?.contains(screen.getByTestId('shell-timeline-compact'))).toBe(false);
   });
 
   it('Audio dock button enters audio focus: page + full mixer + lane boost + SoundLibrary/ChannelEditor', async () => {
@@ -278,10 +317,80 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     expect(screen.getByTestId('shell-deliver')).toBeInTheDocument();
     // leaving audio focus by any route resets the lane boost (design §3.3)
     expect(store().audioLaneBoost).toBe(false);
+    // D-B3: 'auto' resolves compact on deliver too (the D-F1 seam Wave F fills in)
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('shell-dock-page-edit'));
     expect(store().page).toBe('edit');
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-deliver')).not.toBeInTheDocument();
+  });
+});
+
+describe('R23-WB (DESIGN-R23 D-B3, issue #94): the timeline density law', () => {
+  const mainbody = () => document.querySelector('.mainbody') as HTMLElement;
+  const mainbodyH = () => mainbody().style.height;
+
+  it('color auto: compact strip + the 55% mainbody default (the tall-viewer color composition)', async () => {
+    const user = userEvent.setup();
+    renderAppShell();
+    await user.click(screen.getByTestId('shell-dock-page-color'));
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(mainbodyH()).toBe('55%');
+    // the toggle is present on EVERY page and honestly pressed
+    expect(screen.getByTestId('shell-timeline-toolbar-btn-density')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('flipping color to FULL TRACKS drops the default mainbody to 40% (ruling 11 — the filmstrip needs lane room)', async () => {
+    const user = userEvent.setup();
+    renderAppShell();
+    await user.click(screen.getByTestId('shell-dock-page-color'));
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    // the override lands in the store; the FULL Timeline replaces the strip
+    expect(store().timelineCompact).toBe('off');
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline-toolbar-btn-density')).toHaveAttribute('aria-pressed', 'false');
+    expect(mainbodyH()).toBe('40%');
+    // flipping back to compact restores the 55% default (the user never dragged)
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(mainbodyH()).toBe('55%');
+  });
+
+  it('the user-dragged mainBodyH ALWAYS wins over the density default (the mainBodyUserSet law)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ page: 'color', mainBodyH: 500, mainBodyUserSet: true });
+    expect(mainbodyH()).toBe('500px');
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(mainbodyH()).toBe('500px'); // no density flip may steal the user's height
+  });
+
+  it('compact is reachable on EDIT too (#94 — "allow to be used everywhere")', async () => {
+    const user = userEvent.setup();
+    renderAppShell();
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline-toolbar-btn-density')).toHaveAttribute('aria-pressed', 'false');
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    expect(store().timelineCompact).toBe('on');
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
+    // the edit-page mainbody default stays 40% either way (only color carries the 55% compact law)
+    expect(mainbodyH()).toBe('40%');
+  });
+
+  it("'on'/'off' are per-session overrides: the user's word survives a page flip (auto does not)", async () => {
+    const user = userEvent.setup();
+    renderAppShell({ page: 'color' });
+    await user.click(screen.getByTestId('shell-dock-page-edit'));
+    expect(store().timelineCompact).toBe('auto');
+    // edit auto → full; now the user forces compact and flips BACK to color:
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    expect(store().timelineCompact).toBe('on');
+    await user.click(screen.getByTestId('shell-dock-page-color'));
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument(); // the override holds
+    expect(store().timelineCompact).toBe('on');
   });
 });
 
@@ -502,6 +611,24 @@ describe('F6 region cycling (spec 18 §11.5)', () => {
     // (it sits inside the timeline-block region) — F6 from the mixer wraps
     // to the toolbar instead of oscillating dock ↔ mixer.
     pressF6(); activeRegionHolds('shell-toolbar');
+  });
+
+  it('R23-WB (D-B1): color + scopes open — the ScopesDock takes the [6] stop the NodeGraphDock vacated', () => {
+    renderAppShell({ page: 'color', colorScopesState: 'open' });
+    // 7 stops: toolbar, left dock (the Stills gallery on color), viewer,
+    // the COLOR inspector (the color page's rail — D-B2 kept the stop [2]
+    // wrapper through the viewer swap), timeline block, app dock, then the
+    // scopes console (the mixer is collapsed on color, D-B5 — never a stop)
+    pressF6(); activeRegionHolds('shell-toolbar');
+    pressF6(); activeRegionHolds('shell-stills');
+    pressF6(); activeRegionHolds('shell-viewer');
+    pressF6(); activeRegionHolds('shell-color-inspector');
+    pressF6(); activeRegionHolds('shell-timeline-compact');
+    pressF6(); activeRegionHolds('shell-dock');
+    pressF6(); // stop 7 — the scopes dock (inherited slot [6])
+    activeRegionHolds('shell-color-scopes');
+    expect(document.activeElement).not.toContainElement(screen.getByTestId('shell-timeline-compact'));
+    pressF6(); activeRegionHolds('shell-toolbar'); // wraps
   });
 });
 
