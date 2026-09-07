@@ -35,6 +35,7 @@ import { DeliverPage } from '../pages/DeliverPage';
 import { ChannelEditor } from '../mixer/ChannelEditor';
 import { MarkerInspector } from '../panels/MarkerInspector';
 import { CaptionInspector } from '../panels/CaptionInspector';
+import { FxInspector } from '../fx/FxInspector';
 import { sceneDuration, findElement } from '../../lib/mockData';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import { ToastRegion } from './ToastRegion';
@@ -241,13 +242,22 @@ function AppShellInner() {
   /* R22-D8/D2: page-aware defaults — the color page wants a TALL mainbody
      (the timeline area only carries the compact strip) and the reference's
      420px inspector; the user's drag (mainBodyUserSet / inspectorWUserSet)
-     always wins and persists. Read-time only — no write-on-navigate. */
+     always wins and persists. R23-WA (Part IX ruling 1): the FX page stays
+     at the 40% EDIT default — NEVER the color-style 55% (the timeline row
+     carries the FULL Timeline at normal lane heights; seam hit-zones need
+     real pixel geometry — the same honest 16px scroll tolerance Edit
+     carries at the 1280×800 floor). */
   const mainBodyHeight = mainBodyH !== 0
     ? mainBodyH
     : page === 'color' && !mainBodyUserSet ? '55%' : '40%';
   const effectiveInspectorW = page === 'color' && !inspectorWUserSet ? 420 : inspectorW;
+  /* R23-WA (D-A1): the FX page's right rail = the FxInspector (the param
+     surface for the selected transition / fade / clip-effect-stack); the
+     rail swap rides the SAME panels.inspector gate + inspectorW splitter
+     as every other page. */
   const rightPanel: ReactNode =
     page === 'color' ? <ColorInspector />
+    : page === 'fx' ? <FxInspector />
     : page === 'audio' ? <ChannelEditor />
     : selectedMarkerId ? <MarkerInspector />
     : captionSelected ? <CaptionInspector />
@@ -330,7 +340,12 @@ function AppShellInner() {
           beside it (toggleable, the mixer mechanism, issue #78). The mixer
           renders on ALL pages now (issue #73 — Toolbar2 carries the toggle);
           on the color page at the 55% mainbody its FLOOR auto-degrade is the
-          honest behavior (registered). */}
+          honest behavior (registered).
+          R23-WA (D-A1): the FX page's timeline area is the FULL Timeline
+          (fxMode via the store's page coupling — NOT TimelineCompact, whose
+          seamMode stub retires this wave; seam hit-zones need real lane
+          geometry). The mixer keeps its side-by-side slot (ruling 15's
+          Edit+Audio-only toggle matrix is Wave D's seam). */}
       <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />

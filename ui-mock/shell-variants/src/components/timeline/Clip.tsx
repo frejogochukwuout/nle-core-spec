@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { useVariantClipStyle } from '../../state/variantHooks';
-import { mediaById, findElement, EFFECT_DEFS, TRANSITION_PRESENTATIONS, type ElementJSON, type TrackJSON } from '../../lib/mockData';
+import { mediaById, findElement, EFFECT_DEFS, TRANSITION_PRESENTATIONS, effectiveFade, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc, clamp } from '../../lib/timecode';
 import { DRAG_THRESHOLD_PX } from '../../lib/pixel';
 import { resolveGroupMove, toCreateTrackPlans, dragRejectionToast, setGestureActive } from '../../lib/timelinePlacement';
@@ -312,6 +312,12 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
   const splitElement = useUi((s) => s.splitElement);
   const pushToast = useUi((s) => s.pushToast);
   const snap = useUi((s) => s.snap);
+  /* R23-WA (DESIGN-R23 D-A2/D-A3): the FX engine's two view reads — fxMode
+     recedes the clip (trim/drag/context-menu OFF, body 45%, clicks keep
+     selecting); selectedFxObject drives the fade objects' selection ring
+     (the objects joined the FX domain). */
+  const fxMode = useUi((s) => s.fxMode);
+  const selectedFxObject = useUi((s) => s.selectedFxObject);
   const menu = useContextMenu();   // §4.9 clip menu (right-click + Shift+F10)
   const confirm = useConfirm();    // §6.4 multi-delete ≥ 5 confirmation
 
@@ -355,6 +361,11 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
   }, [dragOn]);
 
   const selected = selection.includes(el.id);
+  /* R23-WA: this clip's selected FADE object (null when the FX domain points
+     elsewhere or at a transition) — drives the fade-object selection rings. */
+  const fxObjSelected = selectedFxObject !== null && selectedFxObject.kind === 'fade' && selectedFxObject.elementId === el.id
+    ? selectedFxObject
+    : null;
   const locked = track.locked;
   const media = mediaById(el.mediaId);
   const isAudio = el.type === 'audio';
@@ -588,6 +599,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
     if (tool === 'blade') return; // handled by click
     if (e.button !== 0) return;
     (e.currentTarget as HTMLElement).focus(); // roving focus — Shift+F10 host (§4.9)
+    /* R23-WA (D-A2.1 clip recede): in fxMode the clip's edit gestures are OFF
+       — no move/trim arming. The pointer stays interactive so a plain click
+       still selects the clip (the FX inspector then shows its effect stack). */
+    if (fxMode) return;
     dragCancelled.current = false;
     lastGestureWasDrag.current = false; // fresh gesture — canonical reset-on-pointerdown
     setGestureActive(false); // R15-V2 P3: exception-killed gestures can't wedge the flag
@@ -810,6 +825,22 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       return;
     }
     const { name, cat } = payload;
+    if (cat === 'Fade') {
+      /* R23-WA (D-A5): the Fades browser rows — the row NAME carries the side
+         + preset duration ("Fade In 1s"); setFade routes to the element's own
+         fade domain (audio→audioFadeIn/Out, else fadeIn/Out). NOT
+         addEffectToElement (R23-B note 21 — a fade is a model field, not a
+         stack entry). */
+      const m = /^Fade\s+(In|Out)(?:\s+([\d.]+)\s*s?)?$/i.exec(name);
+      if (!m) {
+        pushToast({ kind: 'info', title: 'Unknown fade preset', detail: `'${name}' is not a Fade row the drop parser knows (expected “Fade In 1s” style names)` });
+        return;
+      }
+      const side = (m[1]!.toLowerCase() === 'in' ? 'in' : 'out') as 'in' | 'out';
+      const seconds = m[2] !== undefined ? parseFloat(m[2]!) : 0.5;
+      useUi.getState().setFade(el.id, side, seconds);
+      return;
+    }
     if (cat === 'Transition') {
       const pres = TRANSITION_PRESENTATIONS.find((p) => p === name);
       if (!pres) {
@@ -832,19 +863,27 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
     useUi.getState().addEffectToElement(el.id, { name: def.name, enabled: true, params: defaultsFor(def) });
   };
 
-  const fadeLeftW = (el.audioFadeIn ?? 0) * pxPerSec;
-  const fadeRightW = (el.audioFadeOut ?? 0) * pxPerSec;
+  /* R23-WA (D-A3): the effective fade — audio elements read audioFadeIn/Out
+     (their seeded domain), every other kind reads fadeIn/fadeOut (the new
+     video/text fades). ONE selector (mockData.effectiveFade) so the object,
+     the store writer and the inspector can never disagree. */
+  const fadeInModel0 = effectiveFade(el, 'in');
+  const fadeOutModel0 = effectiveFade(el, 'out');
+  const fadeLeftW = fadeInModel0 * pxPerSec;
+  const fadeRightW = fadeOutModel0 * pxPerSec;
   const bodyH = laneHeight - 4;  // the clip box is inset 2px top/bottom in the lane
   /* R20-W5 (thread #62 / timeline-cluster thread-5): fade-in/out render as
      selectable, width-draggable TRANSITION OBJECTS — the live width during a
-     drag rides LOCAL state (NO store writes mid-drag; ONE setElementField
-     commit on pointerup = one undo entry, the R15-T4 one-entry-per-gesture
-     law). `t` is the previewed duration in seconds (frame-snapped). */
+     drag rides LOCAL state (NO store writes mid-drag; ONE setFade commit on
+     pointerup = one undo entry, the R15-T4 one-entry-per-gesture law). `t` is
+     the previewed duration in seconds (frame-snapped). R23-WA: the commit
+     seam is the store's setFade (store-owned clamp — today only the gesture
+     clamped). */
   const [fadeDrag, setFadeDrag] = useState<{ side: 'in' | 'out'; t: number } | null>(null);
   const fadeInLive = fadeDrag?.side === 'in' ? fadeDrag.t * pxPerSec : fadeLeftW;
   const fadeOutLive = fadeDrag?.side === 'out' ? fadeDrag.t * pxPerSec : fadeRightW;
-  const fadeInModel = fadeDrag?.side === 'in' ? fadeDrag.t : (el.audioFadeIn ?? 0);
-  const fadeOutModel = fadeDrag?.side === 'out' ? fadeDrag.t : (el.audioFadeOut ?? 0);
+  const fadeInModel = fadeDrag?.side === 'in' ? fadeDrag.t : fadeInModel0;
+  const fadeOutModel = fadeDrag?.side === 'out' ? fadeDrag.t : fadeOutModel0;
 
   const clipLabel = (color: string, align: 'left' | 'center' = 'left') => (
     <span
@@ -1028,12 +1067,17 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
      TRANSITION OBJECTS' gesture grammar — cloned from the loop brackets'
      law (Ruler.tsx bracketHandlers): pointerdown selects the clip + arms the
      drag (local preview only), pointermove resizes, pointerup commits ONE
-     setElementField (one undo entry). Each keypress = one undoable step
+     setFade (one undo entry — R23-WA routes the old setElementField commit
+     through the store's clamp-owning seam). Each keypress = one undoable step
      (bracket-nudge semantics). Each fade clamps independently to
      [0, el.duration]; overlap of in/out objects is allowed (visual stacking:
      the out object renders above the in when they meet). The object stays
      mounted while ITS drag is live even below the 6px gate — unmounting
-     mid-gesture would drop the handlers (width collapses to the border box). */
+     mid-gesture would drop the handlers (width collapses to the border box).
+     R23-WA (D-A3): the press ALSO writes the FX selection domain —
+     selectFxObject AFTER the clip select (the store's survival law keeps
+     the pair alive: the clip in the selection, the object in the domain).
+     The selection ring below mirrors the match. */
   const fadeHandlers = (side: 'in' | 'out') => ({
     onPointerDown: (e: React.PointerEvent) => {
       if (e.button !== 0) return;
@@ -1042,9 +1086,13 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
          domain stays the CLIP — the inspector's Fades group (existing) is the
          parametric surface once selected */
       if (!useUi.getState().selection.includes(el.id)) selectElement(el.id, false);
+      /* R23-WA: the object joins the FX domain — AFTER the clip select so the
+         store's survival law keeps the pair (the inspector's Fades group stays
+         the parametric surface; selectedFxObject is the FX inspector's). */
+      useUi.getState().selectFxObject({ kind: 'fade', elementId: el.id, side });
       (e.currentTarget as HTMLElement).focus();
       capturePointer(e.currentTarget as HTMLElement, e.pointerId);
-      const start = side === 'in' ? (el.audioFadeIn ?? 0) : (el.audioFadeOut ?? 0);
+      const start = effectiveFade(el, side);
       setFadeDrag({ side, t: start });
     },
     onPointerMove: (e: React.PointerEvent) => {
@@ -1063,9 +1111,9 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       if (fadeDrag?.side !== side) return;
       const t = fadeDrag.t;
       setFadeDrag(null);
-      const cur = side === 'in' ? (el.audioFadeIn ?? 0) : (el.audioFadeOut ?? 0);
+      const cur = effectiveFade(el, side);
       if (t === cur) return; // no-op release (plain click) — no history entry
-      useUi.getState().setElementField(el.id, side === 'in' ? { audioFadeIn: t } : { audioFadeOut: t });
+      useUi.getState().setFade(el.id, side, t);
     },
     onPointerCancel: () => { if (fadeDrag?.side === side) setFadeDrag(null); },
     onLostPointerCapture: () => { if (fadeDrag?.side === side) setFadeDrag(null); },
@@ -1073,7 +1121,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
       e.preventDefault();
       e.stopPropagation(); // the clip box's key route must not see the slider keys
-      const cur = side === 'in' ? (el.audioFadeIn ?? 0) : (el.audioFadeOut ?? 0);
+      const cur = effectiveFade(el, side);
       let next: number;
       if (e.key === 'Home') next = 0;
       else if (e.key === 'End') next = el.duration;
@@ -1082,7 +1130,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
         next = Math.max(0, Math.min(snapToFrame(cur + frames / 24), el.duration));
       }
       if (next === cur) return; // no-op keypress — no history entry
-      useUi.getState().setElementField(el.id, side === 'in' ? { audioFadeIn: next } : { audioFadeOut: next });
+      useUi.getState().setFade(el.id, side, next);
     },
   });
 
@@ -1108,7 +1156,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
            bubbles (un-stopped) to the Timeline scroll surface, whose single
            router selects-if-unselected and opens the clip menu. */
         onKeyDown={(e) => {
-          if (isMenuKey(e)) {
+          /* R23-WA (D-A2.1): the clip menu is an edit-mode surface — its
+             rows (split/duplicate/delete/move) all fight the receded clip —
+             so the keyboard route is off in fxMode. */
+          if (isMenuKey(e) && !fxMode) {
             e.preventDefault();
             e.stopPropagation();
             menu.openForElement(ref.current, buildMenuItems(), 'clip');
@@ -1132,7 +1183,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
            active drag lifts to the ghost layer (10, below snap 40 / playhead
            100). Inline so the utilities never fight over precedence. */
         zIndex: dragActive ? 10 : selected ? 5 : 1,
-        opacity: previewSuppressed ? 0.45 : undefined,
+        /* R23-WA (D-A2.1 clip recede): the body dims to 45% while the engine
+           owns the timeline (the lanes stay visible — you still see WHERE
+           things are; the objects above them stay full-strength). */
+        opacity: previewSuppressed ? 0.45 : fxMode ? 0.45 : undefined,
         /* R20-W2 hover-placement translate-preview (only when a displaced
            shift is in flight — never on plain renders). */
         ...(insertPreviewShift !== undefined
@@ -1184,16 +1238,17 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
            (1px border + 2px radius + gradient fill + seconds in the label),
            half-width at the clip HEAD (fade-in, right-edge = the full-amplitude
            boundary) and mirrored at the TAIL (fade-out, left-edge). Width =
-           el.audioFadeIn/Out seconds × pps (the live preview during a drag
-           comes from local state — ONE setElementField commit per gesture).
+           effectiveFade(el, side) seconds × pps (R23-WA: audio reads
+           audioFadeIn/Out, everything else fadeIn/fadeOut — one selector);
+           the live preview during a drag comes from local state — ONE setFade
+           commit per gesture.
            Below 6px the object unmounts (a 0-width fade renders no object;
            the Inspector "Fade in" field creates one). Trim handles sit OUTSIDE
            the clip edges (±4px) so the head object never fights them — the
            narrow-clip crowding is visual only, hit zones stay disjoint.
-           R20-W5-TODO(thread #62 follow-up): per-TYPE transition glyphs (fade
-           = wedge; crossfade = two triangles) — the glyph slot is the empty
-           center of this object; type dispatch lands with the transition-type
-           model (spec 09's mock slice has crossfade only). ---- */}
+           R23-WA (D-A3): the objects joined the FX domain — the selection
+           ring (accent outline, the clip-selected grammar's accent) renders
+           while selectedFxObject points at THIS side. ---- */}
       {(fadeInLive >= 6 || fadeDrag?.side === 'in') && (
         <div
           {...fadeHandlers('in')}
@@ -1208,6 +1263,9 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
           className="absolute bottom-[2px] left-0 top-[2px] z-[3] cursor-ew-resize overflow-hidden rounded-[2px]"
           style={{
             width: Math.max(2, fadeInLive),
+            /* R23-WA: the FX-domain selection ring (mirrors the clip-selected
+               accent grammar; never the hover ring). */
+            outline: fxObjSelected?.side === 'in' ? '1.5px solid var(--accent-selection)' : undefined,
             border: '1px solid var(--fade-line)',
             background: 'linear-gradient(to right, color-mix(in srgb, var(--fade-line) 6%, transparent), color-mix(in srgb, var(--fade-line) 20%, transparent))',
           }}
@@ -1238,6 +1296,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
           className="absolute bottom-[2px] right-0 top-[2px] z-[3] cursor-ew-resize overflow-hidden rounded-[2px]"
           style={{
             width: Math.max(2, fadeOutLive),
+            outline: fxObjSelected?.side === 'out' ? '1.5px solid var(--accent-selection)' : undefined,
             border: '1px solid var(--fade-line)',
             background: 'linear-gradient(to left, color-mix(in srgb, var(--fade-line) 20%, transparent), color-mix(in srgb, var(--fade-line) 6%, transparent))',
           }}
@@ -1289,8 +1348,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
           ripple / stretch tools (slip/slide/blade render none). Gestures
           start PENDING (R15 T2): the 5px threshold gates the trim preview —
           a press-release without crossing it is a plain click (no trim).
-          Roll also engages via ⌥-drag in the select tool (spec-06 §5.5). */}
-      {!locked && selected && (tool === 'select' || tool === 'roll' || tool === 'ripple' || tool === 'stretch') && (
+          Roll also engages via ⌥-drag in the select tool (spec-06 §5.5).
+          R23-WA (D-A2.1): OFF in fxMode — the recede law (regression law:
+          every trim test runs with fxMode:false and keeps passing). */}
+      {!locked && !fxMode && selected && (tool === 'select' || tool === 'roll' || tool === 'ripple' || tool === 'stretch') && (
         <>
           <div
             data-testid={`clip-trim-l-${el.id}`}
@@ -1335,7 +1396,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
           left/right handle zones READ as draggable, not just cursor-change.
           pointer-events-none: the real handles below stay the hit targets
           (z 4 — above the body, below the drag/ghost layers). */}
-      {!locked && selected && hover && (
+      {!locked && !fxMode && selected && hover && (
         <div data-testid={`clip-trim-afford-${el.id}`} aria-hidden="true" className="pointer-events-none absolute inset-0 z-[4]">
           <div
             className="absolute inset-y-0 left-0"

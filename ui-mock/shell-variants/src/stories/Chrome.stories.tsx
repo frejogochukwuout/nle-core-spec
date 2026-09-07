@@ -81,7 +81,7 @@ function DockStory({ patch }: { patch: UiPatch }) {
   return (
     <>
       <StoreBoot patch={patch} />
-      <Bar label="app dock — brand · 4 pages · cheat/home/settings (42px)">
+      <Bar label="app dock — brand · 5 pages (R23-WA: FX joins) · cheat/home/settings (42px)">
         <AppDock />
       </Bar>
     </>
@@ -116,6 +116,14 @@ export const DockAudio: StoryObj = {
 export const DockDeliver: StoryObj = {
   name: 'App dock — Deliver page',
   render: () => <DockStory patch={{ page: 'deliver' }} />,
+};
+
+/** R23-WA (DESIGN-R23 D-A1): FX active (⌘5) — the transitions & fades
+ *  workflow page between Audio and Deliver; the entry state carries fxMode
+ *  (the page coupling the store's setPage owns). */
+export const DockFx: StoryObj = {
+  name: 'App dock — FX page',
+  render: () => <DockStory patch={{ page: 'fx', fxMode: true }} />,
 };
 
 /* ---- timeline toolbar (spec 18 §4.5) ----------------------------------------- */
@@ -362,13 +370,15 @@ export const TrackHeadersMicroMeters: StoryObj = {
 
 /* ---- full shell: effects library (spec 18 §4.1) -------------------------------- */
 
-/** The Effects library has no solo form — EffectsPanel is internal to
- *  AppShell.tsx — so this full-shell story is its review surface: all three
- *  toolbar toggles on, 220px library column docked between the media pool and
- *  the viewer, categories + drag affordances against the real splitters.
- *  (Otherwise the default-shell review is 'Shell/AppShell — Full Shell — Edit'.) */
+/** R23-WA re-point (DESIGN-R23 D-A5, ruling 4): the effects library's home is
+ *  the FX PAGE's left dock now (FxBrowser) — the old edit-page story booted
+ *  `panels.effects: true`, which is dead view state post-retirement (the
+ *  flag mounts nothing; the old story would have rendered a plain Edit page
+ *  and LIED). This story keeps the "all panel toggles pressed" chrome review
+ *  frame AND lands on the FX page so the effects rows + drag affordances are
+ *  actually visible against the real splitters. */
 export const FullShellEffectsPanel: StoryObj = {
-  name: 'Full Shell — Effects panel on',
+  name: 'Full Shell — Effects (FX page)',
   parameters: { layout: 'fullscreen' },
-  render: () => <FullShell patch={{ panels: { mediaPool: true, effects: true, inspector: true } }} />,
+  render: () => <FullShell patch={{ page: 'fx', fxMode: true, panels: { mediaPool: true, effects: true, inspector: true } }} />,
 };

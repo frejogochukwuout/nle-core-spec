@@ -83,6 +83,10 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
   /* ---- Panels / pages (spec 16 §3.9 + spec 18) ---- */
   { action: 'panels-page', keys: '⌘1 / ⌘2 / ⌘3', group: 'Panels', desc: 'Switch page: Edit / Color / Deliver' },
   { action: 'panels-audio-focus', keys: '⌘4', group: 'Panels', desc: 'Toggle Audio focus (BGM / SFX mixer)' },
+  /* R23-WA (DESIGN-R23 D-A1 / ruling 18): the FX page binding — spec 16's
+     ⌘5 was free; the tool radio's FX entry has no plain key (V/B/T/Y/U/R
+     are spec 16 §3.2's — the radio + this chord own the surface). */
+  { action: 'panels-page-fx', keys: '⌘5', group: 'Panels', desc: 'FX page — transitions, fades & effect stacks' },
   { action: 'panels-mixer', keys: 'toolbar button', group: 'Panels', desc: 'Mixer row: collapsed / meter bridge / full' },
   { action: 'escape-audio', keys: 'Esc', group: 'Panels', desc: 'Exit Audio focus back to Edit' },
   { action: 'panels-import', keys: '⌘I', group: 'Panels', desc: 'Import media (mock toast — drop on Media Pool)' },

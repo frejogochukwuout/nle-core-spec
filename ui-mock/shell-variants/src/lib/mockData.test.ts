@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EFFECT_DEFS, TRANSITION_PRESENTATIONS, elementAtTime, findElement, mediaById, project, sceneDuration,
+  effectiveFade, fieldOfFade, type ElementJSON,
 } from './mockData';
 import { snapToFrame } from './timecode';
 
@@ -235,5 +236,44 @@ describe('R14: elementAtTime scans ALL tracks of a kind (topmost wins)', () => {
     expect(hit?.id).toBe('el-v2'); // topmost main track wins over el-1
     const below = elementAtTime(twoMain, 2);
     expect(below?.id).toBe('el-1'); // gap in V2 falls through to V1
+  });
+});
+
+/* ---------- R23-WA (DESIGN-R23 D-A3): the domain-neutral clip fade ---------- */
+
+describe('R23-WA: fadeIn/fadeOut model fields + the effective-fade selector', () => {
+  const el1 = () => scene1.tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-1')!;
+
+  it('demo fades seed every main-track video clip (the FX view paints objects on first paint)', () => {
+    const main = scene1.tracks.find((t) => t.id === 'tr-main')!;
+    for (const id of ['el-1', 'el-2', 'el-3', 'el-4']) {
+      const e = main.elements.find((x) => x.id === id)!;
+      expect(e.fadeIn).toBeGreaterThan(0);
+      expect(e.fadeOut).toBeGreaterThan(0);
+      // frame-clean law (the house grid at 24 fps)
+      expect(snapToFrame(e.fadeIn!)).toBe(e.fadeIn);
+      expect(snapToFrame(e.fadeOut!)).toBe(e.fadeOut);
+    }
+  });
+
+  it('effectiveFade: audio elements read audioFadeIn/Out, every other kind reads fadeIn/Out (one selector, one owner)', () => {
+    const audio = scene1.tracks.find((t) => t.id === 'tr-audio-1')!.elements.find((e) => e.id === 'el-6')!;
+    expect(audio.audioFadeIn).toBe(1.0); // the seeded domain stays
+    expect(effectiveFade(audio, 'in')).toBe(1.0);
+    expect(effectiveFade(audio, 'out')).toBe(2.0);
+    expect(effectiveFade(el1(), 'in')).toBe(el1().fadeIn);
+    expect(effectiveFade(el1(), 'out')).toBe(el1().fadeOut);
+    // missing fields read 0 — no object renders
+    const bare = { ...el1(), fadeIn: undefined, fadeOut: undefined };
+    expect(effectiveFade(bare, 'in')).toBe(0);
+  });
+
+  it('fieldOfFade mirrors the selector (the writer twin — writer and renderer can never disagree)', () => {
+    const audio = { id: 'x', type: 'audio' } as ElementJSON;
+    const video = { id: 'y', type: 'video' } as ElementJSON;
+    expect(fieldOfFade(audio, 'in')).toBe('audioFadeIn');
+    expect(fieldOfFade(audio, 'out')).toBe('audioFadeOut');
+    expect(fieldOfFade(video, 'in')).toBe('fadeIn');
+    expect(fieldOfFade(video, 'out')).toBe('fadeOut');
   });
 });

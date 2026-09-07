@@ -1,7 +1,8 @@
 /* AppDock — spec 18 §4.8: brand / page dock / cheat-sheet + deferred
-   affordances. Pins the four page buttons' store wiring, the cheat-sheet
-   entry, and the R14 no-op sweep: Project home + Settings are aria-disabled
-   with explanatory tips (§9 disabled language) — no dead-silent controls. */
+   affordances. Pins the FIVE page buttons' store wiring (R23-WA: FX joins
+   between audio and deliver — DESIGN-R23 D-A1), the cheat-sheet entry, and
+   the R14 no-op sweep: Project home + Settings are aria-disabled with
+   explanatory tips (§9 disabled language) — no dead-silent controls. */
 
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
@@ -38,5 +39,16 @@ describe('AppDock (spec 18 §4.8)', () => {
     fireEvent.click(settings);
     expect(store().toasts).toHaveLength(0);
     expect(store().page).toBe('edit');
+  });
+
+  it('R23-WA (D-A1): the FX page button sits between Audio and Deliver; its click couples fxMode on', () => {
+    renderPlain(<AppDock />);
+    const ids = Array.from(document.querySelectorAll('[data-testid^="shell-dock-page-"]'))
+      .map((b) => b.getAttribute('data-testid')!.replace('shell-dock-page-', ''));
+    expect(ids).toEqual(['edit', 'color', 'audio', 'fx', 'deliver']);
+    fireEvent.click(screen.getByTestId('shell-dock-page-fx'));
+    expect(store().page).toBe('fx');
+    expect(store().fxMode).toBe(true);
+    expect(screen.getByTestId('shell-dock-page-fx')).toHaveAttribute('aria-current', 'page');
   });
 });

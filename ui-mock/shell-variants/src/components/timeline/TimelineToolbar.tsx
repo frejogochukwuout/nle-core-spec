@@ -28,6 +28,15 @@ const RippleIcon = () => (
     <path d="M4 10h4" /><path d="M20 10h0" />
   </svg>
 );
+/* R23-WA (DESIGN-R23 D-A1): the FX tool's glyph — the transition marker's
+   own crossfade mark (two overlapping triangles), so the tool and the
+   objects it edits read as ONE domain. */
+const FxToolIcon = () => (
+  <svg width="15" height="13" viewBox="0 0 24 20" fill="none">
+    <path d="M5 3 L12 10 L5 17 Z" fill="currentColor" stroke="none" opacity="0.9" />
+    <path d="M19 3 L12 10 L19 17 Z" fill="currentColor" stroke="none" opacity="0.9" />
+  </svg>
+);
 
 const TOOLS: { id: ToolId; tip: string; icon: React.ReactNode }[] = [
   { id: 'select', tip: 'Selection (V)', icon: <MousePointer2 size={14} strokeWidth={1.8} /> },
@@ -37,6 +46,12 @@ const TOOLS: { id: ToolId; tip: string; icon: React.ReactNode }[] = [
   { id: 'slip', tip: 'Slip (Y)', icon: <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M2 10h20" /><path d="M7 5l-5 5 5 5" /><path d="M17 5l5 5-5 5" /></svg> },
   { id: 'slide', tip: 'Slide (U)', icon: <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="8" y="4" width="8" height="12" rx="1" /><path d="M3 10h3" /><path d="M18 10h3" /></svg> },
   { id: 'stretch', tip: 'Rate stretch', icon: <svg width="15" height="13" viewBox="0 0 24 20" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 3v14" strokeDasharray="2 2" /><path d="M20 3v14" strokeDasharray="2 2" /><path d="M7 10h10" /><path d="M14 7l3 3-3 3" /><path d="M10 7l-3 3 3 3" /></svg> },
+  /* R23-WA (D-A1): the FX tool — the "general tool mode in Edit" path
+     (#105): clips recede, seam/head/tail zones + transition boxes become
+     the edit targets. Escape (the existing tool rung) exits; the FX page
+     (⌘5) is the other door into the same engine. No plain-key binding —
+     the letters V/B/T/Y/U/R are spec 16 §3.2's; the radio + ⌘5 own this. */
+  { id: 'fx', tip: 'FX — transitions & fades (Esc exits)', icon: <FxToolIcon /> },
 ];
 
 /* R15 T1 — zoom math from the shared pixel lib (single source; this file

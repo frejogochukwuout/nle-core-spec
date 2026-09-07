@@ -2071,3 +2071,202 @@ describe('R20-W3: track/effect selection domains + project mode', () => {
     expect(s.setInspectorTab).toBeUndefined();
   });
 });
+
+/* ---------- R23-WA (DESIGN-R23 D-A2/D-A3): the FX engine state machine ---------- */
+
+describe('R23-WA: fxMode — the single-source coupling (Part IX ruling 2)', () => {
+  it('boots OFF; setTool(fx) turns it on, any other tool turns it off', () => {
+    expect(S().fxMode).toBe(false);
+    act(() => { S().setTool('fx'); });
+    expect(S().fxMode).toBe(true);
+    expect(S().tool).toBe('fx');
+    for (const t of ['select', 'blade', 'roll', 'ripple', 'slip', 'slide', 'stretch'] as const) {
+      act(() => { S().setTool(t); });
+      expect(S().fxMode).toBe(false);
+    }
+  });
+
+  it('setPage: entering the FX page owns fxMode; leaving resets it AND re-seats a stranded FX tool', () => {
+    act(() => { S().setPage('fx'); });
+    expect(S().fxMode).toBe(true);
+    // on the FX page tool changes never kill the engine (the page owns it)
+    act(() => { S().setTool('blade'); });
+    expect(S().fxMode).toBe(true);
+    expect(S().tool).toBe('blade');
+    act(() => { S().setTool('fx'); });
+    act(() => { S().setPage('edit'); });
+    expect(S().fxMode).toBe(false);
+    expect(S().tool).toBe('select'); // the radio never claims a dead fxMode
+    // leaving via any other route re-seats too (audioLaneBoost's exit law)
+    act(() => { S().setPage('fx'); });
+    act(() => { S().setTool('fx'); });
+    act(() => { S().setPage('color'); });
+    expect(S().fxMode).toBe(false);
+    expect(S().tool).toBe('select');
+  });
+
+  it('the RAW page writers carry the exit law too: enterAudioFocus from the FX page resets fxMode + re-seats the tool (ruling 2 belt-and-braces)', () => {
+    // the audio-focus actions write `page` directly (they seed mixer state in
+    // the same commit) — they must not strand a live engine on the audio page
+    act(() => { S().setPage('fx'); });
+    act(() => { S().setTool('fx'); });
+    act(() => { S().enterAudioFocus('shortcut'); });
+    expect(S().page).toBe('audio');
+    expect(S().fxMode).toBe(false);
+    expect(S().tool).toBe('select'); // no stranded FX tool on the audio page
+    // exit lands on Edit with the engine off (belt-and-braces)
+    act(() => { S().exitAudioFocus(); });
+    expect(S().page).toBe('edit');
+    expect(S().fxMode).toBe(false);
+    expect(S().tool).toBe('select');
+  });
+});
+
+describe('R23-WA: selectedFxObject — the seventh selection domain', () => {
+  it('selectFxObject clears marker/track/effect domains but KEEPS the clip selection (the selectEffect mirror)', () => {
+    act(() => { S().setSelection(['el-1']); });
+    act(() => { S().selectEffect('el-1', 'fx-1'); });
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'in' }); });
+    expect(S().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-1', side: 'in' });
+    expect(S().selection).toEqual(['el-1']); // the clip STAYS selected
+    expect(S().selectedMarkerId).toBe(null);
+    expect(S().selectedTrackId).toBe(null);
+    expect(S().selectedEffectId).toBe(null);
+    expect(S().selectedEffectClipId).toBe(null);
+    expect(S().inspectorProjectMode).toBe(false);
+  });
+
+  it('the domain rides the survival law: alive while its element stays selected, dead when it deselects', () => {
+    act(() => { S().setSelection(['el-1', 'el-2']); });
+    act(() => { S().selectFxObject({ kind: 'transition', elementId: 'el-2' }); });
+    act(() => { S().setSelection(['el-1', 'el-2']); }); // element still held
+    expect(S().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' });
+    act(() => { S().setSelection(['el-1']); }); // dropped
+    expect(S().selectedFxObject).toBe(null);
+  });
+
+  it('selectElement additive toggle-off drops the pointing object (the effect domain\'s own law)', () => {
+    act(() => { S().selectElement('el-1', false); });
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'out' }); });
+    act(() => { S().selectElement('el-1', true); }); // additive re-click = toggle-off
+    expect(S().selection).toEqual([]);
+    expect(S().selectedFxObject).toBe(null);
+  });
+
+  it('mutual exclusivity: selectMarker / selectTrack / selectEffect each clear the FX domain', () => {
+    const fx = { kind: 'fade' as const, elementId: 'el-1', side: 'in' as const };
+    act(() => { S().setSelection(['el-1']); });
+    act(() => { S().selectFxObject(fx); });
+    act(() => { S().selectMarker('mk-1'); });
+    expect(S().selectedFxObject).toBe(null);
+    act(() => { S().selectFxObject(fx); });
+    act(() => { S().selectTrack('tr-main'); });
+    expect(S().selectedFxObject).toBe(null);
+    act(() => { S().selectFxObject(fx); });
+    act(() => { S().selectEffect('el-1', 'fx-1'); });
+    expect(S().selectedFxObject).toBe(null);
+    // and the reverse: selectFxObject clears the effect domain
+    act(() => { S().selectEffect('el-1', 'fx-1'); });
+    act(() => { S().selectFxObject(fx); });
+    expect(S().selectedEffectId).toBe(null);
+    expect(S().selectedEffectClipId).toBe(null);
+  });
+
+  it('the scene switch clears the domain (stale ids never survive — the sixth site)', () => {
+    act(() => { S().setSelection(['el-1']); });
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'in' }); });
+    act(() => { S().setActiveScene('sc-2'); });
+    expect(S().selectedFxObject).toBe(null);
+  });
+
+  it('deleteElements belt-and-braces: a pointing object dies with its element', () => {
+    act(() => { S().setSelection(['el-3']); });
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-3', side: 'in' }); });
+    act(() => { S().deleteElements(['el-3'], false); });
+    expect(S().selectedFxObject).toBe(null);
+  });
+});
+
+describe('R23-WA: setFade — the ONE effective-fade writer (D-A3)', () => {
+  it('routes video/text to fadeIn/fadeOut, audio to audioFadeIn/audioFadeOut (fieldOfFade, single owner)', () => {
+    act(() => { S().setFade('el-1', 'in', 1.25); });
+    expect(el('el-1').fadeIn).toBe(1.25);
+    expect(el('el-1').fadeOut).toBe(0.75); // untouched
+    act(() => { S().setFade('el-6', 'out', 3); }); // audio element
+    expect(el('el-6').audioFadeOut).toBe(3);
+    expect(el('el-6').fadeOut).toBeUndefined(); // never the wrong domain
+  });
+
+  it('store-owned clamp [0, clip duration] + the 24 fps frame grid', () => {
+    act(() => { S().setFade('el-1', 'in', 99); }); // duration 8.5
+    expect(el('el-1').fadeIn).toBe(8.5);
+    act(() => { S().setFade('el-1', 'in', -3); });
+    expect(el('el-1').fadeIn).toBe(0);
+    act(() => { S().setFade('el-1', 'in', 0.317); }); // off-grid → snapped (0.317×24 = 7.6 → 8 frames)
+    expect(el('el-1').fadeIn).toBeCloseTo(8 / 24, 10);
+  });
+
+  it('history-backed; a no-op write mints NO history entry', () => {
+    // the setup contract resets the store per test — fixtures are pristine
+    const before = S().past.length;
+    expect(el('el-1').fadeIn).toBe(0.5); // the fixture value
+    act(() => { S().setFade('el-1', 'in', 2); });
+    expect(S().past.length).toBe(before + 1);
+    const cur = el('el-1').fadeIn!;
+    act(() => { S().setFade('el-1', 'in', cur); }); // same value
+    expect(S().past.length).toBe(before + 1); // the no-op minted nothing
+    act(() => { S().undo(); });
+    expect(el('el-1').fadeIn).toBe(0.5); // one undo step = one write
+  });
+
+  it('locked lanes refuse the write (the marquee/trim lock law)', () => {
+    act(() => { S().setFade('el-7', 'in', 1); }); // tr-audio-2 is locked
+    expect(el('el-7').audioFadeIn).toBeUndefined();
+  });
+});
+
+describe('R23-WA: removeFade / removeTransition — delete-aware removal (R23-B C1)', () => {
+  it('removeFade DELETES the field (Object.assign can never unset) + clears the pointing selection', () => {
+    act(() => { S().setSelection(['el-1']); });
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'in' }); });
+    const before = S().past.length;
+    act(() => { S().removeFade('el-1', 'in'); });
+    expect('fadeIn' in el('el-1')).toBe(false); // the key is GONE, not 0
+    expect(el('el-1').fadeOut).toBe(0.75); // the other side untouched
+    expect(S().selectedFxObject).toBe(null);
+    expect(S().past.length).toBe(before + 1);
+    act(() => { S().undo(); });
+    expect(el('el-1').fadeIn).toBe(0.5); // undo restores the field
+  });
+
+  it('removeFade on a side with no fade is a no-op (no history entry)', () => {
+    const before = S().past.length;
+    act(() => { S().removeFade('el-5', 'in'); }); // no fades on the text clip
+    expect(S().past.length).toBe(before);
+  });
+
+  it('removeFade only clears the selection when it points at THAT side', () => {
+    act(() => { S().setSelection(['el-1']); });
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'out' }); });
+    act(() => { S().removeFade('el-1', 'in'); });
+    expect(S().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-1', side: 'out' });
+  });
+
+  it('removeTransition DELETES transitionOut + clears a pointing transition selection (the disabled boundary dies)', () => {
+    expect(el('el-2').transitionOut).toBeDefined();
+    act(() => { S().selectFxObject({ kind: 'transition', elementId: 'el-2' }); });
+    const before = S().past.length;
+    act(() => { S().removeTransition('el-2'); });
+    expect('transitionOut' in el('el-2')).toBe(false);
+    expect(S().selectedFxObject).toBe(null);
+    expect(S().past.length).toBe(before + 1);
+    act(() => { S().undo(); });
+    expect(el('el-2').transitionOut).toEqual({ type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.75, alignment: 0.5 });
+    // removing what IS there mints one entry; removing nothing is a no-op
+    const after = S().past.length;
+    act(() => { S().removeTransition('el-2'); });
+    expect(el('el-2').transitionOut).toBeUndefined();
+    act(() => { S().removeTransition('el-2'); }); // truly absent now
+    expect(S().past.length).toBe(after + 1); // exactly ONE entry for the real removal
+  });
+});

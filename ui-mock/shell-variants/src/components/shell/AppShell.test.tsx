@@ -86,15 +86,62 @@ describe('AppShell region structure (spec 18 §3)', () => {
     expect(screen.getByTestId('transition-el-2')).toBeInTheDocument();
   });
 
-  it('app dock exposes exactly the four pages with Edit current (§4.8)', () => {
+  it('app dock exposes exactly the five pages with Edit current (§4.8 + R23-WA FX, D-A1)', () => {
     renderAppShell();
     const dock = screen.getByTestId('shell-dock');
-    for (const page of ['edit', 'color', 'audio', 'deliver']) {
+    for (const page of ['edit', 'color', 'audio', 'fx', 'deliver']) {
       expect(screen.getByTestId(`shell-dock-page-${page}`)).toBeInTheDocument();
     }
     expect(within(dock).getByRole('button', { name: 'Edit' })).toHaveAttribute('aria-current', 'page');
     expect(within(dock).queryByRole('button', { name: 'Color' })).not.toHaveAttribute('aria-current');
   });
+
+  /* R23-WA (DESIGN-R23 D-A1): the FX page composition — the effects browser
+     moved from the retired Edit-page Effects tab (below) to the FX page's
+     left dock; the right rail becomes the FX inspector; the timeline area is
+     the FULL Timeline in fxMode (the page coupling, ruling 2 — pinned at the
+     seam-zone presence, Timeline.test owns the engine grammar). */
+  it('R23-WA: the FX page composes FxBrowser + FxInspector + the full Timeline in fxMode (D-A1)', () => {
+    /* the patch boots view state directly (the StoreBoot law — the ACTIONS
+       are the single writer; the coupling itself is pinned at store level in
+       useUiStore.test 'fxMode — the single-source coupling') */
+    renderAppShell({ page: 'fx', fxMode: true });
+    expect(screen.getByTestId('shell-fxbrowser')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-fxinspector')).toBeInTheDocument();
+    // the page coupling turned the engine on — seam zones render
+    expect(screen.getAllByTestId(/^fx-seam-/).length).toBeGreaterThan(0);
+    expect(store().fxMode).toBe(true);
+    // the FX page's dock is the browser ALONE (no pool — D-A5's routing law)
+    expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument();
+    // ruling 1: mainbody default 40% (the Edit default — NEVER color's 55%:
+    // the timeline row carries the FULL Timeline at normal lane heights)
+    expect(document.querySelector('.mainbody')).toHaveStyle({ height: '40%' });
+  });
+
+  it('R23-WA: leaving the FX page resets fxMode + re-seats a stranded FX tool (ruling 2)', () => {
+    renderAppShell({ page: 'fx', tool: 'fx', fxMode: true });
+    expect(store().fxMode).toBe(true);
+    fireEvent.click(screen.getByTestId('shell-dock-page-edit'));
+    expect(store().page).toBe('edit');
+    expect(store().fxMode).toBe(false);
+    expect(store().tool).toBe('select'); // the radio never claims a dead fxMode
+  });
+
+  it('R23-WA ruling 4: the EDIT page dock is the Media Pool ALONE — the Effects tab retired with the FX view (#86/#82)', () => {
+    renderAppShell();
+    expect(screen.queryByTestId('shell-leftdock-tab-effects')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-effects')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-mediapool')).toBeInTheDocument();
+    // the dead-but-harmless flag can no longer mount a surface
+    act(() => { useUi.setState((s) => ({ panels: { ...s.panels, effects: true } })); });
+    expect(screen.queryByTestId('shell-effects')).not.toBeInTheDocument();
+  });
+
+  /* R23-WA re-home (the R20-W6 law — deleted-surface tests move to the
+     surface's new home, never drop): the effects panel's frozen drag
+     contract + click fallback moved to components/fx/FxBrowser.test.tsx
+     (the panel itself moved to the FX page's dock). The LeftDock.test pins
+     the edit-page routing; this file keeps the shell-level composition. */
 
   it('splitters own the panel + timeline seams (§3.2: 12px hit targets, labeled)', () => {
     renderAppShell();
@@ -303,52 +350,6 @@ describe('inspector rail routing + toolbar panel toggles (R20-W3 D4 domains)', (
     expect(screen.getByTestId('shell-viewer')).toBeInTheDocument();
     await user.click(btn); // toggle back — one click must restore it
     expect(screen.getByTestId('shell-mediapool')).toBeInTheDocument();
-  });
-
-  it('LeftDock Effects tabs (panels.effects via the store — the toolbar button is gone, R22-D5/#86; the tab retires with the Effect view #82)', async () => {
-    const user = userEvent.setup();
-    renderAppShell();
-    expect(screen.queryByTestId('shell-effects')).not.toBeInTheDocument();
-    act(() => { useUi.setState((s) => ({ panels: { ...s.panels, effects: true } })); });
-    expect(store().panels.effects).toBe(true);
-    // both panels on → the dock is tabbed; the POOL tab is active by default
-    expect(screen.getByTestId('shell-leftdock-tab-pool')).toHaveAttribute('aria-selected', 'true');
-    await user.click(screen.getByTestId('shell-leftdock-tab-effects'));
-    expect(screen.getByTestId('shell-leftdock-tab-effects')).toHaveAttribute('aria-selected', 'true');
-    const effects = screen.getByTestId('shell-effects');
-    expect(within(effects).getByText('Gaussian Blur')).toBeInTheDocument();
-    expect(within(effects).getByText('Cross Dissolve')).toBeInTheDocument();
-  });
-
-  it('effect rows are drag sources: dragStart writes the fixed x-nle-effect payload (R14 wiring)', async () => {
-    const user = userEvent.setup();
-    renderAppShell();
-    act(() => { useUi.setState((s) => ({ panels: { ...s.panels, effects: true } })); });
-    await user.click(screen.getByTestId('shell-leftdock-tab-effects'));
-    const row = screen.getByTestId('shell-effects-row-gaussian-blur');
-    expect(row).toHaveAttribute('draggable', 'true');
-    // jsdom has no DataTransfer — a recording stub pins the contract payload
-    const dt = { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
-    fireEvent.dragStart(row, { dataTransfer: dt });
-    expect(dt.setData).toHaveBeenCalledWith(
-      'application/x-nle-effect',
-      JSON.stringify({ name: 'Gaussian Blur', cat: 'Blur' }),
-    );
-    expect(dt.effectAllowed).toBe('copy');
-    expect(dt.dropEffect).toBe('copy');
-  });
-
-  it('clicking an effect row answers with the drag-to-clip toast (pointer fallback, R14)', async () => {
-    const user = userEvent.setup();
-    renderAppShell();
-    act(() => { useUi.setState((s) => ({ panels: { ...s.panels, effects: true } })); });
-    await user.click(screen.getByTestId('shell-leftdock-tab-effects'));
-    await user.click(screen.getByTestId('shell-effects-row-vignette'));
-    expect(store().toasts.at(-1)).toMatchObject({
-      kind: 'info',
-      title: 'Add Vignette',
-      detail: 'drag the row onto a timeline clip to apply (mock drag-to-clip, spec 15 §5.4); the Inspector Effects tab carries the param UI',
-    });
   });
 
   it('toolbar Inspector toggle removes the right rail + its seam (viewer keeps the row)', async () => {

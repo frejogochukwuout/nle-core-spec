@@ -4,9 +4,11 @@
    actually quite nice ... overall this is a timeline style that can be
    generalized" — so it is a FIRST-CLASS reusable component now:
      - the COLOR page mounts it where the full Timeline sits (frozen, click =
-       grade target + selection);
-     - the future Effect/transition view (issue #82) reuses it (seamMode prop
-       stub below — tracks frozen, seams hover-able).
+       grade target + selection).
+   R23-WA (DESIGN-R23 Part IX ruling 8): the seamMode stub + prop RETIRE —
+     the FX timeline is the FULL Timeline in fxMode (seam zones need real
+     lane pixel geometry), never the compact strip. The stub's "reserved
+     surface" contract is dead; no consumer remains.
 
    Anatomy (the C51 compact set, kept): 22px ruler (read-only + playhead
    marker — scrubbing stays in the viewer transport) · per-kind lanes (video
@@ -48,17 +50,11 @@ const clipTint: Record<TrackKind, { border: string; tint: string; badge: string 
 
 export interface TimelineCompactProps {
   /** Which grade target a clip click selects. 'grade' (the color page law:
-   *  setSelection + re-target clip mode) — the seamMode variant lands with
-   *  the Effect view (issue #82). */
+   *  setSelection + re-target clip mode). */
   clipClick?: 'grade';
-  /** W6/issue #82 stub: when true the seams between adjacent clips become
-   *  hover-highlighted transition sites (the Effect view's frozen-track
-   *  interaction). NOT yet wired — registered gap; the prop reserves the
-   *  component's reuse contract. */
-  seamMode?: boolean;
 }
 
-export function TimelineCompact({ clipClick = 'grade', seamMode = false }: TimelineCompactProps) {
+export function TimelineCompact({ clipClick = 'grade' }: TimelineCompactProps) {
   const scene = useActiveScene();
   const pps = useUi((s) => s.pxPerSec);
   const playhead = useUi((s) => s.playhead);
@@ -162,13 +158,6 @@ export function TimelineCompact({ clipClick = 'grade', seamMode = false }: Timel
           </div>
         </div>
       </div>
-
-      {/* seamMode stub (issue #82, the Effect view) — honest reserved surface */}
-      {seamMode && (
-        <div data-testid="shell-timeline-compact-seam-stub" className="shrink-0 border-t border-hairline px-2 py-1 text-[10px] text-tfaint">
-          Seam transition editing lands with the Effect view (issue #82).
-        </div>
-      )}
     </div>
   );
 }

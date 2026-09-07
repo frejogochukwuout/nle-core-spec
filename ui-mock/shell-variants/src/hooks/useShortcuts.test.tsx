@@ -556,3 +556,60 @@ describe('R15-F1: destructive keys are swallowed while a gesture is active', () 
     expect(() => el('el-2')).toThrow(); // deleted
   });
 });
+
+/* ---------- R23-WA (DESIGN-R23 D-A1/D-A3, Part IX rulings 2/22): the FX keys ---------- */
+
+describe('R23-WA: the FX page + the FX-object Delete rung', () => {
+  it('⌘5 lands on the FX page (spec 16\'s ⌘5 was free — ruling 18); the page coupling owns fxMode', () => {
+    press({ key: '5', metaKey: true });
+    expect(S().page).toBe('fx');
+    expect(S().fxMode).toBe(true);
+    // leaving via ⌘1 resets the engine + re-seats a stranded FX tool
+    useUi.setState({ tool: 'fx' });
+    press({ key: '1', metaKey: true });
+    expect(S().page).toBe('edit');
+    expect(S().fxMode).toBe(false);
+    expect(S().tool).toBe('select');
+  });
+
+  it('Delete with a selected TRANSITION removes it (delete-aware; ruling 22 — the FX rung FIRST)', () => {
+    useUi.setState({ selection: ['el-3'], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+    press({ key: 'Delete' });
+    expect('transitionOut' in el('el-2')).toBe(false);
+    expect(S().selectedFxObject).toBeNull();
+    // the clip selection is INTACT — the FX rung consumed the key, the
+    // selection branch never fired (el-3 survives)
+    expect(S().selection).toEqual(['el-3']);
+    expect(el('el-3').startTime).toBe(17);
+  });
+
+  it('Delete with a selected FADE removes just that side (the clip survives untouched)', () => {
+    useUi.setState({ selection: ['el-1'], selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'in' } });
+    press({ key: 'Delete' });
+    expect('fadeIn' in el('el-1')).toBe(false);
+    expect(el('el-1').fadeOut).toBe(0.75); // the other side survives
+    expect(S().selection).toEqual(['el-1']); // the clip survives
+    // a fade object with no side defaults to 'in' (the belt-and-braces arm)
+    useUi.setState({ selectedFxObject: { kind: 'fade', elementId: 'el-2' } });
+    press({ key: 'Delete' });
+    expect('fadeIn' in el('el-2')).toBe(false);
+  });
+
+  it('the FX rung precedes the multi-delete confirm dialog (an FX object + a 5-clip selection never asks)', () => {
+    useUi.setState({
+      selection: ['el-1', 'el-2', 'el-3', 'el-4', 'el-5'],
+      selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'out' },
+    });
+    press({ key: 'Delete' });
+    expect('fadeOut' in el('el-1')).toBe(false);
+    expect(S().selection).toEqual(['el-1', 'el-2', 'el-3', 'el-4', 'el-5']); // nothing deleted
+    expect(() => el('el-2')).not.toThrow();
+  });
+
+  it('Escape exits the FX tool back to select (the existing tool rung covers it for free)', () => {
+    useUi.setState({ page: 'edit', tool: 'fx', fxMode: true });
+    press({ key: 'Escape' });
+    expect(S().tool).toBe('select');
+    expect(S().fxMode).toBe(false);
+  });
+});

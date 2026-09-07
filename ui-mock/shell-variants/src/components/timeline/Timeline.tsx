@@ -15,7 +15,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useUi, trackHeights, mintTrackIds } from '../../state/useUiStore';
 import { useVariant } from '../debug/VariantProvider';
-import { sceneDuration, mediaById, findElement, type ElementJSON, type TrackJSON } from '../../lib/mockData';
+import { sceneDuration, mediaById, findElement, effectiveFade, TRANSITION_PRESENTATIONS, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { tc, snapToFrame } from '../../lib/timecode';
 import { dynamicContentWidth, snapPxToDeviceGrid, zoomMinPps, PLAYHEAD_LINE_PX, HORIZONTAL_WHEEL_STEP_PX, DRAG_THRESHOLD_PX } from '../../lib/pixel';
 import {
@@ -31,7 +31,7 @@ import { createEdgeAutoScroll } from '../../lib/edgeScroll';
 import { zoomController, createWheelZoomAccumulator } from '../../lib/zoomController';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
-import { Clip, buildClipMenuItems, CAPTION_PARCHMENT, type ClipDragEvent, type ClipDragHost } from './Clip';
+import { Clip, buildClipMenuItems, CAPTION_PARCHMENT, EFFECT_DRAG_TYPE, type ClipDragEvent, type ClipDragHost } from './Clip';
 import { SpeedGaugeIcon } from './editModeIcons';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { POOL_DRAG_TYPE, isDroppable } from '../shell/MediaPool';
@@ -70,6 +70,298 @@ interface DragPreview {
    (R15-F1 FIX 4e: the RULER SCRUB reuses the exact same law — threshold
    100px, 15px/frame max, intensity ramp 1 − dist/threshold). */
 
+/* ---------- R23-WA (DESIGN-R23 D-A2/D-A3): the FX engine surface ----------
+   The seam / head / tail hit-zones and the interactive transition boxes —
+   rendered ONLY while fxMode (the single-source store flag). Grammar laws:
+   - zones are BUTTONS with honest aria-labels (a11y: the zone is the
+     affordance, not a decorative div);
+   - the transition-box interactivity CLONES the fade-object grammar
+     verbatim (role=slider, ±1-frame steps 1/24 s, ⇧ ×10, Home/End, LOCAL
+     preview during the drag, ONE store commit per gesture, clamp-commit —
+     no preview/escape machinery, Part IX rulings 3/21);
+   - z-ladder (R15 T9 §17 discipline): head/tail 6, transition boxes 7
+     (today's value), seam zones 8 — all above clips (1/5), all below the
+     drag ghosts (10) / snap (40) / playhead (100);
+   - tooltips ride the existing data-tip system (appLayers law). */
+
+const SEAM_W = 12;
+const SEAM_HOVER_W = 24;
+/** R23-WA ruling: the duration domain a transition object can be trimmed to —
+ *  [0, 2 s] (the Inspector Transition row's own max; Home=0 mirrors the fade
+ *  object's floor law, Delete owns removal). Frame-snapped at 24 fps. */
+const TRANSITION_DUR_MAX = 2;
+
+/** mid-seam zone (D-A2.2): centered on the cut, 12px → 24px on hover; click
+ *  applies the DEFAULT transition (setTransition's verified {} = Cross
+ *  Dissolve 0.5 s centered) or SELECTS an existing one; accepts a 'Transition'
+ *  browser row drop (that presentation via setTransition). */
+function SeamZone({ a, b, h, pxPerSec }: { a: ElementJSON; b: ElementJSON; h: number; pxPerSec: number }) {
+  const [hover, setHover] = useState(false);
+  const cut = a.startTime + a.duration;
+  const existing = a.transitionOut;
+  const w = hover ? SEAM_HOVER_W : SEAM_W;
+  const applyOrSelect = () => {
+    if (existing) {
+      useUi.getState().selectFxObject({ kind: 'transition', elementId: a.id });
+      return;
+    }
+    useUi.getState().setTransition(a.id, {});
+    useUi.getState().selectFxObject({ kind: 'transition', elementId: a.id });
+  };
+  return (
+    <button
+      type="button"
+      data-testid={`fx-seam-${a.id}-${b.id}`}
+      data-tip={existing
+        ? `Transition · ${existing.presentation} · ${existing.duration}s — click to select`
+        : 'Click to add Cross Dissolve · drag a transition here'}
+      aria-label={existing
+        ? `Select transition at the ${a.name} to ${b.name} cut`
+        : `Add Cross Dissolve at the ${a.name} to ${b.name} cut`}
+      className="absolute top-0 flex items-center justify-center rounded-[2px]"
+      style={{
+        left: cut * pxPerSec - w / 2,
+        width: w,
+        height: h,
+        zIndex: 8,
+        background: hover ? 'color-mix(in srgb, var(--transition-mark) 26%, transparent)' : 'transparent',
+        border: hover ? '1px solid var(--transition-mark)' : '1px solid transparent',
+        cursor: 'pointer',
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={applyOrSelect}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+        e.preventDefault();
+        let payload: { name: string; cat: string } | null = null;
+        try { payload = JSON.parse(e.dataTransfer.getData(EFFECT_DRAG_TYPE) || 'null'); } catch { payload = null; }
+        if (!payload || typeof payload.name !== 'string' || typeof payload.cat !== 'string') return;
+        if (payload.cat === 'Transition') {
+          const pres = TRANSITION_PRESENTATIONS.find((p) => p === payload!.name);
+          if (!pres) {
+            useUi.getState().pushToast({ kind: 'info', title: 'Unknown transition', detail: `'${payload.name}' is not in the mock's transition vocabulary (spec 09 §3.4 presentations)` });
+            return;
+          }
+          useUi.getState().setTransition(a.id, { presentation: pres });
+          useUi.getState().selectFxObject({ kind: 'transition', elementId: a.id });
+        } else {
+          useUi.getState().pushToast({ kind: 'info', title: 'Seam drops take transitions', detail: 'fade presets drop on a clip body — the seam applies a transition (DESIGN-R23 D-A5)' });
+        }
+      }}
+    >
+      {hover && !existing && (
+        <span aria-hidden="true" className="pointer-events-none text-[13px] font-bold leading-none" style={{ color: 'var(--transition-mark)' }}>+</span>
+      )}
+    </button>
+  );
+}
+
+/** head/tail half-open zone (D-A2.3, issues #104/#105): one-sided 12px at the
+ *  FIRST element's in-edge / LAST element's out-edge per track; click applies
+ *  a 0.5 s fade (R23-WA ruling: the browser's default preset — the design
+ *  names no number) or selects the existing fade object. */
+function EdgeFadeZone({ el, side, h, pxPerSec }: { el: ElementJSON; side: 'in' | 'out'; h: number; pxPerSec: number }) {
+  const [hover, setHover] = useState(false);
+  const has = effectiveFade(el, side) > 0;
+  const left = side === 'in'
+    ? el.startTime * pxPerSec
+    : (el.startTime + el.duration) * pxPerSec - SEAM_W;
+  const onClick = () => {
+    if (has) {
+      useUi.getState().selectFxObject({ kind: 'fade', elementId: el.id, side });
+      return;
+    }
+    useUi.getState().setFade(el.id, side, 0.5);
+    useUi.getState().selectFxObject({ kind: 'fade', elementId: el.id, side });
+  };
+  return (
+    <button
+      type="button"
+      data-testid={`fx-${side === 'in' ? 'head' : 'tail'}-${el.id}`}
+      data-tip={has
+        ? `Fade ${side} · ${effectiveFade(el, side)}s — click to select`
+        : `Click to add a 0.5 s fade ${side}`}
+      aria-label={has
+        ? `Select fade ${side} at ${el.name} ${side === 'in' ? 'start' : 'end'}`
+        : `Add fade ${side} at ${el.name} ${side === 'in' ? 'start' : 'end'}`}
+      className="absolute top-0 flex items-center justify-center rounded-[2px]"
+      style={{
+        left,
+        width: SEAM_W,
+        height: h,
+        zIndex: 6,
+        /* half fade-object preview on hover: the --fade-line wedge fill */
+        background: hover ? 'linear-gradient(to right, color-mix(in srgb, var(--fade-line) 34%, transparent), transparent)' : 'transparent',
+        border: hover ? `1px solid var(--fade-line)` : '1px solid transparent',
+        cursor: 'pointer',
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={onClick}
+    >
+      {hover && !has && (
+        <span aria-hidden="true" className="pointer-events-none text-[12px] font-bold leading-none" style={{ color: 'var(--fade-line)' }}>+</span>
+      )}
+    </button>
+  );
+}
+
+/** R23-WA: client → content x for the transition-box edge drags. The
+ *  playhead-scrub conversion (scroll rect + scrollLeft); jsdom's zero rects
+ *  + zero scroll collapse to identity — the same geometry fallback the
+ *  fade-object drags pin in Clip.test. */
+const clientToContentX = (clientX: number): number => {
+  const sc = document.getElementById('timeline-scroll');
+  const box = sc?.getBoundingClientRect();
+  if (!sc || !box) return clientX;
+  return clientX - box.left + sc.scrollLeft;
+};
+
+/** the transition box (th_mto31dyp visual, kept verbatim) — INTERACTIVE only
+ *  in fxMode (D-A2.4): click selects into the FX domain; edge-drag trims the
+ *  duration under the fade-object clamp-commit grammar; keyboard ±1 frame
+ *  (⇧ ×10) / Home 0 / End the domain max; Delete is the useShortcuts rung
+ *  (selectedFxObject FIRST). In edit mode the box stays today's inert
+ *  title/aria-only marker. */
+const capturePointer = (el: HTMLElement, pointerId: number) => {
+  try { el.setPointerCapture(pointerId); } catch { /* inactive pointer id */ }
+};
+
+function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON; h: number; pxPerSec: number; fxMode: boolean; selected: boolean }) {
+  const tr = el.transitionOut!;
+  const cut = (el.startTime + el.duration) * pxPerSec;
+  /* clamp-commit drag (Part IX ruling 21): LOCAL preview only, ONE
+   * setTransition commit on release. The grabbed edge tracks the pointer —
+   * the box is cut-centered (the shipped visual), so the duration changes at
+   * 2× the edge dx (alignment stays Inspector-owned). */
+  const [trDrag, setTrDrag] = useState<{ side: 'l' | 'r'; t: number } | null>(null);
+  const dur = trDrag ? trDrag.t : tr.duration;
+  const w = dur * pxPerSec;
+  const commit = (t: number) => {
+    if (t === tr.duration) return; // no-op — no history entry
+    useUi.getState().setTransition(el.id, { duration: t });
+  };
+  const trimTo = (e: React.PointerEvent, side: 'l' | 'r') => {
+    const x = clientToContentX(e.clientX);
+    const raw = side === 'l' ? (cut - x) / pxPerSec : (x - cut) / pxPerSec;
+    const t = Math.max(0, Math.min(snapToFrame(raw), TRANSITION_DUR_MAX));
+    setTrDrag({ side, t });
+  };
+  return (
+    <div
+      className="absolute top-[2px] flex items-center justify-center overflow-hidden rounded-[2px]"
+      style={{
+        left: cut - w / 2,
+        width: Math.max(w, 14),
+        height: h - 4,
+        zIndex: 7,
+        background: 'linear-gradient(to bottom, color-mix(in srgb, var(--transition-mark) 30%, transparent), color-mix(in srgb, var(--transition-mark) 70%, transparent))',
+        border: '1px solid var(--transition-mark)',
+        boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
+        ...(fxMode && selected ? { outline: '1.5px solid var(--accent-selection)', outlineOffset: 0 } : {}),
+        ...(fxMode ? { cursor: 'pointer' } : {}),
+      }}
+      title={`Crossfade · ${tr.presentation} · ${tr.duration}s`}
+      aria-label={`Crossfade transition, ${tr.duration} seconds`}
+      data-testid={`transition-${el.id}`}
+      {...(fxMode ? {
+        role: 'slider',
+        tabIndex: 0,
+        'aria-valuemin': 0,
+        'aria-valuemax': Math.round(TRANSITION_DUR_MAX * 24),
+        'aria-valuenow': Math.round(dur * 24),
+        'aria-valuetext': `${dur.toFixed(2)}s`,
+        onPointerDown: (e: React.PointerEvent) => {
+          if (e.button !== 0) return;
+          e.stopPropagation(); // never a clip gesture / marquee
+          (e.currentTarget as HTMLElement).focus();
+          useUi.getState().selectFxObject({ kind: 'transition', elementId: el.id });
+        },
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
+          e.preventDefault();
+          e.stopPropagation(); // beat the window playhead-nudge rungs
+          let next: number;
+          if (e.key === 'Home') next = 0;
+          else if (e.key === 'End') next = TRANSITION_DUR_MAX;
+          else {
+            const frames = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1);
+            next = Math.max(0, Math.min(snapToFrame(tr.duration + frames / 24), TRANSITION_DUR_MAX));
+          }
+          commit(next);
+        },
+      } : {})}
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+        {/* slim crossfade glyph: two overlapping triangles */}
+        <path d="M3 3 L8.5 7 L3 11 Z" fill="white" opacity="0.92" />
+        <path d="M11 3 L5.5 7 L11 11 Z" fill="white" opacity="0.92" />
+      </svg>
+      {fxMode && (
+        <>
+          <div
+            data-testid={`transition-trim-l-${el.id}`}
+            className="absolute inset-y-0 left-0"
+            style={{ width: 6, cursor: 'ew-resize' }}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              e.stopPropagation();
+              (e.currentTarget as HTMLElement).focus();
+              useUi.getState().selectFxObject({ kind: 'transition', elementId: el.id });
+              capturePointer(e.currentTarget as HTMLElement, e.pointerId);
+              setTrDrag({ side: 'l', t: tr.duration });
+            }}
+            onPointerMove={(e) => {
+              if (trDrag?.side !== 'l' || e.buttons !== 1) return;
+              trimTo(e, 'l');
+            }}
+            onPointerUp={() => {
+              if (trDrag?.side !== 'l') return;
+              const t = trDrag.t;
+              setTrDrag(null);
+              commit(t);
+            }}
+            onPointerCancel={() => { if (trDrag?.side === 'l') setTrDrag(null); }}
+            onLostPointerCapture={() => { if (trDrag?.side === 'l') setTrDrag(null); }}
+          />
+          <div
+            data-testid={`transition-trim-r-${el.id}`}
+            className="absolute inset-y-0 right-0"
+            style={{ width: 6, cursor: 'ew-resize' }}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              e.stopPropagation();
+              (e.currentTarget as HTMLElement).focus();
+              useUi.getState().selectFxObject({ kind: 'transition', elementId: el.id });
+              capturePointer(e.currentTarget as HTMLElement, e.pointerId);
+              setTrDrag({ side: 'r', t: tr.duration });
+            }}
+            onPointerMove={(e) => {
+              if (trDrag?.side !== 'r' || e.buttons !== 1) return;
+              trimTo(e, 'r');
+            }}
+            onPointerUp={() => {
+              if (trDrag?.side !== 'r') return;
+              const t = trDrag.t;
+              setTrDrag(null);
+              commit(t);
+            }}
+            onPointerCancel={() => { if (trDrag?.side === 'r') setTrDrag(null); }}
+            onLostPointerCapture={() => { if (trDrag?.side === 'r') setTrDrag(null); }}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+
 export function Timeline() {
   const { variant } = useVariant();
   const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
@@ -96,6 +388,12 @@ export function Timeline() {
      exitSourcePreview clearing is the side-effect). */
   const viewerMode = useUi((s) => s.viewerMode);
   const sourceMediaId = useUi((s) => s.sourceMediaId);
+  /* R23-WA (D-A2): the FX engine flag — seam/head/tail zones + interactive
+     transition boxes render ONLY while this holds (single source: the store's
+     setTool/setPage coupling). The FX selection domain feeds the transition
+     box's selection ring. */
+  const fxMode = useUi((s) => s.fxMode);
+  const selectedFxObject = useUi((s) => s.selectedFxObject);
   const audioSourceFrozen = viewerMode === 'source'
     && (sourceMediaId ? mediaById(sourceMediaId)?.type === 'audio' : false);
   const menu = useContextMenu(); // §4.9 timeline-empty + clip menus (R15 T2 router)
@@ -789,7 +1087,11 @@ export function Timeline() {
         onContextMenu={(e) => {
           e.preventDefault();
           const clipNode = (e.target as HTMLElement).closest('[data-clip-id]') as HTMLElement | null;
-          if (clipNode) {
+          /* R23-WA (D-A2.1): the CLIP menu is an fxMode casualty — its rows
+             (split/duplicate/delete/reveal) are edit-mode commands that fight
+             the receded clip; the router treats a clip right-click as the
+             empty-lane surface instead (the surface's own menu survives). */
+          if (clipNode && !fxMode) {
             const id = clipNode.getAttribute('data-clip-id')!;
             const hit = findElement(useUi.getState().scenes, id);
             if (hit) {
@@ -961,40 +1263,69 @@ export function Timeline() {
                   />
                 ))}
 
+                {/* ---- R23-WA (DESIGN-R23 D-A2.2/D-A2.3): the FX engine's
+                     hit-zones — ONLY while fxMode (absence is pinned in
+                     Timeline.test). Adjacency = exact butt-splice (epsilon
+                     1 ms — the ripple code's tolerance); seam zones ride
+                     the SAME virtualization window as the clips (a seam is
+                     on-screen iff both of its clips are); locked lanes are
+                     inert (the marquee/trim lock law). z: head/tail 6,
+                     seams 8 — above clips, below ghosts/playhead.
+                     D-A2.3's LETTER: the head/tail zones belong to the
+                     TRACK's first/last element — NOT the visible subset's
+                     (a mid-scroll leftmost clip is not a track head; its
+                     in-edge gets no zone) — then virtualize the zone by
+                     that element's own clipVisible, exactly the clips' law. ---- */}
+                {fxMode && !track.locked && (() => {
+                  const els = track.elements.filter(clipVisible);
+                  /* butt-spliced adjacent pairs (sorted — the store keeps
+                     lanes time-ordered; a defensive sort costs nothing) */
+                  const sorted = [...els].sort((a, b) => a.startTime - b.startTime);
+                  const seams: { a: ElementJSON; b: ElementJSON }[] = [];
+                  for (let i = 0; i + 1 < sorted.length; i++) {
+                    const a = sorted[i]!;
+                    const b = sorted[i + 1]!;
+                    if (Math.abs(a.startTime + a.duration - b.startTime) < 0.001) seams.push({ a, b });
+                  }
+                  /* the TRACK's first/last element (min start / max end) —
+                     computed over the WHOLE lane, never the window */
+                  const allSorted = [...track.elements].sort((a, b) => a.startTime - b.startTime);
+                  const first = allSorted[0] ?? null;
+                  const last = allSorted.reduce<ElementJSON | null>(
+                    (acc, e) => (!acc || e.startTime + e.duration >= acc.startTime + acc.duration ? e : acc), null,
+                  );
+                  return (
+                    <>
+                      {seams.map(({ a, b }) => (
+                        <SeamZone key={`fx-seam-${a.id}-${b.id}`} a={a} b={b} h={h} pxPerSec={pxPerSec} />
+                      ))}
+                      {first && clipVisible(first) && <EdgeFadeZone key={`fx-head-${first.id}`} el={first} side="in" h={h} pxPerSec={pxPerSec} />}
+                      {last && clipVisible(last) && <EdgeFadeZone key={`fx-tail-${last.id}`} el={last} side="out" h={h} pxPerSec={pxPerSec} />}
+                    </>
+                  );
+                })()}
+
                 {/* transition markers — Resolve-style box straddling the cut.
                     fixes th_mto31dyp: full-lane height minus a 4px inset, clean
                     1px border, subtle VERTICAL gradient of --transition-mark
                     (30% → 70% opacity), rounded 2px, centered slim crossfade
                     glyph (two overlapping triangles), title/aria preserved.
                     z 7: above clips (1/5), below drag ghosts (10) — see the
-                    R15 T9 z-order note at the playhead. */}
-                {track.elements.filter((e) => e.transitionOut).map((e) => {
-                  const cut = (e.startTime + e.duration) * pxPerSec;
-                  const w = e.transitionOut!.duration * pxPerSec;
-                  return (
-                    <div
-                      key={`tr-${e.id}`}
-                      className="absolute top-[2px] z-[7] flex items-center justify-center overflow-hidden rounded-[2px]"
-                      style={{
-                        left: cut - w / 2,
-                        width: Math.max(w, 14),
-                        height: h - 4,
-                        background: 'linear-gradient(to bottom, color-mix(in srgb, var(--transition-mark) 30%, transparent), color-mix(in srgb, var(--transition-mark) 70%, transparent))',
-                        border: '1px solid var(--transition-mark)',
-                        boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
-                      }}
-                      title={`Crossfade · ${e.transitionOut!.presentation} · ${e.transitionOut!.duration}s`}
-                      aria-label={`Crossfade transition, ${e.transitionOut!.duration} seconds`}
-                      data-testid={`transition-${e.id}`}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-                        {/* slim crossfade glyph: two overlapping triangles */}
-                        <path d="M3 3 L8.5 7 L3 11 Z" fill="white" opacity="0.92" />
-                        <path d="M11 3 L5.5 7 L11 11 Z" fill="white" opacity="0.92" />
-                      </svg>
-                    </div>
-                  );
-                })}
+                    R15 T9 z-order note at the playhead.
+                    R23-WA (D-A2.4): the box is INTERACTIVE in fxMode (the
+                    fade-object grammar cloned — click selects into the FX
+                    domain, edge-drag/keyboard trim the duration); inert
+                    title/aria-only otherwise (today's behavior). */}
+                {track.elements.filter((e) => e.transitionOut).map((e) => (
+                  <TransitionBox
+                    key={`tr-${e.id}`}
+                    el={e}
+                    h={h}
+                    pxPerSec={pxPerSec}
+                    fxMode={fxMode}
+                    selected={selectedFxObject?.kind === 'transition' && selectedFxObject.elementId === e.id}
+                  />
+                ))}
               </div>
             );
           })}
