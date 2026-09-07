@@ -135,7 +135,9 @@ enumerating the absences):
   `timecode.ts` is the declared single seam; flips at W-media.
 - **Multi-select / marquee** — the single-subject XOR law (S7) is the
   deliberate counter-position; W-ops re-files it.
-- **Effects/FX page** — the variants track's W6 (registered not built).
+- **Effects/FX page** — the mini has none; the variants track's FX
+  surface landed at its R23 W-A (`e2d5990`, the FX page + FX tool —
+  DESIGN-R23 supersedes the DESIGN-R22 W6 sketch).
 
 ## 5. Gap register (the posture-law view of this audit)
 

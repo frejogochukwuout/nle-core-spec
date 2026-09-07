@@ -242,8 +242,9 @@ Run it at boot or any time; safe twice.
    from the playhead — documented).
 5. ~~Fixed layout (no splitters)~~ — **DONE (R18d):** pool/inspector
    width + timeline height splitters. Read-only inspector (except nudge),
-   no scenes/variants/mixer/pages/effects/markers/context menus/
-   multi-select/track-editing/localStorage. Ripple EXISTS now (R18e) —
+   no scenes/variants/mixer/pages/effects/edit-position markers or
+   bookmarks (the lane-head marker BADGES stay — CORE-SEAMS §4's
+   disambiguation)/context menus/multi-select/track-editing/localStorage. Ripple EXISTS now (R18e) —
    single-track follower shift only, no multi-select ripple.
 6. ~~Snap-guide indicator deferred~~ — **DONE (R18e):** the 2px guide
    paints at the engaged magnet target. The main-row gutter is 8px
