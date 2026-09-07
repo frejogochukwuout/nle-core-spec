@@ -10,21 +10,22 @@ the chrome/App/MediaPool/timecode/waveform laws — C4's entry list) plus
 check). The crawl app re-expresses this corpus as app-side tests; this file
 is the acceptance list those tests are checked against, row by row.
 
-**Corpus state (sealed at the R23 seal round):** **8 files / 353 tests /
+**Corpus state (sealed at the R23 seal round):** **8 files / 355 tests /
 122 law families** — `src/lib/geometry.test.ts` (15 families / 47),
 `src/state/useMini.test.ts` (29 / 107), `src/timeline/Timeline.test.tsx`
 (47 / 95), `src/App.test.tsx` (18 / 60), `src/shell/MediaPool.test.tsx`
 (5 / 19), `src/lib/timecode.test.ts` (3 / 8), `src/lib/waveform.test.ts`
-(2 / 7), `src/lib/otProject.test.ts` (3 / 10 — the R23 bridge nets).
+(2 / 7), `src/lib/otProject.test.ts` (3 / 12 — the R23 bridge + fix-round nets).
 Lineage: 358 (R21e) → 333 (the R22 drag-machinery retirement, user
-directive) → 343 (the R22 review-loop nets) → **353** (this round's
-otProject bridge nets).
+directive) → 343 (the R22 review-loop nets) → **355** (the R23 seal
+round: the otProject bridge nets + the audit-fix discrimination/guard
+nets).
 
 ## 0. Counting + classification rules (read before using the tables)
 
 - **Census unit = the law family** (a `describe` block). The app-side
   authoring scope is reported in BOTH columns — families and tests — and
-  the test column always sums to exactly 353, so the census is auditable
+  the test column always sums to exactly 355, so the census is auditable
   against `npx vitest run` at any time.
 - **Split rule:** no family carries two dispositions. Where a describe
   block mixes wire-semantics tests with app-policy tests (e.g. `history
@@ -84,7 +85,7 @@ sub-rows are indented under their family.
 | trim clamps — media-bound both edges | 2 | **HOLDS-on-OT** (the trim bounds law is the surviving seam) | row 6 | OT 459 |
 | trim clamps — neighbor + MIN_DUR | 1 | GAP-verify-C1 (OT's min-duration constant is not registered) | row 6 | C1 entry |
 | splitPoint — window + quantize | 2 | **HOLDS-on-OT** (split semantics parity) | row 7 | OT 459 |
-| splitPoint — MIN_DUR=0.5 constant | 2 | GAP-verify-C1 (not registered OT-side) | row 7 | C1 entry |
+| splitPoint — MIN_DUR=0.5 constant | 2 | GAP-verify-C1 (row 7 registers the both-halves law itself; only the constant's VALUE is unregistered OT-side) | row 7 | C1 entry |
 | resolveSnap (magnet-only snap convention) | 6 | GAP-app-C1 (the R18i pro-NLE convention is app policy) | row 2 | C1 |
 | playhead scrub clamp ([0, rulerEnd]) | 1 | GAP-app-C2 (the view clamp; the seek seam itself is OT's) | row 10 | C2 |
 | insertionAt (gap-fit) | 6 | GAP-app-C1 (the REGISTERED deviation — OT `firstAvailable` never hunts same-track gaps; C1 disposition: the app computes gap-fit over the snapshot it holds) | row 5 | C1 |
@@ -131,8 +132,10 @@ sub-rows are indented under their family.
 ### 1.3 Timeline.test.tsx — the component/view laws (`src/timeline/Timeline.tsx`)
 
 All 47 families / 95 tests are **GAP-app-C1** (the view port reproduces
-them; OT covers none of the component layer). Families carrying OT-SEAMS
-citations for their SEAM half (cited here, dispositions in the file):
+them; OT covers none of the component layer). The bullets below are the
+SELECTED families with OT-SEAMS citations for their SEAM half (the
+full 47-family enumeration is the file's own describe map — the census
+counts it exactly):
 
 - Drag/gesture families (rows 1/2/3 cited): drag-move · single-edge LIVE
   magnet ×2 · neighbors-never-move ×2 · the plain commit law · untrusted
@@ -149,7 +152,9 @@ citations for their SEAM half (cited here, dispositions in the file):
   split glyph · tools row · zoom tiers/anchor/slider · coordinate law ·
   cut styles · ripple/filmstrip/audio-lane toggles · waveform sizing ·
   trim-mode edge shade · keyboard [ / ] · the clip-is-a-button law
-  (C2/C46) · scroll preservation · surface swaps.
+  (C2/C46) · scroll preservation · surface swaps · the R18k review-fix
+  hardening family · the R18f collapsed-audio-lane placeholder family
+  (distinct from C47's routing family above).
 
 **Part A totals:** 91 describes / 249 tests → **97 census units** (6
 families split per the split rule) = **10 HOLDS units (21 tests)** + **2
@@ -158,7 +163,7 @@ disposition totals corpus-wide are in §2.3 (the audited arithmetic).
 
 ## 2. PART B — the full corpus (C4's entry list)
 
-### 2.1 The chrome-side files (Part A + these = the whole 353)
+### 2.1 The chrome-side files (Part A + these = the whole 355)
 
 | File | Families | Tests | Disposition summary |
 |---|---:|---:|---|
@@ -166,12 +171,12 @@ disposition totals corpus-wide are in §2.3 (the audited arithmetic).
 | `src/shell/MediaPool.test.tsx` | 5 | 19 | GAP-app — C2 import flow: type tabs, collapse rail, hover autoplay (C2 real-video seam), image duration honesty (the synthetic-extent law — see otProject's stills caveat), video-only mode |
 | `src/lib/timecode.test.ts` | 3 | 8 | GAP-app — C1/C2: fmtTimecode/fmtRulerLabel = the DECLARED single seam for the no-fps decision (flips to frame-accurate TC when fps lands) + the filmstrip determinism smoke |
 | `src/lib/waveform.test.ts` | 2 | 7 | GAP-C3 — the WDC/engine decode seam (the synth envelope laws pin the RENDER grammar; C3 replaces the data source) |
-| `src/lib/otProject.test.ts` | 3 | 10 | **HOLDS-on-OT** — the registered bridge laws (§3.4 time base + §1.6 element model), the C1(d) fixture-bridge acceptance floor |
+| `src/lib/otProject.test.ts` | 3 | 12 | **HOLDS-on-OT** — the registered bridge laws (§3.4 time base + §1.6 element model), the C1(d) fixture-bridge acceptance floor |
 
 ### 2.2 The testid census (Part C)
 
 **60 static testids** (from the source census; C1's testid-mapping source,
-C2's 13 viewer testids included):
+C2's 12 viewer testids included):
 
 `mini-root, mini-topbar, mini-btn-export, mini-pool, mini-pool-collapsed,
 mini-pool-empty, mini-pool-head-video, mini-pool-list, mini-viewer,
@@ -190,11 +195,11 @@ mini-btn-cuttail, mini-btn-delete, mini-btn-snap, mini-btn-ripple,
 mini-btn-filmstrip, mini-btn-audiolane, mini-btn-nudge-left,
 mini-btn-nudge-right, mini-btn-zoomin, mini-btn-zoomout,
 mini-btn-pool-collapse, mini-btn-pool-expand, mini-btn-inspector-collapse,
-mini-btn-inspector-expand` (the C2 viewer set: `mini-viewer*`, `mini-tc`,
-`mini-btn-play/seek-start/seek-cliphead/viewer-max` — 13, as spec 14's C2
-row enumerates).
+mini-btn-inspector-expand` (the C2 viewer set: `mini-viewer*` (7 — incl. -aspect-select and -empty), `mini-tc`,
+`mini-btn-play/seek-start/seek-cliphead/viewer-max` (4) — **12 total**, the
+audited count; spec 14's C2 row enumerates them).
 
-**14 templated families** (cardinality = the live doc; expansion rule
+**15 templated families** (cardinality = the live doc; expansion rule
 stated per family — C1's DOM-structural gate ("the enumerated testid
 census present") checks the static 60 + the families' presence):
 
@@ -202,8 +207,9 @@ census present") checks the static 60 + the families' presence):
 |---|---|---|
 | `mini-clip-${clip.id}` | one per rendered clip | Timeline ClipItem |
 | `mini-lane-${track.id}` | per visible track | Timeline Lane |
+| `mini-lane-${track.id}-collapsed` | per audio track with the lane collapsed (the placeholder bar) — pinned by the R18f collapsed-lane + C47 routing families | Timeline Lane |
 | `mini-min-lane-${track.id}` | per visible track (minimized strip) | Timeline MinLane |
-| `mini-track-head-${track.id}` | per visible track (expanded, unlocked) | Timeline head column |
+| `mini-track-head-${track.id}` | per visible track — the head CELL renders in every expanded mode; only its select/marker CONTENTS hide when locked (the R18f placeholder keeps the cell) | Timeline head column |
 | `mini-track-marker-${track.id}` | per visible track (single-pair unlocked) | marker-badge law |
 | `mini-track-select-${track.kind}` | exactly 2 (video+audio) — multi-track unlocked | binding selector |
 | `mini-track-mute-chip-${track.id}` | per muted track | lane head |
@@ -217,17 +223,17 @@ census present") checks the static 60 + the families' presence):
 ### 2.3 The disposition totals (the audited arithmetic)
 
 Census units = top-level describes, with the 6 split families counting
-their sub-rows (122 describes → 128 units); the test column sums to 353
+their sub-rows (122 describes → 128 units); the test column sums to 355
 (auditable against `npx vitest run`).
 
 | Disposition | Census units | Tests |
 |---|---:|---:|
-| HOLDS-on-OT (projection conformance) | 13 | 31 |
-| GAP-app-C0/C1 (view + policy) | 102 | 282 |
+| HOLDS-on-OT (projection conformance) | 13 | 33 |
+| GAP-app-C0/C1/C2 (view + policy; authored across the crawl's view phases) | 102 | 282 |
 | GAP-C2/C3 (engine/audio boundary) | 7 | 21 |
 | GAP-W-ops (composed ripple family) | 4 | 16 |
 | GAP-verify-C1 (constant verification) | 2 | 3 |
-| **Total** | **128** | **353** |
+| **Total** | **128** | **355** |
 
 (The four GAP classes are all "GAP-with-owner" in the spec-14 vocabulary —
 the owner is the phase in the class name.)
@@ -235,8 +241,8 @@ the owner is the phase in the class name.)
 ### 2.4 The app-side authoring count + the ARCH-R22 reconciliation
 
 **The exact app-side authoring scope: 322 tests across 115 GAP census
-units** (353 − 31 HOLDS tests; 128 − 13 HOLDS units). The crawl app
-re-authors these as app-side tests; the 31 HOLDS tests may be kept
+units** (355 − 33 HOLDS tests; 128 − 13 HOLDS units). The crawl app
+re-authors these as app-side tests; the 33 HOLDS tests may be kept
 near-verbatim as projection conformance pins (they will pass over real
 OT for the same reasons the mini's pass over the mock).
 
@@ -261,13 +267,19 @@ the estimate simply predated the census.
   enumeration source.
 - **C2 entry:** the viewer/transport rows (scrub bar, seek controls,
   transport grammar) + the C2-flagged families (playback, seekToClipHead,
-  contentEnd, scrub clamps) bind to engine playhead ownership; the 13
+  contentEnd, scrub clamps) bind to engine playhead ownership; the 12
   viewer testids are the enumerated check.
+- **C3 entry (audio):** `src/lib/waveform.test.ts` (the 2 GAP-C3
+  families — the bar grammar + envelope laws) + the mute laws (the flag
+  + visual law live in `src/state/useMini.test.ts`'s toggleTrackMute
+  coverage + `src/App.test.tsx`'s "R19 — inspector track card" family —
+  2 of its 3 tests carry the mute-chip assertions); C3 binds them to
+  WDC/engine (the one-owner law, CORE-SEAMS S17).
 - **C4 exit (the mini-parity gate):** this whole file checked row-by-row
   — the app's re-expressed corpus satisfies every law; the arithmetic in
   §2.3/§2.4 is the authoring-count audit; the demo (import → cut → play
   → export) rides on top.
 - **Standing law:** this file is generated from the live corpus — if the
   mini's tests change, THIS FILE MUST BE RE-CENSUSED (the counts are
-  battery-checkable: `npx vitest run` == 353 tests / 8 files; 122
+  battery-checkable: `npx vitest run` == 355 tests / 8 files; 122
 describes → 128 census units).

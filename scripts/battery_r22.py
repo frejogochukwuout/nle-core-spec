@@ -79,7 +79,7 @@ check("18 §16.2 carries the R22 drag-law notice", lambda: (
     "R22 (user directive — the full drag-machinery retirement)" in specs[18] and "RETIRED" in specs[18], "notice"))
 check("18 §16.3 re-pointed at the crawl app as the MVP vehicle", lambda: (
     "The MVP vehicle (R22 amendment" in specs[18], "vehicle"))
-check("18 test count re-baselined to 353 (R23 seal census)", lambda: ("353 vitest tests" in specs[18], "count"))
+check("18 test count re-baselined to 355 (R23 seal census)", lambda: ("355 vitest tests" in specs[18], "count"))
 check("14 drag law = the R22 R18k verbatim (retired machinery stays retired)", lambda: (
     "R22-directive R18k law verbatim" in specs[14] and "stays retired" in specs[14], "freeze"))
 
@@ -109,8 +109,8 @@ check("17 re-tier row carries the R22 counts", lambda: (
 check("17 §17A fleet counts re-baselined", lambda: ("R22 counts" in specs[17], "17A"))
 check("19 tier-4 assets present (nle-ui + nle-test-app THE APP)", lambda: (
     "nle-ui" in specs[19] and "THE APP" in specs[19], "tier-4"))
-check("mini law count current (353) in 18 + 14 + ARCH", lambda: (
-    "353 vitest tests" in specs[18] and "353-test net" in specs[14] and "353" in arch, "mini count"))
+check("mini law count current (355) in 18 + 14 + ARCH", lambda: (
+    "355 vitest tests" in specs[18] and "355-test net" in specs[14] and "355" in arch, "mini count"))
 check("mini count staleness sweep: no live 333 claims in the spec set", lambda: (
     not any(re.search(r"mini 333|333 tests|333 vitest|333/333|333-test", specs[n]) for n in specs),
     "stale 333"))
@@ -171,6 +171,69 @@ check("consumer-pin classes: 3420b5f + ea10c42 present in 14/19", lambda: (
     "3420b5f" in specs[14] and "ea10c42" in specs[14] and "ea10c42" in specs[19], "consumer classes"))
 check("REVIEW-R22 transcripts exist in audits/", lambda: (
     os.path.exists(os.path.join(REPO, "audits/REVIEW-R22-ARCH.md")) and os.path.exists(os.path.join(REPO, "audits/REVIEW-R22-PLAN.md")), "reviews"))
+
+# === G. THE R23 SEAL CHECKS (drift-proof: SCRAPE the live suite, not the text) ==
+MINI_DIR = os.path.join(REPO, "ui-mock/shell-mini")
+DECLARED_MINI_TESTS = 355   # the sealed census; bump WITH the census, never alone
+DECLARED_MINI_FILES = 8
+
+def _scrape_mini():
+    """Run the mini's suite and return (test_count, file_count) or None."""
+    import subprocess
+    import json as _json
+    out_file = os.path.join(MINI_DIR, ".vitest", "json", "output.json")
+    if os.path.exists(out_file):
+        os.remove(out_file)  # never read a stale report
+    subprocess.run(
+        ["npx", "vitest", "run", "--reporter=json", "--silent"],
+        cwd=MINI_DIR, capture_output=True, text=True, timeout=300,
+    )
+    if not os.path.exists(out_file):
+        return None
+    d = _json.load(open(out_file))
+    files = len(d.get("testResults", []))
+    return d.get("numPassedTests"), files
+
+def _mini_scraped():
+    r = _scrape_mini()
+    if r is None:
+        return False, "scrape-failed (json reporter shape?)"
+    tests, files = r
+    ok = tests == DECLARED_MINI_TESTS and files == DECLARED_MINI_FILES
+    return ok, f"scraped {tests} tests / {files} files vs declared {DECLARED_MINI_TESTS} / {DECLARED_MINI_FILES}"
+
+check("mini corpus SCRAPED == declared (the count-discipline law, executed)", _mini_scraped, "scrape")
+
+def _inventory_math():
+    inv = read("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md")
+    # §2.3 table rows: parse the disposition totals
+    rows = re.findall(r"\| (HOLDS-on-OT|GAP-app-C0/C1/C2|GAP-C2/C3|GAP-W-ops|GAP-verify-C1)[^|]*\|\s*(\d+)\s*\|\s*(\d+)\s*\|", inv)
+    units = sum(int(u) for _, u, _ in rows)
+    tests = sum(int(t) for _, _, t in rows)
+    total_row = re.search(r"\*\*Total\*\*\s*\|\s*\*\*(\d+)\*\*\s*\|\s*\*\*(\d+)\*\*", inv)
+    holds = next((int(t) for n, _, t in rows if n == "HOLDS-on-OT"), 0)
+    authored = re.search(r"(\d+) tests across (\d+) GAP census\s*units", inv)
+    ok = (units == 128 and tests == 355
+          and total_row and int(total_row.group(1)) == 128 and int(total_row.group(2)) == 355
+          and authored and int(authored.group(1)) == 355 - holds and int(authored.group(2)) == 128 - 13)
+    return ok, f"units={units} tests={tests} holds={holds} authored={authored.groups() if authored else None}"
+
+check("LAW-NET-INVENTORY arithmetic parses + sums (128 units / 355 / authored=355−HOLDS)", _inventory_math, "census math")
+
+check("CORE-SEAMS carries the store partition + seam inventory (content, not existence)", lambda: (
+    "## 2. The store partition" in read("ui-mock/shell-mini/docs/CORE-SEAMS.md")
+    and "## 1. The seam inventory" in read("ui-mock/shell-mini/docs/CORE-SEAMS.md")
+    and "S26" in read("ui-mock/shell-mini/docs/CORE-SEAMS.md"), "core-seams content"))
+
+check("otProject module carries the registered constants (content, not existence)", lambda: (
+    "OT_TICKS_PER_SECOND = 120000" in read("ui-mock/shell-mini/src/lib/otProject.ts")
+    and "projectClipBack" in read("ui-mock/shell-mini/src/lib/otProject.ts"), "otProject content"))
+
+# NOTE (the honest scope): the stale-333 sweep covers the SPEC SET only —
+# ARCH + the mini's own docs are history-ledger surfaces by design (era-marked
+# lineage notes like "333 at the R22 retirement" live there legitimately). The
+# VARIANTS count is the sibling track's pin (they re-pin at their round wrap;
+# the queue is filed in the HANDOFF — not unilaterally bumped here).
 
 # === REPORT ====================================================================
 fails = [r for r in results if not r[1]]

@@ -78,7 +78,7 @@ user's live verdict).
    now: `src/lib/otProject.ts` — `toTicks`/`fromTicks` (the §3.4 time base,
    NEAREST-TICK rounding policy — pointer-committed times may be off-grid),
    `projectClip`/`projectClipBack` (the §1.6 element model, both directions,
-   tick-arithmetic trim invariant). Unit-pinned by 10 tests that travel
+   tick-arithmetic trim invariant). Unit-pinned by 12 tests that travel
    with the module as the bridge's acceptance floor. **Honest role:** this
    repo is not a package — the app cannot import it; the C1 sceneBridge
    COPIES it verbatim, then binds the real OT element field names (the

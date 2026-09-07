@@ -12,7 +12,7 @@
    Field names are MINI-OWNED and provisional (`ProjectedClip`): the OT
    element's real field names + the SceneTracks track mapping (main
    singleton / overlay[] / audio[] — which mini video track becomes the OT
-   main) are the REGISTERED C1-ENTRY DECISION (docs/CORE-SEAMS.md S6/S11),
+   main) are the REGISTERED C1-ENTRY DECISION (docs/CORE-SEAMS.md S6/S19),
    pinned when the OT snapshot is vendored into the app workspace. The
    CONVERSION LAWS below are the seam; the binding names are not.
 
@@ -21,7 +21,8 @@
      becomes the fps quantizer's rounding step when real media carries fps.
    - toTicks rounding policy: Math.round — the mini commits raw pointer
      times (snap-off drags + raw trims land off-grid), so seconds×120000
-     is NOT integral in general; the nearest-tick policy is the bridge law.
+     is NOT integral in general; the nearest-tick policy is the bridge law
+     (ties round half-up toward +∞: toTicks(0.5 + 1/240000) = 60001).
    - Element model (OT-SEAMS §1.6): the mini's clip is a full window over
      its source from in-point 0 → project to
      {trimStart: 0, trimEnd: sourceDuration − duration}. trimEnd is
@@ -71,10 +72,21 @@ export interface ProjectedClip {
 
 /** Project a mini clip (full window over its source, in-point 0) into the
  *  OT element field family (OT-SEAMS §1.6). Throws on the doc-invariant
- *  violation (duration > source) — the store's clamp laws make that
- *  unreachable for valid docs, so a throw means an upstream bug, not a
- *  projection choice. */
+ *  violations — duration > source, or non-finite/negative times — the
+ *  store's clamp laws make those unreachable for valid docs, so a throw
+ *  means an upstream bug, not a projection choice. */
 export function projectClip(clip: Clip, media: Media): ProjectedClip {
+  if (
+    !Number.isFinite(clip.duration) ||
+    !Number.isFinite(clip.start) ||
+    !Number.isFinite(media.duration) ||
+    clip.duration < 0 ||
+    clip.start < 0
+  ) {
+    throw new Error(
+      `otProject: clip ${clip.id} carries non-finite/negative times — doc invariant violated`,
+    );
+  }
   if (clip.duration > media.duration) {
     throw new Error(
       `otProject: clip ${clip.id} duration ${clip.duration}s exceeds its source ${media.duration}s — doc invariant violated`,

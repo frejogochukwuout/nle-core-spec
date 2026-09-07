@@ -1,7 +1,13 @@
 /* otProject tests — the executable seam pins (OT-SEAMS §1.6/§3.4).
    Every law here is the REGISTERED conversion made testable: the C1
    sceneBridge copies this module verbatim, and these nets travel with it
-   as the bridge's acceptance floor (spec 14 §3.1 C1 row (d)). */
+   as the bridge's acceptance floor (spec 14 §3.1 C1 row (d)).
+
+   Portability note (the copy-verbatim role): 3 of these tests consume
+   the mini's seed corpus (`seedDoc`) + mock `Media` literals carrying
+   mini-mock fields (name/kind/hue) — the C1 copy either vendors the seed
+   fixtures or swaps those tests' data; the other tests are self-contained
+   arithmetic pins. */
 
 import { describe, expect, it } from 'vitest';
 import { seedDoc, type Clip, type Media } from './mockData';
@@ -78,7 +84,34 @@ describe('projectClip (OT-SEAMS §1.6 — the in-point-0 element model)', () => 
     const p = projectClip(clip, media);
     expect(p.trimStartTicks + p.durationTicks + p.trimEndTicks).toBe(p.sourceDurationTicks);
     expect(fromTicks(p.durationTicks)).toBeCloseTo(clip.duration, 5);
-    expect(p.durationTicks).toBeLessThanOrEqual(p.sourceDurationTicks);
+  });
+
+  it('DISCRIMINATES tick arithmetic from the float-difference path (both inputs off-grid)', () => {
+    // the mutation-proven net: with BOTH source and duration off-grid, the
+    // tick path and the float path DIVERGE by one tick. source 0.5000042s
+    // → 60001 ticks (rounds up); duration 0.166668s → 20000 ticks; tick
+    // path trimEnd = 60001 − 20000 = 40001. The float path projects
+    // (0.5000042 − 0.166668) = 0.3333362s → 40000 ticks — WRONG, and the
+    // invariant would break (20000 + 40000 ≠ 60001). An implementation
+    // that projects the float difference fails this net.
+    const media: Media = { id: 'm-d', name: 'd.mp4', kind: 'video', duration: 0.500_004_2, hue: 30 };
+    const clip: Clip = { id: 'c-d', trackId: 'V1', mediaId: 'm-d', start: 0, duration: 0.166_668 };
+    const p = projectClip(clip, media);
+    expect(p.sourceDurationTicks).toBe(60_001);
+    expect(p.durationTicks).toBe(20_000);
+    expect(p.trimEndTicks).toBe(40_001);
+    expect(p.trimStartTicks + p.durationTicks + p.trimEndTicks).toBe(p.sourceDurationTicks);
+  });
+
+  it('throws on non-finite or negative times (NaN bypasses float comparison — guard explicitly)', () => {
+    const media: Media = { id: 'm-n', name: 'n.mp4', kind: 'video', duration: 2, hue: 0 };
+    const base = { id: 'c-n', trackId: 'V1', mediaId: 'm-n', start: 0 };
+    // NaN duration: NaN > 2 is false, so the duration>source check alone
+    // would let it through projecting NaN ticks — the finite guard catches it
+    expect(() => projectClip({ ...base, duration: NaN } as Clip, media)).toThrow(/doc invariant/);
+    expect(() => projectClip({ ...base, duration: Infinity } as Clip, media)).toThrow(/doc invariant/);
+    expect(() => projectClip({ ...base, duration: -1 } as Clip, media)).toThrow(/doc invariant/);
+    expect(() => projectClip({ ...base, start: -0.5, duration: 1 } as Clip, media)).toThrow(/doc invariant/);
   });
 
   it('throws on the doc-invariant violation (duration > source)', () => {
