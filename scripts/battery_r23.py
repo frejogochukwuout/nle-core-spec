@@ -254,6 +254,21 @@ check("otProject module carries the registered constants (content, not existence
 # NOTE (the honest scope): the stale-333 sweep covers the SPEC SET only; the VARIANTS count is
 # the sibling track's pin (they re-pin at their round wrap — not unilaterally bumped here).
 
+
+# === J. INTEGRATION-REVIEW CHECKS (the R23 round's blind-spot class) ==========
+check("pin strings correctly spelled in 17+19 (the b8c6c88 class)", lambda: (
+    all(v in specs[19] for v in FLEET_HEAD.values()) and all(v in specs[17] for v in ["b8c6f88", "222532c"])
+    and "b8c6c88" not in specs[19] and "b8c6c88" not in specs[17] and "b8c6c88" not in plan, "spellings"))
+check("the consumer-lag figure coherent (one commit, not 14+)", lambda: (
+    "14+ commits" not in plan and "14+ commits" not in specs[9], "lag"))
+check("no live N2b-queued claims (LANDED) in the plan", lambda: (
+    "instruments + N2b + parity" not in plan and "(N2b design" not in plan, "N2b"))
+check("the seal artifacts carry the R23 mapping notes + the 30-name census", lambda: (
+    "R23 mapping note" in read("ui-mock/shell-mini/docs/CORE-SEAMS.md")
+    and "R23 mapping note" in read("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md")
+    and "R23 mapping note" in read("ui-mock/shell-mini/docs/OT-SEAMS.md")
+    and "30-command" in read("ui-mock/shell-mini/docs/CORE-SEAMS.md"), "seal notes"))
+
 # === REPORT ====================================================================
 fails = [r for r in results if not r[1]]
 print(f"\nbattery_r23: {len(results) - len(fails)}/{len(results)} PASS")

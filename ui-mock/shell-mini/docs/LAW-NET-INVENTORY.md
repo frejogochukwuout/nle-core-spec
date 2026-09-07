@@ -286,7 +286,9 @@ the estimate simply predated the census.
   — the app's re-expressed corpus satisfies every law; the arithmetic in
   §2.3/§2.4 is the authoring-count audit; the demo (import → cut → play
   → export) rides on top.
-- **Standing law:** this file is generated from the live corpus — if the
+- 
+> **R23 mapping note (ARCH-R23 D23/D24):** spec 14 is RETIRED — the plan is `IMPLEMENTATION-PLAN.md` and the phases are the D24 verification ladder. This file's C0-C4/spec-14 citations map: C1(b,d,e,f)+C1(c)→K3; C1(a)/C2-frames→w1; C3→K3; C4→K4 (+ the human side-by-side→w1-entry); the 'crawl' below means the K3 corpus authoring, not the R22 C-ladder. The disposition vocabulary (HOLDS-on-OT / GAP-app-C1 / GAP-C2/C3 / GAP-W-ops) maps to K3 / w1 / K3 / K3-compose+r1-graduate respectively.
+**Standing law:** this file is generated from the live corpus — if the
   mini's tests change, THIS FILE MUST BE RE-CENSUSED (the counts are
   battery-checkable: `npx vitest run` == 355 tests / 8 files; 122
 describes → 128 census units).

@@ -9,7 +9,7 @@ and the downstream swap path. The goal: when the mock graduates to the real
 library, the ops rename, they don't redesign.
 
 **Reference state studied (R19, re-read R20):** `src/lib/timeline/headless/api.ts`
-(the 24-command wire surface, `{ok, code}` contract), `types/index.ts`
+(the 30-command wire surface (the R23 census — was 24 at the R22 pin; OT-SEAMS rows keyed to the 24-name era), `{ok, code}` contract), `types/index.ts`
 (SceneTracks, element fields), `ops/group-move.ts` (resolveGroupMove,
 resolveExistingTrackMove, canApplyMovesToExistingTracks, resolveNewTrackMove,
 snapGroupEdges), `placement/index.ts` (wouldElementOverlap /
@@ -115,3 +115,8 @@ clamp law as its drag rendering). The R19 insert-push and R20 escape/verdict
 deviations are RETIRED (removed from the register — redesigns masquerading
 as seam deltas; the user's P0 verdict plus the R22 machinery retirement
 settled the drag on the R18k clamp law).
+
+
+---
+
+> **R23 mapping note (ARCH-R23 D23/D24):** spec 14 is RETIRED — the plan is `IMPLEMENTATION-PLAN.md`; the D24 verification ladder re-homes this file's phase hooks (the C1-entry verifications → K3's corpus authoring + the D25 bridge; W-ops → r1; the crawl's law-subset gate is the K3 acceptance list). The wire surface census this file carries is the R22-era 24-name count — the R23 census is 30 names (specs 05/06/15/19); the extra six: track.toggleLock, the S1 transport trio, setAllLocked, setAllMuted.
