@@ -590,9 +590,10 @@ describe('R18f wave-2: waveform SVG sizing law', () => {
 });
 
 /* ---- R18j (thread #13): the minimized timeline strip --------------
-   The tools row hides, V/A collapse into pill sub-rows in one compact
-   strip, the slim ruler seeks, and the SAME gesture engine keeps
-   dragging / trimming / arranging live. */
+   The tools row hides, the VIDEO pills collapse into one compact strip
+   (R18k thread #21: the audio sub-row is expanded-mode only), the slim
+   ruler seeks, and the SAME gesture engine keeps dragging / trimming /
+   arranging live. */
 
 describe('R18j minimized timeline (thread #13)', () => {
   it('minimize hides the tools, renders the compact strip with the video pill row', () => {
@@ -669,7 +670,7 @@ describe('R18j minimized timeline (thread #13)', () => {
     expect(labels).toContain('00:04');
   });
 
-  it('pool drags still land on the pill sub-rows (video→V, audio→A)', () => {
+  it('pool drags still land on the pill row (video→V; the strip is video-only since R18k)', () => {
     render(<App />);
     fireEvent.click(screen.getByTestId('mini-btn-timeline-min'));
     poolDrag.current = 'm-lower'; // image 2.5s → V1
