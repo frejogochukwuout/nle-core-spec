@@ -1,26 +1,27 @@
 # 10 — FCPXML Export: Format, Mappings, Handoff Contract (Refined)
 
 **Stream:** FCPXML exporter
-**Status:** v-next (Round 23 — the fleet audit re-baseline: design-of-record only — zero FCPXML writer/parser/fixture code in the fleet, the whole module is **r5** greenfield (was R-fcpxml, the D24 ladder re-tag); the export seam's MEDIA half is now landed engine-side (see §0 BASE); Round 22's re-baseline + the SCOUT-10-RETRY refinement remain the design lineage — open questions answered with DTD + Apple doc references)
+**Status:** v-next (Round 24 — the fleet audit re-baseline: design-of-record only — zero FCPXML writer/parser/fixture code in the fleet, the whole module is **r5** greenfield; the export seam's MEDIA half is now landed at BOTH layers — engine-side since R23, and app-side since the app's R8 W2.4 (`deliverService.ts` drives the engine's `renderCompositionCore` via the deep import; see §0 BASE) — while the FORMAT half stays zero-anywhere; Round 23's re-baseline + Round 22's + the SCOUT-10-RETRY refinement remain the design lineage — open questions answered with DTD + Apple doc references)
 **Primary teacher:** Apple FCPXML 1.10 DTD (mirrored in CommandPost repo) + Apple developer docs + project model
 **Spec file:** `10-fcpxml-export.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 
 ---
 
-## 0. FORWARD INVENTORY (the R22 posture, R23 re-audited — what needs to be done; the BASE is accepted, not re-explained)
+## 0. FORWARD INVENTORY (the R22 posture, R24 re-audited — what needs to be done; the BASE is accepted, not re-explained)
 
-**BASE (accepted; re-verified at the 2026-09-07 R23 pins — engine `b8c6f88`, OT `222532c`, nle-ui `85dcf57`, app `70e99f0`):**
+**BASE (accepted; re-verified at the 2026-09-08 R24 pins — engine `5036387` (458/458), OT HEAD `ded43c4` (536/536; code pin `c15a629` — the last three commits are docs/runner-artifacts only, src diff empty), WDC `85b81b0` (759/759), nle-ui `fc4cc35` (674/674), app `c885ece` (174/174); the R23 pins were engine `b8c6f88` / OT `222532c` / nle-ui `85dcf57` / app `70e99f0`):**
 - This spec IS the design-of-record: the FCPXML 1.10 shape rules (the DTD-not-XSD finding, §14), the §4 ProjectJSON→FCPXML mappings (asset/clip/lane/marker/transition/`timeMap`), the §6 validation strategy, the §8 limitations — the contract text stays the acceptance form.
-- The export seam is now HALF-real (the R22→R23 delta; FCPXML is the interchange FORMAT, the engine's export is the MEDIA render — spec 15 §4.2's export row states the same split): the **media half is LANDED and decode-verified** — nle-engine @ `b8c6f88` (440/440 vitest, tsc 0) renders real A/V via WebCodecs + mediabunny (`src/lib/nle/export/` orchestrator/settings/audio-mixdown: Wave 5B m24 + Stage 2 audio + m29 A/V mux — MP4/WebM/MKV + audio-only, decode-verified incl. pixel parity in the browser m24/m25/m29 milestones, per the engine's `gaps/audit/MASTER.md`). The **format half is still ZERO code**: re-grepped at the pins, 0 FCPXML matches in nle-engine, nle-test-app, opencut-timeline, and web-daw-core — no writer, no parser, no fixture corpus anywhere. The only FCPXML-shaped surfaces are honest MOCK rails that defer to this spec: nle-ui's `DeliverPage` (preset `fcpxml` active by default, "Bundle media with FCPXML", mock queue rows) + the shell-variants' `DeliverPage` (the R22 W5 export/queue grammar — presets left / the queue replaces the preview while rendering / the deliver inspector right), plus the app's `GluedDeliver` story rendering the package rail around the engine timeline; ⌘E toasts "FCPXML export lands with spec 10". The BASE is the CONTRACT, not an implementation.
-- The serialization source exists and is netted: opencut-timeline @ `222532c` (489/489) — the `SceneTracks` doc model (main single-track / `overlay[]` above / `audio[]` below — §4's lane mapping 1:1) serialized per-scene via `TimelineCore.toJSON`/`fromJSON` (round-trip pinned by OT's own M-suites); time base = integer ticks at 120,000/sec (MediaTime, spec 09 — the same law OT carries). ProjectJSON (spec 09) rides per-scene `toJSON` persistence.
-- The app @ `70e99f0` (117/117) has NO engine export call wired (no `renderTimeline`/`renderProject` consumer in `engineService.ts`) and no FCPXML surface — that wiring is the K4 GAP row below (CORE-SEAMS S15).
+- The export seam is now HALF-real (FCPXML is the interchange FORMAT, the engine's export is the MEDIA render — spec 15 §4.2's export row states the same split), and the R23→R24 delta deepens the media half to BOTH layers: the **engine half** (landed R23, UNCHANGED at `5036387`, 458/458) renders real A/V via WebCodecs + mediabunny (`src/lib/nle/export/` orchestrator/settings/audio-mixdown/contracts/index: Wave 5B m24 + Stage 2 audio + m29 A/V mux — MP4/WebM/MKV + audio-only, decode-verified incl. pixel parity, per the engine's `gaps/audit/MASTER.md`; Stage 3 worker/OPFS + Stage 5 smart-copy still sequenced in `gaps/audit/C-export-encode.md`), and the **app half** (the app's R8 W2.4, commit `278b95b`, "Pins ×17" — service 15 + the GluedShell seam 2): `src/deliverService.ts` maps the nle-ui DeliverPage `exportRequest` seam onto the engine's `renderCompositionCore` **via the deep import** (the app drives the CORE directly; the vendored engine has no node_modules — **mediabunny@1.50.8 EXACT** is the app's own install, package.json:23) — 'master' = avc/aac/mp4 quality high (the orchestrator probes `canEncodeVideo` and falls back with a CODEC_FALLBACK warning; the file name's ext follows the **EFFECTIVE container** — a vp9 fallback never ships a .mp4 label), 'frame' = the same painter at the CURRENT playhead → `canvas.toBlob('image/png')`, audio = a **FRESH `SceneMixer.renderOffline`** over the app's REAL segment pipeline (flatten → foldSidecars → transition windows → segments — never the live mixer, the one-engine law), abort = the engine's `DOMException AbortError` shape propagated to the page's cancelled row state. The **format half is still ZERO code** (honest staleness: untouched since R23 — no writer, no parser, no fixture corpus): re-grepped at the R24 pins, 0 FCPXML matches in nle-engine, opencut-timeline, and web-daw-core; the app's only FCPXML-shaped code is deliverService's **DEFENSIVE row** (throws "FCPXML export is not implemented (spec-10 future)" — pinned) + its 2 seam tests; nle-ui's are the honest MOCK rails that defer to this spec: the `DeliverPage` (preset `fcpxml` active by default, "Bundle media with FCPXML", mock queue rows — **fcpxml stays page-mock in BOTH worlds**: with `exportRequest` present the fcpxml CTA pushes the "FCPXML writer is a spec-10 future — not wired yet" toast, never the contract) + the shell-variants' `DeliverPage` (the R22 W5 export/queue grammar — presets left / the queue replaces the preview while rendering / the deliver inspector right), plus the app's `GluedDeliver` story rendering the package rail around the engine timeline; ⌘E toasts "FCPXML export lands with spec 10". The BASE is the CONTRACT, not an implementation.
+- The serialization source exists and is netted: opencut-timeline @ `ded43c4` (536/536; code pin `c15a629`, src diff empty — the W11 wire-dispatch round changed no `SceneTracks`/serialization surface) — the `SceneTracks` doc model (main single-track / `overlay[]` above / `audio[]` below — §4's lane mapping 1:1) serialized per-scene via `TimelineCore.toJSON`/`fromJSON` (round-trip pinned by OT's own M-suites); time base = integer ticks at 120,000/sec (MediaTime, spec 09 — the same law OT carries). ProjectJSON (spec 09) rides per-scene `toJSON` persistence.
+- The app @ `c885ece` (174/174) HAS the deliver CTA wired to a REAL export (App.tsx:56, `exportRequest={deliverService.exportRequest}` — the R8 W2.4 landing above; the path is `renderCompositionCore`'s deep import, still no `renderTimeline`/`renderProject` consumer in `engineService.ts`) and no FCPXML surface beyond the defensive row — the K4 GAP row below is now the e2e leg ONLY (CORE-SEAMS S15).
 
 **GAP (the work — owner + phase per the D24 ladder, `IMPLEMENTATION-PLAN.md` §2; acceptance in parentheses):**
-- The whole module (owner: nle-test-app, phase **r5** — was R-fcpxml, the D24 re-tag; interchange + polish): greenfield exporter + validation; the parser+fixture-corpus choice is the PHASE-ENTRY artifact — decided at entry, recorded in `IMPLEMENTATION-PLAN.md` §2's r5 row (spec 14 is retired to a redirect stub, D23) BEFORE work starts (acceptance: the export validates vs the chosen reference parser on the corpus + the deliver e2e).
-- The export-seam wiring (owner: nle-test-app; phase **K4** — was C4, the D24 re-tag; the crawl exit's export leg; CORE-SEAMS S15): the deliver/topbar export CTA → the engine's real A/V export call (`renderTimeline`/`renderProject` — the landed media half) replaces the honest-mock toast (acceptance: the CTA wires the engine export call + the K4 e2e's import→cut→play→**export** leg green, zero mock paths; the deliver rail's mock queue swaps to real job rows).
+- The whole module (owner: nle-test-app, phase **r5**; interchange + polish; re-checked R24 — ladder position unchanged, the plan's r5 row still carries the phase-entry artifact verbatim): greenfield exporter + validation; the parser+fixture-corpus choice is the PHASE-ENTRY artifact — decided at entry, recorded in `IMPLEMENTATION-PLAN.md` §2's r5 row (spec 14 is retired to a redirect stub, D23) BEFORE work starts (acceptance: the export validates vs the chosen reference parser on the corpus + the deliver e2e).
+- The export-seam wiring (owner: nle-test-app; phase **K4**; the crawl exit's export leg; CORE-SEAMS S15): the CTA half LANDED at the app's R8 W2.4 (`278b95b` — deliverService drives `renderCompositionCore`; the deliver rail's queue rows run the real job promise: queued→running→done/cancelled/failed with per-row retry; the honest-mock toast survives ONLY for the fcpxml preset, by design). The residual is the e2e half: the K4 e2e's import→cut→play→**export** leg, zero mock paths (acceptance: the automated e2e green — the app still has ZERO e2e, grep-verified at `c885ece`).
+- The grade→export gap (Z2; owner: nle-test-app, the D30 W-E wave): the MEDIA half's export is currently UNGRADED — deliverService has ZERO grade/color terms at `c885ece` (verified by grep; the app's 9-A2 defect #2 "scene grade never reaches export"). W-E applies the scene `color` grade in the export path as the CONSUMER-SIDE FINAL PASS — the same law ProgramCanvas's monitor uses; what you grade is what you get (pin: export a frame from a graded scene, assert the painter ran the grade). The engine seam DECLINES the promotion BY DESIGN (the D29.5c law, engine `8a0b7fe`: hue-rotate/saturate are non-linear under per-element alpha compositing — the app host composes first, filter-draws once; the same decline spec 04/08 carry as a decision, not a gap). Orthogonal to the FORMAT half: FCPXML 1.10 doesn't carry grade state anyway (§3.4/§8 — v1 exports neutral + the LUT workaround).
 - Keyframed-volume mapping (owner: this spec; phase r5, decision at entry): N2b is LANDED (engine `37cdd28` + app `c8c875e` — `animations["volume"]` → `gainAutomation` breakpoints, lane-replaces-static) and has NO v1 FCPXML 1.10 mapping — v1 exports the static `<adjust-volume>` + fades and lists `gainAutomation` in `KNOWN_LOSSY_FIELDS`; the v2 `keyframeAnimation` mapping is §8's DEFERRED decision (acceptance: the lossy-fields list names it + the v1 fold rule stated at phase entry).
 
-**ACCEPTANCE & TEST PLAN:** §15 (the seed intent list) + the `## Testing` section (the executable contract); the §15 items 3–5 manual FCP/Resolve/Premiere open tests ride the phase's deliver gate; spec 17 §13A's FCPXML matrix rows; battery posture: no suite exists to hold — the phase-entry corpus CREATES the regression net. The Tier-2 UI surface exists TODAY as the mock reference (nle-ui's `DeliverPage` + the shell-variants' `DeliverPage` — see the R23 note in Tier 2); the real CTA wiring rides the K4 GAP row.
+**ACCEPTANCE & TEST PLAN:** §15 (the seed intent list) + the `## Testing` section (the executable contract); the §15 items 3–5 manual FCP/Resolve/Premiere open tests ride the phase's deliver gate; spec 17 §13A's FCPXML matrix rows; battery posture: no suite exists to hold — the phase-entry corpus CREATES the regression net. The Tier-2 UI surface exists TODAY in two forms (nle-ui's `DeliverPage` — the W2.4 `exportRequest` seam: the app's real-jobs world + the package's mock world, **fcpxml mock in BOTH** — + the shell-variants' `DeliverPage`; see the R23/R24 note in Tier 2); the real export e2e rides the K4 GAP row (the CTA wiring landed at the app's R8 W2.4).
 
 ---
 
@@ -1478,7 +1479,7 @@ All URLs below were fetched during this scout task with HTTP 200 (markdown versi
 
 **Engine FCPXML surface: verified zero.** `grep -ri fcpxml /home/z/my-project/nle-engine/src` returns 0 matches — no exporter module, no `engine.export.*`, no XML emission anywhere. This entire spec is SPEC-ONLY relative to the engine. The mapping below records what the engine's project model already provides the future exporter, plus the gaps.
 
-> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests — a Round-7-era snapshot; at the R23 pin `b8c6f88` it is 440/440 vitest + the browser milestone venue, see the R23 note below) is a clean-room FreeCut-port **in-between reference, NOT canon**. Where engine and spec conflict, **the spec wins**. Full reconciliation: `19-code-references.md`.
+> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests — a Round-7-era snapshot; at the R24 pin `5036387` it is 458/458 vitest + the browser milestone venue, see the R23/R24 notes below) is a clean-room FreeCut-port **in-between reference, NOT canon**. Where engine and spec conflict, **the spec wins**. Full reconciliation: `19-code-references.md`.
 
 | Spec section | nle-engine file:line | Verified quote | Status | Note |
 |---|---|---|---|---|
@@ -1514,6 +1515,20 @@ All URLs below were fetched during this scout task with HTTP 200 (markdown versi
 > still the highest-value pre-export engine addition. (4) N2b
 > keyframed volume (LANDED `37cdd28`) adds `gainAutomation` — see the
 > §0 GAP row for the v1 known-lossy ruling.
+
+> **R24 re-verification (2026-09-08 pins, engine @ `5036387`, 458/458
+> static census):** (1) the zero-FCPXML claim STILL HOLDS — rg over
+> src/ + tests/ → 0 matches; the engine remains FCPXML-free. (2) The
+> export subsystem is UNCHANGED since the R23 note (5 files / 1,785
+> LOC, mediabunny lazy-imported — the only engine source deltas since
+> `b8c6f88` are the bridge's W2.5 effects sidecar + blur clamp, not
+> export). (3) The `MediaMetadata` colorSpace ENGINE-GAP row re-
+> verified OPEN — still no colorSpace field at HEAD; still the
+> highest-value pre-export engine addition. (4) The MEDIA half now
+> ALSO lands app-side (the app's R8 W2.4 deliverService deep-imports
+> `renderCompositionCore` — §0 BASE); the rows above are untouched by
+> it, and the Round-7 "MP4/WebM only" roadmap note stays superseded
+> as recorded at R23.
 
 ---
 
@@ -2077,6 +2092,22 @@ written to disk correctly and that bundled media is co-located.
   > `GluedDeliver` story). Both toast that FCPXML "lands with spec
   > 10" — the real CTA→engine wiring is the K4 GAP row in §0
   > (CORE-SEAMS S15).
+
+  > **R24 — the seam is now DUAL-WORLD (the W2.4 `exportRequest`
+  > contract, same testid `shell-deliver-btn-export-fcpxml`):** the
+  > nle-ui `DeliverPage` accepts an OPTIONAL engine-free
+  > `exportRequest` prop — ABSENT = the mock world verbatim (all
+  > pre-W2.4 pins stand); PRESENT (the app, App.tsx:56) = master and
+  > frame drive the app's real deliverService (job rows run the
+  > promise's truth: queued→running→done/cancelled/failed, retry
+  > re-runs the same settings, Cancel aborts → the service's
+  > DOMException AbortError maps to the cancelled row). **fcpxml
+  > stays mock in BOTH worlds**: with the seam present the fcpxml CTA
+  > pushes the info toast "FCPXML writer is a spec-10 future — not
+  > wired yet" (no job row, no encode); the app's deliverService
+  > throws defensively if routed anyway (pinned). This Tier-2 test (a
+  > REAL download event) still has no live surface anywhere — it
+  > lands with r5.
 - `export-with-media-bundling-copies-media-alongside-fcpxml` — when
   `bundleMedia: true` is passed to the export call, the download
   directory (simulated via OPFS or Playwright's `download.path()`)
