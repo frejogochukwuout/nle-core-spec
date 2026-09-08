@@ -1,4 +1,5 @@
 # LAW-NET-INVENTORY — the mini's law corpus as the crawl's acceptance lists
+> **R24 mapping note (ARCH-R24 D26.5/D29):** the census targets are the REAL vocabularies three-way — timeline units map to OT's frozen `data-test=` convention (68 sites at `c15a629`), chrome units to nle-ui's `shell-*` testids, no-counterpart units are the D25.3b structural-gap worklist; the app's `timeline-port/` is now the census-governed converging mirror (register-equality = the mirror-integrity instrument). The K3 re-expression reads this census through that mapping.
 
 **What this is:** the pre-C1 / pre-C4 deliverable registered in spec 14 §3.1
 (the "inventory, spec-side — REQUIRED BEFORE C1 entry") and spec 17 line 3:

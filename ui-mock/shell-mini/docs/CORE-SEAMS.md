@@ -38,7 +38,7 @@ owner + phase + acceptance are stated (the posture law, spec 00 D20).
 
 ## 1. The seam inventory
 
-### A. Timeline-domain seams (target: opencut-timeline @ `05584d8`)
+### A. Timeline-domain seams (target: opencut-timeline @ `c15a629` (re-based R24 from `05584d8`))
 
 | # | Seam | Current interface (mini) | Target (core) | State | Swap path |
 |---|---|---|---|---|---|
@@ -53,7 +53,7 @@ owner + phase + acceptance are stated (the posture law, spec 00 D20).
 | S9 | **Keyboard surface** | `useKeys.ts` (Space/S/[/]/Del/±/0/Home/Esc + the form-control skip + C1/C16 laws) | — (the app's own surface; MiniShell OWNS the editing keys incl. undo per spec 14 C1(f)) | **REGISTERED-DELTA** (the shell-vs-port ownership gap closes at C1) | port with the MiniShell keymap; the C53 pending-window branches are retired (D22) |
 | S10 | **Error/feedback rendering** | `ToastMsg {kind,text,seq}` + TTLs (2.6s/8s) + role=alert/status laws + every `pushToast('error'|'info', …)` site | OT wire error codes (`{ok:false, code}`) → user-facing copy | **REGISTERED-DELTA** — the COPY hardcodes what spec 15 §6.3's error-envelope refinement (W-ops) will type; the code→message mapping is the seam | C1 maps OT codes to the toast surface; W-ops types the envelope |
 
-### B. Engine-domain seams (target: nle-engine @ `f68ab8c`)
+### B. Engine-domain seams (target: nle-engine @ `5036387` (re-based R24 from `f68ab8c`))
 
 | # | Seam | Current interface (mini) | Target (core) | State | Swap path |
 |---|---|---|---|---|---|
@@ -63,7 +63,7 @@ owner + phase + acceptance are stated (the posture law, spec 00 D20).
 | S14 | **Clip bodies / thumbnails** | `filmstripFor` (SVG data-URI strips) + `thumbGradientFor` (CSS gradient frames) (`src/lib/filmstrip.ts`) + MediaCard hover preview (gradient-pan + ticking timecode) | the engine's decoded frame-cache thumbnails; a real `<video>` scrub preview | **GAP-with-owner — C2** (the RENDER grammar — discrete strips, hover autoplay — is the transportable law; the DATA is mock) | C2: same components, real data source; the determinism smoke tests port as generator-contract tests |
 | S15 | **Export** | the honest stub CTA (`mini-btn-export` → toast; `src/shell/Topbar.tsx`) | the engine's real A/V export (app-side wiring is C4) | **GAP-with-owner — C4** | the topbar is the documented downstream customization point (README §topbar); the host owns the real flow |
 
-### C. Audio-domain seams (target: web-daw-core @ `fe05d85` + engine)
+### C. Audio-domain seams (target: web-daw-core @ `85b81b0` (re-based R24 from `fe05d85`) + engine)
 
 | # | Seam | Current interface (mini) | Target (core) | State | Swap path |
 |---|---|---|---|---|---|

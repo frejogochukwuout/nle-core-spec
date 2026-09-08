@@ -26,7 +26,8 @@
 | R9 | P0-P6 | retired (git history) |
 | R15 | A0-A7b | superseded by R22 (absorbed into the W-rows) |
 | R22 | THIS file's v2.1 (C0-C4 / W-* / R-*) | superseded by `IMPLEMENTATION-PLAN.md` (R23) — every row re-homed via the D24 mapping table (`audits/ARCH-R23-plan-and-bridge.md`) |
-| R23 | `IMPLEMENTATION-PLAN.md` + ARCH-R23 | **current** |
+| R23 | `IMPLEMENTATION-PLAN.md` + ARCH-R23 | superseded by R24 |
+| R24 | `IMPLEMENTATION-PLAN.md` + ARCH-R24 (D26 amends D25.2's mechanism; D29's W11 instruments enter the ladder) | **current** |
 
 ## What survives verbatim (history, kept resolvable)
 

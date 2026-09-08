@@ -199,22 +199,30 @@ check("§0 is the first H2 section in every domain spec", lambda: (
     all((lambda t: t.find("## 0. FORWARD INVENTORY") >= 0 and not re.search(r"^## \d", t[:t.find("## 0. FORWARD INVENTORY")], re.M))(specs[n]) for n in DOMAIN), "placement"))
 
 # === I. THE R23 SEAL CHECKS (drift-proof: SCRAPE the live suite) ===============
-def _mini_scraped():
+def _scrape_mini():
     import subprocess, json
     d = os.path.join(REPO, "ui-mock/shell-mini")
     if not os.path.exists(os.path.join(d, "node_modules", ".bin", "vitest")):
-        return True, "node_modules absent — scrape skipped (fresh clone)"
-    try:
-        out = subprocess.run(["npx", "vitest", "run", "--reporter=json"], cwd=d, capture_output=True,
-                             text=True, timeout=420)
-        m = re.search(r'\{.*"numTotalTests".*\}', out.stdout, re.S)
-        if not m:
-            return True, "no json reporter — skipped"
-        j = json.loads(m.group(0))
-        total, passed = j.get("numTotalTests", 0), j.get("numPassedTests", 0)
-        return (total == 355 and passed == 355), f"scraped {passed}/{total} (declared 355)"
-    except Exception as e:
-        return True, f"scrape error {e} — skipped"
+        return None, "node_modules absent (fresh clone) — scrape unavailable"
+    out_file = os.path.join(d, ".vitest", "json", "output.json")
+    if os.path.exists(out_file):
+        os.remove(out_file)
+    subprocess.run(["npx", "vitest", "run", "--reporter=json", "--silent"],
+                   cwd=d, capture_output=True, text=True, timeout=420)
+    if not os.path.exists(out_file):
+        return None, "json output file absent — scrape FAILED (not skipped)"
+    j = json.load(open(out_file))
+    files = len(j.get("testResults", []))
+    return (j.get("numPassedTests"), j.get("numTotalTests"), files), None
+
+def _mini_scraped():
+    r, err = _scrape_mini()
+    if err and "node_modules absent" in err:
+        return True, err + " (vacuous-pass tolerated only on fresh clones)"
+    if r is None:
+        return False, err or "scrape failed"
+    passed, total, files = r
+    return (passed == 355 and total == 355 and files == 8), f"scraped {passed}/{total} tests / {files} files (declared 355/8)"
 check("mini corpus SCRAPED == declared (the count-discipline law, executed)", _mini_scraped, "scrape")
 
 def _inventory_math():
@@ -246,8 +254,8 @@ check("mini count current (355) + variants 1521+ live", lambda: (
 # === K. THE R24 RESIDUE CLASSES (pin spelling + stale sweeps) ==================
 check("no live R23 pin spellings (b8c6f88/222532c/494f6ff/85dcf57/70e99f0) outside lineage", lambda: (
     sum(live_stale(f, p) for p in ["b8c6f88", "222532c", "85dcf57", "70e99f0"] for f in [s00, specs[1], specs[5], specs[19]]) == 0, "stale sweep"))
-check("the b8c6c88 c/f-typo class absent (the R23 lesson)", lambda: (
-    "b8c6c88" not in s00 and "b8c6c88" not in specs[17] and "b8c6c88" not in specs[19], "typo class"))
+check("the b8c6c88 c/f-typo class absent corpus-wide (the R23+F3 lesson)", lambda: (
+    all("b8c6c88" not in f for f in [s00, plan] + [specs[n] for n in DOMAIN]), "typo class"))
 check("no live N2b-queued claims (LANDED/consumed) in the plan", lambda: (
     "N2b" not in plan or "LANDED" in plan[plan.find("N2b")-300:plan.find("N2b")+300]
     or "consumed" in plan[plan.find("N2b")-300:plan.find("N2b")+300], "N2b"))
