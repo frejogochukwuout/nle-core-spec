@@ -332,7 +332,7 @@ interface KeyframeJSON {
 
 **A5 — visibility is non-audio-only.** M/S/L on ALL track kinds; V on non-audio kinds only — audio tracks carry no visibility flag (18 §4.7's unqualified M/S/L/V is wrong in both directions; the mock ships S on all kinds and V only on non-audio headers).
 
-**B1 — link + sync-lock fields.** `ElementJSON.linkedTo?: string` backs 05 §12.3 linked selection and 16 §3.4 `toggleAVLink` (the `linkGroupId` alternative was REJECTED — one linked companion is the v1 shape, matching the mock). `TrackJSON.syncLock?: boolean` backs 06 §6's sync-lock (default true, FreeCut's `syncLock !== false`).
+**B1 — link + sync-lock fields.** `ElementJSON.linkedTo?: string` backs 05 §12.3 linked selection and 16 §3.4 `toggleAVLink` (the `linkGroupId` alternative was REJECTED — one linked companion is the v1 shape, matching the mock). **(Round 25 amendment note, D32.5/ARCH-R25 — the model-shape reconciliation; the field definition is unchanged):** the persistence form is PAIRWISE (`linkedTo` — this field; the rejection above was the persisted-shape question); the runtime expansion is GROUPS — the engine's `linkedGroupId`, expanded from the pairwise links at load (pairwise at rest → groups at runtime), never persisted here; a split relinks BOTH halves, each half carrying the link (06 §5.0's split-link law — cross-cite). `TrackJSON.syncLock?: boolean` backs 06 §6's sync-lock (default true, FreeCut's `syncLock !== false`).
 
 **B2 — audio element fields.** `ElementJSON.pan?: number` (−100..100) and `preservePitch?: boolean` join `volume`; volume's persisted unit is LINEAR 0..1 — the shell displays dB via conversion at the UI boundary (18 §4.4's "Gain dB" row is the display form, not the persisted form).
 

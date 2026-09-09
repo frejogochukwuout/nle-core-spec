@@ -1,13 +1,32 @@
 # 06 — NLE Operations: Cut / Split / Trim / Ripple / Roll / Slip / Slide / Move / Lock / Snap (REFINED)
 
 **Stream:** NLE operation logic (pure functions over timeline state)
-**Status:** v-next (Round 24 — the R24 re-baseline: OT @ HEAD `ded43c4` (code pin `c15a629`) **536/536** is the accepted ops BASE — the W10F controller-hardening rounds, the W11 complete-UI round (the wire-dispatch seam: **24 routed command verbs + 6 documented exceptions**, M49C machine-checked; the W11-b dispatch migration + the W11-f gesture commits), and the op-surface parity audit AT HEAD (`ded43c4` = `.agents/OP-COVERAGE.md`: **11/11 NLE edit verbs** ported vs opencut-classic @ `cf5e79e`; omissions all documented scope cuts; extensions lock/loop/rate/rippleDelete) all landed since the R23 pin; the C7 lineage re-based per D29.2; the phase vocabulary closed to the D24 set (r1/K3) (`audits/ARCH-R24-timeline-strategy-and-topology.md`, D26/D29). Round 23: the R23 re-baseline (OT @ `222532c` 489/489 — the T-round, the F1 hardening, the S3 seam round; the r1 re-key + the spec-14 §4.1 re-home, `audits/ARCH-R23-plan-and-bridge.md`). Round 22: the §0 forward inventory + the R22 re-baseline (OT @ `05584d8` 459/459 — the ops BASE at that pin; the gap was the op-family ports)); Refined (SCOUT-06). Every claim tagged with file:line evidence. Round-8 amendments: §5.2A trim-shape layer mapping + NOOP code, §5.4 ripple modeling notes + OT as executable reference, §5.9 intra-batch overlap guard, §10.4 engine re-baseline @ 8ac91d9 (all citations re-verified, P0.6 fixed), §10.5 opencut-timeline op-coverage. Round-9 amendments: the Decision-11.3 "division of labor" is superseded by **Decision 12.3 — one algorithm home (opencut-timeline's ops layer) with the engine's FreeCut-side families port-scheduled into it** (§10.4/§10.5 notes updated); engine counts re-baselined @ 624a76b (202/202).
+**Status:** v-next (Round 25 — the edit-mode completeness round: the ARCH-R25 ruling's Decisions 30-32 landed in this file — D30 the ten-mode matrix registered in §0 (the edit-mode completeness census, re-derived at every fleet pass); D31/31A the §5.9 restructure (the two-semantics preamble + the mid-clip split law + the dedicated-vs-composite criterion + the new §5.9B overwrite edit / §5.9C replace / §5.9D append at end / §5.9E ripple overwrite / §5.9F fit to fill — the four absent families now spec-first, r1-scheduled per D30.2); D32 the new §5.0 linked-companion propagation law (the ten-mode fan-out table, the lock > sync-lock > link precedence, the canonical `syncLinked` name, the split-link relink-both-halves ruling, the E1 defect row); the P-list phantom rows fixed (P1-P6 + P9) (`audits/ARCH-R25-edit-mode-completeness.md`, D30/D31/D31A/D32). Round 24 — the R24 re-baseline: OT @ HEAD `ded43c4` (code pin `c15a629`) **536/536** is the accepted ops BASE — the W10F controller-hardening rounds, the W11 complete-UI round (the wire-dispatch seam: **24 routed command verbs + 6 documented exceptions**, M49C machine-checked; the W11-b dispatch migration + the W11-f gesture commits), and the op-surface parity audit AT HEAD (`ded43c4` = `.agents/OP-COVERAGE.md`: **11/11 NLE edit verbs** ported vs opencut-classic @ `cf5e79e`; omissions all documented scope cuts; extensions lock/loop/rate/rippleDelete) all landed since the R23 pin; the C7 lineage re-based per D29.2; the phase vocabulary closed to the D24 set (r1/K3) (`audits/ARCH-R24-timeline-strategy-and-topology.md`, D26/D29). Round 23: the R23 re-baseline (OT @ `222532c` 489/489 — the T-round, the F1 hardening, the S3 seam round; the r1 re-key + the spec-14 §4.1 re-home, `audits/ARCH-R23-plan-and-bridge.md`). Round 22: the §0 forward inventory + the R22 re-baseline (OT @ `05584d8` 459/459 — the ops BASE at that pin; the gap was the op-family ports)); Refined (SCOUT-06). Every claim tagged with file:line evidence. Round-8 amendments: §5.2A trim-shape layer mapping + NOOP code, §5.4 ripple modeling notes + OT as executable reference, §5.9 intra-batch overlap guard, §10.4 engine re-baseline @ 8ac91d9 (all citations re-verified, P0.6 fixed), §10.5 opencut-timeline op-coverage. Round-9 amendments: the Decision-11.3 "division of labor" is superseded by **Decision 12.3 — one algorithm home (opencut-timeline's ops layer) with the engine's FreeCut-side families port-scheduled into it** (§10.4/§10.5 notes updated); engine counts re-baselined @ 624a76b (202/202).
 **Primary teacher:** FreeCut `stores/actions/edit/*` (algorithm-level reference) + OpenCut-classic `ripple/` + `retime/` + `commands/` + `timeline/placement/` + `timeline/group-move/` + `timeline/group-resize/` (architecture-level reference)
 **Spec file:** `06-nle-ops.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 
 ---
 
-## 0. FORWARD INVENTORY (R22 posture, R24-re-based — what needs to be done; the BASE is accepted, not re-explained)
+## 0. FORWARD INVENTORY (R22 posture, R24-re-based, R25-amended — what needs to be done; the BASE is accepted, not re-explained)
+
+**R25 (2026-09-09 — the edit-mode completeness round; `audits/ARCH-R25-edit-mode-completeness.md`, Decisions 30-32):** the ruling's 06-side amendments landed in this file — **§5.0 "Linked-companion propagation" (D32: the ten-mode fan-out table, the precedence sentence lock > sync-lock (§6) > link, the canonical param `syncLinked`, the split-link relink-both-halves ruling, the E1 engine defect row)**; **the §5.9 restructure (D31/31A: the two-semantics preamble — the placement surface places, the source-edit surface splices — the mid-clip split law, the dedicated-vs-composite criterion, and the four previously-absent families now spec-first as §5.9B overwrite edit / §5.9C replace / §5.9D append at end / §5.9E ripple overwrite / §5.9F fit to fill, r1-scheduled per D30.2 with their GAP rows)**; **the ten-mode matrix below (D30.1 — the completeness census, re-derived at every spec round's fleet pass like the C7 census; every code cell re-read live by the ten mode reports at the R25 pins)**; **the P-list fixes (P1: the ripple-insert-via-diff phantom re-keyed to the D31.6 composite law; P2/P6: the phantom `placement:'overwrite'` test rows re-keyed to §5.9B/§5.9E; P3: the unreachable `ripple-insert-makes-room` row replaced by the composite's trajectory row; P4/P5: the slide continuity/chain corrections; P9: the §10.4 insert row split into placement vs insert-edit with honest verdicts)**. The landed C7 census (24 routed + 6 exceptions) is NOT touched — the new family verbs appear only as r1-scheduled GAP rows that re-declare mechanically per the tsc-lockstep/M49C law (D29.2) when they land.
+
+**The ten-mode matrix (Decision 30 — the edit-mode completeness census; the R25 fleet pins engine `3989506` / OT code pin `c15a629` / app `64fb0ab`; the spec column is post-R25-amendment, the code columns are the R25 census):**
+
+| Mode | 06 spec home | 15 wire | engine | OT ops+UI | app | reference |
+|---|---|---|---|---|---|---|
+| Roll | §5.5 COVERED | `RollCommand` §4.3.5 | `rollingTrimItems` :2984 UNWIRED | ABSENT | ABSENT | variants (LIVE, 5 pins) |
+| Ripple trim | §5.2A COVERED (wire/keys only) | `TrimCommand{ripple}` | `rippleTrimItem` :2839 UNWIRED | ABSENT (ripple-delete only; the trim verb carries NO ripple param — the W11 exception) | ⌥[/⌥] composed-over-patches | variants (the only DaVinci-faithful mouse surface) |
+| Slip | §5.6 COVERED | `SlipCommand` §4.3.6 | `slip` :4143 UNWIRED | ABSENT | `,`/`.` engine-true (the app-inline law, unpinned) | variants R15-T4 |
+| Slide | §5.7 COVERED | `SlideCommand` §4.3.7 | `slideItem` :4246 UNWIRED | ABSENT | ABSENT | variants (gesture+bounds; the source-capped divergence registered) |
+| Insert edit | §5.9 (the two-semantics preamble + the splice law, D31.1/31.2 — R25) | `insert` verb (placement-only) | `performInsertEdit` :4702 (splice+push; the E1 linked defect open) | placement-insert only (reject-not-shift) | pool-DnD placement + split (2 of 3 facets) | variants insertPlan (the most faithful, honestly-labeled) |
+| Overwrite edit | §5.9B (D31.3 — R25) | none | `performOverwriteEdit` :4860 (the covered-clip law deep; E2/E3 open) | ABSENT (the phantom strategy rows retired R25, P2/P6) | ABSENT | variants R20-W2 (the only full impl) |
+| Replace | §5.9C (D31.4 — R25, spec-first) | none (r1: `timeline.replace`) | ABSENT | ABSENT (the deliberate classic-parity no-op, DECISIONS SD-5) | ABSENT | variants (implements the WRONG law — specified 3×, correct 0×) |
+| Append at end | §5.9D (D31.5 — R25, spec-first) | none (r1: the 6th `PlacementStrategy` + `insertBatch`) | ABSENT | ABSENT | ABSENT | variants + mini (real per-track-end composites) |
+| Ripple overwrite | §5.9E (D31.6 — R25, spec-first) | none | ABSENT (the signed-shift primitives private) | ABSENT | ABSENT | variants (push-only — the pull unreachable) |
+| Fit to fill | §5.9F (D31.7 — R25, spec-first) | none | ABSENT (rateStretch manual; `calculateSpeed` exists) | ABSENT | ABSENT | variants (a TESTED planner branch) |
+
+*Decision 30.2: the four absent families (replace / append / ripple-overwrite / fit-to-fill) are r1-scheduled spec-first families — owner + phase + acceptance per their §5.9C-F GAP rows; the landed C7 census (24 routed + 6 exceptions) is NOT reopened. Decision 30.3 (the ladder gate): at K2 every matrix row is LANDED or carries a live r1-scheduled row with owner + acceptance — zero orphan rows (the completeness is over the REGISTER, not over landed-ness); at K3 the app column matches the LANDED set with pins.*
 
 **BASE (accepted, pinned 2026-09-07):**
 - opencut-timeline (OT) @ HEAD `ded43c4` (**code pin `c15a629`** — the last three commits are docs/runner-artifacts; src diff empty) — **536/536** (386 in-page + 150 real-mouse across 59 milestone entries, 18 of them real-mouse; `download/timeline-test-report.json` is the count authority, re-run live R24), tsc 0. The ops engine of this spec: split/trim/move/ripple/delete/insert/duplicate + placement with the landed semantics — the S-round (S1 transport policy; S2 track lock; S3 transitionOut null=DELETE key law + split left-drops; S4 bookmark color/note; D-S5 typed ElementParams), the T-round (D-T3 `setTracksLocked` — the lock-all batch, one history entry + the `track.setAllLocked` wire verb, M44; D-T7 `moveElements` same-position NOOP — the `ok:true` true-return asymmetry, no batch abort), **the S3 seam round (M48: `setTracksMuted` the mute-all batch — the D-T3 twin, the F1C-1-normalized every-at-target predicate — + the `track.setAllMuted` wire verb)**, the F1 whole-codebase hardening (M45: F1B-1..8 the wire/interaction validation laws — no-overlap enforced on update span patches → CONFLICT, INVALID_PARAMS for missing/null/array params (was INTERNAL_ERROR — F1B-4), negative trims/starts rejected (F1B-6), `setLoopRegion clear:false` never clears (F1B-5), failed `applyBatch` preserves the pre-batch redo stack (F1B-7), the keyframe flick commits (F1B-8); F1A-2/3/4 the insert-batch laws — heterogeneous-batch rejection + the intra-batch overlap guard (§5.9's law, now pinned) + `createTracks` id validation; F1A-1 the marquee expanded-lane rows; F1C-1 the unlock-direction every-at-target NOOP law), **the W10F controller rounds** (M45 round-1 + M47 round-3 — the marquee expanded-lane row math; M46 the `applyBatch` redo-outcome matrix + the absent-field NOOP predicate), and **the W11 complete-UI round** (the wire-dispatch seam, DECISIONS #25: `useWireDispatch` over `HeadlessTimelineApi` with attach + the recorder (`wireLog` ring 500 + the `wireCoverage` Set) + `WIRE_COMMAND_TYPES` tsc-lockstep + `applyBatch` `data.results` + keyframe-verb `TRACK_LOCKED`; the W11-b dispatch migration — command verbs cross the wire — + the W11-f gesture commits — move/updateElements-patch/moveBookmark/insert cross the wire with TRACK_LOCKED error drivers; M49T/H/R/G + the **M49C coverage gate: 24/24 routed verbs machine-checked through the real UI**). The wire surface is **30 prefixed command names split 24 UI-routed + 6 documented exceptions** (`selectElements`, the three singular keyframe verbs, `advancePlayhead`, `trim`) — the C7 census lineage: **24 at the R15/M29 charter → 28 actual at the R22 pin → 30 at R23 → the routed/exceptions split at `c15a629`** (D29.2). Per D25, OT's `src/components/timeline/` is THE canonical React timeline UI tree (spec 05 §0's row — the ops layer it binds is this spec's surface).
@@ -385,6 +404,39 @@ export interface TimelineElement {
 
 ## 5. Operations — Detailed Specs
 
+### 5.0 Linked-Companion Propagation (the A/V link fan-out law — Decision 32, R25)
+
+**The law.** When an edit targets an element whose linked companion exists (spec 09 §3.1A B1's `ElementJSON.linkedTo`; nle-engine's `linkedGroupId`), the companion RIDES THE SAME OP: one command, one history entry, one ⌘Z. Propagation is an id-closure expansion applied BEFORE the op — symmetric over the link relation, live ids only, order-stable, cycle-free (the av-link seam's law, engine `bridge/av-link.ts:10-24`/`:26-37`). A companion on a LOCKED track never enters the closure (the explicit target's op gate owns rejection, `av-link.ts:141-151`). Default: propagation ON; the canonical param name is **`syncLinked`** (the spec-15 wire name, §4.3.2/§4.3.5/§4.3.6/§4.3.7) — the engine's `options.linked` (16 public methods, default true, at the §10.4-cited sites and siblings) and the app store's link toggle re-name to `syncLinked` at their next touch (Decision 32.3 — one name at every layer, no forced rename wave). The other homes keep their slices and are never conflated with this one: 09 §3.1A B1 stays the MODEL home (the `linkedTo` field), 05 §12.3 stays the SELECTION home ("selecting one selects both"), 18 §4.5 (N4) stays the VIEW-GATE home (link-OFF gates selection propagation and companion fan-out, view-level, never editing doc-level links).
+
+**The precedence (Decision 32.2 — stated once, referenced everywhere):** track LOCK > sync-lock (track-level, §6 — interval/gap propagation over whole tracks) > link (clip-level, this section — pairs one clip with one companion). The two mechanisms are never conflated: linking answers "which clips move with this clip"; sync-lock answers "which tracks ripple when this track ripples" (§5.14's precedent: sync-locked companions are excluded from link expansion and take §6's propagation instead, :1825-1837).
+
+**The fan-out table (Decision 32.1 — the mode × situation matrix over the ten-mode family):**
+
+| Mode | Linked pair present | Transitions at shared edges | Companion on a sync-locked track |
+|---|---|---|---|
+| Slip (§5.6) | the same clamped δ applies to anchor + synchronized companions (06:1271); a window-mismatched companion is EXCLUDED — desync-safe by exclusion (engine `getSynchronizedLinkedItems` :751-767) | `clampSlipDeltaToPreserveTransitions` (FreeCut-only — the engine port dropped it) | n/a (timeline unchanged) |
+| Slide (§5.7) | the counterpart + ITS OWN neighbors on its track (a parallel slide group; tightest clamp across both, 06:1289/:1299/:1357); window-mismatched excluded | both preservation clamps (06:1291-1292) | n/a (span preserved) |
+| Roll (§5.5) | the counterpart pair rolls with the SAME tightest δ — a central `keepTightestDelta` across both pairs (06:1014-1022) | binary-search clamp (06:1145) | per §6 |
+| Ripple trim (§5.2A) | companions trimmed the same δ with `from` restored; downstream shifts on EVERY pair track (+ transition-neighbors, engine :2921-2950) | transition-followers ride the ripple | sync-lock WINS: interval/gap propagation, not link-following (§6) |
+| Insert edit (§5.9's splice family) | the pair splits at the SAME insert frame; each half re-pairs (the ≥2-splits relink law); the right half + companions + downstream shift by the inserted duration — the left half NEVER moves (Decision 31.2) | a split inside a transition's consumed window aborts the edit (R1-B4; §5.9B's E3 error contract) | inserted-gap propagation (§6) |
+| Overwrite edit (§5.9B) | the pair's coverage mirrors the covered-clip law: removed → the companion cascades (the `removeItems` law); trimmed survivor → the companion TRIMS TO MATCH (the E2 fix — the engine's current asymmetry is the defect) | transitions referencing removed clips drop; the R1-B4 abort law applies | removed-interval propagation (§6) |
+| Replace (§5.9C) | SEVERED — `syncLinked: false` by law; the companion keeps position + duration; the new clip carries no link (re-establishable via 16 §3.4's `toggleAVLink`) | transition endpoint REMAP (the `joinItems` pattern, timeline.ts:7411-7427) — never cascade-drop | n/a (downstream never moves) |
+| Append at end (§5.9D) | the linked-append law: the A/V pair lands at the SAME startTime = the video track's append point; an audio-track conflict refuses the whole append atomically (never a partial pair) | n/a (the end is free) | n/a |
+| Ripple overwrite (§5.9E) | the removed set's companions cascade (the `removeItems` law); the move set applies to BOTH tracks' linked sets at the same delta (the A/V pair moves together); the incoming clip enters UNLINKED (the replacement severs — 31.4's law) | the target's transitions drop (the replacement breaks both edges) | both halves: removed-interval on pull, inserted-gap on push (§6) |
+| Fit to fill (§5.9F) | the pair takes the SAME computed rate and the SAME target duration — one rate law both streams, ONE commit (the engine `rateStretchItem` :3202-3211 precedent) | overwrite-style (§5.9B's covered-clip law) | n/a (no downstream movement) |
+
+The base verbs inherit the same law per their own sections: split (§5.1's relink bookkeeping), trim (§5.2's `applySynchronizedTrim` tightest-δ discipline), delete/range-removal (§5.14's linked expansion), move (the offset-preserving pair move — the partner's target = the element's target + the pair's start offset, never collapsed, `av-link.ts:160-201`), rate-stretch (§5.11 step 3 — the same stretch to all synchronized linked items).
+
+**The split-link ruling (Decision 32.4 — the conflict stated, then decided).** §5.1's quoted FreeCut `relinkSplitSegments` SEVERS the link on a single-side split (one linked split → both `linkedGroupId`s stay `undefined` — both halves lose the group); the engine relinks both halves (`relinkSplitSegments`, timeline.ts:668-690 — a single linked split preserves the original group id on BOTH halves). **Relink-both-halves is the law** — Resolve-faithful: a split clip's halves both stay linked to the companion; representable in 09's pairwise `linkedTo` as both halves carrying the link. The §5.1 quote is REFERENCE-CENSUS (the R15-era FreeCut reference), not law; the nle-ui/shell-variants R14 right-half-sever is a registered divergence (the D26 carrier-reduction program's reconciliation row, not an immediate change).
+
+**The model-shape reconciliation (Decision 32.5):** 09's persisted `linkedTo` (pairwise, one companion — the group alternative was rejected at 09 §3.1A B1) stays the persistence form; the engine's `linkedGroupId` (N-clip groups) is the runtime expansion — pairwise at rest, groups at runtime; the r1 port maps groups→pairs explicitly (00-master:330's convergence directive).
+
+**GAP rows (posture law):**
+
+| ID | Gap | Owner | Phase | Acceptance |
+|---|---|---|---|---|
+| E1 | **Engine linked mid-clip insert corrupts layout** — `_performInsertEditImpl` (timeline.ts:4719) with the default `linked:true` and a mid-clip insert point: Phase 2's linked expansion pulls the split's LEFT half into the shift set (both halves share the linkage group — a single linked split keeps the original id on both halves), shifting it INTO the inserted clip's span — an exact-overlap violation of 00-master:804 — while the audio companion shifts whole and unsplit (A/V desync). Live-probed by mode-insert (§3.1, a /tmp vitest run against the real `Timeline` class, engine tree clean); unpinned by every suite (all insert fixtures use `linked:false` or unlinked pairs — the default path is the untested path) | S-engine | pre-r1 (the insert-edit-3-point port's precondition — the port must not carry the defect) | The Decision-32.6 fix: the linked expansion EXCLUDES target-track clips with `from < insertFrame` (the left half), and linked companions that straddle the insert frame are SPLIT there (only their right half shifts); a named vitest pin with the 4 postconditions — no overlap on the target track; the left half unmoved; the companion split at the same frame; ONE undo entry |
+
 ### 5.1 Split
 
 **Description:** Cut one or more clips into two pieces at a given time.
@@ -472,6 +524,8 @@ function relinkSplitSegments(splitResults: SplitResultEntry[]): void {
   }
 }
 ```
+
+**Split-link ruling (Decision 32.4, R25):** the quoted `relinkSplitSegments` SEVERS the link on a single-side split — with exactly ONE linked split, both `leftLinkedGroupId` and `rightLinkedGroupId` stay `undefined`, so BOTH halves lose the group. The LAW is relink-both-halves: the engine's port preserves the original group id on both halves when only one linked clip splits (timeline.ts:668-690) — Resolve-faithful, a split clip's halves both stay linked to the companion — per §5.0's split-link ruling. This quote is REFERENCE-CENSUS (the R15-era FreeCut reference), not law; the nle-ui/shell-variants R14 right-half-sever is the registered divergence.
 
 **OpenCut-classic split (`commands/timeline/element/split-elements.ts:19-214`):**
 
@@ -1431,6 +1485,12 @@ export class DeleteElementsCommand extends Command {
 
 **Description:** Add a new element to the timeline from the media library.
 
+**The two insert semantics (Decision 31.1, R25):** the corpus runs TWO distinct insert operations with DISTINCT homes, and this section states both. **Placement-insert** — the drag-drop/pool insert: OT's `insertElements` (`ops/timeline-core.ts:872`; the W11 `timeline.insert` verb) — reject-not-shift, the main-track zero-anchor (05 §14.5A), F1A-3 homogeneous batches, the first-element canvas/fps auto-set below; the LANDED canonical form (this section's body is its law). **Insert-edit** — the DaVinci source-mode splice: split-at-playhead + intrinsic downstream push + multi-clip sequential landing, the engine's 3-point family (`performInsertEdit`, timeline.ts:4702 — class-only, UNWIRED) porting into OT's ops layer at **r1** per Decision 12.3. The boundary sentence: **the placement surface places (rejecting or displacing per strategy); the source-edit surface splices (splitting and pushing).** The splice's push is INTRINSIC, never flag-routed — the §11.3 ripple flag governs delete and the placement surface's displacement, never the source-edit family (the everywhere-clause, Decision 31.1).
+
+**The mid-clip split law (Decision 31.2):** insert-edit at a playhead interior to a clip splits that clip at the playhead, places the source between the halves, shifts the right half and everything after by the source duration; **the left half NEVER moves.** The engine implements this exactly in the unlinked path (Phase 1 `_splitClipPure` :4742-4774; the Phase 2 shift :4776-4802; one `execute()` = one undo entry); the linked path violates it today — §5.0's E1 row is the pre-r1 fix. Multi-clip sources land sequentially (the DaVinci intent — unimplemented in every repo today, mode-insert Δ3; rides the r1 port); the transition-window abort (R1-B4) and the companion clause are §5.9B's shared 3-point family laws.
+
+**Dedicated vs composite (Decision 31A — one stated rule, not ad hoc):** a new family gets a **DEDICATED op** when its semantics cannot be expressed as a guarded composition of LANDED verbs without breaking atomicity / transition / keyframe / companion invariants — replace (§5.9C: the transition-remap + sever semantics need single-op atomicity). A family stays a **COMPOSITE** when a batch of landed verbs already preserves the invariants — append (§5.9D: `insertElements` relative-offset batch), ripple-overwrite (§5.9E: delete+move+insert), fit-to-fill (§5.9F: insert+retime). The criterion is stated in this preamble so the next family proposal derives the same split.
+
 **Round-8 constraint (absorbed from opencut-timeline DECISIONS #10):** an insert `CommandBatch` (spec 15 §7) must pass an **intra-batch overlap guard** — the batch's own inserts are validated against each OTHER, not just against pre-batch state. Without it, a batch inserting two elements at overlapping times on the same track can pass per-command validation and still produce an invalid final state (atomicity checks the pre-image and post-image; the guard checks the intermediate trajectory). The reference repo hit this in review round 3; our spec 15 §7.1A now states it as batch semantics.
 
 **OpenCut insert (`commands/timeline/element/insert-element.ts:32-297`, key body):**
@@ -1506,7 +1566,117 @@ export type PlacementStrategy =
 - Main-track constraint: main track can't start before its earliest existing element (`placement/main-track.ts:27-55` — `enforceMainTrackStart`).
 - First-element canvas/fps auto-set (`insert-element.ts:83-111`).
 
-**Ripple insert:** Set `isRippleEnabled = true`; the diff-based ripple will detect the new element as a "joined interval" (exempt from shift) and shift everything to its right by `element.duration` to make room.
+**Ripple insert (re-keyed R25, Decision 31.6 — the P1 fix):** the diff-based claim is retired — the classic §12 diff produces the PULL exactly but NEVER the push (a pure insert vacates nothing → freed = ∅ → no adjustment fires; the new element is a joined interval, exempt from shift by construction). The make-room law lives in exactly two places: the insert-edit family's INTRINSIC push (the engine's Phase-2 shift, this section's mid-clip split law — never flag-routed, Decision 31.1) and, at the wire, §5.9E's delete+move+insert composite — NOT a diff-routed `insert{ripple}` path.
+
+### 5.9B Overwrite Edit (R25, Decision 31.3 — the covered-clip law)
+
+**Description:** place a new clip at the playhead (or a marked in-point), writing over whatever clip or clips were there before — cover, not push.
+
+**The covered-clip law** (the engine's verified implementation `_performOverwriteEditImpl`, timeline.ts:4876-5051, and the R20-W2 mock `insertPlan.ts:192-255` — the two executable witnesses):
+
+| Overlap case (target-track clip vs the half-open span [spanStart, spanEnd)) | Law |
+|---|---|
+| Fully contained (`clipStart ≥ spanStart && clipEnd ≤ spanEnd`) | REMOVED entirely |
+| Straddles both sides | split at `spanStart`, the right half split at `spanEnd`, the MIDDLE removed — left + right remnants survive |
+| Straddles only the span start | split at `spanStart`, the right half removed — the left remnant survives (head-straddle ⇒ tail-trim) |
+| Straddles only the span end | split at `spanEnd`, the left half removed — the right remnant survives |
+| Multiple covered clips | the scan re-runs until no overlapping clip remains (each split can expose new candidates) |
+
+- **Zero downstream movement** — nothing shifts, anywhere; the timeline duration is preserved or shortened.
+- **Transitions drop:** transitions referencing removed clips drop; a split that lands inside a transition's consumed window ABORTS the whole edit (R1-B4 — refuse, no partial commit, no history entry).
+- **ONE atomic undo** — the splits + removals + the insert commit under one `execute()` (the engine's P1.14 reentrancy fold).
+- **The 3-point shape:** duration = `sourceEnd − sourceStart` (the source viewer's in/out marks, `max(1, …)`), placed at the overwrite frame, typed by the track kind (`_buildSourceEditClip` :5061-5116; assumes sourceFps === timelineFps — callers pre-convert).
+
+**The companion law (§5.0's fan-out row):** companions of REMOVED clips cascade (removed with them — the `removeItems` law); companions of surviving TRIMMED remnants TRIM TO MATCH — both tracks' remnants by the same amounts. The engine's current asymmetry (removed clips cascade, timeline.ts:4998-5017; trimmed survivors' companions do not) is the E2 defect the r1 port must not carry.
+
+**The error contract (E3 — the 3-point family's shared R1-B4 abort law):** the transition-blocked abort REFUSES — at the r1 port it re-surfaces as an `INVALID_PARAMS`-class error (15 §6.3's envelope), never the engine's current silent empty return (`{insertedClipId:'', …}`, no error code — not wire-able; mode-insert Δ7 / mode-overwrite G4).
+
+**GAP rows (posture law — the r1-scheduled registration per Decision 30.2):**
+
+| ID | Gap | Owner | Phase | Acceptance |
+|---|---|---|---|---|
+| OW-1 | §5.9B's executable home: the covered-clip law exists only engine-side (class-only, UNWIRED off the 19-op INTERNAL surface per Decision 16) and in the R20-W2 mock; OT has no overwrite op/verb/UI (the phantom `placement:'overwrite'` rows were retired this round — P2/P6) | S-ot | r1 (the Decision-12.3 port wave; `performOverwriteEdit` :4860 is the algorithm source) | the ported pure op over SceneTracks implements the four overlap cases + no-shift + remnant survival + one-entry undo; the carried engine tests + a four-case vitest family (fully-contained-removed / straddle-both-split×2 / head+tail-trim / no-displacement) green; the R1-B4 abort classified INVALID_PARAMS-class (E3); the §10.4 row flips ALIGNED |
+| OW-2 (E2) | the engine companion asymmetry: removed clips cascade to companions, trimmed survivors' companions do NOT (A/V desync by design-comment omission, mode-overwrite Δ4) | S-engine (pre-r1; the port home then owns it) | pre-r1 → r1 | a linked A/V overwrite-straddle fixture: the trimmed survivor's companion trims by the same amounts; pinned engine-side and carried into the ported op's vitest family |
+| OW-3 (E3) | the abort is silent: `_performOverwriteEditImpl` returns an empty result on a transition-blocked split (the refusal stance is right; the silence is not wire-able) | S-engine + S-ot | pre-r1 (the queue filing) / r1 (the port) | the refusal carries the error code at the port seam (INVALID_PARAMS-class); the abort path pinned (no commit, no history entry) |
+
+### 5.9C Replace (R25, Decision 31.4 — the exact-length swap)
+
+**Description:** replace a single clip with a source of the exact same length — the incoming clip's OUT point is auto-adjusted so it fits perfectly, making it the same duration as the clip it replaces.
+
+**The contract:**
+- **Exact-length swap:** the target's span is vacated and refilled with zero net time change; the postcondition set: `newClip.from == target.from ∧ newClip.duration == targetDur ∧ every downstream element unchanged (startTime + duration) ∧ every other clip/transition id unchanged`.
+- **Out-auto-adjust:** the source's OUT is DERIVED, never honored — `sourceEnd' = sourceStart + timelineToSourceFrames(targetDur, speed=1, timelineFps, sourceFps)` (the shared law of trim/slip/split, engine `core/timeline-math.ts:151`); the IN point is untouched. Out-auto-adjust is replace's law (contrast §5.9E: the ripple overwrite lets the source's own duration stand).
+- **Downstream does NOT move** — no ripple math; the right-arrow grammar token is hidden for this mode.
+- **Transitions REMAP:** transitions at the target's edges re-target onto the new clip (the `joinItems` pattern, timeline.ts:7411-7427 — `replacementByRemovedId` endpoint remap, self-transitions dropped) — NOT the cascade-drop of `removeItems` (:3775-3777). This is the single clearest reason replace is a DEDICATED op (Decision 31A).
+- **The companion SEVERS:** `syncLinked: false` by law — the companion keeps position + duration; the new clip carries no link (re-establishable via 16 §3.4's `toggleAVLink`). The naive-composition trap: `removeItems`' default-true linked expansion would DELETE the companion (§5.0's fan-out row; engine :3757).
+- **Unfillable source REFUSES:** a marked range shorter than the target with no source handles (`getAvailableSourceFrames < targetDur`, timeline-math.ts:190) → `INVALID_PARAMS` — the honest-refusal stance; never clamp, never place-shorter-and-ripple.
+- **Target resolution:** the N15 law (16 §3.4) — primary selection first; else the clip under the playhead on the focused track (fallback: main track); single clip only (multi-select replace = per-element fan-out, one command each, batched per 15 §7).
+
+**GAP rows (posture law — Decision 30.2):**
+
+| ID | Gap | Owner | Phase | Acceptance |
+|---|---|---|---|---|
+| RE-1 | the dedicated op + wire verb: no `performReplaceEdit` in the engine (the 3-point family ports freecut's insert+overwrite only, timeline.ts:4513-4515), no `timeline.replace` on the wire (`WIRE_COMMAND_TYPES` = 30 names, tsc-lockstep-closed); OT's drop-on-clip replace is the deliberate SD-5 no-op (`drag-drop-controller.ts:354-359`) | S-engine (the op: `performReplaceEdit(trackId, targetClipId, sourceId, sourceStart, {linked:false})` in the freecut style — a corpus-designed op, not a port) + S-ot (the port + verb per Decision 12.3) | r1 | one `execute` = one undo entry; transition endpoint REMAP (the joinItems pattern) not cascade-drop; `linked:false` default; the `_commit` keyframe-prune verified; Tier-1 pins: exact-length, no-move, undo atomicity, transition survival, companion untouched; the C7 census re-declares mechanically on landing (tsc-lockstep + M49C — the landed 24+6 census untouched until then) |
+| RE-2 | the shell-variants mock implements the WRONG law: the replace branch (`insertPlan.ts:311-340`) places the source at its OWN duration and trims the downstream it covers — remove+overwrite, not the exact-length swap its own tooltip (`SourceEditBar.tsx:66`), its own R20 doc ("exact-length swap", insert-modes.md:135), and the mode card all promise | S-app (the mock owner) | r1-adjacent (with RE-1's consumer) | `plan.ghost.dur == target.duration` + displaced == ∅ pinned; the downstream-trim behavior removed from the replace branch (§5.9E owns it); the tooltip stays truthful |
+
+### 5.9D Append at End (R25, Decision 31.5 — the per-track tail composite)
+
+**Description:** place the source clip after the last edit on the target track, regardless of where the playhead is located (the mode's identity sentence); multi-select appends N clips from the pool all at once.
+
+**The contract:**
+- **Per-track last-element-end:** `t₀ = max(0, max over target-track elements of (startTime + duration))`; empty track ⇒ 0. Per-track, NOT timeline-content-end — both in-corpus implementations chose it (variants `insertPlan.ts:413-414`; mini `useMini.ts:1055` + `geometry.ts:50`), and it is the only reading under which append never creates an interior gap on the target track; an append point is always ≥ the earliest element, so `enforceMainTrackStart` (05 §14.5A) never rewrites it.
+- **Multi-append ordering:** the pool's canonical display order filtered by the selection, sequentially accumulated — `t_{i+1} = t_i + dur_i` (append points evolve INSIDE the op, never pre-computed as N × the same t₀); per-clip duration = the source's trimmed range (the 3-point shape).
+- **The playhead is IGNORED** — the op reads neither `currentTime` nor any pointer-derived time, and does not move the playhead (mid-timeline playhead ⇒ identical landing).
+- **Never a push:** nothing is downstream of the append point by construction; the ripple parameter is inapplicable (fixed false BY LAW, not by default); the right-arrow grammar token is forbidden for this mode. Append ≠ gap-fit insert (the mini's OT-SEAMS row 5 divergence stays registered).
+- **The linked-append law (§5.0's fan-out row):** a video source with audio lands the A/V pair at the SAME startTime = the video track's append point, the companion on the paired audio track (sync by construction — NOT at the audio track's own content end, which desyncs when the tails diverge); existing audio content at/after that point REFUSES the whole append atomically (reject-not-shift + 00-master:804 — never a partial pair).
+- **Composite (Decision 31A):** NO new engine op — `insertElements`' relative-offset batch is the primitive (the first element at `t₀`, later elements at accumulated offsets, the intra-batch overlap guard satisfied by construction, ONE history entry — the one-entry law for free); F1A-3's heterogeneous-batch rejection splits a mixed pool selection into per-kind batches (one per target lane). Wire form: the 6th `PlacementStrategy {type:'append', trackId?}` + the already-endorsed r1 `insertBatch` composite (15 §13.15, D29 F8); an optional `timeline.append` wrapper per the `rippleDelete` pattern (§5.4 note 2 — a documented convenience, never a 79th union member by the back door).
+
+**GAP rows (posture law — Decision 30.2):**
+
+| ID | Gap | Owner | Phase | Acceptance |
+|---|---|---|---|---|
+| AP-1 | the wire form: no append strategy/verb on spec 15 or OT's wire (2-of-5 strategies exposed, `api.ts:42-50`); OT's pool batch is playhead-anchored `applyBatch([insert × N])` stacking with N undo entries (`page.tsx:515-555`) | S-spec (15) + S-ot | r1 (the param-alignment wave, 15 §13.15's :4901 row; rides insertBatch's endorsed slot) | 15 §4.3.9 gains `{type:'append', trackId?}` (the 6th strategy) + `insertBatch{placement:'append'}` + the optional wrapper row + the §4.1A disposition row; on landing, `WIRE_COMMAND_TYPES` + the M49C gate re-declare mechanically (D29 F8) — the landed 24+6 census untouched until then |
+| AP-2 | the OT-side resolver + pins: the append-point resolution, the sequential accumulation, the linked-companion composition, and the playhead-ignored law exist nowhere in the ops layer (scout-ot row 8: composable manually via `timeline.insert` at an explicit end-of-track `startTimeTicks` only) | S-ot | r1 (with AP-1) | the append resolution lands at the `insertElements`/strategy level (per-track t₀, sequential accumulation, the linked-append law, TRACK_LOCKED refusal); M16-class pins: append-at-track-end, playhead-ignored, multi-append order + one-entry, linked pair sync + atomic refusal, empty-track→0 |
+
+### 5.9E Ripple Overwrite (R25, Decision 31.6 — the delta law)
+
+**Description:** replace a shot of one length with a shot of a different length — longer clips push everything down to make room, shorter clips pull things in so there are no gaps.
+
+**The contract:**
+- **The delta law:** the target span `[t.start, t.start + oldDur)` is fully vacated; the source lands at `t.start` with **its own duration** (NO out-adjustment — that is §5.9C's law); `delta = newDur − oldDur` shifts every downstream element on the target track (`startTime ≥ span.end`, plus transition-right-neighbors of removed clips per the engine's ripple machinery — `rippleTrimItem` :2925-2950's precedent) — push if positive, PULL if negative. Upstream untouched; the total length changes by delta; ONE atomic undo.
+- **The pull leaves no gap:** `firstDownstream.start + delta == source.end` by construction; pre-existing gaps elsewhere are preserved verbatim (the law scopes to the edit's OUT boundary).
+- **Transitions drop:** the replacement breaks both edges — the target's transitions die with it, the incoming clip enters bare, the moved downstream forms a hard cut at the OUT side (the same law `performOverwriteEdit` applies to removed clips; DaVinci does not transfer the old transitions to the new edges).
+- **The zero-floor law:** the delta never shortens any downstream clip below its minimum duration; a pull that would cross the track head floors at 0 or refuses (the honest refusal).
+- **The companion law (§5.0's fan-out row):** the removed set's companions cascade; the move set applies to BOTH tracks' linked sets at the same delta; sync-locked tracks take §6's propagation (removed-interval on pull, inserted-gap on push); the incoming clip enters unlinked (the replacement severs — §5.9C's law).
+- **The composite (Decision 31A):** `delete + move + insert` — three routed verbs, ONE `applyBatch` (15 §7 / 06 §4.3), one history entry. The order law — delete → move → insert — keeps every intermediate state overlap-free, so the §5.9 intra-batch overlap guard (F1A-2) passes by trajectory (never overlapping), with the insert LAST (reject-not-shift placement). **NOT "overwrite + the §11.3 ripple flag":** the classic §12 diff is ASYMMETRIC — it produces the PULL exactly (vacated − joined = the tail gap; OT's M6 joined-interval test pins the mechanism) but cannot produce the PUSH (freed = ∅ when the joined interval covers the vacated span, and the push's intermediate state is overlap-rejected by 05 §14.5's reject-not-shift law). The r20 doc's `rippleDelete + insert` mapping is likewise broken in both directions (rippleDelete closes the gap first — the subsequent insert collides with the pulled-in downstream for ANY source length; insert-modes.md:290/:299, mode-ripple-overwrite §3.3).
+- **The r1 verb decision** (the C7-worklist row): a dedicated `timeline.rippleOverwrite` OR the InsertCommand replace-placement carrying the delta-law ripple param — with the law-split stated in the row: `insert{ripple}` = push by the FULL inserted duration; `ripple-overwrite{ripple}` = shift by delta (one boolean cannot mean both; the rateStretch/retime ripple wording at 15 :836/:865 is the template).
+
+**GAP rows (posture law — Decision 30.2):**
+
+| ID | Gap | Owner | Phase | Acceptance |
+|---|---|---|---|---|
+| RO-1 | the composite's consumer-side documentation + the verb decision: expressible TODAY over the 24 routed verbs (delete/move/insert all routed; `applyBatch` atomic) but stated nowhere consumer-side; the verb form unruled | S-ot + S-spec (15 §13.15's row) | r1 (with the Decision-12.3 port wave) | the composite documented at the consumer seam; the verb decision ruled (the dedicated verb OR the replace-placement with the delta-law ripple param — the law-split stated); the census re-declares mechanically on landing (D29 F8) — the landed 24+6 census untouched until then |
+| RO-2 | the engine's signed-shift machinery is private: `rippleTrimItem`'s push/pull downstream shift (:2925-2950) + both sync-lock propagations (:3475/:3534) — the algorithm source for the composite, exposed by no public surface | S-engine (the exposure filing) + S-ot (the port) | r1 | the ripple-overwrite composite (or `performRippleOverwriteEdit`) lands as pure OT-side functions with the carried engine tests; the §10.4/§10.5 rows flip |
+| RO-3 | the shell-variants mock's rippleOverwrite is span-form, push-only: `delta = dur − displaced ≥ 0` by construction — the pull is unreachable; a shorter source head-trims the target (plain-overwrite behavior), violating full replacement + "no gaps" (insertPlan.ts:472-484; the stale test title at useUiStore.test.ts:2048) | S-app (the mock owner) | crawl (r1-adjacent, with RO-1's consumer) | a pull-case test exists and passes (a shorter source → full replacement + left shift + no gap); the planner aligns to the clip-form delta law or the divergence is registered |
+
+### 5.9F Fit to Fill (R25, Decision 31.7 — the 4-point retime fill)
+
+**Description:** take the portion of the source you have marked and add a speed change to it — automatically calculated so it fits exactly into the space you have selected on the timeline.
+
+**The contract:**
+- **The speed law:** `speed = markedDuration / targetDuration` — a LONGER marked range into a SHORTER span speeds UP (the fleet-wide playback-multiplier convention: engine `calculateSpeed`, `timeline-math.ts:133`; OT `retime.ts:29` — `sourceTime = clipTime × rate`; WDC `varispeed.ts:40`). The result's timeline duration = `targetDuration` EXACTLY (frame-snapped); the source window = the FULL marked range (`sourceStart = markedIn`) — the window is never re-trimmed to fit; it is retimed (the rate change is the whole edit).
+- **The acceptance domain is [0.1, 5]** — the three-domain intersection: engine freecut-model [0.1, 16] ∩ OT [0.01, 5] ⊂ WDC [1/32, 32] ⇒ pitch preserved for every accepted fit. Out-of-domain REFUSES with `INVALID_PARAMS` — **never clamps** (a clamped fit silently violates exact-fill: the clip would no longer fill the span). The generic retime module keeps [0.01, 5] (§11.7's adopted decision); the 0.01–0.1 band is fit-to-fill-invalid because it is engine-freecut-clamp-unsafe (a rate there would silent-clamp on the engine reference path).
+- **Placement:** overwrite-style into the selected span — covered clips split/trim per §5.9B's law; NO downstream movement; the selection is not cleared (the replace/fit-fill family law).
+- **The pair law (§5.0's fan-out row):** the linked companion gets the SAME computed rate and the SAME target duration — one law both streams (video consumes the rate in `timelineToSourceFrames`; audio in `varispeedRate = segRate × transportRate`); the pair lands as ONE commit, never two calls.
+- **The badge:** one decimal, lowercase x — "1.7x" (the reference mock's form; the full precision lives in the element's rate field).
+- **Composite (Decision 31A):** insert + `updateElements{retime}` (the mocks' documented mapping, `insertPlan.ts:26` / insert-modes.md:292) — both verbs LANDED and UI-routed; one `applyBatch` = one history entry. A first-class wire verb is optional at r2, NOT r1. The audio half consumes WDC's landed W2 (SoundTouch varispeed — output length exactly `round(inFrames / rate)`, pitch preserved in-domain): no new audio work; ±1-frame tail drift between the streams is frame/sample quantization residue, not an error.
+
+**GAP rows (posture law — Decision 30.2):**
+
+| ID | Gap | Owner | Phase | Acceptance |
+|---|---|---|---|---|
+| FF-1 | the composite's OT-side landing: the authoring verb is absent everywhere (the pure law exists engine-side — `calculateSpeed` — and OT's inverse `getTimelineDurationForSourceSpan`, `retime.ts:51`; no verb computes rate from a duration); the r1 vehicle is the wave-1 rateStretch port (§10.5's OT-GAP row) | S-ot | r1 (riding 15 §13.15's wave-1 rateStretch row) | the composite (insert + `updateElements{retime}` under the 4-point contract) lands; the mock's 37 per-mode pins re-expressed OT-side + the A/V pair sync pin (the same rate both streams, one commit); the refusal law pinned (out-of-domain → INVALID_PARAMS, unmarked source → the honest info refusal) |
+| FF-2 | the rate-domain registration: §11.7's generic bounds ([0.01, 5], adopted) vs this section's acceptance domain ([0.1, 5] + refusal) — the split is law here but §11.7's row does not yet cross-reference it | S-spec (06 §11.7's cross-note) | r1 (with FF-1) | §11.7's row carries the fit-to-fill cross-reference (the domain split documented — the generic retime module keeps [0.01, 5]); no silent-clamp path on any accepted fit |
 
 ### 5.10 Duplicate
 
@@ -2405,7 +2575,9 @@ For multi-select move architecture, **OpenCut-classic's `group-move/` is the can
 | §5.3 Move | :3945 / :4035 | `moveClip(` / `moveItems(` | ALIGNED |
 | §5.6 Slip | :4143 | `slip(clipId: string, deltaFrames: number, options: { linked?: boolean } = {}): void {` | ALIGNED |
 | §5.7 Slide | :4246 | `slideItem(` | ALIGNED |
-| §5.9 Insert / Overwrite | :4702 / :4860 | `performInsertEdit(` / `performOverwriteEdit(` | ALIGNED |
+| §5.9 Insert (placement half — Decision 31.1) | (absent) | no engine placement code — placement is OT's law | N/A — OT-OWNED (§10.5's `insertElements` row, M5, is the LANDED home; the engine has no placement surface by design) |
+| §5.9 Insert-edit (the 3-point splice — Decisions 31.1/31.2) | :4702 | `performInsertEdit(` | PORT-SCHEDULED (r1, Decision 12.3 — the prior "ALIGNED" verdict retired R25, P9: it certified the method against a § teaching the OTHER insert semantics; the splice law is §5.9's insert-edit preamble; the E1 linked defect (§5.0) is the pre-r1 precondition; UNWIRED off the 19-op INTERNAL surface) |
+| §5.9B Overwrite edit | :4860 | `performOverwriteEdit(` | PORT-SCHEDULED (r1 — §5.9B's covered-clip law, Decision 31.3; the E2 companion asymmetry + the E3 silent abort are the fix rows; UNWIRED) |
 | §5.14 Range removal family | :6910 / :7057 / :7098 / :7124 | `removeRangesFromClip(` / `removeSilenceFromItems(` / `removeFillerWordsFromItems(` / `removeTranscriptRangesFromItems(` | ALIGNED |
 | §5.13 Freeze frame | :7185 | `freezeFrameAtPosition(` | ALIGNED |
 | Join (spec 16 composite) | :7341 | `joinItems(clipIds: string[]): string \| null {` | ALIGNED |
@@ -3107,7 +3279,11 @@ rate-stretch, retime, freeze-frame, range-removal}:
   to a video track → `TRACK_TYPE_MISMATCH` rejected; moving to a different
   audio track → succeeds (per `placement/compatibility.ts`)
 - `move-overlap-on-target-rejected` — moving onto an occupied slot on the
-  target track → `OVERLAP_DETECTED` rejected (unless overwrite placement)
+  target track → `OVERLAP_DETECTED` rejected (re-keyed R25, Decision 31.3 —
+  there is no "overwrite placement" strategy in any union; the overwrite
+  EDIT is §5.9B's covered-clip law, a distinct op that removes/trims the
+  clips its span covers rather than rejecting — it never rides the move
+  verb's placement path)
 - `move-main-track-constraint` — main-track element cannot be moved before
   the earliest stationary main-track element
   (`placement/main-track.ts:enforceMainTrackStart`)
@@ -3117,8 +3293,13 @@ rate-stretch, retime, freeze-frame, range-removal}:
 - `ripple-delete-shifts-downstream-left` — delete a clip with
   `ripple: true`; every downstream clip on the same track shifts
   `startTime` by `-deletedDuration`
-- `ripple-insert-makes-room` — insert a clip with `ripple: true`; every
-  downstream clip shifts `startTime` by `+insertedDuration`
+- `ripple-overwrite-composite-makes-room` — the §5.9E composite
+  `applyBatch([delete, move, insert])` over the routed verbs: every
+  downstream clip shifts by `delta = newDur − oldDur` (push or pull); the
+  delete-then-move-then-insert trajectory passes the intra-batch overlap
+  guard; ONE undo entry (re-keyed R25, Decision 31.6 — replaces the phantom
+  `ripple-insert-makes-room` row: the §12 diff cannot push, so no
+  diff-routed insert path produces the old assertion)
 - `ripple-diff-computation` — verifies `ripple/diff.ts:13-43` produces
   correct `vacated`, `joined`, `freed` intervals for a known
   before/after pair (e.g. 3-clip track with middle clip deleted →
@@ -3157,10 +3338,19 @@ rate-stretch, retime, freeze-frame, range-removal}:
 
 - `slide-moves-element-and-trims-neighbors` — element `startTime` shifts
   by δ; left neighbor trims end by `+δ`; right neighbor trims start by
-  `-δ`; slid element's `sourceStart`/`duration` unchanged
-- `slide-no-chain-is-noop` — when left+right neighbors don't form a
-  split-contiguous chain with the slid element → no-op
-  (`slide-utils.ts:16-42`)
+  `-δ`; slid element's `duration` unchanged, `sourceStart` shifts by the
+  continuity delta when the split chain holds (§5.7 steps 5/8,
+  `computeSlideContinuitySourceDelta`; `preserveContinuity` default true,
+  15 §4.3.7) — re-keyed R25 (the old "sourceStart/duration unchanged" tail
+  contradicted §5.7 steps 5/8 and 15 §4.3.7)
+- `slide-continuity-zero-for-non-chain` — when left+right neighbors don't
+  form a split-contiguous chain with the slid element,
+  `computeSlideContinuitySourceDelta` returns 0 and the slid clip's source
+  window stays put — but the slide itself PROCEEDS (the neighbors still
+  trim, the clip still moves; the engine slides anyway, timeline.ts:4336)
+  (`slide-utils.ts:16-42`; renamed R25 — the old `slide-no-chain-is-noop`
+  mis-named the behavior: the chain gates only the source delta, not the
+  slide)
 - `slide-preserves-keyframes` — keyframes on the slid element are not
   evicted from source (`slide-keyframe-constraints.ts`)
 
@@ -3172,8 +3362,13 @@ rate-stretch, retime, freeze-frame, range-removal}:
   downstream clips shift left by `deletedDuration`
 - `delete-multi-element-atomic` — deleting N elements in one command is
   one undo step (BatchCommand under the hood)
-- `insert-overwrite-vs-ripple` — `placement: 'overwrite'` vs
-  `'ripple'` produces different post-states for the same insert
+- `insert-overwrite-vs-ripple` — §5.9B's overwrite edit (the covered-clip
+  law: covered clips removed/trimmed, ZERO downstream movement) vs §5.9E's
+  ripple overwrite (the delta law: downstream shifts by
+  `newDur − oldDur`, the pull leaves no gap) produce different post-states
+  for the same target + source (re-keyed R25, Decisions 31.3/31.6 — the
+  old row's `placement: 'overwrite'` / `'ripple'` values exist in NO
+  `PlacementStrategy` union)
 - `insert-resolves-placement` — `placement/resolve.ts` picks the correct
   slot per `main-track` vs overlay vs audio track type
 - `duplicate-regenerates-keyframe-ids` — cloned animations get fresh
