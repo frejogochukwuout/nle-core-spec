@@ -1022,6 +1022,14 @@ export const useUi = create<UiState>((set, get) => ({
        the radio never claims fxMode that no longer holds). */
     fxMode: p === 'fx',
     ...(s.page === 'fx' && p !== 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
+    /* R24-W0 (DESIGN-R24 §3 W0.1 — F5's page-transition leak): the FX domain
+       dies with the page too. A selectedFxObject carried into edit/color/
+       deliver rendered a lying FxInspector rail AND armed Delete (the
+       ruling-22 rung reads the domain before the clip selection) — the exit
+       law now covers all seven selection domains the way the scene switch
+       does. The fx-page entry is always fresh (the domain can only be set
+       while on fx — selectFxObject is fx-page-driven). */
+    ...(s.page === 'fx' && p !== 'fx' ? { selectedFxObject: null } : {}),
     /* R23-WB (DESIGN-R23 D-B5; issue #92 — SUPERSEDES #73's R22-era "mixer
        renders on ALL pages" for the color page, registered in the README
        deviation ledger): entering a page whose toolbar carries NO mixer
@@ -1599,6 +1607,10 @@ export const useUi = create<UiState>((set, get) => ({
          the FX engine's seam zones on a page that never asked for them. */
       fxMode: false,
       ...(s.page === 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
+      /* R24-W0 (W0.1's belt-and-braces — the RAW page writer twin): this
+         action writes `page` directly, so it carries the fx-domain exit
+         itself (the fxMode coupling above is the pattern). */
+      ...(s.page === 'fx' ? { selectedFxObject: null } : {}),
       mixer,
       mixerState: 'full',
       audioLaneBoost: true,
@@ -1614,6 +1626,10 @@ export const useUi = create<UiState>((set, get) => ({
     audioLaneBoost: false,
     fxMode: false,
     ...(s.page === 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
+    /* R24-W0 (W0.1 belt-and-braces): exit is only reachable from the audio
+       page (where the domain is already dead per the entry clear above),
+       but the raw writer keeps the full exit law like its fxMode twin. */
+    ...(s.page === 'fx' ? { selectedFxObject: null } : {}),
   })),
   setMixerState: (m) => set({ mixerState: m }),
   cycleMixerState: () => set((s) => {
@@ -2054,6 +2070,17 @@ export const useUi = create<UiState>((set, get) => ({
       delete right.linkedTo;
       t.elements.splice(idx, 1, left, right);
     }
+    /* R24-W0 (DESIGN-R24 §3 W0.3 — F5's lying rail): the transition moves to
+       the NEW right-half id (left.transitionOut is deleted above), so a
+       selectedFxObject pointing at the ORIGINAL (now left-half) id renders
+       a lying rail after the split — and Add would mint a second transition
+       one seam over. The pointing domain dies with the element it
+       referenced (the removeFade/removeEffect belt-and-braces pattern: the
+       set() runs BEFORE withHistory's own set, one React commit). */
+    const st = get();
+    if (st.selectedFxObject !== null && st.selectedFxObject.elementId === id) {
+      set({ selectedFxObject: null });
+    }
     return scenes;
   }),
   toggleEffect: (elementId, fxId) => withHistory(set, get, (scenes) => {
@@ -2246,6 +2273,17 @@ export const useUi = create<UiState>((set, get) => ({
   setTransition: (id, patch) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, id);
     if (!hit || hit.track.locked) return;
+    /* R24-W0 (DESIGN-R24 §3 W0.2 — A1's no-op twin): an IDENTICAL patch on
+       an EXISTING transition mints NO history entry (the drag-replace
+       gesture short-circuits earlier with its 'Already X' toast; this is
+       the belt-and-braces store twin). The guard fires ONLY when a
+       transition already exists — the fresh-mint path (no transitionOut)
+       is a real change and must keep minting. */
+    if (hit.el.transitionOut) {
+      const cur = hit.el.transitionOut as unknown as Record<string, unknown>;
+      const nxt = patch as unknown as Record<string, unknown>;
+      if (Object.keys(nxt).length > 0 && Object.keys(nxt).every((k) => cur[k] === nxt[k])) return;
+    }
     if (!hit.el.transitionOut) hit.el.transitionOut = { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 };
     Object.assign(hit.el.transitionOut, patch);
     return scenes;

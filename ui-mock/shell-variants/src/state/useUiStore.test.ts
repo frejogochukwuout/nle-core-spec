@@ -2290,6 +2290,74 @@ describe('R23-WA: selectedFxObject — the seventh selection domain', () => {
   });
 });
 
+describe('R24-W0: the store prep — fx-domain exit laws + the transition no-op twin + split clears the pointing rail', () => {
+  it('W0.1: leaving the FX page clears selectedFxObject (the page-transition leak — F5-P2)', () => {
+    act(() => { S().setPage('fx'); });
+    act(() => { S().setSelection(['el-1']); });
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'in' }); });
+    expect(S().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-1', side: 'in' });
+    act(() => { S().setPage('edit'); }); // ⌘1 — the leak route Delete abused
+    expect(S().selectedFxObject).toBe(null);
+    // the survival law still holds WITHIN the page (selection changes only)
+    act(() => { S().setPage('fx'); });
+    act(() => { S().selectFxObject({ kind: 'transition', elementId: 'el-2' }); });
+    expect(S().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' });
+    act(() => { S().setPage('color'); });
+    expect(S().selectedFxObject).toBe(null);
+  });
+
+  it('W0.1 raw-writer twin: enterAudioFocus from the FX page clears the domain (the fxMode coupling pattern)', () => {
+    act(() => { S().setPage('fx'); });
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'out' }); });
+    act(() => { S().enterAudioFocus('shortcut'); });
+    expect(S().page).toBe('audio');
+    expect(S().selectedFxObject).toBe(null);
+  });
+
+  it('W0.2: an IDENTICAL patch on an existing transition mints NO history entry (A1 no-op twin)', () => {
+    // el-2's fixture transition: crossfade / Cross Dissolve / 0.75s / alignment 0.5
+    const pastBefore = S().past.length;
+    act(() => { S().setTransition('el-2', { duration: 0.75, presentation: 'Cross Dissolve' }); });
+    expect(S().past.length).toBe(pastBefore); // true no-op
+    expect(el('el-2').transitionOut?.duration).toBe(0.75);
+    // a REAL patch still mints exactly one entry
+    act(() => { S().setTransition('el-2', { duration: 1.25 }); });
+    expect(S().past.length).toBe(pastBefore + 1);
+    expect(el('el-2').transitionOut?.duration).toBe(1.25);
+    act(() => { S().undo(); });
+    expect(el('el-2').transitionOut?.duration).toBe(0.75); // round-trips
+  });
+
+  it('W0.2 fresh-mint guard: the no-op guard NEVER fires when no transition exists (the R24 first-cut bug)', () => {
+    expect(el('el-4').transitionOut).toBeUndefined(); // virgin seam
+    const pastBefore = S().past.length;
+    act(() => { S().setTransition('el-4', { duration: 0.5, presentation: 'Cross Dissolve', alignment: 0.5 }); });
+    expect(S().past.length).toBe(pastBefore + 1); // fresh-mint IS a change
+    expect(el('el-4').transitionOut?.presentation).toBe('Cross Dissolve');
+    // and a second identical patch on the NOW-existing transition is the no-op
+    act(() => { S().setTransition('el-4', { duration: 0.5 }); });
+    expect(S().past.length).toBe(pastBefore + 1);
+  });
+
+  it('W0.3: split clears a selectedFxObject pointing at the split element (the lying rail — F5)', () => {
+    act(() => { S().setPage('fx'); });
+    act(() => { S().setSelection(['el-2']); });
+    // point at el-2's transition BEFORE the split — after ⌘B the transition
+    // moves to the new right-half id (el-2-b…), the rail would lie
+    act(() => { S().selectFxObject({ kind: 'transition', elementId: 'el-2' }); });
+    act(() => { S().splitElement('el-2', 12.75); });
+    expect(S().selectedFxObject).toBe(null);
+    // and the transition itself moved to the right half (the pre-existing law)
+    expect(el('el-2').transitionOut).toBeUndefined();
+    expect(mainEls().some((id) => id.startsWith('el-2-b'))).toBe(true);
+    // a domain pointing ELSEWHERE survives a REAL split of a different
+    // element (no over-clearing — el-3 spans 17→24, split at 20 is valid)
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'in' }); });
+    act(() => { S().splitElement('el-3', 20); });
+    expect(S().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-1', side: 'in' });
+  });
+});
+
 describe('R23-WA: setFade — the ONE effective-fade writer (D-A3)', () => {
   it('routes video/text to fadeIn/fadeOut, audio to audioFadeIn/audioFadeOut (fieldOfFade, single owner)', () => {
     act(() => { S().setFade('el-1', 'in', 1.25); });
