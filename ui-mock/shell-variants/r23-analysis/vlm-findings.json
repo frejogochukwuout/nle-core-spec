@@ -582,10 +582,12 @@
     "shot": "r23-analysis/shots/color/color--inspector-curves.png",
     "findings": [
       {
-        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+        "severity": "P3",
+        "element": "Curves panel area",
+        "description": "The curves editor is confined to the top-left quadrant, leaving a large empty dark void in the rest of the 1280x800 layout, which looks like a broken visualization or an unfinished UI state."
       }
     ],
-    "reviewedAt": "2026-09-07T11:05:47.447Z"
+    "reviewedAt": "2026-09-10T07:54:14.927Z"
   },
   {
     "story": "color--inspector-qualifier",
@@ -1574,32 +1576,22 @@
     "shot": "r23-analysis/shots/timeline/timeline--fx-mode.png",
     "findings": [
       {
+        "severity": "P3",
+        "element": "Text 1 track label",
+        "description": "The text 'MARINA — FISHERWO...' is clipped/overflowing its container, with the end of the string cut off."
+      },
+      {
         "severity": "P2",
+        "element": "V1 track clips",
+        "description": "Clip labels like 'A_2_C034_beach_wide' and 'marina_interview' are overlapping or positioned very close to the clip boundaries/thumbnails, leading to a cluttered and potentially illegible layout."
+      },
+      {
+        "severity": "P3",
         "element": "V1 track clip labels",
-        "description": "Text is clipped/overflowing its container, e.g., 'beach_wide' and 'interview' are cut off at the left edge of the clip boxes."
-      },
-      {
-        "severity": "P3",
-        "element": "A1 track clip label",
-        "description": "The text 'ambience' is partially clipped on the left side of the green clip container."
-      },
-      {
-        "severity": "P3",
-        "element": "A2 track subtitle clips",
-        "description": "Text inside the subtitle boxes (e.g., 'We ai...', 'Nous venon...') is heavily truncated, indicating insufficient width for the content or poor font scaling."
-      },
-      {
-        "severity": "P3",
-        "element": "T1 track clip label",
-        "description": "The text 'MARINA — FISHERWO...' is truncated with an ellipsis, suggesting the container is too narrow for the full title."
-      },
-      {
-        "severity": "P2",
-        "element": "Top-left header area",
-        "description": "The placeholder text '( timeline toolbar + scene tabs sit here in...' is clipped by the left edge of the viewport."
+        "description": "Text labels on video clips (e.g., '...nch') appear to be clipped by the right edge of their respective clip containers."
       }
     ],
-    "reviewedAt": "2026-09-07T11:10:28.868Z"
+    "reviewedAt": "2026-09-10T07:54:22.885Z"
   },
   {
     "story": "timeline--clip-states",
@@ -1793,6 +1785,30 @@
     "reviewedAt": "2026-09-07T11:12:15.110Z"
   },
   {
+    "story": "pages--deliver-strip",
+    "title": "Pages",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/pages/pages--deliver-strip.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "V1 track clip text",
+        "description": "The label 'drone_lau...' is clipped/overflowing its container on the right side."
+      },
+      {
+        "severity": "P2",
+        "element": "A1 track clip text",
+        "description": "The label 'interview_marina' has very low contrast against the dark green background, making it difficult to read."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline ruler area",
+        "description": "The timecode markers (e.g., 00:08, 00:83) appear misaligned or use an unconventional format that looks like a rendering error or placeholder data."
+      }
+    ],
+    "reviewedAt": "2026-09-10T07:54:28.293Z"
+  },
+  {
     "story": "shell-appshell--edit",
     "title": "Shell/AppShell",
     "layer": "shell",
@@ -1829,26 +1845,21 @@
     "findings": [
       {
         "severity": "P3",
-        "element": "Sound Library - DIALOGUE 2",
-        "description": "The text 'interview_m...' is clipped/overflowing its container, failing to display the full filename."
-      },
-      {
-        "severity": "P3",
-        "element": "Timeline - Video Track (V1)",
-        "description": "The clip label 'MARINA — FISHERWO...' is truncated, indicating the text container is too narrow for the full title."
-      },
-      {
-        "severity": "P3",
-        "element": "Timeline - Audio Track (A1)",
-        "description": "The clip label 'ocean_ambience' is partially cut off at the bottom edge of the audio waveform clip."
+        "element": "Sound Library list item 'interview_m...'",
+        "description": "Text is clipped/overflowing its container, showing an ellipsis for the filename."
       },
       {
         "severity": "P2",
-        "element": "Channel Editor - Fader Control",
-        "description": "The fader knob for track A1 appears to be a plain white rectangle without clear visual affordances or a handle, looking like an unwired placeholder."
+        "element": "Timeline track labels (T1, V1, A1, A2)",
+        "description": "The bottom of the track label area is cut off by the bottom toolbar/status bar, suggesting a layout overflow or incorrect height calculation for the timeline panel."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline clip 'ocean_ambience'",
+        "description": "Text label 'ocean_ambience' is partially obscured by the audio waveform visualization within the clip container."
       }
     ],
-    "reviewedAt": "2026-09-07T11:12:24.700Z"
+    "reviewedAt": "2026-09-10T07:54:38.908Z"
   },
   {
     "story": "shell-appshell--color",
@@ -1858,11 +1869,16 @@
     "findings": [
       {
         "severity": "P3",
-        "element": "Stills panel description text",
-        "description": "Text at the bottom of the Stills panel is clipped/overflowing its container, with the last line of text being cut off horizontally."
+        "element": "Gallery description text",
+        "description": "Text in the left panel ('Applies to the selected clip's grade...') is tightly wrapped and slightly clipped at the bottom, suggesting a container height issue or overflow."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline track labels (T1, V1, A1, A2, CC)",
+        "description": "Track labels on the far left of the timeline are vertically misaligned with their respective track rows."
       }
     ],
-    "reviewedAt": "2026-09-07T11:12:27.973Z"
+    "reviewedAt": "2026-09-10T07:54:44.105Z"
   },
   {
     "story": "shell-appshell--deliver",
@@ -1871,17 +1887,17 @@
     "shot": "r23-analysis/shots/shell-appshell/shell-appshell--deliver.png",
     "findings": [
       {
-        "severity": "P2",
-        "element": "Left Sidebar - 'Queue an export...' text",
-        "description": "Text is clipped at the bottom of the container, with the last line of the paragraph being partially cut off."
+        "severity": "P3",
+        "element": "Left Sidebar Text (Presets)",
+        "description": "Text 'Handoff to ECP / Resolve / Premiere' and 'Playhead frame export' is clipped or wrapping tightly within the narrow sidebar container."
       },
       {
-        "severity": "P3",
-        "element": "Right Panel - Export Summary Destination",
-        "description": "The destination path text '~/Downloads/beach-doc/' appears to be slightly clipped or very close to the right edge of its container."
+        "severity": "P2",
+        "element": "Timeline Track Labels (V1, A1, A2, CC)",
+        "description": "Track name text ('A012_C034_beach_wide', 'ocean_ambience', etc.) is horizontally truncated/clipped by the track header width."
       }
     ],
-    "reviewedAt": "2026-09-07T11:12:31.100Z"
+    "reviewedAt": "2026-09-10T07:54:57.724Z"
   },
   {
     "story": "shell-appshell--fx",

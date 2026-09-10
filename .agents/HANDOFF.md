@@ -21,4 +21,11 @@
 
 - The posture law (D20), the pin world (D21), the drag law (D22), the single-tree law (D25 + D26's convergence amendment), the plan-executability law (§2A.6), the census law (§2A.7 — now MECHANISM-BACKED: the app's checker + mutation gate in CI), the productization gate (D28.2), the mode-matrix completeness law (§2A.8), the reference-register law (§2A.9) — all as at R25.
 
+## VARIANTS-TRACK state (R24 — 2026-09-10, the full-audit round COMPLETE + reconstructed)
+
+- **The sibling's R24-variants round is COMPLETE** (the mid-flight race R26 absorbed was its W0/W1; the full wrap landed @ `b9cd387`): the 14 reviewer threads #58-#71 researched (A1/A2/A3), audited (the F1-F5 fresh-context family net), re-specced (DESIGN-R24 v2-RECON @ `.agents/design/r24-audit-round.md`), re-implemented W0-W5d after the recycle destroyed the original unpushed waves (SKILL #143-#145 are THAT incident's laws), and resolved 14/14 + GH mirror closed. **The variants census for the register re-read: 64 test files / 1,734 it-blocks / 1740 green / 124 stories** (the R26 register's 1,613/61 figure is the W1-era mid-flight read — supersede at the next spec re-pin).
+- **The public review URL serves the full R24 state** (124 stories; the SKILL #122 story-count gate holds; the annotakit store is live with 0 open review threads).
+- **The GitLab mirror PAT (glpat-…) died 401 mid-R24** — re-issue before the next mirror push; GitHub + the /home/sync bundles carried durability alone.
+- **Next for the variants track:** the user's reaction round on the R24 state (the 14 resolutions + the rebuilt color/FX/deliver compositions); the registered residue list (the Clip context-menu Add-Transition mixed-selection mint; the de-esser/aux polish rows; the r23-analysis re-triage); the 62 legacy open threads.
+
 

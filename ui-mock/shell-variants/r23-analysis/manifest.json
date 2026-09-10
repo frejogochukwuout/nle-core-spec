@@ -24,7 +24,7 @@
     "group": "shell-appshell",
     "shot": "r23-analysis/shots/shell-appshell/shell-appshell--audio-focus.png",
     "viewport": "1280x800",
-    "capturedAt": "2026-09-07T10:56:48.573Z",
+    "capturedAt": "2026-09-10T07:53:47.765Z",
     "iframe": {
       "w": 1280,
       "h": 800,
@@ -41,7 +41,7 @@
     "group": "shell-appshell",
     "shot": "r23-analysis/shots/shell-appshell/shell-appshell--color.png",
     "viewport": "1280x800",
-    "capturedAt": "2026-09-07T10:56:52.660Z",
+    "capturedAt": "2026-09-10T07:53:53.562Z",
     "iframe": {
       "w": 1280,
       "h": 800,
@@ -58,7 +58,7 @@
     "group": "shell-appshell",
     "shot": "r23-analysis/shots/shell-appshell/shell-appshell--deliver.png",
     "viewport": "1280x800",
-    "capturedAt": "2026-09-07T10:56:56.272Z",
+    "capturedAt": "2026-09-10T07:53:57.518Z",
     "iframe": {
       "w": 1280,
       "h": 800,
@@ -534,7 +534,7 @@
     "group": "color",
     "shot": "r23-analysis/shots/color/color--inspector-curves.png",
     "viewport": "1280x800",
-    "capturedAt": "2026-09-07T10:58:19.655Z",
+    "capturedAt": "2026-09-10T07:54:00.968Z",
     "iframe": {
       "w": 1280,
       "h": 800,
@@ -1877,7 +1877,7 @@
     "group": "timeline",
     "shot": "r23-analysis/shots/timeline/timeline--fx-mode.png",
     "viewport": "1280x800",
-    "capturedAt": "2026-09-07T11:02:01.243Z",
+    "capturedAt": "2026-09-10T07:54:06.763Z",
     "iframe": {
       "w": 1280,
       "h": 800,
@@ -2082,6 +2082,23 @@
     "shot": "r23-analysis/shots/shell-variants/shell-variants--preset-c.png",
     "viewport": "1280x800",
     "capturedAt": "2026-09-07T11:02:36.318Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "pages--deliver-strip",
+    "title": "Pages",
+    "name": "Deliver page — compact strip (ruler + range band)",
+    "layer": "panel",
+    "group": "pages",
+    "shot": "r23-analysis/shots/pages/pages--deliver-strip.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-10T07:54:04.008Z",
     "iframe": {
       "w": 1280,
       "h": 800,
