@@ -129,12 +129,23 @@ describe('TimelineCompact — click-to-target (the color page law)', () => {
     expect(S().colorGradeTarget).toBe('timeline'); // NEVER re-targeted off the color page
   });
 
-  it('the playhead marker rides the strip at the store playhead (read-only)', () => {
+  it('the playhead marker rides the strip at the store playhead (read-only) — UNDER the sticky badge chrome (F3 P3-3, R24-W5d)', () => {
     const { container } = mount({ playhead: 4 });
     // the marker is the w-px absolute with the accent background
     const marker = container.querySelector('[data-testid="shell-timeline-compact"] .pointer-events-none.absolute.w-px');
     expect(marker).toBeTruthy();
-    expect(marker?.className).toContain('z-[3]');
+    // R24-W5d: z-[3] painted OVER the sticky badge column (z-[2]) — the badge
+    // chrome wins now (z-[1], still above the lane clips)
+    expect(marker?.className).toContain('z-[1]');
+    expect(marker?.className).not.toContain('z-[3]');
+    // the badge cells keep their higher chrome layer (the badge column + the
+    // per-lane badge cells — the sticky surface the playhead must not cover)
+    const badges = container.querySelectorAll('[data-testid^="shell-timeline-compact-track-"]');
+    expect(badges.length).toBeGreaterThan(0);
+    for (const b of badges) {
+      const cell = (b as HTMLElement).closest('.sticky');
+      expect(cell?.className).toContain('z-[2]');
+    }
   });
 });
 

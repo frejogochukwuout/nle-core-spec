@@ -54,12 +54,20 @@ const SPLIT_HIT = 12; // §3.2: 12px interactive hit; visual line is the 6px --s
 function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
   const start = useRef(0);
   /* §11 a11y floor: separator is keyboard-operable — ←/→ = 8px steps,
-     ⇧ ×4 = 32px (the R13 reviewer's ladder; R14 adds the shift multiplier) */
+     ⇧ ×4 = 32px (the R13 reviewer's ladder; R14 adds the shift multiplier).
+     R24-W5d (F5-P2, DESIGN-R24 §2/§3 W5d — the live-vs-jsdom class): the
+     rung was UNREACHABLE — role=separator + onKeyDown but NO tabIndex, so
+     live tab skipped the splitter, a click left focus on <body> and Arrow*
+     hit nothing (AppShell.test fires keyDown directly, so jsdom stayed
+     green while the §11 ladder never reached it). tabIndex=0 joins the
+     natural tab order; the house :focus-visible outline (app.css) + the
+     seam line's group-focus-visible accent make the focus legible. */
   const keyStep = (dir: 1 | -1, shift: boolean) => onDrag(dir * 8 * (shift ? 4 : 1));
   return (
     <div
       className="group relative z-10 flex shrink-0 cursor-col-resize items-center justify-center bg-app"
       style={{ width: SPLIT_HIT }}
+      tabIndex={0}
       onDoubleClick={() => onDrag(0)}
       onKeyDown={(e) => {
         if (e.key === 'ArrowLeft') { e.preventDefault(); keyStep(-1, e.shiftKey); }
@@ -79,7 +87,7 @@ function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
       aria-label="Resize panel"
     >
       <div className="h-full w-[var(--split-visual)] flex items-center justify-center">
-        <div className="h-[96%] w-px bg-hairline transition-colors group-hover:bg-accent" />
+        <div className="h-[96%] w-px bg-hairline transition-colors group-hover:bg-accent group-focus-visible:bg-accent" />
       </div>
     </div>
   );
@@ -87,12 +95,14 @@ function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
 
 function HSplitter({ onDrag }: { onDrag: (dy: number) => void }) {
   const start = useRef(0);
-  /* ↑/↓ = 8px steps, ⇧ ×4 = 32px (same ladder as VSplitter) */
+  /* ↑/↓ = 8px steps, ⇧ ×4 = 32px (same ladder as VSplitter; tabIndex per
+     the R24-W5d fix above — the H seam joins the tab order too) */
   const keyStep = (dir: 1 | -1, shift: boolean) => onDrag(dir * 8 * (shift ? 4 : 1));
   return (
     <div
       className="group relative z-10 flex shrink-0 cursor-row-resize items-center justify-center bg-app"
       style={{ height: SPLIT_HIT }}
+      tabIndex={0}
       onDoubleClick={() => onDrag(0)}
       onKeyDown={(e) => {
         if (e.key === 'ArrowUp') { e.preventDefault(); keyStep(-1, e.shiftKey); }
@@ -112,7 +122,7 @@ function HSplitter({ onDrag }: { onDrag: (dy: number) => void }) {
       aria-label="Resize timeline"
     >
       <div className="flex h-[var(--split-visual)] w-full items-center justify-center">
-        <div className="h-px w-[96%] bg-hairline transition-colors group-hover:bg-accent" />
+        <div className="h-px w-[96%] bg-hairline transition-colors group-hover:bg-accent group-focus-visible:bg-accent" />
       </div>
     </div>
   );
@@ -162,6 +172,9 @@ function AppShellInner() {
   const mainBodyH = useUi((s) => s.mainBodyH);
   const setMediaW = useUi((s) => s.setMediaW);
   const setInspectorW = useUi((s) => s.setInspectorW);
+  /* R24-W5d (F5-P3): the §3.2 dbl-click reset seam — un-pins the user flag
+     (see the VSplitter site below; the setMainBodyH twin law). */
+  const resetInspectorW = useUi((s) => s.resetInspectorW);
   const setMainBodyH = useUi((s) => s.setMainBodyH);
   const scenes = useUi((s) => s.scenes);
   const activeSceneId = useUi((s) => s.activeSceneId);
@@ -406,9 +419,14 @@ function AppShellInner() {
 
             {/* right-docked panel: dragging the seam LEFT (dx<0) widens it.
                 R22-D2: the color page defaults to the reference's 420px
-                until the user drags (inspectorWUserSet). */}
+                until the user drags (inspectorWUserSet). R24-W5d (F5-P3,
+                the mainBody twin law — R23-WB-REV fixed setMainBodyH's reset
+                but not this seam): the dbl-click reset runs the store's
+                resetInspectorW, which UN-SETS the user flag so the page-aware
+                default honestly resumes (the color reset → edit showed 420,
+                not 340, while the flag stayed pinned). */}
             {panels.inspector && (
-              <VSplitter onDrag={(dx) => setInspectorW(dx === 0 ? (page === 'color' ? 420 : 340) : useUi.getState().inspectorW - dx)} />
+              <VSplitter onDrag={(dx) => (dx === 0 ? resetInspectorW() : setInspectorW(useUi.getState().inspectorW - dx))} />
             )}
             {panels.inspector && (
               <div ref={(el) => { regionsRef.current[3] = el; }} tabIndex={-1} className="shell-region panel-shadow z-10 flex h-full min-h-0 shrink-0" style={{ width: effectiveInspectorW }}>

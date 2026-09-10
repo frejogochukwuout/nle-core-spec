@@ -523,7 +523,10 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
           aria-label={`Marker ${m.label}`}
           className="absolute z-[6] block cursor-pointer border-0 bg-transparent p-0"
           style={{
-            left: snapPxToDeviceGrid(m.time * pxPerSec) - pinW / 2,
+            /* R24-W5d (DESIGN-R24 §2 F3-P3): the center anchor (x − pinW/2)
+               clipped HALF the pin at t≈0 (left −5px at the start edge) — the
+               x clamps to 0 so a start-edge pin is fully visible. */
+            left: Math.max(0, snapPxToDeviceGrid(m.time * pxPerSec) - pinW / 2),
             top: bandTop + (bandH - pinH) / 2,
             width: pinW,
             height: pinH,

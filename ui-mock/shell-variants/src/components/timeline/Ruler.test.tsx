@@ -325,6 +325,19 @@ describe('R19 markers v2 — marker band + point pins (th_mto2ytyo)', () => {
     expect(pin.style.outline).toContain('var(--accent-selection)');
     expect(screen.getByTestId('ruler-marker-mk-1').style.outline).toBe('');
   });
+
+  /* R24-W5d (DESIGN-R24 §2 F3-P3): a marker at t≈0 pinned HALF-CLIPPED at
+     the start edge — the center anchor (x − pinW/2) went negative. The x
+     clamps to ≥ 0 now: the start-edge pin is fully visible. */
+  it('a t=0 marker pin clamps to the start edge (full visibility — F3 P3-4, R24-W5d)', () => {
+    boot({});
+    const pin = screen.getByTestId('ruler-marker-mk-1'); // mk-1 = 'Hook' @ 0 s
+    expect(pin.style.left).toBe('0px'); // was −5px (pinW 10 / 2) — half the shield clipped
+    expect(parseFloat(pin.style.left)).toBeGreaterThanOrEqual(0);
+    expect(pin.style.width).toBe('10px'); // the full readout-scale shield
+    // an INTERIOR pin keeps the honest center anchor (mk-2 @ 8.5 s = 391 − 5)
+    expect(screen.getByTestId('ruler-marker-mk-2').style.left).toBe('386px');
+  });
 });
 
 describe('R19 markers v2 — RANGE markers (mk-5: 17 → 24 s)', () => {

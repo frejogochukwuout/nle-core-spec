@@ -349,6 +349,12 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
   const targets = useUi.getState().selection.includes(el.id)
     ? useUi.getState().selection
     : [el.id];
+  /* R24-W5d (W5a's hand-off): the Add Transition fan-out's no-op guard —
+     every target already carries a transitionOut (setTransition(id, {})
+     assigns nothing onto an existing record and the W0 identical-patch
+     guard never fires on an EMPTY patch, so an unguarded fan-out minted one
+     no-op history entry per transitioned clip on a mixed selection). */
+  const allTransitioned = targets.every((id) => findElement(useUi.getState().scenes, id)?.element.transitionOut);
   const deleteSelected = (ripple: boolean) => {
     const run = () => {
       useUi.getState().deleteElements(targets, ripple);
@@ -412,9 +418,15 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
     { id: 'remove-effects', label: 'Remove Effects', disabled: targets.length === 0 || !targets.some((id) => (findElement(useUi.getState().scenes, id)?.element.effects?.length ?? 0) > 0), tip: 'clears the effect stack of every selected clip', sep: true, onSelect: () => {
       targets.forEach((id) => useUi.getState().setElementField(id, { effects: [] }));
     } },
-    { id: 'add-transition', label: 'Add Transition…', onSelect: () => {
-      // default crossfade (spec 09 TransitionJSON) per selected clip
-      targets.forEach((id) => useUi.getState().setTransition(id, {}));
+    { id: 'add-transition', label: 'Add Transition…', disabled: allTransitioned, tip: allTransitioned ? 'every selected clip already has a transition' : undefined, onSelect: () => {
+      /* default crossfade (spec 09 TransitionJSON) per selected clip —
+         already-transitioned targets are SKIPPED (see allTransitioned above:
+         the honest row goes disabled when NOTHING can mint; a mixed fan-out
+         writes only the hard-cut targets — the F2 TransitionSection bug's
+         context-menu twin, W5a's flagged debt). */
+      targets
+        .filter((id) => !findElement(useUi.getState().scenes, id)?.element.transitionOut)
+        .forEach((id) => useUi.getState().setTransition(id, {}));
     } },
     /* R19 clip markers (gap C33): add-at-playhead (clamped into the clip by
        the store; outside the clip span the clip's mid stands in) + one
@@ -1061,32 +1073,40 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
        bar width `100/bars.length − 0.4` goes NEGATIVE once bars.length > 250
        (el-6 at default zoom = 345 bars → every rect had a negative width →
        SVG renders nothing). Bars are now laid out in user-space px with
-       Math.max(1, …) so every audio clip renders ≥1 visible bar. */
+       Math.max(1, …) so every audio clip renders ≥1 visible bar.
+       R24-W5d (W1's flag→render gap, DESIGN-R24 §3 W5d): the body READS the
+       §4.7 per-track view flag now — the ViewOptionsPopover / TrackHeader
+       write it; `waveform === false` renders the FLAT LANE (gradient + name,
+       no strip; undefined/true keep the strip — the fixture's undefined
+       boots as ON). */
+    const waveformOn = track.waveform !== false;
     const barCount = Math.max(1, Math.min(600, Math.floor(geo.width / 4)));
-    const bars = getWaveform(el.mediaId ?? el.id, barCount, { ramp: CLIP_WAVEFORM_RAMP });
+    const bars = waveformOn ? getWaveform(el.mediaId ?? el.id, barCount, { ramp: CLIP_WAVEFORM_RAMP }) : [];
     const h = laneHeight - 12;
     const mid = h / 2;
-    const cell = geo.width / bars.length;
+    const cell = geo.width / Math.max(1, bars.length);
     body = (
       <div className="relative h-full w-full" style={{ background: 'linear-gradient(to bottom, var(--clip-audio-a), var(--clip-audio-b))' }}>
-        <svg className="absolute inset-x-0 bottom-[2px]" width="100%" height={h} preserveAspectRatio="none" aria-hidden="true" data-testid={`clip-waveform-${el.id}`}>
-          {/* visible centerline — the envelope is symmetric around it */}
-          <line x1="0" y1={mid} x2="100%" y2={mid} stroke="var(--waveform)" strokeWidth="0.75" opacity={0.55} />
-          {bars.map((b, i) => {
-            const half = Math.max(0.5, ((b.max + b.min) / 2) * (h / 2));
-            return (
-              <rect
-                key={i}
-                x={i * cell}
-                y={mid - half}
-                width={Math.max(1, cell - 0.6)}
-                height={Math.max(1, half * 2)}
-                fill="var(--waveform)"
-                opacity={0.9}
-              />
-            );
-          })}
-        </svg>
+        {waveformOn && (
+          <svg className="absolute inset-x-0 bottom-[2px]" width="100%" height={h} preserveAspectRatio="none" aria-hidden="true" data-testid={`clip-waveform-${el.id}`}>
+            {/* visible centerline — the envelope is symmetric around it */}
+            <line x1="0" y1={mid} x2="100%" y2={mid} stroke="var(--waveform)" strokeWidth="0.75" opacity={0.55} />
+            {bars.map((b, i) => {
+              const half = Math.max(0.5, ((b.max + b.min) / 2) * (h / 2));
+              return (
+                <rect
+                  key={i}
+                  x={i * cell}
+                  y={mid - half}
+                  width={Math.max(1, cell - 0.6)}
+                  height={Math.max(1, half * 2)}
+                  fill="var(--waveform)"
+                  opacity={0.9}
+                />
+              );
+            })}
+          </svg>
+        )}
         {/* R20-W5 (thread #62): the fade overlays LEFT this body — they are
             now the SELECTABLE transition objects rendered at the clip-box
             level (see fade-object-${el.id}-in/-out below, z-[3]); the fake

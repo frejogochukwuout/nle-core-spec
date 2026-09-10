@@ -1189,7 +1189,14 @@ export function Timeline() {
      both clauses. While an armed preview plan holds:
      (a) AUTO-SCROLL — one rAF AFTER PAINT, scrollIntoView({inline:'nearest'})
          the ghost span into #timeline-scroll's view (the ghost ref below;
-         the layer's own anim stays W3's fade+slide).
+         the layer's own anim stays W3's fade+slide). R24-W5d (F3's
+         leftover, DESIGN-R24 §2 F3-P3): the straddler's SPLIT ghost
+         (dashed right half, potentially far past the main ghost — the
+         content-x-1855/viewport-1280 class) JOINS the scroll target: the
+         split ghost is always at/after the main ghost's end by
+         construction, so a 'nearest' scroll after the main ghost's only
+         ever moves RIGHT — the union span becomes visible, never a
+         back-slide.
      (b) ZOOM FLOOR — a ghost narrower than PREVIEW_MIN_SPAN_PX at the
          current pps bumps zoom through the bus (targetPps = 24/dur) so it
          renders ≥ 24 px. ONE bump per ARM (arm key = mediaId+mode): the
@@ -1201,6 +1208,8 @@ export function Timeline() {
      playing case below, so the refusal is legible in place (the bar's
      tip/status carry the why; the scroll shows the where). */
   const previewGhostRef = useRef<HTMLDivElement | null>(null);
+  /* R24-W5d (F3): the straddler's split-ghost scroll target (see (a)) */
+  const previewSplitGhostRef = useRef<HTMLDivElement | null>(null);
   const previewBumpedArmRef = useRef<string | null>(null);
   useEffect(() => {
     if (!insertPreview) {
@@ -1218,6 +1227,11 @@ export function Timeline() {
     const raf = requestAnimationFrame(() => {
       if (ghost) {
         previewGhostRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        // F3's leftover: the straddler's split ghost joins the scroll target
+        // (comment above — the union span, not just the head). It scrolls
+        // only when it EXISTS; a no-split preview (fresh lanes, place-on-top)
+        // keeps exactly the one ghost scroll.
+        previewSplitGhostRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
       } else {
         const sc = scrollRef.current;
         if (!sc) return;
@@ -1717,6 +1731,7 @@ export function Timeline() {
                 )}
                 {insertPreview.geometry.splitGhost && (
                   <div
+                    ref={previewSplitGhostRef}
                     data-testid="insert-preview-split-ghost"
                     data-track-id={insertPreview.geometry.splitGhost.trackId}
                     className="clip-drag-ghost absolute rounded-[4px]"

@@ -263,8 +263,13 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
             );
           })}
 
-          {/* playhead marker across the strip (read-only indicator) */}
-          <div aria-hidden className="pointer-events-none absolute bottom-0 top-0 z-[3] w-px" style={{ left: BADGE_W + playhead * pps, background: 'var(--accent-selection)' }}>
+          {/* playhead marker across the strip (read-only indicator).
+              R24-W5d (DESIGN-R24 §2 F3-P3): z-[3] painted OVER the sticky
+              badge chrome (z-[2]) — the badge column must win (the badge
+              chrome is the frozen surface's one interactive head surface).
+              Dropped to z-[1]: still above the lane clips (z-auto; the
+              DOM-order win over the z-[1] selected clip), below the badges. */}
+          <div aria-hidden className="pointer-events-none absolute bottom-0 top-0 z-[1] w-px" style={{ left: BADGE_W + playhead * pps, background: 'var(--accent-selection)' }}>
             <div className="absolute -left-[3px] top-0 h-[6px] w-[7px]" style={{ background: 'var(--accent-selection)' }} />
           </div>
         </div>

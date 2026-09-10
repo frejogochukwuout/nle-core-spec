@@ -459,6 +459,27 @@ describe('track flag commands', () => {
     expect(S().lockAll).toBe(false);
     expect(track('sc-1', 'tr-audio-2').locked).toBe(false); // originally locked, now unlocked
   });
+
+  /* R24-W5d (W1's debt — the converging flip's single-undo seam): ONE
+     withHistory write converges every audio track's §4.7 waveform flag;
+     already-converged calls mint NOTHING (the toggleTrackCmd no-op law). */
+  it('setAllTrackWaveforms converges every audio flag in ONE undoable write; a converged call is a true no-op', () => {
+    const audio = () => S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.filter((t) => t.kind === 'audio');
+    // fixture boots A1/A2 undefined (the §4.7 quirk — reads as ON)
+    act(() => { S().setAllTrackWaveforms(false); });
+    expect(audio().every((t) => t.waveform === false)).toBe(true); // converged in ONE write
+    expect(S().past).toHaveLength(1); // THE FIX: was 4 (undefined→true→false × 2 tracks)
+    expect(S().future).toHaveLength(0);
+    // converged again → no-op, no history
+    act(() => { S().setAllTrackWaveforms(false); });
+    expect(S().past).toHaveLength(1);
+    // back on: ONE entry again, undo lands exactly on the converged state
+    act(() => { S().setAllTrackWaveforms(true); });
+    expect(S().past).toHaveLength(2);
+    expect(audio().every((t) => t.waveform === true)).toBe(true);
+    act(() => { S().undo(); });
+    expect(audio().every((t) => t.waveform === false)).toBe(true); // one undo = full revert
+  });
 });
 
 /* ---------- audio focus state machine (design doc §3) ---------- */
@@ -760,6 +781,17 @@ describe('effects commands', () => {
     expect(el('el-1').effects).toEqual([]);
   });
 
+  it('R24-W5d (F5-P3 — the canonical no-op law): unknown ids / missing fxIds mint NO history entry', () => {
+    const past0 = S().past.length;
+    act(() => { S().toggleEffect('nope', 'fx-1'); });   // unknown elementId
+    act(() => { S().toggleEffect('el-2', 'fx-none'); }); // known element, missing fxId
+    act(() => { S().removeEffect('nope', 'fx-1'); });   // unknown elementId
+    act(() => { S().removeEffect('el-2', 'fx-none'); }); // known element, missing fxId
+    expect(S().past.length).toBe(past0); // THE FIX: unchanged doc → no history mint
+    expect(el('el-1').effects![0].enabled).toBe(false); // untouched
+    expect(el('el-2').effects).toBeUndefined(); // no stack was conjured
+  });
+
   it('REGRESSION (deep clone): undo/redo round-trips NESTED mutations — effects + transitionOut', () => {
     // R11 shallow-clone bug: nested refs were shared across history snapshots,
     // so undo silently kept the mutation. The deep clone fixes the round-trip.
@@ -980,6 +1012,29 @@ describe('setMainBodyH (0 = auto sentinel)', () => {
     expect(S().mainBodyH).toBe(440);
     act(() => { S().setMainBodyH(9999); });
     expect(S().mainBodyH).toBe(900);
+  });
+});
+
+/* R24-W5d (F5-P3, DESIGN-R24 §3 W5d — the mainBody twin law): the §3.2
+   dbl-click seam reset clears inspectorWUserSet so the page-aware default
+   honestly resumes (a pinned flag kept the color 420 after flipping to
+   edit — the width families' reset law). */
+describe('resetInspectorW (R24-W5d — the un-pinning seam reset)', () => {
+  it('restores the 340 edit default and CLEARS the user flag; the page default follows the page', () => {
+    act(() => { S().setInspectorW(500); });
+    expect(S().inspectorWUserSet).toBe(true);
+    act(() => { S().resetInspectorW(); });
+    expect(S().inspectorW).toBe(340);
+    expect(S().inspectorWUserSet).toBe(false);
+    // color: the page-aware default is 420 (R22-D2)
+    act(() => { S().setPage('color'); S().setInspectorW(460); });
+    expect(S().inspectorWUserSet).toBe(true);
+    act(() => { S().resetInspectorW(); });
+    expect(S().inspectorW).toBe(420);
+    expect(S().inspectorWUserSet).toBe(false);
+    // a later drag re-pins the flag through the ONE writer
+    act(() => { S().setInspectorW(500); });
+    expect(S().inspectorWUserSet).toBe(true);
   });
 });
 

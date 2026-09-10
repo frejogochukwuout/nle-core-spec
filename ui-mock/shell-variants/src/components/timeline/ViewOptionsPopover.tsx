@@ -27,19 +27,13 @@
      overlay — setVariant is the shared writer; TrackHeader/Clip lane
      heights + the debug overlay all read the same variant.clipStyle).
    - "Audio waveforms" — menuitemcheckbox over the §4.7 per-track view
-     flags: a converging toggleTrackCmd flip loop that sets every audio
-     track's waveform flag to the SAME value (the undefined→true fixture
-     quirk: `waveform === undefined` boots as ON, and one toggle writes
-     !undefined = true, so an undefined track needs TWO flips to reach an
-     explicit false — the loop keeps flipping until the flag HOLDS the
-     target). HONEST aria-disabled + reason tip while compact: the frozen
-     compact strip has no waveform lanes to toggle
-     ("Not available while tracks are compact").
-
-   Debt note: each toggleTrackCmd is its own undoable doc write, so a
-   converging flip can mint several history entries (2 per undefined track
-   when converging to "off") — flagged for a store-level set-all batch
-   (W5); behavior is otherwise correct. */
+     flags: the store's setAllTrackWaveforms batch (R24-W5d — W1's debt
+     paid: the per-track toggleTrackCmd flip loop could mint 2 entries per
+     undefined track on the undefined→true→false double walk; the batch is
+     ONE undoable write, and an already-converged click mints nothing).
+     HONEST aria-disabled + reason tip while compact: the frozen compact
+     strip has no waveform lanes to toggle ("Not available while tracks are
+     compact"). */
 
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useUi, resolveTimelineCompact } from '../../state/useUiStore';
@@ -51,23 +45,13 @@ const MENU_TID = 'shell-menu-tl-view-options';
 const OPENER_TID = 'shell-timeline-toolbar-btn-view-options';
 const WAVEFORMS_DISABLED_TIP = 'Not available while tracks are compact';
 
-/** The §4.7 converging flip: set every audio track's waveform flag to the
- *  same value via toggleTrackCmd (live-read loop — withHistory clones the
- *  scenes array per toggle, so re-reading is required; bounded by the ≤2
- *  flips any flag-to-target distance can ever need). */
+/** The §4.7 convergence — R24-W5d (W1's debt paid): ONE store batch write
+ *  sets every audio track's waveform flag to the target
+ *  (setAllTrackWaveforms — a single undoable entry, a no-op when already
+ *  converged; the old per-track toggleTrackCmd flip loop minted 2 entries
+ *  per undefined track on the undefined→true→false double walk). */
 function convergeWaveforms(target: boolean) {
-  const s0 = useUi.getState();
-  const sc = s0.scenes.find((x) => x.id === s0.activeSceneId)!;
-  const audio = sc.tracks.filter((t) => t.kind === 'audio');
-  for (const t of audio) {
-    let guard = 0;
-    while (guard++ < 4) {
-      const cur = useUi.getState().scenes.find((x) => x.id === sc.id)!.tracks
-        .find((x) => x.id === t.id)!.waveform;
-      if (cur === target) break;
-      useUi.getState().toggleTrackCmd(sc.id, t.id, 'waveform');
-    }
-  }
+  useUi.getState().setAllTrackWaveforms(target);
 }
 
 export function ViewOptionsPopover({ showCompact }: { showCompact: boolean }) {
@@ -260,7 +244,9 @@ export function ViewOptionsPopover({ showCompact }: { showCompact: boolean }) {
             </div>
             <div className="menu-sep" role="separator" aria-orientation="horizontal" />
 
-            {/* Audio waveforms — the §4.7 per-track view flags, converged.
+            {/* Audio waveforms — the §4.7 per-track view flags, converged
+                through the ONE-batch store seam (R24-W5d: a single undoable
+                write, never the per-track flip walk).
                 HONEST aria-disabled + reason tip while compact (the frozen
                 strip has no waveform lanes); aria-disabled (not native
                 disabled) keeps the honest-mock data-tip hoverable. */}

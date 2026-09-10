@@ -71,7 +71,7 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
 
   /* ---- Selection (spec 16 §3.3 / §5.4) ---- */
   { action: 'selection-track-focus', keys: '↑ / ↓', group: 'Selection', desc: 'Move track focus up / down' },
-  { action: 'selection-escape', keys: 'Esc', group: 'Selection', desc: 'Tool → select; else clear selection' },
+  { action: 'selection-escape', keys: 'Esc', group: 'Selection', desc: 'Tool → select; else clear the marker / FX-object domain, else the clip selection (R24-W5d: the marker + fx-object clears joined the ladder)' },
 
   /* ---- Timeline nav (spec 16 §3.6) ---- */
   { action: 'timeline-home-end', keys: 'Home / End', group: 'Timeline', desc: 'Jump playhead to start / end' },

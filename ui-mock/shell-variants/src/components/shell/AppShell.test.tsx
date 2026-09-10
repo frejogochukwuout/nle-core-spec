@@ -809,6 +809,63 @@ describe('splitter keyboard resize (R14 — the keyStep implementation finally p
   });
 });
 
+/* ---------- R24-W5d (F5-P2, DESIGN-R24 §3 W5d): the splitter keyboard is
+   REACHABLE. role=separator + onKeyDown had NO tabIndex — live tab skipped
+   the seams, a click left focus on <body> and Arrow* hit nothing while
+   AppShell.test's direct keyDown dispatches kept jsdom green (the F1/F2
+   live-vs-jsdom class). jsdom cannot pin the real TAB ORDER; it CAN pin the
+   wiring: the tab stops exist, focus() lands on the seam, and the keydown
+   routed at the FOCUSED element fires the store write. ---------- */
+describe('R24-W5d: splitter tabIndex + focus wiring (the F5-P2 fix)', () => {
+  it('every seam separator is a TAB STOP (tabIndex 0) — the §11 ladder can reach them', () => {
+    renderAppShell();
+    const seps = screen.getAllByRole('separator');
+    expect(seps.length).toBeGreaterThanOrEqual(3); // pool / inspector / timeline H seams
+    for (const sep of seps) expect(sep).toHaveAttribute('tabindex', '0');
+  });
+
+  it('the focused inspector seam answers ArrowRight routed AT FOCUS (not only a direct dispatch)', () => {
+    renderAppShell();
+    const sep = seamBefore('shell-inspector');
+    sep.focus();
+    expect(document.activeElement).toBe(sep); // jsdom CAN pin focus placement
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowRight' });
+    expect(store().inspectorW).toBe(332); // 340 − 8 — the focused seam's handler ran
+    // the focus-ring grammar: the seam line carries the house accent while
+    // focused (the global :focus-visible outline + the group accent class)
+    expect(sep.innerHTML).toContain('group-focus-visible:bg-accent');
+  });
+});
+
+/* ---------- R24-W5d (F5-P3, the setMainBodyH twin law — R23-WB-REV fixed
+   the H seam's reset flag, this V seam's didn't): the inspector dbl-click
+   reset un-pins inspectorWUserSet so the page-aware default honestly
+   resumes. ---------- */
+describe('R24-W5d: the inspector seam dbl-click reset un-pins inspectorWUserSet', () => {
+  it('a drag pins the flag; the dbl-click reset restores the default width AND clears the flag (edit: 340)', () => {
+    renderAppShell();
+    const sep = seamBefore('shell-inspector');
+    fireEvent.pointerDown(sep, { pointerId: 1, button: 0, clientX: 600 });
+    fireEvent.pointerMove(sep, { pointerId: 1, buttons: 1, clientX: 540 });
+    expect(store().inspectorW).toBe(400);
+    expect(store().inspectorWUserSet).toBe(true); // the drag pinned it
+    fireEvent.doubleClick(sep);
+    expect(store().inspectorW).toBe(340); // the edit structural default
+    expect(store().inspectorWUserSet).toBe(false); // THE FIX: the flag no longer pins the width
+  });
+
+  it('on COLOR the reset restores the 420 page default (the flag cleared, not just the width)', () => {
+    renderAppShell({ page: 'color' });
+    act(() => { store().setInspectorW(500); }); // the real writer pins the flag
+    expect(store().inspectorWUserSet).toBe(true);
+    // the color rail is the ColorInspector (shell-color-inspector) — the seam
+    // still precedes the same wrapper
+    fireEvent.doubleClick(seamBefore('shell-color-inspector'));
+    expect(store().inspectorWUserSet).toBe(false);
+    expect(store().inspectorW).toBe(420); // the color page-aware default resumes
+  });
+});
+
 describe('R19 rail routing: marker / caption selection swaps the inspector (AppShell seam)', () => {
   it('a selected marker swaps the rail for the embedded MarkerInspector; Done returns to the clip inspector', async () => {
     const user = userEvent.setup();

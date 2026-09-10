@@ -728,7 +728,7 @@ interface UiState {
    * clip-children, one at a time) but KEEPS the clip selection (the
    * fade-object pointerdown selects the clip first, exactly the
    * selectEffect mirror). */
-  selectFxObject: (sel: SelectedFxObject) => void;
+  selectFxObject: (sel: SelectedFxObject | null) => void;
   setZoom: (px: number) => void;
   setZoomMin: (pps: number) => void;
   zoomStep: (factor: number) => void;
@@ -746,6 +746,11 @@ interface UiState {
   setMasterVolume: (v: number) => void;
   setMediaW: (w: number) => void;
   setInspectorW: (w: number) => void;
+  /** R24-W5d (F5-P3, DESIGN-R24 §3 W5d — the setMainBodyH twin): the §3.2
+   *  dbl-click seam reset — restores the page-aware default (420 on color,
+   *  340 elsewhere) AND un-sets inspectorWUserSet so the default honestly
+   *  resumes. View state: no history entry. */
+  resetInspectorW: () => void;
   setMainBodyH: (h: number) => void;
   setCheatOpen: (v: boolean) => void;
   setMediaSelection: (ids: string[]) => void;
@@ -760,6 +765,14 @@ interface UiState {
   saveNow: () => void;
   removeMarkersAt: (time: number) => void;
   toggleTrackCmd: (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') => void;
+  /** R24-W5d (W1's debt, DESIGN-R24 §3 W5d — the single-undo convergence):
+   *  ONE withHistory write sets every audio track's §4.7 waveform flag to
+   *  the target (the ViewOptionsPopover's converge seam — the per-track
+   *  toggleTrackCmd flip loop minted 2 entries per undefined track on the
+   *  undefined→true→false double walk). Doc state like toggleTrackCmd
+   *  (undoable, one entry); a converged no-change call mints NOTHING (the
+   *  canonical no-op law). */
+  setAllTrackWaveforms: (target: boolean) => void;
   enterAudioFocus: (trigger: 'dock' | 'shortcut' | 'escalation', trackId?: string) => void;
   exitAudioFocus: () => void;
   setMixerState: (m: MixerDockState) => void;
@@ -1558,6 +1571,12 @@ export const useUi = create<UiState>((set, get) => ({
   setMasterVolume: (v) => set({ masterVolume: clamp(v, 0, 1) }),
   setMediaW: (w) => set({ mediaW: clamp(w, 200, 480) }),
   setInspectorW: (w) => set({ inspectorW: clamp(w, 280, 560), inspectorWUserSet: true }),
+  /* R24-W5d (F5-P3 — the mainBodyH twin): the seam reset restores the
+     page-aware default AND clears the user flag, so "inspectorWUserSet"
+     never pins a stale default across a page flip (the color reset → edit
+     showed 420, not 340). No dx-0 overload on setInspectorW itself — the
+     reset is a distinct seam, the width families stay explicit. */
+  resetInspectorW: () => set((s) => ({ inspectorW: s.page === 'color' ? 420 : 340, inspectorWUserSet: false })),
   setMainBodyH: (h) => set({ mainBodyH: h <= 0 ? 0 : clamp(h, 320, 900), mainBodyUserSet: h > 0 ? true : false }), // 0 = auto (page-aware default, R22-D8; spec 18 §3.2) — a reset (h≤0, the double-click) CLEARS the user flag so 'auto' honestly resumes (R23-WB-REV P3 #3: the flag stuck and locked the 40% landing)
   setCheatOpen: (v) => set({ cheatOpen: v }),
   setMediaSelection: (ids) => set({ mediaSelection: ids }),
@@ -1605,6 +1624,23 @@ export const useUi = create<UiState>((set, get) => ({
     const t = scenes.find((x) => x.id === sceneId)?.tracks.find((x) => x.id === trackId);
     if (!t) return; // unknown scene/track — true no-op, no history entry
     (t as any)[field] = !(t as any)[field];
+    return scenes;
+  }),
+  /* R24-W5d (W1's debt — the converging flip's single-undo seam): one
+     withHistory write, every audio track's flag set to the target (audio
+     only — the TrackHeader Waveform view toggle carries the same kind gate;
+     the popover's §4.7 converging checkbox is the consumer). Already
+     converged → true no-op, no history. */
+  setAllTrackWaveforms: (target) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    let changed = false;
+    for (const t of sc.tracks) {
+      if (t.kind !== 'audio') continue;
+      if (t.waveform !== target) { t.waveform = target; changed = true; }
+    }
+    if (!changed) return; // converged — no-op, no history entry
     return scenes;
   }),
 
@@ -2110,13 +2146,16 @@ export const useUi = create<UiState>((set, get) => ({
     }
     return scenes;
   }),
+  /* R24-W5d (F5-P3, the canonical no-op law — the removeMarkersAt/
+     setEffectParam twins): an unknown elementId OR a fxId the element does
+     not carry returns BEFORE any history mint. The old shape fell through
+     to `return scenes` — an unchanged doc that still pushed a past entry. */
   toggleEffect: (elementId, fxId) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, elementId);
-    if (hit?.track.locked) return;
-    if (hit?.el.effects) {
-      const fx = hit.el.effects.find((f) => f.id === fxId);
-      if (fx) fx.enabled = !fx.enabled;
-    }
+    if (!hit || hit.track.locked) return;
+    const fx = hit.el.effects?.find((f) => f.id === fxId);
+    if (!fx) return; // missing fxId — no-op, no history entry
+    fx.enabled = !fx.enabled;
     return scenes;
   }),
   addEffectToElement: (elementId, fx) => withHistory(set, get, (scenes) => {
@@ -2129,7 +2168,11 @@ export const useUi = create<UiState>((set, get) => ({
   removeEffect: (elementId, fxId) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, elementId);
     if (!hit || hit.track.locked) return;
-    if (hit.el.effects) hit.el.effects = hit.el.effects.filter((f) => f.id !== fxId);
+    /* R24-W5d (the canonical no-op law): unknown element OR unknown fxId
+       mints NO history entry (the toggleEffect twin). */
+    const fxList = hit.el.effects;
+    if (!fxList || !fxList.some((f) => f.id === fxId)) return;
+    hit.el.effects = fxList.filter((f) => f.id !== fxId);
     // R20-W3: the effect domain dies with its effect
     const s = get();
     if (s.selectedEffectId === fxId) set({ selectedEffectId: null, selectedEffectClipId: null });

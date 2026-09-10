@@ -1349,6 +1349,30 @@ describe('R23-WE D-E2: the insert-preview visibility law (#102)', () => {
       spy.mockRestore();
     }
   });
+
+  /* R24-W5d (DESIGN-R24 §2 F3-P3, the insert-preview split ghost): the
+     straddler's dashed right half could render OFFSCREEN — the content-x-
+     1855/viewport-1280 class — while the auto-scroll targeted ONLY the main
+     ghost. The split ghost now JOINS the scroll target (both scrollIntoView
+     in the same after-paint rAF; 'nearest' + the split ghost's at/after-the-
+     main-ghost position means the union span lands in view). */
+  it('(a) AUTO-SCROLL covers the STRADDLER: the split ghost joins the scroll target (F3 leftover, R24-W5d)', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      // m-03 video, insert at 12 — el-2 [8.5,17) straddles the playhead: the
+      // plan carries a split tick + the dashed right-half ghost at 30.6 s
+      boot({ playhead: 12, hoverInsertPreview: { mediaId: 'm-03', mode: 'insert' } });
+      const ghost = screen.getByTestId('insert-preview-ghost');
+      const split = screen.getByTestId('insert-preview-split-ghost');
+      expect(parseFloat(split.style.left)).toBeCloseTo(30.6 * 46, 0); // the far-right half
+      await nextFrame();
+      expect(spy).toHaveBeenCalledTimes(2); // the main ghost THEN the straddler's half
+      expect(spy.mock.contexts).toEqual([ghost, split]); // the union span is the scroll target
+      for (const c of spy.mock.calls) expect(c[0]).toEqual({ inline: 'nearest', block: 'nearest' });
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
 
 /* ---------- R23-WA (DESIGN-R23 D-A2): the FX engine — seam/head/tail zones

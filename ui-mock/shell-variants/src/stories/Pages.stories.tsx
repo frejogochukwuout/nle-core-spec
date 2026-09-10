@@ -12,6 +12,7 @@ import { DeliverPage } from '../components/pages/DeliverPage';
 import { ChannelEditor } from '../components/mixer/ChannelEditor';
 import { FxBrowser } from '../components/fx/FxBrowser';
 import { FxInspector } from '../components/fx/FxInspector';
+import { ToastRegion } from '../components/shell/ToastRegion';
 import { Timeline } from '../components/timeline/Timeline';
 import { TimelineCompact } from '../components/timeline/TimelineCompact';
 import { StoreBoot, PanelBox } from './decorators';
@@ -152,7 +153,11 @@ export const ChannelEditorEmpty: StoryObj = {
  *  FxBrowser (left, 280px — the dock width law) beside the FxInspector rail
  *  (340px) with the el-2 transition selected (the parametric state).
  *  The full shell composes them via AppShell — see Shell/AppShell's
- *  “Full Shell — FX”. */
+ *  “Full Shell — FX”.
+ *  R24-W5d (F5-P3, DESIGN-R24 §3 W5d): the story mounts the ToastRegion —
+ *  the browser's click-fallback toast was INVISIBLE here (live
+ *  toastRegion=false), while the full-shell story showed it fine; the
+ *  notification surface is part of the page's honest composition. */
 export const FxPageStory: StoryObj = {
   name: 'FX page — browser & inspector',
   parameters: { layout: 'padded' },
@@ -167,6 +172,7 @@ export const FxPageStory: StoryObj = {
           <FxInspector />
         </PanelBox>
       </div>
+      <ToastRegion />
     </>
   ),
 };

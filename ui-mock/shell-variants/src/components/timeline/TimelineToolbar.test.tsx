@@ -457,7 +457,7 @@ describe('R24-W1 (A3-R4/#62): the ViewOptionsPopover items — clip style + wave
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
   });
 
-  it('Audio waveforms: the converging §4.7 flip — all-on boots, one click converges every flag to false, a mixed state converges to true', () => {
+  it('Audio waveforms: the §4.7 convergence — all-on boots, ONE batch write converges every flag, a mixed state converges to true, a converged click mints nothing', () => {
     boot({ page: 'edit' });
     fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
     const wave = screen.getByTestId('shell-menu-tl-view-options-waveforms');
@@ -467,16 +467,21 @@ describe('R24-W1 (A3-R4/#62): the ViewOptionsPopover items — clip style + wave
     expect(track('tr-audio-1').waveform).toBe(false); // converged
     expect(track('tr-audio-2').waveform).toBe(false);
     expect(wave).toHaveAttribute('aria-checked', 'false');
-    // the quirk, pinned honestly: an undefined track needs TWO flips to reach
-    // an explicit false (undefined → true → false), so this convergence
-    // minted 4 history entries (2 per audio track) — the W5 set-all-batch debt
-    expect(store().past).toHaveLength(4);
+    // R24-W5d (W1's debt paid): the convergence is ONE withHistory batch
+    // write (setAllTrackWaveforms) — the old per-track flip walk minted 4
+    // entries (2 per undefined track on the undefined→true→false double
+    // walk); undo now fully reverts in ONE step. (The checkbox's target is
+    // always !waveformsOn — a real change by construction, so the popover
+    // itself can never hit the batch's converged no-op arm; THAT arm is
+    // pinned at the store level in useUiStore.test.ts.)
+    expect(store().past).toHaveLength(1);
     // mixed state: A2 back on, A1 off → checked=false → one click converges ALL to true
     act(() => { useUi.getState().toggleTrackCmd('sc-1', 'tr-audio-2', 'waveform'); });
     fireEvent.click(wave);
     expect(track('tr-audio-1').waveform).toBe(true);
     expect(track('tr-audio-2').waveform).toBe(true);
     expect(wave).toHaveAttribute('aria-checked', 'true');
+    expect(store().past).toHaveLength(3); // batch + the manual A2 flip + the re-converge batch — still ONE per convergence
     // a FRESH track (A3) boots with addTrack's OWN law: explicit
     // waveform=true (the undefined state is a FIXTURE-only quirk — the
     // §4.7 fixture tracks boot undefined; addTrack never does). With all

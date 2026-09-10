@@ -572,8 +572,24 @@ describe('R23-WA: the FX page + the FX-object Delete rung', () => {
     expect(S().tool).toBe('select');
   });
 
-  it('Delete with a selected TRANSITION removes it (delete-aware; ruling 22 — the FX rung FIRST)', () => {
-    useUi.setState({ selection: ['el-3'], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+  it('R24-W5d (F5-P2 re-pin — the scope): Delete OUT of the fx scope clears the selection, never deletes (the forced-in fx object)', () => {
+    useUi.setState({ page: 'edit', fxMode: false, selection: ['el-3'], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+    press({ key: 'Delete' });
+    // the transition SURVIVES — the rung's documented scope (shortcutMap's
+    // "on the FX page / in the FX tool") gates the destructive arm; out of
+    // scope the pointing domain + the clip selection CLEAR instead (the W0
+    // exit-law belt-and-braces twin — live states can't reach this, direct
+    // store writes can)
+    expect('transitionOut' in el('el-2')).toBe(true);
+    expect(el('el-2').transitionOut!.duration).toBe(0.75);
+    expect(S().selectedFxObject).toBeNull();
+    expect(S().selection).toEqual([]);
+    expect(() => el('el-3')).not.toThrow(); // nothing deleted
+    expect(S().past.length).toBe(0); // and nothing minted history
+  });
+
+  it('Delete with a selected TRANSITION removes it (delete-aware; ruling 22 — the FX rung FIRST, in scope on the FX page)', () => {
+    useUi.setState({ page: 'fx', selection: ['el-3'], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
     press({ key: 'Delete' });
     expect('transitionOut' in el('el-2')).toBe(false);
     expect(S().selectedFxObject).toBeNull();
@@ -583,8 +599,8 @@ describe('R23-WA: the FX page + the FX-object Delete rung', () => {
     expect(el('el-3').startTime).toBe(17);
   });
 
-  it('Delete with a selected FADE removes just that side (the clip survives untouched)', () => {
-    useUi.setState({ selection: ['el-1'], selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'in' } });
+  it('Delete with a selected FADE removes just that side (the clip survives untouched — fxMode scope, the FX tool armed)', () => {
+    useUi.setState({ page: 'edit', tool: 'fx', fxMode: true, selection: ['el-1'], selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'in' } });
     press({ key: 'Delete' });
     expect('fadeIn' in el('el-1')).toBe(false);
     expect(el('el-1').fadeOut).toBe(0.75); // the other side survives
@@ -595,8 +611,9 @@ describe('R23-WA: the FX page + the FX-object Delete rung', () => {
     expect('fadeIn' in el('el-2')).toBe(false);
   });
 
-  it('the FX rung precedes the multi-delete confirm dialog (an FX object + a 5-clip selection never asks)', () => {
+  it('the FX rung precedes the multi-delete confirm dialog (an FX object + a 5-clip selection never asks — in scope)', () => {
     useUi.setState({
+      page: 'fx',
       selection: ['el-1', 'el-2', 'el-3', 'el-4', 'el-5'],
       selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'out' },
     });
@@ -611,5 +628,27 @@ describe('R23-WA: the FX page + the FX-object Delete rung', () => {
     press({ key: 'Escape' });
     expect(S().tool).toBe('select');
     expect(S().fxMode).toBe(false);
+  });
+
+  it('R24-W5d (F5-P3): Escape clears a held MARKER selection (the dead-key fix — the shell-level domain clear)', () => {
+    useUi.setState({ page: 'edit', selection: [], selectedMarkerId: 'mk-2' });
+    press({ key: 'Escape' });
+    expect(S().selectedMarkerId).toBeNull();
+    // the ladder position: a non-select tool would win first — the marker
+    // clear rides BELOW the tool reset, ABOVE the clip selection
+    useUi.setState({ selectedMarkerId: 'mk-3', tool: 'blade' });
+    press({ key: 'Escape' });
+    expect(S().tool).toBe('select'); // tool rung first
+    expect(S().selectedMarkerId).toBe('mk-3'); // still held — next Escape takes it
+    press({ key: 'Escape' });
+    expect(S().selectedMarkerId).toBeNull();
+  });
+
+  it('R24-W5d (F5-P3): Escape clears a held FX-object selection (the marker rung\'s twin)', () => {
+    useUi.setState({ page: 'fx', selection: [], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+    press({ key: 'Escape' });
+    expect(S().selectedFxObject).toBeNull();
+    expect('transitionOut' in el('el-2')).toBe(true); // cleared, not deleted
+    expect(S().past.length).toBe(0);
   });
 });
