@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Inspector } from './Inspector';
+import { Inspector, TransitionSection } from './Inspector';
 import { useUi } from '../../state/useUiStore';
 import { findElement } from '../../lib/mockData';
 import type { UiPatch } from '../../test/helpers';
@@ -231,6 +231,46 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expect(screen.getByTestId('shell-inspector-eq')).toBeVisible();
     // sub-tab state is LOCAL — no store surface (inspectorTab is gone)
     expect('inspectorTab' in S()).toBe(false);
+  });
+
+  /* ---- R24-W5a (F2-P2): the [Levels | EQ] arrow roving (ColorInspector
+     grammar — ArrowRight was a no-op live) ---- */
+
+  it('R24-W5a F2: Audio sub-tabs ROVE — ←/→ move focus + selection with wrap (the ColorInspector grammar)', async () => {
+    const user = userEvent.setup();
+    boot({ selection: ['el-6'] });
+    const levels = screen.getByTestId('shell-inspector-subtab-levels');
+    const eq = screen.getByTestId('shell-inspector-subtab-eq');
+    // tabIndex rove: only the selected tab is a tab stop
+    expect(levels).toHaveAttribute('tabindex', '0');
+    expect(eq).toHaveAttribute('tabindex', '-1');
+    levels.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toBe(eq); // focus follows the rove
+    expect(eq).toHaveAttribute('aria-selected', 'true');
+    expect(levels).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByTestId('shell-inspector-eq')).toBeVisible();
+    await user.keyboard('{ArrowRight}'); // wraps the 2-tab loop
+    expect(document.activeElement).toBe(levels);
+    expect(levels).toHaveAttribute('aria-selected', 'true');
+    await user.keyboard('{ArrowLeft}'); // wraps back
+    expect(document.activeElement).toBe(eq);
+  });
+
+  /* ---- R24-W5a (F2-P2): the NumberField width follows the content grammar
+     (TC displays fit their 11-char SMPTE string — client 62 vs scrollWidth 81
+     live, the hours digits cut) ---- */
+
+  it('R24-W5a F2: TC NumberFields carry the measured-fit width (w-[84px]); plain numerics keep w-[64px]', () => {
+    const timing = boot({ selection: ['el-5'] }); // text clip → Timing (tcDisplay)
+    const inField = screen.getByTestId('shell-inspector-timing-in');
+    expect(inField).toHaveValue('00:00:08:18'); // the 11-char TC display that clipped
+    expect(inField.className).toContain('w-[84px]');
+    expect(inField.className).not.toContain('w-[64px]');
+    timing.unmount();
+    // plain numeric rows stay compact (the non-TC rhythm is unchanged)
+    boot({ selection: ['el-2'] });
+    expect(screen.getByLabelText('Opacity value').className).toContain('w-[64px]');
   });
 
   /* ---- the §4.4 field contracts, carried over from the tab era ---- */
@@ -536,6 +576,24 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expect(el('el-2').eq).toEqual([0, 0, 0, 0]); // fanned out to the whole selection
   });
 
+  /* ---- R24-W5a (F2-P1, the EQ half): the vertical band slider keeps its
+     h-[88px] utility — the range reset now lives in @layer base so the
+     cascade lets utilities win (the source-level pin lives in
+     appLayers.test.ts; jsdom cannot see the cascade itself) ---- */
+
+  it('R24-W5a F2-P1: the EQ band slider carries h-[88px] — the class survives the cascade once the reset is layered', () => {
+    boot({ selection: ['el-6'] });
+    fireEvent.click(screen.getByTestId('shell-inspector-subtab-eq'));
+    for (const i of [1, 2, 3, 4]) {
+      const slider = screen.getByTestId(`shell-inspector-eq-slider-${i}`);
+      expect(slider).toHaveAttribute('type', 'range');
+      expect(slider.className).toContain('h-[88px]');
+      // the vertical-writing grammar rides the inline style (browsers render
+      // the reference's vertical bands; jsdom ignores it)
+      expect((slider as HTMLElement).style.writingMode).toBe('vertical-lr');
+    }
+  });
+
   /* ---- the fallback sheet's REAL toggles (th_mto5fdf6, carried over) ---- */
 
   it('fallback toggles are REAL: toggleTrackCmd flips the track (undoable)', () => {
@@ -636,5 +694,58 @@ describe('R23-WA: the FX section embeds at the TOP of the Edit-page rail (D-A4)'
     expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'fx-object');
     expect(screen.getByTestId('inspector-entity-name')).toHaveTextContent('Fade In — A012_C034_beach_wide'); // el-1's clip name
     expect(screen.getByTestId('inspector-entity-type')).toHaveTextContent('fade');
+  });
+});
+
+/* ---------- R24-W5a (DESIGN-R24 §2 F2-P2): TransitionSection's honest ----------
+   mixed state. The section is EXPORTED (the FX inspector reuses it), so the
+   mixed els[] contract pins at the component level: the Inspector frame's
+   showTransition common-subset gate hides mixed multis (its own documented
+   law), and both shipped frames currently pass single-element arrays — the
+   pin guards the exported contract every future frame inherits. */
+describe('R24-W5a: TransitionSection — the honest mixed state (F2-P2)', () => {
+  it('mixed multi-select: the count summary, NOT the els[0] "Hard cut / Add crossfade" lie', () => {
+    // el-2 carries the fixture transitionOut; el-3 is a hard cut
+    expect(el('el-2').transitionOut).toBeDefined();
+    expect(el('el-3').transitionOut).toBeUndefined();
+    render(<TransitionSection els={[el('el-2'), el('el-3')]} nextEl={null} />);
+    expect(screen.getByTestId('transition-mixed-summary'))
+      .toHaveTextContent('Mixed — 1 of 2 clips have transitions.');
+    // the old lie is dead: no els[0] Hard cut summary, no editor rows
+    expect(screen.queryByText(/Hard cut/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('transition-presentation')).not.toBeInTheDocument();
+    // the controls render honest-disabled with their reason tips (§4.9:
+    // aria-disabled keeps the data-tip hoverable)
+    const add = screen.getByTestId('transition-mixed-add');
+    expect(add).toHaveAttribute('aria-disabled', 'true');
+    expect(add).toHaveAttribute('data-tip', expect.stringContaining('Mixed cut state'));
+    expect(screen.getByTestId('transition-mixed-remove')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('the mixed Add click mints NOTHING — no history entry, no doc change (the setTransition({}) no-op mint is dead)', () => {
+    render(<TransitionSection els={[el('el-2'), el('el-3')]} nextEl={null} />);
+    const before = S().past.length;
+    const trBefore = { ...el('el-2').transitionOut! };
+    fireEvent.click(screen.getByTestId('transition-mixed-add'));
+    fireEvent.click(screen.getByTestId('transition-mixed-remove'));
+    expect(S().past.length).toBe(before); // NO no-op history entry (F2 live: +1)
+    expect(el('el-2').transitionOut).toEqual(trBefore); // untouched
+    expect(el('el-3').transitionOut).toBeUndefined(); // no default minted either
+  });
+
+  it('the honest branches survive: all-hard-cuts still offers Add (fan-out); all-transitioned still edits', () => {
+    // uniform hard cuts (both lack one) → the Add offer fans out to BOTH
+    // (the §4.4 sets-all law — the old els[0]-only write was a partial write)
+    const { unmount } = render(<TransitionSection els={[el('el-3'), el('el-6')]} nextEl={null} />);
+    expect(screen.getByText(/Hard cuts — 2 clips/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add crossfade' }));
+    const spec09 = { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 };
+    expect(el('el-3').transitionOut).toEqual(spec09);
+    expect(el('el-6').transitionOut).toEqual(spec09);
+    unmount();
+    // uniform transitioned (both carry one) → the editor rows, no mixed summary
+    render(<TransitionSection els={[el('el-3'), el('el-6')]} nextEl={null} />);
+    expect(screen.getByTestId('transition-presentation')).toBeInTheDocument();
+    expect(screen.queryByTestId('transition-mixed-summary')).not.toBeInTheDocument();
   });
 });

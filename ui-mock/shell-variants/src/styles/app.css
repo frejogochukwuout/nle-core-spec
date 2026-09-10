@@ -247,34 +247,46 @@ body {
 }
 [data-tip-top]::after { top: auto; bottom: calc(100% + 7px); transform: translateX(-50%) translateY(2px); }
 
-/* range inputs — mock grammar */
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  height: 14px;
-  flex-shrink: 0;
-  cursor: pointer;
+/* range inputs — mock grammar.
+   R24-W5a (DESIGN-R24 §2 F2-P1, THE cascade landmine): this block used to
+   sit UNLAYERED, and unlayered author CSS outranks Tailwind's @layer
+   utilities — the reset's `height: 14px` silently killed EVERY range height
+   utility in the tree (the Inspector EQ's vertical h-[88px] band sliders
+   collapsed to 14×11 stubs live; every ChannelEditor h-[10px]/h-[9px] range
+   row was dead). Control resets MUST live in @layer base — the same tier
+   and the same law as the button/input resets at the top of this file
+   (R2 design review, cascade finding) and the [data-tip] position rule
+   (R20-W0). Layered = utilities win (h-[88px] etc. override the reset),
+   while the track/thumb skin survives untouched below them. */
+@layer base {
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    height: 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 3px;
+    background: var(--border-soft);
+    border-radius: 2px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px; height: 11px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: #d8d8d8;
+    box-shadow: 0 0 2px rgba(0,0,0,.6);
+    border: none;
+  }
+  input[type="range"].green-fill::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, var(--type-audio) 0%, var(--type-audio) var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
+  }
+  [data-theme="light"] input[type="range"]::-webkit-slider-thumb { background: #4a4a52; }
 }
-input[type="range"]::-webkit-slider-runnable-track {
-  height: 3px;
-  background: var(--border-soft);
-  border-radius: 2px;
-}
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 11px; height: 11px;
-  margin-top: -4px;
-  border-radius: 50%;
-  background: #d8d8d8;
-  box-shadow: 0 0 2px rgba(0,0,0,.6);
-  border: none;
-}
-input[type="range"].green-fill::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, var(--type-audio) 0%, var(--type-audio) var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
-}
-[data-theme="light"] input[type="range"]::-webkit-slider-thumb { background: #4a4a52; }
 
 /* text inputs */
 .field {

@@ -51,7 +51,7 @@
      TransitionSection are exported too — the FX inspector (components/fx/)
      reuses them (one component, two frames — the anti-duplication law). */
 
-import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
 import {
   AudioWaveform, ChevronDown, ChevronRight, ChevronUp, Diamond, FlipHorizontal, FlipVertical,
   FolderCog, History, Image as ImageIcon, Layers, MoreHorizontal, Plus, RotateCcw, Sparkles, Type, Video, X,
@@ -276,7 +276,7 @@ export function NumberField({
           setError(null);
           commitRef.current(resetTo);
         }}
-        className={`mono w-[64px] rounded-[var(--radius-sm)] border bg-inset px-1 py-[2px] text-right text-[11px] focus:outline-none ${
+        className={`mono ${tcDisplay ? 'w-[84px]' : 'w-[64px]'} rounded-[var(--radius-sm)] border bg-inset px-1 py-[2px] text-right text-[11px] focus:outline-none ${
           error ? 'num-field-invalid border-[var(--danger,#e5484d)]' : 'border-soft text-tprimary focus:border-[var(--accent-focus)]'
         }`}
       />
@@ -963,16 +963,70 @@ export function TransitionSection({ els, nextEl }: { els: ElementJSON[]; nextEl:
   const removeTransition = useUi((s) => s.removeTransition);
   const trs = els.map((e) => e.transitionOut).filter((t): t is TransitionJSON => t != null);
 
+  /* R24-W5a (DESIGN-R24 §2 F2-P2): the honest MIXED branch. The old code
+     fell into the els[0] "Hard cut / Add crossfade" shape whenever ANY
+     selected clip lacked a transition — a lie twice over when some clips
+     DO carry one: the summary claimed "Hard cut" for a selection whose
+     first clip may itself be transitioned, and the Add click on that clip
+     minted a NO-OP history entry (setTransition(id, {}) Object.assigns
+     nothing onto the existing record — the W0 identical-patch guard only
+     fires on non-empty patches). The honest presentation: the count + the
+     controls OFF with their reasons (aria-disabled, the §4.9 grammar —
+     the data-tip stays hoverable; NO onClick = nothing can mint). */
+  if (els.length > 1 && trs.length > 0 && trs.length < els.length) {
+    return (
+      <Group title="Transition">
+        <p className="text-[11px] leading-relaxed text-tmuted" data-testid="transition-mixed-summary">
+          Mixed — {trs.length} of {els.length} clips have transitions.
+        </p>
+        <p className="text-[11px] leading-relaxed text-tmuted">
+          Transition edits need a uniform cut state — select only transitioned clips to edit them, or only hard cuts to add.
+        </p>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            className="mini-btn"
+            aria-disabled="true"
+            data-testid="transition-mixed-add"
+            data-tip="Mixed cut state — disabled: some selected clips already carry a transition (select only hard cuts to add)"
+          >
+            <Plus size={12} strokeWidth={1.6} /> Add crossfade
+          </button>
+          <button
+            type="button"
+            className="mini-btn"
+            aria-disabled="true"
+            data-testid="transition-mixed-remove"
+            data-tip="Mixed cut state — disabled: removal would hit only the transitioned subset (select only transitioned clips to remove)"
+          >
+            <X size={12} strokeWidth={1.6} /> Remove transition
+          </button>
+        </div>
+      </Group>
+    );
+  }
+
+  /* no selected element carries one (single OR a uniform hard-cut
+     multi-select) — offer creation; setTransition(id, {}) creates the spec 09
+     default in-store. Safe by construction now: the mixed branch above owns
+     every some-have selection, so this Add can never land on an
+     already-transitioned clip (the no-op-mint path the F2 audit measured).
+     R24-W5a: the Add FANS OUT to the whole uniform selection (the §4.4
+     sets-all law — the old els[0]-only write was a silent partial write). */
   if (trs.length !== els.length) {
-    // single selection with a following cut but no transition yet — offer
-    // creation; setTransition(id, {}) creates the spec 09 default in-store
     const el = els[0];
     return (
       <Group title="Transition">
         <p className="text-[11px] leading-relaxed text-tmuted">
-          Hard cut{nextEl ? ` to “${nextEl.name}”` : ''} at {tc(el.startTime + el.duration)}.
+          {els.length > 1
+            ? `Hard cuts — ${els.length} clips selected, none carry a transition.`
+            : `Hard cut${nextEl ? ` to “${nextEl.name}”` : ''} at ${tc(el.startTime + el.duration)}.`}
         </p>
-        <button type="button" className="mini-btn self-start" onClick={() => setTransition(el.id, {})}>
+        <button
+          type="button"
+          className="mini-btn self-start"
+          onClick={() => els.forEach((e) => setTransition(e.id, {}))}
+        >
           <Plus size={12} strokeWidth={1.6} /> Add crossfade
         </button>
         <p className="text-[11px] text-tmuted">Creates the spec 09 default: Cross Dissolve · 0.50s · centered.</p>
@@ -1121,37 +1175,48 @@ function AudioSection({
   setFieldAll: (patch: Partial<ElementJSON>) => void;
 }) {
   const [sub, setSub] = useState<'levels' | 'eq'>('levels');
+  /* R24-W5a (DESIGN-R24 §2 F2-P2): arrow roving on the [Levels | EQ]
+     tablist — the ColorInspector/marker-dots house grammar (spec 18
+     §11.6): ←/→ move the tab stop with wrap, selection follows, and the
+     focus is synchronous by id (the rAF deferral lost focus races under
+     jsdom/userEvent). ArrowRight used to be a no-op here live. */
+  const SUBTABS = ['levels', 'eq'] as const;
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, current: (typeof SUBTABS)[number]) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const idx = SUBTABS.indexOf(current);
+    const next = SUBTABS[(idx + (e.key === 'ArrowRight' ? 1 : SUBTABS.length - 1)) % SUBTABS.length];
+    setSub(next);
+    document.getElementById(`tab-audio-${next}`)?.focus();
+  };
   return (
     <section className="border-b border-hairline">
       <div className="flex h-[26px] min-h-[26px] items-center gap-1.5 border-b border-hairline bg-raised px-2">
         <span className="text-[11px] font-medium tracking-wide text-tprimary">Audio</span>
         <div className="grow" />
-        {/* compact text sub-tabs — spec 18 §11.6 tablist semantics KEPT */}
+        {/* compact text sub-tabs — spec 18 §11.6 tablist semantics KEPT,
+            R24-W5a: + the house arrow-roving grammar (tabIndex rove too) */}
         <div role="tablist" aria-label="Audio sections" className="flex items-center gap-0.5">
-          <button
-            type="button"
-            role="tab"
-            id="tab-audio-levels"
-            aria-selected={sub === 'levels'}
-            aria-controls="insp-audio-levels"
-            data-testid="shell-inspector-subtab-levels"
-            onClick={() => setSub('levels')}
-            className={`rounded-[var(--radius-sm)] px-2 py-[1px] text-[10.5px] ${sub === 'levels' ? 'bg-[var(--active-overlay)] text-tprimary' : 'text-tmuted hover:text-tprimary'}`}
-          >
-            Levels
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="tab-audio-eq"
-            aria-selected={sub === 'eq'}
-            aria-controls="insp-audio-eq"
-            data-testid="shell-inspector-subtab-eq"
-            onClick={() => setSub('eq')}
-            className={`rounded-[var(--radius-sm)] px-2 py-[1px] text-[10.5px] ${sub === 'eq' ? 'bg-[var(--active-overlay)] text-tprimary' : 'text-tmuted hover:text-tprimary'}`}
-          >
-            EQ
-          </button>
+          {SUBTABS.map((id) => {
+            const selected = sub === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                id={`tab-audio-${id}`}
+                aria-selected={selected}
+                aria-controls={`insp-audio-${id}`}
+                tabIndex={selected ? 0 : -1}
+                data-testid={`shell-inspector-subtab-${id}`}
+                onClick={() => setSub(id)}
+                onKeyDown={(e) => onTabKey(e, id)}
+                className={`rounded-[var(--radius-sm)] px-2 py-[1px] text-[10.5px] ${selected ? 'bg-[var(--active-overlay)] text-tprimary' : 'text-tmuted hover:text-tprimary'}`}
+              >
+                {id === 'levels' ? 'Levels' : 'EQ'}
+              </button>
+            );
+          })}
         </div>
       </div>
       <div

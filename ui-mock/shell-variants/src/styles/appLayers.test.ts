@@ -51,6 +51,35 @@ describe('app.css cascade-layer discipline (R20-W0)', () => {
   });
 });
 
+/* ---------- R24-W5a (DESIGN-R24 §2 F2-P1 — THE P1): the unlayered range
+ * reset. The whole input[type="range"] grammar block (reset + track + thumb
+ * + green-fill) used to sit OUTSIDE any @layer, so its `height: 14px`
+ * outranked EVERY Tailwind range height utility (unlayered author CSS beats
+ * @layer utilities regardless of specificity): the Inspector EQ's vertical
+ * h-[88px] band sliders collapsed to 14×11 px stubs live, and every
+ * ChannelEditor h-[10px]/h-[9px] range row was dead. The block moved into
+ * @layer base — utilities win again, the skin survives below them. The
+ * RENDER-side half of the pin (the EQ slider still carries h-[88px]) lives
+ * in Inspector.test.tsx. ---------- */
+describe('R24-W5a F2-P1: the range-input reset lives in @layer base (utilities can override it)', () => {
+  it('the input[type=range] reset (height 14px) is INSIDE an @layer base block', () => {
+    const layered = /@layer\s+base\s*\{[\s\S]*?input\[type="range"\]\s*\{[^}]*height:\s*14px[^}]*\}/;
+    expect(layered.test(css)).toBe(true);
+    // the pseudo-element skin (track/thumb/green-fill) rides the same layer
+    expect(/@layer\s+base\s*\{[\s\S]*?input\[type="range"\]\.green-fill::/.test(css)).toBe(true);
+  });
+
+  it('NO UNLAYERED input[type=range] rule remains — the height reset no longer outranks h-[88px]/h-[10px] utilities', () => {
+    const unlayered = withoutLayerBlocks(css);
+    // the reset itself…
+    expect(/input\[type="range"\]\s*\{/.test(unlayered)).toBe(false);
+    // …and the pseudo-element / green-fill / light-theme twins
+    expect(/input\[type="range"\]::/.test(unlayered)).toBe(false);
+    expect(/input\[type="range"\]\.green-fill/.test(unlayered)).toBe(false);
+    expect(/\[data-theme="light"\]\s*input\[type="range"\]/.test(unlayered)).toBe(false);
+  });
+});
+
 /* ---------- R23-FIX (review-sweep R-d + item 12): the z-ladder bumps + the
    --danger contrast pairs. jsdom runs css:false, so these laws pin at the
    source-text level (this file's own precedent — file reads are the only

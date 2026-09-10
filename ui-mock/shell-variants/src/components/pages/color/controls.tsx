@@ -60,6 +60,13 @@ export interface MicroSliderProps {
   /** gradient color-bars (linear-gradient string) */
   trackStyle?: CSSProperties;
   className?: string;
+  /** R24-W5a (DESIGN-R24 §2 F2-P2): the param's documented DEFAULT —
+   *  double-click resets HERE (the NumberField §5A resetTo grammar), NEVER
+   *  to the range midpoint (the old dbl-click wrote min+(max−min)/2 —
+   *  Gamma luma 1 → 2.125 live, a fabricated value). When no default is
+   *  threaded the dbl-click is a NO-OP (same law as NumberField: no
+   *  documented default → nothing honest to write). */
+  resetTo?: number;
 }
 
 export function MicroSlider({
@@ -74,6 +81,7 @@ export function MicroSlider({
   variant = 'mini',
   trackStyle,
   className = '',
+  resetTo,
 }: MicroSliderProps) {
   const ref = useRef<HTMLDivElement>(null);
   const v = VARIANT[variant];
@@ -127,7 +135,9 @@ export function MicroSlider({
       onPointerUp={commit}
       onPointerCancel={() => setDrag(null)}
       onLostPointerCapture={commit}
-      onDoubleClick={() => onChange(min + (max - min) / 2)}
+      /* R24-W5a (F2-P2): dbl-click = reset to the param's documented
+         default (resetTo), the §5A gesture — NOT the range midpoint. */
+      onDoubleClick={() => { if (resetTo !== undefined) onChange(resetTo); }}
       onKeyDown={(e) => {
         const s = step * (e.shiftKey ? 5 : 1);
         if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {

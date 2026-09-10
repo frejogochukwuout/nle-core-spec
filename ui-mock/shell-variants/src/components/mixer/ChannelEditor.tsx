@@ -133,8 +133,16 @@ function NumField({ value, min, max, step = 0.1, onCommit, ariaLabel }: {
    slider drag live via local preview state; the store commits once per
    gesture (release/keyup/blur — the §4.4 single-write law, same as the old
    inline slider). The NumField stays keyed on the element id (the R13
-   stale-defaultValue fix); the slider re-keys on value so external writes
-   (undo, NumField commit) resync its defaultValue. */
+   stale-defaultValue fix).
+   R24-W5a (DESIGN-R24 §2 F2-P2 — the focus drop): the slider used to
+   re-key on the VALUE (key={`${keyId}-${label}-${value}`}) so external
+   writes would resync its uncontrolled defaultValue — but a single
+   ArrowRight commit changed the value → React UNMOUNTED the focused
+   slider and remounted a fresh one → document.activeElement fell to
+   <body>. The key is now STABLE (param identity, like the row's own
+   testid) and the slider is CONTROLLED (value={shown}, the Inspector
+   ParamRow's exact grammar): external writes (undo, NumField commit)
+   resync through the value prop — no remount, focus survives the commit. */
 function ClipParamRow({ label, value, min, max, step, fmt, keyId, numAria, sliderAria, onCommit }: {
   label: string; value: number; min: number; max: number; step: number;
   fmt: (v: number) => string; keyId: string; numAria: string; sliderAria: string;
@@ -154,11 +162,12 @@ function ClipParamRow({ label, value, min, max, step, fmt, keyId, numAria, slide
       <input
         type="range"
         min={min} max={max} step={step}
-        defaultValue={value}
-        key={`${keyId}-${label}-${value}`}
+        value={shown}
+        key={`${keyId}-${label}`}
         className="h-[10px] min-w-0 flex-1"
         onChange={(e) => setDrag(+(e.target as HTMLInputElement).value)}
         onPointerUp={commitDrag}
+        onPointerCancel={() => setDrag(null)}
         onKeyUp={commitDrag}
         aria-label={sliderAria}
       />

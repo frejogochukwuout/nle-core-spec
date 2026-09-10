@@ -274,7 +274,9 @@ function WheelControl({
       </div>
 
       {/* luma thumbwheel — the wheel's SCALAR (lift/gamma/gain/offset),
-          spec bounds per color-layout §3.5; ONE commit per drag */}
+          spec bounds per color-layout §3.5; ONE commit per drag.
+          R24-W5a: resetTo threads the spec 08 default so dbl-click resets
+          (Gamma luma → 1.0, NOT the 0.25–4 midpoint 2.125 — F2-P2). */}
       <div className="mt-2 w-full">
         <MicroSlider
           ariaLabel={`${meta.label} luma`}
@@ -285,6 +287,7 @@ function WheelControl({
           valueText={`${scalar.toFixed(3)}${meta.key === 'offset' ? ' ·' : ''}`}
           variant="mini"
           className="w-full"
+          resetTo={DEFAULT_GRADE[meta.key]}
           trackStyle={{
             height: 12,
             borderRadius: 6,
@@ -371,21 +374,26 @@ export function WheelsPanel() {
                  typed path and the drag path agree. */
               onCommit={(v) => setGrade(fieldPatch(c.key, clamp(v, c.min, c.max)))}
             />
-            {c.bar ? (
-              <div aria-hidden className="h-[2px] min-w-0 flex-1 rounded-[1px]" style={{ background: c.bar }} />
-            ) : (
-              <MicroSlider
-                ariaLabel={c.label}
-                value={grade[c.key]}
-                min={c.min}
-                max={c.max}
-                step={c.step}
-                valueText={c.fmt(grade[c.key])}
-                className="min-w-0 flex-1"
-                onFirstTouch={tell}
-                onChange={(v) => setGrade(fieldPatch(c.key, v))}
-              />
-            )}
+            {/* R24-W5a (DESIGN-R24 §2 F2-P2 — the affordance lie): Temp/Tint
+                used to render a DECORATIVE 2px gradient bar (aria-hidden div,
+                no role, no keyboard, no pointer) next to the typed field —
+                they are REAL bar-sliders now, the master-row grammar below
+                (variant="bar" + the gradient as trackStyle, the same
+                MicroSlider keyboard/drag/commit law as every other row). */}
+            <MicroSlider
+              ariaLabel={c.label}
+              value={grade[c.key]}
+              min={c.min}
+              max={c.max}
+              step={c.step}
+              valueText={c.fmt(grade[c.key])}
+              variant={c.bar ? 'bar' : 'mini'}
+              trackStyle={c.bar ? { background: c.bar } : undefined}
+              resetTo={DEFAULT_GRADE[c.key]}
+              className="min-w-0 flex-1"
+              onFirstTouch={tell}
+              onChange={(v) => setGrade(fieldPatch(c.key, v))}
+            />
           </div>
         ))}
       </div>
@@ -428,6 +436,7 @@ export function WheelsPanel() {
               valueText={c.fmt(grade[c.key])}
               variant={c.bar ? 'bar' : 'mini'}
               trackStyle={c.bar ? { background: c.bar } : undefined}
+              resetTo={DEFAULT_GRADE[c.key]}
               className="min-w-0 flex-1"
               onFirstTouch={tell}
               onChange={(v) => setGrade(fieldPatch(c.key, v))}

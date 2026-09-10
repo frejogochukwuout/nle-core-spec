@@ -125,6 +125,11 @@ describe('ChannelEditor', () => {
       expect((kids[0] as HTMLElement).textContent).toBe(label);
       expect(kids[1]).toHaveAttribute('type', 'number');
       expect(kids[2]).toHaveAttribute('type', 'range');
+      // R24-W5a F2-P1: the range height utility SURVIVES the cascade now —
+      // the app.css range reset lives in @layer base (the unlayered reset's
+      // height:14px used to kill this h-[10px] row, source-pinned in
+      // appLayers.test.ts)
+      expect((kids[2] as HTMLElement).className).toContain('h-[10px]');
       expect((kids[3] as HTMLElement).textContent).toBe(readout);
       expect(kids[3]).toHaveAttribute('data-testid', `channel-clip-readout-${label}`);
     }
@@ -181,7 +186,32 @@ describe('ChannelEditor', () => {
     fireEvent.blur(input);
     expect(el('el-6').audioFadeOut).toBe(3.5);
     expect(screen.getByTestId('channel-clip-readout-Fade out')).toHaveTextContent('3.5 s');
-    expect((screen.getByLabelText('Audio fade out slider (commit on release)') as HTMLInputElement).defaultValue).toBe('3.5');
+    /* R24-W5a: the slider is CONTROLLED now (value={shown}) — the external
+       write resyncs through the value prop (the old re-key-on-value remount
+       is dead), so the DOM value follows without any remount. */
+    expect(screen.getByLabelText('Audio fade out slider (commit on release)')).toHaveValue('3.5');
+  });
+
+  /* ---------- R24-W5a (DESIGN-R24 §2 F2-P2): the ClipParamRow focus law ---------- */
+  it('R24-W5a F2: ArrowRight on a clip slider STEPS and KEEPS focus — no re-key remount drops it to body', () => {
+    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' }); // fade in 1.0
+    const slider = screen.getByLabelText('Audio fade in slider (commit on release)');
+    slider.focus();
+    expect(document.activeElement).toBe(slider);
+    // one ArrowRight gesture: the native step lands as a change, the keyUp
+    // commits (the browser sequence; jsdom fires both manually)
+    fireEvent.change(slider, { target: { value: '1.5' } });
+    fireEvent.keyUp(slider, { key: 'ArrowRight' });
+    expect(el('el-6').audioFadeIn).toBe(1.5); // the value stepped + committed
+    expect(screen.getByTestId('channel-clip-readout-Fade in')).toHaveTextContent('1.5 s');
+    // the FOCUS survives the commit — the old key={`${keyId}-${label}-${value}`}
+    // remounted the input and dropped activeElement to <body> (F2 live)
+    expect(document.activeElement).toBe(slider);
+    // a SECOND gesture on the SAME slider still keeps focus (no cumulative drift)
+    fireEvent.change(slider, { target: { value: '2.5' } });
+    fireEvent.keyUp(slider, { key: 'ArrowRight' });
+    expect(el('el-6').audioFadeIn).toBe(2.5);
+    expect(document.activeElement).toBe(slider);
   });
 
   it('the G-layer fader/pan respond to the keyboard grammar (design doc §6)', () => {
