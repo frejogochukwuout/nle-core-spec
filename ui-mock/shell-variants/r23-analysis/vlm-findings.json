@@ -1,0 +1,2109 @@
+[
+  {
+    "story": "primitives--fader-fixed",
+    "title": "Primitives",
+    "layer": "primitive",
+    "shot": "r23-analysis/shots/primitives/primitives--fader-fixed.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Fader track container",
+        "description": "The fader track container appears to be a zero-size or minimal-size box, with the actual fader controls (sliders and labels) overflowing its visible boundaries, making it look like a broken visualization or improperly constrained layout."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:03:36.057Z"
+  },
+  {
+    "story": "primitives--fader-fill-height",
+    "title": "Primitives",
+    "layer": "primitive",
+    "shot": "r23-analysis/shots/primitives/primitives--fader-fill-height.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top-left text label",
+        "description": "Text 'Fader — fillHeight inside a 300px-tall flex c...' is clipped/overflowing its container at the top left edge."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:03:37.986Z"
+  },
+  {
+    "story": "primitives--fader-scale-column",
+    "title": "Primitives",
+    "layer": "primitive",
+    "shot": "r23-analysis/shots/primitives/primitives--fader-scale-column.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Top-left text",
+        "description": "Text 'Fader — A3 dB scale column at TRUE taper posi' is clipped/overflowing its container at the top-left edge of the viewport."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:03:39.797Z"
+  },
+  {
+    "story": "primitives--knob-dial-states",
+    "title": "Primitives",
+    "layer": "primitive",
+    "shot": "r23-analysis/shots/primitives/primitives--knob-dial-states.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top-left text area",
+        "description": "Text is severely clipped and overflowing its container, cutting off the left side of the text (e.g., 'min — indicator -135°', 'detent zone', 'release snaps')."
+      },
+      {
+        "severity": "P2",
+        "element": "Knob labels",
+        "description": "The text labels ('L100', 'L2', 'C', 'R100') are positioned very close to the bottom border of their respective containers, appearing slightly misaligned or cramped."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:03:43.414Z"
+  },
+  {
+    "story": "primitives--pan-knob-centered",
+    "title": "Primitives",
+    "layer": "primitive",
+    "shot": "r23-analysis/shots/primitives/primitives--pan-knob-centered.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top-left text",
+        "description": "Text 'Pan knob — centered (C) . drag / double-click' is clipped/overflowing its container at the top left edge."
+      },
+      {
+        "severity": "P3",
+        "element": "Main canvas area",
+        "description": "The main visualization area is an empty black canvas, which may indicate a broken or unrendered primitive for the 'Pan knob' story."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:03:49.187Z"
+  },
+  {
+    "story": "primitives--pan-knob-l-25",
+    "title": "Primitives",
+    "layer": "primitive",
+    "shot": "r23-analysis/shots/primitives/primitives--pan-knob-l-25.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Main Canvas",
+        "description": "The main canvas area is completely empty, showing no visualization for the 'Pan knob' primitive or the 'L25' layer, which reads as a broken or unrendered component."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:03:57.015Z"
+  },
+  {
+    "story": "primitives--strip-meter-static",
+    "title": "Primitives",
+    "layer": "primitive",
+    "shot": "r23-analysis/shots/primitives/primitives--strip-meter-static.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top-left text",
+        "description": "Text 'strip meter — paused (engine idle, levels at' is clipped/overflowing its container at the top-left edge."
+      },
+      {
+        "severity": "P3",
+        "element": "Main canvas area",
+        "description": "The main viewport is a large empty black canvas, which reads as a broken or uninitialized visualization for a 'Strip meter' primitive."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:03:59.285Z"
+  },
+  {
+    "story": "primitives--strip-meter-playing",
+    "title": "Primitives",
+    "layer": "primitive",
+    "shot": "r23-analysis/shots/primitives/primitives--strip-meter-playing.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Story title text",
+        "description": "Text 'Strip meter — playing (engine program walk, ...' is clipped/overflowing its container at the top left of the viewport."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:01.164Z"
+  },
+  {
+    "story": "primitives--strip-meter-levels",
+    "title": "Primitives",
+    "layer": "primitive",
+    "shot": "r23-analysis/shots/primitives/primitives--strip-meter-levels.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top-left text label",
+        "description": "Text 'strip meter — normal -12 · peak-hold (fill -1...' is clipped/overflowing its container at the left edge of the viewport."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:03.270Z"
+  },
+  {
+    "story": "chrome--toolbar-default",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--toolbar-default.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top-left text",
+        "description": "Text 'toolbar2 — traffic dots · panel toggles · pro...' is clipped/overflowing its container at the left edge."
+      },
+      {
+        "severity": "P1",
+        "element": "Sub-header text",
+        "description": "Text 'Beach Bob — Rough Cut | Edited' is heavily clipped or overlapping with the white toolbar background, making it nearly illegible."
+      },
+      {
+        "severity": "P3",
+        "element": "Main canvas area",
+        "description": "The large central dark area appears as an empty canvas or broken visualization, lacking any expected content for an 'Edit page' with 'all panels on'."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:06.897Z"
+  },
+  {
+    "story": "chrome--toolbar-panels-off",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--toolbar-panels-off.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top toolbar text",
+        "description": "Text 'Dead foo — Rough cut | Edited' is severely clipped/overflowing its container, with only the bottom half of the characters visible."
+      },
+      {
+        "severity": "P2",
+        "element": "Main canvas area",
+        "description": "The central viewport is a completely empty black void, reading as a broken visualization or missing content state for the 'Shell 1920x1080' project."
+      },
+      {
+        "severity": "P3",
+        "element": "Right-side toolbar labels",
+        "description": "Labels 'mixer' and 'inspector' in the top-right corner appear faint and have low contrast against the background."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:15.699Z"
+  },
+  {
+    "story": "chrome--toolbar-audio-page",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--toolbar-audio-page.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Main content area (Audio page)",
+        "description": "The main canvas is completely empty/black, reading as a broken visualization or missing component for the 'audio page' state."
+      },
+      {
+        "severity": "P2",
+        "element": "Top-center text labels",
+        "description": "Text elements ('Beach VOD - Rough Cut', 'Linked') are severely clipped/overflowing their container at the top of the viewport."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:18.554Z"
+  },
+  {
+    "story": "chrome--dock-edit",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--dock-edit.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Top-left window title bar",
+        "description": "Text 'app dock — brand - 5 pages (R23-WA: FX joins)' is clipped/overflowing its container on the left edge."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:20.858Z"
+  },
+  {
+    "story": "chrome--dock-color",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--dock-color.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Main Canvas Area",
+        "description": "The primary content area for the 'Color page' is completely empty, appearing as a broken visualization or missing component (zero-size box/empty canvas)."
+      },
+      {
+        "severity": "P3",
+        "element": "Top-left Tab Text",
+        "description": "The text 'app dock — brand - 5 pages (R23-WA: FX joins)' appears to be clipped at the left edge of the window."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:23.613Z"
+  },
+  {
+    "story": "chrome--dock-audio",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--dock-audio.png",
+    "findings": [
+      {
+        "severity": "P2",
+        "element": "Top-left window title bar",
+        "description": "Text 'app dock — brand - 5 pages (R23-WA: FX joins)' is clipped/overflowing its container on the left edge."
+      },
+      {
+        "severity": "P3",
+        "element": "Main canvas area",
+        "description": "The main editing area is a large empty dark rectangle, reading as an unpopulated or broken visualization for the 'Audio' focus state."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:26.795Z"
+  },
+  {
+    "story": "chrome--dock-deliver",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--dock-deliver.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Main Canvas Area",
+        "description": "The central workspace is a completely empty, dark void with no content, layers, or visualizations, appearing as a broken or uninitialized state."
+      },
+      {
+        "severity": "P3",
+        "element": "Top Bar Text",
+        "description": "The text 'app dock — brand - 5 pages (R23-WA: FX joins)' in the top-left corner is partially clipped by the edge of the window."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:29.437Z"
+  },
+  {
+    "story": "chrome--dock-fx",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--dock-fx.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top-left tab text",
+        "description": "Text 'app dock — brand - 5 pages (R23-WA: FX joins)' is clipped/overflowing its container on the left edge."
+      },
+      {
+        "severity": "P3",
+        "element": "Main canvas area",
+        "description": "The primary workspace is an empty, dark void with no content or visualization, reading as a broken or uninitialized state."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:32.657Z"
+  },
+  {
+    "story": "chrome--timeline-toolbar-default",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-default.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Timeline toolbar text",
+        "description": "Text 'timeline toolbar — tools · snap/Link/lock · m' is clipped at the left edge of the screen."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline canvas area",
+        "description": "The main timeline area is a large, empty black canvas with no tracks, rulers, or content, appearing as an uninitialized or broken visualization."
+      },
+      {
+        "severity": "P2",
+        "element": "Top toolbar container",
+        "description": "The white top toolbar (containing 'Shell 1920x1080') appears to be overlapping or misaligned with the dark timeline header below it, creating a visual break in the UI layout."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:36.836Z"
+  },
+  {
+    "story": "chrome--timeline-toolbar-blade-locked",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-blade-locked.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top-left text label",
+        "description": "Text 'timeline toolbar — tools · snap/link/lock · m' is clipped/overflowing its container at the left edge of the screen."
+      },
+      {
+        "severity": "P2",
+        "element": "Main canvas area",
+        "description": "The central viewport is a large, empty black void with no content, tracks, or UI elements, reading as a broken visualization or missing state."
+      },
+      {
+        "severity": "P3",
+        "element": "Floating toolbar",
+        "description": "The white toolbar containing 'Shell 1920x1080' appears to be floating awkwardly over the top edge of the main workspace without a clear parent container or proper docking context."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:55.294Z"
+  },
+  {
+    "story": "chrome--timeline-toolbar-mixer-full",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-mixer-full.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Main Canvas Area",
+        "description": "The main content area is a completely empty black void, reading as a broken visualization or an uninitialized canvas. Given the story name 'mixer dock full', the expected mixer/layer panel UI is entirely missing."
+      },
+      {
+        "severity": "P2",
+        "element": "Top Toolbar Text",
+        "description": "The text 'timeline toolbar — tools · snap/link/lock · m' at the top left is clipped, ending abruptly with the letter 'm'."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Controls",
+        "description": "The secondary toolbar below the main white bar contains faint, low-contrast icons and text (e.g., '200m') that are difficult to read against the dark background."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:04:58.634Z"
+  },
+  {
+    "story": "chrome--timeline-toolbar-master-muted",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-master-muted.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Main Canvas Area",
+        "description": "The central viewport is a completely empty, solid black rectangle. It appears as an uninitialized or broken visualization (empty canvas) with no content, grid, or UI elements rendered within the 1280x800 layout floor."
+      },
+      {
+        "severity": "P2",
+        "element": "Top Left Text",
+        "description": "The text 'timeline toolbar — tools · snap/Link/lock · m' is clipped at the right edge of its container, indicating overflow or insufficient width allocation for the label."
+      },
+      {
+        "severity": "P3",
+        "element": "Top Toolbar Alignment",
+        "description": "The secondary white toolbar containing 'Shell 1920x1080' is slightly misaligned or overlapping the dark primary toolbar beneath it, creating a visual seam."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:01.910Z"
+  },
+  {
+    "story": "chrome--timeline-toolbar-density-on",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-density-on.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Timeline toolbar text",
+        "description": "Text 'timeline toolbar — tools · snap/link/lock · m' is clipped at the left edge of the window."
+      },
+      {
+        "severity": "P2",
+        "element": "Main canvas area",
+        "description": "The main content area is a completely empty black void, reading as a broken visualization or missing data."
+      },
+      {
+        "severity": "P3",
+        "element": "Top toolbar controls",
+        "description": "Several icons in the top toolbar (e.g., the document icon, the location pin, the 3D box) appear as faint, unwired placeholders with very low contrast against the white background."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:14.003Z"
+  },
+  {
+    "story": "chrome--timeline-toolbar-zoom-fit-min",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-zoom-fit-min.png",
+    "findings": [],
+    "reviewedAt": "2026-09-07T11:05:15.300Z"
+  },
+  {
+    "story": "chrome--timeline-toolbar-zoom-max",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-zoom-max.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Timeline toolbar text",
+        "description": "Text 'timeline toolbar — tools · snap/Link/lock · m' is clipped on the left edge of the screen."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline ruler area",
+        "description": "The timeline ruler and track headers appear to be missing or completely empty, leaving a large black void that looks like an uninitialized canvas."
+      },
+      {
+        "severity": "P2",
+        "element": "Zoom cluster controls",
+        "description": "The zoom slider and its associated numerical value (partially visible as '0000') are severely clipped at the right edge of the toolbar."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:23.708Z"
+  },
+  {
+    "story": "chrome--timeline-toolbar-meter-live",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-meter-live.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Main Canvas Area",
+        "description": "The main content area is a completely empty black void, reading as a broken visualization or missing component (empty canvas)."
+      },
+      {
+        "severity": "P2",
+        "element": "Window Title Bar",
+        "description": "Text 'timeline toolbar – zoom cluster mid-range - m...' is clipped/overflowing its container on the left side."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Toolbar",
+        "description": "Controls in the secondary toolbar row appear faint, low-contrast, and potentially unwired or placeholder-like due to the lack of context from the empty canvas."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:27.330Z"
+  },
+  {
+    "story": "chrome--scene-tabs-default",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--scene-tabs-default.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top-left text",
+        "description": "Text 'scene tabs — 26px strip between timeline tool...' is clipped/overflowing its container at the top left edge."
+      },
+      {
+        "severity": "P3",
+        "element": "Main viewport area",
+        "description": "The large central dark area appears as an empty canvas or broken visualization, lacking any expected layer or scene content."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:29.590Z"
+  },
+  {
+    "story": "chrome--scene-tabs-second-dirty",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--scene-tabs-second-dirty.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Top-left text",
+        "description": "Text 'scene tabs — 26px strip between timeline tool' is clipped/overflowing its container at the top left edge."
+      },
+      {
+        "severity": "P3",
+        "element": "Main viewport area",
+        "description": "The large central area is a completely empty black canvas, which reads as a broken visualization or missing content for the active scene."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:32.704Z"
+  },
+  {
+    "story": "chrome--track-headers-column",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--track-headers-column.png",
+    "findings": [
+      {
+        "severity": "P2",
+        "element": "V1 track header text '1920x1080'",
+        "description": "Text is clipped/overflowing its container on the right side."
+      },
+      {
+        "severity": "P3",
+        "element": "Track headers container width",
+        "description": "The track headers panel appears to be a narrow vertical strip (160px) while the main canvas is empty, suggesting an incomplete or broken layout state for the 1280x800 floor."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:34.880Z"
+  },
+  {
+    "story": "chrome--track-headers-audio-focus",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--track-headers-audio-focus.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Window title bar text",
+        "description": "Text 'track headers — audio-focus lane boost (main...' is clipped/overflowing its container on the left side."
+      },
+      {
+        "severity": "P3",
+        "element": "Track T1 content area",
+        "description": "The track header for T1 appears as an empty container with no visible controls or visualization, looking like a broken or placeholder element."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:37.345Z"
+  },
+  {
+    "story": "chrome--track-headers-micro-meters",
+    "title": "Chrome",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/chrome/chrome--track-headers-micro-meters.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Window Title Bar",
+        "description": "Text 'Track headers — R15-A4 audio micro-meters - A' is clipped/overflowing its container on the left side."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:39.553Z"
+  },
+  {
+    "story": "color--inspector-primaries",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--inspector-primaries.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:43.507Z"
+  },
+  {
+    "story": "color--inspector-curves",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--inspector-curves.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Curves panel area",
+        "description": "The curves editor is confined to the top-left quadrant, leaving a large empty dark void in the rest of the 1280x800 layout, which looks like a broken visualization or an unfinished UI state."
+      }
+    ],
+    "reviewedAt": "2026-09-10T07:54:14.927Z"
+  },
+  {
+    "story": "color--inspector-qualifier",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--inspector-qualifier.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:51.393Z"
+  },
+  {
+    "story": "color--inspector-timeline-target",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--inspector-timeline-target.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:55.341Z"
+  },
+  {
+    "story": "color--compact-strip",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--compact-strip.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:05:59.278Z"
+  },
+  {
+    "story": "color--scopes-console-row",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--scopes-console-row.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:03.214Z"
+  },
+  {
+    "story": "color--stills-gallery",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--stills-gallery.png",
+    "findings": [
+      {
+        "severity": "P2",
+        "element": "Instructional text block",
+        "description": "Text is clipped/overflowing its container at the bottom of the 'Stills' panel, with the last line ('C59)') being cut off vertically."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:28:08.023Z"
+  },
+  {
+    "story": "color--nodes-viewer-surface",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--nodes-viewer-surface.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:11.097Z"
+  },
+  {
+    "story": "color--node-graph",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--node-graph.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:15.040Z"
+  },
+  {
+    "story": "color--graded-viewer",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--graded-viewer.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:19.043Z"
+  },
+  {
+    "story": "color--qualifier-matte-eyedropper",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--qualifier-matte-eyedropper.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:23.018Z"
+  },
+  {
+    "story": "color--decode-failure-row",
+    "title": "Color",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/color/color--decode-failure-row.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:27.037Z"
+  },
+  {
+    "story": "mixer--full-dock",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--full-dock.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:30.979Z"
+  },
+  {
+    "story": "mixer--meters-state",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--meters-state.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:34.912Z"
+  },
+  {
+    "story": "mixer--full-dock-levels",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--full-dock-levels.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:38.854Z"
+  },
+  {
+    "story": "mixer--meters-state-levels",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--meters-state-levels.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:42.789Z"
+  },
+  {
+    "story": "mixer--collapsed",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--collapsed.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:46.723Z"
+  },
+  {
+    "story": "mixer--channel-strip-solo",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-strip-solo.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:50.662Z"
+  },
+  {
+    "story": "mixer--channel-strip-solo-level",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-strip-solo-level.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:54.598Z"
+  },
+  {
+    "story": "mixer--channel-strip-lean",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-strip-lean.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:06:58.533Z"
+  },
+  {
+    "story": "mixer--channel-strip-t-3",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-strip-t-3.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:07:02.467Z"
+  },
+  {
+    "story": "mixer--channel-strip-narrow",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-strip-narrow.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:07:06.402Z"
+  },
+  {
+    "story": "mixer--channel-editor-story",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-editor-story.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "EQ / FX INSERTS section",
+        "description": "The 'Ins 1' and 'Ins 2' dropdowns are set to '—', and the 'panarms: mock' label suggests these controls might be placeholder or unwired."
+      },
+      {
+        "severity": "P3",
+        "element": "Pan knob",
+        "description": "The Pan knob appears as a thin, faint arc with a small 'C' indicator, making it look like a broken or incomplete visualization compared to the fader."
+      },
+      {
+        "severity": "P2",
+        "element": "Fader track labels",
+        "description": "The numerical labels (0, -5, -10, etc.) next to the vertical fader are misaligned; they do not line up horizontally with each other or consistently with the tick marks."
+      },
+      {
+        "severity": "P3",
+        "element": "Bottom text 'EUC OPTIONAL'",
+        "description": "The text 'EUC OPTIONAL' at the very bottom left is partially cut off or clipped by the edge of the container."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:28:19.403Z"
+  },
+  {
+    "story": "mixer--sound-library-story",
+    "title": "Mixer",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/mixer/mixer--sound-library-story.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "interview_mann...",
+        "description": "Text is clipped/overflowing its container, showing an ellipsis for the filename."
+      },
+      {
+        "severity": "P3",
+        "element": "sunset_timelaps...",
+        "description": "Text is clipped/overflowing its container, showing an ellipsis for the filename."
+      },
+      {
+        "severity": "P3",
+        "element": "A012_C034_be...",
+        "description": "Text is clipped/overflowing its container, showing an ellipsis for the filename."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:28:27.566Z"
+  },
+  {
+    "story": "overlays--confirm-scene-delete",
+    "title": "Overlays",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/overlays/overlays--confirm-scene-delete.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:07:18.309Z"
+  },
+  {
+    "story": "overlays--confirm-multi-delete",
+    "title": "Overlays",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/overlays/overlays--confirm-multi-delete.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:07:22.387Z"
+  },
+  {
+    "story": "overlays--error-boundary-crash",
+    "title": "Overlays",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/overlays/overlays--error-boundary-crash.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:07:26.332Z"
+  },
+  {
+    "story": "overlays--variant-explorer-open",
+    "title": "Overlays",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/overlays/overlays--variant-explorer-open.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:07:30.373Z"
+  },
+  {
+    "story": "overlays--toast-error-and-persist",
+    "title": "Overlays",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/overlays/overlays--toast-error-and-persist.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:07:34.308Z"
+  },
+  {
+    "story": "overlays--toast-max-stack",
+    "title": "Overlays",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/overlays/overlays--toast-max-stack.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:07:38.263Z"
+  },
+  {
+    "story": "pages--color-page-story",
+    "title": "Pages",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/pages/pages--color-page-story.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:07:42.212Z"
+  },
+  {
+    "story": "pages--deliver-page-story",
+    "title": "Pages",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/pages/pages--deliver-page-story.png",
+    "findings": [
+      {
+        "severity": "P2",
+        "element": "In/Out range selection box",
+        "description": "The 'In - Out range selection' box in the Export Summary section displays a warning/error state with red text, indicating a potential logic or data validation issue (out of range selection)."
+      },
+      {
+        "severity": "P3",
+        "element": "Codec label",
+        "description": "The 'Codec' label in the Render Settings section appears slightly misaligned vertically compared to the other labels like Format, Resolution, and Destination."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:28:35.473Z"
+  },
+  {
+    "story": "pages--deliver-master-preset",
+    "title": "Pages",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/pages/pages--deliver-master-preset.png",
+    "findings": [
+      {
+        "severity": "P2",
+        "element": "Video preview area",
+        "description": "The video preview frame (1920x1080) is significantly clipped by the bottom edge of the preview container, cutting off the playback controls and the lower portion of the image."
+      },
+      {
+        "severity": "P3",
+        "element": "Export Summary / In — Out range selection",
+        "description": "The text block for 'In — Out range selection' and its instructional subtext is rendered in a dark grey box with low contrast against the dark background, making it slightly difficult to read."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:28:43.403Z"
+  },
+  {
+    "story": "pages--deliver-page-rail",
+    "title": "Pages",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/pages/pages--deliver-page-rail.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Main content area (right of the rail)",
+        "description": "Severe text clipping and overflow. The main settings panel (Export, Video, Audio) is cut off by the edge of the narrow container, making labels like 'Timeline', 'Format', 'Resolution' and their values illegible."
+      },
+      {
+        "severity": "P1",
+        "element": "Settings panel content",
+        "description": "Elements are overlapping and misaligned due to insufficient width. Text blocks and input fields are stacked on top of each other or truncated mid-word (e.g., 'In...', 'set...', 'tra...')."
+      },
+      {
+        "severity": "P2",
+        "element": "Rail panel text",
+        "description": "Text within the left rail presets is slightly clipped or tightly packed, specifically 'FCPXML 1.10' and 'Current frame - PNG' which touch the edges of their containers."
+      },
+      {
+        "severity": "P3",
+        "element": "Bottom action button",
+        "description": "The yellow 'Render' button at the bottom of the clipped main area is partially cut off by the bottom edge of the visible container."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:28:52.625Z"
+  },
+  {
+    "story": "pages--channel-editor-empty",
+    "title": "Pages",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/pages/pages--channel-editor-empty.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:07:58.067Z"
+  },
+  {
+    "story": "pages--fx-page-story",
+    "title": "Pages",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/pages/pages--fx-page-story.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Inspector panel (right side)",
+        "description": "The inspector area is mostly empty dark space below the transition properties, which may look like a broken or missing visualization (e.g., missing preview canvas or keyframe editor)."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:29:01.914Z"
+  },
+  {
+    "story": "pages--fx-timeline",
+    "title": "Pages",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/pages/pages--fx-timeline.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:05.943Z"
+  },
+  {
+    "story": "regions--viewer-default",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--viewer-default.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:09.924Z"
+  },
+  {
+    "story": "regions--viewer-overlays-hidden",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--viewer-overlays-hidden.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:13.921Z"
+  },
+  {
+    "story": "regions--viewer-safe-guides",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--viewer-safe-guides.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:17.918Z"
+  },
+  {
+    "story": "regions--viewer-source-preview",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--viewer-source-preview.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:21.934Z"
+  },
+  {
+    "story": "regions--viewer-source-audio",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--viewer-source-audio.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:25.908Z"
+  },
+  {
+    "story": "regions--viewer-caption-overlay",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--viewer-caption-overlay.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:29.927Z"
+  },
+  {
+    "story": "regions--viewer-zoom-2-x",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--viewer-zoom-2-x.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:33.929Z"
+  },
+  {
+    "story": "regions--media-pool-offline",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--media-pool-offline.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:37.920Z"
+  },
+  {
+    "story": "regions--media-pool-no-results",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--media-pool-no-results.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:41.856Z"
+  },
+  {
+    "story": "regions--inspector-empty",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--inspector-empty.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:45.798Z"
+  },
+  {
+    "story": "regions--inspector-multi-mixed",
+    "title": "Regions",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/regions/regions--inspector-multi-mixed.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:08:49.738Z"
+  },
+  {
+    "story": "shell-components--media-pool-grid",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--media-pool-grid.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Media item: A012_C034_beach...",
+        "description": "Text label is truncated with ellipsis, indicating the container width is insufficient for the full filename."
+      },
+      {
+        "severity": "P3",
+        "element": "Media item: sunset_timelapse.m...",
+        "description": "Text label is truncated with ellipsis, indicating the container width is insufficient for the full filename."
+      },
+      {
+        "severity": "P2",
+        "element": "Media item: title_card.png",
+        "description": "The thumbnail area appears as a dark, empty canvas with only a 'STILL' text overlay, reading as a broken visualization or missing asset preview."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:29:10.332Z"
+  },
+  {
+    "story": "shell-components--media-pool-list",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--media-pool-list.png",
+    "findings": [
+      {
+        "severity": "P2",
+        "element": "Media pool list items (e.g., 'interview_ma...', 'waves_cl...')",
+        "description": "Text is clipped/overflowing its container, with filenames truncated using ellipses or cut off abruptly."
+      },
+      {
+        "severity": "P3",
+        "element": "Top-left UI controls (Search, Name, Sort, View icons)",
+        "description": "Controls appear partially obscured or overlapping with circular annotation markers (1, 2), suggesting potential layout misalignment in the header area."
+      },
+      {
+        "severity": "P2",
+        "element": "'title_card.png' list item",
+        "description": "The duration field displays a dash '-' instead of a timecode, which may read as a broken visualization or missing metadata for an image asset."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:29:18.766Z"
+  },
+  {
+    "story": "shell-components--media-pool-audio-mode-filter",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--media-pool-audio-mode-filter.png",
+    "findings": [
+      {
+        "severity": "P2",
+        "element": "sunset_timelapse.m... metadata row",
+        "description": "The filename and resolution metadata (3840x2160) are overlapping with the '39p' badge, causing text to be clipped or obscured."
+      },
+      {
+        "severity": "P3",
+        "element": "interview_marina.mp4 metadata row",
+        "description": "The text '1020x1068' is very close to the right edge of the card container, appearing slightly cramped compared to other items."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:29:28.475Z"
+  },
+  {
+    "story": "shell-components--media-pool-hover-preview",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--media-pool-hover-preview.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Media item text labels",
+        "description": "Multiple filenames (e.g., 'A012_C034_beach...', 'sunset_timelapse.m...') are truncated with ellipses, indicating the container width is insufficient for the full text."
+      },
+      {
+        "severity": "P2",
+        "element": "'title_card.png' thumbnail",
+        "description": "The thumbnail for 'title_card.png' appears as a dark, empty canvas with only a 'STILL' label, which reads as a broken or missing visualization/placeholder."
+      },
+      {
+        "severity": "P3",
+        "element": "'waves_closeup.mp4' item",
+        "description": "This media item is partially obscured by a 'Media offline' warning banner, causing visual clutter and overlapping elements within the grid cell."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:29:36.881Z"
+  },
+  {
+    "story": "shell-components--left-dock-tabbed",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--left-dock-tabbed.png",
+    "findings": [],
+    "reviewedAt": "2026-09-07T11:29:42.937Z"
+  },
+  {
+    "story": "shell-components--left-dock-effects-tab",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--left-dock-effects-tab.png",
+    "findings": [],
+    "reviewedAt": "2026-09-07T11:29:48.874Z"
+  },
+  {
+    "story": "shell-components--left-dock-effects-only",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--left-dock-effects-only.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "FX Browser list items",
+        "description": "The text labels for effects and transitions (e.g., 'Chromatic Aberration', 'Push Right') appear to be clipped or very close to the right edge of the 220px narrow container, potentially causing overflow or poor readability."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:29:56.301Z"
+  },
+  {
+    "story": "shell-components--left-dock-audio",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--left-dock-audio.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Sound file names (e.g., 'interview_m...', 'drone_launc...')",
+        "description": "Text is clipped/overflowing its container, showing ellipsis instead of the full filename."
+      },
+      {
+        "severity": "P2",
+        "element": "Bottom status bar text ('audio-bearing video included')",
+        "description": "The text is extremely low contrast against the dark background, making it nearly illegible."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:30:03.227Z"
+  },
+  {
+    "story": "shell-components--viewer-story",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--viewer-story.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Top-left metadata text",
+        "description": "Text 'Marina interview • 00:00:03:00-00:00:11:12' is positioned very close to the left edge of the viewer canvas, appearing slightly clipped or lacking standard internal padding."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:30:12.120Z"
+  },
+  {
+    "story": "shell-components--inspector-video-clip",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-video-clip.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Speed Change section - Duration label and value",
+        "description": "The text '00:00:08:12' is very close to the label 'Duration', and the secondary text 'timeline span' has significantly lower contrast, making it look like a stray or placeholder label."
+      },
+      {
+        "severity": "P3",
+        "element": "Audio section header (Levels, EQ)",
+        "description": "The 'Levels' and 'EQ' buttons appear as inactive or unwired controls within the section header, lacking the visual weight of active navigation elements."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:30:20.101Z"
+  },
+  {
+    "story": "shell-components--inspector-audio-clip",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-audio-clip.png",
+    "findings": [],
+    "reviewedAt": "2026-09-07T11:30:26.227Z"
+  },
+  {
+    "story": "shell-components--inspector-track-sheet",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-track-sheet.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Track FX description text",
+        "description": "Text is clipped/overflowing its container, wrapping awkwardly at the left edge of the inspector panel."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:30:33.521Z"
+  },
+  {
+    "story": "shell-components--inspector-effect-editor",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-effect-editor.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Opacity value",
+        "description": "The value '160%' for Opacity is clipped/overflowing its input container, making the right edge of the text and the box border look cut off."
+      },
+      {
+        "severity": "P3",
+        "element": "Bottom of the panel",
+        "description": "The bottom-most row (starting with '0...') is vertically clipped by the edge of the inspector panel, suggesting a layout overflow or missing padding."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:30:40.429Z"
+  },
+  {
+    "story": "shell-components--inspector-empty-fallback",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-empty-fallback.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Inspector panel text",
+        "description": "The descriptive text 'Track-level FX home is gap C57 — these are the G-layer insert slots (spec 20.54.2)' is clipped on the left edge, with the start of the line cut off by the container boundary."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:30:47.276Z"
+  },
+  {
+    "story": "shell-components--inspector-project-sheet",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-project-sheet.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Ripple preference row",
+        "description": "The text for the 'Ripple' value is awkwardly wrapped across three lines ('per-', 'command', '(no global pref...)'), which looks like a layout or container width issue in the inspector panel."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:30:58.178Z"
+  },
+  {
+    "story": "shell-components--status-saved",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--status-saved.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:09:52.891Z"
+  },
+  {
+    "story": "shell-components--status-saving",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--status-saving.png",
+    "findings": [
+      {
+        "error": "VLM call failed after 2 retries: API request failed with status 429: {\"error\":\"Too many requests, please try again later\"}"
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:09:56.830Z"
+  },
+  {
+    "story": "shell-components--status-failed",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--status-failed.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Status strip text",
+        "description": "The text 'Save failed — click to retry' in the bottom-left status bar is clipped/overflowing its container, with the left side being cut off."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:10:02.220Z"
+  },
+  {
+    "story": "shell-components--toast-region-story",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--toast-region-story.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Toast region (bottom right)",
+        "description": "The toast notifications are positioned very close to the bottom and right edges of the 1280x800 viewport, potentially violating standard UI padding/margin guidelines for this specific layout floor."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:10:05.471Z"
+  },
+  {
+    "story": "shell-components--context-menu-story",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--context-menu-story.png",
+    "findings": [],
+    "reviewedAt": "2026-09-07T11:10:06.975Z"
+  },
+  {
+    "story": "shell-components--cheat-sheet-story",
+    "title": "Shell/Components",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/shell-components/shell-components--cheat-sheet-story.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Keyboard shortcut labels (e.g., ⌘M, ⌥⌘M)",
+        "description": "Several keyboard shortcut labels display as garbled or illegible characters (e.g., '⌘M', '⌥⌘M', '⌘I', '⌘O', '⌘S', '⌘E'), suggesting a font rendering issue or missing icon font for modifier keys."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:10:10.535Z"
+  },
+  {
+    "story": "timeline--default",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--default.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Text label 'MARINA — FISHERWO...'",
+        "description": "Text is clipped/overflowing its container, ending with an ellipsis instead of displaying the full name."
+      },
+      {
+        "severity": "P2",
+        "element": "Text labels on V1 track ('A2_C034_beach_wide', 'Marina_interview', 'Broll_...inch')",
+        "description": "Text labels are partially clipped or overlapping with the clip thumbnails below them."
+      },
+      {
+        "severity": "P3",
+        "element": "Empty space below the timeline tracks",
+        "description": "A large empty dark area exists below the timeline, which may look like a broken visualization or missing UI component (e.g., properties panel or preview window)."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:10:14.903Z"
+  },
+  {
+    "story": "timeline--blocks-style",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--blocks-style.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "V1 track blocks",
+        "description": "Text labels on video clips (e.g., '02_C034_beach_wide', 'Marina interview', 'lunch') are heavily clipped/overflowing their container boundaries, making them difficult to read and visually messy."
+      },
+      {
+        "severity": "P2",
+        "element": "A1 track block",
+        "description": "The text label 'ambience' in the first audio block is clipped at the beginning, showing only 'bience'."
+      },
+      {
+        "severity": "P3",
+        "element": "Top header area",
+        "description": "Text '( timeline toolbar + scene tabs sit here in...' is clipped at the left edge of the viewport."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:10:23.490Z"
+  },
+  {
+    "story": "timeline--fx-mode",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--fx-mode.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Text 1 track label",
+        "description": "The text 'MARINA — FISHERWO...' is clipped/overflowing its container, with the end of the string cut off."
+      },
+      {
+        "severity": "P2",
+        "element": "V1 track clips",
+        "description": "Clip labels like 'A_2_C034_beach_wide' and 'marina_interview' are overlapping or positioned very close to the clip boundaries/thumbnails, leading to a cluttered and potentially illegible layout."
+      },
+      {
+        "severity": "P3",
+        "element": "V1 track clip labels",
+        "description": "Text labels on video clips (e.g., '...nch') appear to be clipped by the right edge of their respective clip containers."
+      }
+    ],
+    "reviewedAt": "2026-09-10T07:54:22.885Z"
+  },
+  {
+    "story": "timeline--clip-states",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--clip-states.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "V1 track header text",
+        "description": "Text 'V1 - main - selected, offline, F-badge, lin...' is clipped/overflowing its container on the left side."
+      },
+      {
+        "severity": "P3",
+        "element": "CC track caption chips",
+        "description": "Caption text 'We always visit this b...' and 'Nous venons tout le temp...' appears truncated with ellipsis, indicating potential overflow or insufficient width allocation for the content."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:10:31.482Z"
+  },
+  {
+    "story": "timeline--ruler-markers",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--ruler-markers.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Main Canvas Area",
+        "description": "The primary visualization area is a large, empty black void with no content (tracks, clips, or markers), reading as a broken or uninitialized component."
+      },
+      {
+        "severity": "P2",
+        "element": "Timeline Ruler",
+        "description": "The ruler at the top is heavily clipped and only shows partial timecodes (00:80, 00:83) without clear context or alignment to the empty canvas below."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:10:36.893Z"
+  },
+  {
+    "story": "timeline--ruler-tiers",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--ruler-tiers.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Top ruler labels (00:03, 00:06, etc.)",
+        "description": "Text is vertically clipped/overflowing the top edge of the 46 px/s ruler container."
+      },
+      {
+        "severity": "P3",
+        "element": "120 px/s ruler (second row)",
+        "description": "The first label '00:02' is partially clipped by the left edge of its container or misaligned compared to subsequent labels."
+      },
+      {
+        "severity": "P2",
+        "element": "240 px/s ruler (third row) labels",
+        "description": "Labels like '15f', '6f', '21f' appear significantly misaligned with their respective tick marks, creating a disjointed visual rhythm."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:11:25.457Z"
+  },
+  {
+    "story": "timeline--markers-and-captions",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--markers-and-captions.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "T1 Track (Text 1)",
+        "description": "The text track container appears empty or as a zero-height box, lacking any visible clip representation, waveform, or placeholder compared to the populated V1 and A1 tracks."
+      },
+      {
+        "severity": "P2",
+        "element": "V1 Track Clip Labels",
+        "description": "Clip labels like '/012_C004_beach_wide' and 'Vienna interview' are partially clipped by the left and right edges of their respective clip containers."
+      },
+      {
+        "severity": "P3",
+        "element": "A2 Track (Audio 2)",
+        "description": "The A2 track contains a single small clip ('interview_martina') that is pushed to the far right edge of the timeline, leaving a large empty void in the middle of the track which may suggest an incomplete or broken visualization state."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:11:52.349Z"
+  },
+  {
+    "story": "timeline--loop-handles-full-band",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--loop-handles-full-band.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Main canvas area",
+        "description": "The timeline visualization is completely missing, leaving a large empty dark void where the ruler, tracks, and loop handles should be rendered."
+      },
+      {
+        "severity": "P3",
+        "element": "Instructional text",
+        "description": "Raw development notes/specification text is visible at the top of the canvas instead of being hidden or replaced by actual UI components."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:11:54.978Z"
+  },
+  {
+    "story": "timeline--text-clip-thin-bar",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--text-clip-thin-bar.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Longer title card label",
+        "description": "Text is clipped/overflowing its container, cutting off the end of the sentence."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:11:56.790Z"
+  },
+  {
+    "story": "timeline--track-heights-mixed",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--track-heights-mixed.png",
+    "findings": [
+      {
+        "severity": "P2",
+        "element": "Text labels on V1 track",
+        "description": "Text labels like 'A012_C034_beach_wide', 'Marina interview', and 'cliffs_lunch' are clipped at the bottom by the track boundary or overlapping the blue background area."
+      },
+      {
+        "severity": "P3",
+        "element": "Text label 'MARINA — FISHERWO...'",
+        "description": "The text on the T1 track clip is truncated with an ellipsis, indicating it is overflowing its container width."
+      },
+      {
+        "severity": "P2",
+        "element": "Text label 'ocean_ambience'",
+        "description": "The text label for the audio clip on the A1 track is partially clipped at the top, overlapping with the waveform visualization."
+      },
+      {
+        "severity": "P1",
+        "element": "Timeline tracks (V1, A1, A2)",
+        "description": "Multiple clips on the video and audio tracks (V1, A1, A2) extend beyond the right edge of the visible timeline area, suggesting an overflow issue or missing horizontal scrollbar context."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:12:04.606Z"
+  },
+  {
+    "story": "timeline--fade-transition-objects",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--fade-transition-objects.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Clip label text",
+        "description": "The text 'ocean_ambience — fade-in/out' is clipped at the left edge of the audio clip container."
+      },
+      {
+        "severity": "P2",
+        "element": "Timeline header text",
+        "description": "The text 'A1 · audio — 1.2s fade-in / 1.5s fade-out o...' is truncated/overflowing the top-left header area."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:12:09.133Z"
+  },
+  {
+    "story": "timeline--snap-indicator",
+    "title": "Timeline",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/timeline/timeline--snap-indicator.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "Text 1 clip label",
+        "description": "The text 'MARINA — FISHERWO...' is clipped/overflowing its container, with the right side cut off."
+      },
+      {
+        "severity": "P2",
+        "element": "V1 track labels",
+        "description": "Clip labels like 'A2_C034_beach_wide', 'marina_interview', and 'ore_inch' are partially obscured by the white diagonal selection handles/overlays, making them difficult to read."
+      },
+      {
+        "severity": "P3",
+        "element": "A1 track label",
+        "description": "The text '-cean_ambience' is slightly clipped on the left edge by the track's boundary or an overlay element."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:12:15.110Z"
+  },
+  {
+    "story": "pages--deliver-strip",
+    "title": "Pages",
+    "layer": "panel",
+    "shot": "r23-analysis/shots/pages/pages--deliver-strip.png",
+    "findings": [
+      {
+        "severity": "P1",
+        "element": "V1 track clip text",
+        "description": "The label 'drone_lau...' is clipped/overflowing its container on the right side."
+      },
+      {
+        "severity": "P2",
+        "element": "A1 track clip text",
+        "description": "The label 'interview_marina' has very low contrast against the dark green background, making it difficult to read."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline ruler area",
+        "description": "The timecode markers (e.g., 00:08, 00:83) appear misaligned or use an unconventional format that looks like a rendering error or placeholder data."
+      }
+    ],
+    "reviewedAt": "2026-09-10T07:54:28.293Z"
+  },
+  {
+    "story": "shell-appshell--edit",
+    "title": "Shell/AppShell",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--edit.png",
+    "findings": [
+      {
+        "severity": "P2",
+        "element": "Timeline track labels (T1, V1, A1, A2)",
+        "description": "Text is vertically clipped or tightly constrained within the narrow track header area, making it look slightly squashed."
+      },
+      {
+        "severity": "P3",
+        "element": "Clip label 'MARINA — FISHERWO...'",
+        "description": "The text on the purple timeline clip is truncated with an ellipsis, indicating the container is too small for the full title."
+      },
+      {
+        "severity": "P3",
+        "element": "Media Pool clip labels (e.g., 'A012_C034_beach...', 'interview_marina.mp4')",
+        "description": "Filenames in the media bin are truncated with ellipses due to limited column width."
+      },
+      {
+        "severity": "P2",
+        "element": "Bottom status bar / transport controls area",
+        "description": "The bottom-most bar containing 'nle-core', 'shell study', and various tool icons appears extremely compressed and potentially overlapping with the very bottom edge of the audio waveforms."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:12:20.465Z"
+  },
+  {
+    "story": "shell-appshell--audio-focus",
+    "title": "Shell/AppShell",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--audio-focus.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Sound Library list item 'interview_m...'",
+        "description": "Text is clipped/overflowing its container, showing an ellipsis for the filename."
+      },
+      {
+        "severity": "P2",
+        "element": "Timeline track labels (T1, V1, A1, A2)",
+        "description": "The bottom of the track label area is cut off by the bottom toolbar/status bar, suggesting a layout overflow or incorrect height calculation for the timeline panel."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline clip 'ocean_ambience'",
+        "description": "Text label 'ocean_ambience' is partially obscured by the audio waveform visualization within the clip container."
+      }
+    ],
+    "reviewedAt": "2026-09-10T07:54:38.908Z"
+  },
+  {
+    "story": "shell-appshell--color",
+    "title": "Shell/AppShell",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--color.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Gallery description text",
+        "description": "Text in the left panel ('Applies to the selected clip's grade...') is tightly wrapped and slightly clipped at the bottom, suggesting a container height issue or overflow."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline track labels (T1, V1, A1, A2, CC)",
+        "description": "Track labels on the far left of the timeline are vertically misaligned with their respective track rows."
+      }
+    ],
+    "reviewedAt": "2026-09-10T07:54:44.105Z"
+  },
+  {
+    "story": "shell-appshell--deliver",
+    "title": "Shell/AppShell",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--deliver.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Left Sidebar Text (Presets)",
+        "description": "Text 'Handoff to ECP / Resolve / Premiere' and 'Playhead frame export' is clipped or wrapping tightly within the narrow sidebar container."
+      },
+      {
+        "severity": "P2",
+        "element": "Timeline Track Labels (V1, A1, A2, CC)",
+        "description": "Track name text ('A012_C034_beach_wide', 'ocean_ambience', etc.) is horizontally truncated/clipped by the track header width."
+      }
+    ],
+    "reviewedAt": "2026-09-10T07:54:57.724Z"
+  },
+  {
+    "story": "shell-appshell--fx",
+    "title": "Shell/AppShell",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--fx.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Timeline track labels (T1, V1, A1, A2)",
+        "description": "Text is slightly clipped on the left edge of the container."
+      },
+      {
+        "severity": "P3",
+        "element": "Video preview text overlay",
+        "description": "The text 'Marina interview • 00:00:03:00-00:00:11:12' and '1020x1689 24p' overlaps with the top border or looks tightly packed within the video frame area."
+      },
+      {
+        "severity": "P2",
+        "element": "Timeline clip 'MARINA - FISHERWO...'",
+        "description": "The label text inside the purple timeline clip is truncated/ellipsized, indicating the container is too narrow for the full name."
+      },
+      {
+        "severity": "P3",
+        "element": "Bottom status bar / Timeline footer",
+        "description": "Text elements like 'Saved just now', 'World', 'Narrative', etc., appear somewhat misaligned or inconsistently spaced across the bottom row."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:12:37.111Z"
+  },
+  {
+    "story": "shell-appshell--marker-inspector-story",
+    "title": "Shell/AppShell",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--marker-inspector-story.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Marker Inspector - Name field",
+        "description": "The text 'Drone sequence' is slightly clipped on the right side, with the final 'e' touching or crossing the input field border."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Track V1",
+        "description": "Clip labels such as 'A012_C034_beach_wide', 'Marina interview', and 'drone_launch' are horizontally truncated and overflowing their respective clip containers."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:12:39.724Z"
+  },
+  {
+    "story": "shell-appshell--caption-inspector-story",
+    "title": "Shell/AppShell",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--caption-inspector-story.png",
+    "findings": [
+      {
+        "severity": "P2",
+        "element": "Caption Inspector - Row 3",
+        "description": "The text in the 'CAPTION' column for the third row ('Every year we spend a week here') is horizontally clipped/overflowing its container, with the right side of the text cut off."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Track Labels",
+        "description": "The track labels on the far left (e.g., 'A01', 'A02') appear slightly misaligned or inconsistently spaced compared to the track content areas."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:12:48.702Z"
+  },
+  {
+    "story": "shell-appshell--markers-v-2",
+    "title": "Shell/AppShell",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--markers-v-2.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "V1 Track Clip Labels",
+        "description": "Text labels for clips on the V1 track (e.g., 'A012_C034_beach_wide', 'Marina interview', 'drone_launch') are clipped/overflowing their container boundaries, making them difficult to read."
+      },
+      {
+        "severity": "P3",
+        "element": "A1 Track Clip Label",
+        "description": "The text label 'ocean ambience' on the A1 track is clipped on the left side, cutting off the first letter."
+      },
+      {
+        "severity": "P3",
+        "element": "T1 Track Text Element",
+        "description": "The text 'MARINA — FISHERWO...' on the T1 track is truncated with an ellipsis, indicating it is overflowing its allocated width."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:12:52.642Z"
+  },
+  {
+    "story": "chrome--full-shell-effects-panel",
+    "title": "Chrome",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/chrome/chrome--full-shell-effects-panel.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "V1 Track Header",
+        "description": "The text '1920x1080' in the V1 track header is slightly clipped on the right edge, overflowing its container."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Clip (T1)",
+        "description": "The text 'MARINA - FISHERWO...' in the T1 track clip is truncated, indicating insufficient width for the full label."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Clip (V1)",
+        "description": "The text 'Marina interview' in the V1 track clip is truncated, indicating insufficient width for the full label."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Clip (A1)",
+        "description": "The text 'beach_ambience' in the A1 track clip is partially obscured/truncated by the left edge of the clip or container."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Clip (A2)",
+        "description": "The text 'interview_marina' in the A2 track clip is partially obscured/truncated by the left edge of the clip or container."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:12:57.210Z"
+  },
+  {
+    "story": "shell-variants--preset-a",
+    "title": "Shell/Variants",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-variants/shell-variants--preset-a.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Timeline Track Labels (T1, V1, A1, A2)",
+        "description": "Text labels for tracks (e.g., 'T1', 'V1', 'A1', 'A2') appear slightly misaligned vertically with their respective track content areas and control icons."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Clip Names",
+        "description": "Clip names on the timeline (e.g., 'MARINA — FISHERWO...', 'AO12_C034_beach_wide', 'interview_marina') are heavily truncated or clipped due to narrow track heights."
+      },
+      {
+        "severity": "P3",
+        "element": "Media Pool Filenames",
+        "description": "Filenames in the Media Pool (e.g., 'AO12_C034_beach...', 'drone_launch.mp4', 'interview_marina.mp4') are truncated with ellipses, indicating potential overflow or insufficient width allocation."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:13:01.365Z"
+  },
+  {
+    "story": "shell-variants--preset-b",
+    "title": "Shell/Variants",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-variants/shell-variants--preset-b.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Media Pool - A0012_C034_beach...",
+        "description": "The filename 'A0012_C034_beach...' is truncated with an ellipsis, indicating the text container is too narrow for the full filename."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Track V1 - 'A0012_C034_beach_wide'",
+        "description": "The clip label 'A0012_C034_beach_wide' is partially clipped at the end ('wide' is cut off) because the clip width or text padding is insufficient."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline Track V1 - 'drone_launch.mp4'",
+        "description": "The clip label 'drone_launch.mp4' is partially clipped at the end ('mp4' is cut off)."
+      },
+      {
+        "severity": "P2",
+        "element": "Timeline Track T1 - Text Clip",
+        "description": "The text inside the T1 track clip reads as 'Tex... text', which appears to be a placeholder or a severely truncated label that doesn't provide meaningful information."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:13:05.830Z"
+  },
+  {
+    "story": "shell-variants--preset-c",
+    "title": "Shell/Variants",
+    "layer": "shell",
+    "shot": "r23-analysis/shots/shell-variants/shell-variants--preset-c.png",
+    "findings": [
+      {
+        "severity": "P3",
+        "element": "Media Pool - A012_C034_beach...",
+        "description": "Text is clipped/overflowing its container, showing 'A012_C034_beach...' instead of the full filename."
+      },
+      {
+        "severity": "P2",
+        "element": "Timeline - V1 Track",
+        "description": "The clip label 'A012_C034_beach_wide' is partially clipped by the adjacent clip 'Marina interview'."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline - V1 Track",
+        "description": "The clip label ending in '...e_launch' is heavily clipped, making the full name illegible."
+      },
+      {
+        "severity": "P3",
+        "element": "Timeline - V1 Track",
+        "description": "The clip label at the far right '...set_time' is clipped, showing only the end of the filename."
+      }
+    ],
+    "reviewedAt": "2026-09-07T11:13:09.671Z"
+  }
+]

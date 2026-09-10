@@ -1,8 +1,247 @@
 # PLAN — Long-Horizon Task Tracker (nle-core-spec)
 
 **Created:** 2026-09-02 (Round 8 wrap-up — user directive: push/backup every micro milestone; PLAN tracks the long horizon, HANDOFF tracks the next session only)
-**Current round:** 9 COMPLETE (pushed @ `4bc8c4d`) — seal round remains
-**Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec
+**Current round:** 26 COMPLETE (THE EXECUTION round — the three R25 cross-repo filings EXECUTED at their owners, each adversarially reviewed by a fresh-context agent (PASS, all folds landed): **the engine E1/E2 linked-companion fixes** @ `8188d4e`+`412693d`+`0a49286` — the P1 linked mid-clip insert overlap (Phase 1b companion splits + the ≥2-splits relink + the from<insertFrame exclusion; the r1 port's precondition MET) + the overwrite companion asymmetry (the ground-truth discovery: the old cascade was DEAD CODE — the fate-based companion law now implements cascade + trim-to-match + the by-side re-pair; 471/471, the 13-test pin file, the mutation-verified exclusion clause, the E1-a..d/E2-a r1 residue register); **the WDC waveform-contract promotion** @ `035afe8`+`387f327`+`d2e5ddc` — the core-owned `waveform-contract.ts` (the extraction law held: audio-registry byte-verbatim, hash == lock) exporting WAVEFORM_PEAKS_BUCKETS + WaveformPeaks + the 14-pin contract test incl. the observed-internal-constant drift guard; 773/773; the app's consumer re-pinned; **the app census-CI mechanism** @ `9d310f8`+`3e4f0cd`+`3c91ffe` — docs/port-census.md the register (41 = 35 zero-action + 5 carriers + host, the arithmetic reconciled live), vendor/nle-timeline-ui the vendored components-tree reference @ c15a629 (byte-exact; the R25 filing's "vendored pin" was tree-imprecise), scripts/census-check.mjs the checker (register-declared values, never hardcoded) + the 6-scenario mutation gate, both in ci.yml; the .agents/ bootstrap (was OVERDUE ×2); 206/206. The spec-side re-pin: 00 v11.0 (the fleet rows to the R26 HEADs), 06's E1 GAP row flipped FIXED + the E2 dead-code record, 20's waveform row EXECUTED-stamped, the plan's S-row execution stamps, REFERENCE-REGISTER's variants census amendment (the sibling's R24-W1 race absorbed mid-wrap: 1,613 it-blocks), **battery_r26 141/141** (the r25 classes re-based + the T/U execution-state classes with LIVE git verification). The horizon: THE EXECUTION continues — K3's store/policy halves (the maintainPitch residual precisely scoped: gates on a spec-09 model decision), the mode-matrix K3 rows, the K2 registration, the register maintenance. Prior: 25 COMPLETE (the DaVinci edit-mode completeness); 24 COMPLETE (the absolute-finality audit); 23-spec/23-mini/23-variants COMPLETE. (the DAVINCI EDIT-MODE COMPLETENESS round — the user's R25 directive: one more deep audit at a 50+ sub-agent budget with tight per-agent focus + multi-pass; check the nle-ui/app + core-module seam updates (mostly sealed); deeply analyze the two new DaVinci mocks — trim_edit_modes.html + timeline_edit_modes (2).html — "did we have all these specified?"; the shell-variants/shell-mini mocks as references for the spec's gaps). Landed (@ b5a49e4+, a 34-dispatch fleet across 6 waves — 5 module scouts → 10 one-per-mode auditors → 5 cross-cuts → 2 adversarial ruling reviewers → 6 amendment agents → 5 verification agents + the battery builder + the integration reviewer — every load-bearing claim orchestrator-verified): **the answer to the headline question: NO — the ten-mode matrix splits 6/4** (the four TRIM modes specified-but-unwired; insert/overwrite deep-implemented-in-the-engine-but-stated-in-no-prose; **REPLACE / APPEND-AT-END / RIPPLE-OVERWRITE / FIT-TO-FILL absent corpus-wide**, grep-verified by ten independent agents); **ARCH-R25 v2** (D30 the mode-matrix law + D31 the source-edit family restructure + D31A the dedicated-vs-composite criterion + D32 the linked-companion law + D33 the visual-grammar register + D34 the keyboard source-edit family + D35 the reference register + D36 the execution wiring; 2 adversarial reviews — 4 P1 + 6 P2 + 5 faithfulness folds — all folded); **the corpus amendments** (06 +195 lines: §5.0 the 10-mode fan-out law + §5.9 preamble/§5.9B-F the five family contracts + the P1-P6/P9 phantom fixes; 05 §8A the 12-row affordance-grammar register; 16 §3.4A/§3.4B the source-edit keys + the four-meaning row; 18 v1.7 the 8 tokens + the SourceEditBar/SourceRangeBar/RangeBand rows; 09 the §B1 note; 00 v10.0 Decisions 30-36 + §2A.8/§2A.9; 15's four r1-scheduled verb rows — the landed 24+6 census byte-untouched); **REFERENCE-REGISTER.md** (the 19-family mock register + the C33-C58 intake, zero untracked); **IMPLEMENTATION-PLAN re-written** (S-app post-D30; the K2 zero-orphan-rows gate; cold-executor 6/6); **the three cross-repo filings EXECUTED** (WDC root-HANDOFF waveform @ 82b3ea9; engine R9 re-file + E1/E2/E3 defect filings @ 275bb9d — incl. the P1 linked mid-clip insert overlap defect, verified live twice; app census-CI @ 24e1fff); **battery_r25 123/123** (85 re-based + 38 new check classes). The horizon: THE EXECUTION — unchanged in shape (the app's .agents/ + census-CI execution + K3's halves; the engine's E1 fix pre-r1; the r1 port waves now grown by the four mode families; the register maintenance every round). Prior: 24 COMPLETE (the absolute-finality audit); 23-spec/23-mini/23-variants COMPLETE.
+
+---
+
+## Round 24 (2026-09-09→10) — shell-variants: THE FULL-AUDIT ROUND + the recycle reconstruction (COMPLETE)
+
+**User ask (verbatim):** "alright check out new feedbacks under Issue. frankly it is still quite broken. we need extremely thorough full audit of every view + ui group as there are many many issues i can't list them all. some require deeper ux research / design / audit / iterations too. drive massive amount of work here in this round."
+
+**Landed (all pushed, 1740/1740, tsc+build green, 124 stories live, 14/14 threads resolved incl. GH mirror #112-#125):**
+- **The corpus:** 14 new reviewer threads (#58-#71) pulled + the 3-track research fleet (A1 transitions/DnD — FCP/Premiere/Resolve unanimous drag-replace; A2 color composition — grep-verified NO curves DOM in the reference canon, rebuilt from Resolve research; A3 mixer/toolbar/deliver — binary toggle, audio-only, ruler+band coexistence) + the 5-auditor fresh-context F-net (primitives+chrome / panels+inspector / timeline / mixer+color / appshell+store, every family file read in full + live agent-browser measurements) → DESIGN-R24 (`.agents/design/r24-audit-round.md`).
+- **THE INCIDENT + THE RECONSTRUCTION:** the original round's 5 committed-but-UNPUSHED waves (W0-W4) were destroyed by the 2026-09-10 00:54 container recycle (the overlay lost its tree AND objects; the auto-snapshot predated the commits; the runtime never carried them) — the round was reconstructed from the durable records (the worklog's contract-level wave records, tool-results' audit caches, the threads.db issue texts) as DESIGN-R24 v2-RECON, then re-implemented wave-by-wave WITH PUSH-AFTER-EVERY-WAVE (SKILL #143): W0 store prep (fx-domain exit laws + the transition no-op twin + split clears the pointing rail) → W1 shell chrome + mixer (binary toggle w/ deletion pins, the ViewOptionsPopover APG menu, Clapperboard, the icon audit) → W2 color view (the scopes pane under the viewer, the node graph in the console row, the Curves YRGB rebuild w/ y∘r composition, the Gallery rename + context menu, stills replace-not-merge) → W3 FX DnD (the shared parser + three doors, replace-never-stack w/ retained duration/alignment, the routing table w/ adjacency guard, drag-over visuals, dbl-click apply, F3's un-clipped wrapper/visual split) → W4 deliver (the ruler+band coexistence head stack, the band grammar, deliverViewStore, the honest preview clamp, the DeliverStrip story 123→124) → W5a-d audit-fix waves (the unlayered-range P1, SourceEditBar wrap P1, TC clipping, slider focus/midpoint/roving, Temp/Tint sliders, the mixed-transition honesty, splitter tabIndex, the scoped Delete rung, the waveform batch seam, the F3 leftovers).
+- **Wrap gates:** tsc clean; 1740/1740 (1597 at base → +143 net); vite build green; the runtime synced + the public URL serving **124 stories** (SKILL #122 gate); the VLM re-sweep of the changed views (zero REAL-BUGs — the finding residue is the known truncate/story-canvas artifact classes); the console sweep zero errors on the changed stories; 14/14 threads resolved with fix evidence (scripts/r24-resolve-threads.mjs) + the GH mirror verified closed.
+- **The GitLab mirror PAT died (401) mid-round — flagged for re-issue; GitHub + the /home/sync bundles carried the durability alone.**
+
+**Standing next (R25-variants):** the registered-only list (the Clip context-menu Add-Transition mixed-selection mint — W5a's flag; the QualifierPanel MicroSlider resetTo pass landed W5c but the de-esser/aux polish rows ride the next review); the 62 legacy open threads in the shared annotakit db (mini-stream era); the GitLab mirror re-issue; the r23-analysis corpus re-triage (the new sweep's findings JSON rides the repo — the family triage classes carried over).
+
+---
+
+## Round 26 (2026-09-10) — SPEC-TRACK: THE EXECUTION round (the three R25 filings executed + the re-pin + battery_r26) (COMPLETE)
+
+**User ask (the continuation directive):** drive the execution per the R25 HANDOFF — the engine E1 fix (the highest-value single item, P1 pre-r1) with E2 riding the same session; S-app's queue (the `.agents/` bootstrap + the census-CI execution); S-wdc's waveform promotion execution; the spec-side re-pin + the register maintenance.
+
+**Landed:** the context restore (all six repos at the R25 pins + the three filing commits; NO sibling pushes beyond the filings) → **the engine E1+E2** (the live defect probes FIRST — ground truth: the E1 overlap reproduced [30,80) vs [50,80); the E2 filing UNDERSTATED the defect — the companion cascade was DEAD CODE, the fully-contained probe showed the companion outliving its removed anchor) → the fixes (Phase 1b companion splits + the batched ≥2-splits relink + the E1 exclusion; the fate-based overwrite companion law) → the 13-test pin file → **the adversarial review** (PASS-WITH-FINDINGS: the F1 mutation-vacuous exclusion clause pinned; the F7 companion-abort pins; the F8 fresh-id assertions; the E1-a..d/E2-a P3 register filed r1) → **the WDC promotion** (the extraction-law catch: audio-registry is upstream-VERBATIM — the hash-lock approach rejected, the core-owned contract module per the meter-tap precedent; the observed-internal-constant drift guard; the barrel re-export) → **the WDC review** (PASS: the barrel-ambiguity rationale corrected — same-binding re-exports are NOT ambiguous; the sync-check claim de-overstated) → **the app census-CI** (the arithmetic reconciled live FIRST: 41 = 7 byte-exact + 28 mechanical-exact + 5 carriers + host; the vendored components-tree reference; the register + the checker + the 6-scenario mutation teeth; the ci.yml steps; the boundary extension; the `.agents/` bootstrap) → **the app review** (PASS: the EMPTY_CONTEXT_ITEMS misattribution fixed; the WDC re-pin EXECUTED rather than queued; the require-pattern hole closed) → **the spec-side re-pin** (00 v11.0 + the 06/20/plan stamps + battery_r26 141/141 with LIVE git verification) → **the sibling race absorbed** (the variants stream's R24-W0/W1 mid-wrap: 15 files merged clean; the register's variants census amended to 1,613 it-blocks per D35.2).
+
+**Gates:** battery_r26 141/141 (post-merge); the engine 471/471 + tsc; the WDC 773/773 + tsc + the byte-verbatim hash; the app 206/206 + tsc + build + boundary + census + mutation-gate; both adversarial reviews PASS with all folds landed.
+
+**The next round (the execution continues):** K3's store/policy halves (the app's critical path; the maintainPitch residual precisely scoped — it gates on a spec-09 model decision, file the design ask); the mode-matrix K3 rows; the K2 combined-family census registration; the register maintenance standing; the r1-entry user gates (the absent-family scope decision; D6; the rename).
+
+## Round 25 (2026-09-09) — SPEC-TRACK: the DaVinci edit-mode completeness + the reference register + the filings executed (COMPLETE)
+
+**User ask (verbatim-tightened):** (1) "one more round of deep review / audit, to ensure it is absolutely tight and final. Budget not 5 or not even 10 sub-agents but much larger, potentially 50+… thoughtfully carve out each area, multi-pass"; (2) "check for any updates now from the nle-ui/app repo that may demonstrate better seam integration… things should be mostly considered sealed right now"; (3) the two new mocks (trim_edit_modes / timeline_edit_modes (2)) "explain the exact trim and timeline insert mode by davinci resolve. Did we have all these specified? If not deeply analyze these"; (4) "the current ux mock of both shell-variant (full) and shell-mini themselves are excellent ui/ux + nle functionality references for anything your spec missed or under-defined."
+
+**Landed:** the context restore (all six repos synced past the R24 pins — FOUR moved: engine 5036387→3989506 docs-only, OT ded43c4→fdb771c code-byte-identical, nle-ui fc4cc35→3026099 shell/keymap-only, app c885ece→64fb0ab ALL D30 waves landed 174→206 tests carriers 7→5; WDC unmoved 85b81b0) → **wave 1: the five module scouts** (the sealed verdicts + the per-repo 10-mode censuses) → **the orchestrator's own ground-truth passes** (both mocks read in full; the OT place-vs-splice insert divergence verified; engine rippleTrimItem + the census-CI absence verified; the E1 defect mechanism read with own eyes) → **wave 2: the ten-mode fleet** (one agent per DaVinci mode — the ~70-80 gap rows, the phantom rows, the engine defect, the variants-mock-as-hidden-reference findings) → **wave 3: the five cross-cuts** (visual grammar 12/13-nowhere; keyboard F-block + the comma-period ownership; linked companions no-law + two contradictory split-link laws; the plan's 9 mismatches; the shell-mocks' 19-family census) → **ARCH-R25 v1 → 2 adversarial reviews → v2** (all 15 + 5 folds landed) → **wave 4: the six-agent amendment fleet** (06/05/16/18+09/00+15/register+plan) → **wave 5: the five verification agents + battery_r25** (123/123; all PASS/GO; 30+ direct fixes) → **the three cross-repo filings EXECUTED** (WDC/engine/app — the first round the filings actually landed at their venues) → **the integration review: PASS**.
+
+**Gates:** battery_r25 123/123; the census byte-stable through the round (integration-verified); the cold-executor 6/6; the verification fleet all-PASS; the filings SHOW at their target repos.
+
+**The next round (the execution continues):** see HANDOFF — the app's .agents/ + census-CI execution + K3 halves; the engine's E1 fix (pre-r1, the P1); the WDC waveform promotion execution; the r1 port waves grown by the four mode families (the user-gated scope decision at r1-entry: +1.5-3 wk solo if all four families are in scope); the register maintenance standing.
+
+---
+
+## Round 24 (2026-09-08) — SPEC-TRACK: the absolute-finality audit + the adopt-wholesale ruling + the topology decisions (COMPLETE)
+
+**User ask (verbatim-tightened):** "do a thorough per spec doc / per track / per module audit through waves of sub-agents while you hold the high level ground truth to ensure the whole spec + plan is absolutely final. note that the core modules have pushed towards finalizing the seams themselves collectively, while the nle-ui + app has did one more round of proving on the seam as well, in particular adopting the timeline from ot-timeline wholesale which is a strategy we should consider in the plan if not already. as for the actual repo of these existing ones, we can decide whether to keep or remove nle-ui / nle-app, and how to evolve in place for the other core modules (e.g. forking these to be a new clean base or continuing on in place)."
+
+**Landed:** the context restoration (all six repos synced past the R23 pins — OT's W10F+W11 complete-UI round 489→536 with the M49C coverage gate 24/24 routed verbs; the app's R8-D29 real-wiring + R9-D30 mid-flight with the port re-converged to 32/39 zero-action; nle-ui's D29 seam waves 648→674; the engine's fleet-coherence re-pin 440→458; WDC's seal wrap; cloudcut-nle identified as the dormant June-July predecessor whose successor notes independently recommend the adopt-wholesale pattern) → **wave 1: the five module ground-truth cards** (the three-lens audit's module lens — verified counts, landing lists, seam surfaces, queues, the port census live-verified) → **ARCH-R24** (D26-D29, drafted on the live evidence, adversarially reviewed — GO-WITH-AMENDMENTS 17 findings all folded: the D30-R10 dispositions amended before W-G files; the retirement trigger re-based to D30's declared irreducible carrier set; the census CI-enforced register-equality; the three-way DOM mapping; the shell-path compensating pin family; the seal-snapshot trigger predicate) → **waves A-D: the 20-agent per-file fleet** (every §0 re-verified at the R24 pins; the 05 fork row REVERSED to the census-governed converging mirror; the 15 census re-based 24 routed + 6 exceptions with full name lists; the 09 persistence contradiction resolved; the 20 waveform PROMOTION + the off-by-one 4→5 ports; the phase window CLOSED) → **the plan/track audit** (the S-ot/S-app rows re-written per D26; the cold-executor re-simulation 6/6 with 4 blocked-and-fixed; the estimates re-itemed) → **battery_r24 85/85** (the strict scrape ported after the integration review caught the vacuous pass) → **the integration review** (PASS-WITH-FIXES, 7 folded: the strict scrape, the typo-class re-entry, the third seal note, the seal-artifact body pins, the stub lineage row).
+
+**Gates:** battery_r24 85/85 (the strict mini scrape 355/8 included); the pin sweep zero-live-stale; the ruling→corpus faithfulness sampled 8+ consequences per ruling, all landed; the cold-executor 6/6.
+
+**The next round (the execution continues):** see HANDOFF — the app's D30 W-C..W-G completion is the critical path; K3's store/policy halves author in parallel; the five cross-repo filings land at their owners; the user-gated set: D6 (r4), the app rename, the variants-count central reconciliation.
+
+---
+
+## Round 23 (2026-09-07) — SPEC-TRACK: the plan separation + the verification ladder + the single-tree bridge + the 20-file audit fleet (COMPLETE)
+
+**User ask (verbatim-tightened):** (1) "separate the implementation phase / plan from the spec (not mixed into it)"; (2) "do a full pass auditing each spec file against upstream core module repo… one sub-agent per file or even less (as they need to analyze a lot at repo level) so they have focus"; (3) crawl is NOT shell-mini — it is "the programmatic test each core module is doing… closer to the combined test that audio core has done before, or the full app wiring the current nle-app is trying to do — programmatically verify every part of the ui / app behavior across three modules… before any human test is needed"; (4) the open question: "should the current timeline fill in closer to a ui stage, porting over all the opencut ui logic" as the bridge — "we don't have a gold sample that work[s] ui + timeline wise"; (5) "the implementation plan is very lacking… what are the workstreams? how much can parallel? … there's not even a single entry point to execute, let alone per track."
+
+**Landed:** the three rulings (ARCH-R23 v2, GO-WITH-AMENDMENTS ×2 — 10+15 findings folded: the theme overclaim split into token/structural halves, the K3-after-D25 ordering law, the mapping-table orphans re-homed, the vendoring mechanics enumerated, the estimate itemization) + `IMPLEMENTATION-PLAN.md` (the executable plan: §0's six-track entry-point table — S-ot's D25 bridge work order / S-app's K3-halves split with the re-expression targets named / S-engine's de-staled queue (N2b LANDED 37cdd28, SoundTouch W2 LANDED de09c93) / S-wdc's deferred-ports-first / S-package's C0 / S-spec's battery-first + the K2 census; the ladder K1-K4/w1-w3/r1-r6 with every gate tagged [P] or [H:reason]; the dependency graph with the S-wdc-contract hard edge; the cold-executor block-points closed) + the stub + 00 v8.0 + battery_r23 (75/75: the pin-spelling class, the lag-coherence, the N2b sweep, the seal-note checks, the strikethrough-flip convention) + **the fleet** (20 general-purpose agents, one per file, 4 waves: every stale pin/count/line-ref re-based; N2b/W2/S3/M45/M46/RR1-A/W3/007-class landings verified in code and promoted to BASE; the R22 overclaims reversed (02's zero-Worker truth, 04's Wave-4A P0 fixes, 05's view-tree reversal per D25, 19's never-existed §3.3B/§3.3C/§3.6 rows created); every retired spec-14 §4 row confirmed re-homed in the owning §0 (the posture law audited, not assumed); C7 corrected 24→30 names; the seal artifacts' mapping notes landed). The integration review: PASS-WITH-FIXES, all 5 folded (the b8c6c88 typo class + battery checks; the lag figure; the N2b residue; the seal notes + the 30-name census; the crawl tags) — the five user demands all MET.
+
+**Gates:** battery_r23 75/75 (incl. the live mini scrape 355/8); the pin sweep zero-live-stale; the cross-ref sweep complete (every spec-14 §N resolves via the stub).
+
+**The next round (the execution begins):** see HANDOFF — S-app's K3 store/policy halves are the ONLY critical-path work unblocked NOW; the S-ot D25 bridge work order is the largest single item; the six streams all have live first-actions.
+
+---
+
+## Round 23 (2026-09-07) — shell-variants: the FX/TRANSITION VIEW + the review-sweep round (COMPLETE)
+
+**User ask:** "check all the latest issues… the transition/effects one seems missed — do a focused design deep dive to find the optimal design after design/review/audit rounds; categorize into tracks and have sub-agents do deep design/implement/test/review iterations till polished… initially you should dive in to understand all the major issues and which part of codebase these apply to; once finalized… thorough code/UX review one ui component at a time… rely on visual tests (wire in VLM) to feed in the storybook views (from ui primitives first all the way to whole app shell views)."
+
+**Landed (all pushed, 1595/1595, tsc+builds green, live-verified, 22/22 threads resolved incl. GH mirror):**
+- **THE FLAGSHIP — the FX/transition surface (issues #103/#104/#105, thrice-iterated):** DESIGN-R23 v2 (`.agents/design/r23-fx-view-and-revision.md` — web-researched DaVinci/NLE workflows + 2 parallel fresh-context audits (design + seam), 3 blockers + 22 amendment rulings folded). THE RULING: **BOTH surfaces, ONE engine** — the FX page (AppDock 5 pages + ⌘5: FxBrowser left / Viewer center / FxInspector right / full Timeline in fxMode at 40% mainbody) + the FX tool in the Edit toolbar (8 tools, setTool coupling, Esc exits). The engine: seam hit-zones (12→24px hover, click = default crossfade or select-existing), head/tail half-open fade zones, transition boxes interactive (select + edge-drag ±1-frame trim + Delete), clips recede (45% opacity, edit gestures off, click = effect stack). Model: fadeIn/fadeOut clip fields + setFade/removeFade/removeTransition (delete-aware) + selectedFxObject domain (7-site mutual exclusivity). The user's #105 mental model implemented verbatim (hover seam → add; clip select → Effects not Transitions).
+- **The color track (#90–#97):** ScopesDock (the timeline-area console, 4 TABS, one scope full-size — the squeeze dies); nodes-in-viewer (the × close surface, the timeline dock retired); the density toggle everywhere (55%↔40% mainbody interaction law); StillsPanel = the DaVinci Gallery (clip-level apply ANSWERED in the UI, Save Still, colorStills store home); the stills-only color dock; the mixer hidden on color.
+- **The mixer/inspector track (#98/#99/#70):** the uniform ClipParamRow grammar; the channel-selected rail law (stripFocus, any page); the master/bus meters-only collapse.
+- **The shell-semantics track (#100/#106/#108):** the ONE leftDockContent(page) table; the D-D2 per-page TimelineToolbar cluster matrix (researched, DOM-absent hidden clusters).
+- **The timeline-visuals track (#101/#102):** thin brackets (hit zones unchanged); the preview visibility law (auto-scroll + the 24px zoom floor + the mode badge — the offscreen-span root cause of "animated effects now none").
+- **The deliver track (#107):** TimelineCompact + the 32px RangeBand (the bracket grammar) + the 50% mainbody.
+- **THE REVIEW SWEEP (the user's one-component-at-a-time directive):** the VLM visual net (scripts/vlm-capture/review — 123 stories captured at the 1280×800 floor, findings JSON; the console-sweep gate) + 5 fresh-context family reviewers (primitives+chrome / panels+inspector / timeline / mixer+color / appshell+store), each reading every file IN FULL with live measurements and triaging every VLM finding (REAL-BUG / STORY-ARTIFACT / DESIGN-INTENT). The fix round: 2 real P1s (the inert transition box blocking edit-mode trims; the scene-switch blank rail) + 15 P2s + the P3 quick-win batch + 4 orchestrator rulings (R-a rail hoist / R-b FX density / R-c table-driven dock / R-d z-ladder) — 1595/1595.
+- **The mid-round reviewer wave (th_mtr0*):** the fader drag REVERSAL (tests had pinned the inverted math — re-pinned with the physical law), the invisible toolbtn ON state (measured 3% delta → the accent tint + ring), the context menu under the root-level z-100 playhead (the 104/105/106 ladder).
+
+**Standing next (R24):** the user's reaction round on the FX view + the color/deliver compositions; the registered-only list (r23-analysis/review-findings.md — VLM caption artifact, fade-label occlusion, wheel-hue keyboard, chrome hex debt, compact playhead follow); the 62 legacy open threads in the shared annotakit db (mini-stream era); the spec-side entries live in IMPLEMENTATION-PLAN.md (the sibling stream's tracks).
+
+---
+
+## Round 23 (2026-09-07) — shell-mini: the seal round (COMPLETE)
+
+**User ask (verbatim intent):** the three directives above + "any outstanding gaps / issues / next steps you see fit in this hopefully final / seal round".
+
+**Landed:** the seam family (3 docs + the executable bridge module, per above); the count re-pin with the count-coherence convention (ALL fixes first, ONE sweep after); the battery hardening (scrape + census-math + content assertions + the honest-scope note: ARCH + the mini docs are history-ledger by design; the VARIANTS pin is the sibling's); the GitLab mirror resumed with the user's re-supplied GLPAT (WAF retry law held); the /home/sync r23 bundle.
+
+**The review-loop shape (the seal standard now):** design review BEFORE any code → implementation → parallel fresh-context audits → fix rounds with mutation-verification by the NEXT round → the exit criterion ZERO findings at all severities. This round took 5 rounds (design + 2 audits + residue + exit + closure) and found: 1 P2 premise inversion (the toggleTrackMute/OT mute mapping vs spec 15 §4.1A), 1 P2 phantom-id gate demand (the story-only testid in the static census), 1 P2 missing census family (the 15th templated family), 1 P2 non-discriminating test (the otProject invariant — the mutation-proven divergence net now pins it), 1 P1 self-introduced battery break (the final sed ran after the gate run — the exit round caught it), plus the drift-blind battery class (now scraping).
+
+**Standing next:** THE CRAWL — C0 MiniShell (nle-ui) is the next build phase; the C1 executor's entry checklist is LAW-NET Part A + the testid census + the GAP-verify rows (trim/split MIN_DUR) + the S6/S19 C1-entry decisions (the track mapping + the OT field-name binding, pinned against the vendored OT snapshot). Queued (not mine): the variants 1334→1425 re-pin at the sibling's round wrap; the PR #69 notices when GitHub's repo API surface recovers (still dark at close — git works, REST 404s).
+
+---
+
+**Current round:** 22 COMPLETE (the SPEC-STREAM FINALITY round — the user's audit directive: "fully review/audit the spec + plan to ensure it is absolutely final... mainly reflect what needs to be done... fully complete and exhaustive covering what needs to get done, even for existing code... acceptance and hence fully executable (with a test plan)... decide whether we need a separate nle-ui... reach the shell-mini UI first, FULLY working on the core modules (crawl-walk-run), then the bigger full NLE... exact execution phases and what can be parallelized"). Landed: ARCH-R22 (five rulings, twice adversarially reviewed — 10+13 amendments folded, `audits/ARCH-R22-finality.md` v3 + REVIEW-R22-ARCH/PLAN transcripts); **spec 14 REWRITTEN as the crawl/walk/run plan** (C0-C4 mini-parity crawl / W-ops-media-n5-audio-project-color walk / R-fcpxml-polish-engine-p2-cloud run; BASE fleet table; re-baselined gap registers; the six-stream parallelization map; honest estimates: crawl 10-14 wk solo / 7-9 two-dev, walk 16.5-23 / 11-13, run 6-9); **the posture inversion across ALL 21 specs** (the §0 FORWARD INVENTORY triad: BASE pinned / GAP with owner+phase+acceptance / ACCEPTANCE & TEST PLAN — 16 domain specs via 4 sub-agent waves, the meta specs 18/17/19/00 by hand: the R22 drag-law notice, the acceptance-executability law, the v3.0 re-baseline, Decisions 18-22); **battery_r22 58/58** (posture + pins + plan gates + drag-freeze + counts + the 6 blind-spot checks); the mid-round sibling directive absorbed (the user's FULL drag-machinery retirement — the R18k law verbatim; mini 333). The horizon is now THE CRAWL (spec 14 §3.1): pre-C1 LAW-NET-INVENTORY + spec-18 §16.2 fix (DONE this round) → C0 MiniShell → C1-C4.
+**Canon:** this repo, `main` — https://github.com/frejogochukwuout/nle-core-spec (PAT shared in-session, kept in local `.git/config` + chat only — NEVER commit it; GitHub's secret scanner blocks token-bearing pushes). GitLab mirror remains the second remote (WAF 403s are probabilistic — retry).
+
+---
+
+## Round 22 (2026-09-07) — the spec-stream finality round (COMPLETE)
+
+**User ask (verbatim intent):** audit the spec+plan to absolutely final; posture inversion (what needs to be done; existing code = accepted BASE cited as reference); exhaustive acceptance + test plans (even for existing code); architecture: nle-ui keep/fold decision + the crawl (shell-mini UI fully working on a smaller subset of the core modules) → walk (shell-variants-class full NLE, DaVinci + web-DAW) → run; exact phases + parallelization.
+
+**Landed:**
+- **ARCH-R22** (`audits/ARCH-R22-finality.md` v3): Ruling A — KEEP the two-repo package+app topology (nle-ui engine-free chrome package w/ MiniShell as the second family + nle-test-app promoted to THE APP; fold rejected, D23 user-provenance + the boundary-test rationale); Ruling B — the crawl C0-C4 (MiniShell port → qc-styled OT timeline + window/binding + fixture bridge + testid mapping → viewer/transport/inspector/pool → audio crawl → the C4 mini-parity gate: law-net corpus + import→cut→play→export demo); Ruling C — walk (W-ops/media/n5/audio/project/color re-baselined from the R15 A-series) + run; Ruling D — the posture law; Ruling E — the six-stream parallelization map + critical path. Twice adversarially reviewed: REVIEW-R22-ARCH (GO-WITH-AMENDMENTS ×10) + REVIEW-R22-PLAN (GO-WITH-AMENDMENTS ×13) — all folded; the integration review PASS-WITH-FIXES (8 fixes landed).
+- **spec 14 v2.1** — the crawl/walk/run plan: BASE fleet table (HEAD pins + consumer pins, both classes); pre-C1/pre-C4 sequencing (the law-net inventory BEFORE the phases that consume it — kills the circularity); the C1 OT-SEAMS dispositions (gap-fit = app-side over the OT snapshot; row 6 pre-decided app-port-config; row 11 pre-registered); the seven previously-silent crawl surfaces landed as deliverables (inspector, pool+import, topbar/CTA, toast/splitter, undo/redo exposure, MiniShell keymap ownership); W-color re-scoped (the color instruments → S-engine, W-color = binding + parity); W-n5 split out (PENDING user re-affirmation of D6); C7 at W-ops end + the one-day migration sub-gate; the P→A→C/W/R traceability.
+- **The posture inversion (all 21 specs):** every domain spec (01-13, 15, 16, 18, 19, 20) carries the §0 FORWARD INVENTORY triad; 17 carries the §0A acceptance-executability law (BASE rows = regression role: pin+suite+count; GAP rows = acceptance gate + facet row; count discipline battery-enforced); 00 v7.0 carries Decisions 18-22; the fleet re-pinned repo-wide (the R15 pin families retired to annotated history).
+- **The drag-law freeze:** spec 18 §16.2's R22 notice (the pre-C1 fix landed in-round), 00 D22, spec 14 §3.1 — the verbatim R18k law is the WHOLE drag law; the retired machinery stays retired; the tombstoned escape rows re-open only by USER request.
+- **battery_r22.py 58/58** (posture triads, HEAD+consumer pins, the plan's gates, the drag freeze, count consistency, the 6 integration-review blind-spot checks).
+- The registered honest limit: the specs' BODIES remain mostly backward narrative (the contract text legitimately stays — it is the acceptance form; the retitled §0A round-history sections are the compressible residue) — compression rides each spec's next substantive amendment (no dedicated pass scheduled; raise with the user if wanted).
+
+**Standing next:** THE CRAWL (spec 14 §3.1) — pre-C1: LAW-NET-INVENTORY.md (the C1/C4 acceptance lists, from the mini's 333-test net); C0: MiniShell in nle-ui; C1-C4 the app build. User-gated decisions open: D6 re-affirmation (W-n5 real media decode), the nle-test-app → nle-app rename (recommended, non-blocking), R-cloud charter. The mockup streams continue their review loops (mini R21e closed at only-P3; variants R22 W0 color rewrite landed mid-round).
+
+---
+
+## Round 22 (2026-09-07) — shell-variants: the COLOR VIEW REWRITE + all-view revision round (COMPLETE except W6)
+
+**User ask (the P0):** "the color grade view is a disaster. it deviated severely... no one has the memory of the original reference under ui-mock/ and no one bothered to look. the whole layout is a mess. need to completely rewrite" + "follow my feedbacks from annotakit the latest ux review feedbacks" (19 new issues #71-#89) + "do a proper and thorough revision across all views".
+
+**Process:** the reference canon read IN FULL by the orchestrator (davinci shell + wheels/scopes/node-graph/qualifier refs) → DESIGN-R22 v1 → 2 parallel fresh-context audits (R22-A design: 3 BLOCKERs + 12 CONCERNs caught — the scopes pixel budget was degenerate, the node-graph fit numbers wrong, the insert-mode list wrong; R22-B seams: the full blast radius + the "existing seam" myths debunked) → v2 → implement in waves.
+
+**Landed (all pushed):**
+- **W0 the color rewrite (the flagship):** ColorConsole + ColorInspectorRail DELETED; the composition = media pool left (Pool|Stills) / viewer DOMINANT center / ColorInspector (Primaries|Curves|Qualifier tabs — the #78 directive) right / TimelineCompact (#75, V/A/T token-coded) + NodeGraphDock (#74 clipped+scrollable) in the timeline area; the scopes = a 4-state console (off/collapsed/row/grid, default OFF — the mixer's collapsed law); page-aware defaults (55% mainbody + 420px inspector, user-drag wins). Stills tab = real grade presets (apply/save, gap C59). Live-verified end-to-end (viewer 1196x428, scopes 266px bounded, 8 nodes zero leak).
+- **W2 mixer:** #71 the phantom scroll gap = the [data-tip]::after tooltips extending the scroll extent at opacity:0 (display:none is the ONLY fix — visibility:hidden does NOT remove it in Chromium; measured both live); #72 AuxStrip rewritten with the master's alignment grammar (all faders exact-aligned, live-verified); #81 EQ/FX param sections in the ChannelEditor (gap C60 view-state mocks).
+- **W3 insert modes:** #83 all 7 buttons always inline (the <560px kebab retired — the reviewer saw 2 buttons because the collapse hid 5), the hover preview fades+slides (the reference's own 0.3s ease-in-out + translateY 4px).
+- **W4 source trim:** #84/#85 the SourceRangeBar (dual clamped handles + keyboard) + THE SEAM: ctx.sourceRange in the planner (dur = out−in, sourceStart = in; fitToFill retimes the range; backward-compat pinned).
+- **W5 deliver:** #88 the video preview RETURNS (the program Viewer, center) + summary→the right inspector; #89 presets-only left + the queue replaces the center while rendering (auto-flip + header toggle).
+- **Toolbar2 (#73/#80/#86/#87):** console toggles right (Scopes/Nodes/Mixer/Inspector), page-aware left label (Sound Library on audio — the old label lied), Effects + Project buttons REMOVED (the LeftDock Effects tab retires WITH W6).
+
+**Gates at close:** tsc 0, **1349/1349**, vite + storybook builds green; live-verified (color composition + #71 phantom=0 + #72 alignment + #74 zero leak + zero console errors); all 19 threads resolved with fix evidence (scripts/r22-resolve-threads.mjs; the GH issue mirror had transient GitHub-connectivity failures — retries landed; the annotakit store's own ghSync self-heals on next mutation).
+
+**Standing next (R23):**
+- **W6 — the Effect/transition view (#82, REGISTERED in DESIGN-R22 W6):** the FX page — TimelineCompact in seamMode (frozen tracks, hoverable seams → apply transition objects; head/tail → fades), transition-specific inspector, effects assets in the left dock, the LeftDock Effects tab retires in the same wave. The blocking-track fade objects stay until it lands.
+- The per-mode transition glyph TODO (W5 R20 carry-forward); node-graph binding beyond Primary/Secondary (C56); the scopes' sub-100px cell-header shrink (registered adaptation); the 62 old open threads in the shared annotakit db (mini-stream era — the kit's logical merge reconciles).
+
+## Round 21 (2026-09-06) — the P0 drag-revert round (COMPLETE, executed across two parallel sessions)
+
+**User ask (P0, `ui-mock/shell-mini/user-msg`, pushed 07:46Z — 32 min after R20):** "revert all the recent 'drag' related timeline 'fixes'... the last two rounds of changes related to timeline drag support should be all reverted. related to new issue opened issue#57 from annotekit too."
+
+**Landed (sibling session, `0bc5fc4` + `c8b174d`):**
+- R21 (PR #69 review round): all 56 inline comments — 8 P2 + 38 P3 + 10 CodeRabbit (Space-yields-to-focused-control, Enter-only clip activation, singleton usePlayhead, e.repeat guards, gesturePending window, tick interaction-lock, zoom anchor-at-playhead, edge auto-scroll on ruler, Lane/MinLane dedup via useLaneDnd + RulerScrub, toast pause/TTL/close, vendor hardening C28-C45: origin validation, Link-rel=next same-origin, store-queue liveness, GIT_CONFIG env auth, dist rebuild; a11y sweep; tests 317→354).
+- R21b (the P0): R19+R20 drag-law rewrites REVERTED to the R18k clamp law — previewMove = clampMove; endDrag = commit-if-changed; plain-Doc history entries; the escape/refuse/mint/rebind machinery + verdict affordances DELETED. KEPT (user-endorsed / drag-neutral): nearest magnet (PR-69 C17 + the user's 08:44Z PR reply: "The nearest law survives the drag revert"), frozen magnet field, commit-at-UP, moveClip wouldOverlap refusal, capture guards, trim ghosts, mute, ladder, scrubbing. Tests 354→343 (clamp pins at geometry/store/component level). README deviation #22 REVERTED + new #35; OT-SEAMS drag rows tombstoned as the seam map for a future USER-REQUESTED retry.
+
+**Landed (this session, R21-2 — the verification + forensics + wrap round):**
+- Independent verification in a fresh sandbox: tsc 0, vitest 343/343, vite + storybook builds green; live browser drags (c2 across c1: neighbors frozen, clamp at 3.5s, no chip, zero page errors).
+- `.agents/design/r21-p0-forensics.md` — the timeline forensics (author-date -0700 offsets + server push events → "the last two rounds" = R19+R20, the only coherent reading), the R21-R1 adversarial review record, the strict-vs-pragmatic divergence resolution (the user's PR reply adjudicated), the parallel-session race record.
+- PLAN/HANDOFF/SKILL wrap (the sibling session had not updated them); user-msg consumed.
+- This session's own strict-reading revert (committed 08:56Z, 17 min AFTER the sibling's 08:39Z R21b) was discarded via `reset --hard origin/main` — the remote is canon; the divergence points are registered, not re-litigated.
+
+**Standing next:** the user's next review round on the reverted drag + the R21 PR69 fixes; issue #57 stays the variants stream's queue; quiet-window chores: annotakit vendor v0.5.2 upgrade, the OT-SEAMS tombstoned drag rows as the map for any future USER-REQUESTED drag retry; if the user wants the stricter revert variants (silent moveClip / last-move commit), each is a one-small-commit change registered in the forensics doc §3.
+
+---
+
+## Round 19 (2026-09-06) — shell-mini: wave 7 + OT seams + drag deep pass + scrubbing + MVP designation (COMPLETE)
+
+**User ask:** check the latest feedbacks; (1) track opencut-timeline seams for the actual timeline ops (not improvised mock logic), (2) reflect everything in the UI spec with shell-mini as the first MVP before shell-full, (3) full deep pass on timeline drag handling ("can't move a clip in front of another clip — one-lane street"), (4) ensure scrubbing is enabled.
+
+**Landed:**
+- Wave 7 (mirror #45–#53, 9 threads) closed: rails whole-click, empty-lane track inspect (inspector track card + mutual-exclusion selection with survive-iff-visible healing), minimize slot law (measured 23/34 both modes), V1/A1 markers vs hidden-when-locked heads, half-open head corners, trim ghost edges (outward-only, ripple-start suppressed), 9-step zoom ladder (hardcodes swept), play-button centering + the viewer scrub bar + seek controls (edit-point walk-back).
+- **The drag law rewritten** (user item 3): free drag from the snapshot; conflicting drops INSERT (Premiere insert-edit geometry — dedicated insertPlacement, ALWAYS-floor, cross-track law); is-pushed live affordance; commit at the UP position; both-edge magnet + frozen field; moveClip = the OT wire law (refuse + toast; nudge refuses).
+- **OT seam tracking** (item 1): `ui-mock/shell-mini/docs/OT-SEAMS.md` — 14-row op map, drop-law matrix, mockup→library swap path; README deviations #22–#27.
+- **Spec** (item 2): 18-ui-shell.md v1.3 §16 — shell-mini = the first shippable MVP (embedding contract + canon rules).
+- Adversarial design review (4 P1 + 7 P2 adopted, `.agents/design/r19-drag-seams-design.md`); tests 235→302; tsc/builds green; live-verified + VLM; threads resolved, mirror 0 open; pushed origin+gitlab (merge-first with the sibling's R20); /home/sync r19 bundle+tarball.
+
+**Standing next:** the user's next review round on the new surfaces (insert drag feel, scrub bar, ghosts); quiet-window chores: annotakit vendor v0.5.2 upgrade; cross-track drag in the window model is a host-rebind question (registered, not scheduled).
+
+---
+
+## Round 16 (2026-09-05) — the shell-mini bootstrap round (IN PROGRESS → core landed)
+
+**User ask:** bootstrap a minimal version of the spec-18 shell under `ui-mock/shell-mini/` — simplified from shell-variants, skinned with `ui-mock/RH-timeline-editor.html` (RunningHub quick-cut), similar setup incl. Storybook.
+
+**Landed (A1-A4):**
+- **W0 research:** `ui-mock/shell-mini/docs/RH-skin-extraction.md` — verbatim token set + quick-cut DOM anatomy extracted from the 7.2MB SingleFile DOM snapshot via headless-browser computed styles.
+- **Design contract:** `ui-mock/shell-mini/docs/DESIGN-mvp.md` v2.1 FINAL — 11 decisions; adversarial design audit (5 majors / 14 minors) + implementation code review (2 P1 / 5 P2) both folded.
+- **The app:** React 19 + Vite 8 + TS strict + Tailwind 4 + Zustand 5 + lucide (stack mirrors the sibling, minus annotakit); tokens.css = extraction §2 verbatim; timeline.css = qc- class-for-class quick-cut port; shell = floating glass panels over a #0d0d0d dot grid; geometry.ts = the pure interaction-law module; useMini.ts = doc/ui/history(50)/drag-session store with the interaction lock.
+- **Quality gates:** 93 vitest tests / 4 files green; tsc strict clean; vite build + storybook static green; VLM-verified renders (skin fidelity + ruler/clip/playhead px alignment verified in real-browser rects).
+- **Git:** origin PAT push DONE in the R16-continuation session (GitHub had the parallel R15-UI wrap on top of the old base — MERGED, no force); GitLab mirror (ansgareutychisO) kept current through every milestone: 38a5fc0 → 204eedd → 3a8931f → 908dd6f → bd734ae → d695fa4 → 96ea0db → be1f141(port-3000) → merge.
+- **Runtime (R18 layout — user-corrected):** the FULL Storybook dev server owns **:3000** (`ui-mock/shell-mini/scripts/sb3000.py`, double-fork, PPID=1, `core.allowedHosts: true`) — the Z-container's Caddy :81 reverse-proxies localhost:3000, so the preview URL root = the Storybook manager (verified end-to-end: manager boots, story tree, story selection, iframe story DOM, zero page errors; plus a live kill→restore→public-200 cycle). The app moved to localhost :3001 (`scripts/dev3000.py`; vite.config port 3001, allowedHosts kept). Recycle resurrection via the PAT-free boot hook (`ui-mock/shell-mini/scripts/boot-restore.sh`, iso `/home/z/my-project/.zscripts/dev.sh`, restores from the newest /home/sync bundle, gates on the SB /index.json probe, must-succeed on :3000). **GO-LIVE FIX (R16, still true for any Vite surface):** the FC edge rewrites Host to ...fcapp.run and Vite's default allowedHosts 403'd every public request (localhost probes were a false pass) — `server.allowedHosts: ['.space-z.ai', '.fcapp.run']`. **R18 REVERT:** the R16 "static mount at public/stories/ + sb6007 + previewRedirect shim" workaround stack (built on the wrong "dev SB can't serve publicly" verdict) was removed; SKILL #61/#64 + Law 3-corrected record the lesson.
+
+**Remaining for the round (R16 close-out):**
+- [x] design audit round, [x] implementation, [x] code review round + fixes, [x] README + DESIGN v2.1
+- [x] final wrap: HANDOFF/SKILL/PLAN updates, /home/sync backup, worklog
+- [x] origin PAT push + parallel-thread merge (R16-continuation session)
+- [x] LIVE on port 3000 via the preview URL (R16-continuation session) — browser self-verified
+- [ ] user reaction pass on the live review surface (R18: the full Storybook AT the preview URL root — no port juggling)
+
+**shell-mini v0.2 candidates (next UI iteration):** drag-DnD media→timeline (top candidate, deferred with the drop-outline token), annotakit wiring (vendored dir + 3 config lines), keyboard clip-focus traversal, snap-guide indicator, 18px node-space gutter option for pixel-compare passes, waveform with amplitude variation.
+
+---
+
+## Round 15 (2026-09-05) — the assembly + path round (COMPLETE)
+
+**The three rulings (peer-reviewed 2×, both signed off; full record `audits/ARCH-R15-assembly-and-path.md` v2.1):**
+- **Decision 15 — EVOLVE-IN-PLACE:** the four repos ARE the product (user's ~70% estimate verified: the union covers ~65-70% of non-assembly/non-cloud scope; the adversarial steelman FOR greenfield recorded and beaten in REVIEW-R15-ARCH §4; reversal condition probed — no structural defect found). D10's "references" framing superseded.
+- **Decision 16 — the `nle-app` assembly architecture:** fifth repo + three pinned submodules (lockset rule) + mock chrome PORTED; **projector is ENGINE-home** (`src/lib/nle/projector/`, additive; Timeline = parity oracle → permanent test substrate); commands DOWN one union (routing-disposition table = spec 15 §4.1A, 78/78 members; NOT_IMPLEMENTED typed) + telemetry UP one event staircase (spec 15 §9.5 register; playhead ownership = engine Clock truth, imperative mirror); multi-scene app-level (OT stays sealed single-scene); D12.2 amended (engine JSON-RPC = internal transport).
+- **Decision 17 — four walls one roof:** module gates stay undiluted; the app adds S1-S5 (seam contracts / state WYSIWYG / wired shell with the /dev/view-fixture + ~200 ported chrome + §12 capture suite / render-audio parity incl. the net-new null rig / battery); port-then-swap law; CI fast-lane/nightly + HEAD-follow bump PRs.
+
+**Execution plan (spec 14 REWRITTEN):** week −1 pre-flight (TS + HMR spike gates) + A0 scaffold (HMR round-trip exit gate) → A1 projector (engine, 4-5wk) → A2 bus+C7+op-port wave 1 (5-6wk) → A2.5 wave 2 (∥A3) → A3 shell + DEMO (5-6wk; demo ≈11-13wk solo / 7-8 two-dev) → A4-v1/v2 audio → A5 project+scenes → A6 FCPXML → A7a/b polish. **A7-complete ≈22-27wk solo / 13-16 two-dev (honest, fresh-senior calibrated).** Per-domain gap registers live in spec 14 §4 (every row cites a module pin).
+
+**The amendment set (all landed, battery-checked):** A1-A6 + B1-B4 + N1-N15 processed into 09/05/16/18/20/15 (AM1/AM2 agents); 19/17 re-baselined to R15 SHAs with the roof-suite section (AM3); README R15; integration review R15 (0 BLOCKING/6 MAJOR/7 MINOR → all fixed in `6315cd6`, verdict CLEARED); **battery_r15.py 47/47 green**. The C-series + D remain the live deviation ledger (candidates file). Cross-spec contradiction fixes: 15's marker-note → per-scene, 181 bindings, R→ripple example.
+
+**Scouts (the evidence base, all gates re-run in-sandbox):** SCOUT-R15-A (engine: 274/274+265/265+318; headless = JSON-RPC 19 ops; OT vendored TYPE-ONLY; P0 85%/P-A 80%/P3 85%/P4 70%/P5 0) — SCOUT-R15-B (OT: 423/423; W8 UI landed; C7 NOT STARTED deliberately; 24/78 wire coverage; pin=post-W8-d, bump recommended) — SCOUT-R15-C (WDC: 721/721 pure; one-audio-engine verified; mixer G-surface UNWIRED = M2; 12 host obligations) — SCOUT-R15-D (mock: 596/596; ≈55% UI-layer risk de-risked; net-new 09 deltas incl. float-seconds vs MediaTime; PR #1 down to 2 P3s).
+
+**Parallel-session note:** the user's parallel session landed `ac784f7` (R15 W0: OT seam-contract research, web-daw-ui pattern reference, mockup 18-defect audit, two design docs v2 FINAL — timeline-parity + audio-overhaul) and `0403225` mid-round; both rebased cleanly (no file overlap). The design docs in `.agents/design/` are the MOCK-side next iterations — they complement (not conflict with) this round's canon work.
+
+## UI/UX direction track (R10 `390fd48` → R11 `e0eaed2` → R12 `5550902`+ → R13 `b8d504f`+)
+
+**R14 (2026-09-05) landed (comment-audit + zero-no-op + both-directions spec scan):** the full **90-comment PR corpus was re-inventoried and re-audited** (74 inline + 11 issue + 5 reviews; every finding verified against code — the audit caught 5 fixes claimed-but-not-landed in the R13 reply, all now fixed: gh.ts pagination origin guard, ghsync per-comment mirror sentinel (self-healing duplicate-echo), anchor walk-up tag re-verification, cross-story focus retry-until-ack, and the vendor `prestorybook` prebuild (CX6's P1 — `npm run storybook` now builds the addon itself)). **Zero-no-op sweep:** every interactive element re-audited; the dead cluster landed real wiring — zoom cluster + ⌘\ + ±/⌘0 (spec 16 §3.8), marker-color dropdown + ⌘⇧←/→ marker nav, ⌘⇧I/O, ⌘S/⌘E, ⌘⇧M, [ ] non-ripple trim, ⇧J/L, ⇧,/. ×10, tool-radiogroup arrows + Toolbar2 roving (§11.1), effects drag-to-clip, Color/Deliver form controls, Deliver §4.2 empty/failed rows, Viewer loading/error rows, mixer auxPreFader/auxB/aux-on toggles, SoundLibrary sort, bracket drag + slider grammar, Clip Enter/Space, two-way scroll sync, height menu rows, add-track above/below, DebugOverlay copy-failure + save-fail drill. **Store laws:** loop ordering (start ≤ end, the inverted-window hang is dead), link-toggle gating (N4's reference answer), split linkedTo law, MIN_DUR unification, duplicate-at single undo, multi-track viewer resolution, loadSample mixer rebuild, ⌘M any-kind focused track. **Suite: 511 → 596 tests, tsc clean.** **Both-directions spec audit:** candidates file grew to §E (15 net-new N-findings incl. 2 P1s — ElementJSON container home, Link A/V contract vacuum; strengthenings to A2/A5/A6/B1-B3; 19 new C-registrations C10-C28) + comment posted to GitHub issue #2.
+
+**R13 (2026-09-04) landed (test + PR + review-gate round):** the mock got its **test program** — Vitest 5 + RTL + jsdom, **33 files / 511 tests**, co-located `*.test.tsx`, per-test store-reset contract (`src/test/setup.ts`), provider-stack helpers; PR **#1** opened (base `ui-baseline` @ `ce16d33`, head `main`, 143 files ≤ 300) which pulled in **CodeRabbit + Codex + three maintainer review waves**; five fix rounds closed every P1/P2 (only P3s remain, deliberately): store bug-hunt (deep-clone undo, no-op history pollution, dead ⌥⇧M, setMixerTrack partial strips, lockAll/selection-in-undo, locked-track law, ripple trim + target constraint, id collisions, range-param stub), keyboard/a11y parity (Tab scoping, slider grammar on scrub rows, splitters/menu tabs/cards keyboard-operable, danger-dialog cancel-first, violet AA), §4.9 menu enumerations completed, §6.4 keyboard multi-delete confirm, annotakit hotkeys remapped off the shell's keys + vendor functional fixes with dist rebuilt. **Direction-2 output: `.agents/SPEC-REVISION-CANDIDATES.md` + GitHub issue #2 (17 entries: 6 spec-vs-spec conflicts, 4 missing canon answers, 9 mock registrations C1-C9, seal staleness flags).**
+
+**R12 (2026-09-04) landed (user-feedback round):** mixer relocated to a RIGHT-SIDE DOCK beside the multi-track lanes (design doc v2.2 — 3 states preserved: 44px bridge rail / full strip row with fill-height faders); inspector seam direction fixed (was inverted+runaway) + Inspector/MediaPool fill their columns (w-full); playhead triangle re-centered on the bar centerline (was 2px off); **Storybook 10.6 + annotakit 0.4.0** (vendored, pin-comments with component/file:line digests, sqlite store, GitHub issue mirror ACTIVE) served at the platform preview URL via `storybook dev --port 3000` under a supervisor; **71 stories** (every shell region, chrome strip, timeline leaf, mixer surface, page, overlay, primitive); viewer overlays + safe-area guides became store-level UI prefs (real 90/80% guides); review gates: code review NO MAJORS + spec review 1 major (type floor) — all closed.
+
+**R11 (2026-09-04) landed:** layout overhaul to spec-18 geometry; the five v1.1 surfaces (context menus §4.9, toasts §6.4, state rows, pointer/wheel grammar, sample project); media-pool drag-to-lane/multi-select; 40-key map w/ JKL + undo; **Audio focus mode** per peer-reviewed `ui-mock/shell-variants/docs/DESIGN-audio-mode.md` v2.1 (4th dock page ⌘4, 3-state mixer, channel editor = S/G seam, sidechain ducking = spec 20 §12.2 mock answer, escalation gesture); **Storybook 9** (29 stories). Review gates: code review → all majors fixed → re-check verdict **NO MAJORS REMAIN**.
+
+`ui-mock/shell-variants/` — interactive TSX mockup of the spec-18 shell (React 19 + Vite per 00 §4) with a ctrl+` Variant Explorer: direction presets **A Resolve Classic** (spec-canonical), **B Modern Studio** (elevated dark, violet), **C Editorial Light** (tests the 18 §8.14 rejection). Three sub-agent review rounds (pro-editor / product-designer / a11y+spec) → R3 verdict: **NO MAJORS REMAIN — valid for user review**. Mock-level interactions live (drag/trim/split with snap, playhead, search, variants persist + share links).
+
+**Next steps (in order):**
+1. **USER REACTION remains the gate** — now with TWO surfaces: the PR (#1, CodeRabbit review + the candidates issue #2) and the live pins (public URL → annotakit → GH issue mirror). Tour the presets + Audio focus; answer DESIGN-audio-mode.md §11 q1-q9.
+2. **PR #1 close-out** — remaining open items are P3-only (the maintainer's corpus lists them; batch as a polish round or fold into wiring); re-run CodeRabbit on the final commit; merge or keep open per the user's call.
+3. **Seal round inherits THREE new inputs:** seal items 10-25 + `SPEC-REVISION-CANDIDATES.md` (R14: A1-A6 conflicts + N1-N15 net-new findings incl. 2 P1s, B1-B4 + strengthenings, C1-C9 + C10-C28 registrations, D staleness flags — the file is now the complete spec-amendment worklist) + the 596-test suite as the regression harness for any wiring.
+4. P1 wiring (spec 14) inherits the token set + component structure + `shell-*` testids + the 511-test suite; the audio-focus surfaces become the spec-18 mixer-panel section the seal round must write.
+
+**Seal additions from the mockup reviews (spec-side findings, not mock bugs):**
+10. **18 §9 playhead provenance error** — table says `--accent-selection #e8b34b (mock playhead gold)` but the davinci mock's playhead is RED (#fa1024, `.playhead-line`); spec must decide the canonical playhead treatment (mock follows the actual mock: red time indicators, gold = state/selection).
+11. **18 §4.5 tool-key conflict vs 16 §3.2** (A/','/S vs V/B/T/Y/U + N) — pick one, amend the other.
+12. **`--accent-focus` has no AA text pair** in resolve/studio (≈3.9-4.0:1 both directions) though 18 §9 assigns primary buttons to it — needs an `--accent-focus-contrast`-class decision.
+13. **18 §3.1 12px status strip vs §11.12 11px type floor** — internally in tension; mock used 12px.
+14. **R11: workspace keymap mismatch** — spec 16 §3.8/App A binds ⌘3 = Effects workspace, no Deliver binding; spec 18 dock ships Edit/Color/Deliver. The mock binds ⌘4 (per 16) + ⌘1-3 (per 18 tooltips). Seal must reconcile.
+15. **R11/R12: F6 region count** — 18 §11.5 enumerates six regions; the mixer DOCK is a seventh (mock registers it conditionally — visible states only, no invisible collapsed stop; amendment or fold-into-timeline decision).
+16. **R11: meter deferral (18 §8.13) vs always-on master micro-meter + header micro-meters** — seal decides whether these count as "meters panel." **(R13 flag: STALE — header micro-meters do not exist in the code; re-scope to the master micro-meter or re-implement.)**
+17. **R11: automation-curve UX home (20 §12.1)** — the mock ships a visible placeholder (Automation — M2 watermark); the seal round inherits the question.
+18. **R11: the C15 re-litigation needs formalizing** — DESIGN-audio-mode.md §9 argues it (D13 postdates the ruling); the seal round should either ratify the mixer surface as the spec-18 mixer-panel section or reject with the ledger. **R12: the mixer is now a right-side DOCK (v2.2) — the ratification question now carries the dock placement.**
+19. **R12: strip-family 10px type floor exception** — the console vocabulary (strips/rail/guides) runs 10px against §11.12's categorical 11px (R11 accepted 10px-in-strips informally; now needs formal ratification or a 11px pass).
+20. **R12: toast max-3 overflow deviation** — mock DROPS the oldest; §6.4 says collapse-to-icon-row (labeled in story + store; decide at seal).
+21. **R12: ⌘M master-fallback extension** — spec 16 §3.5 binds ⌘M to focused-track mute only; the mock falls back to master when nothing focused (tooltip now honest; register the extension).
+22. **R12: 90%/80% safe-guide convention unregistered** — no spec text constrains the percentages; ratify the broadcast convention when §4.3 is sealed.
+23. **R12: overlays-hidden approximation** — mock hides in-canvas overlays whenever tool ≠ select; §4.3 says tool-DRAG. Register.
+24. **R12: mockMixer masterVolume placement** — spec 20 §4.2 puts scene master in the mixer slice; the mock keeps it in the UI store (docblock over-claims). Register with the G-layer conformance pass.
+25. **R12: mixer testids not shell-namespaced** — adopt `shell-*` names when the spec-18 mixer-panel section is written (mixer-dock-*/mixer-strip-*/btn-mixer-state today).
 
 ---
 
@@ -44,3 +283,96 @@ Priority order (R9-re-scoped):
 - Mechanical battery after every fix round (`scripts/battery_r9.py` — 48 checks; recalibrate stale checks; exempt-window logic must look BEFORE AND AFTER each hit)
 - A facet with no coverage-matrix row is a spec bug (spec 17 §14.4 step 0)
 - Domain cores converge toward the spec's CONTRACTS, never the reverse (Decisions 10-12); the spec never duplicates what the code can be cited for (00 §2.5.2)
+
+## R15-UI round (parallel to the R15 assembly round) — timeline parity + audio overhaul — COMPLETE
+
+**User ask:** bridge the mockup's UI layer to the canonical timeline seam
+(bearachprema/opencut-timeline — match exactly, not invent) + heavy audio/DAW
+pass borrowing zmmac1/web-daw-ui (fix the broken knob/meter) + keep Storybook
+in sync + iterative sub-agent design/code review.
+
+**Landed (14 commits, 596→788 tests, tsc clean, 83-story build green):**
+- Research: 3-agent extraction — opencut seam contract (43 points), DAW
+  pattern reference, mockup defect audit (18) → `.agents/research-r15/`
+- Design: `.agents/design/R15-{timeline-parity,audio-overhaul}.md` v2 FINAL
+  after adversarial C1/C2 critique rounds (C1's zero-anchor inversion + C2's
+  antiphase knob both caught pre-implementation)
+- Timeline T1–T9: pixel/zoomController/rulerTiers/timelinePlacement/trimLaws/
+  ripple libs; two-regime anchored zoom; CapCut ruler + virtualization; full
+  gesture discipline; 2D cross-track drag (preferIndex, overlap rejection,
+  zero-anchor, mixed-group reject); ripple interval-diff; all 5 tool
+  gestures; snap upgrade + indicator; clip virtualization
+- Audio A0–A5: token sheet, SVG knob (antiphase fixed), stereo meterEngine,
+  dB-linear meters, fader scale, strip chrome, header micro-meters (v2.2
+  §3.2 closed), Storybook deterministic levels
+- Reviews: V1 (4 verified bugs) → F1 fixes → V2 SHIP → P3 closers
+- Runtime: supervisor crash fixed (numeric-fd write), instrumentation.ts
+  auto-boot chain (next-server → supervisor → :3000), static + runtime synced
+- Registrations: SPEC-REVISION-CANDIDATES §G (spec-16 §3.8 ×1.7, spec-18 §5A
+  two-regime + 18↔05 conflict, alignment record, deferral ledger)
+
+**Standing for the next round:** CodeRabbit re-review of the 14-commit range
+on PR #1; V2's 2 deferred P3s (duplicateAndMove raw-API edges, snap-ON
+head-drag fallthrough); G.4 deferral ledger items are engine-team questions.
+
+## R20 — the OT-faithful drag law (wave 8 + the user's "comically buggy" verdict)
+
+**Trigger.** The user live-rejected the R19 drag ("your timeline drag logic
+is extremely buggy almost comical — did you follow OT seams at all?").
+Reproduction confirmed: `previewMove` ran the R19 `insertPlacement`
+(Premiere insert-push improvisation) on EVERY pointermove, mutating the live
+doc — neighbors teleported mid-gesture (c2 +297px, c1 +313px, sliding back
+as the span moved). OT never mutates the doc during a drag at all.
+
+**Landed (single commit, 302 → 317 tests, tsc clean, builds green):**
+- Design doc `.agents/design/r20-drag-ot-law.md` (the full indictment + the
+  windowed OT law) + adversarial review round (4 P1 / 7 P2 — atomic escape
+  via direct set(), binding-aware history entries, drop position =
+  preview-rendered position, snap-induced conflicts flow through the drop
+  law, prefer-existing-free-track, structural pill fix, guard all six
+  capture sites, up-within-threshold cancel, dragMoverId) — all adopted
+  as §8 amendments before implementation.
+- DRAG LAW REWRITTEN against the real OT source (element-interaction-
+  controller + group-move + drop-target, re-read from clone): preview =
+  mover-only (neighbors NEVER move mid-gesture — pinned by a sweep test
+  at store AND component level); overlap allowed visually (mover renders
+  above its lane) with the live verdict affordance (amber dashed +
+  `→ V2` chip / red + `no room · locked` chip); drop at the UP: free →
+  plain commit; conflict + unlocked → the OT escape THROUGH the window
+  (existing free same-kind track, doc order — else MINTED V/A-series
+  track; ONE atomic set: mint + move + REBIND + binding-aware history
+  entry + toast); conflict + trackBindingLocked → refuse (doc restored
+  bit-for-bit, NO history, error toast = OT's CONFLICT). insertPlacement /
+  insertPushedIds / pushedIds DELETED. Undo restores doc AND binding.
+- mintTrackId (kind-local series, V1,V3→V4) + resolveDropEscape (pure).
+- All six setPointerCapture sites guarded (untrusted pointers throw
+  NotFoundError — live page errors caught during reproduction; the release
+  side was always guarded, the capture side was not).
+- Wave-8 threads closed with live evidence: playhead pill structural fix
+  (inside the ruler band in ALL modes — VLM-verified un-cropped in
+  video-only), user-select:none on the whole timeline panel, mute/unmute
+  on the inspector track card (doc state + lane dim + head M chip — thread
+  #29), topbar 36→40px recalibration (thread #30 follow-up).
+- docChanged now compares TRACKS too (the mute trap: clips-only comparison
+  silently swallowed track-state commits — same class as the media-only
+  miss).
+- OT-SEAMS.md §1 rows 1/2/3/12 + §2 matrix + §3/§4 rewritten to the
+  faithful law; README deviations #22 superseded (insert-push RETIRED —
+  "a redesign masquerading as a seam delta"); the swap path simplifies
+  (drag commit ≈ moveElements({moves, createTracks}) 1:1).
+
+**Standing for the next round:** the sibling's R20 is active in
+shell-variants (their queue: 3 reviewer threads + their mixer/pages work);
+annotakit vendor upgrade to v0.5.2 still deferred to a quiet window.
+
+## R20 — shell-variants: mixer rebuild + insert modes + real color + type-driven inspector (COMPLETE 2026-09-06)
+
+Scope: 16 open threads (GH #53-#68) + user directives (mixer "deep review/
+re-implement", timeline_edit_modes (2).html integration w/ OT seam check,
+color "very broken → real", inspector no-tab). All landed W0-W6:
+944→1334 tests, 107 stories, 16/16 resolved, VLM-verified.
+Carry-forwards (registered, not silent): C45-C58 ledger §I (edit-function
+OT seams, source-transport cluster, audio routing, hover preview, grade
+sidecar, console layout, CPU preview, real scopes, qualifier, curves,
+node binding, track-height/FX, project tabs); W6VIS LOW polish items;
+per-type transition glyphs; the retarget same-kind law is contract-letter.

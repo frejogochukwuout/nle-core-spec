@@ -509,6 +509,72 @@ The rename script's CANON_NOTE contained the literal `.refined.md`, which the su
 
 ---
 
+## Round-10 Meta-Learnings (UI/UX direction-study sessions — 2026-09-03, ui-mock/shell-variants)
+
+### 19. Direction studies need variants as data, not branches
+
+When the open question is "which visual direction," build ONE app with a variant dimension system: token blocks keyed by `data-theme`/`data-density`/etc. attributes, presets as plain data, an overlay (Ctrl + `) to switch them live, persistence + URL-hash share links so the reviewer can send an exact state back. The spec-canonical direction must be preset A (default), and every non-canonical option carries an inline "Spec position" note — deviations are surfaced, never hidden. This turns a subjective debate into a toggleable artifact.
+
+### 20. Peer review of UI needs LIVE interaction tests, not just screenshots
+
+Three review rounds over the same mockup: the two worst bugs (clip-drag preview teleporting clips because seconds were used as pixels; an entire floating-panel CSS treatment that matched zero DOM elements) were INVISIBLE in screenshots and only catchable by dragging elements in the running app and reading computed styles. VLM screenshot critique reliably catches contrast/legibility/hierarchy issues but hallucinates states (claimed trim handles that don't exist, "white border" that was gold) and misses dead code. The working loop: 3 personas (pro-domain user, product designer, a11y/spec compliance) × (VLM on screenshots + live agent-browser interaction tests + code greps), each returning an explicit severity-ranked findings list, iterate until an explicit "NO MAJORS REMAIN" verdict, then RESUME the same reviewer agent for gate re-checks (cheap, keeps context).
+
+### 21. Unlayered author CSS silently defeats Tailwind 4's @layer utilities
+
+A plain `button { background:none; border:none }` written outside any cascade layer outranks every Tailwind `bg-*`/`border-*` utility (utilities live in `@layer utilities`; unlayered author CSS beats all layers). Symptom: buttons that ignore their classes — invisible selection states, borderless cards, dead hovers — while divs render fine. Proven only via computed styles + isolated repro. **Rule:** every hand-written reset/base rule goes in `@layer base` when Tailwind 4 is in play.
+
+### 22. The sandbox reaps background processes between tool calls
+
+`vite` started with nohup/setsid/disown dies anyway when the bash tool call ends; only the platform's own dev.sh survives. Keep a `vite-up.sh` (idempotent start-if-down + curl health loop) and re-run it at the head of any command that needs the server. Related gotchas: agent-browser screenshots need ABSOLUTE paths (relative paths resolve in the daemon's cwd, silently dropping files elsewhere); set the browser viewport ABOVE the app's minimum before testing or the window-too-small overlay intercepts every interaction; hash-only URL changes on an SPA don't reload — force `agent-browser reload` after variant-URL navigation.
+
+### 23. Mock-level ≠ sloppy: the mock's fidelity IS the review surface
+
+A UI mock for direction validation must still honor the target spec's testids, type floor, contrast rules, and panel inventory — reviewers (rightly) treat violations as findings even in a "fake" app, and the mock doubles as the blueprint the real shell will be wired from. Keep mock-scope honest by listing intentional deviations in the README (with spec refs) and routing spec-side discoveries to the tracker instead of editing canon in passing.
+
+---
+
+## Round-11 Meta-Learnings (mockup-completeness + audio-focus sessions — 2026-09-04)
+
+### 24. Zustand v5: unstable selector results infinite-loop useSyncExternalStore
+
+A selector like `useUi(s => s.mixer.tracks[id]) ?? {default}` or `s.scenes.find(...)?.tracks.filter(...)` returns a NEW reference on every getSnapshot call; React's useSyncExternalStore sees the snapshot "change" after every render and re-renders forever → "Maximum update depth exceeded" crashing the whole tree through the error boundary. Fix patterns: module-level constant defaults (`const DEFAULT_STRIP = {...}` outside the component), select the CONTAINER object (`useUi(s => s.mixer)` — stable until a real change) and read fields locally, or derive arrays outside the selector. Scan every new `useUi((s) => …)` for object/array literals inside the selector argument.
+
+### 25. React's delegated wheel handlers are passive — preventDefault silently fails
+
+`onWheel={(e) => e.preventDefault()}` in React does NOTHING (React 17+ attaches delegated passive listeners; you get a console warning at best) — so ⌘/Ctrl+wheel zoom-to-cursor triggers the BROWSER zoom instead. The fix is a native listener in a useEffect: `el.addEventListener('wheel', fn, {passive: false})` (+ cleanup, + a ref for changing values like pxPerSec). Symptom in testing: zoom "works" but the page also zooms / Shift+wheel double-scrolls.
+
+### 26. The design-decision loop: doc → fresh peer review → fold → resume for re-check
+
+For any non-trivial design decision (this round: the DAW/NLE switch), the sequence that worked: (1) write the decision as a standalone design doc with an evidence table citing specs; (2) dispatch a FRESH-context sub-agent to peer-review it (citation audit + contradiction hunt + UX critique + ranked refinements + a verdict); (3) fold refinements into v2; (4) RESUME the same reviewer agent for the re-check (it remembers its own findings; verdict becomes the gate). Two rounds cost ~30 min and caught: a hard shortcut conflict, a wrong arithmetic claim (the reviewer even admitted its own error next round), and a state-model honesty issue. Verdict-gated review of DECISIONS, not just code.
+
+### 27. Parallel feature agents on disjoint files require the orchestrator to own the shared state first
+
+N agents implementing N features in one working tree conflict only on shared files (store, AppShell, app.css). The pattern that ran clean: the orchestrator writes ONE comprehensive store upgrade FIRST (every field + action every agent will need, typechecked), then dispatches agents with "store is READ-ONLY — use these exact actions" + disjoint file ownership lists + permission to append only to app.css's @layer components. Zero clobbering across 5 agents. When an action doesn't exist, agents do honest-mock toasts instead of editing the store.
+
+### 28. Pointer-capture + event bubbling double-dispatches commits
+
+Trim handles nested inside a draggable clip: `setPointerCapture` retargets pointer events to the handle, but the events still BUBBLE to the parent — a shared `onPointerUp` on both levels commits the trim twice (two undo entries per gesture). Fix: `stopPropagation` in the handle-level handlers (or check `e.target === e.currentTarget`). Any drag/commit path with nested interactive layers needs this check.
+
+### 29. VLM/tool transcripts eat bracket-escape sequences — verify before "fixing" corruption
+
+A grep/tool output showed `MARKER_PALETTEarkerColorIdx` where the file actually contained `MARKER_PALETTE[markerColorIdx` — the `[m` was consumed as an ANSI escape in the output pipeline. The FILE WAS FINE (tsc passed). Rule: when output "looks corrupted" but the typechecker/build is green, re-read the file another way before editing — don't chase display artifacts.
+
+### 30. Sandbox process persistence: children of the platform's app server survive; your own spawns don't
+
+Agent-session bash spawns (even setsid/nohup/disown) are REAPED between tool calls, but processes parented to the platform's next-server (boot-time, platform cgroup) survive indefinitely. The bridge: an API route on the platform app that `child_process.spawn`s a command — the child inherits the server's persistence, and when the server is later killed the child orphans to init and KEEPS LIVING. This is how a dev server meant for a public preview URL gets a permanent life: spawn a supervisor (respawn-loop) as a next-server child, let it take over the port. Key sequencing: spawn BEFORE killing the app server (you lose the spawner otherwise).
+
+### 31. Public-URL 403 "Invalid host" through platform edges: validate WHERE the host check lives before blaming the proxy
+
+Chain: public URL -> platform edge (Function Compute) -> sandbox Caddy -> dev server. The edge REWRITES the Host header (observed: not the public domain, and not the container hostname). Two independent host gates exist: Caddy (platform-generated config, unreadable) and Storybook 10 core-server (`core.allowedHosts`, default = local only). Caddy happily proxied ANY host; the 403 text came from Storybook. Diagnostic that found it: `curl -H "Host: <public>" http://127.0.0.1:<dev-port>/` directly, bypassing edge+Caddy — isolated the layer. Fix: `core.allowedHosts: true` for a sandboxed review server (safe — only edge-reachable). Also: Vite 8 has NO `allowedDevHosts` option (it's `server.allowedHosts`, and builder-vite forwards core.allowedHosts into it) — a confidently-written dead config is still dead; grep the installed package before trusting option names.
+
+### 32. Storybook as the review surface changes the mock's persistence contract
+
+When the user reviews in Storybook rather than a static preview: (a) every element needs a STORY (component + its states — sub-agents write these well on disjoint files with a conventions brief: decorators, StoreBoot patches, PanelBox, and "typecheck must pass, don't touch other files"); (b) the pin-comment addon turns review into structured data (component chain + file:line + DOM selector per pin) — the agent consumes threads via REST, resolves by PATCHing the FULL document back (no DELETE); (c) a dev-server-only addon means the review URL must serve `storybook dev`, not a static build — which is exactly when lesson 30's supervisor pattern pays off.
+
+### 33. Empirical geometry verification beats VLM eyeballing for layout bugs
+
+User-reported "layout is broken" triage: reproduce in a real browser, then MEASURE (getBoundingClientRect on the panel roots, the seam, the playhead bar vs its triangle) — the inspector bug turned out to be TWO distinct defects (inverted seam math + missing w-full making a flex child content-width), and the playhead offset was an exact 2px svg-centering error, none of which a VLM would have precisely located. Use VLM only for the final "does it look right" pass — with an explicit "do NOT generate code/HTML" leash (it drifts into mockup generation when asked open-ended questions about UI screenshots).
+
 ## GitHub Operations
 
 When pushing a large spec set to a new GitHub repo:
@@ -636,6 +702,26 @@ Output: integration review report with per-check verdict + issues list.
 
 ---
 
+## R13 meta-learnings (test + review-gate round)
+
+34. **Writing the test suite IS a review pass.** Five real bugs surfaced while writing tests (shallow-clone undo, no-op history pollution, a documented-but-dead shortcut) — before any reviewer looked at the code. Write the suite FIRST; treat every "why does this test fail" as a finding, not a test bug.
+
+35. **Verify the DEPLOYED artifact, not the fix claim.** A fix sub-agent reported "dist rebuilt, code-verified" — the verification wave proved the bundle was still pre-fix (mtime + literal markers). For any build step: grep the OUTPUT for a code marker (comments get stripped), then restart, then re-check. Claims are not artifacts.
+
+36. **Review waves converge on different strata.** Wave 1 (code/UX/test/docs) found store-contract honesty issues; the maintainer's live pass found interaction bugs (targeting, hotkey collisions) that static review missed; the verification wave found the deployment gap. Rotate reviewer MODES (static / live-interactive / verification) rather than running the same mode twice.
+
+37. **Open the PR EARLY in the fix loop.** CodeRabbit + Codex comments arrived while sub-agent waves ran; the fix batches could fold all sources into one dedup corpus per commit. A PR opened at the end would have serialized three review sources instead of parallelizing them.
+
+38. **Tests that pin behavior need behavior-level assertions.** The PageUp bug survived a test that only asserted `playhead < 17` — a weak bound that a completely broken implementation satisfies. Assert exact landings (`toBeCloseTo(8.49, 4)`) wherever the math is deterministic.
+
+## R14 meta-learnings (re-audit + zero-no-op + both-directions spec scan)
+
+39. **"Fixed" reply comments can lie — re-audit against code, not claims.** The R13 PR reply claimed the mirror sentinel, focus race, origin guard, and reveal-snap were fixed; code review proved 5 of ~75 claimed fixes had never landed (grep PASSes were false positives: comments match, code doesn't). The re-audit method: build a mechanical grep battery FIRST (cheap PASS/FAIL), then manually inspect every FAIL and every "PASS" whose pattern could match a comment instead of code. Verification-not-claims applies retroactively to your OWN past claims.
+
+40. **The no-op sweep is an audit primitive: trace every handler to an observable.** "Ensure zero no-op" ≠ checking flagged buttons. The systematic method: enumerate every interactive element (button/onClick/role/slider/draggable/tabIndex), then for each trace ONE of four terminal states (store mutation with visible effect / local behavior / honest toast / aria-disabled+tip). The sweep found 12 dead buttons + 7 dead form controls + 1 functional-no-op toggle + 5 orphaned store actions BEYOND the review waves' finds — and two of the biggest fixes were pure wiring (store actions existed, buttons never called them).
+
+41. **Fresh sandbox = git recovers code, never process state.** The clone, tests, and PR all came back from origin; the runtime stack (Storybook-on-:3000 supervisor, spawntest route, runtime copy with .env/git/threads.db) did NOT — none of it is git-tracked. Write the restoration recipe into HANDOFF as you build infra (paths, commands, env keys, verification markers), or the next session rebuilds it from archaeology. Also re-verify platform assumptions: the reaper still kills setsid'd processes; only platform-next-server children survive.
+
 ## Summary
 
 The core insight from this session: **multi-round scout → audit → revise → integration review produces dramatically higher-quality specs than single-pass writing.** The audit step is non-negotiable — scouts make mistakes (especially fabrication), and only a fresh skeptical reader catches them. The integration step catches cross-stream inconsistencies that no individual scout could see.
@@ -643,3 +729,903 @@ The core insight from this session: **multi-round scout → audit → revise →
 For testability: **data-driven architecture (JSON-in/JSON-out engine) + three-tier testing (engine/render/UI) + WYSIWYG invariants (state/pixel/audio)** is the pattern that makes complex systems programmatically verifiable without UI flakiness.
 
 These patterns generalize beyond browser NLEs to any complex engine + UI system where testability matters.
+
+## R15 meta-learnings (assembly-architecture + implementation-path round)
+
+42. **Path re-litigation at scale milestones: the decision input is a completion matrix + a reversal condition, not vibes.** When the user re-opens a settled decision ("evolve vs greenfield") because the world changed (repos went 20%→70%), the move is NOT to re-argue — it is to (a) re-measure the completion matrix with scouts whose gates RE-RAN, (b) price BOTH paths in a ledger (re-derivation multiplier + review-debt re-incurrence), (c) state the reversal condition explicitly and have the adversarial reviewer PROBE for it, and (d) record the full steelman for the losing side so the decision is auditable. The user's own estimate was verified accurate (~70%); the steelman's honest half-wins (process tax) got priced INTO the winning ruling instead of being ignored.
+
+43. **The two-staircase law: every architecture diagram with only DOWN arrows is missing half the system.** A commands-down-only topology (the v1 assembly design) forgot playhead-during-playback, meters, waveform peaks, export progress — the entire telemetry UP direction. The tell: canon (spec 15 §9 EngineEvent) and precedent (engine D8's data contracts) already contained the answer, and S1's "engine output never feeds back" wording, read at the wrong layer, FORBADE it. Fix: state one-wayness at the precise layer ("editing state never flows engine→editing-core; telemetry flows up through a SEPARATE seam") and enumerate the actual runtime flows before believing a diagram.
+
+44. **A completeness instrument beats a completeness claim: the routing-disposition table.** "The bus routes 100% of the union" was a claim; the table (one row per union member → home ∈ {OT, engine, app, DEFERRED} + a typed NOT_IMPLEMENTED code) is an instrument — it compiles honest, it's battery-checkable, and building it immediately caught that ~20 members had NO home in any phase. Same class as the facet-coverage-matrix law (#10): aspiration becomes architecture when it's a table with an enforcement rule.
+
+45. **Author-calibrated vs fresh-senior calendars differ ~1.7-2×; adopt the fresh-senior numbers.** The R15 plan's first estimates (11-16wk) were author-velocity; the execution reviewer's bottom-up (22-27wk solo, with per-phase drivers + the serial A1+A2→A3-demo chain + two-dev decay) was the honest one. Also: re-derive headline totals after ANY phase is added (the demo figure didn't re-derive after A2.5 was inserted) and state derivations explicitly.
+
+46. **Surgical multi-agent amendment fleets need the integration review MORE than single agents do.** Three amendment agents (disjoint file ownership, zero clobbering) each passed their own QA; the fresh integration review still found 6 propagation Majors — stale counts in files the round RE-baselined, amendments not propagated to sibling specs (05/06 test contracts asserting the OLD keyboard semantics), and dangling references CREATED by the same round's rewrite (14 §2.1 pointers). Amendment work is never "done" per-file; it's done when the cross-file grep battery says so. Keep the counter-claim sweep (stale strings, inverted after re-baseline) as a standing review check.
+
+## R15-UI meta-learnings (mockup timeline-parity + audio round — parallel thread; kept at #47-51 per its own PLAN/HANDOFF references)
+
+47. **Match-the-canonical means auditing YOUR OWN spec claims too.** The R15-UI design's first instinct was to REGISTER a spec revision removing the magnetic zero-anchor, "because spec-18 has a free-spine main" — a citation the critique agent searched for and DID NOT FIND; spec-05 §14.5A had adopted it normatively (Round-8, test-anchored) and the MOCK was the deviation. Lesson: before proposing to de-spec a behavior, grep the whole corpus for every clause that touches it — you may be about to remove something your own repo deliberately absorbed, and the burden flips (implement the ~20-line clamp, register nothing).
+
+48. **The harness deadline is not a failure signal — CHECK THE TREE FIRST.** Three of five long implementation agents hit "context deadline exceeded" with 90-100% of the work already written to disk (T3's seam, T4's full wave, F1's fixes). The expensive reflex is re-dispatching from the prompt; the cheap correct move is `git status` + scoped `vitest run` + targeted completion agent (T3b) that READS what landed and drives the remaining failures to green. Budget one completion agent per timed-out wave; the completion pass ALSO catches the real bugs (T3b found the start+move notification bug the tests were written to catch).
+
+49. **Mid-edit cut-offs leave identifier soup — search by symptom, not by plan.** A cut agent left `scene.tracksoverTarget.trackIndex]` and `scene.tracksoveredIdx]` (a find/replace interrupted halfway). Symptom: tests fail while tsc exits 0 THROUGH A PIPE (`| head` eats the exit code — check `${PIPESTATUS[0]}` or run tsc bare). Verify suspect lines with `od -c`/hex before trusting sed output; stale terminal buffers showed "broken" lines that were already fixed.
+
+50. **The armed-runtime pattern needs a REAL trigger, not an armed route.** R14 left a spawntest route "armed for when the platform server comes up" — but nothing ever POSTed it, and the supervisor script itself crashed instantly (`openSync` returns a numeric fd; `fd.write(1,…)` was never valid). R15-UI's fix: Next's `instrumentation.ts` register() hook spawns the supervisor at server start (the one lifecycle event the platform guarantees), sentinel-guarded. Verified chain: server up → supervisor → storybook :3000 → 200. A background process that nothing starts is theater; wire it to a lifecycle hook you can actually observe.
+
+51. **Design critiques pay for themselves exactly at the geometry level.** The two highest-value catches of R15-UI were a 180°-antiphased SVG indicator (y 65→80 below center vs the arc filling upward — would have shipped the flagship fix visibly broken) and a lower/upper clamp swap in my own zoom code (dynamic min bound in the UPPER clamp — caught by a test 10 minutes after writing). Both were cheap to fix pre-merge and expensive to discover in review. Corollary: write the geometry assertions (rotate transform, dasharray, clamp direction) BEFORE the visual polish — they're the tests that catch the class.
+
+## R16 meta-learnings (shell-mini bootstrap — minimal-MVP skin-port round) (items originally minted as 47-52; renumbered +6 after the parallel-thread numbering collision)
+
+53. **Extract the skin's ground truth BEFORE designing: a SingleFile DOM snapshot is a design-token mine, not just a picture.** A 7.2MB saved page carries the app's ENTIRE `:root` token block + per-component CSS rules verbatim. The extraction pipeline that worked: headless-browser `getComputedStyle` + styleSheets rule dump filtered by component prefix (`quick-cut`) + measured DOM anatomy (bounding rects) + VLM on CROPS for gestalt. Rule: **trust the extracted CSS over the VLM's color/layout claims** (the VLM hallucinated "missing dot grid" and "opaque panels" that pixel-sampling disproved) — but VLM DID catch real defects (text collisions) that DOM checks miss. Use both, verify each against the other.
+
+54. **%-positioned timeline marks are a coordinate-law bug waiting to happen.** In any scrollable timeline with `min-width: 100%` content, positioning SOME children in `%` (ruler marks) and others in `px` (clips, playhead) guarantees desync when the content stretches past its intrinsic width (2-3× at low zoom). The law that fixed it: **ONE shared render origin + ALL positions in px; % only for fills**. jsdom's zero-`getBoundingClientRect` masks the bug completely — pin the coordinate law with a style-attribute equality test (mark.left === playhead.left === t*pps) AND verify once in a real browser.
+
+55. **jsdom's zero rects make pointer tests deterministic — exploit it, but compute the origin law explicitly.** Every `clientX → time` inversion goes through a `contentRect.left + RENDER_ORIGIN` constant; with jsdom rects at 0, tests map clientX directly to time. Keep ONE origin constant shared by render math AND pointer inversion (the review caught three different origins — ruler clicks, clip drags, playhead scrubs — 10px apart).
+
+56. **The snap magnet must exclude the dragged object's own edges.** Self-inclusive magnet targets create a 5-12px dead zone (drag active but nothing moves), permanent pointer hysteresis, and at low pps a self-teleport for min-duration clips. Same-track neighbors + playhead only — and derive the targets per-clip, not globally.
+
+57. **Test-writing is a design-review stage: the seed that made every move degenerate.** The audit-pinned seed (back-to-back clips, zero slack) made EVERY V1 move-drag a no-op — discoverable only when you try to write the drag test and find there is nothing meaningful to assert. Write the interaction tests against the SEED early; a seed with no slack is a UX bug (nothing is draggable) hiding as "deterministic simplicity".
+
+58. **The audit round on the DESIGN doc and the code-review round on the implementation catch disjoint bug classes — run both.** The design audit caught contract holes (trim bounds, scroll model, the DnD hedge); the code review caught implementation-vs-contract drift (the % ruler, self-magnet, interaction-lock holes at the pointer layer, storybook story isolation). Neither could have caught the other's set. Fold ALL findings, then re-run the full gate suite — and record both rounds in the design doc so the contract stays the single source of truth.
+
+59. **"Serving on localhost" is a FALSE PASS for public liveness — the edge rewrites the Host header.** The R16 port-3000 go-live reported "LIVE" on the strength of `curl localhost:81 → 200`; the user's browser got Vite's 403 "Blocked request: This host is not allowed" the whole time. The chain is four layers, and each has its own failure mode: (1) process alive (reaper), (2) port bound (crash → port free), (3) proxy forwards (Caddy passes Host untouched), (4) **backend accepts the Host** — dev servers (Vite, Storybook) default-allow only localhost/IPs, and platform edges rewrite Host (`...fcapp.run`, `...space-z.ai`). Probe layer 4 explicitly: `curl -H 'Host: <edge-style-host>' http://127.0.0.1:81/`, and call the app live ONLY after a real public-URL browser pass (agent-browser through the edge). The other session's note had already documented this exact trap for Storybook (`core.allowedHosts`) — read sibling-session failure notes BEFORE claiming a go-live class of win.
+
+60. **Process persistence is three different problems: reaper, recycle, and nothing-starts-it.** (a) The per-toolcall reaper kills the whole descendant tree — only double-fork (grandchild reparents to PID 1) survives; `nohup`/`setsid`/`disown` all die. (b) A container recycle kills even the double-forked daemon (FC scale-to-zero) — only durable storage survives: remotes + /home/sync. (c) After recycle, NOTHING re-launches your app unless you've wired a boot hook: the harness runs `/home/z/my-project/.zscripts/dev.sh` at boot in some sandbox variants — write it idempotent + PAT-free (restore from the newest `/home/sync/*.bundle` via glob, not a PAT-embedded clone; creds in an untracked boot script get archived into repo.tar), test it live by killing the daemon and running the hook, and keep a canonical copy committed in the repo so a fresh clone can re-install the hook in one cp. Each layer needs its own verification; surviving one says nothing about the next.
+
+61. **A second UI cannot ride ?XTransformPort, and a dev server cannot ride a sub-path — but a static build can.** Verified while exposing Storybook at the public URL: the query survives the edge and routes the DOCUMENT request to :6007, but sub-resource URLs (relative or absolute) never carry the query → they fall to :3000 → 404 → the manager HTML loads and its JS never executes. The dev server's iframe is worse: root-absolute Vite paths (`/@vite/client`, `/@id/__x00__virtual:/…`) escape any sub-path prefix. The winning pattern: build static (`npm run build-storybook`), copy `storybook-static/` → `public/stories/` of the app (static output is fully relative — sub-path-safe by construction), commit it, serve it from the app's already-Host-allowed Vite. Entry must be the explicit file `/stories/index.html` (bare `/stories/` falls to the SPA fallback and serves the app). Full law-set in the reference section below. **[R18 correction: the "winning pattern" framing was wrong — it was the workaround. The default is Law 3-corrected: the dev server itself owns :3000 (see #64). The empirical observations stand; the conclusion drawn from them did not.]**
+
+---
+
+## Z-container preview-URL serving — the verified reference (R16; verdict CORRECTED in R18)
+
+Written after the port-3000 go-live false-pass (#59) and the Storybook
+external-surface investigation. Every line was verified empirically in this
+sandbox (forged-Host probes + real public-URL browser passes + VLM on
+screenshots); claims inherited from other sessions' notes are marked.
+
+> **R18 correction (user directive):** the R16 verdict below Law 3/4 —
+> "a dev Storybook cannot serve publicly; mount the static build instead" —
+> was WRONG. The standard pattern works and is the default: **the full dev
+> server owns :3000** (verified here end-to-end after the correction; the
+> sibling R17 section below documents the same pattern for shell-variants).
+> The XTransformPort findings survive only as a historical dead-end note —
+> don't build on them.
+
+### The chain
+
+```
+browser → https://preview-chat-<chat_id>.space-z.ai/   (chat_id from gateway metadata)
+        → FC edge (rewrites request Host to ...fcapp.run)
+        → Caddy :81 (platform-owned, ALWAYS running, Host passes untouched)
+            ├─ request carries ?XTransformPort=NNNN → localhost:NNNN
+            └─ otherwise → localhost:3000 (unconditionally)
+```
+
+Caddy needs no "trigger to serve": the moment ANY process binds :3000 it
+becomes the public site; if nothing binds, the edge/Caddy layer errors
+(upstream down). The preview URL host embeds THIS chat's id — it is not
+discoverable from inside the container (no env vars), but it is derivable
+from the chat gateway metadata.
+
+### Law 1 — the backend must ACCEPT the edge Host
+
+- **Vite dev server:** default allowlist = localhost/IPs only → every public
+  request dies with `403 Blocked request. This host ("…fcapp.run") is not
+  allowed.` Fix: `server.allowedHosts: ['.space-z.ai', '.fcapp.run']`
+  (dot-prefix matches any subdomain).
+- **Storybook 10.6 dev:** allows ALL hosts by default — startup banner says
+  `Other allowed hosts: all (insecure)`; verified 200 with a forged edge
+  Host. Older Storybook versions threw "Invalid host" (a sibling session
+  fixed theirs via `core.allowedHosts`) — PROBE, don't assume either way.
+- **Static files served by the app (Vite publicDir):** no Host check at all —
+  immune by construction. (This is why the static-build mount in Law 4 needs
+  zero extra plumbing.)
+
+### Law 2 — liveness is 4 layers; a localhost curl is a FALSE PASS
+
+`process alive (reaper!) → port bound → Caddy forwards → backend accepts
+Host.` Probe the last layer with the edge's Host:
+
+```bash
+curl -H 'Host: preview-chat-<id>.fcapp.run' http://127.0.0.1:81/
+```
+
+…and call the app live ONLY after a real public-URL browser pass
+(agent-browser through the edge) that includes an interaction (click/play)
+and an asset-load check — a 200 HTML fetch proves neither JS execution nor
+sub-asset loading (probe the ASSET CHAIN: manager bundle, /index.json,
+iframe story DOM — R17 gotcha 8 has the full recipe).
+
+### Law 3 (R18-corrected) — to serve a dev UI publicly, put the server ON :3000
+
+**The standard pattern (THE answer, user-confirmed):** the public proxy chain
+is port-based — edge → Caddy :81 → localhost:3000, unconditionally. Whatever
+dev server binds :3000 IS the public site, same-origin, so every asset class
+works with zero extra plumbing: manager HTML + `./sb-manager/*` bundles,
+`/iframe.html?id=…` story canvases, `/index.json`, `/@vite/client`, HMR,
+deep links (`/?path=/story/…`). Verified end-to-end in this env (R18):
+manager boots through the real edge, story tree live, story selection works,
+iframe story DOM renders (4 clips + 8 trim handles in the Timeline seed
+story), zero page errors. Plain port-forwarding of :3000 would work the same
+way — the platform's query-based port forwarding is the unnecessary detour.
+
+Launch recipe (shell-mini, this env): `python3 scripts/sb3000.py`
+(double-fork daemon, PPID=1, port 3000) + `core.allowedHosts: true` in
+`.storybook/main.ts` (belt-and-braces; SB 10.6 already allows all hosts by
+default — the banner says so).
+
+**Historical dead end (kept only so nobody rebuilds it):** R16 spent a whole
+session routing AROUND :3000 with the platform's query-based port forward
+(`?XTransformPort=NNNN`), concluded "multi-asset UIs can't work", and built
+workaround infrastructure (static build mounted at `public/stories/`, an
+app-entry redirect shim for the query's case-sensitive key, a second SB
+daemon on :6007). All of that was unnecessary — and its "verified" write-ups
+then read as truth and misled the next session (the exact failure mode of
+#64). The empirical trivia, for the record: the query survives the edge and
+routes the DOCUMENT to :NNNN, but sub-resource URLs don't carry the query →
+they fall to :3000 → multi-asset UIs never boot; the query KEY is
+case-sensitive in Caddy's matcher (lowercase silently routes to :3000).
+None of it matters once the server owns :3000.
+
+### Law 4 — when the APP must own :3000, the second UI goes under it as a STATIC mount
+
+R18 note: this is the FALLBACK pattern, not the default (Law 3-corrected and
+the R17 section are the defaults). shell-mini used it in R16 (app owned the
+port, storybook static-mounted at `/stories/`) and DROPPED it in R18 when the
+user directed the full storybook server to :3000 instead — the static mount
+and its 8.4MB committed `public/stories/` were removed. The pattern itself
+remains valid and is documented in the R17 decision table at the bottom of
+this file:
+
+1. `npm run build-storybook`
+2. `cp -r storybook-static public/stories` — the static output is FULLY
+   relative (`./sb-manager/*`, `./sb-addons/*`, `./assets/*`), hence
+   sub-path-safe by construction.
+3. Commit `public/stories` (git-is-the-disk; zero build steps at boot).
+4. Entry URLs (public): `…/stories/index.html` for the manager — NOT bare
+   `/stories/` (trailing-slash directory requests fall to the app's SPA
+   fallback and serve the APP); `…/stories/iframe.html?id=<story-id>&viewMode=story`
+   for a full-screen single story.
+5. Rebuild + recopy + commit when stories change — the cost that makes this
+   the fallback, not the default.
+
+### Law 5 — persistence is three different problems
+
+See #60 for the full law. Layer summary with the concrete artifacts (R18
+layout): reaper → double-fork daemons (`scripts/sb3000.py` storybook on
+:3000 = the public surface, `scripts/dev3000.py` app on :3001 = localhost
+dev); recycle → `scripts/boot-restore.sh` (iso
+`/home/z/my-project/.zscripts/dev.sh`, idempotent + PAT-free, restores from
+the newest `/home/sync/nle-core-spec-*.bundle`, gates on the SB
+`/index.json` asset-chain probe, must-succeed on :3000); durability → GitHub
+origin + gitlab mirror + `/home/sync` bundle/tarball refreshed at every
+wrap-up.
+
+## R17 meta-learnings (shell-variants takes :3000 in its own env — parallel-stream serving split)
+
+62. **Per-env port ownership: when parallel streams share a REPO but not a SANDBOX, :3000 is owned per-ENV, not per-repo.** Two streams were both landing in `nle-core-spec` (shell-mini + shell-variants); each sandbox has its own Caddy/edge, so the "who serves :3000" question is answered per-environment by user directive — "serve YOURS in this env." The failure mode it prevents: an agent from stream A rebuilds what stream B already built (a whole sb-supervisor stack existed in MY env that only ever served shell-mini's predecessor), or worse, kills the other stream's daemon believing it stale. On any port-3000 takeover: (1) identify WHAT is running before killing it (process cwd, not just the command line — `node vite.js` could be either app), (2) check `git ls-remote` for parallel pushes FIRST (the sibling pushed 3× during this session; rebase, never force), (3) document the ownership split in the SHARED HANDOFF so the next session of either stream reads one truth.
+
+63. **A recycle doesn't just kill processes — it leaves the boot hook pointing at ghosts, and NOTHING tells you.** After the container recycle: the overlay clone (`/home/z/nle-core-spec`) was gone, the runtime copy was gone, AND the harness boot hook `.zscripts/dev.sh` (tracked in the my-project repo, force-checked-out) ran a `package.json` dev script pointing at `sb-supervisor.mjs` — a file that died with the recycle → `MODULE_NOT_FOUND` → wait_for_service fails → no server, no restart, no retry, ever. The boot log (`sb-boot.log`) held the answer the whole time. Law: after any recycle, read the boot logs BEFORE inventing a new serving stack, and make the boot hook's failure mode loud (a dev.sh that exits 0 with a warning is worse than one that fails hard — the harness won't tell you either way).
+
+## R17-v0.5 meta-learnings (vendored-addon version swap) (items minted as 64-65; renumbered twice — +2 for the R18 round, then +1 again for the R18b round — the parallel stream mints fast)
+
+67. **A vendored-dependency version swap is a three-way merge, not a replace: upstream, ours, and the integration surface.** Swapping vendored storybook-annotakit 0.4.0→0.5.0 lost THREE local fixes silently (preset fresh-clone guard, JSON-store queue-wedge fix, tsup clean:false) — upstream had never seen them, so "take the new version" regressed them. The discipline that caught all three: (1) diff the new zip's src against the VENDORED src (not just file lists — patterns like `queue = queue.then`, `clean: true`, the guard's error string); (2) re-apply local fixes WITH a comment naming them as local re-applies (future swappers need to know they exist); (3) grep the REBUILT dist for every marker (tsup keeps identifiers — `p.catch(() => undefined)`, `annotakit/ui-command`, the `staticStore.mjs` entry); (4) re-check the INTEGRATION surface (our app's `.storybook/preview.tsx` hotkey remap was written against 0.4.0 semantics — under 0.5.0 legacy plain-key configs only fire with ⌥ held, silently changing what the config MEANS; one remap survived because the shell's cheat-sheet '?' still collides with the addon's '?' default). Gates after a vendor swap: vendor tsc (needs the APP's node_modules for peer types — run it after app `npm ci`, not before), app tsc, full app suite, dist markers, daemon restart + health version + live browser pass.
+
+68. **The best E2E proof of a durability engine is one you didn't fabricate.** After the 0.5.0 swap, health reported threads:1 and `autoSync: "pushed (mutation)"` — a thread created through the public URL 5 minutes EARLIER (by the parallel stream's verification agent, on a story id from THEIR storybook) had been auto-migrated from the legacy store, merged cross-stream, and pushed to the shared orphan branch before I touched anything. Zero synthetic test data; the real pipeline proved migration + merge + push in one boot. Lesson: check `git log <orphan-branch>` + the health JSON's sync state FIRST after any store-engine change — reality may already have run your E2E.
+
+## Serving the shell-variants review surface on :3000 — the verified reference (R17)
+
+This is the SIBLING pattern to the "Z-container preview-URL serving" section
+above (that one = shell-mini: static-build mount under an app that owns the
+port). This one = **the dev Storybook IS the app on :3000** — the full
+shell-variants review surface (Storybook 10.6 + annotakit, 83 stories) served
+directly at the public URL. Every line below was verified live in this
+sandbox (kill→restore→public-200 cycle included).
+
+### The stack (what runs where)
+
+```
+browser → https://preview-chat-<chat_id>.space-z.ai/
+        → FC edge (rewrites Host to …fcapp.run)
+        → Caddy :81 (platform, always up) → localhost:3000
+        → Storybook 10.6 DEV (storybook dev -p 3000)
+            ├── manager + 83 stories (React 19 + Vite 8, HMR live)
+            ├── /annotakit/api/*  → vendored addon v0.5.0 server
+            │     store = .git/annotakit/threads.db (SQLite, INSIDE .git —
+            │     zero working-tree footprint; storeMode:"git")
+            └── git auto-sync: snapshot → ORPHAN branch `annotakit`
+                (tree = README + threads.db, plumbing-built, never checks
+                out) → pushed to GitHub via http extraheader; on boot the
+                engine RESTORES + MERGES the remote snapshot (cross-stream:
+                the parallel stream's threads ride the same branch, namespaced
+                db=annotakit@<session> — verified live in the R17-v0.5 swap)
+
+serving host = /home/z/my-project/shell-variants   (persistent-volume RUNTIME copy)
+source of truth = /home/z/nle-core-spec            (repo checkout; dies on recycle)
+boot hook = /home/z/my-project/.zscripts/dev.sh    (iso of scripts/boot-restore.sh)
+launcher = scripts/sb3000.py                       (double-fork daemon, PPID=1)
+```
+
+The runtime copy is NOT the repo checkout — it is a second working tree on
+the persistent volume with its OWN `node_modules` (263MB, survives recycles
+when the volume does), its own `.env` (token), and its own git repo (any
+branch; v0.5.0's store lives under `.git/annotakit/`, so the runtime repo
+just needs to BE a git repo with an `origin` remote pointing at the spec
+repo — see gotcha 6).
+
+### The launch recipe (from nothing to public-200)
+
+```bash
+# 1. repo (PAT from chat; never committed)
+git clone https://<PAT>@github.com/frejogochukwuout/nle-core-spec.git /home/z/nle-core-spec
+git -C /home/z/nle-core-spec remote add gitlab https://<GLPAT>@gitlab.com/ansgareutychisO/nle-core-spec.git
+
+# 2. runtime copy on the persistent volume
+cp -a /home/z/nle-core-spec/ui-mock/shell-variants /home/z/my-project/shell-variants
+cd /home/z/my-project/shell-variants
+npm ci --no-audit --no-fund          # ~4 min; esbuild allow-scripts warning is benign
+
+# 3. vendored annotakit dist — MANDATORY, gitignored, see gotcha 4
+npm run vendor:build                 # tsup → dist/{server.cjs,manager.mjs,preview.mjs}
+
+# 4. token (gitignored; never in tracked files — secret scanner blocks pushes)
+printf 'ANNOTAKIT_GH_TOKEN=<PAT>\nANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec\n' > .env
+
+# 5. runtime git repo (annotakit git-push host) — see gotcha 6
+#    v0.5.0: ANY branch works — the store lives under .git/annotakit/ and
+#    syncs to the ORPHAN branch `annotakit` on origin (auto-created).
+git init -b runtime && git add -A && git commit -m "runtime base"
+git remote add origin https://<PAT>@github.com/frejogochukwuout/nle-core-spec.git
+
+# 6. launch (double-fork; PPID=1) + verify
+python3 scripts/sb3000.py
+curl -s localhost:3000/annotakit/api/health         # {"ok":true,…,"durability":"git-push"}
+curl -H 'Host: preview-chat-<id>.fcapp.run' http://127.0.0.1:81/   # 200
+# then the REAL public URL + sub-assets (gotcha 8)
+```
+
+### The gotchas (every one bitten-then-verified this session)
+
+1. **The reaper kills ALL bash descendants — only double-fork survives.**
+   Verified twice: `setsid nohup sleep` AND `setsid nohup next dev` both
+   died between tool calls (dev.log even emptied). Only the
+   fork→setsid→fork pattern (grandchild reparents to PID 1) survives.
+   `scripts/sb3000.py` is the canonical implementation; verify with
+   `ps -o ppid= -p <pid>` → `1`. Prior sessions' claims that "children of
+   the platform's app server survive" were true THEN (app server had a
+   spawn-route) but are NOT a property you can rely on — the platform tree
+   itself changes between harness versions.
+
+2. **A recycle kills even the PPID=1 daemon; only durable storage + a boot
+   hook bring it back.** The stack died mid-session and twice across
+   sessions. Three layers, each verified: (a) daemon survives toolcalls
+   (PPID=1), (b) `boot-restore.sh` (iso `.zscripts/dev.sh`) rebuilds
+   everything from the newest `/home/sync/nle-core-spec-*.bundle` (PAT-free
+   — a PAT embedded in `.zscripts/*` gets archived into the my-project
+   repo.tar by the watchdog), (c) remotes (GitHub + GitLab + bundle)
+   refreshed at every wrap-up. The restorer gates on the HEALTH ENDPOINT,
+   not a bare 200 (a half-dead tenant can bind the port and still 500) and
+   kills half-dead tenants before relaunching.
+
+3. **The harness boot hook is the ONLY auto-start — and it fails silently.**
+   `.zscripts/dev.sh` runs at boot (when the harness executes it); a missing
+   target (MODULE_NOT_FOUND) leaves :3000 dead forever with no retry and no
+   alert. After any recycle: READ the boot log first. Also: the my-project
+   watchdog auto-commits working-tree changes — a replaced hook persists
+   (verify `git -C /home/z/my-project log --oneline -- .zscripts/dev.sh`),
+   but `dev.log` (untracked) survives force-checkouts. Keep the canonical
+   copy of the hook committed IN THE REPO (`scripts/boot-restore.sh`) so a
+   fresh session re-installs it with one `cp`.
+
+4. **The vendored addon ships WITHOUT its dist.** `vendor/storybook-annotakit/dist/`
+   is gitignored (build artifact) — a fresh clone cannot boot Storybook
+   (explicit `[storybook-annotakit]` error; SB dev refuses to start). Run
+   `npm run vendor:build` (tsup, ~3s). AND verify the dist content by
+   grepping for the fix markers in `dist/server.cjs` — the R13 audit caught
+   a "dist rebuilt" claim that was never rebuilt: the health endpoint
+   answered while the running code was pre-fix (**responding ≠ fixed**;
+   tsup doesn't minify, so markers survive). v0.5.0 marker set:
+   `p.catch(() => undefined)` (JSON-store queue wedge fix),
+   `annotakit/ui-command` (new toolbar channel), `staticStore.mjs` present
+   in dist/ (new tsup entry — a stale dist lacks it). ALSO: a v0.5.0
+   upstream swap LOSES local fixes — diff the zip's src against the
+   vendored src before swapping and re-apply: the R17 swap had to
+   re-apply the preset fresh-clone guard, the queue-wedge fix, and the
+   tsup clean:false CR10 fix (upstream regressed all three).
+
+5. **Token law: `.env` only, never tracked.** GitHub's secret scanner
+   REJECTS pushes containing the PAT (even in history), and the GitLab PAT
+   lives only in `.git/config` + chat. The addon reads
+   `ANNOTAKIT_GH_TOKEN` from `.env` next to the project root (its own
+   ~30-line dotenv — no dependency); without it the addon degrades to
+   "partial: git repo without a github remote" (commits, no push — check
+   the health JSON's `gh.hasToken`).
+
+6. **Annotakit v0.5.0 durability: the serving directory just needs to BE
+   a git repo with an `origin` — the store lives INSIDE `.git/`.** The
+   0.4.0 design (threads.db in the working tree, runtime repo with an
+   INVERTED .gitignore, tracked `annotakit-store` branch) is obsolete.
+   v0.5.0 keeps the SQLite store at `.git/annotakit/threads.db`
+   (`storeMode:"git"` — zero working-tree footprint, no checkout
+   conflicts), builds snapshot trees with pure plumbing (hash-object +
+   mktree + commit-tree — README + threads.db at the ORPHAN branch
+   `annotakit`, which is never checked out), and pushes via http
+   extraHeader (token never in argv/URL/errors). On boot it RESTORES the
+   remote snapshot and MERGES (cross-stream: parallel sessions share the
+   branch, commits namespaced `db=annotakit@<session>`). Migration:
+   a legacy `.storybook/annotakit/threads.db` is migrated automatically
+   on first boot (verified live — a thread created minutes before the
+   swap survived into the new store and reached the remote branch).
+
+7. **Port hygiene: kill the RIGHT tenant, and defuse competing dev
+   scripts.** Before binding :3000: (a) identify the running process's cwd
+   (`ls -l /proc/<pid>/cwd`) — `node vite.js` could be either parallel
+   stream's app; (b) kill half-dead tenants (bound, not answering);
+   (c) make sure NOTHING else will grab the port at the next harness boot
+   — the platform's own `package.json` dev script must not also bind :3000
+   (point it at :3001 or make it a no-op; a racing `next dev` and the SB
+   daemon will fight over the port across boots).
+
+8. **Liveness proof = the asset chain, not the HTML 200.** A manager HTML
+   200 proves nothing (the XTransformPort trap: title loads, JS never
+   boots). The full probe set, in order: health endpoint
+   (`/annotakit/api/health` — proves addon server + store + token config),
+   forged-Host through Caddy (`curl -H 'Host: …fcapp.run' :81/`), then the
+   REAL public URL fetching: `/` (manager HTML), `/sb-manager/runtime.js`
+   (1.2MB manager bundle), `/sb-addons/vendor-storybook-annotakit-1/manager-bundle.js`
+   (the ADDON actually loads through the edge), `/iframe.html?id=<story-id>&viewMode=story`
+   (a story actually renders), `/index.json` (story COUNT — 83 entries / 8
+   groups at R17; a count regression catches half-loaded story globs), and
+   `/@vite/client` (the dev server's virtual modules — root-absolute, so
+   it only works when the app owns the WHOLE origin, which is exactly why
+   this pattern requires the dedicated port).
+
+9. **Host acceptance: SB 10.6 allows all hosts by default** — startup
+   banner `Other allowed hosts: all (insecure)`; verified 200 with a
+   forged edge Host. The committed `core.allowedHosts: true` in
+   `.storybook/main.ts` (builder-vite forwards it into vite
+   `server.allowedHosts`) is belt-and-braces that survives a future SB
+   default flip. PROBE, don't assume — Vite itself default-403s the edge
+   Host (the shell-mini session's whole go-live bug).
+
+10. **Timing + noise you will hit:** `npm ci` ~4 min; Storybook dev ~25-40s
+    to ready (telemetry + vite optimizer bundling — poll, don't assume);
+    the esbuild "install scripts not yet covered by allowScripts" warning
+    is benign (binary works; `node -e "require('esbuild')"` proves it);
+    GitLab mirror pushes 403 (WAF) ~1 in 3 — just retry once; `git push`
+    rejected non-fast-forward means the PARALLEL stream pushed again —
+    fetch + rebase, never force (it happened twice this session; the
+    shell-variants subtree was untouched both times — verify with
+    `git diff --name-only A B -- ui-mock/shell-variants` before assuming
+    conflict).
+
+11. **The only real proof of the restorer is a live kill→restore→public-200
+    cycle.** Idempotence check (run the hook while up → "nothing to do") +
+    kill the daemon → run the hook → health green → public URL 200. If you
+    haven't watched it come back from the dead, you don't have a restorer,
+    you have a script.
+
+### When to use WHICH serving pattern (the two-session decision table)
+
+| | shell-mini pattern (above) | shell-variants pattern (this section) |
+|---|---|---|
+| What owns :3000 | the APP's Vite dev server | the Storybook DEV server itself |
+| Storybook at public URL | static build mounted at `/stories/` | :3000 IS Storybook (root) |
+| Why | the app is the product; SB is a sub-surface | SB+annotakit IS the review product (HMR + live review API) |
+| Cost | rebuild+recopy+commit `public/stories` on story changes | no static sync; port exclusively SB's |
+| Both verified | end-to-end (manager + VLM) | end-to-end (health + bundles + iframe + index.json) |
+
+Rule of thumb: **if reviewers interact through the Storybook UI (pin
+comments), serve the DEV Storybook as the port owner** — annotakit's review
+API lives on the dev server, a static build shows a "dev only" note. If the
+APP is the review surface, mount SB's static build under the app.
+
+### R18 amendment (shell-mini joins the SB-owns-:3000 pattern)
+
+User directive after the R16 verdict was shipped: "everyone can serve this
+through 3000 — port forwarding should work, but at least 3000 should
+definitely work." shell-mini's env switched to the shell-variants pattern:
+the FULL Storybook dev server owns :3000 (`scripts/sb3000.py`, double-fork,
+PPID=1, `core.allowedHosts: true`), the app moved to localhost :3001
+(`scripts/dev3000.py`), the static `public/stories/` mount and the
+`previewRedirect` query-shim were REMOVED (8.4MB out of the repo, 101→93
+tests), and the restorer now gates on `/index.json` (must-succeed) with the
+app as best-effort. Verified end-to-end through the real edge post-switch
+(manager boots, story tree, story selection, iframe story DOM with 4 clips +
+8 trim handles, zero page errors) AND via a live kill→restore→public-200
+cycle. The decision table above stands, with the R17-vs-R18 twist: the
+"shell-mini pattern" column is now the documented FALLBACK (app owns the
+port), not what any env currently runs.
+
+## R18 meta-learnings (serving-verdict correction round)
+
+64. **Reach for the standard serving pattern before inventing a workaround — and never let a workaround's write-up promote itself to "the law."** The R16 session probed the platform's query-based port forwarding, correctly observed that sub-resources don't carry the query, then concluded "a dev Storybook cannot serve publicly" and built a workaround STACK (static-build recopy pipeline, 8.4MB committed mount, an app-entry redirect shim with 8 tests, a second SB daemon on :6007) — all to route AROUND the one-port rule that was never actually binding: the proxy chain is port-based, so putting the dev server ON :3000 makes everything same-origin and it just works (the sibling session did exactly that, in parallel, and wrote it up; the note was IN THIS FILE the whole time). The user's correction was one sentence. The failure mode has two halves: (1) not asking "what does everyone else do here?" before accepting a constraint as a law, and (2) writing a workaround up as "THE verified pattern" — the next session (mine) inherited it as truth and doubled down with the casing shim. Empirical honesty about a dead end is necessary but NOT sufficient; label the standard way as the default, demote everything else to fallback, and when a user corrects a verdict, revert BOTH the docs and the infrastructure built on it.
+
+## R18b meta-learnings (vendoring the storybook-annotakit review kit)
+
+65. **A vendored kit developed against repo-root projects breaks in quiet ways inside subdirectories — probe the GIT CWD assumptions.** storybook-annotakit v0.5's orphan-branch sync failed silently here: `refHasOurReadme` ran `git ls-tree <tree> -- README` through a helper that shells `git -C <projectRoot>`; pathspecs are CWD-relative, the project (`ui-mock/shell-mini`) is a SUBDIRECTORY of the repo, so the pathspec matched nothing → every remote branch read as "foreign" → sync never parented on it → every push after the first was rejected non-fast-forward, forever, with lastError: null. The kit author's dogfood project IS a repo root, so the bug was invisible upstream. Diagnosis recipe that cracked it: reproduce the kit's exact git invocation BY HAND from the project dir (my first reproduction from the repo ROOT passed — the wrong cwd made the check look healthy). Fix: cwd-independent forms — `git rev-parse <ref>:README` (colon-path) instead of pathspec-dependent `ls-tree`. Rebuild discipline from R17 gotcha 4 held: comments are STRIPPED by esbuild/tsup, so grep the dist for the CODE change (`rev-parse`/`ls-tree` call shapes), not the comment marker.
+
+66. **When two parallel streams share a git-backed store, watch the branch log for the OTHER stream's signature before diagnosing your own sync.** The remote `annotakit` orphan branch carries commit messages like `db=annotakit@shell-mini` and `db=annotakit@shell-variants` — the sibling env pushes to the SAME branch, so "the remote moved under me" (non-FF) can be healthy cross-stream logical-merge traffic, not a bug. The kit's design (union-by-id merge, tombstone propagation, pull-every-60s) is built for exactly this; verify convergence by watching a real mutation cycle end-to-end (create → UI badge → delete → tombstone → push → issue closed) instead of trusting a single health-state string — the `autoSync` label lags by design (debounced 6s + async cycle), and POST /sync short-circuits when the store isn't dirty.
+
+## R19 meta-learnings (feedback-wave + reference-integration round)
+
+69. **Mint spec-gap ids ONLY after reading the candidates ledger.** R19's
+    design doc blind-minted C29-C40 for its 12 new gaps; the ledger already
+    held C10-C32 from R15. The review wave caught 66 in-code citations
+    pointing at the wrong rows and the whole tree got swept to C33-C44. The
+    fix was cheap ONLY because a single review agent traced every citation;
+    in a bigger tree this is a silent spec-debt generator. Law: gap ids are
+    ledger-sequential — `rg '^### |^| C[0-9]' .agents/SPEC-REVISION-CANDIDATES.md`
+    BEFORE writing "gap C##" anywhere, and the design doc must carry the
+    id MAP, not just the ids.
+
+70. **A browser-automation session is a MEASUREMENT instrument — calibrate
+    it before believing a FAIL.** The R19 VLM round "failed" the mixer
+    (strips not filling vertically) and the timeline (no markers). Ground
+    truth: Storybook's canvas was 478px tall because the addons panel was
+    open (viewport ≠ story height), and the first DOM probe evaluated in the
+    MANAGER frame, not the story iframe. Three calibration laws: (a) append
+    `&nav=false&panel=false` to story URLs before measuring layout; (b) story
+    DOM probes go through
+    `document.getElementById('storybook-preview-iframe').contentDocument`
+    (agent-browser's `frame` command does not persist across CLI calls);
+    (c) when VLM and the DOM disagree, the DOM wins — re-screenshot after
+    calibrating before filing the bug.
+
+71. **Parallel implementation agents need FROZEN cross-file contracts, and
+    the stub is the cheapest freeze.** Five agents shipped 60 files with
+    zero cross-agent conflicts because every seam another agent would mount
+    (MarkerInspector/CaptionInspector/EditOverlay) existed as a compiled
+    stub BEFORE dispatch, and the AppShell routing was withheld to the
+    orchestrator (the only file everyone needed). The two in-flight agent
+    runs that the deadline killed mid-wave also recovered cleanly — the
+    late-arriving agent audited the partial work against the contract
+    instead of rewriting. Law: contracts-first (stubs compile), integration
+    ownership stays with the orchestrator, and re-issued tasks to a partially
+    completed tree should AUDIT-then-fix, not rebuild.
+
+## R19 meta-learnings (shell-mini stream — wave 7 + OT-seam deep pass round)
+
+72. **`setPointerCapture` THROWS on untrusted (synthetic) pointer events in a
+    real browser — jsdom is a no-op, so unit tests never see it.** The R19
+    live-verification drag "silently did nothing": the synthetic
+    PointerEvent dispatches fine, React's handler runs, but
+    `setPointerCapture(fakePointerId)` throws NotFoundError (no active
+    pointer) BEFORE the handler's state updates — aborting the whole
+    gesture start. The clip gestures survived by luck (their capture call
+    sits AFTER the ref assignment, so the throw only skipped the last
+    line). Law: capture is an ENHANCEMENT — wrap every
+    `setPointerCapture` in try/catch (the finishGesture release pattern,
+    applied to the down side too), and when a synthetic-event gesture
+    "fails" live, check for a capture throw before suspecting the law.
+    (Trusted CDP-driven mouse moves via agent-browser `mouse` avoid the
+    class entirely — prefer them for final verification.)
+
+73. **Test pure helpers against the FULL doc shape they'll receive, not
+    the filtered subset that makes the case clean.** R19's
+    `insertPlacement` shipped with a V1-filtered invariant sweep that
+    proved no-overlap — and a live store test caught the real bug: the
+    helper ran over the WHOLE doc (audio clip included), treated the A1
+    clip under the video span as a conflict, and shifted BOTH tracks.
+    The geometry suite passed because every test passed
+    `doc.clips.filter(c => c.trackId === 'V1')`. Law: the helper's test
+    matrix must include the exact container it's called with (grep the
+    caller), and cross-domain members (other tracks) are a REQUIRED test
+    axis, not noise.
+
+74. **When one gesture path both APPLIES and CLEARS via callbacks, the
+    clears run AFTER the apply.** R19's commit-at-up fix (applyGesture at
+    the pointerup coordinates) re-fired the snap-guide and trim-ghost
+    signals from inside the shared applier — the "clears with the
+    gesture" lines that ran first were instantly un-done and the ghost
+    stayed painted after release. The live test caught it; the fix is
+    ordering, not logic (move onSnapGuide(null)/onTrimGhost(null) below
+    the commit block). General: any handler that delegates to a shared
+    emitter and then "resets" the emitter's outputs must reset LAST —
+    or the emitter needs a silent flag for the terminal application.
+
+75. **A default renumber silently re-pins every story control.** The R19
+    zoom ladder (5 → 9 steps) renumbered "48pps" from step 1 to step 2 —
+    and the stories' `zoomStep: 1` pins (written when 1 WAS the default)
+    silently became 36pps. Unit tests passed (they set state directly);
+    the live drag math then "looked wrong" by exactly the pps ratio
+    (0.75). Law: when a ladder/index renumber lands, sweep EVERY story
+    arg + test literal that pins the old index (rg the number), and when
+    a live gesture result is off by a clean RATIO, suspect the zoom pps
+    before the gesture law — read it back from the live DOM
+    (style.left÷time) first.
+
+76. **A per-event preview that mutates the live doc IS the comedy.** R19's
+    drag law ran insert-push geometry on every pointermove — neighbors
+    teleported hundreds of px mid-gesture and slid back, "extremely buggy
+    almost comical". OT's law: the doc is NEVER mutated during a drag;
+    the mover renders from a drag view and the drop resolves at the UP.
+    Law: a preview may move ONLY the mover, computed against the snapshot
+    (idempotent per event); anything that resolves conflicts must run at
+    the UP, never per-event. If a mid-drag probe shows a NON-mover at a
+    different position than its snapshot, the law is broken no matter
+    how correct the committed doc looks.
+
+77. **Store actions outside act() leave the DOM stale — flush before
+    asserting.** The mute test called `S().undo()` directly (not wrapped
+    in act): the store restored the doc, the NEXT store assertion passed,
+    but the component assertion (`not.toHaveClass('is-muted')`) failed on
+    a stale render. Law: in component tests, every direct store call
+    between fireEvent interactions goes through the `setStore(() => ...)`
+    act wrapper — the store is not the DOM.
+
+78. **A toast can fire while nobody renders it.** The refuse-drop toast
+    verified fine in the store test but showed NOTHING in the timeline
+    panel story — ToastRegion lives in the shell, not the panel. Law:
+    verify toasts in a FullShell story (or the app), never in the panel
+    story; "the toast didn't fire" needs a rendering-surface check before
+    it becomes a logic debug.
+
+79. **A history-entry shape change sweeps EVERY direct assignment site.**
+    HistoryEntry {doc + bindings} replaced bare Docs in past/future: two
+    non-store sites (a test's `setState({past: [seedDoc()]})` and a story's
+    `past: hasHistory ? [seedDoc()] : []`) broke the typecheck. Law: when
+    a store field's type changes, grep the FIELD NAME across src/ (not
+    just the store + its tests) — stories and sibling tests patch state
+    directly and are the first silent casualties.
+
+80. **A failed MultiEdit batch can leave earlier edits applied.** Twice
+    this round a MultiEdit reported "No replacement was performed" for one
+    edit while the edits BEFORE it in the same batch had already landed
+    (interface fields updated, later blocks not). Law: after any failed
+    batch, re-grep the target symbols before re-running the "same" batch —
+    construct the new batch against what's actually on disk, not what the
+    error message implies.
+
+## R21 meta-learnings (the P0 drag-revert round — forensics + the parallel-session race)
+
+81. **FETCH IMMEDIATELY BEFORE EXECUTING a P0-class directive — the user
+    runs parallel sessions that may have already acted.** This session
+    restored context from a fetch taken at ~08:1x, spent ~40 minutes
+    executing the full P0 revert + gates + live verification, and pushed at
+    08:56 — 17 minutes AFTER a sibling session had already landed the same
+    directive (08:39Z) on a RICHER base this session never had (their R21
+    PR-69 round). The push rejection was the first signal of the race; the
+    correct response was `reset --hard origin/main` (remote = canon, never
+    force push) + salvage of the unique deltas (forensics + wrap docs).
+    Law: after context restore, ALWAYS `git fetch` + `git log HEAD..origin/main`
+    right before starting execution of any user directive — cheap
+    insurance against an entire wasted round.
+
+82. **Commit-date forensics for cross-timezone directives: the display
+    lies, the offsets don't.** The user-msg commits DISPLAYED as 00:44-00:45
+    while the mini rounds displayed 06:04/07:13 — a naive read places the
+    user's revert order BEFORE both drag rewrites (contradiction). The
+    truth: `%ai` showed the user-msg authored at **-0700** (Pacific) = 
+    07:44-07:45Z, and the GitHub events API push timestamp (07:46:00Z)
+    confirmed it — 32 minutes AFTER R20. `git log`'s default display mixes
+    author timezones into one local view. Law: for any "which came first"
+    question involving commits from different authors, check raw `%ai`
+    offsets AND the server-side push events
+    (`GET /repos/:owner/:repo/events` → PushEvent created_at) before
+    ruling on intent.
+
+83. **A "revert the last two rounds" order has a strict and a pragmatic
+    reading — reconcile with the user's NEWER review comments before
+    choosing.** Strict (this session): revert every drag-touched change
+    including commit-at-UP, nearest-magnet, and the moveClip refuse+toast.
+    Pragmatic (the sibling session that shipped): revert the drag LAW (the
+    drop resolution/escape machinery), keep gesture-composition details
+    with documented user endorsements. The user had already adjudicated on
+    the PR ("The nearest law survives the drag revert — it's a PR-69 C17
+    requirement", 08:44Z) — a comment this session hadn't read because it
+    examined the tree but not the PR review threads. Law: before executing
+    a revert directive, sweep the PR review comments + issue threads for
+    POST-DIRECTIVE endorsements that constrain the revert scope; when both
+    readings are defensible, register the divergence for the user instead
+    of re-litigating unilaterally.
+
+## R20 meta-learnings (shell-variants — mixer/insert-modes/color/inspector round)
+
+1. **The Task-tool context deadline is a REPORT deadline, not a work
+   deadline.** Three implementation agents (W1/W2/W4a-d style tasks)
+   each completed ~90-100% of a large wave and hit "context deadline
+   exceeded" ONLY on their final message. The work + files were intact;
+   only the report was lost. Countermeasures that WORK: (a) instruct
+   agents to append the worklog entry BEFORE the final full-suite gate
+   (W4a onwards — zero lost documentation), (b) ask for a <25-line final
+   message, (c) the orchestrator independently re-runs gates (tsc + full
+   suite + build) before committing — cheap and catches the ~5% tail of
+   unfinished work (W1 stories + W2's three failing tests were the only
+   tail; both fixed in minutes).
+2. **The jsdom drop-event trap has a precise shape**: RTL's fireEvent.drop
+   falls back to a plain Event (no DragEvent ctor) and SILENTLY DROPS the
+   `clientX`/`altKey` init props → the handler computes NaN → the pure
+   planner receives a NaN time → a silent no-displacement (tests still
+   pass on fixture-satisfied assertions!). The reliable channel:
+   `createEvent.drop(el, {dataTransfer})` + `Object.defineProperty(ev,
+   'clientX', {value})` — and the PRODUCTION code needs the
+   `Number.isFinite` guard (fallback to playhead semantics) so a bad
+   event can never mint NaN geometry. Both landed + pinned.
+3. **A test can pass on a FIXTURE element while the feature silently
+   no-ops** (W2's insert test: "m-06 at 0+30" matched the PRE-EXISTING
+   el-6). Disambiguate with identity (`e.id !== 'el-6'`) or count
+   assertions, and prefer assertions that could ONLY pass via the new
+   path (history length, displaced startTime).
+4. **CSS cascade regressions are invisible to jsdom by construction**
+   (vitest css:false) — the free-floating-markers bug (unlayered
+   `[data-tip]{position:relative}` outranking layered `.absolute`)
+   shipped through 944 green tests. The honest net: source-text
+   assertions (readFileSync on app.css, regex on @layer placement) +
+   live computed-position probes (agent-browser, `getComputedStyle`) —
+   both landed in W0. `?raw` imports are ALSO stubbed by css:false.
+5. **Storybook measurement law (confirmed again, cheaper form)**:
+   `iframe.html?id=<story>&viewMode=story` gives the TRUE viewport at
+   the browser size (1440×894); the `?path=/story/...&nav=false&
+   panel=false` form loses its params on reload and the canvas lies at
+   ~472px — every vertical measurement through it is garbage.
+6. **Design-review folding works as a pair**: ONE UX-truth reviewer +
+   ONE feasibility/spec reviewer in parallel, then a single amendment
+   pass folding both (REV-A caught tier arithmetic + overreach; REV-B
+   caught the ⌘M spec-16 collision, the selector-identity trap, the
+   state-home contradiction, wave-order swap). Cost: ~2 agent runs; it
+   removed every P1 before any implementation started.
+7. **Research→contract→design→implement→audit keeps the honest seams**:
+   the color wave wired the mock to spec 08 §4.2's EXACT 14-step order
+   and §11.3 graticule (the adversarial reviewer verified the port
+   step-by-step) — the mock now demonstrably runs the engine's real math
+   on canvas, which is the whole point of "be very real in your ui
+   implementation".
+
+## R22 (the finality round) — meta-learnings
+
+84. **The spec-posture inversion has a mechanical form.** "Mainly what needs to be done" is
+    implementable as a three-part §0 (BASE pinned / GAP with owner+phase+acceptance /
+    ACCEPTANCE & TEST PLAN) inserted as the spec's first section — the entry point changes,
+    the contract bodies stay (they ARE the acceptance form). Sub-agent waves with a strict
+    template + a pre-built evidence pack (exact pins + phase vocabulary + the rules) did 16
+    specs with ZERO normative damage (verified by diff in the integration review). The
+    template's discipline that mattered: BASE rows cite pin+suite+count, never narrate; GAP
+    rows without a phase tag fail the battery.
+85. **Gates must not cite artifacts scheduled later than the gate** (the circularity the
+    plan review caught): if C1's exit gate consumes a law inventory, the inventory is a
+    PRE-C1 deliverable. Audit every gate for "does the artifact it checks exist yet, and
+    whose phase builds it?" — the answer orders the plan.
+86. **Consumer pins vs HEAD pins are different check classes.** A repo's HEAD SHA and the
+    SHA its consumers pin diverge (nle-ui HEAD `dba8d52`, app pin `752991d`; WDC HEAD
+    `fe05d85`, pin `5570321`). A battery that checks one class against the other fails
+    permanently or passes vacuously — check both, separately, and say which is which in
+    every pin table.
+87. **Parallel-stream rounds absorb mid-round directives by re-fetching before every
+    push.** This round absorbed a full sibling drag-machinery retirement (R22 `7286122`)
+    mid-edit: the rebase preserved the spec work; the drag-law citations were then
+    RE-DERIVED from the sibling's updated OT-SEAMS rather than from my earlier reading.
+    The law: when a sibling commits in your citation domain, re-read the source doc before
+    re-asserting any claim about it.
+88. **Estimates in a decision doc must be superseded IN the doc** (the integration review's
+    finding): folding review amendments into the downstream spec while leaving the ruling
+    doc's own tables at the pre-review numbers creates a canon-vs-record contradiction —
+    future rounds cite the ruling doc. Every amendment that changes a number must touch
+    BOTH the plan and the ruling record, or the record carries a supersession marker inline.
+89. **The honest-posture register.** When a round's mandate is only structurally met (the
+    §0s inverted; the bodies still carry round-history narrative), REGISTER the residue
+    with an owner and a trigger (compression rides each spec's next substantive amendment)
+    instead of silently claiming completeness — the integration reviewer's test for
+    "absolutely final" is exactly this honesty.
+
+## R22-variants meta-learnings (the COLOR VIEW REWRITE + all-view revision round)
+
+90. **READ THE REFERENCE CANON BEFORE DESIGNING — with your own eyes.** The R20 color
+    failure mode: the PANELS were reference-faithful but the COMPOSITION was invented
+    (the node graph stole the media pool's slot; an always-on scope strip starved the
+    viewer inside a 320px mainbody; TWO surfaces duplicated one grade). The user's
+    verdict named it exactly: "no one has the memory of the original reference and no
+    one bothered to look." The R22 fix started by READING every ui-mock HTML in full
+    (they are 20-64KB hand-authored mocks — readable in one sitting) BEFORE writing a
+    design line. The auditor's provenance-labeling demand then forced every D1 element
+    to declare [reference-faithful] / [repo-precedent] / [user-directed invention] —
+    invented composition is now visible at review time, not at user-review time.
+91. **Compute the pixel budget BEFORE committing the layout to paper.** v1's scopes
+    grid was "max(240px, 45%)" — the audit's arithmetic showed 34% of a 320px-min
+    mainbody minus 26px headers minus per-cell 32px headers ≈ 30px canvases (a
+    degenerate scope the user had PRAISED as impressive). Same for the node dock: the
+    reference workspace is ~1010×250, not "640×268 fits ~300px". Any height/width spec
+    in a design doc must be run against the registered floor (1280×800) with the real
+    chrome subtracted (toolbar 34 + tabs 26 + status 12 + dock 42 ≈ 160px fixed).
+92. **The DOM/CSS gotchas that cost an hour each — now laws:**
+    (a) an always-laid-out absolutely-positioned box (opacity:0 tooltip!) EXTENDS the
+    ancestor's scroll extent; visibility:hidden does NOT remove it in Chromium; ONLY
+    display:none does (verified live both ways — the #71 phantom scroll gap);
+    (b) a percentage height resolves indefinite inside a content-based flex parent →
+    fixed pixel budgets for bounded consoles (the scopes blew the mainbody out to 625px);
+    (c) absolutely-positioned nodes never extend a scroll region — give the canvas box
+    explicit width/height extents;
+    (d) a flex item's default min-width:auto lets CONTENT block shrinking (the compact
+    wrapper overflowed 414px until min-w-0);
+    (e) the storybook manager iframe can lock at a stale 1920px width after viewport
+    resizes — force the iframe chain's widths for honest screenshots.
+93. **The "existing seam" claim must be grep-verified.** Two v1 design claims died in
+    the seam audit: "the planner already accepts a source range" (it hardcodes
+    sourceStart:0) and "extract the SVG icons" (already extracted verbatim in
+    editModeIcons.tsx). Every "X already exists" in a design doc needs a file+line
+    citation from THIS session's grep, not last round's memory.
+94. **The user's "you only showed two buttons" was an OVERFLOW-COLLAPSE illusion** —
+    all 7 buttons existed; a <560px ResizeObserver hid 5 in a kebab. When a reviewer
+    reports a MISSING control, FIRST check width-driven collapse/overflow logic, then
+    check the actual mode set. (The inverse also held: the reviewer "saw" a
+    non-functional button that WAS wired — always answer the premise honestly in the
+    fix note: "it was wired to a read-only stub" — while still honoring the directive.)
+95. **Keep the "which surface owns X" question first-class.** The whole color disaster
+    reduced to ownership drift: the wheels lived in BOTH a timeline-area console and a
+    right rail; the timeline grade had one editor but two surfaces. The #78/#79
+    directives resolved it as a TABLE (clip-level → inspector tabs; global/separate →
+    toggleable console). Write that table explicitly in the design doc so every future
+    panel has one answer.
+96. **Background retry loops are the honest way to close a flaky-network session**:
+    GitHub PATCHes returning 000 (the daemon's own fetch failing identically) at wrap
+    time → leave nohup retry loops + logs (/tmp/gh-close-retry.log) running, write the
+    VERIFY step into the HANDOFF (ghSync.pending == 0 at next session start), and never
+    block the wrap on a third-party outage.
+
+97. **The seal-round discipline for transport-readiness deliverables** (R23-mini):
+    code = REGISTERED facts only, docs = recommendations + open decisions. The
+    otProject bridge encodes exactly what OT-SEAMS registers (the ×120000 time
+    base, the in-point-0 trim formula) and NOTHING else — the unregistered
+    parts (the SceneTracks track mapping, the OT field names) stay REGISTERED
+    C1-ENTRY DECISIONS in the docs, never invented in mock code. A seam module
+    that guesses field shapes becomes dead code at integration time.
+98. **The count-coherence convention**: when a round both changes a test
+    corpus AND re-pins its declared count, land ALL test changes FIRST, then
+    ONE scripted re-pin sweep, then run the gate battery LAST — a final sed
+    after the last battery run silently breaks a check (the exit round caught
+    exactly this: my LAW-NET 353→355 edit ran after the 66/66 run, taking the
+    battery to 65/66 undetected by me).
+99. **Text-substring count checks are drift-blind; SCRAPE the live suite.**
+    "declared == actual" enforced by `"355" in specs[18]` passes forever while
+    the corpus drifts to 360. The battery now runs vitest --reporter=json,
+    deletes the report file first (never read a stale one), parses
+    numPassedTests + testResults, and asserts against DECLARED constants. The
+    same applies to census math: parse the doc's tables and validate the sums,
+    don't substring-check the totals.
+100. **grep filters can MASK the very class you're sweeping for.** The
+    stale-333 sweep grepped `333` with a `-vE "1334|..."` exclusion — which
+    silently dropped every "mini 333, variants 1334" line (they all contain
+    1334). The fresh-context auditor's narrower pattern (mini 333|333
+    tests|...) found 5 more masked claims. When sweeping for count X, grep
+    WITHOUT exclusions first, then adjudicate each hit's era (history-ledger
+    vs current-state) — never let a convenience filter pre-classify.
+101. **Audit your own claimed fixes against the diff, not the intent.** The
+    fix round CLAIMED "markers disambiguation landed" but never applied the
+    edit — the confirmation round's `grep 'edit-position' → zero hits` caught
+    the no-op. Every fix-round commit message should be verifiable by
+    grep-able tokens the NEXT reviewer can check mechanically.
+102. **A "P2 premise inversion" is the highest-value class a fresh-context
+    audit finds.** CORE-SEAMS claimed toggleTrackMute "has NO OT command
+    today" while spec 15 §4.1A registers it as OT-IMPLEMENTED (the element-
+    level pair is the pending wire addition) — I had read the spec WRONG and
+    written the inversion with a confident citation. When a doc cites a spec
+    for a claim, re-read the cited LINE, not the memory of it.
+103. **Story-surface testids are phantom ids for app DOM gates.** The static
+    testid census included mini-clip-harness (a story anatomy harness — no
+    app component emits it, no test queries it); a C1 gate built on "the
+    static 60" would demand an id the ported app can never emit. Census =
+    59 app-emitted + the story-surface id annotated out. Same class both
+    directions: a MISSING templated family (the 15th, the collapsed-lane
+    placeholder) leaves the gate unable to check a family the corpus itself
+    depends on. Census work needs source-grep on BOTH static and template
+    forms, with an emission-site check per id.
+104. **The era-qualifier pattern for dated sections carrying current
+    numbers**: a spec section scoped "R22 re-baseline (2026-09-07)" that
+    carries the CURRENT mini count needs an inline qualifier ("mini 355
+    (current-tracked — the R23 seal census; 333 at the R22 re-baseline)")
+    rather than a silent bump — the dated scope header stays true AND the
+    number is current. The convention: history-ledger surfaces (ARCH, the
+    mini's own docs) keep era-marked values; live spec sections carry
+    current + qualifier.
+105. **Sibling-domain discipline under count drift**: the variants' in-repo
+    count moved to 1425 mid-round (their W-A landing) while the shared spec
+    set still says 1334 — the right move is a REGISTERED convention (the
+    battery's honest-scope note: "the sibling re-pins at their round wrap;
+    not unilaterally bumped here"), not a unilateral re-pin that would drift
+    again before their wrap. Shared canon + separate owners = queue it, note
+    it, never race it.
+
+## Round-23 Spec-Track Meta-Learnings (the plan-separation + audit-fleet session)
+
+### 106. The per-file audit fleet is the user's answer to spec-vs-code drift
+When the user says "audit each spec file against upstream, one sub-agent per file or even less so they have focus": the protocol that works — one agent per file, each charged (a) BASE re-verify (b) GAP re-check (c) retired-content re-homing (d) phase re-tag (e) new-work reflection, with HARD rules (edit ONLY your file, no git, no test runs, findings to a per-file report). Dispatch in parallel waves of 5; the ORCHESTRATOR commits per wave and runs the battery. The focus dividend is real: agents found what whole-file sweeps miss (an R22 overclaim, never-existed register rows, engine-side P0 fixes the spec never flipped). Cross-wave coherence is NOT a per-agent duty — it's the orchestrator's integration round (see #114).
+
+### 107. Briefings are hypotheses — instruct agents to verify the briefing itself
+Three of my fleet briefings carried errors (a TRACK_MUTED wire code that didn't exist; a "14+ commits behind" figure that was really one commit; a "vendor mechanism already exists" overclaim). Every agent that code-verified its brief caught the error and corrected me. Standing rule for fleet prompts: "the counts/pins given here were live-verified this round — but verify FEATURES by reading code; if the briefing and the code disagree, the CODE wins and flag the discrepancy in your report."
+
+### 108. The pin-typo class — count checks pass on misspelled pins
+A transposed pin (b8c6c88 vs b8c6f88) survives every count-consistency check ("440" appears elsewhere in the file). Battery checks must assert the pin STRINGS are correctly spelled in the register files, not just that counts match. The class generalizes: any identifier repeated 90+ times is one edit away from a typo that structural checks can't see — grep for the exact string in the files that own it.
+
+### 109. "Executable plan" has a concrete bar: per-track first-action/inputs/gates/done-state + the cold-executor simulation
+The user's "there's not even a single entry point to execute, let alone per track" defines the bar. A plan row is executable when a fresh agent can simulate a first day WITHOUT asking anything: which repo, which orientation files, which FIRST action, which gates tell it the step is done. The adversarial test that works: walk the first day in the prompt and report the FIRST block point — every block point found is a P1 finding. Orientation cells must be verified to EXIST (a "read its .agents/HANDOFF.md" instruction for a repo with no .agents/ is a 5-minute block).
+
+### 110. Crawl/walk/run as VERIFICATION DEPTH, not build scope
+The user's redefinition ("crawl is not even shell-mini… programmatically verify every part of the ui / app behavior… before any human test is needed") resolves cleanly when the ladder labels HOW WORK IS VERIFIED: crawl = programmatic nets (module / combined / app-behavior / the e2e exit), walk = humans enter (with the human-required gates REGISTERED with reasons — the user's named class only), run = full product depth. Code lands continuously in every stream; a stage's exit gate is what sequences. This frame also tells you where any given deliverable belongs: split it by verification class (the behavior half to crawl, the visual-fidelity half to walk).
+
+### 111. The fork-retirement decision needs the diff TRIAGE, not just the diff size
+For any "retire the fork, consume upstream" question: count the diff lines, then CLASSIFY them — (1) parameterization (injectable props → upstream as optional props), (2) surgery (real divergence → adapters or rejection), (3) MISSED upstream (the fork silently lacks the parent's later hardening — the drift machine's proof), (4) fork-local bug-fixes (upstream them). Class (3) is the strongest argument FOR retirement and the least visible without the triage; it also becomes the post-swap verification checklist.
+
+### 112. Retire a widely-cited doc with a §-redirect stub, not a delete
+When a corpus cites "spec 14 §3.1/§4.6" in dozens of places, deleting the file breaks every citation. The pattern: the file becomes a redirect tombstone carrying a §-redirect TABLE (every §N → where it lives now) + the lineage tombstone (the plan eras). The battery then checks the stub's completeness. Citations keep resolving; history stays auditable; the content's new home is singular.
+
+### 113. Dual-vocabulary windows for phase migrations
+Re-tagging phase vocabulary across 20 files (C0-C4/W-*/R-* → K1-K4/w1-w3/r1-r6) can't be atomic. The pattern: the battery accepts BOTH vocabularies during the migration window (each file's fleet agent re-tags its own), the transitional dual-tag convention ("r1 (was W-ops)") keeps prose honest, and the battery TIGHTENS to the new set at the fleet's close — the tightening is a registered step, not a hope.
+
+### 114. Per-file agents cannot see cross-file contradictions — the integration round is not optional
+Two fleet agents re-counted the same git lag differently (one copied the plan's stale "14+", one ran the git count) — both files were individually excellent and jointly contradictory. The integration review's job: pin/count sweeps across ALL files, vocabulary coherence, cross-ref resolution, plan↔specs agreement, 3 random blind-spot spot-checks, and the fleet reports' REMAINS-OPEN aggregation (contradictions vs honest-open-work). Budget it after every fleet; it found 5 fixes at 71/71-green.
+
+### 115. The artifact's own runner output is the count authority — scrape the report, not the prose
+OT's in-page runner writes download/timeline-test-report.json (total 489, 51 suites) — that file beats every spec's "489" and even the commit messages ("486" at the same SHA). The count-discipline law extends to repo-generated reports: the battery should read the artifact's own output (report json, vitest json) wherever one exists, and spec prose should CITE the report file as the authority. Related: ±1 bucket splits (359+130 vs 360+129) are convention questions — pick one, keep it corpus-wide, note the alternative.
+
+## R23-variants meta-learnings (the FX view + the review-sweep round)
+
+### 116. The "missed directive" pattern: three iterations means SHIP THE SURFACE, not another registration
+The FX/transition view was promised in #82, re-registered in DESIGN-R22 W6, then re-demanded twice more (#103/#104/#105: "nothing is done on that front. so i have to reiterate. again."). A directive that comes back two rounds in a row is a P0 signal: the correct response this round was a full research → design → dual-audit → implement → per-wave-review → VLM-sweep treatment, NOT another design registration. When the user offers options ("which is better? or we should do both?"), answer the question EXPLICITLY in the design doc with research citations — the "both, one engine" ruling settled a question the user had been carrying across three feedback rounds.
+
+### 117. The user's own phrasing is the cheapest design spec you will ever get
+#105's mental model ("hover between two clips (seam) → transition can be added; same on tail/head; selecting the clip itself will just inspect Effects instead of Transitions") was a complete interaction spec in three clauses. Mining the issue text verbatim for the interaction law BEFORE inventing one saved the design round from itself — the shipped engine implements those three clauses literally. Always re-read the full issue body for embedded specs before researching what DaVinci does.
+
+### 118. jsdom is structurally blind to hit-testing — the VLM net is not optional chrome
+Two of the round's real P1s (the inert z-7 transition box covering trim handles; the context menu under the root-level z-100 playhead) and one inversion (the fader drag running away from the cursor) were INVISIBLE to a 1542-green jsdom suite — the tests even PINNED the inverted fader math. Live elementFromPoint probes (reviewer agents) + pixel-rect measurement caught all three. The standing law: any z-index or pointer-mapping change needs a live browser verification pass (the console-sweep + probe scripts are now standing tools), and VLM findings must be TRIAGED (REAL-BUG / STORY-ARTIFACT / DESIGN-INTENT) by an agent that can measure — the raw 29-P1 corpus held exactly 2 real P1s.
+
+### 119. The state-delta visibility law: a toggle's ON state must be MEASURABLY different
+The toolbtn active treatment (a 3% per-channel background delta) was live-verified as INVISIBLE — the reviewer filed "no visual change" and they were right. When adding pressed/active chrome: compute the actual contrast delta of the resting vs active treatment (getComputedStyle both states in a real browser); if it's under ~10%, it is not a state. The fix (accent tint + hairline ring) reuses the dock-tab family — state treatments should come from ONE accent family across the app, not per-component improvisation.
+
+### 120. Parallel sub-agent waves are safe IF the file sets are disjoint — and the orchestrator runs the full gates
+Three waves (C/D/E) ran concurrently by assigning disjoint file ownership (AppShell to one, Toolbar2/LeftDock/toolbar to another, Ruler/SourceEditBar/Timeline-preview to the third) with targeted-tests-only per agent; the full tsc+suite+build ran once after all three landed (1521 green, zero cross-conflicts). The "don't touch X, I own it" contract in the dispatch prompt is the mechanism — but it requires the orchestrator to have read the seam map well enough to know the disjoint partition in advance.
+
+### 121. "Context deadline exceeded" dispatches may still have DONE the work — audit the tree before re-dispatching
+The Task tool timed out on at least four dispatches this round (Wave A, Wave B, the VLM harness, the fix round); in every case the sub-agent had actually RUN to completion (or near) and the work sat uncommitted in the tree. The recovery pattern that worked: check `git status` + the worklog for the agent's Task ID BEFORE re-dispatching; the re-dispatch prompt then says "you will find a near-complete uncommitted implementation — audit it against the contract, fix defects, write the missing pins" — which the agents did well (each found real defects in the inherited tree). Never blindly re-run a timed-out implementation task from scratch.
+
+### 122. The serving runtime is NOT self-updating — verify the public URL against the PUSHED state, not the green gates
+2026-09-07 incident: R23 was fully shipped (1597 green, pushed, threads resolved) but the user saw "nothing changed" on the public review URL. Root cause chain: the container recycled → the overlay clone died → boot-restore relaunched the daemon from the PERSISTENT-VOLUME runtime copy, which was still at the R22-era tree (the runtime never received R23; the last session's "runtime sync" died with its container). The 1542-green suite proved nothing about what was SERVED. Laws: (1) every wrap must end with the runtime-sync + a live probe of the public URL (index.json story COUNT vs the repo's story count — 117 vs 123 caught it instantly); (2) absolute-path symlinks committed to git (r23-analysis/shots/* → /home/z/my-project/...) become SELF-LOOPS when synced into the runtime and ELOOP-crash vite's watcher — never commit absolute-path links, and the sync now carries an ELOOP guard; (3) boot-restore has a stamp-gated code-sync step (repo→runtime, runtime-only state protected) so a recycle self-heals instead of resurrecting stale code; (4) the /home/sync bundle must be refreshed at every wrap — it is the only cross-recycle code carrier.
+
+## Round 24 (spec-track) — entries #122-129 (the absolute-finality audit round)
+
+**#122 — The mechanism-vs-reality reconciliation pattern.** When a prescribed mechanism (D25.2's two-path vendoring) never executes but a BETTER one emerges in the field (the app's adopt-wholesale convergence), do NOT force the original mechanism and do NOT silently ignore the divergence — rule the field practice into law WITH its own enforcement instrument (the census register + register-equality CI), and retire the un-executed mechanism explicitly with the full evidence chain in the ruling (the zero-upstreamed-props verification + the field convergence numbers + the independent precedent — cloudcut's successor notes recommended exactly the pattern the app evolved). The amendment must name which clauses of the old ruling STAND (canon, gold sample, protocol) vs which are superseded (mechanism) — a blanket supersession destroys surviving law.
+
+**#123 — The module-card wave (the audit's module lens).** Before ruling on a multi-repo fleet state, dispatch read-only ground-truth scouts (one per repo) that return MODULE CARDS: verified test counts (live-run where feasible — the report-json/static-census authority distinction stated per repo), the landing list since the last pin, the seam surface NOW (enumerated, with file:line cites), the module's own queue state, the census facts, and a best-effort spec-staleness register. The cards become the evidence packs the rulings AND the per-file fleet both consume — one verification, two consumers, zero briefing-hypothesis drift. This round: 5 cards fed both ARCH-R24 and all 20 file agents.
+
+**#124 — The vacuous-pass battery class.** A battery check that self-skips (returns True when its instrument is unavailable — "no json reporter — skipped") silently degrades the count-discipline law: the headline shows GREEN while the law is unexecuted. The strict-scrape pattern: parse the instrument's OUTPUT FILE (not stdout — vitest writes `.vitest/json/output.json`, stdout only says "JSON report written to…"), DELETE the stale file before running, FAIL hard when the file is absent after the run, and tolerate absence ONLY for fresh-clone environments (node_modules missing) with the skip reason PRINTED. Every battery check must distinguish "instrument broken" (FAIL) from "instrument absent because fresh clone" (tolerated skip, visible).
+
+**#125 — The error-class re-entry law.** A known error class (the pin c/f-typo b8c6f88→b8c6c88, caught at R23) RE-ENTERED at R24 through a new agent wave (the 16-file agent's edits). Checks for known error classes must be corpus-wide (all files), not spot-checked at the files where the class was first found. The class detector is cheap (a substring grep); the cost of the corpus-wide form is zero; the cost of the spot-check form is a re-entry.
+
+**#126 — The lineage-idiom exemption vocabulary.** Old pin values legitimately survive in lineage contexts, and the corpus's lineage IDIOMS GROW over rounds: transition records (`a4e971d` → `c15a629`), round markers ("(R23)", "the R23 re-pin", "stable since `b8c6f88`"), re-based notes. The stale-sweep's exemption list must grow WITH the idioms — and the sharpest discriminator is ARROW-ADJACENCY: a pin sha immediately followed or preceded by `→` is a transition record, exempt by construction. When a stale-sweep flags a site, read the site BEFORE "fixing" it — a third of the flags will be legitimate lineage (this round: 19's transition records, 01's review-round citations).
+
+**#127 — The decision-record exemption class in GAP registers.** The §0 GAP registers accumulate NON-work rows: DECISION rows ("the DECLINE is the law"), dispositions (LANDED/DECLINED BY DESIGN/future-extension), disposition blocks. The phase-tag check needs the exemption vocabulary ("DECISION row", "DECLINED BY DESIGN", "LANDED (BASE above", "disposition") — otherwise every honest decision record false-positives as an untagged gap. Symmetric to the R23 strikethrough convention: the register's record types grow, the checker's vocabulary grows with them.
+
+**#128 — MultiEdit atomicity is unreliable in this environment.** A MultiEdit batch that REPORTS failure ("old_str not found") can leave the edits BEFORE the failing one APPLIED (observed twice this round — the ARCH fold left D26-D28 landed while D29 rolled back). The recovery protocol: after ANY failed MultiEdit, GREP the file for the intended markers of EVERY edit in the batch before re-running; re-run only the missing edits with corrected old_strs. Never assume rollback happened because the tool reported an error; never assume the whole batch applied because some markers are present.
+
+**#129 — Fetch before COMMIT, not just before push.** The sibling-race window is the whole wave, not the push moment: this round's races hit at wave-1 push (5 commits behind) and at the battery commit (3 behind). When a sub-agent wave or a long analysis separates your last sync from your next commit, `git fetch` + `merge --ff-only` (or merge) BEFORE staging — a commit built on a stale main makes the push-time merge messier than it needs to be, and a batch of fleet edits is much harder to rebase than a single-doc edit.
+
+**#130 — The mock-gap-audit shape: read the reference artifact YOURSELF, then one-agent-per-feature.** When the user supplies reference material (mocks, screenshots, specs-from-elsewhere) and asks "did we specify all this?": (a) the orchestrator reads EVERY artifact in full first — the ground-truth mode-card extraction happens at the top, before any delegation, because fleet briefs built on un-read references produce agents that describe the brief, not the artifact; (b) then dispatch one agent per FEATURE/MODE (not per file — the feature is the axis the reference material is organized around; ten modes = ten tight agents, each sweeping ALL specs + ALL codebases for ONE mode); (c) seed each brief with your own extraction + the prior wave's census findings, so agents VERIFY and DEEPEN rather than rediscover (multi-pass = verification + depth, not repetition). The mode-agent's report form (mode card → spec sweep → code sweep → semantic deltas → posture-law gap rows → verdict) generalizes to any feature-vs-corpus gap audit.
+
+**#131 — The absence-proof discipline.** "X is not specified anywhere" is a LOAD-BEARING claim (it justifies new law). It requires: corpus-wide greps with the hit list SHOWN (not just "no hits"), false-positive classification (track-append vs clip-append; String.replace vs NLE-replace), per-repo sweeps at the RIGHT repos, and independent verification (ten agents + the ruling's own greps). An absence claim without the grep evidence table is an overclaim waiting to happen — and the corpus-faithfulness reviewer's job is to re-run the greps.
+
+**#132 — The two-semantics trap (placement vs splice).** When a corpus accumulates the same WORD for two different operations (insert = OT's placement-reject-not-shift vs the engine's 3-point splice-split-push), every seam audit must FIRST split the word into named distinct ops, THEN rule which surface owns which. The failure mode if you skip the split: a spec marks the engine's method "ALIGNED" against a section that teaches the OTHER semantics (the P9 phantom class), and implementations diverge silently for years. The boundary sentence ("the placement surface places; the source-edit surface splices") is the minimum viable reconciliation.
+
+**#133 — The hidden reference-implementation discovery.** The mock/sandbox streams (shell-variants, shell-mini) often hold the ONLY faithful implementations of features the product repos lack (R25: roll trim fully live + pinned in the variants; ripple-trim's only DaVinci-faithful mouse surface; the overwrite covered-clip law). When a mode/census agent reports "ABSENT everywhere", ask it to check the MOCKS too — and when a mock implements something the spec under-defines, register the mock as the reference (the REFERENCE-REGISTER pattern), don't re-derive. Corollary: a mock can implement a feature WRONG while its own docs specify it right three times (the variants' replace) — mock-as-reference still needs the semantic audit.
+
+**#134 — The dedicated-vs-composite criterion for new op families.** When adding a new operation family to a layered op corpus, state the RULE for whether it gets a dedicated op or a composite of landed verbs: dedicated when a guarded composition of landed verbs would break atomicity/transition/keyframe/companion invariants; composite when a batch already preserves them. Without the stated criterion, the next family proposal re-litigates the split ad hoc. Also: verify the composite is ACTUALLY expressible before ruling it one (the classic ripple-diff produces the PULL but structurally cannot produce the PUSH — "overwrite + the ripple flag" was half-true at best; the honest composite was delete+move+insert).
+
+**#135 — The filing-venue verification gate.** A cross-repo queue filing is not done when you write it; it is done when the TARGET repo's queue doc SHOWS it (grep the venue). R24's waveform promotion "filed" into a venue that doesn't exist (.agents/HANDOFF vs the repo-ROOT HANDOFF) and nobody verified — the filing missed TWO rounds. Every filing order now carries: the venue's exact path, a verification gate ("the row is not done until the target SHOWS it"), and the filing's SHA stamped back into the plan. Read the target repo's OWN docs to find its real queue venue before writing the block.
+
+**#136 — Orders vs filings (the cross-repo protocol's verb discipline).** A spec session may ORDER nothing in another repo's code; it FILES titled blocks (queue entries) that the target session executes. The language distinction matters in the spec text itself: "the spec round files the mechanism block; the app session executes it" — a ruling that says "the app adds a CI step" without the filing framing reads as an unauthorized cross-repo order and will be flagged by any fresh-context design reviewer. The three filing verbs: FILE (write the queue block, this round), EXECUTE (the target session's work), VERIFY+RE-PIN (the spec round's follow-up).
+
+**#137 — The line-shift self-citation hazard after large insertions.** A spec file that gains ~200 lines mid-file breaks every IN-FILE line-number citation made before the insertion (the §5.0 fan-out table cited 06's own rows at pre-shift lines). Two mitigations: (a) prefer section-ID citations over raw line numbers for in-file references; (b) when a verification fleet follows an amendment wave, its standing checklist item #1 is "re-derive every in-file line citation in the new sections". Cross-file line citations to OTHER files don't shift (unless that file was also amended) — classify before sweeping.
+
+**#138 — The filed-contract execution loop (FILE → EXECUTE → adversarial review → fold → re-pin).** R26 executed three R25 filings and the loop that worked is now the template: (a) re-derive the filing's claims against live ground truth BEFORE coding (R26's probes found the E2 filing UNDERSTATED the defect — the "working cascade" it described was dead code; a filing is a hypothesis, the execution session's first job is to test it); (b) implement the filed contract exactly, then let a fresh-context adversarial reviewer mutation-test your pins (the reviewer found the exclusion clause mutation-VACUOUS — the pinned fixture never exercised it); (c) fold everything P1/P2 immediately, file P3s into the owning PLAN as named residue rows (E1-a..d); (d) re-pin the spec side + extend the battery with LIVE git checks of the landed SHAs (the T/U class pattern — the battery now verifies the execution itself, not just the docs).
+
+**#139 — The upstream-verbatim boundary (the extraction law).** In a repo with an extraction manifest (copy/shim/coreOwned classes), NEVER edit a COPY file to add a contract — the drift gate (sync --check) fails the build on hand-edits, by design. The pattern for promoting a de-facto contract living in verbatim code: a NEW core-owned module (the meter-tap precedent) that declares the named surface, while the implementation stays byte-verbatim. For constants the verbatim file keeps private: DECLARE the value in the contract module + a pinning test that OBSERVES the internal value through the public API (the probe round-trip drift guard) — the two constants then cannot silently diverge.
+
+**#140 — The census/checker split (declared state vs recomputed state).** A governance law ("register-equality fails the build") needs TWO artifacts, never one: the REGISTER doc holds the declared state (machine-parseable — a fenced JSON block beats markdown-table scraping) and the CHECKER script holds ZERO hardcoded values (grep it for the counts — any hardcoded number is a vacuous gate). The checker verifies register↔tree equality in BOTH directions: the tree drifting from the register (an unregistered edit) AND the register lying about the tree (a stale class/count). The teeth are part of the deliverable: a doctored-copy mutation gate (sandbox via an env-var root override) proving the checker can fail — a checker that cannot fail is not a gate.
+
+**#141 — Vendored trees are pin-shaped, not tree-shaped: read which tree before filing.** The R25 census filing said "recompute from the vendored pin (vendor/nle-timeline)" — but that vendor holds the LIB tree while the port mirrors the COMPONENTS tree; the mechanism execution had to vendor a SECOND lock-copy (the components reference). When a filing names a vendored path, verify the path actually contains the tree the law is about (one `git ls-tree` + one `diff -r`) BEFORE building the mechanism on it. Same class: a "reference implementation" cited by file:line drifts when the file is regenerated — re-derive the hash at execution time.
+
+**#142 — The scoping gate for "small" residuals.** A queue item labeled as a quick thread ("the maintainPitch residual: engineService hardcodes true") can hide a model decision (the nle-ui toggle is MOCK-LOCAL by design; the real fix gates on whether ElementJSON gains a field). Before threading any cross-layer residual: trace BOTH ends (the UI control's state home + the engine field) and check the MODEL layer between them. If a model decision is missing, file the design ask — do not hardcode around it (a hardcoded thread would have permanently foreclosed the model ruling).
+
+**#143 — PUSH AFTER EVERY WAVE, not at wrap (the 2026-09-10 variants incident).** The R24-variants round committed five implementation waves (W0 00a0220 → W4 654f773) and saved the push for the wrap — then the 00:54 container recycle destroyed the overlay clone's working tree AND object store, the auto-snapshot (taken 19:33) predated the commits, and the runtime had never carried them: the ENTIRE round's code was unrecoverable and had to be reconstructed from the worklog + tool-results + threads.db. A commit is not durability; the PUSH is (plus a refreshed /home/sync bundle). The wave protocol is now: commit → push (GitHub primary; mirrors best-effort) → `git bundle create <file> HEAD main` → next wave. A recycle mid-round must cost at most ONE wave. Corollary: the design doc (the round's binding spec) gets committed AND pushed BEFORE implementation dispatches.
+
+**#144 — The reconstruction-provenance law.** When a round must be rebuilt from records (see #143), the re-implementation carries [recon] markers on every detail the lost commit held but no record states, and the reconstruction's deviations get documented in the wave's commit message (the W2 storage-shape adaptation and the W5a width measurement are the examples: the record said `curves: {}`, the frozen mergeGrade couldn't carry it, the faithful alternative `{master: []}` was chosen and cited). The durable-record classes that made the R24 reconstruction possible: contract-level worklog sections per wave (not just summaries), the tool-results read/bash caches (which preserved the full F-audit reports when the agents' reports were lost), and the threads.db payloads (the verbatim issue texts). Write worklog sections as if the code will be destroyed — because it was.
+
+**#145 — Bundles carry HEAD or clones come up empty.** `git bundle create <file> main` alone records refs/heads/main but NOT the HEAD symbolic ref — `git clone <bundle>` then fails checkout ("remote HEAD refers to nonexistent ref") and leaves an UNBORN master with NO working tree (the R23-fix bundle had exactly this; the 2026-09-10 boot silently no-oped its code-sync because `git rev-parse HEAD` failed, and the runtime kept serving stale code with a healthy daemon — the exact failure #122's gate catches at wrap but not at boot). The law: create bundles with `HEAD main` (both refs), and TEST-CLONE the bundle into a scratch dir before trusting it. The boot-restore now also carries a checkout guard (if the tree is missing after a bundle clone, `git checkout -f -B main origin/main`).

@@ -1,7 +1,7 @@
 # 16 — Keyboard Shortcuts: Comprehensive Interaction Spec
 
 **Stream:** Keyboard interaction layer (UI → engine command bus)
-**Status:** v1.0 (NEW — authored under task TEST-03)
+**Status:** v-next (Round 22 — the §0 forward inventory + the R22 re-baseline: the app's landed key surface + the mini's editing keys are the BASE; the gap is the C22 long tail + C1/W-ops surfaces); **R24 audit round (this pass): the BASE re-pinned to the 2026-09-08 fleet pins (engine `5036387` 458, OT HEAD `ded43c4` — code tip `c15a629` — 536/536, WDC `85b81b0` 759, nle-ui `fc4cc35` 674, app `c885ece` 174, mini 355 sealed, variants 1521+), the JKL rows re-based to OT's W11 M28R stateless rate ladder (the round's real delta: OT = BASE, the app's D30 R5 adoption = GAP in flight, WDC's audio half sealed S4), the D30 keymap rows registered (R6 the `r`-key yield-set + Z4 the `[data-transport]` scrub guard), and the phase tags stripped to the D24 set (the dual-vocabulary window closed)**; **R23 audit round: the BASE re-pinned to the 2026-09-07 fleet HEADs (app `70e99f0` 117/117, nle-ui `85dcf57` 648, OT `222532c` 489, mini 355 sealed, variants 1470), the §0 GAP register re-tagged to the D24 ladder (ARCH-R23: C1(f)→K3, W-ops→r1, R-polish→r5), the live key-surface census added (the five surfaces below), and the OT-side keyboard-laws gap registered (the K/B/J-L divergences + the fork's keymap deltas)**; v1.1 (Round 15 amendment pass — A1/A6/N8/N11/N12/N15 resolutions + C2-extension registration per `.agents/SPEC-REVISION-CANDIDATES.md`, ARCH-R15 §4; original v1.0 authored under task TEST-03)
 **Primary teacher:** FCP/Premiere/DaVinci Resolve muscle-memory conventions + FreeCut `config/hotkeys.ts` + OpenCut-classic `OC-Actions/definitions.ts`
 **Consumers:** UI keyboard handler (`src/ui/keyboard/`), test harness (`tests/e2e/keyboard.spec.ts`), cheat-sheet modal (`src/ui/cheat-sheet/`)
 **Predecessor:** `05-timeline.md` §19 (unified shortcut table — ~50 actions)
@@ -9,11 +9,37 @@
 
 ---
 
-## 0. What This Spec Adds (TL;DR)
+## 0. FORWARD INVENTORY (the R22 posture, re-baselined by the R23 fleet and re-pinned by the R24 fleet — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, re-pinned 2026-09-08 — the R24 audit fleet; the five live key surfaces):**
+- nle-test-app @ `c885ece` — **174/174** (static it/test census at the R24 module card; the suite was not re-run in the audit sandbox), tsc 0 (was `70e99f0` 117/117 at R23, `e662759` 83/83 at R22). The app's landed key surface: (a) the PORT keymap (`src/timeline-port/hooks/use-keybindings.ts` — the 25-row port map (OT's 28 at `c15a629` minus the 3 undo rows): Space/K play, L/J JKL shuttle, ⇧L/⇧J fixed 2×, ←/→ frame-step, ⇧←/→ 1 s/5 s jump, Home/Enter/End, S split, Q/W split-side, Backspace/Delete + ⇧ ripple-delete, N snap, ⌘A select-all, ⌘D duplicate, B bookmark, Escape cancel-then-deselect; the port's ctrl+z / ctrl+shift+z / ctrl+y rows are REMOVED — the shell owns undo, D22b); (b) **the W3 JKL half landed** (`3f351bc`, design `docs/design-jkl-audio-follow.md` v1.1 — **the AUDIO half is now SEALED WDC-side (the S4 close: composed varispeed, one reschedule per rate change, silent reverse; only the R4 ⇧K dead-key residue remains, a P3 doc item)**): the port's tap-accel ladder (1×→2×→4× inside 500 ms; K pauses with the rate persisted — the engine law; ⇧L/⇧J bypass at 2×) drives `core.setPlaybackRate` directly (capture-phase) — **SUPERSEDED-IN-FLIGHT by D30 R5 (W-D): the M28R stateless ladder replaces the tap-accel form; at `c885ece` the port still ships tap-accel + K = togglePlay (use-keybindings.ts is one of the census's 3 documented merge carriers, W-D pending — see the GAP register's R5 row)**; the audio scheduler composes the transport rate (varispeedRate = elementRate × rate; one stop+reschedule per rate change; r < 0 = silent reverse); the routed `setShuttle` round-trips through the mirror (`engineService.setPlaybackRate`; contract surface — no production caller, the port's keymap owns JKL in the engine world); (c) the shell-owner undo law (nle-ui's useShortcuts ⌘Z/⇧⌘Z/⌘Y → the timelineRouter facade: engine history first, store domain second).
+- The mini's editing keys — `ui-mock/shell-mini` (355 tests, the R23 seal) + the law registers: `docs/CORE-SEAMS.md` **S9** (useKeys: Space/S/[/]/Del/±/0/Home/Esc + the form-control skip + the C1/C16 laws) + `docs/LAW-NET-INVENTORY.md`'s App.test.tsx row (the keyboard-on-shell laws: **C1** Space-yields-to-native-button, **C16** auto-repeat gate, **C46** clip-is-a-button, **C49** the advertised zoom keys). The mini's `[`/`]` = cutHead/cutTail (trim-to-playhead, ripple-pref-aware — the R18e form; §3.4's ⌥[ / ⌥] ripple chords live in the nle-ui/variants shells instead).
+- nle-ui @ `fc4cc35` — 674/674 (run live at the R24 module card; +26 over R23 = the D29 seam rounds — saveState/exportRequest/setGrade; the ⌘S real-dirty gate changed the D29 semantics). The package's shell keymap: `src/hooks/useShortcuts.ts` + `src/lib/shortcutMap.ts` (**53 cheat-sheet rows — re-verified at `fc4cc35`** — the honest implemented-set ledger, §8.6 single-source discipline) + the CheatSheet modal (§7.3, auto-generated). The **engine-owned yield law (D22b)**: router-attached → the port keymap owns the plain NLE editing keys (incl. the shifted ⇧J/⇧L/⇧Backspace/⇧←→ — the W3/F5 double-fire fix); the shell keeps the ⌘-family, pages, markers, ⌥-family, F6. **The yield-set's THIRD row is PENDING (D30 R6, W-D): `'r'` is in NEITHER yield set today — `useShortcuts.ts:417` maps plain r → ripple tool unconditionally in both worlds (verified live at `fc4cc35`); see the GAP register's R6 row.**
+- The variants track (1521+ tests, the R24 canon) — the page-key grammar: **⌘1-⌘5** (Edit/Color/Deliver/Audio/FX — R23-WA's ⌘5 row), the **FX tool joins the tool radio with NO plain key** (V/B/T/Y/U/R own the radio; the FX entry + the ⌘5 chord own the FX surface), **Escape exits** (FX tool → select; audio focus → edit); `src/lib/shortcutMap.ts` 56 rows (adds ⌘5 + the source-mode `,`/`.` insert/overwrite rows, R20-W2 C46).
+- OT @ HEAD `ded43c4` (code tip `c15a629` — the last three commits are docs/runner-artifacts; the src diff is empty) — **536/536** (386 in-page + 150 real-mouse, run live at the R24 module card). **The CANONICAL keymap now lives in the tree, W11-rewritten (DECISIONS #25 — a CONSCIOUS divergence from classic's j/k/l jump rows)**: `src/components/timeline/hooks/use-keybindings.ts` @ `c15a629` — the 28-row map: the JKL rows are the **M28R stateless rate-based ladder** (rate ∈ {0, ±1, ±2, ±4}; same-direction doubling capped; opposite-direction reset; **K = pause-ONLY** — `timeline.pause`; Space resumes at the persisted rate; **setPlaybackRate BEFORE play** — the S1 rate-conditioned restart), the jump gestures survive on ⇧Arrow (±1 s / ±5 s), **r / ⇧R = loop set/clear** (`setLoopFromSelection` / `clearLoopRegion` — the W11 pair, both previously unbound), the ctrl+z / ctrl+shift+z / ctrl+y undo rows OT keeps; the in-page real-keyboard suites (**M24**: S split, Space + rAF ticker, follow-scroll, arrows + Home/End, Delete + Ctrl+Z, B bookmark, text-input guard; **M28R** — the actions real-mouse suite: the JKL ladder pins (l → +1, l l → +2, the +4 cap, K-pause-with-rate-persisted, Space-resume-at-persisted-rate, j → −1, j j → −2, opposite-direction reset) + ⇧arrow 5 s, q/w split sides, Enter, Backspace, n snap, ⌘a, Escape, ⌘d, ⌘y/⌘⇧z redo; **M49T**: rate control, loop region, wrap laws).
+- C22 ledger state: the ledger row reads "42→~60 bindings implemented" (`.agents/SPEC-REVISION-CANDIDATES.md` §C C22); the live cheat-sheet ledgers count **53 rows (nle-ui) / 56 rows (variants)** of this spec's **181-row Appendix A universe** — the remainder is the r5 long tail (the old "~54 of ~178" claim is retired: both sides stale; both counts re-verified at the R24 pins).
+
+**GAP (the work — owner + acceptance; phase tags per the D24 verification ladder (ARCH-R23; the dual-vocabulary window closed at R24 — pure D24 tags below) — spec 14 §4's per-domain registers are RETIRED, this §0 is the register):**
+- **K3 — the crawl's editing keyboard surface + undo/redo exposure.** MiniShell owns the editing keys (CORE-SEAMS S9, the w1-prep/S-package C0 chrome row carries the component; the KEY laws are K3). Landed since R22: the app's port keymap, the W3 JKL engine-rate ladder, the shell-owner undo law (D22b); **in flight: the D30 W-C/W-D absorption waves (the wire-dispatch seam + the M28R JKL adoption — the R5 row below).** **Remains:** the mini's key laws re-expressed as app-side tests over the canonical tree — the LAW-NET-INVENTORY corpus (the keyboard-on-shell families C1/C16/C46/C49 + the history family: cap + no-op guard + selection healing). Acceptance: the corpus rows green app-side (the K3 gate; ordering law: the DOM-structural half after the D25 swap, the store/policy halves ∥).
+- **K3 — the OT-side keyboard-laws census (registered R23, re-shaped R24).** At `c15a629` the three R23 divergences re-verify as: **K and J/L RESOLVED OT-side** — W11's M28R rewrote OT's rows to K = pause-ONLY + the shuttle rate ladder (both now match §3.1's rows; the ladder mechanism is stateless rate math off the live engine state, not §8.7's tap-count closure — the observable ladder is the same); the JKL divergence MOVED to the app side (the port still ships tap-accel + K = togglePlay until the D30 W-D adoption — the R5 row below); **B remains the sole live divergence** (OT + the app port: `b` = bookmark-at-playhead vs §3.2's razor tool — the nle-ui/variants mocks implement B = razor per this spec). The port's keymap deltas are the D26 census's documented carriers (the keymap surgery in use-keybindings.ts — one of the 3 merge files; the yield-set port-local; the Z4 guard to come) — no longer a D25-bridge PORT-LOCAL set. The mini's **C16 auto-repeat gate (`e.repeat`) is STILL in neither the OT nor the app-port keymap** (grep-verified at `c15a629` / `c885ece`) — a held S machine-guns splits there (live-proven in the mini; the canonical tree needs the gate or the app-side re-expression pins it). Disposition: the B row + the mechanism note ride the D26 carrier-reduction program's review cycles + the D30 R10(k) spec ask (record the divergent keymap laws as decisions, not silent divergences); K3 re-points the app-side key tests at the canonical tree. Owner: S-ot (carrier program) + S-app (K3).
+- **r5 — the keymap long tail.** Acceptance: the C22 ledger closed row-by-row (53/56 of 181 rows implemented today) + spec 17 facet rows.
+- **r1 — keymap surfaces for the new op families** (slip/slide/roll/rateStretch wave 1; retime/freezeFrame/rangeRemoval wave 2). Acceptance: keymap rows + nle-ui sync (the S-package workstream's r1 queue row).
+- **The carrier-reduction program (S-ot, the crawl window — the old D25-bridge view-config halves, re-pointed by D26).** The view-config surface — zoom-ladder config (the ± keys' ladder constant) + ripple-toggle semantics exposure (the ⌥R mode's engine-side semantics) — **re-verified ABSENT at `c15a629`** (rippleMode is an internal `useState` at TimelineView.tsx:237; zoom is continuous-clamped, no exposed ladder). The keyboard-side consumers: §3.8's zoom rows + §3.2's Option+R row. Owner: S-ot (ONE carrier-reduction work order, D26.3 — no longer a bridge prerequisite: K3 gates on the coverage vocabulary per D29).
+- **K3 (the page-key grammar reconciliation).** The live mock grammar (⌘1=Edit / ⌘2=Color / ⌘3=Deliver / ⌘4=Audio / ⌘5=FX; the FX tool radio; Escape exits) vs §3.8's ⌘1-⌘4 (⌘3 = "Effects workspace" — the collision). R23-WA landed the ⌘5 row + the spec-side registration note; the ⌘3 reconciliation is PENDING (re-verified R24: the variants' ⌘3 = Deliver at HEAD; SPEC-REVISION-CANDIDATES still carries no ⌘3 registration). Acceptance: §3.8 amended (or the deviation registered in SPEC-REVISION-CANDIDATES) + the app-side page-key tests at K3.
+- **D30 W-D (in flight) — R5, the JKL adoption (the round's real delta).** OT's M28R stateless ladder is BASE (the OT row above); the app's D30 R5 REPLACES the port's tap-accel shuttle with it (rate ∈ {0, ±1, ±2, ±4}; same-direction doubling capped; opposite reset; K = pause-ONLY; Space resumes at the persisted rate; setPlaybackRate BEFORE play). The S1 pin's comment is rewritten to the new law (the assertions survive — traced by the app's 9-A1 audit); **⇧L/⇧J fixed-2× stay PORT-LOCAL** (the S-round law, documented in both SKILLs); the shell's mock-world JKL (router-gated) is untouched. Owner: S-app (W-D). Acceptance: the M28R-law pins green app-side (K-pause-only + Space-inherits-rate) + the S1 comment re-written.
+- **D30 W-D (in flight) — R6, the `r`-key coordination (the yield-set's third row).** OT's new r / ⇧R (loop set/clear) vs the shell's `r` (`setTool('ripple')`, nle-ui `useShortcuts.ts:417` — unconditional in both worlds today) would DOUBLE-FIRE once W-D lands the port's loop rows (the port keymap's capture-phase preventDefault does not stop the shell's window listener). The fix is PACKAGE-side: `engineOwnedPlain` + `shiftedYields` gain `'r'` — the router-attached world: the port owns r; the mock world: the ripple tool keeps r — a cross-repo lockstep commit + app re-pin (the D28-A5 pattern: one package commit, the app re-pin last). Owner: S-package + S-app. Acceptance: engine world — one r-press = one loop-set (no tool change); mock world — the ripple tool fires.
+- **D30 W-D (in flight) — Z4, the scrub-row double-apply guard.** The package's Viewer scrub row gains `data-transport`; the port keymap ignores events whose target is inside `[data-transport]` — the guard sits NEXT TO the identical W8 playhead-guard precedent (`use-keybindings.ts:141-147` — same bug class, same fix shape; a documented keymap port-local). **Option (a) — removing the row's own keydown handling — is REJECTED: it kills the slider's keyboard-a11y contract (spec 18 §11.3).** Owner: S-package + S-app. Acceptance: one ArrowLeft at the scrub row = exactly one frame step.
+- **R25 — D34, the source-edit keyboard family (ARCH-R25 Decision 34 + the xcut-keyboard fleet report; the 16-side law LANDED this round).** What landed: **§3.4A** — the source-mode-gated primary chords (`,` insert-edit / `.` overwrite-edit / `⇧⌥.` ripple-overwrite / `E` append) + the F9-F12 documented DaVinci-parity alternates (preventDefault + browser-hostage law) + the button-first replace/fit-to-fill note, every command shape carrying the **(r1-scheduled)** marker (15's landed union is untouched; the source-edit wire rows land in 15 at r1 with the D31 family law); **§3.4B** — the slide-by-frame rows mirroring the slip ladder (the "any other tool → nudge" fallthrough trap that broke the 3-clip slide invariant — a 00:838 violation class — is closed); **§6.1 row 2's four-meaning form** (source-mode insert/overwrite | slip | slide | plain nudge) **+ the new #19/#20 resolution rows** (the `Shift+`/`Option+` split families made explicit — the `⇧⌥.` chord sits in the table; no conflict left implicit); **§3.2's tool-vs-source-edit boundary sentences** (D34.4 — the radio owns pointer gestures; the source-edit modes are not tools; the radio does not grow insert modes); and **P11's 16-half** — the §3.2 R-key resolution note's precision clause (the ripple flag routes delete + the placement surface's displacement; the source-edit family's push is intrinsic, never flag-routed). The `,`/`.` source-mode rows are **ratified now** — the variants' R20-W2 C46 implementation is spec law and the deviation-register entry retires (the rows are dormant in every shipped shell: no source viewer exists — 18 §8.5 defers dual viewers to v2 — zero live-behavior risk). Owner: S-spec (this amendment — landed); the carriers ride r1. Acceptance: the sections above exist as law (battery_r25's keyboard-family checks: the §3.4A/§3.4B presence + the four-meaning row + the slide rows); at r1 — 15's union gains the source-edit verbs (the D31/D30.2 rows, another agent), and the keymap rows + Appendix-A `kbd-source-*`/`kbd-slide-*` enumeration + cheat-sheet rows + the nle-ui/variants/app-port keymap sync land under the D30 R5 lockstep law (one commit: port keymap + shell yield-sets + the variants' map, G-SLIP-5's tool gate included) + a slide-by-frame pin (neighbors trim, span preserved, one history entry).
+
+**ACCEPTANCE & TEST PLAN:** §9 (Test Verification) + Appendix A (the flat registry for enumeration) are this spec's battery; BASE acceptance = the cited suites at the cited pins (**app 174; mini 355; nle-ui 674**; the OT in-page M24/M28R real-keyboard suites at `ded43c4`, code tip `c15a629`) — the regression role. GAP acceptance is per-row above; facet rows in spec 17 §13A.
+
+---
+
+## 0A. What This Spec Adds (TL;DR)
 
 | Area | Before (spec 05 §19) | After (this spec) |
 |---|---|---|
-| Shortcut count | ~50 actions (union of 2 repos) | **180 bindings** across 13 categories (~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings), every common NLE action covered |
+| Shortcut count | ~50 actions (union of 2 repos) | **181 bindings** (180 at v1.0 + `Option+R` from the R15/A6 amendment) across 13 categories (~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings), every common NLE action covered |
 | Mapping target | "FCP/Premiere equivalent" column | **`EngineCommand` discriminator** + manager-method cross-ref (§12) |
 | Conflict handling | 5 conflicts noted, resolutions inline | **Full conflict table** (§6) covering 18 disambiguation cases (12 original + 6 audit-flagged direct conflicts resolved in §6.1 #13–#18) |
 | Test integration | "Keyboard test: Press each shortcut, assert correct command fires" | **4 named patterns** + Playwright recipes (§4, §9) + test enumeration appendix (§A) |
@@ -21,7 +47,7 @@
 | Non-US keyboards | (unaddressed) | **`event.code`-based lookup** as primary, `event.key` as fallback (§8.4) |
 | Customization | "v2" stub | **`ShortcutMap` interface + `localStorage` persistence** contract (§7, §8.6) |
 
-### 0.1 Why a dedicated spec
+### 0A.1 Why a dedicated spec
 
 `05-timeline.md` §19 documented the *union* of shortcuts across FreeCut and OpenCut-classic as a discovery exercise. That table answers "what do the reference repos do?" This spec answers the different question: **"what is the complete, consistent, test-enumerable keyboard contract for OUR NLE?"** Concretely:
 
@@ -30,7 +56,7 @@
 3. §19 did not bind shortcuts to the engine command bus; this spec maps every shortcut to a **serializable `EngineCommand`** (§3, §12) so tests can replay via `page.evaluate({ type, params })` without touching the DOM.
 4. §19 had no implementation guidance; this spec defines the handler architecture (§8), the resolver that converts `EngineCommand` → `Command` instance / manager call (§8.3), and the cheat-sheet data model (§7.3).
 
-### 0.2 Alignment with spec 15 (`15-wire-protocol.md`)
+### 0A.2 Alignment with spec 15 (`15-wire-protocol.md`)
 
 The `EngineCommand` type used throughout this spec is the **serializable command descriptor** that the keyboard handler emits and that tests inject via `page.evaluate`. Spec 15 (`15-wire-protocol.md`, shipped under TEST-02, amended Round 7) is the **canonical definition** of this type — its §4.1 defines a 78-type discriminated union (73 at TEST-02 + 5 Round-7 additions: 3 export commands and 2 project commands) covering Timeline, Track, Playback, Project, Scene, Media, Tool, Marker, Effect, Mask, Transition, Keyframe, Clipboard, Undo/Redo, Snapshot, and Export categories. Spec 15 §4.2 maps every command type 1:1 to a manager method on `EditorCore`.
 
@@ -69,7 +95,7 @@ Comprehensive keyboard shortcuts serve two purposes:
 
 4. **Modifier keys for variants.** `Shift+arrow` for 10-frame nudge vs `arrow` for 1-frame. `Shift+J`/`Shift+L` for 2× shuttle vs `J`/`L` for 1×. `Cmd+Shift+B` for split-all-tracks vs `Cmd+B` for split-focused. The pattern: **Shift = "more"** (10× frames, 2× speed, all tracks), **Cmd = "global"** (file, project, all-tracks).
 
-5. **Context-sensitive.** `Delete` deletes the selected clip (no ripple); `Backspace` ripple-deletes; both work without modifier. `B` selects razor tool when not in razor mode, but in razor mode `B` + click splits at the click point. Resolution rules are explicit (§6) — no implicit "last tool wins" behavior.
+5. **Context-sensitive.** `Delete` and `Backspace` both delete the selected clip (no ripple — aliases); `Shift+Delete` (⇧⌫) is the ONLY ripple-delete chord (Round 15 amendment, A1 — resolves the 16 §3.4 vs 18 §4.9 conflict; the mock implements 18's form). `B` selects razor tool when not in razor mode, but in razor mode `B` + click splits at the click point. Resolution rules are explicit (§6) — no implicit "last tool wins" behavior.
 
 6. **Discoverable.** Tooltips show shortcuts (`Space — Play/Pause`). `?` opens the cheat-sheet modal (§7.3) listing every shortcut grouped by category, searchable. The cheat sheet is auto-generated from the same `ShortcutMap` the handler uses — there is no second source of truth.
 
@@ -137,9 +163,11 @@ Organized by category. For each shortcut:
 | `Option+X` | Clear in + out (both) | `{ type: 'setLoop', params: { start: null, end: null } }` | Always | Option+X |
 | `Cmd+Shift+G` | Loop playback toggle | `{ type: 'toggleLoopPlayback' }` | Always | Cmd+L ⚠ conflict |
 
-**In/out points are `setLoop` halves** — spec 15 has no dedicated in/out-point commands; the mark-in/mark-out surface is expressed at the wire level as `setLoop`'s `start`/`end` (spec 15 §4.3.29), which is why `I`/`O` and their clear variants emit the rows above. Spec 03 §3.4's in/out-point behavior is the playback-side consumer of this window.
+**In/out points are `setLoop` halves** — spec 15 has no dedicated in/out-point commands; the mark-in/mark-out surface is expressed at the wire level as `setLoop`'s `start`/`end` (spec 15 §4.3.29), which is why `I`/`O` and their clear variants emit the rows above. Spec 03 §3.4's in/out-point behavior is the playback-side consumer of this window. **(Round 15 amendment, N12 — this is the canonical in/out model: 05 §11.2 is RETIRED by this resolution (R15).)** 05 §11.2's dedicated `InOutPoints` interface and its `G`-to-clear binding do not carry: clearing is `Cmd+Shift+I` / `Cmd+Shift+O` / `Option+X` (rows above), `G` is unbound in this spec (`Cmd+Shift+G` is loop-playback toggle, §3.1), and 18 §4.3/§4.9 already consume the halves form. The 05-side retirement edit lands in the parallel R15 05 pass.
 
 **JKL multi-tap semantics:** `J` and `L` are stateful — each consecutive press within 500 ms of the previous increments speed by 1× (capped at 4×). Pressing `K` or `Space` resets the counter. The resolver tracks tap-count in a closure; the emitted `EngineCommand` always carries the absolute target rate, not a delta, so tests can assert directly on rate.
+
+**R24 live-surface census (the JKL family, where it landed):** **OT's canonical keymap @ `c15a629` is now the BASE — the W11 M28R stateless rate-based ladder** (DECISIONS #25, a conscious divergence from classic's j/k/l jump rows): rate ∈ {0, ±1, ±2, ±4}; same-direction doubling capped; opposite-direction reset; **K = pause-ONLY** (`timeline.pause`); **Space resumes at the persisted rate**; **setPlaybackRate BEFORE play** (the S1 rate-conditioned restart — the ladder reads the live engine state, `getPlaybackRate` + `isPlaying`, not a tap-count closure; §8.7's mechanism sketch is the spec-side form and the observable ladder is the same). The app's port (`c885ece`) still ships the W3 tap-accel ladder (1×→2×→4× inside 500 ms; K = togglePlay; the rate PERSISTED is the engine law) — **D30 R5 adopts M28R in the W-D wave (in flight; the S1 pin's comment rewritten, assertions survive; ⇧L/⇧J fixed-2× stay port-local — the S-round law, documented in both SKILLs)**. **The JKL audio half is CLOSED — WDC's S4 seal:** the audio scheduler composes the transport rate (varispeedRate = elementRate × rate; one stop+reschedule per rate change; r < 0 = silent reverse) — only the R4 ⇧K dead-key residue remains (a P3 doc item). The nle-ui/variants mocks (store-world `setShuttle`, mock-only) yield to the port in the engine world (D22b). The R23 K / J-L divergences are RESOLVED OT-side (above; the app-side K divergence closes with W-D); **B remains the outlier** (bookmark-at-playhead vs §3.2's razor — both OT and the app port; see §0's GAP register). K-then-J/L ½× slow-mo remains unimplemented everywhere (ledger C20).
 
 ### 3.2 Tools
 
@@ -152,7 +180,8 @@ Organized by category. For each shortcut:
 | `T` | Trim tool (rollover edit between adjacent clips) | `{ type: 'selectTool', params: { tool: 'roll' } }` | Always | T |
 | `Y` | Slip tool | `{ type: 'selectTool', params: { tool: 'slip' } }` | Always | Y |
 | `U` | Slide tool | `{ type: 'selectTool', params: { tool: 'slide' } }` | Always | U |
-| `R` | Ripple mode toggle (global, affects all delete/insert ops) | `{ type: 'toggleRipple' }` | Always | (none) |
+| `R` | Ripple tool (selects the ripple editing tool) | `{ type: 'selectTool', params: { tool: 'ripple' } }` | Always | (none) |
+| `Option+R` | Ripple mode toggle (global editing pref — affects all delete/insert/trim ops) | `{ type: 'toggleRipple' }` (UI) | Always | (none) |
 | `N` | Snap toggle (global, affects all drag/trim/move ops) | `{ type: 'toggleSnap' }` | Always | N |
 | `Escape` (when tool active) | Return to select tool | `{ type: 'selectTool', params: { tool: 'select' } }` | When non-select tool active | Esc |
 
@@ -160,12 +189,18 @@ Organized by category. For each shortcut:
 
 **`toggleSnap` greenfield (audit Issue #14):** snap is a UI-layer concern (timeline viewport snapping during drag/trim/move). Spec 01's `TimelineManager` interface does not have a `toggleSnap` method. This spec therefore routes `toggleSnap` to `uiStore.timeline.toggleSnap()` (Zustand) — see §8.3 resolver + §12 cross-reference. The flag is 📝 NEW greenfield on the UI store; spec 01 may absorb it in a future revision. `toggleRipple` is NOT greenfield — `engine.command.isRippleEnabled` IS on EditorCore (spec 01 §3.1 line 215).
 
+**R-key resolution (Round 15 amendment, A6):** `R` selects the ripple **TOOL** (`selectTool {tool:'ripple'}`, matching spec 18 §4.5's tool inventory — spec 15 §4.3.45's enum member); ripple **MODE** — the global editing pref that makes delete/insert/trim ops ripple — is NOT a tool: it rides `Option+R` above (or a transport-cluster toggle in 18 §4.5) and persists as `TimelineViewState.rippleMode` (spec 09 §3.1 — a view-level UI pref, both homes stated: ⌥R is the binding, `rippleMode` is the stored state). This collapses the three prior claimants: 16 §3.2's old `R` = mode toggle, 18 §4.5's ripple tool, and spec 15 §13.5's registry example mapping `R` → `selectTool razor` (that example row is corrected by this resolution — razor is `B` per §3.2; the 15-side text fix rides the R15 spec pass). The mock's binding (`R` → `setTool('ripple')`) implements this form. **R25 precision clause (P11 — D31.1's everywhere-clause):** the ripple flag routes **delete** + the **placement surface's displacement** only — `delete{ripple}` closes the gap, and a placement-insert under the flag displaces per its `PlacementStrategy` (15 §4.3.9); the **source-edit family's push is intrinsic, never flag-routed** (§3.4A's insert-edit splices and pushes by the verb's own law — `Option+R` does not convert an overwrite-edit into an insert-edit, and the ripple-overwrite composite is the delete+move+insert batch, not an overwrite+flag).
+
+**FX tool + the radio (R23-WA, DESIGN-R23 D-A1/ruling 18):** the variants' FX tool joins the edit-tool radio (select/blade/roll/slip/slide/ripple/**fx**) with **NO plain key of its own** — V/B/T/Y/U/R own the six plain rungs; the FX entry is reachable via the radio and the `⌘5` FX-page chord. Spec 18 §4.5's tool union is the owner of the seventh member; this spec keeps §3.2's six plain keys unchanged. (The live behavior: the FX tool implies `fxMode`; leaving the FX page re-seats a stranded fx tool to select; Escape exits the FX tool — the existing tool-escape rung covers it for free.)
+
+**Tool-vs-source-edit boundary (R25, D34.4 — three sentences, law):** the tool radio owns **pointer gestures** — `V`/`B`/`H`/`Z`/`T`/`Y`/`U`/`R` own the plain rungs (+ the FX member, no plain key, R23-WA). The source-edit modes (insert-edit / overwrite-edit / replace / append / ripple-overwrite / fit-to-fill — §3.4A) are **NOT tools**: they are one-shot **source-mode operations** driven from the media pool + the source viewer (the SourceEditBar surface, 18 §4.3). The radio does not grow insert modes — no `selectTool` member exists or is planned for the source-edit family (15 §4.3.45's tool enum stays closed; the ops fire from the source-edit bar or the §3.4A keys).
+
 ### 3.3 Selection
 
 | Key | Action | EngineCommand | Context | FCP equiv |
 |---|---|---|---|---|
-| `Tab` | Select next clip (timeline order) | `{ type: 'selectElements', params: { elements: [<next>], mode: 'replace' } }` | Always | Tab |
-| `Shift+Tab` | Select previous clip | `{ type: 'selectElements', params: { elements: [<prev>], mode: 'replace' } }` | Always | Shift+Tab |
+| `Tab` | Select next clip (timeline order) | `{ type: 'selectElements', params: { elements: [<next>], mode: 'replace' } }` | Timeline region focused (N11) | Tab |
+| `Shift+Tab` | Select previous clip | `{ type: 'selectElements', params: { elements: [<prev>], mode: 'replace' } }` | Timeline region focused (N11) | Shift+Tab |
 | `Cmd+A` | Select all clips on focused track | `{ type: 'selectElements', params: { elements: <allOnTrack>, mode: 'replace' } }` | When track focused | Cmd+A |
 | `Cmd+Shift+A` | Select all clips in timeline | `{ type: 'selectElements', params: { elements: <all>, mode: 'replace' } }` | Always | Cmd+Shift+A |
 | `Escape` | Deselect all | `{ type: 'selectElements', params: { elements: [], mode: 'replace' } }` | Always (when no tool override) | Esc |
@@ -181,6 +216,8 @@ Organized by category. For each shortcut:
 
 **Spatial-neighbor resolution:** `<above>`, `<below>`, `<next>`, `<prev>` are computed by the resolver (not by the shortcut handler) by querying `engine.timeline.getElementsInTrack({ trackId })` and finding the element whose `[startTime, startTime+duration)` interval overlaps `<currentTime>`. If multiple clips overlap the playhead on the target track, the nearest clip *edge* wins. The resolution rules are part of the `EngineCommandResolver` contract (§8.3), not the keyboard handler — so tests can exercise them directly.
 
+**(Round 15 registration, C2 extension):** `Shift+Up`/`Shift+Down` (add clip above/below), `Cmd+Shift+Up`/`Cmd+Shift+Down` (move clips between tracks), and `F` (find-playhead) are **implemented-pending** in the mock (`useShortcuts.ts`'s ArrowUp/Down branch covers single-level track focus only) — the §3.3 rows above STAND as spec; the deviation is registered in the C-ledger (SPEC-REVISION-CANDIDATES §E.3), not amended.
+
 ### 3.4 Editing Ops
 
 | Key | Action | EngineCommand | Context | FCP equiv |
@@ -191,17 +228,17 @@ Organized by category. For each shortcut:
 | `S` | Split at playhead (alt, single-key) | `{ type: 'split', params: { time: <currentTime>, trackIds: null } }` | Always (alt binding) | S |
 | `Q` | Split + delete left half (ripple-close left) | `{ type: 'splitAndRemove', params: { time: <currentTime>, side: 'left', ripple: true } }` | When clip under playhead | Q |
 | `W` | Split + delete right half (ripple-close right) | `{ type: 'splitAndRemove', params: { time: <currentTime>, side: 'right', ripple: true } }` | When clip under playhead | W |
-| `[` | Trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', delta: <trimDelta>, ripple: false } }` | When clip selected | [ |
-| `]` | Trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', delta: <trimDelta>, ripple: false } }` | When clip selected | ] |
-| `Option+[` | Ripple-trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', delta: <trimDelta>, ripple: true } }` | When clip selected | Option+[ |
-| `Option+]` | Ripple-trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', delta: <trimDelta>, ripple: true } }` | When clip selected | Option+] |
+| `[` | Trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', delta: <trimDelta>, ripple: false } }` | When clip selected or under playhead (N15) | [ |
+| `]` | Trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', delta: <trimDelta>, ripple: false } }` | When clip selected or under playhead (N15) | ] |
+| `Option+[` | Ripple-trim clip start to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'start', delta: <trimDelta>, ripple: true } }` | When clip selected or under playhead (N15) | Option+[ |
+| `Option+]` | Ripple-trim clip end to playhead | `{ type: 'trim', params: { elementId: <selected>, edge: 'end', delta: <trimDelta>, ripple: true } }` | When clip selected or under playhead (N15) | Option+] |
 | `,` | Slip left 1 frame (source-window shift) | `{ type: 'slip', params: { elementId: <primarySelection>, delta: -4000 } }` | When clip selected, slip tool active | , |
 | `.` | Slip right 1 frame | `{ type: 'slip', params: { elementId: <primarySelection>, delta: 4000 } }` | When clip selected, slip tool active | . |
 | `Shift+,` | Slip left 10 frames | `{ type: 'slip', params: { elementId: <primarySelection>, delta: -40000 } }` | When clip selected | Shift+, |
 | `Shift+.` | Slip right 10 frames | `{ type: 'slip', params: { elementId: <primarySelection>, delta: 40000 } }` | When clip selected | Shift+. |
 | `Delete` | Delete selected (no ripple, leaves gap) | `{ type: 'delete', params: { elements: <selection>, ripple: false } }` | When clip selected | Delete |
-| `Backspace` | Ripple delete (closes gap) | `{ type: 'delete', params: { elements: <selection>, ripple: true } }` | When clip selected | Shift+Delete |
-| `Cmd+Delete` | Ripple delete (alt, matches §19 recommendation) | `{ type: 'delete', params: { elements: <selection>, ripple: true } }` | When clip selected | Cmd+Delete |
+| `Backspace` | Delete selection (alias of `Delete`, no ripple) | `{ type: 'delete', params: { elements: <selection>, ripple: false } }` | When clip selected | Delete |
+| `Shift+Delete` | Ripple delete (closes gap) — the only ripple-delete chord | `{ type: 'delete', params: { elements: <selection>, ripple: true } }` | When clip selected | Shift+Delete |
 | `Cmd+X` | Cut (copy + ripple delete) | `{ type: 'cut', params: { elements: <selected> } }` | When clip selected | Cmd+X |
 | `Cmd+C` | Copy (to clipboard) | `{ type: 'copy', params: { elements: <selected> } }` | When clip selected | Cmd+C |
 | `Cmd+V` | Paste at playhead (insert mode) | `{ type: 'paste', params: { atTime: <currentTime>, ripple: true } }` | Always | Cmd+V |
@@ -213,7 +250,52 @@ Organized by category. For each shortcut:
 | `Cmd+Shift+J` | Join selected (merge adjacent clips into one) | `{ type: 'join', params: { elementIds: <selected> } }` | When ≥2 adjacent clips selected | (none) |
 | `Cmd+Option+L` | Toggle A/V link on selected | `{ type: 'toggleAVLink', params: { elementIds: <selected> } }` | When clip selected | Cmd+Option+L |
 
-**Slip vs. nudge:** Slip and nudge are both "delta on a clip" but operate on different fields. Slip shifts the *source* window (`sourceStart` / `sourceEnd`) while keeping timeline position fixed. Nudge shifts *timeline position* (`startTime`) while keeping the source window fixed. Both use `,` / `.` as keys — disambiguated by the active tool: **slip tool active → slip**, **any other tool → nudge**. See §6 conflict table.
+**Slip vs. nudge:** Slip and nudge are both "delta on a clip" but operate on different fields. Slip shifts the *source* window (`sourceStart` / `sourceEnd`) while keeping timeline position fixed. Nudge shifts *timeline position* (`startTime`) while keeping the source window fixed. Both use `,` / `.` as keys — disambiguated by context, per §6.1 row 2's four-meaning law (R25, D34.2): **source-mode active → insert-edit / overwrite-edit (§3.4A)**; **slip tool active → slip**; **slide tool active → slide (§3.4B)**; **any other tool → nudge**. See §6 conflict table.
+
+**Delete-chord resolution (Round 15 amendment, A1):** `Delete`/`Backspace` are aliases for plain delete (no ripple); `Shift+Delete` (⇧⌫) is the ONLY ripple-delete chord; the `Cmd+Delete` alt row is dropped (18 §4.9's clip-menu row — Ripple delete `⇧⌫` — already matched this form). This resolves the 16 §3.4 vs 18 §4.9 conflict (the mock implements 18's form: `useShortcuts.ts`'s Delete/Backspace branch; cheat-sheet row `clips-ripple-delete` = `⇧Delete`).
+
+**Trim-to-playhead targeting (Round 15 amendment, N15):** `[` / `]` (and their `Option+` ripple variants) target **all selected elements** when ≥1 is selected; with **no selection**, the clip under the playhead on the **focused track** (fallback: main track); **ACTIVE scene only** — no cross-scene fan-out. Multi-select fan-out issues one `trim` per element, batched per spec 15 §7. The mock's R13 P1 fix is the reference contract.
+
+### 3.4A Source-Edit Ops (one-shot, source-mode-gated)
+
+The DaVinci edit-mode family's keyboard surface (R25, D34.1 — the ARCH-R25 source-edit family law + the xcut-keyboard fleet report's two-tier ruling). These are **one-shot source-mode operations, not tools** — §3.2's boundary sentences above (D34.4). They fire from the media pool + the source viewer (the SourceEditBar surface, 18 §4.3) and are gated on the **C46 context**: `viewerMode === 'source'` with a source of non-zero duration loaded — a §6.2 **step-3 panel context**, context-disjoint from the entire timeline key surface (the slip/nudge ladder is a step-4 tool context; §8.6's multi-descriptor law carries the duplicate registration, the source-edit descriptors listed before the timeline ones per §6.2's order). The primary chords are browser-safe Premiere/FCP grammar; the F-block below is the documented DaVinci-parity alternate set, not the primary.
+
+**Phasing (the census law):** every command shape in this subsection carries the **(r1-scheduled)** marker — the source-edit verbs land in spec 15 at r1 with the D31 family law (06 §5.9 (preamble) + §5.9B-§5.9F, the R25 restructure), and **15's landed union is untouched by this table**; the keymap rows + the Appendix-A `kbd-source-*` enumeration + the cheat-sheet rows ride the r1 keymap wave (§0's r1 GAP row) under the D30 R5 lockstep law. The `,`/`.` rows themselves are **ratified now** — the variants have implemented + tested the gate since R20-W2 (C46; the deviation-register entry retires: the rows are spec law, no longer a registered deviation). The rows are dormant in every shipped shell by construction (no source viewer exists — 18 §8.5 defers dual viewers to v2; zero live-behavior risk).
+
+| Key | Action | EngineCommand | Context | FCP equiv |
+|---|---|---|---|---|
+| `,` | Insert-edit — splice the loaded source at the playhead (split a straddling clip at the playhead, place the source between the halves, shift the right half + everything downstream by the source duration; the left half NEVER moves — 06 §5.9 preamble (D31.2)) | (r1-scheduled) `{ type: 'insert', params: { source: <sourceMediaId>, atTime: <currentTime>, mode: 'insert-edit' } }` — the r1 source-edit verb (the r1 port of the engine's 3-point `performInsertEdit` family, D31.1/12.3 — 06's PORT-SCHEDULED row; 15's landed r1 verb seam is §13.15's InsertCommand-placement rows, so the final wire shape rides that wave's param alignment; NOT the placement-insert `insert` verb of 15 §4.3.9 — that is the OTHER insert semantics, reject-not-shift) | When source-mode active (viewerMode === 'source') and a source with duration is loaded — the C46 gate; SourceEditBar surface (18 §4.3) | ⚠ differs (Premiere `,`) |
+| `.` | Overwrite-edit — cover the timeline at the playhead with the loaded source (the covered-clip law: fully-contained → removed; straddles → split + remnant; zero downstream movement — 06 §5.9B / D31.3) | (r1-scheduled) `{ type: 'overwrite', params: { source: <sourceMediaId>, atTime: <currentTime> } }` — the r1 source-edit verb | same | ⚠ differs (Premiere `.`) |
+| `Option+Shift+.` (⇧⌥.) | Ripple-overwrite — replace the target with the source and shift downstream by the signed duration delta (push if positive, pull if negative — pull leaves no gap; the target's transitions drop — 06 §5.9E / D31.6) | (r1-scheduled) `{ type: 'batch', label: 'Ripple overwrite', commands: [ { type: 'delete', ... }, { type: 'move', ... }, { type: 'insert', ... } ] }` — the **delete+move+insert composite** (three routed verbs, applyBatch, one undo; NOT "overwrite + the ripple flag" — the flag never routes the source-edit push, §3.2's R-key precision clause) | same | (none — the re-chorded family form) |
+| `E` | Append — the source lands at the target track's last-element end (per-track law; the playhead is IGNORED — the mode's defining law; never a push — the end is free — 06 §5.9D / D31.5) | (r1-scheduled) `{ type: 'insert', params: { element: <sourceElementSpec>, placement: { type: 'append' }, ripple: false } }` — the 6th `PlacementStrategy`; multi-append = the r1 `insertBatch` batch form (pool display order, one undo) | same | E (Premiere/FCP append-at-end grammar) |
+
+**Why these chords (D34.1):** the plain `Shift+.` is TAKEN (§3.4's slip-10 rows / §3.6's nudge-10 rows — every conflict resolved explicitly per §6, rows #19-#20 below), so ripple-overwrite takes the `⇧⌥.` sibling (§6.3's Shift-then-Option precedence, re-chorded once — plain `Option+Shift+.`'s timeline meaning is the slip-10 alt, context-disjoint via §6.2); `E` is free in every corpus keymap (16 §3, the variants' 56-row map, nle-ui's 53-row map, OT's 28-row port map, the mini's useKeys — grep-verified R25); macOS fn-defaults ("Use F1…F12 as standard function keys" OFF — the factory default) kill F9-F12 at the OS level for the default user, which is why the F-block is the ALTERNATE, not the primary.
+
+**The F9-F12 documented ALTERNATES (DaVinci parity — documented, not primary):**
+
+| Key | Action | EngineCommand | Context | FCP equiv |
+|---|---|---|---|---|
+| `F9` | Insert-edit (alternate of `,`) | same (r1-scheduled) shape as `,` above | same C46 gate | F9 (DaVinci) |
+| `F10` | Overwrite-edit (alternate of `.`) | same as `.` | same | F10 (DaVinci) |
+| `F11` | Replace (the button-first op's documented alternate — exact-length swap, the target's transitions REMAP, the linked companion SEVERED, an unfillable source refuses `INVALID_PARAMS` — 06 §5.9C / D31.4) | (r1-scheduled) `{ type: 'replace', params: { source: <sourceMediaId>, target: <N15 target> } }` | source-mode gate + the N15 target rule (selection, else clip under playhead) | F11 (DaVinci) |
+| `F12` | Append (alternate of `E`) | same as `E` | same | F12 (DaVinci) |
+
+**The browser-hostage + preventDefault law (every F-row):** F-keys are browser-hostage — `F11` toggles browser fullscreen (Chrome/Edge/Firefox on Windows/Linux), `F12` opens DevTools, `F1`-adjacency (16 §3.13's live contextual-help claim) sits at the block's low edge, and the macOS fn-defaults hazard above; F-keys are however the most layout-stable keys (`event.code` = "F11" on every layout — §8.4's problem class doesn't touch them), which is why they are documented at all. **`preventDefault()` on keydown at the shell's window listener is MANDATORY for every F-row** (18 §5A's Cmd+wheel law — "`preventDefault` is mandatory so the browser page-zoom never fires"; the D30 R5 lockstep law — port keymap + shell yield-sets in ONE commit; §0's R6 row's double-fire class). **`Shift+F10` is NOT available** — 18 §4.9 owns it normatively as the context-menu keyboard route (all five menus); per D34.1 "ripple-overwrite has NO F-alternate: it is primary-chord-only (⇧⌥.), the F-block's four members are insert/overwrite/replace/append" — the F-block stays a four-member family (F9/F10/F11/F12) and ripple-overwrite's primary is the `⇧⌥.` chord alone. (A claimed Shift+F10 row would additionally require preventDefault on the `contextmenu` event.)
+
+**Replace + fit-to-fill stay button-first (D34.5):** no industry plain-key grammar exists for replace (neither Premiere nor FCP ships one) — the SourceEditBar's roving tabindex is the keyboard-parity surface (18 §4.3/§11); `F11` above is its documented alternate and **`Cmd+Option+F`** the fallback chord (unclaimed — grep-verified R25). Fit-to-fill has **no key by design** (DaVinci's own posture — a toolbar one-shot): its input keys already exist (`I`/`O` = the `setLoop` halves, §3.1), and the op itself is the insert + `updateElements{retime}` composite (06 §5.9F / D31.7 — speed = markedDuration / targetDuration, acceptance domain [0.1, 5], out-of-domain refuses, never clamps).
+
+### 3.4B Slide-by-Frame (slide tool)
+
+With the **slide tool** armed, `,`/`.` and their `Shift+` twins slide the primary selection by frame — mirroring the slip ladder's form (§3.4's rows above; slip and slide are the corpus's twin frame-level trim modes — the Y/U tool keys, 15 §4.3.6/§4.3.7):
+
+| Key | Action | EngineCommand | Context | FCP equiv |
+|---|---|---|---|---|
+| `,` (slide tool) | Slide left 1 frame — the neighbors trim, the 3-clip span invariant holds | `{ type: 'slide', params: { elementId: <primarySelection>, delta: -4000 } }` | When clip selected, slide tool active | , |
+| `.` (slide tool) | Slide right 1 frame | `{ type: 'slide', params: { elementId: <primarySelection>, delta: 4000 } }` | When clip selected, slide tool active | . |
+| `Shift+,` (slide tool) | Slide left 10 frames | `{ type: 'slide', params: { elementId: <primarySelection>, delta: -40000 } }` | When clip selected, slide tool active | Shift+, |
+| `Shift+.` (slide tool) | Slide right 10 frames | `{ type: 'slide', params: { elementId: <primarySelection>, delta: 40000 } }` | When clip selected, slide tool active | Shift+. |
+
+**The trap this closes (D34.3 / the xcut-keyboard fleet report's slide-trap finding, XKB-6):** before these rows, §6.1 row 2's fallthrough ("any other tool → nudge") made slide-tool + `,`/`.` emit a plain `move` — a span-breaking shift that violates 00:838's no-overlap invariant and 06 §5.7's neighbor-trim law (the slide invariant: total span preserved, both neighbors trimmed; the variants' un-gated code was a third wrong answer — it *slips* under the slide tool). The key rows use the SAME op as the gesture (`slide` / SlideCommand, 15 §4.3.7 — one history entry, neighbor trims, the `syncLinked` default); at track edges / missing neighbors the op's own refusal path (non-adjacent → no-op) governs — the key row needs no new law. Deltas are `<runtime>`-resolved from `engine.playback.getFrameRate()` (§3.6's conversion note — the table's ±4000/±40000 are the 30 fps defaults). The keymap surface + the Appendix-A `kbd-slide-*` enumeration ride §0's r1 GAP row (slide is wave 1) + G-SLIP-5's tool gate (nle-ui/variants gain tool dispatch on `,`/`.` at the r1 keymap sync; both currently un-gated).
 
 ### 3.5 Track Ops
 
@@ -256,15 +338,17 @@ Organized by category. For each shortcut:
 
 | Key | Action | EngineCommand | Context | FCP equiv |
 |---|---|---|---|---|
-| `M` | Add marker at playhead (or edit existing if one is at playhead) | `{ type: 'toggleBookmark', params: { time: <currentTime> } }` | Always | M |
-| `Shift+M` | Delete marker at playhead | `{ type: 'removeBookmark', params: { time: <currentTime> } }` | When marker at playhead | Shift+M |
-| `Option+M` | Edit marker (open dialog, focus name field) | (UI only — opens marker dialog via uiStore; EngineCommand `updateBookmark` fires on save) | When marker at playhead | (none) |
+| `M` | Add marker at playhead (always adds — see the N8 note below) | `{ type: 'addMarker', params: { time: <currentTime> } }` | Always | M |
+| `Shift+M` | Delete marker at playhead | `{ type: 'deleteMarker', params: { time: <currentTime> } }` | When marker at playhead | Shift+M |
+| `Option+M` | Edit marker (open dialog, focus name field) | (UI only — opens marker dialog via uiStore; EngineCommand `updateMarker` fires on save) | When marker at playhead | (none) |
 | `Cmd+Option+M` | Delete all markers | `{ type: 'batch', label: 'Delete all markers', commands: ... }` | Always | (none) |
-| `Option+Shift+M` | Edit marker color (cycle through 8 colors) | `{ type: 'updateBookmark', params: { time: <currentTime>, updates: { color: <nextColor> } } }` | When marker at playhead | (none) |
+| `Option+Shift+M` | Add marker at playhead with cycled color (next in the 8-color palette) | `{ type: 'addMarker', params: { time: <currentTime>, color: <nextColor> } }` | Always | (none) |
 | `Up` (in marker nav mode) | Jump to previous marker | `{ type: 'seekToMarker', params: { direction: -1 } }` | Always | Cmd+Up |
 | `Down` (in marker nav mode) | Jump to next marker | `{ type: 'seekToMarker', params: { direction: 1 } }` | Always | Cmd+Down |
 
-**Marker color palette:** 8 colors — red, orange, yellow, green, blue, purple, pink, gray. Cycle order matches FCP. Color is stored on the bookmark (`Bookmark.color: string`).
+**Marker color palette:** 8 colors — red, orange, yellow, green, blue, purple, pink, gray. Cycle order matches FCP. Color is stored on the marker (`Marker.color: string` — the A2 amendment's unified type; the old `Bookmark.color` shape is absorbed).
+
+**M-key behavior (Round 15 amendment, N8 — DECIDED):** the mock's proven behavior is adopted: `M` **always adds** a marker at the playhead — there is no toggle/edit-at-playhead semantics (the v1.0 row's "or edit existing if one is at playhead" was undefined behavior: one gesture, one meaning, and the always-add form is pinned by the mock's tests). Editing an existing marker is `Option+M`'s dialog; deleting is `Shift+M` — the three verbs stay three keys. `Option+Shift+M` likewise **always adds** (with the next palette color) rather than cycling an existing marker's color. Command verbs on the two amended rows are aligned to spec 15 §4.3.49's shipped `addMarker` (spec 15 wins per §0.2); the remaining bookmark verbs (`toggleBookmark`/`removeBookmark`/`updateBookmark`) retire into the marker family via the A2 unification (09-side R15 pass). **A2-rename execution note (single owner — dated 2026-09-06, R15 fix wave; shared verbatim by 09 §3.1A):** the §3.7 binding rows above now speak the unified marker family's verbs (`deleteMarker`, `updateMarker`, `Marker.color`); the union's Bookmark block (spec 15 §4.3.39-42) retires at the next union-version bump per §4.1A's Bookmark row. ONE owner for the remaining fold: **spec 15 §13.15's C7 worklist** (the OT-side rename pass at A2).
 
 ### 3.8 View / Zoom
 
@@ -290,6 +374,8 @@ Organized by category. For each shortcut:
 | `Cmd+;` | Toggle grid overlay in preview | (UI state) | Always | (none) |
 
 **Fullscreen-preview conflict:** FCP uses `Cmd+Ctrl+F` for fullscreen; the binding `Cmd+Shift+F` here matches FreeCut's "open Scene Browser". Resolution: `Cmd+Shift+F` = **fullscreen preview** (more common in browser context where there is no separate Scene Browser window). Scene Browser opens via `Cmd+Option+B`.
+
+**R23 page-key reconciliation (PENDING — the live grammar vs these rows):** the shipped mock grammar (nle-ui + the variants) is `⌘1` Edit / `⌘2` Color / `⌘3` **Deliver** / `⌘4` Audio / `⌘5` **FX** (R23-WA) — this table's `⌘3` = "Effects workspace" collides with the live `⌘3` = Deliver, and the live surfaces add a fifth page (FX) this table lacks. The registered disposition (the variants' R23-WA wrap note): the FX page took spec 16's free `⌘5` chord; the `⌘3` reconciliation (Effects-workspace renamed/re-homed vs Deliver) is the pending edit — resolution rides the seal round or the SPEC-REVISION-CANDIDATES registration (see §0's GAP register row). `Escape` exits the Audio focus page and the FX tool back to Edit (the live law; §3.2's tool-escape row + §3.13's modal row generalize it).
 
 ### 3.9 Project / File
 
@@ -519,7 +605,7 @@ await page.evaluate(async (cmd) => {
 
 Track focus and selection are **orthogonal**:
 
-- **Track focus** determines which track receives `Cmd+A`, mute/solo/lock ops, and `Tab` navigation. There is exactly one focused track at a time (default: topmost track).
+- **Track focus** determines which track receives `Cmd+A`, mute/solo/lock ops, and `Tab` navigation. There is exactly one focused track at a time — **initialized to the TOPMOST track on scene load/switch** (Round 15 amendment, N11: the mock initialized focus to null and invented per-key fallbacks; the explicit init rule removes them — every fallback site reads the initialized focus instead).
 - **Selection** is the set of selected clips, which can span multiple tracks. `Tab` walks the focused track's clips in time order; `Up`/`Down` move the selection to the clip on the adjacent track *at the same time*.
 
 This separation lets a test do "select all on track 2, then nudge up to track 1" via: `Cmd+Down` (focus track 2) → `Cmd+A` (select all on track 2) → `Cmd+Shift+Up` (move selected up to track 1).
@@ -546,7 +632,7 @@ Some keys have multiple meanings depending on context. **Every conflict is resol
 | # | Key | Meaning A (context A) | Meaning B (context B) | Resolution | Notes |
 |---|---|---|---|---|---|
 | 1 | `L` | Forward playback (always) | Lock track (when track focused) | **`L` = playback (always).** Track lock is `Cmd+L`. | §3.1 vs §3.5 |
-| 2 | `,` / `.` | Slip (when slip tool active) | Nudge (when select tool active) | **Tool-mode determines op.** Slip tool → slip; any other tool → nudge. Alt: `Option+,`/`Option+.` always slips. | §3.4 vs §3.6 |
+| 2 | `,` / `.` | Insert-edit / overwrite-edit (when source-mode active — §3.4A) | Slip (slip tool) / slide (slide tool, §3.4B) / nudge (any other tool) | **Four meanings, resolved in §6.2's order (R25, D34.2): panel first — source-mode active → insert-edit (`,`) / overwrite-edit (`.`) (§3.4A); then tool — slip tool → slip, slide tool → slide (§3.4B), any other tool → nudge.** Alt: `Option+,`/`Option+.` always slips. | §3.4A vs §3.4 vs §3.4B vs §3.6 |
 | 3 | `M` | Add marker (always) | Mute track (when track focused) | **`M` = marker (always).** Mute is `Cmd+M`. | §3.7 vs §3.5 |
 | 4 | `S` | Solo track (when track focused) | Save project (always) | **`Cmd+S` = save (always).** Solo is `Cmd+Option+S`. | §3.5 vs §3.9 |
 | 5 | `B` | Razor tool (when not in razor mode) | Split at click (when in razor mode) | **Tool-mode determines op.** Not razor → select razor tool; razor + click → split at click. `Cmd+B` always splits at playhead regardless of tool. | §3.2 vs §3.4 |
@@ -556,13 +642,15 @@ Some keys have multiple meanings depending on context. **Every conflict is resol
 | 9 | `Cmd+Shift+F` | Toggle fullscreen preview | Open Scene Browser (FreeCut) | **`Cmd+Shift+F` = fullscreen preview** (browser context). Scene Browser is `Cmd+Option+B`. | §3.8 |
 | 10 | `Cmd+L` | Lock focused track (this spec) | Loop playback toggle (some editors) | **`Cmd+L` = lock track.** Loop playback is `Cmd+Shift+G` (avoids Cmd+L entirely). | §3.5 |
 | 11 | `Cmd+1`–`Cmd+9` | Switch workspace (§3.8) | Apply effect preset (§3.11, no Cmd) | **Workspace = `Cmd+1`–`Cmd+9`.** Effect presets = `1`–`9` (no modifier). No conflict — different modifiers. | §3.8 vs §3.11 |
-| 12 | `Tab` | Select next clip (timeline focused) | Cycle focus in effects panel (effects panel focused) | **Panel focus determines op.** Effects panel focused → cycle effects; otherwise → select next clip. | §3.3 vs §3.11 |
+| 12 | `Tab` | Select next clip (timeline region focused) | Cycle focus in effects panel (effects panel focused) | **Panel focus determines op.** Effects panel focused → cycle effects; timeline region focused → select next clip. (Round 15 amendment, N11 — §3.3's context column now reads "Timeline region focused", reconciling its old "Always" with this row.) | §3.3 vs §3.11 |
 | 13 | `Cmd+Option+L` | Toggle A/V link (when clip selected) | Unlock all tracks (always) | **`Cmd+Option+L` = A/V link toggle (clip-context priority).** Unlock-all-tracks reassigned to `Cmd+Shift+Option+L` (4-key chord). | §3.4 vs §3.5 (audit Issue #8 fix) |
 | 14 | `Cmd+Option+E` | Export current frame (always) | Reset all effects (when clip selected) | **`Cmd+Option+E` = export frame (Always-active primary).** Reset-all-effects reassigned to `Cmd+Shift+Option+E`. | §3.9 vs §3.11 (audit Issue #8 fix) |
 | 15 | `Cmd+Option+M` | Delete all markers (always) | Unmute all tracks (always) | **`Cmd+Option+M` = delete all markers.** Unmute-all-tracks reassigned to `Cmd+Shift+Option+M`. | §3.7 vs §3.5 (audit Issue #8 fix) |
 | 16 | `Cmd+Option+S` | Solo focused track (when track focused) | Save a copy (always) | **`Cmd+Option+S` = solo focused track** (per §6.1 #4 resolution). Save-a-copy reassigned to `Option+S` (alternate save variant — matches §6.3 Option-key convention). | §3.5 vs §3.9 (audit Issue #8 fix) |
 | 17 | `Cmd+Shift+M` | Mute all tracks (always) | Cycle marker color (when marker at playhead) | **`Cmd+Shift+M` = mute all tracks (Always).** Cycle-marker-color reassigned to `Option+Shift+M`. | §3.5 vs §3.7 (audit Issue #8 fix) |
 | 18 | `Cmd+Shift+S` | Save as (always) | Clear all solos (always) | **`Cmd+Shift+S` = save as (FCP convention, primary).** Clear-all-solos reassigned to `Cmd+Shift+Option+S` (4-key chord — "clear all" pattern per §6.3). | §3.9 vs §3.5 (audit Issue #8 fix) |
+| 19 | `Shift+,` / `Shift+.` | Slip ±10 frames (slip tool / clip selected — §3.4) | Nudge ±10 frames (any other tool, clip selected — §3.6) | **Tool-mode determines op (row 2's ±10 twin, made explicit R25/D34.2).** Slip tool → slip-10; slide tool → slide-10 (§3.4B); any other tool → nudge-10. No source-mode claimant — the source-edit family claims plain `,`/`.` and `Option+Shift+.` only (§3.4A); in the source viewer these rows fall through to the tool ladder unchanged. | §3.4 vs §3.6 vs §3.4B (D34.2, R25) |
+| 20 | `Option+Shift+,` / `Option+Shift+.` (⇧⌥.) | Ripple-overwrite (when source-mode active — §3.4A, the D34.1 primary) | Slip ±10 frames alt (when clip selected — §3.4's Option+ always-slip rows) | **Panel context wins (§6.2 step 3 > step 5): source-mode active → ripple-overwrite (the delete+move+insert composite); timeline with a clip selected → slip-10 (the always-slip alt).** Plain `Option+,`/`Option+.` keep the always-slip meaning — no source-mode claimant; the ripple-overwrite claimant is the `⇧⌥.` PERIOD sibling only (§3.4A's table) — `Option+Shift+,` has no source-mode descriptor (§8.6's set is `,`, `.`, `Option+Shift+.`) and keeps the slip-10 alt in every context. The re-chord's reasons: plain `Shift+.` is row 19's ladder, and DaVinci's `Shift+F10` is 18 §4.9's normative context-menu route (unavailable to this family). | §3.4A vs §3.4 (D34.1/D34.2, R25) |
 
 ### 6.2 Context-resolution order
 
@@ -1461,6 +1549,8 @@ export function isTextInput(target: HTMLElement | null): boolean {
 }
 ```
 
+**R23 live-guard census (the input/overlay family as shipped — each law is netted in its owner repo):** the skip list in every live surface adds **`SELECT`** (the mini's R18k review P2-4: a focused track-binding dropdown must keep its own keys — Space opens it, typing finds options); the **OS auto-repeat `e.repeat` gate** (the mini's C16: one S-hold = one split; NOT yet in the OT/app keymap — see §0's GAP row); the **native-control yield** (the mini's C1: Space on a focused `button`/`a` yields to the browser's own activation — ARIA-role elements do NOT yield); the **overlay/modal gate** (OT + the app: while a context menu, dialog, or any `[data-modal]` element is open, ALL timeline shortcuts are suppressed — the menu's own Escape closes it); **Escape-in-typable blurs first** (OT: the blur runs before the typable guard swallows the key); the **focused-playhead arrow ownership** (OT: the focused playhead component owns ←/→ frame-stepping; the global binding would double-apply); and the **Alt guard** (OT: no binding uses Alt — an Alt-held combo belongs to the OS/browser and must not be preventDefault-ed). The mock-vs-spec gap on the Cmd-combos-in-fields question is registered as ledger C1 (SPEC-REVISION-CANDIDATES §C: the mock suppresses everything mid-field; this §8.5 keeps `Cmd+` alive).
+
 ### 8.6 ShortcutMap
 
 The `ShortcutMap` is a `Map<ShortcutKey, ShortcutDescriptor[]>` (note: array of descriptors per key — see Issue #8 resolution below) with these features:
@@ -1469,7 +1559,8 @@ The `ShortcutMap` is a `Map<ShortcutKey, ShortcutDescriptor[]>` (note: array of 
 - **User overrides** (v2) — merged over default from `localStorage`.
 - **Context predicates** — each descriptor carries a `contextPredicate(ctx)` that returns `true` if the shortcut is active in the current context (selected clip exists, tool active, panel focused, etc.). Predicates receive the full `ResolverContext` (engine + uiStore) so they can evaluate UI-layer context (keyframe panel focused, color page active, etc.).
 - **Allow-in-text-input flag** — `Cmd+` shortcuts set this to `true`; single-key shortcuts set to `false`.
-- **Multi-descriptor-per-key support** — when two shortcuts share a key (e.g., `K` = pause / add-keyframe, `R` = ripple-toggle / reset-color-grade), the `register()` call appends a second descriptor. At lookup time, the handler iterates the descriptor array and picks the first whose `contextPredicate(ctx)` returns `true`. Direct conflicts (two descriptors both `Always` active) are flagged as errors at register time.
+- **Multi-descriptor-per-key support** — when two shortcuts share a key (e.g., `K` = pause / add-keyframe, `R` = ripple-tool / reset-color-grade), the `register()` call appends a second descriptor. At lookup time, the handler iterates the descriptor array and picks the first whose `contextPredicate(ctx)` returns `true`. Direct conflicts (two descriptors both `Always` active) are flagged as errors at register time.
+- **Source-edit descriptors (R25, D34):** the §3.4A rows register as additional context-disjoint descriptors on `,`, `.`, and `Option+Shift+.` — their `contextPredicate` is the C46 gate (`ctx.uiStore.viewerMode === 'source' && ctx.uiStore.sourceMediaId != null` — a source with duration loaded), a §6.2 step-3 panel context that outranks the slip/nudge ladder's step-4 tool context, so the source-edit descriptors sit BEFORE the timeline descriptors in each array (§6.2's order). The §3.4B slide rows register as tool-context siblings of the slip descriptors (`slide tool active`). The source-edit verbs are r1-scheduled (§3.4A's phasing note) — their descriptors enter `default()` at the r1 keymap wave, not before.
 
 > **Audit fix (Issue #8):** The original spec 16 used `Map<ShortcutKey, ShortcutDescriptor>` and threw on any duplicate registration. That invariant was incompatible with the Appendix A bindings that legitimately share a key across disjoint contexts (e.g., `K` = pause when keyframe panel NOT focused vs. `K` = add-keyframe when keyframe panel focused). The refactor to `Map<ShortcutKey, ShortcutDescriptor[]>` resolves this without losing the dev-time invariant: `register()` still throws for true conflicts (two descriptors both `Always`), but allows context-disjoint duplicates.
 
@@ -1568,7 +1659,7 @@ export class ShortcutMap {
       contextPredicate: (ctx) => ctx.uiStore.keyframes.isPanelFocused(),
       fcpEquiv: 'K',
     });
-    // ... ~178 more entries mirroring §3 (180 total — see Appendix A)
+    // ... ~178 more entries mirroring §3 (181 total — see Appendix A)
     return m;
   }
 
@@ -1659,7 +1750,7 @@ private handleJKL(key: 'J' | 'L'): EngineCommand | null {
 }
 ```
 
-`Space`, `K`, and any non-JKL key resets `jklState`. This state lives in the handler, not in the engine — tests that want to assert multi-tap behavior must press keys in sequence with realistic timing (Playwright's `page.keyboard.press()` runs in the same event loop, so the 500 ms window is real).
+`Space`, `K`, and any non-JKL key resets `jklState`. This state lives in the handler, not in the engine — tests that want to assert multi-tap behavior must press keys in sequence with realistic timing (Playwright's `page.keyboard.press()` runs in the same event loop, so the 500 ms window is real). **[R24 census note: the live implementations compute the ladder STATELESSLY from the engine's current rate + playing state (OT's W11 M28R — the BASE; the app post-D30-W-D) — no tap-count closure is kept; the observable ladder (1×→2×→4× capped, K = pause-only, Space resumes at the persisted rate) matches this closure form's §3.1 rows.]**
 
 ---
 
@@ -1957,6 +2048,7 @@ Spec 05 §19 documented the *union* of FreeCut + OpenCut-classic shortcuts as a 
 | `k` = pause (JKL) / add keyframe (keyframe panel) | Same — context-determined | ✅ agreed (§6 conflict #7) |
 | `m` = marker | Same | ✅ agreed |
 | `i` / `o` = mark in/out | Same | ✅ agreed |
+| `,` / `.` = insert / overwrite edit (source → timeline; the FreeCut-only comparison rows, 05 §19.1 — now at :1537-1538 post-R25; the `:1496-1497` anchor was the pre-R25 line) | `,` / `.` = source-mode-gated insert-edit / overwrite-edit (§3.4A, the C46 gate) | ✅ agreed — ratified R25 (D34.2): the variants' R20-W2 C46 implementation becomes spec law; the timeline meanings (slip/slide/nudge) are untouched by the gate (§6.1 row 2's four meanings) |
 | `mod+z` / `mod+shift+z` = undo/redo | `Cmd+Z` / `Cmd+Shift+Z` | ✅ agreed (`Cmd` normalized per §3 conventions) |
 | `mod+=` / `mod+-` = zoom in/out | `+`/`=` / `-` (no Cmd) | Single-key zoom is faster for common zoom; `Cmd++`/`Cmd+-` retained as alt bindings for FCP muscle memory |
 | `\` = zoom to fit | `Cmd+\` | Avoid single-key `\` (layout-dependent, easy to mistype) |
@@ -1966,7 +2058,7 @@ Spec 05 §19 documented the *union* of FreeCut + OpenCut-classic shortcuts as a 
 | `alt+c` (FreeCut) = split at cursor | `B` (razor) + click = split at click | Razor tool + click is more discoverable than a chord |
 | (none) | `Cmd+Shift+B` = split all tracks | New — addresses test need for "split everything at playhead" |
 
-**Net change:** this spec defines **180 bindings** across 13 categories (~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings — see Appendix A footer for the collapsing rule) vs §19's ~50, with explicit conflict resolution for all 12 disambiguation cases (§6) plus 6 audit-flagged direct conflicts resolved in §6.1 #13–#18. §19's union table remains useful as a *reference* for "what do FCP/Premiere/FreeCut/OpenCut-classic do" — this spec is the *normative* definition for our NLE.
+**Net change:** this spec defines **181 bindings** across 13 categories (180 at v1.0 + `Option+R` from the R15/A6 amendment; ~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings — see Appendix A footer for the collapsing rule) vs §19's ~50, with explicit conflict resolution for all 12 disambiguation cases (§6) plus 6 audit-flagged direct conflicts resolved in §6.1 #13–#18. §19's union table remains useful as a *reference* for "what do FCP/Premiere/FreeCut/OpenCut-classic do" — this spec is the *normative* definition for our NLE.
 
 ---
 
@@ -2040,20 +2132,20 @@ Each `EngineCommand` type maps to one or more manager methods on `EditorCore` **
 
 ---
 
-## 13. Implementation Phasing
+## 13. Implementation Phasing (the old phase rows kept as lineage; the D24 ladder is the tag vocabulary — the dual-tag window closed at R24)
 
-This spec is implemented across the phases defined in `14-implementation-phases.md`:
+**[R23 note: `14-implementation-phases.md` is RETIRED to a redirect stub (D23) — `IMPLEMENTATION-PLAN.md` at the spec-repo root is THE plan. The historical phase rows below are kept for lineage and re-tagged per the D24 verification ladder (ARCH-R23; the old-vocabulary dual-tags were stripped at R24 — the window closed): the crawl's app-behavior rows → **K3** (programmatic), the fidelity rows → **w1**, op depth → **r1**, the long-tail/polish rows → **r5**. This spec's live acceptance rows are §0's GAP register — this table is the coarse map only.]**
 
-| Phase | What's built | Shortcuts included |
-|---|---|---|
-| Phase 2 (timeline MVP) | Playback + basic edit | §3.1 (playback), §3.2 (tools: V, B), §3.3 (Tab/Esc), §3.4 (Cmd+B, Delete, Backspace), §3.10 (undo/redo) |
-| Phase 3 (full ops) | All NLE ops | §3.4 (full), §3.6 (nudge), §3.5 (track ops) |
-| Phase 4 (effects + color) | Effects pipeline | §3.11 (effects) |
-| Phase 5 (keyframes) | Keyframe panel | §3.12 (keyframes) |
-| Phase 6 (polish) | Cheat sheet, ARIA | §3.13 (help), §7 (accessibility) |
-| v2 (customization) | Remap UI | §7.4, §8.6 `mergeOverrides` |
+| Old phase (spec 14, retired) | D24 stage | What's built | Shortcuts included |
+|---|---|---|---|
+| Phase 2 (timeline MVP) | **K3** (the app-behavior nets; the surface already exists — the app's port keymap + the shell) | Playback + basic edit | §3.1 (playback), §3.2 (tools: V, B), §3.3 (Tab/Esc), §3.4 (Cmd+B, Delete, Backspace), §3.10 (undo/redo) — LIVED: the port's 24-row map + the W3 JKL half + the D22b undo law |
+| Phase 3 (full ops) | **K3** (composes) + **r1** (op depth: slip/slide/roll/rateStretch, retime/freezeFrame/rangeRemoval) | All NLE ops | §3.4 (full), §3.6 (nudge), §3.5 (track ops) |
+| Phase 4 (effects + color) | **r3** (the color instruments) + K3 (the panel rows' app tests) | Effects pipeline | §3.11 (effects) |
+| Phase 5 (keyframes) | **r1** (keyframe op depth) + K3 | Keyframe panel | §3.12 (keyframes) |
+| Phase 6 (polish) | **r5** (interchange + polish — the keymap long tail) | Cheat sheet, ARIA | §3.13 (help), §7 (accessibility) — LIVED: the cheat sheet is real in nle-ui/variants (§7.3's single-source discipline) |
+| v2 (customization) | **r5** | Remap UI | §7.4, §8.6 `mergeOverrides` |
 
-Phase 2's exit criteria (per `14-implementation-phases.md` line 308: "Keyboard shortcuts work") is satisfied when all Phase-2 shortcuts in the table above pass their tests (§9).
+The old "Phase 2 exit criteria" ("Keyboard shortcuts work") is answered by the K3 gate today: the app's key surface at `c885ece` (174/174 — the S1 JKL pins, the S2 delete/undo round-trips; the M28R-law pins land with D30 W-D) + the mini's law corpus (355) + the OT in-page real-keyboard suites (M24/M28R at `ded43c4`, code tip `c15a629`) are the crawl's evidence; the REMAINING rows are §0's GAP register (the K3 re-expression, the OT-side census, the D30 W-D family — R5/R6/Z4 — the r5 long tail, the r1 surfaces).
 
 ---
 
@@ -2097,11 +2189,12 @@ kbd-tool-zoom               | Z                  | Zoom tool                    
 kbd-tool-trim               | T                  | Trim tool                          | tools     | Always
 kbd-tool-slip               | Y                  | Slip tool                          | tools     | Always
 kbd-tool-slide              | U                  | Slide tool                         | tools     | Always
-kbd-toggle-ripple           | R                  | Ripple mode toggle                 | tools     | Always
+kbd-tool-ripple             | R                  | Ripple tool                        | tools     | Always
+kbd-toggle-ripple-mode      | Option+R           | Ripple mode toggle (UI pref)       | tools     | Always
 kbd-toggle-snap             | N                  | Snap toggle                        | tools     | Always
 kbd-tool-escape             | Escape             | Return to select tool              | tools     | When non-select tool active
-kbd-select-next             | Tab                | Select next clip                   | selection | Always
-kbd-select-prev             | Shift+Tab          | Select previous clip               | selection | Always
+kbd-select-next             | Tab                | Select next clip                   | selection | Timeline region focused
+kbd-select-prev             | Shift+Tab          | Select previous clip               | selection | Timeline region focused
 kbd-select-add-next         | Option+Tab         | Add next clip to selection         | selection | Always
 kbd-select-add-prev         | Option+Shift+Tab   | Add previous clip to selection     | selection | Always
 kbd-select-all-track        | Cmd+A              | Select all on focused track       | selection | When track focused
@@ -2121,17 +2214,17 @@ kbd-split-all               | Cmd+Shift+B        | Split all tracks at playhead 
 kbd-split-alt               | S                  | Split at playhead (alt binding)     | editing   | Always
 kbd-split-remove-left       | Q                  | Split + delete left half           | editing   | When clip under playhead
 kbd-split-remove-right      | W                  | Split + delete right half          | editing   | When clip under playhead
-kbd-trim-start-to-playhead  | [                  | Trim clip start to playhead        | editing   | When clip selected
-kbd-trim-end-to-playhead    | ]                  | Trim clip end to playhead          | editing   | When clip selected
-kbd-ripple-trim-start       | Option+[          | Ripple-trim clip start             | editing   | When clip selected
-kbd-ripple-trim-end         | Option+]          | Ripple-trim clip end               | editing   | When clip selected
+kbd-trim-start-to-playhead  | [                  | Trim clip start to playhead        | editing   | When clip selected or under playhead
+kbd-trim-end-to-playhead    | ]                  | Trim clip end to playhead          | editing   | When clip selected or under playhead
+kbd-ripple-trim-start       | Option+[          | Ripple-trim clip start             | editing   | When clip selected or under playhead
+kbd-ripple-trim-end         | Option+]          | Ripple-trim clip end               | editing   | When clip selected or under playhead
 kbd-slip-left-1             | ,                  | Slip left 1 frame                  | editing   | When clip selected, slip tool
 kbd-slip-right-1            | .                  | Slip right 1 frame                 | editing   | When clip selected, slip tool
 kbd-slip-left-10            | Shift+,            | Slip left 10 frames                | editing   | When clip selected
 kbd-slip-right-10           | Shift+.            | Slip right 10 frames               | editing   | When clip selected
 kbd-delete                  | Delete             | Delete (no ripple)                 | editing   | When clip selected
-kbd-ripple-delete           | Backspace          | Ripple delete                      | editing   | When clip selected
-kbd-ripple-delete-alt       | Cmd+Delete         | Ripple delete (alt)                | editing   | When clip selected
+kbd-delete-alias            | Backspace          | Delete selection (alias of Delete) | editing   | When clip selected
+kbd-ripple-delete           | Shift+Delete       | Ripple delete                      | editing   | When clip selected
 kbd-cut                     | Cmd+X              | Cut (copy + ripple delete)         | editing   | When clip selected
 kbd-copy                    | Cmd+C              | Copy                                | editing   | When clip selected
 kbd-paste-insert            | Cmd+V              | Paste at playhead (insert)         | editing   | Always
@@ -2250,7 +2343,7 @@ kbd-context-help            | F1                 | Contextual help              
 kbd-close-modal             | Escape             | Close modal / cancel                | help      | When modal open
 ```
 
-**Total bindings: 180 rows** (including alt bindings and per-preset rows). Each row maps 1:1 to a test in `tests/e2e/keyboard.spec.ts`. Unique actions: **~110** (after parameterizing: effect presets 1–9 counted as 1 unique action, effect toggles 1–9 as 1, panel toggles as 1, workspace switches as 1, alt bindings merged with primaries — collapsing rule: 180 → ~150 → ~120 → ~110). This 180 / ~110 split is the canonical binding count referenced in §0 TL;DR, §16 test matrix, and §11 net-change summary.
+**Total bindings: 181 rows** (180 at v1.0 + `Option+R` from the R15/A6 amendment; the A1 delete-family re-row is count-neutral — Backspace-alias + `Shift+Delete`-ripple replace Backspace-ripple + `Cmd+Delete`-ripple-alt, the latter dropped). Each row maps 1:1 to a test in `tests/e2e/keyboard.spec.ts`. Unique actions: **~110** (after parameterizing: effect presets 1–9 counted as 1 unique action, effect toggles 1–9 as 1, panel toggles as 1, workspace switches as 1, alt bindings merged with primaries — collapsing rule: 181 → ~150 → ~120 → ~110). This 181 / ~110 split is the canonical binding count referenced in §0A TL;DR, §16 test matrix, and §11 net-change summary (spec 15 §13.5's citation now reads **181 bindings** — the R15 15-side sync landed; its old "180 bindings" text predates the R15 pass).
 
 ---
 
@@ -2294,18 +2387,20 @@ For implementers. Each `EngineCommand` type maps to a `Command` subclass (or dir
 | `exportFrame` | `engine.command.apply({type:'exportFrame'})` → `ExportFrameCommand` (spec 15 §4.3.76) | `src/commands/export/export-frame.ts` |
 | (all playback / UI-store ops) | direct manager calls / `uiStore.*` setters | (no Command class) |
 
-**Greenfield files** (marked "greenfield" above) are new — they do not exist in OpenCut-classic and must be authored as part of this spec's implementation. See `14-implementation-phases.md` Phase 3 for scheduling. Spec-15-canonical type renames (`deleteTrack`, `upsertKeyframes`, `removeKeyframes`, `retimeKeyframe`, `copyClipboardEntry`, `buildPasteClipboardCommand`, `closeProject`) reflect alignment with `15-wire-protocol.md` §4 — files keep their existing OpenCut-classic file paths (e.g., `remove-track.ts`) but the EngineCommand discriminator uses the spec-15 name.
+**Greenfield files** (marked "greenfield" above) are new — they do not exist in OpenCut-classic and must be authored as part of this spec's implementation. Scheduling (R23 re-base): the composites that are app-side behavior (the `splitAndRemove`/ripple composes) author at **K3** over `timeline.trim`/`rippleDelete` (the GAP-W-ops rows); the op-depth families (slip/slide/roll/rateStretch/retime/freezeFrame/rangeRemoval) queue at **r1** (S-ot's workstream) — see `IMPLEMENTATION-PLAN.md` §3. Spec-15-canonical type renames (`deleteTrack`, `upsertKeyframes`, `removeKeyframes`, `retimeKeyframe`, `copyClipboardEntry`, `buildPasteClipboardCommand`, `closeProject`) reflect alignment with `15-wire-protocol.md` §4 — files keep their existing OpenCut-classic file paths (e.g., `remove-track.ts`) but the EngineCommand discriminator uses the spec-15 name.
 
 ---
 
 ## 16. Appendix C — Test Matrix
 
-Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status column tracks implementation. **Counts aligned to Appendix A's 180-row canonical registry** (see Appendix A footer for the collapsing rule that derives ~110 unique actions).
+Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status column tracks implementation. **Counts aligned to Appendix A's 181-row canonical registry** (see Appendix A footer for the collapsing rule that derives ~110 unique actions).
+
+**[R23 status note: the "Tests written: 0" column tracks THIS spec's planned app-side Playwright enumeration corpus (the K3/r5 target) — it is still 0 as a named suite. The crawl's keyboard NETS, however, are real and green in their owner repos (the verification layer moved under the R22 plan): the app's vitest pins (`GluedShell.test.tsx` S1/S2 — the JKL ladder, the delete/undo round-trips; 174/174 at `c885ece`), the mini's LAW-NET law tests (C1/C16/C46/C49 + Space/Escape; 355 sealed), nle-ui's useShortcuts.test.tsx (674 at `fc4cc35`), the variants' useShortcuts/shortcutMap tests (1521+), and OT's in-page real-keyboard suites (M24 + M28R's keyboard half, `ded43c4` code tip `c15a629`). The 181-row enumeration corpus lands with the K3 re-expression (the mini's key laws re-expressed app-side) + the r5 long tail. The per-category phase tags below are the OLD spec-14 ladder — see §13's D24 re-base.]**
 
 | Category | Tests planned | Tests written | Status |
 |---|---|---|---|
 | Playback (§3.1) | 22 | 0 | pending Phase 2 |
-| Tools (§3.2) | 10 | 0 | pending Phase 2 |
+| Tools (§3.2) | 11 | 0 | pending Phase 2 |
 | Selection (§3.3) | 16 | 0 | pending Phase 2 |
 | Editing (§3.4) | 26 | 0 | pending Phase 2–3 |
 | Track ops (§3.5) | 13 | 0 | pending Phase 3 |
@@ -2317,23 +2412,23 @@ Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status co
 | Effects (§3.11) | 22 | 0 | pending Phase 4 |
 | Keyframes (§3.12) | 20 | 0 | pending Phase 5 |
 | Help (§3.13) | 5 | 0 | pending Phase 6 |
-| **Total** | **180** | **0** | — |
+| **Total** | **181** | **0** | — |
 
-(The 180 count is the canonical Appendix A row count — see §0 TL;DR. Tests cover all 180 rows, with effect presets (1–9) and effect toggles (1–9) parameterized into 2 unique-action test groups (9 + 9 = 18 rows → 2 parameterized tests). Adjusted unique-action test count: ~110. Multi-tap JKL combos (`J`×2, `J`×3, `L`×2, `L`×3, `K`+`J`, `K`+`L`) are tested via the base `J`/`L`/`K` testIds with timed multi-press sequences — see §9.2 JKL shuttle recipe and Appendix A scope note.)
+(The 181 count is the canonical Appendix A row count — see §0A TL;DR. Tests cover all 181 rows, with effect presets (1–9) and effect toggles (1–9) parameterized into 2 unique-action test groups (9 + 9 = 18 rows → 2 parameterized tests). Adjusted unique-action test count: ~110. Multi-tap JKL combos (`J`×2, `J`×3, `L`×2, `L`×3, `K`+`J`, `K`+`L`) are tested via the base `J`/`L`/`K` testIds with timed multi-press sequences — see §9.2 JKL shuttle recipe and Appendix A scope note.)
 
 ---
 
 ## 17. Code References — nle-engine (reference, NOT canon)
 
-nle-engine has NO keyboard layer — it is engine + headless API only (its own Decision 9: "No React dependency in engine core"). Everything in this spec is SPEC-ONLY relative to the engine; the rows below document what the engine does provide that an implementer will attach a keyboard handler to. Where engine and spec conflict, **the spec wins**. Full reconciliation: `19-code-references.md`.
+nle-engine has NO keyboard layer — it is engine + headless API only (its own Decision 9: "No React dependency in engine core"). Everything in this spec is SPEC-ONLY relative to the engine; the rows below document what the engine does provide that an implementer will attach a keyboard handler to. Where engine and spec conflict, **the spec wins**. Full reconciliation: `19-code-references.md`. **[R24 re-verified at `5036387` — every verdict STANDS (all six rows re-checked live: player.ts:994-995, api.ts:793/919, run-nle-tests.mjs:167, page.tsx:5794, the UI-kit keydown sites — all exact; the pin moved `b8c6f88`→`5036387` via a submodule-only OT re-pin a4e971d→c15a629, zero engine source delta). R23 re-verification at `b8c6f88` kept as lineage; the file:line citations unchanged (the playback/player and headless/api files live under `src/lib/nle/` now):]**
 
 | Spec 16 section | nle-engine file:line | Verified quote | Status | Note |
 |---|---|---|---|---|
-| §3 entire inventory | `src/app/page.tsx` (grep) | only match: `compositionKeyframe pass=${pass}` | SPEC-ONLY | No `keydown`/`keyup` handler anywhere in the engine (incl. the test page); FreeCut's `config/hotkeys.ts` (this spec's primary teacher) was not ported |
-| §8 handler architecture | `scripts/run-nle-tests.mjs:122` | `await page.waitForSelector('button:has-text("Run All Milestones")'` | SPEC-ONLY | The only UI input the engine's harness exercises is one button click; `page.keyboard` is never used |
-| §3.1 JKL / setRate | `playback/player.ts:652` | `this._clock.playbackRate = rate;` | ALIGNED (underneath) | The rate machinery a JKL resolver would drive exists in Player; only the key→command layer is missing |
-| §3.2 tool keys → selectTool | `headless/api.ts:767` | `case 'addText': {` | ENGINE-GAP | No tool/selection model on the engine's wire surface (`selectTool`, `selectElements`, `marqueeSelect` have no counterpart) |
-| §3.12 keyframes | `headless/api.ts:893` | `const r = actions.addKeyframe({` | ALIGNED | `addKeyframe {itemId, property, frame, value, easing}` is wire-drivable today |
+| §3 entire inventory | `src/app/page.tsx:5794` (grep) | only match: `compositionKeyframe pass=${pass}` | SPEC-ONLY | No `keydown`/`keyup` handler anywhere in the NLE surface (the only keydown listeners in the tree are the shadcn-style UI kit's `components/ui/sidebar.tsx:108`/carousel — not the NLE); FreeCut's `config/hotkeys.ts` (this spec's primary teacher) was not ported |
+| §8 handler architecture | `scripts/run-nle-tests.mjs:167` | `await page.waitForSelector('button:has-text("Run All Milestones")'` | SPEC-ONLY | The only UI input the engine's harness exercises is one button click; `page.keyboard` is never used |
+| §3.1 JKL / setRate | `src/lib/nle/playback/player.ts:994-995` | `setPlaybackRate(rate: number): void { this._clock.playbackRate = rate;` | ALIGNED (underneath) | The rate machinery a JKL resolver would drive exists in Player (the `ratechange` event forwards from the clock, player.ts:606-607); the key→command layer is missing engine-side — the APP's port keymap drives it through the vendored OT (`core.setPlaybackRate`, W3-verified), and OT's canonical keymap now drives the same machinery through the wire verbs (`timeline.setPlaybackRate` / `timeline.play` / `timeline.pause` — the W11 M28R ladder, dispatch order setPlaybackRate-BEFORE-play) |
+| §3.2 tool keys → selectTool | `src/lib/nle/headless/api.ts:793` | `case 'addText': {` | ENGINE-GAP | No tool/selection model on the engine's wire surface (`selectTool`, `selectElements`, `marqueeSelect` have no counterpart) |
+| §3.12 keyframes | `src/lib/nle/headless/api.ts:919` | `const r = actions.addKeyframe({` | ALIGNED | `addKeyframe {itemId, property, frame, value, easing}` is wire-drivable today |
 | §9 test recipes | `gaps/audit/G-test-coverage.md:248` | `A thrown error inside any test block escapes` | CORRECTIVE | No per-test isolation in the engine harness — §9's assert-on-command patterns are the upgrade |
 
 ---
@@ -2349,7 +2444,7 @@ nle-engine has NO keyboard layer — it is engine + headless API only (its own D
 - Spec 10 (FCPXML export): handoff target — drives FCP-convention choice (§2.1, §11)
 - Spec 11 (cloud render): `exportMaster` destination
 - Spec 12 (testing strategy): test patterns, property-based testing
-- Spec 14 (implementation phases): phasing (§13)
+- Spec 14 (implementation phases): **RETIRED to a redirect stub (D23)** — the phasing content lives in `IMPLEMENTATION-PLAN.md` (this spec's §13 re-based; the old phase rows mapped to the D24 ladder, the dual-tags stripped at R24)
 - Spec 15 (`15-wire-protocol.md`, TEST-02 shipped, Round-7 amended): canonical `EngineCommand` discriminated union (78 types, §4.1) + command→manager-method mapping (§4.2) + `apply()` dispatcher (§4.4) + export commands (§4.3.74-76) and `renameProject`/`deleteProject` (§4.3.77-78). Spec 16's §8.3 reproduces the spec-15-overlapping types for local compilation; spec 15 is normative.
 - Spec 18 (UI shell): panel/tool controls that emit this spec's shortcuts and UI-layer commands (§0.2); the cheat-sheet modal (§7.3) lives in the shell's help surface (spec 18 §4.8).
 - Spec 19 (code references): the keyboard layer is SPEC-ONLY vs nle-engine (no keyboard code exists there) — see spec 19 §11's map.

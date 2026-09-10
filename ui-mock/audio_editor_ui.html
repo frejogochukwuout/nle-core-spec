@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Editor UI Reproduction</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+            color: #d1d5db;
+        }
+        /* Custom range slider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            height: 4px;
+            background: #4b5563;
+            border-radius: 2px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: #e5e7eb;
+            margin-top: -4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <!-- Main Container -->
+    <div class="w-full max-w-[420px] bg-[#1a1a1c] text-[#9ca3af] rounded-xl shadow-2xl border border-[#2c2c2e] overflow-hidden select-none">
+        
+        <!-- Top Navigation Bar -->
+        <div class="flex items-center justify-around bg-[#161618] border-b border-[#2c2c2e] px-2 py-3 text-xs">
+            <!-- Video Tab -->
+            <div class="flex flex-col items-center text-[#71717a] cursor-pointer hover:text-gray-300">
+                <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9A2.25 2.25 0 0 0 13.5 5.25h-9a2.25 2.25 0 0 0-2.25 2.25v9A2.25 2.25 0 0 0 4.5 18.75Z"/></svg>
+                <span>Video</span>
+            </div>
+            <!-- Audio Tab (Active) -->
+            <div class="flex flex-col items-center text-[#ff5722] font-medium relative cursor-pointer">
+                <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5m0-4.5h4.5m-4.5 0L3.75 20.25M15 9h4.5M15 9V4.5m0 4.5 5.25-5.25M15 15h4.5m-4.5 0v4.5m0-4.5 5.25 5.25"/></svg>
+                <span>Audio</span>
+                <div class="absolute -bottom-3 w-10 h-0.5 bg-[#ff5722] rounded-t"></div>
+            </div>
+            <!-- Effects Tab -->
+            <div class="flex flex-col items-center text-[#71717a] cursor-pointer hover:text-gray-300">
+                <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
+                <span>Effects</span>
+            </div>
+            <!-- Transition Tab -->
+            <div class="flex flex-col items-center text-[#71717a] cursor-pointer hover:text-gray-300">
+                <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+                <span>Transition</span>
+            </div>
+            <!-- Image Tab -->
+            <div class="flex flex-col items-center text-[#71717a] cursor-pointer hover:text-gray-300">
+                <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/></svg>
+                <span>Image</span>
+            </div>
+            <!-- File Tab -->
+            <div class="flex flex-col items-center text-[#71717a] cursor-pointer hover:text-gray-300">
+                <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75"/></svg>
+                <span>File</span>
+            </div>
+        </div>
+
+        <!-- Scrollable Content Area -->
+        <div class="p-4 space-y-5 text-xs">
+
+            <!-- Clip Volume Section -->
+            <div class="border-b border-[#2c2c2e] pb-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-2">
+                        <!-- Toggle Switch ON -->
+                        <div class="w-8 h-4 bg-[#ff5722] rounded-full relative cursor-pointer flex items-center p-0.5 shadow-inner">
+                            <div class="w-3 h-3 bg-white rounded-full ml-auto shadow"></div>
+                        </div>
+                        <span class="text-gray-200 font-medium">Clip Volume</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-[#71717a]">
+                        <svg class="w-3.5 h-3.5 cursor-pointer hover:text-gray-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/></svg>
+                        <svg class="w-3.5 h-3.5 cursor-pointer hover:text-gray-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between space-x-3 pl-4">
+                    <span class="text-[#9ca3af]">Volume</span>
+                    <div class="flex items-center space-x-3 flex-1 justify-end">
+                        <input type="range" min="-24" max="12" step="0.01" value="0" class="w-40">
+                        <div class="bg-[#121212] border border-[#3f3f46] px-2 py-0.5 rounded text-gray-200 w-14 text-right font-mono">0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clip Pan Section -->
+            <div class="border-b border-[#2c2c2e] pb-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-4 bg-[#ff5722] rounded-full relative cursor-pointer flex items-center p-0.5 shadow-inner">
+                            <div class="w-3 h-3 bg-white rounded-full ml-auto shadow"></div>
+                        </div>
+                        <span class="text-gray-200 font-medium">Clip Pan</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-[#71717a]">
+                        <svg class="w-3.5 h-3.5 cursor-pointer hover:text-gray-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/></svg>
+                        <svg class="w-3.5 h-3.5 cursor-pointer hover:text-gray-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between space-x-3 pl-4">
+                    <span class="text-[#9ca3af]">Pan</span>
+                    <div class="flex items-center space-x-3 flex-1 justify-end">
+                        <input type="range" min="-1" max="1" step="0.01" value="0" class="w-40">
+                        <div class="bg-[#121212] border border-[#3f3f46] px-2 py-0.5 rounded text-gray-200 w-14 text-right font-mono">0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clip Pitch Section -->
+            <div class="border-b border-[#2c2c2e] pb-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-4 bg-[#ff5722] rounded-full relative cursor-pointer flex items-center p-0.5 shadow-inner">
+                            <div class="w-3 h-3 bg-white rounded-full ml-auto shadow"></div>
+                        </div>
+                        <span class="text-gray-200 font-medium">Clip Pitch</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-[#71717a]">
+                        <svg class="w-3.5 h-3.5 cursor-pointer hover:text-gray-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/></svg>
+                        <svg class="w-3.5 h-3.5 cursor-pointer hover:text-gray-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+                    </div>
+                </div>
+                <div class="space-y-2.5 pl-4">
+                    <div class="flex items-center justify-between space-x-3">
+                        <span class="text-[#9ca3af]">Semi Tones</span>
+                        <div class="flex items-center space-x-3 flex-1 justify-end">
+                            <input type="range" min="-12" max="12" step="1" value="0" class="w-40">
+                            <div class="bg-[#121212] border border-[#3f3f46] px-2 py-0.5 rounded text-gray-200 w-14 text-right font-mono">0</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between space-x-3">
+                        <span class="text-[#9ca3af]">Cents</span>
+                        <div class="flex items-center space-x-3 flex-1 justify-end">
+                            <input type="range" min="-100" max="100" step="1" value="0" class="w-40">
+                            <div class="bg-[#121212] border border-[#3f3f46] px-2 py-0.5 rounded text-gray-200 w-14 text-right font-mono">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clip Equalizer Section -->
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-4 bg-[#ff5722] rounded-full relative cursor-pointer flex items-center p-0.5 shadow-inner">
+                            <div class="w-3 h-3 bg-white rounded-full ml-auto shadow"></div>
+                        </div>
+                        <span class="text-gray-200 font-medium">Clip Equalizer</span>
+                    </div>
+                    <svg class="w-3.5 h-3.5 text-[#71717a] cursor-pointer hover:text-gray-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+                </div>
+
+                <!-- Equalizer Graph Container -->
+                <div class="bg-[#121212] border border-[#2c2c2e] rounded-lg p-2 relative mb-3">
+                    <!-- DB labels left/right -->
+                    <div class="absolute left-2 top-3 flex flex-col justify-between h-[155px] text-[10px] text-[#52525b] pointer-events-none">
+                        <span>+24</span>
+                        <span>+12</span>
+                        <span>0</span>
+                        <span>-12</span>
+                        <span>-24</span>
+                    </div>
+                    <div class="absolute right-2 top-3 flex flex-col justify-between h-[155px] text-[10px] text-[#52525b] pointer-events-none text-right">
+                        <span>+24</span>
+                        <span>+12</span>
+                        <span>0</span>
+                        <span>-12</span>
+                        <span>-24</span>
+                    </div>
+
+                    <!-- SVG Graph -->
+                    <div class="mx-8">
+                        <svg viewBox="0 0 300 160" class="w-full h-40 overflow-visible">
+                            <!-- Grid lines horizontal -->
+                            <line x1="0" y1="20" x2="300" y2="20" stroke="#27272a" stroke-width="1"/>
+                            <line x1="0" y1="50" x2="300" y2="50" stroke="#27272a" stroke-width="1"/>
+                            <line x1="0" y1="80" x2="300" y2="80" stroke="#3f3f46" stroke-width="1" stroke-dasharray="2 2"/>
+                            <line x1="0" y1="110" x2="300" y2="110" stroke="#27272a" stroke-width="1"/>
+                            <line x1="0" y1="140" x2="300" y2="140" stroke="#27272a" stroke-width="1"/>
+
+                            <!-- Grid lines vertical -->
+                            <line x1="60" y1="10" x2="60" y2="150" stroke="#27272a" stroke-width="1"/>
+                            <line x1="120" y1="10" x2="120" y2="150" stroke="#27272a" stroke-width="1"/>
+                            <line x1="180" y1="10" x2="180" y2="150" stroke="#27272a" stroke-width="1"/>
+                            <line x1="240" y1="10" x2="240" y2="150" stroke="#27272a" stroke-width="1"/>
+
+                            <!-- Shaded Area Under Curve -->
+                            <path d="M 0,120 Q 30,100 60,75 T 150,65 T 220,80 T 270,80 L 300,130 L 300,150 L 0,150 Z" fill="rgba(6, 182, 212, 0.15)"/>
+
+                            <!-- Equalizer Curve Line -->
+                            <path d="M 0,120 Q 30,100 60,75 T 150,65 T 220,80 T 270,80 L 300,130" fill="none" stroke="#06b6d4" stroke-width="2"/>
+
+                            <!-- Point 1 -->
+                            <g transform="translate(60, 75)" class="cursor-pointer">
+                                <circle r="9" fill="#06b6d4" opacity="0.3"/>
+                                <circle r="6" fill="#06b6d4"/>
+                                <text x="0" y="3.5" font-size="8" fill="#121212" font-weight="bold" text-anchor="middle">1</text>
+                            </g>
+
+                            <!-- Point 2 -->
+                            <g transform="translate(140, 65)" class="cursor-pointer">
+                                <circle r="9" fill="#06b6d4" opacity="0.3"/>
+                                <circle r="6" fill="#06b6d4"/>
+                                <text x="0" y="3.5" font-size="8" fill="#121212" font-weight="bold" text-anchor="middle">2</text>
+                            </g>
+
+                            <!-- Point 3 -->
+                            <g transform="translate(220, 80)" class="cursor-pointer">
+                                <circle r="9" fill="#06b6d4" opacity="0.3"/>
+                                <circle r="6" fill="#06b6d4"/>
+                                <text x="0" y="3.5" font-size="8" fill="#121212" font-weight="bold" text-anchor="middle">3</text>
+                            </g>
+
+                            <!-- Point 4 -->
+                            <g transform="translate(270, 80)" class="cursor-pointer">
+                                <circle r="9" fill="#06b6d4" opacity="0.3"/>
+                                <circle r="6" fill="#06b6d4"/>
+                                <text x="0" y="3.5" font-size="8" fill="#121212" font-weight="bold" text-anchor="middle">4</text>
+                            </g>
+                        </svg>
+                    </div>
+
+                    <!-- Frequency Axis Labels -->
+                    <div class="flex justify-between px-8 text-[10px] text-[#52525b] mt-1 font-mono">
+                        <span>Hz</span>
+                        <span>62</span>
+                        <span>250</span>
+                        <span>1K</span>
+                        <span>4K</span>
+                        <span>16K</span>
+                    </div>
+                </div>
+
+                <!-- Band Selection Buttons -->
+                <div class="grid grid-cols-4 gap-1.5 mb-3">
+                    <!-- Band 1 (Active) -->
+                    <div class="border border-[#ff5722] rounded py-1.5 text-center text-[#ff5722] font-medium bg-[#271a16] cursor-pointer">
+                        Band 1
+                    </div>
+                    <!-- Band 2 -->
+                    <div class="border border-[#3f3f46] rounded py-1.5 text-center text-[#9ca3af] hover:border-gray-500 cursor-pointer">
+                        Band 2
+                    </div>
+                    <!-- Band 3 -->
+                    <div class="border border-[#3f3f46] rounded py-1.5 text-center text-[#9ca3af] hover:border-gray-500 cursor-pointer">
+                        Band 3
+                    </div>
+                    <!-- Band 4 -->
+                    <div class="border border-[#3f3f46] rounded py-1.5 text-center text-[#9ca3af] hover:border-gray-500 cursor-pointer">
+                        Band 4
+                    </div>
+                </div>
+
+                <!-- Filter Type Dropdown Indicator Container -->
+                <div class="grid grid-cols-4 gap-1.5">
+                    <!-- Band 1 Filter Icon selector -->
+                    <div class="bg-[#121212] border border-[#3f3f46] rounded p-1.5 flex items-center justify-between cursor-pointer">
+                        <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+                        <svg class="w-3 h-3 text-[#71717a]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
+                    </div>
+                    <!-- Band 2 Filter Icon selector -->
+                    <div class="bg-[#121212] border border-[#3f3f46] rounded p-1.5 flex items-center justify-between cursor-pointer opacity-70">
+                        <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v18m9-9H3"/></svg>
+                        <svg class="w-3 h-3 text-[#71717a]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
+                    </div>
+                    <!-- Band 3 Filter Icon selector -->
+                    <div class="bg-[#121212] border border-[#3f3f46] rounded p-1.5 flex items-center justify-between cursor-pointer opacity-70">
+                        <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5"/></svg>
+                        <svg class="w-3 h-3 text-[#71717a]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
+                    </div>
+                    <!-- Band 4 Filter Icon selector -->
+                    <div class="bg-[#121212] border border-[#3f3f46] rounded p-1.5 flex items-center justify-between cursor-pointer opacity-70">
+                        <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 17.25h16.5M3.75 12h16.5M3.75 6.75h16.5"/></svg>
+                        <svg class="w-3 h-3 text-[#71717a]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>
