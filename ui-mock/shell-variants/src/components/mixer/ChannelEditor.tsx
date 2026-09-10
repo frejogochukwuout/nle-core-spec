@@ -48,8 +48,17 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 /* R22 #81: per-insert param rows — honest view-state mocks (gap C60). One
-   state per trackId+kind so switching slots keeps the edits. */
-const INSERT_PARAM_DEFAULTS: Record<string, { key: string; label: string; min: number; max: number; step: number; fmt: (v: number) => string; init: number }[]> = {
+   state per trackId+kind so switching slots keeps the edits.
+   R24-W5c (DESIGN-R24 §2 F4-P3): a param may declare `log` — a LOG-DOMAIN
+   control (the De-esser's 2–9 kHz frequency row: its 4 kHz region is the
+   GEOMETRIC midpoint √(2k·9k) ≈ 4.24 kHz, not the arithmetic 5.5k the old
+   linear track parked mid-screen, useless). The slider then operates in a
+   0..100 POSITION domain through the family's zoom-slider grammar
+   (value = min·(max/min)^(pos/100), the lib/pixel.ts sliderToZoom law);
+   keyboard + drag ride the ONE map (each arrow = a constant ~1.5% ratio,
+   Home/End = the bounds). `step` stays the value step for linear rows and
+   the POSITION step for log rows. */
+const INSERT_PARAM_DEFAULTS: Record<string, { key: string; label: string; min: number; max: number; step: number; fmt: (v: number) => string; init: number; log?: boolean }[]> = {
   EQ: [
     { key: 'low', label: 'Low', min: -12, max: 12, step: 0.5, fmt: (v) => v.toFixed(1) + ' dB', init: 0 },
     { key: 'mid', label: 'Mid', min: -12, max: 12, step: 0.5, fmt: (v) => v.toFixed(1) + ' dB', init: 0 },
@@ -66,9 +75,12 @@ const INSERT_PARAM_DEFAULTS: Record<string, { key: string; label: string; min: n
   ],
   'De-esser': [
     { key: 'amount', label: 'Amount', min: 0, max: 100, step: 1, fmt: (v) => v + '%', init: 35 },
-    { key: 'freq', label: 'Freq', min: 2000, max: 9000, step: 100, fmt: (v) => (v / 1000).toFixed(1) + ' kHz', init: 5500 },
+    { key: 'freq', label: 'Freq', min: 2000, max: 9000, step: 1, fmt: (v) => (v / 1000).toFixed(1) + ' kHz', init: 5500, log: true },
   ],
 };
+
+/** the log-row position domain width (the zoom-slider grammar's 0..100). */
+const LOG_POS_MAX = 100;
 
 const insertParamsStore: Record<string, Record<string, number>> = {};
 
@@ -85,22 +97,36 @@ function InsertParams({ trackId, kind, badge }: { trackId: string; kind: string;
   };
   return (
     <div className="mb-1 flex flex-col gap-[2px] pl-1" data-testid={`channel-insert-params-${badge}-${kind}`}>
-      {defs.map((d) => (
-        <div key={d.key} className="flex items-center gap-2">
-          <span className="w-[52px] shrink-0 pl-2 text-[10px] text-tfaint">{d.label}</span>
-          <input
-            type="range"
-            min={d.min}
-            max={d.max}
-            step={d.step}
-            value={params[d.key]}
-            onChange={(e) => set(d.key, +(e.target as HTMLInputElement).value)}
-            aria-label={`${kind} ${d.label} for ${badge}`}
-            className="h-[9px] min-w-0 flex-1"
-          />
-          <span className="mono w-[52px] shrink-0 text-right text-[10px] text-tmuted">{d.fmt(params[d.key])}</span>
-        </div>
-      ))}
+      {defs.map((d) => {
+        /* R24-W5c (F4-P3): `log` params ride the zoom-slider grammar — the
+           DOM range is a 0..100 POSITION domain, the param keeps its value
+           in Hz (value = min·(max/min)^(pos/100); pos 50 = the geometric
+           mean, NOT the arithmetic midpoint). */
+        const domMin = d.log ? 0 : d.min;
+        const domMax = d.log ? LOG_POS_MAX : d.max;
+        const domStep = d.log ? 1 : d.step;
+        const domValue = d.log
+          ? (Math.log(params[d.key] / d.min) / Math.log(d.max / d.min)) * LOG_POS_MAX
+          : params[d.key];
+        const onDom = (raw: number) =>
+          set(d.key, d.log ? d.min * Math.pow(d.max / d.min, raw / LOG_POS_MAX) : raw);
+        return (
+          <div key={d.key} className="flex items-center gap-2">
+            <span className="w-[52px] shrink-0 pl-2 text-[10px] text-tfaint">{d.label}</span>
+            <input
+              type="range"
+              min={domMin}
+              max={domMax}
+              step={domStep}
+              value={domValue}
+              onChange={(e) => onDom(+(e.target as HTMLInputElement).value)}
+              aria-label={`${kind} ${d.label} for ${badge}`}
+              className="h-[9px] min-w-0 flex-1"
+            />
+            <span className="mono w-[52px] shrink-0 text-right text-[10px] text-tmuted">{d.fmt(params[d.key])}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -395,15 +421,20 @@ export function ChannelEditor() {
                   </div>
                 )}
 
-                {/* aux returns read-out */}
+                {/* aux returns — BOTH buses (R24-W5c, DESIGN-R24 §2 F4-P3:
+                    the block used to edit A1 only — A2's return was reachable
+                    only through the dock strip; the editor now covers the
+                    full bus pair, one row each, same grammar) */}
                 <div className="mt-1 border-t border-hairline pt-2">
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-tfaint">Aux returns</span>
-                  <Row label="A1">
-                    <span className="mono text-[10px] text-tmuted">{mixer.buses.a1.name}</span>
-                    <input type="range" min={-60} max={6} step={1} value={mixer.buses.a1.returnGain} className="h-[10px] min-w-0 flex-1"
-                      onChange={(e) => setAuxBus('a1', { returnGain: +e.target.value })} aria-label="Aux 1 return gain" />
-                    <span className="mono text-[10px] text-tmuted">{dbLabel(mixer.buses.a1.returnGain)}</span>
-                  </Row>
+                  {(['a1', 'a2'] as const).map((bus) => (
+                    <Row key={bus} label={bus === 'a1' ? 'A1' : 'A2'}>
+                      <span className="mono text-[10px] text-tmuted">{mixer.buses[bus].name}</span>
+                      <input type="range" min={-60} max={6} step={1} value={mixer.buses[bus].returnGain} className="h-[10px] min-w-0 flex-1"
+                        onChange={(e) => setAuxBus(bus, { returnGain: +e.target.value })} aria-label={`Aux ${bus === 'a1' ? 1 : 2} return gain`} />
+                      <span className="mono text-[10px] text-tmuted">{dbLabel(mixer.buses[bus].returnGain)}</span>
+                    </Row>
+                  ))}
                 </div>
 
                 {/* automation non-goal placeholder (design doc §8) */}

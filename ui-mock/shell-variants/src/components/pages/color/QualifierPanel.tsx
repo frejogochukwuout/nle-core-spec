@@ -129,7 +129,13 @@ function RangeWidget({
         className="absolute top-0 z-10 h-full cursor-ew-resize touch-none"
         style={{ left: `${pct}%`, width: handleW, transform: 'translateX(-50%)' }}
         onPointerDown={(e: ReactPointerEvent<HTMLDivElement>) => {
-          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          /* R24-W5c (DESIGN-R24 §2 F4-P3): GUARDED capture — a synthetic/
+             inactive pointer id throws NotFoundError in real browsers (the
+             Fader/Knob/PanBox law; the old unguarded call died before the
+             handle math ran in automation). Best-effort capture only. */
+          try {
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          } catch { /* inactive pointer id — drag still works, capture best-effort */ }
           onFirstTouch();
           setPos(which, e.clientX);
         }}
@@ -448,7 +454,9 @@ export function QualifierPanel() {
           ]}
         />
 
-        {/* strength — spec 08 §8.1 (0..1; displayed 0..100) */}
+        {/* strength — spec 08 §8.1 (0..1; displayed 0..100). R24-W5c (the
+            W5a resetTo hand-off): dbl-click writes the spec default (100% —
+            strength 1), in the row's own DISPLAY domain. */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between">
             <span className="text-[11px] text-[#a0a0a0]">Strength</span>
@@ -464,6 +472,7 @@ export function QualifierPanel() {
             step={1}
             valueText={`${(q.strength * 100).toFixed(0)}%`}
             variant="finesse"
+            resetTo={DEFAULT_QUALIFIER.strength * 100}
             onFirstTouch={tell}
             onChange={(v) => setQualifier({ strength: v / 100 })}
           />
@@ -471,25 +480,30 @@ export function QualifierPanel() {
       </div>
 
       {/* the spec 08 §17.E secondary correction (applied INSIDE the matte by
-          applyQualifierCorrection — W4c composes it in the viewer) */}
+          applyQualifierCorrection — W4c composes it in the viewer).
+          R24-W5c (the W5a resetTo hand-off): every correction slider threads
+          the spec default so dbl-click resets honestly (exposure/sat/temp/
+          tint all default 0 — never a fabricated range midpoint). */}
       <div className="flex flex-col gap-3.5 border-t border-hairline bg-panel px-4 py-4">
         <h3 className="mb-0.5 text-[14px] font-semibold text-tprimary">Secondary Correction</h3>
-        <CorrSlider label="Exposure" value={q.exposure} min={-2} max={2} step={0.05} fmt={(v) => v.toFixed(2)} onChange={(v) => setQualifier({ exposure: v })} tell={tell} />
-        <CorrSlider label="Saturation" value={q.saturation} min={-100} max={100} step={1} fmt={(v) => v.toFixed(1)} onChange={(v) => setQualifier({ saturation: v })} tell={tell} />
-        <CorrSlider label="Temperature" value={q.temperature} min={-100} max={100} step={1} fmt={(v) => v.toFixed(1)} onChange={(v) => setQualifier({ temperature: v })} tell={tell} />
-        <CorrSlider label="Tint" value={q.tint} min={-100} max={100} step={1} fmt={(v) => v.toFixed(1)} onChange={(v) => setQualifier({ tint: v })} tell={tell} />
+        <CorrSlider label="Exposure" value={q.exposure} min={-2} max={2} step={0.05} fmt={(v) => v.toFixed(2)} resetTo={DEFAULT_QUALIFIER.exposure} onChange={(v) => setQualifier({ exposure: v })} tell={tell} />
+        <CorrSlider label="Saturation" value={q.saturation} min={-100} max={100} step={1} fmt={(v) => v.toFixed(1)} resetTo={DEFAULT_QUALIFIER.saturation} onChange={(v) => setQualifier({ saturation: v })} tell={tell} />
+        <CorrSlider label="Temperature" value={q.temperature} min={-100} max={100} step={1} fmt={(v) => v.toFixed(1)} resetTo={DEFAULT_QUALIFIER.temperature} onChange={(v) => setQualifier({ temperature: v })} tell={tell} />
+        <CorrSlider label="Tint" value={q.tint} min={-100} max={100} step={1} fmt={(v) => v.toFixed(1)} resetTo={DEFAULT_QUALIFIER.tint} onChange={(v) => setQualifier({ tint: v })} tell={tell} />
       </div>
     </div>
   );
 }
 
-function CorrSlider({ label, value, min, max, step, fmt, onChange, tell }: {
+function CorrSlider({ label, value, min, max, step, fmt, resetTo, onChange, tell }: {
   label: string;
   value: number;
   min: number;
   max: number;
   step: number;
   fmt: (v: number) => string;
+  /** the spec 08 default (dbl-click reset — the W5a resetTo grammar) */
+  resetTo: number;
   onChange: (v: number) => void;
   tell: () => void;
 }) {
@@ -507,6 +521,7 @@ function CorrSlider({ label, value, min, max, step, fmt, onChange, tell }: {
         step={step}
         valueText={fmt(value)}
         variant="finesse"
+        resetTo={resetTo}
         onFirstTouch={tell}
         onChange={onChange}
       />

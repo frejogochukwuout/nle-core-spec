@@ -266,6 +266,20 @@ describe('selection semantics', () => {
     expect(S().activeSceneId).toBe('sc-1');
   });
 
+  /* R24-W5c (DESIGN-R24 §2 F4-P3): the 8th clear-site domain — stripFocus.
+     A focused strip carried across a scene switch resolved to a track id
+     that exists in NO new scene (harmless today — the ChannelEditor's
+     stripLive resolver degrades to the first-track fallback — but the
+     store carried the stale id; the D-C2 class). */
+  it('R24-W5c F4: scene switch clears stripFocus — the 8th clear-site domain (no stale mixer focus)', () => {
+    act(() => { S().setActiveScene('sc-1'); });
+    act(() => { S().setStripFocus('tr-audio-2'); });
+    expect(S().stripFocus).toBe('tr-audio-2');
+    act(() => { S().setActiveScene('sc-2'); });
+    expect(S().stripFocus).toBe(null); // the focus died with the scene
+    act(() => { S().setActiveScene('sc-1'); }); // restore for the siblings below
+  });
+
   it('R23-FIX item 3 (R5-P2-2): Tab selection clears the marker domain (+ track + project mode)', () => {
     /* the prior state a Tab walk can hit: marker rail live + a selection
        cursor + project mode on (booted directly — the domain writers can't

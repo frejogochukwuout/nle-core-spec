@@ -124,7 +124,14 @@ export function MicroSlider({
       aria-orientation="horizontal"
       className={`relative cursor-ew-resize select-none ${v.hit} ${className}`}
       onPointerDown={(e) => {
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        /* R24-W5c (DESIGN-R24 §2 F4-P3): GUARDED capture — a synthetic or
+           inactive pointer id makes setPointerCapture throw NotFoundError
+           in real browsers (the exact Fader/Knob/PanBox law; the old
+           unguarded call killed the handler in automation). Capture is
+           best-effort: the drag grammar works without it. */
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch { /* inactive pointer id — drag still works, capture best-effort */ }
         onFirstTouch?.();
         setFromClientX(e.clientX);
       }}

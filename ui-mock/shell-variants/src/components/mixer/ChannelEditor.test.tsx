@@ -256,6 +256,27 @@ describe('ChannelEditor', () => {
     expect(store().mixer.buses.a1.returnGain).toBe(0);
   });
 
+  /* R24-W5c (DESIGN-R24 §2 F4-P3): the Aux-returns block covers BOTH aux
+     buses — A2's return used to be reachable only via the dock strip. */
+  it('R24-W5c F4: the Aux-returns block covers BOTH buses — A2 renders + commits (was dock-strip-only)', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    // both bus rows render, each with its own name + slider + readout
+    expect(screen.getByText('Reverb')).toBeInTheDocument(); // a1
+    expect(screen.getByText('Spare')).toBeInTheDocument(); // a2 — the NEW row
+    const a1 = screen.getByLabelText('Aux 1 return gain') as HTMLInputElement;
+    const a2 = screen.getByLabelText('Aux 2 return gain') as HTMLInputElement;
+    expect(a1).toBeInTheDocument();
+    expect(a2).toBeInTheDocument();
+    expect(a2).toHaveAttribute('min', '-60'); // the same −60..+6 dB domain
+    expect(a2).toHaveAttribute('max', '6');
+    // both rows COMMIT through setAuxBus
+    fireEvent.change(a2, { target: { value: '-6' } });
+    expect(store().mixer.buses.a2.returnGain).toBe(-6);
+    expect(store().mixer.buses.a1.returnGain).toBe(-6); // a1 untouched (fixture)
+    fireEvent.change(a1, { target: { value: '3' } });
+    expect(store().mixer.buses.a1.returnGain).toBe(3);
+  });
+
   it('the pre/post tap point is a real toggle writing auxPreFader (moved off the strip, R19-B1)', () => {
     boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
     const tap = screen.getByRole('button', { name: 'Aux send pre-fader' });
@@ -336,5 +357,42 @@ describe('ChannelEditor terminal fader block (R19-B1)', () => {
     expect(useUi.getState().mixer.tracks['tr-audio-2'].inserts[1]).toBe('Comp');
     expect(screen.getByTestId('channel-insert-params-A2-Comp')).toBeInTheDocument();
     expect(screen.getByLabelText('Comp Thresh for A2')).toBeInTheDocument();
+  });
+
+  /* R24-W5c (DESIGN-R24 §2 F4-P3): the De-esser Freq row is a LOG-domain
+     control — the family's zoom-slider grammar (DOM range = a 0..100
+     POSITION domain, value = 2000·(9000/2000)^(pos/100) Hz; keyboard and
+     drag ride the one map). Mid-position is the GEOMETRIC mean
+     √(2000·9000) ≈ 4.24 kHz — the old linear 2000..9000 track parked the
+     arithmetic 5.5k mid-screen, useless for a de-esser. */
+  it('R24-W5c F4: the De-esser Freq row is LOG-domain — mid-position ≈ the geometric mean, not the arithmetic', () => {
+    boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
+    fireEvent.change(screen.getByLabelText('Insert slot 1'), { target: { value: 'De-esser' } });
+    expect(screen.getByTestId('channel-insert-params-A2-De-esser')).toBeInTheDocument();
+    const freq = screen.getByLabelText('De-esser Freq for A2') as HTMLInputElement;
+    // the DOM range is the 0..100 POSITION domain; the param stays in Hz
+    expect(freq).toHaveAttribute('min', '0');
+    expect(freq).toHaveAttribute('max', '100');
+    expect(freq).toHaveAttribute('step', '1');
+    // boots at init 5.5 kHz → pos = log(5.5/2)/log(4.5)·100 ≈ 67.3 — the
+    // default sits where the VALUE sits, not pinned mid-screen
+    expect(Number(freq.value)).toBeGreaterThan(60);
+    expect(Number(freq.value)).toBeLessThan(75);
+    expect(screen.getByText('5.5 kHz')).toBeInTheDocument(); // the readout at init
+    // MID-POSITION: 2000·4.5^0.5 = √(2000·9000) ≈ 4242.6 Hz → 4.2 kHz (the
+    // geometric mean) — the old linear track read the ARITHMETIC midpoint
+    // 5.5 kHz here (indistinguishable from the init — the useless row)
+    fireEvent.change(freq, { target: { value: '50' } });
+    expect(screen.getByText('4.2 kHz')).toBeInTheDocument();
+    expect(screen.queryByText('5.5 kHz')).toBeNull();
+    // the endpoints: pos 0/100 ⇔ the 2k/9k bounds (Home/End land exactly)
+    fireEvent.change(freq, { target: { value: '0' } });
+    expect(screen.getByText('2.0 kHz')).toBeInTheDocument();
+    fireEvent.change(freq, { target: { value: '100' } });
+    expect(screen.getByText('9.0 kHz')).toBeInTheDocument();
+    // one keyboard STEP in the position domain = a constant ~1.5% RATIO in
+    // Hz (4345.4 → 4.3 kHz) — keyboard + drag consistent through one map
+    fireEvent.change(freq, { target: { value: '51' } });
+    expect(screen.getByText('4.3 kHz')).toBeInTheDocument();
   });
 });

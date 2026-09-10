@@ -1080,6 +1080,13 @@ export const useUi = create<UiState>((set, get) => ({
          resolved to nothing in the new scene and the AppShell rail swap
          mounted a BLANK MarkerInspector (the stale-id blank-rail bug). */
       selectedMarkerId: null,
+      /* R24-W5c (DESIGN-R24 §2 F4-P3 — the 8th clear-site domain): the mixer
+         strip FOCUS dies with the scene switch (stale track id — the same
+         law as the effect/track/marker domains; the ChannelEditor's
+         stripLive resolver already degrades gracefully, this makes the
+         store stop carrying the stale id at all). W5c's ONLY useUiStore
+         change — the wave's partition exception, documented. */
+      stripFocus: null,
       ...(sc ? { lockAll: sc.tracks.every((t) => t.locked) } : {}),
     };
   }),

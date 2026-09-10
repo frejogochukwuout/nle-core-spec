@@ -7,14 +7,19 @@
    matte-preview status hint), plus the NEW tab-law pins (one scope at a
    time at full panel size, the ARIA tabs roving pattern, the ruling-14
    stale-frame honesty while the node graph owns the viewer). The 2d context
-   is the LOCAL recording stub (src/test/canvas2d). */
+   is the LOCAL recording stub (src/test/canvas2d).
+
+   R24-W5c (DESIGN-R24 §2 F4-P3 ×2): the parade pins — the SHARED max
+   drives the density math (honest cross-channel compare) and ONE shared
+   10-bit label axis draws (not three per-panel sets). */
 
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ScopesDock, SCOPE_THROTTLE_MS } from './ScopesDock';
 import { publishGradedFrame, getGradedFrame, subscribeGradedFrame, __clearGradedFrameBus } from './gradedFrameBus';
 import { densityAlpha, VECTORSCOPE_TARGETS, DEFAULT_QUALIFIER } from '../../../lib/color';
-import { drawWaveformScope, drawQualifierMatte } from './scopeDraw';
+import { drawWaveformScope, drawParadeScope, drawQualifierMatte } from './scopeDraw';
+import type { WaveformData, ParadeData } from '../../../lib/color';
 import { makeTestImageData, stubCanvas2D, type Canvas2DStub } from '../../../test/canvas2d';
 import { useUi } from '../../../state/useUiStore';
 
@@ -297,6 +302,22 @@ describe('ScopesDock — real traces from a red graded frame (§3.7, re-homed)',
     expect(Math.max(...panelTrace('95,224,138'))).toBeGreaterThan(140); // bottom
   });
 
+  it('R24-W5c F4: the parade draws ONE shared 10-bit label axis (5 labels, not 3×5)', async () => {
+    renderDock();
+    act(() => { publish(red()); });
+    await act(async () => { vi.advanceTimersByTime(0); });
+    selectTab('parade');
+    await act(async () => { vi.advanceTimersByTime(0); });
+    // ONE label set at the scope's left edge (the reference's graticule
+    // grammar): the old painter drew a set per panel — 15 fillTexts
+    const labels = ops('parade', 'fillText').map((a) => String(a[0]));
+    expect(labels).toEqual(['0', '256', '512', '768', '1023']);
+    // the gridlines are ONE shared axis too: 5 full-width hairlines (the
+    // three per-panel ⅓-width segments were contiguous — same pixels)
+    const lines = ops('parade', 'fillRect').filter((a) => a[3] === 1 && a[2] === 320);
+    expect(lines).toHaveLength(5);
+  });
+
   it('histogram: three stacked 256-bin tracks draw', async () => {
     renderDock();
     act(() => { publish(red()); });
@@ -389,6 +410,41 @@ describe('the pure painters (scopeDraw, no React)', () => {
     const trace = calls.filter((c) => c.op === 'set:fillStyle' && String(c.args[0]).includes('125,255,160,1'));
     expect(trace.length).toBeGreaterThan(0); // densityAlpha(9,9)=1 → alpha 1
     expect(densityAlpha(9, 9)).toBe(1);
+  });
+
+  it('R24-W5c F4: parade density normalizes on the SHARED max — same count, different per-panel maxes → the SAME alpha', () => {
+    const ctx = recorder();
+    /* R panel: one cell at n=9 (also its own busiest → local max 9);
+       G panel: the SAME n=9 cell plus an n=99 cell (local max 99).
+       sharedMax = 99. Under the OLD per-panel normalization R's n=9 read
+       FULL alpha (densityAlpha(9,9)=1) while G's n=9 read ~0.5 — the same
+       input value, different rendered intensity, a quiet channel lying
+       as bright as its own busiest cell. The shared scale reads BOTH at
+       densityAlpha(9,99) ≈ 0.5 (the honest cross-channel compare). */
+    const wf = (cells: [number, number][], max: number): WaveformData => {
+      const counts = new Uint32Array(256);
+      for (const [level, n] of cells) counts[level] = n;
+      return { cols: 1, levels: 256, counts, max };
+    };
+    const data: ParadeData = {
+      r: wf([[40, 9]], 9),
+      g: wf([[40, 9], [80, 99]], 99),
+      b: wf([], 0),
+      sharedMax: 99,
+    };
+    drawParadeScope(ctx, 320, 160, data);
+    const calls = (ctx as unknown as { __calls: { op: string; args: unknown[] }[] }).__calls;
+    const styles = calls.filter((c) => c.op === 'set:fillStyle').map((c) => String(c.args[0]));
+    // sharedMax is actually USED: R's n=9 draws at the shared alpha ≈0.5,
+    // NOT the per-panel full 1 the old data.max normalization produced
+    expect(styles).toContain('rgba(255,107,107,0.5)');
+    expect(styles).not.toContain('rgba(255,107,107,1)');
+    // the same count in the busier panel reads IDENTICALLY
+    expect(styles).toContain('rgba(95,224,138,0.5)');
+    expect(densityAlpha(9, 99)).toBeCloseTo(0.5, 2);
+    // and the label law at the painter level: ONE shared 10-bit axis
+    const labels = calls.filter((c) => c.op === 'fillText').map((c) => String(c.args[0]));
+    expect(labels).toEqual(['0', '256', '512', '768', '1023']);
   });
 
   it('drawQualifierMatte paints green rects with alpha = the sampled mask', () => {

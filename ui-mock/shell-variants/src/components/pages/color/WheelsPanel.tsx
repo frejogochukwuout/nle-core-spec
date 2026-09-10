@@ -174,7 +174,13 @@ function WheelControl({
   };
   const onPointer = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.type === 'pointerdown') {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      /* R24-W5c (DESIGN-R24 §2 F4-P3): GUARDED capture — a synthetic/
+         inactive pointer id throws NotFoundError in real browsers (the
+         Fader/Knob/PanBox law; the old unguarded call died before the
+         puck math ran in automation). Best-effort capture only. */
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch { /* inactive pointer id — drag still works, capture best-effort */ }
       tell();
       applyPuck(e.clientX, e.clientY);
     } else if (e.type === 'pointermove' && e.buttons === 1 && drag) {

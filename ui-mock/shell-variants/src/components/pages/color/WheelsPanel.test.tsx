@@ -88,6 +88,37 @@ describe('R24-W5a F2: WheelsPanel top controls — Temp/Tint are REAL sliders', 
   });
 });
 
+describe('R24-W5c F4: the wheel puck pointer capture is GUARDED (Fader/Knob law)', () => {
+  it('a bogus pointer id at pointerdown never throws — the puck gesture survives and commits ONE setGrade', () => {
+    boot();
+    const wheel = screen.getByTestId('shell-color-wheel-lift');
+    // jsdom geometry is flat — stub the 150px wheel box (the puck math is real)
+    wheel.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 150, height: 150, right: 150, bottom: 150, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    /* setup.ts stubs setPointerCapture as a no-op; REAL browsers throw
+       NotFoundError for a synthetic/inactive pointer id — stub the throw and
+       fire the exact event. The old unguarded call (the F4 finding) died
+       BEFORE the puck math ran; the guard keeps capture best-effort. */
+    const real = Element.prototype.setPointerCapture;
+    Element.prototype.setPointerCapture = () => {
+      throw new DOMException('Invalid pointer id', 'NotFoundError');
+    };
+    try {
+      expect(() => fireEvent.pointerDown(wheel, { pointerId: 9999, clientX: 100, clientY: 75 })).not.toThrow();
+      fireEvent.pointerMove(wheel, { buttons: 1, pointerId: 9999, clientX: 100, clientY: 75 });
+      expect(S().mockGrades['el-2']).toBeUndefined(); // nothing committed mid-gesture
+      fireEvent.pointerUp(wheel, { pointerId: 9999 });
+    } finally {
+      Element.prototype.setPointerCapture = real;
+    }
+    // the puck gesture COMMITTED: dx = (100−75)/75 = 1/3 → shAmount 0.333,
+    // puck angle 90° → spec hue (360−90) = 270 (the D3 one-write law)
+    expect(S().mockGrades['el-2'].shAmount).toBeCloseTo(0.333, 2);
+    expect(S().mockGrades['el-2'].shHue).toBe(270);
+    expect(S().past.length).toBe(1);
+  });
+});
+
 describe('R24-W5a F2: WheelsPanel luma thumbwheels — dbl-click resets to the spec 08 default', () => {
   it('Gamma luma: double-click from a NON-default grade writes DEFAULT_GRADE.gamma (1), never the midpoint (2.125)', () => {
     boot();

@@ -12,7 +12,14 @@
    same 'lighter' mode over the spec-08 §11.3 graticule (6 target boxes at
    103°/61°/−13°/−77°/−119°/167° on the 75% ring, circles 100/75/25%,
    crosshair, 123° skin-tone line). Y-axis labels use the 10-bit 0–1023
-   convention over 8-bit data (×4.01 — documented, color-layout §3.7). */
+   convention over 8-bit data (×4.01 — documented, color-layout §3.7).
+
+   R24-W5c (DESIGN-R24 §2 F4-P3 ×2): the PARADE now normalizes its three
+   panels on ParadeData.sharedMax (the honest cross-channel compare —
+   scopesMath computes it, the painter uses it: the same cell count draws
+   the same density alpha in every panel) and draws ONE shared graticule
+   axis across the full width (one 10-bit label set — the reference's
+   graticule grammar, not three duplicated per-panel sets). */
 
 import {
   densityAlpha,
@@ -41,35 +48,51 @@ export type ScopeKind = 'waveform' | 'parade' | 'vectorscope' | 'histogram';
 
 const LABEL_10BIT = [0, 256, 512, 768, 1023];
 
-function drawColumnHistogram(
+/** y of an 8-bit level (0 = bottom) — shared by the graticule and the
+    traces so the labels sit on the levels they measure. */
+const yOfLevel = (h: number, level: number) => h - 1 - (level / 255) * (h - 2);
+
+/** The 5-level graticule + its ONE 10-bit label set (color-layout §3.7:
+    8-bit data maps ×4.01). R24-W5c (F4-P3): the PARADE calls this ONCE
+    across the full panel width — one SHARED axis (the reference's
+    graticule grammar), never a label set per channel panel; the labels
+    gate on the scope being wide enough (w ≥ 200). */
+function drawGraticule(
   ctx: CanvasRenderingContext2D,
   w: number,
+  h: number,
+  x0: number,
+  width: number,
+): void {
+  ctx.fillStyle = GRAY_LABEL;
+  ctx.font = '9px ui-monospace, monospace';
+  for (let i = 0; i < LABEL_10BIT.length; i++) {
+    const y = yOfLevel(h, i * 64);
+    ctx.fillStyle = 'rgba(140,150,164,0.28)';
+    ctx.fillRect(x0, y, width, 1);
+    if (w >= 200) {
+      ctx.fillStyle = GRAY_LABEL;
+      ctx.fillText(String(LABEL_10BIT[i]), x0 + 2, Math.max(8, y - 2));
+    }
+  }
+}
+
+/** Column-histogram traces with density alpha, normalized against
+    `scaleMax` — the single panel passes its own max; the parade passes
+    the SHARED max (R24-W5c F4-P3: honest cross-channel compare). */
+function drawColumnHistogram(
+  ctx: CanvasRenderingContext2D,
   h: number,
   data: WaveformData,
   color: string,
   x0: number,
   panelW: number,
-  withGraticule: boolean,
+  scaleMax: number,
 ): void {
-  const { cols, counts, max } = data;
+  const { cols, counts } = data;
   const colW = Math.max(1, panelW / cols);
-  const yOf = (level: number) => h - 1 - (level / 255) * (h - 2);
+  const yOf = (level: number) => yOfLevel(h, level);
   const rowH = Math.max(1, h * 0.009); // §3.7 fillRect(x, y, 1, 1.5) at 160px native
-  if (withGraticule) {
-    // 10-bit graticule labels (color-layout §3.7: 8-bit data maps ×4.01)
-    ctx.fillStyle = GRAY_LABEL;
-    ctx.font = '9px ui-monospace, monospace';
-    for (let i = 0; i < LABEL_10BIT.length; i++) {
-      const level = i * 64;
-      const y = yOf(level);
-      ctx.fillStyle = 'rgba(140,150,164,0.28)';
-      ctx.fillRect(x0, y, panelW, 1);
-      if (w >= 200) {
-        ctx.fillStyle = GRAY_LABEL;
-        ctx.fillText(String(LABEL_10BIT[i]), x0 + 2, Math.max(8, y - 2));
-      }
-    }
-  }
   ctx.globalCompositeOperation = 'lighter';
   const BUCKETS = 16;
   for (let col = 0; col < cols; col++) {
@@ -88,7 +111,7 @@ function drawColumnHistogram(
     for (let level = 0; level < 256; level++) {
       const n = counts[base + level];
       if (n <= 0) { flush(level - 1); runLevel = -1; continue; }
-      const bucket = Math.round(densityAlpha(n, max) * BUCKETS);
+      const bucket = Math.round(densityAlpha(n, scaleMax) * BUCKETS);
       if (runLevel < 0) { runLevel = level; runBucket = bucket; }
       else if (bucket !== runBucket) { flush(level - 1); runLevel = level; runBucket = bucket; }
     }
@@ -101,13 +124,20 @@ function drawColumnHistogram(
 export function drawWaveformScope(ctx: CanvasRenderingContext2D, w: number, h: number, data: WaveformData): void {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, h);
-  drawColumnHistogram(ctx, w, h, data, TRACE, 0, w, true);
+  drawGraticule(ctx, w, h, 0, w);
+  drawColumnHistogram(ctx, h, data, TRACE, 0, w, data.max);
 }
 
-/** RGB Parade — three side-by-side panels on the shared max (mode 5). */
+/** RGB Parade — three side-by-side panels on the shared max (mode 5).
+ *  R24-W5c (F4-P3 ×2): ONE graticule/label axis across the full width
+ *  (the panels' gridline segments were contiguous — identical pixels, one
+ *  shared axis now) and every panel's density normalized on
+ *  `data.sharedMax` (the scale scopesMath computes — the same count draws
+ *  the same alpha in R/G/B, honest cross-channel compare). */
 export function drawParadeScope(ctx: CanvasRenderingContext2D, w: number, h: number, data: ParadeData): void {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, h);
+  drawGraticule(ctx, w, h, 0, w);
   const panelW = w / 3;
   const panels: [WaveformData, string][] = [
     [data.r, '255,107,107'],
@@ -115,7 +145,7 @@ export function drawParadeScope(ctx: CanvasRenderingContext2D, w: number, h: num
     [data.b, '90,169,255'],
   ];
   panels.forEach(([wd, color], i) => {
-    drawColumnHistogram(ctx, w, h, wd, color, i * panelW, panelW, true);
+    drawColumnHistogram(ctx, h, wd, color, i * panelW, panelW, data.sharedMax);
   });
 }
 

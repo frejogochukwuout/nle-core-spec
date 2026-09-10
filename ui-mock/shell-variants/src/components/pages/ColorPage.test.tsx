@@ -509,6 +509,55 @@ describe('QualifierPanel (C54 — spec 08 §8.1 store-driven keyer)', () => {
     expect(S().mockGrades['el-2'].qualifier?.temperature).toBe(1);
   });
 
+  /* R24-W5c (DESIGN-R24 §2 F4-P3): the W5a resetTo hand-off — the
+     qualifier's 5 MicroSliders (strength + the 4 §17.E corrections)
+     thread the spec 08 defaults so dbl-click resets honestly (the
+     no-default no-op law of controls.test; never a fabricated midpoint). */
+  it('R24-W5c (W5a hand-off): dbl-click on the qualifier sliders writes the SPEC DEFAULT (5/5 threaded)', () => {
+    mountQualifier();
+    // move all five off-default through the store seam first
+    act(() => {
+      S().setGrade('el-2', { qualifier: { strength: 0.5, exposure: 0.75, saturation: 30, temperature: 20, tint: -40 } });
+    });
+    const q0 = S().mockGrades['el-2'].qualifier!;
+    expect(q0.strength).toBeCloseTo(0.5, 5);
+    expect(q0.exposure).toBeCloseTo(0.75, 5);
+    fireEvent.doubleClick(screen.getByRole('slider', { name: 'Qualifier strength' }));
+    expect(S().mockGrades['el-2'].qualifier?.strength).toBe(1); // DEFAULT_QUALIFIER.strength (display 100)
+    fireEvent.doubleClick(screen.getByRole('slider', { name: 'Qualifier Exposure' }));
+    expect(S().mockGrades['el-2'].qualifier?.exposure).toBe(0);
+    fireEvent.doubleClick(screen.getByRole('slider', { name: 'Qualifier Saturation' }));
+    expect(S().mockGrades['el-2'].qualifier?.saturation).toBe(0);
+    fireEvent.doubleClick(screen.getByRole('slider', { name: 'Qualifier Temperature' }));
+    expect(S().mockGrades['el-2'].qualifier?.temperature).toBe(0);
+    fireEvent.doubleClick(screen.getByRole('slider', { name: 'Qualifier Tint' }));
+    expect(S().mockGrades['el-2'].qualifier?.tint).toBe(0);
+  });
+
+  /* R24-W5c (F4-P3): the RangeWidget handle's pointer capture is guarded —
+     the Fader/Knob/PanBox law (a synthetic/inactive pointer id throws
+     NotFoundError in real browsers; jsdom's setup stub no-ops, so the throw
+     is stubbed in). The old unguarded call died before the handle math. */
+  it('R24-W5c F4: a bogus pointer id on a range handle never throws — the guarded capture keeps the gesture alive', () => {
+    mountQualifier();
+    mockBox(); // the hue bar measures 400px: clientX 120 → 30% → v=108
+    const lo = screen.getByRole('slider', { name: 'Hue range low' });
+    const real = Element.prototype.setPointerCapture;
+    Element.prototype.setPointerCapture = () => {
+      throw new DOMException('Invalid pointer id', 'NotFoundError');
+    };
+    try {
+      expect(() => fireEvent.pointerDown(lo, { pointerId: 9999, clientX: 120 })).not.toThrow();
+      fireEvent.pointerUp(lo, { pointerId: 9999 });
+    } finally {
+      Element.prototype.setPointerCapture = real;
+    }
+    // the gesture COMMITTED through the store seam (the handler survived
+    // the capture throw; the separation law clamped lo to hi − 2%: 10.3/17.5)
+    expect(S().mockGrades['el-2'].qualifier?.hueCenter).toBeCloseTo(13.9, 2);
+    expect(S().mockGrades['el-2'].qualifier?.hueWidth).toBeCloseTo(7.2, 2);
+  });
+
   it('Preview matte toggles the qualifierPreviewOn view-state AND mirrors showMask (undoable)', () => {
     mountQualifier();
     fireEvent.click(screen.getByTestId('shell-color-qualifier-preview'));

@@ -535,8 +535,10 @@ export function ChannelStrip({ track, sceneId, tier = 0, narrow = false, stripH,
    Ours, not in the reference (model-backed, spec 20 §4.2 — deliberate
    divergence, flagged in the R19-B1 report): the same 86px/tier law with a
    lean accessory stack — the real bus ON/OFF toggle + the honest no-source
-   chip share the 22px input-row slot; the bus name lives in the header (T1+)
-   or the title row (T0). Same TERMINAL fader section law as the channels. */
+   chip share the 22px input-row slot; the bus name lives in the header at
+   T1/T2 (the tier law — those tiers drop the title row) or the title row
+   (T0: the header is ID-only, D5 — R24-W5c). Same TERMINAL fader section
+   law as the channels. */
 export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' | 'a2'; tier?: MixerTier; narrow?: boolean; stripH?: number }) {
   const settings = useUi((s) => s.mixer.buses[bus]);
   const setAuxBus = useUi((s) => s.setAuxBus);
@@ -669,7 +671,13 @@ export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' 
     body = (
       <>
         <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
-        <StripHeader badge={badge} name={settings.name} />
+        {/* R24-W5c (DESIGN-R24 §2 F4-P3): the T0 header is ID-ONLY (the D5
+            law the channels/master keep) — the bus NAME lives in the 26px
+            title row below (the old name-in-header duplicated it live:
+            "A1Reverb" + "Reverb"). T1/T2 still merge the name up (those
+            tiers drop the title row — the shared tier law); T3 was already
+            ID-only. */}
+        <StripHeader badge={badge} />
         <Hairline />
         {accessory(0)}
         {onRow}

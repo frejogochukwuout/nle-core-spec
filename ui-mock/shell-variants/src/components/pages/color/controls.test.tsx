@@ -4,7 +4,12 @@
    fix threads the default through a resetTo prop (the NumberField §5A
    grammar): dbl-click writes it; without one the gesture is an honest no-op.
    These pins hold the component-level law; WheelsPanel.test.tsx holds the
-   panel-level threading (the grade rows + the spec 08 defaults). */
+   panel-level threading (the grade rows + the spec 08 defaults).
+
+   R24-W5c (DESIGN-R24 §2 F4-P3): the guarded-capture pin — the setup.ts
+   stub no-ops setPointerCapture, so the inactive-pointer-id throw is
+   simulated by stubbing it to THROW; the guarded handler must survive
+   (the Fader/Knob/PanBox law). */
 
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -48,6 +53,36 @@ describe('MicroSlider — the double-click reset law (R24-W5a F2-P2)', () => {
     mount({ onChange });
     fireEvent.doubleClick(screen.getByRole('slider', { name: 'Test slider' }));
     expect(onChange).not.toHaveBeenCalled(); // nothing honest to write
+  });
+});
+
+describe('MicroSlider — the guarded pointer capture (R24-W5c F4-P3)', () => {
+  it('a synthetic pointerdown with a bogus pointer id NEVER throws — the capture is best-effort, the gesture survives', () => {
+    /* jsdom's setPointerCapture is a setup.ts no-op; REAL browsers throw
+       NotFoundError for an inactive/synthetic pointer id (test automation,
+       synthetic events). Stub the throw and fire the exact event: the old
+       unguarded call propagated the exception out of the handler. */
+    const real = Element.prototype.setPointerCapture;
+    Element.prototype.setPointerCapture = () => {
+      throw new DOMException('Invalid pointer id', 'NotFoundError');
+    };
+    try {
+      const onChange = vi.fn();
+      mount({ value: 1, onChange });
+      const s = screen.getByRole('slider', { name: 'Test slider' });
+      s.getBoundingClientRect = () =>
+        ({ left: 0, width: 100, right: 100, top: 0, height: 14, bottom: 14, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+      // the bogus pointer id: capture throws, the handler survives, the
+      // drag buffer engaged (the move + up still complete the gesture)
+      expect(() => fireEvent.pointerDown(s, { pointerId: 9999, clientX: 40 })).not.toThrow();
+      fireEvent.pointerMove(s, { buttons: 1, pointerId: 9999, clientX: 40 });
+      expect(onChange).not.toHaveBeenCalled(); // nothing committed mid-gesture
+      fireEvent.pointerUp(s, { pointerId: 9999 });
+      expect(onChange).toHaveBeenCalledTimes(1); // the gesture COMMITTED
+      expect(onChange).toHaveBeenCalledWith(1.75); // 40% of 0.25..4
+    } finally {
+      Element.prototype.setPointerCapture = real;
+    }
   });
 });
 

@@ -526,6 +526,25 @@ describe('AuxStrip', () => {
     expect(faderCol.compareDocumentPosition(meterCol)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
+  /* R24-W5c (DESIGN-R24 §2 F4-P3): the T0 header is ID-ONLY (the D5 law
+     the channels/master keep) — the bus NAME lives in the 26px title row
+     (the old name-in-header rendered "A1Reverb" + "Reverb" live). */
+  it('R24-W5c F4: the T0 aux header is ID-ONLY — the bus name lives in the title row exactly once (D5)', () => {
+    renderPlain(<AuxStrip bus="a1" />);
+    const s = screen.getByTestId('mixer-strip-aux-a1');
+    // the 25px header row (the badge's row) carries the ID ONLY
+    const badge = within(s).getByText('A1');
+    expect(badge.closest('div')!.textContent).toBe('A1'); // was "A1Reverb"
+    // the bus name renders exactly ONCE — the title row's job (was 2×)
+    expect(within(s).getAllByText('Reverb')).toHaveLength(1);
+    expect(within(s).getByTestId('strip-title')).toHaveTextContent('Reverb');
+    // the ID pattern holds for the a2 twin
+    renderPlain(<AuxStrip bus="a2" />);
+    const s2 = screen.getByTestId('mixer-strip-aux-a2');
+    expect(within(s2).getByText('A2').closest('div')!.textContent).toBe('A2');
+    expect(within(s2).getAllByText('Spare')).toHaveLength(1);
+  });
+
   it('aux "no source" state: honest-disabled chip when nothing feeds the bus (A4)', () => {
     // fixture: NOTHING feeds either bus (all sends 0, no outputBus routes) —
     // both returns carry the honest-disabled chip in the bus row
