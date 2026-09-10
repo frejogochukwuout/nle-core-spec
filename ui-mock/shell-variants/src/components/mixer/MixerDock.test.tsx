@@ -1,13 +1,18 @@
-/* MixerDock component tests — the 3-state machine (collapsed / meters /
-   full, R20-W1 DESIGN-R20 D1.4): state-driven rendering, the meters-dock
-   columns (thread #61), shared master values, strip focus + escalation
-   flash, the MIXER_TIER constants + tier wiring (mocked offsetHeight fed
-   through a recording ResizeObserver — jsdom's default stub never fires),
-   the <FLOOR auto-fallback, the narrow width trigger, and the B4
-   state-naming collapse controls. */
+/* MixerDock component tests — the open/close + mode machine (R24-W1: the
+   3-state cycle is dead — toggleMixerOpen is binary with lastVisual memory;
+   the meters master-column's PanelRight → 'full', the full dock header's
+   PanelLeft → 'meters', both MODE actions with no aria-pressed):
+   state-driven rendering, the meters-dock columns (thread #61), shared
+   master values, strip focus + escalation flash, the MIXER_TIER constants
+   + tier wiring (mocked offsetHeight fed through a recording
+   ResizeObserver — jsdom's default stub never fires), the <FLOOR SILENT
+   render fallback (R24-W1/#60 — the `mixer-dock` wrapper pure-renders
+   MetersDock below 280px while the store stays untouched), the narrow
+   width trigger, and the D-C3 master/bus bank's meters-only collapse. */
 
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, within } from '@testing-library/react';
+import * as MixerDockModule from './MixerDock';
 import { MixerDock, MIXER_TIER, mixerTierFor } from './MixerDock';
 import { TimelineToolbar } from '../timeline/TimelineToolbar';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
@@ -39,6 +44,24 @@ describe('MixerDock', () => {
   it('collapsed renders nothing at all (design doc v2.2 §4)', () => {
     const { container } = boot({ mixerState: 'collapsed' });
     expect(container.querySelector('[data-testid^="mixer-dock"]')).toBeNull();
+  });
+
+  /* R24-W1 (A3-R3): mixerStateLabel is DELETED with the cycle — the
+     module-exports pin guards the deletion (it can never silently return). */
+  it('R24-W1 deletion pin: mixerStateLabel is gone from the module (the cycle wording died with cycleMixerState)', () => {
+    const mod = MixerDockModule as unknown as Record<string, unknown>;
+    expect(mod.mixerStateLabel).toBeUndefined();
+    expect(mod.stateName).toBeUndefined();
+  });
+
+  it('R24-W1: the open dock wraps in the `mixer-dock` container (the measurement surface for the silent floor)', () => {
+    boot({ mixerState: 'full' });
+    const wrapper = screen.getByTestId('mixer-dock');
+    expect(wrapper).toContainElement(screen.getByTestId('mixer-dock-full'));
+    expect(wrapper.className).toContain('h-full');
+    // the meters state rides the SAME wrapper
+    act(() => { useUi.setState({ mixerState: 'meters' }); });
+    expect(screen.getByTestId('mixer-dock')).toContainElement(screen.getByTestId('mixer-dock-meters'));
   });
 
   it('meters state: full-height thin meter COLUMNS side by side + the master column pinned right (D1.4, thread #61)', () => {
@@ -104,15 +127,10 @@ describe('MixerDock', () => {
     expect(screen.getByRole('button', { name: 'Master mute' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('B4: the meters expand control names its state and cycles to FULL in the Edit page (v2.2 3-state cycle)', () => {
+  it('B4 → R24-W1: the meters expand control is a MODE action — "Expand to full strips", no aria-pressed (an action can\'t lie)', () => {
     boot({ mixerState: 'meters' });
-    // D1.4/B4: from `meters` the cycle lands on FULL on both pages — the old
-    // "Collapse mixer rail" quirk label is replaced by an honest state name
-    const btn = screen.getByRole('button', { name: 'Mixer: meter columns (click for full strips)' });
-    /* R20-W6FIX (P2-2): the dock IS open in the meters state — the pressed
-       value is DERIVED (mixerState !== 'collapsed'), not the hard-coded
-       false the review caught lying. */
-    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    const btn = screen.getByRole('button', { name: 'Expand to full strips' });
+    expect(btn).not.toHaveAttribute('aria-pressed'); // R24-W1: mode actions never claim a pressed state
     expect(btn.querySelector('svg')!.getAttribute('class')).toContain('lucide-panel-right'); // PanelRight glyph (B4)
     fireEvent.click(btn);
     expect(store().mixerState).toBe('full');
@@ -129,21 +147,20 @@ describe('MixerDock', () => {
     expect(screen.getByText('MIXER · G-LAYER')).toBeInTheDocument(); // vertical dock label
   });
 
-  it('B4: the full dock collapse control names its state (page-aware next stop) and closes on the Edit page', () => {
+  it('B4 → R24-W1: the full dock header collapse control is a MODE action — "Collapse to meter columns" → meters, never closed', () => {
     boot({ mixerState: 'full' });
-    const btn = screen.getByRole('button', { name: 'Mixer: full strips (click to close)' });
-    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    const btn = screen.getByRole('button', { name: 'Collapse to meter columns' });
+    expect(btn).not.toHaveAttribute('aria-pressed'); // R24-W1: mode actions never claim a pressed state
     expect(btn.querySelector('svg')!.getAttribute('class')).toContain('lucide-panel-left'); // PanelLeft glyph (B4)
     fireEvent.click(btn);
-    expect(store().mixerState).toBe('collapsed');
+    expect(store().mixerState).toBe('meters'); // the dock STAYS OPEN — closing is toggleMixerOpen's job
   });
 
-  it('B4: in the Audio page the full dock control offers meters (page-aware cycle branch preserved)', () => {
-    boot({ mixerState: 'full', page: 'audio' });
-    fireEvent.click(screen.getByRole('button', { name: 'Mixer: full strips (click for meter columns)' }));
+  it('R24-W1: the two mode controls round-trip meters ↔ full (the old page-aware cycle branch, now mode actions on any page)', () => {
+    boot({ mixerState: 'full' });
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse to meter columns' }));
     expect(store().mixerState).toBe('meters');
-    // and back: meters → full on the Audio page
-    fireEvent.click(screen.getByRole('button', { name: 'Mixer: meter columns (click for full strips)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand to full strips' }));
     expect(store().mixerState).toBe('full');
   });
 
@@ -327,23 +344,34 @@ describe('MixerDock height tiers (D1.3)', () => {
     });
   });
 
-  it('below FLOOR (280): auto-fallback to the meters state + ONE honest toast per session (store flag)', () => {
+  it('R24-W1 (#60): below FLOOR (280) the container SILENTLY pure-renders MetersDock — store untouched, no toast, strips return when the height grows', () => {
     withRecordingRO((fire) => {
       boot({ mixerState: 'full' });
-      const toastsBefore = store().toasts.length;
-      Object.defineProperty(screen.getByTestId('mixer-dock-full'), 'offsetHeight', { configurable: true, value: 250 });
+      expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument();
+      // the WRAPPER (mixer-dock) is the measurement surface now
+      const wrapper = screen.getByTestId('mixer-dock');
+      Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 250 });
       fire();
-      expect(store().mixerState).toBe('meters'); // honest fallback, not a broken strip layout
-      expect(store().toasts.length).toBe(toastsBefore + 1);
-      expect(store().toasts.at(-1)!.title).toBe('Mixer floor');
-      expect(store().toasts.at(-1)!.detail).toContain('280');
-      expect(screen.getByTestId('mixer-dock-meters')).toBeInTheDocument();
-      // ONE per session: a second below-floor event flips state with NO new toast
-      act(() => { useUi.setState({ mixerState: 'full' }); });
-      Object.defineProperty(screen.getByTestId('mixer-dock-full'), 'offsetHeight', { configurable: true, value: 240 });
+      expect(store().mixerState).toBe('full'); // #60: NO store write — the state is untouched
+      expect(store().toasts).toHaveLength(0); // no floor toast, ever (the flag + toast are DELETED)
+      expect(screen.queryByTestId('mixer-dock-full')).toBeNull(); // the full dock does not render
+      expect(screen.getByTestId('mixer-dock-meters')).toBeInTheDocument(); // pure render fallback
+      // strips RETURN when the height grows back — still with no state change
+      Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 600 });
+      fire();
+      expect(store().mixerState).toBe('full');
+      expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument();
+      expect(screen.queryByTestId('mixer-dock-meters')).toBeNull();
+    });
+  });
+
+  it('R24-W1 (#60): the meters state itself is unaffected by the floor (it IS the fallback surface)', () => {
+    withRecordingRO((fire) => {
+      boot({ mixerState: 'meters' });
+      Object.defineProperty(screen.getByTestId('mixer-dock'), 'offsetHeight', { configurable: true, value: 200 });
       fire();
       expect(store().mixerState).toBe('meters');
-      expect(store().toasts.length).toBe(toastsBefore + 1); // flag held
+      expect(screen.getByTestId('mixer-dock-meters')).toBeInTheDocument();
     });
   });
 
@@ -351,8 +379,9 @@ describe('MixerDock height tiers (D1.3)', () => {
     withRecordingRO((fire) => {
       boot({ mixerState: 'full' });
       const dock = screen.getByTestId('mixer-dock-full');
-      // two ancestors up = the timeline row (the B1 definite-width ancestor)
-      const row = dock.parentElement?.parentElement as HTMLElement;
+      // THREE ancestors up = the timeline row (the B1 definite-width
+      // ancestor — R24-W1: the mixer-dock wrapper added one node)
+      const row = dock.parentElement?.parentElement?.parentElement as HTMLElement;
       row.getBoundingClientRect = () => ({ width: 260, height: 300, top: 0, left: 0, right: 260, bottom: 300, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
       Object.defineProperty(dock, 'offsetHeight', { configurable: true, value: 600 });
       fire();
@@ -369,7 +398,8 @@ describe('MixerDock height tiers (D1.3)', () => {
     withRecordingRO((fire) => {
       const { container } = boot({ mixerState: 'full' });
       const dock = screen.getByTestId('mixer-dock-full');
-      const row = dock.parentElement?.parentElement as HTMLElement;
+      // THREE ancestors up = the timeline row (R24-W1: the wrapper added one node)
+      const row = dock.parentElement?.parentElement?.parentElement as HTMLElement;
       row.getBoundingClientRect = () => ({ width: 900, height: 400, top: 0, left: 0, right: 900, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
       fire();
       // budget = min(540, 452) = 452 → 86px strips, capped maxWidth
@@ -395,7 +425,7 @@ describe('R23-WC D-C3 (#70): master/bus bank meters-only collapse', () => {
     expect(btn.querySelector('svg')!.getAttribute('class')).toContain('lucide-gauge'); // distinct from the cycle controls
     // it lives in the dock header (the B4 state-controls rail), a sibling of
     // the dock-level cycle control — not a per-strip control
-    expect(btn.parentElement).toBe(screen.getByRole('button', { name: 'Mixer: full strips (click to close)' }).parentElement);
+    expect(btn.parentElement).toBe(screen.getByRole('button', { name: 'Collapse to meter columns' }).parentElement);
   });
 
   it('collapsing the bank swaps aux/master STRIPS for meters-only columns; the CHANNEL strips stay full (#70 independence)', () => {
@@ -445,15 +475,17 @@ describe('R23-WC D-C3 (#70): master/bus bank meters-only collapse', () => {
     expect(screen.queryByTestId('mixer-bank-col-master')).toBeNull();
   });
 
-  it('independence from the dock 3-state cycle: the collapse survives full → collapsed → meters → full (stripArm law)', () => {
+  it('independence from the dock open/mode state: the collapse survives full → closed → meters → full (stripArm law)', () => {
     boot({ mixerState: 'full' });
     fireEvent.click(screen.getByTestId('mixer-masterbus-toggle'));
-    // cycle the DOCK away and back — the bank's own state survives (it never
-    // rides the cycle; only the channels' tiers were the cycle's business)
-    act(() => { useUi.getState().cycleMixerState(); }); // full → collapsed (edit page)
+    // toggle the DOCK closed and back through the modes — the bank's own
+    // state survives (it never rides the open/close or mode writes; only
+    // the channels' tiers were the cycle's business)
+    act(() => { useUi.getState().toggleMixerOpen(); }); // full → closed (the binary toggle)
     expect(screen.queryByTestId('mixer-dock-full')).toBeNull();
-    act(() => { useUi.getState().cycleMixerState(); }); // collapsed → meters
-    act(() => { useUi.getState().cycleMixerState(); }); // meters → full
+    act(() => { useUi.getState().toggleMixerOpen(); }); // closed → full (the lastVisual memory)
+    act(() => { useUi.getState().setMixerState('meters'); }); // the header's mode action
+    act(() => { useUi.getState().setMixerState('full'); });
     expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument();
     expect(screen.queryByTestId('mixer-strip-master')).toBeNull(); // still meters-only
     expect(screen.getByTestId('mixer-bank-col-master')).toBeInTheDocument();

@@ -48,6 +48,14 @@ if [ ! -d "$REPO/.git" ]; then
   if [ -n "${BUNDLE:-}" ]; then
     git clone "$BUNDLE" "$REPO" || echo "bundle clone FAILED (continuing — runtime copy is the serving host)"
     [ -d "$REPO/.git" ] && git -C "$REPO" remote set-url origin https://github.com/frejogochukwuout/nle-core-spec.git
+    # CHECKOUT GUARD (2026-09-10 incident): the sync bundles' HEAD points at a
+    # ref they don't carry — `git clone` leaves master unborn with NO working
+    # tree, code-sync then no-ops (empty REPO_HEAD) and the runtime serves a
+    # stale tree silently. Repair: force a local main at origin/main.
+    if [ -d "$REPO/.git" ] && [ ! -f "$REPO/ui-mock/shell-variants/package.json" ]; then
+      git -C "$REPO" checkout -f -B main origin/main 2>/dev/null \
+        && echo "repo checkout repaired (main @ $(git -C "$REPO" rev-parse --short HEAD))"
+    fi
   else
     echo "no bundle — relying on runtime copy alone this boot"
   fi

@@ -13,12 +13,18 @@
             "these should change, no longer media pool if you use this to
             show other panels"): Media Pool on Edit, Sound Library on
             Audio, Effects on FX, Stills on Color.
-     right: [Scopes ·color] [Nodes ·color] [Mixer ·edit+audio] [Inspector].
-   R23-WB (DESIGN-R23 D-B5, issue #92 — SUPERSEDES #73's "mixer on ALL
-   pages" for the color page, registered in the README deviation ledger):
-   the Mixer toggle renders on EDIT + AUDIO ONLY (DOM-absent on color/fx/
-   deliver — never display:none); entering color collapses the console in
-   setPage (the exit law) so nothing dangles unclosable.
+     right: [Scopes ·color] [Nodes ·color] [Mixer ·audio] [Inspector].
+   R23-WB (D-B5, #92) → R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 —
+   SUPERSEDES the edit+audio row, registered in the README deviation
+   ledger): the Mixer toggle is a BINARY open/close toggle (toggleMixerOpen,
+   with lastVisual memory) and renders on the AUDIO page ONLY — DOM-absent
+   on edit/color/fx/deliver (never display:none). Resolve's Edit page can
+   show a mixer only via Workspace; the user's ruling wins (#66 "mixer
+   shouldn't be here when it is not audio workflow"). The setPage exit law
+   collapses an open mixer on every non-audio page, so nothing dangles
+   unclosable. Glyph law: AudioLines when CLOSED (opening shows strips),
+   SlidersVertical when OPEN — never SlidersHorizontal (the Inspector
+   collision glyph F1 caught).
    R23-WD (DESIGN-R23 D-D1; #100/#106/#91 + Part IX ruling 16): the left
    toggle's label/icon AND its render-or-not now read the ONE table —
    leftDockContent(page) in ./leftDockContent (the label names the dock's
@@ -30,7 +36,7 @@
    REMOVED: the Effects button (#86) and the Project button (#87). */
 
 import { useRef, useState } from 'react';
-import { Activity, Layers, SlidersHorizontal } from 'lucide-react';
+import { Activity, Layers, SlidersHorizontal, AudioLines, SlidersVertical } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { project } from '../../lib/mockData';
 import { leftDockContent } from './leftDockContent';
@@ -44,7 +50,7 @@ export function Toolbar2() {
   const colorNodesDock = useUi((s) => s.colorNodesDock);
   const toggleColorNodesDock = useUi((s) => s.toggleColorNodesDock);
   const mixerState = useUi((s) => s.mixerState);
-  const cycleMixerState = useUi((s) => s.cycleMixerState);
+  const toggleMixerOpen = useUi((s) => s.toggleMixerOpen);
 
   /* roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern): exactly ONE
      button is a tab stop; ←/→ move focus between buttons in DOM order
@@ -94,13 +100,17 @@ export function Toolbar2() {
     setColorScopesState(scopesOpen ? 'off' : 'open');
   };
 
-  /* R23-WB (D-B5/#92 + Part IX ruling 15): the Mixer toggle is Edit+Audio
-     ONLY — DOM-absent on color/fx/deliver (the display:none law). */
-  const showMixer = page === 'edit' || page === 'audio';
+  /* R24-W1 (A3-R3; issues #65/#66): the Mixer toggle is AUDIO ONLY —
+     DOM-absent on edit/color/fx/deliver (R23-WB's edit+audio row is
+     superseded). The button is a BINARY open/close toggle (toggleMixerOpen,
+     with the lastVisual memory) — the meters↔full MODE lives in the dock
+     header's own controls. */
+  const showMixer = page === 'audio';
+  const mixerOpen = mixerState !== 'collapsed';
 
   /* dense DOM order: the left asset toggle (audio/fx/deliver hide it —
      ruling 16 + the R-c slot-ownership law), then (color only) scopes,
-     nodes, then (edit+audio only) mixer, then inspector. The indices are
+     nodes, then (audio only) mixer, then inspector. The indices are
      CONTIGUOUS over the buttons that actually render (a hole where the
      left toggle's index would sit on audio/fx/deliver — or between nodes
      and inspector on color — strands the arrows: the wrap math counts
@@ -198,21 +208,28 @@ export function Toolbar2() {
           <span>Nodes</span>
         </button>
       )}
-      {/* R23-WB (D-B5/#92): the Mixer toggle is Edit+Audio ONLY — DOM-absent
-          on the color page ("mixer shouldn't be here in Color Grading view")
-          and on fx/deliver (Part IX ruling 15). The setPage exit law
-          collapses an open mixer when color is entered, so the console is
-          never stranded unclosable on a page without its toggle. */}
+      {/* R24-W1 (A3-R3; #65/#66): the Mixer toggle — AUDIO page only
+          (DOM-absent on edit/color/fx/deliver — the R23-WB edit+audio row is
+          superseded; Resolve's Edit page shows a mixer only via Workspace).
+          BINARY open/close with the lastVisual memory: AudioLines when closed
+          (opening shows strips), SlidersVertical when open — NEVER
+          SlidersHorizontal (the Inspector collision glyph). The setPage exit
+          law collapses an open mixer on every non-audio page, so the console
+          is never stranded unclosable. */}
       {showMixer && (
         <button
           {...roverProps(iMixer)}
-          className={`toolbtn ${mixerState !== 'collapsed' ? 'active' : ''}`}
+          className={`toolbtn ${mixerOpen ? 'active' : ''}`}
           data-testid="shell-toolbar-btn-mixer"
-          aria-pressed={mixerState !== 'collapsed'}
-          title={`Mixer — ${mixerState === 'collapsed' ? 'collapsed' : mixerState}; click cycles collapsed → meters → full`}
-          onClick={cycleMixerState}
+          aria-pressed={mixerOpen}
+          title={mixerOpen ? 'Hide audio mixer' : 'Show audio mixer'}
+          onClick={toggleMixerOpen}
         >
-          <SlidersHorizontal size={14} strokeWidth={1.7} />
+          {mixerOpen ? (
+            <SlidersVertical size={14} strokeWidth={1.7} />
+          ) : (
+            <AudioLines size={14} strokeWidth={1.7} />
+          )}
           <span>Mixer</span>
         </button>
       )}

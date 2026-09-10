@@ -332,9 +332,22 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
   });
 });
 
-describe('R23-WB (DESIGN-R23 D-B3, issue #94): the timeline density law', () => {
+describe('R23-WB (DESIGN-R23 D-B3, issue #94) → R24-W1: the timeline density law', () => {
   const mainbody = () => document.querySelector('.mainbody') as HTMLElement;
   const mainbodyH = () => mainbody().style.height;
+  /* R24-W1 (A3-R4): the standalone density button is RETIRED — density
+     drives through the ViewOptionsPopover's Compact-tracks
+     menuitemcheckbox now. The checkbox KEEPS the menu open, so repeat
+     flips never re-open. */
+  const openCompactMenu = async (user: ReturnType<typeof userEvent.setup>) => {
+    if (!screen.queryByTestId('shell-menu-tl-view-options')) {
+      await user.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+    }
+    return screen.getByTestId('shell-menu-tl-view-options-compact');
+  };
+  const flipCompact = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await openCompactMenu(user));
+  };
 
   it('color auto: compact strip + the 55% mainbody default (the tall-viewer color composition)', async () => {
     const user = userEvent.setup();
@@ -342,23 +355,24 @@ describe('R23-WB (DESIGN-R23 D-B3, issue #94): the timeline density law', () => 
     await user.click(screen.getByTestId('shell-dock-page-color'));
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(mainbodyH()).toBe('55%');
-    // the toggle is present on EVERY page and honestly pressed
-    expect(screen.getByTestId('shell-timeline-toolbar-btn-density')).toHaveAttribute('aria-pressed', 'true');
+    // the Compact-tracks checkbox is present on EVERY page and honestly checked
+    expect(await openCompactMenu(user)).toHaveAttribute('aria-checked', 'true');
   });
 
   it('flipping color to FULL TRACKS drops the default mainbody to 40% (ruling 11 — the filmstrip needs lane room)', async () => {
     const user = userEvent.setup();
     renderAppShell();
     await user.click(screen.getByTestId('shell-dock-page-color'));
-    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    await flipCompact(user);
     // the override lands in the store; the FULL Timeline replaces the strip
     expect(store().timelineCompact).toBe('off');
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
-    expect(screen.getByTestId('shell-timeline-toolbar-btn-density')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('shell-menu-tl-view-options-compact')).toHaveAttribute('aria-checked', 'false');
     expect(mainbodyH()).toBe('40%');
     // flipping back to compact restores the 55% default (the user never dragged)
-    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    // — the checkbox keeps the menu open, no re-open needed
+    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(mainbodyH()).toBe('55%');
   });
@@ -367,7 +381,7 @@ describe('R23-WB (DESIGN-R23 D-B3, issue #94): the timeline density law', () => 
     const user = userEvent.setup();
     renderAppShell({ page: 'color', mainBodyH: 500, mainBodyUserSet: true });
     expect(mainbodyH()).toBe('500px');
-    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    await flipCompact(user);
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     expect(mainbodyH()).toBe('500px'); // no density flip may steal the user's height
   });
@@ -376,8 +390,8 @@ describe('R23-WB (DESIGN-R23 D-B3, issue #94): the timeline density law', () => 
     const user = userEvent.setup();
     renderAppShell();
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-timeline-toolbar-btn-density')).toHaveAttribute('aria-pressed', 'false');
-    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    expect(await openCompactMenu(user)).toHaveAttribute('aria-checked', 'false');
+    await flipCompact(user);
     expect(store().timelineCompact).toBe('on');
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
@@ -391,7 +405,7 @@ describe('R23-WB (DESIGN-R23 D-B3, issue #94): the timeline density law', () => 
     await user.click(screen.getByTestId('shell-dock-page-edit'));
     expect(store().timelineCompact).toBe('auto');
     // edit auto → full; now the user forces compact and flips BACK to color:
-    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    await flipCompact(user);
     expect(store().timelineCompact).toBe('on');
     await user.click(screen.getByTestId('shell-dock-page-color'));
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument(); // the override holds
@@ -421,7 +435,10 @@ describe('R23-WF (DESIGN-R23 D-F1, #107): the deliver composition', () => {
   it('flipping deliver to FULL TRACKS drops the default mainbody to 40% — the band goes WITH the strip (ruling 11, deliver-shaped)', async () => {
     const user = userEvent.setup();
     renderAppShell({ page: 'deliver' });
-    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    // R24-W1: density flips ride the ViewOptionsPopover now (the checkbox
+    // keeps the menu open, so the flip-back below needs no re-open)
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
     expect(store().timelineCompact).toBe('off');
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     // the band is the compact strip's head row only — full tracks bring the
@@ -429,7 +446,7 @@ describe('R23-WF (DESIGN-R23 D-F1, #107): the deliver composition', () => {
     expect(screen.queryByTestId('shell-deliver-range-band')).not.toBeInTheDocument();
     expect(mainbodyH()).toBe('40%');
     // flipping back restores the band + the 50% default (the user never dragged)
-    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
     expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
     expect(mainbodyH()).toBe('50%');
   });
@@ -438,7 +455,8 @@ describe('R23-WF (DESIGN-R23 D-F1, #107): the deliver composition', () => {
     const user = userEvent.setup();
     renderAppShell({ page: 'deliver', mainBodyH: 500, mainBodyUserSet: true });
     expect(mainbodyH()).toBe('500px');
-    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-density'));
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
     expect(mainbodyH()).toBe('500px'); // no density flip may steal the user's height
   });
 

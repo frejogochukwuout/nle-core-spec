@@ -541,6 +541,11 @@ interface UiState {
   // ---- audio focus mode (design doc docs/DESIGN-audio-mode.md v2.1) ----
   mixer: MockMixerScene;      // mock G-slice (spec 20 §4.2 shape)
   mixerState: MixerDockState;
+  /* R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66): the binary toggle's
+     lastVisual memory — the visual state ('full' | 'meters') the dock
+     re-opens to after a close ('full' by default; on the audio page it may
+     be 'meters'). View state, never snapshotted. */
+  mixerLastVisual: Exclude<MixerDockState, 'collapsed'>;
   audioLaneBoost: boolean;
   stripFocus: string | null;
   stripFlash: number;
@@ -550,17 +555,19 @@ interface UiState {
      unchanged and there is no doc-slice field (gap C40 honesty toasts stay). */
   stripArm: Record<string, boolean>;       // record-arm display state per trackId
   stripInsertsOn: Record<string, boolean>;  // inserts-power display state per trackId
-  /* R20-W1 D1.3: ONE honest floor-fallback toast per session — the dock
-     auto-falls back to the meters state below MIXER_TIER.FLOOR. */
-  mixerFloorWarned: boolean;
+  /* R24-W1 (DESIGN-R24 §1.3 A3-R2; issue #60 — the floor-fallback toast +
+     this flag are DELETED, deletion-pinned in useUiStore.test): below the
+     280px strip floor the dock PURE-RENDERS the meters surface at the
+     container level (MixerDock's own height measurement) while mixerState
+     stays untouched — no store write, no toast, no session flag. */
   /* R23-WC (DESIGN-R23 D-C3; issue #70 — the R20-era carry-over "probably
      should have separate collapse / minimize for the master / bus"): the full
      dock's master + aux-bus bank has its OWN meters-only collapse, INDEPENDENT
-     of the channel strips and of the dock-level 3-state cycle — collapsing
-     the bank never touches the channel strips' tier/anatomy, and cycling the
-     dock collapsed↔meters↔full never resets the bank. View state in the
-     stripArm precedent's law (B6): survives dock unmounts / state cycles /
-     scene switches (stale ids are harmless — the dock resolves per the active
+     of the channel strips and of the dock-level open/mode state — collapsing
+     the bank never touches the channel strips' tier/anatomy, and toggling the
+     dock open/closed never resets the bank. View state in the stripArm
+     precedent's law (B6): survives dock unmounts / state cycles / scene
+     switches (stale ids are harmless — the dock resolves per the active
      scene), NEVER inside a withHistory snapshot (the snapshot slice stays
      scenes/activeSceneId/lockAll/selection/mockGrades). */
   masterBusCollapsed: boolean;
@@ -756,7 +763,11 @@ interface UiState {
   enterAudioFocus: (trigger: 'dock' | 'shortcut' | 'escalation', trackId?: string) => void;
   exitAudioFocus: () => void;
   setMixerState: (m: MixerDockState) => void;
-  cycleMixerState: () => void;
+  /** R24-W1 (DESIGN-R24 §1.3 A3-R3; #65/#66): the BINARY open/close toggle —
+   *  cycleMixerState (and its page-aware meters↔full branch) is DELETED
+   *  (deletion-pinned). Closing remembers the visual state; re-opening
+   *  returns to it (mixerLastVisual, 'full' by default). */
+  toggleMixerOpen: () => void;
   toggleStripArm: (trackId: string) => void;
   toggleStripInserts: (trackId: string) => void;
   /** R23-WC (D-C3/#70): flips masterBusCollapsed — the full dock's master +
@@ -985,12 +996,12 @@ export const useUi = create<UiState>((set, get) => ({
   future: [] as HistoryEntry[],
   mixer: createMixerScene(project.scenes.flatMap((sc) => sc.tracks.filter((t) => t.kind === 'audio').map((t) => t.id))),
   mixerState: 'collapsed',
+  mixerLastVisual: 'full', // R24-W1 (#65/#66): re-open target after a close
   audioLaneBoost: false,
   stripFocus: null,
   stripFlash: 0,
   stripArm: {},
   stripInsertsOn: {},
-  mixerFloorWarned: false,
   masterBusCollapsed: false, // R23-WC (D-C3/#70): the bank boots FULL strips
   trackHeightPref: null,
   trackHeightOverrides: {}, // R20-W5: per-track view state, absent = auto
@@ -1022,16 +1033,24 @@ export const useUi = create<UiState>((set, get) => ({
        the radio never claims fxMode that no longer holds). */
     fxMode: p === 'fx',
     ...(s.page === 'fx' && p !== 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
-    /* R23-WB (DESIGN-R23 D-B5; issue #92 — SUPERSEDES #73's R22-era "mixer
-       renders on ALL pages" for the color page, registered in the README
-       deviation ledger): entering a page whose toolbar carries NO mixer
-       toggle collapses the console (the audioLaneBoost exit-law pattern).
-       The Toolbar2 toggle is Edit+Audio only now (D-D2/ruling 15), so an
-       open mixer carried into color/fx/deliver would be unclosable from
-       that page's toolbar — the exit law keeps every console closable on
-       the page that owns it. (The dock header's own cycle control stays as
-       the manual close on the pages that DO show it.) */
-    ...(p !== 'edit' && p !== 'audio' && s.mixerState !== 'collapsed' ? { mixerState: 'collapsed' as MixerDockState } : {}),
+    /* R24-W0 (DESIGN-R24 §3 W0.1 — F5's page-transition leak): the FX domain
+       dies with the page too. A selectedFxObject carried into edit/color/
+       deliver rendered a lying FxInspector rail AND armed Delete (the
+       ruling-22 rung reads the domain before the clip selection) — the exit
+       law now covers all seven selection domains the way the scene switch
+       does. The fx-page entry is always fresh (the domain can only be set
+       while on fx — selectFxObject is fx-page-driven). */
+    ...(s.page === 'fx' && p !== 'fx' ? { selectedFxObject: null } : {}),
+    /* R23-WB (D-B5/#92) → R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 —
+       AUDIO-ONLY mixer surfaces, registered in the README deviation ledger):
+       entering a page whose toolbar carries NO mixer toggle collapses the
+       console (the audioLaneBoost exit-law pattern). The Toolbar2 toggle is
+       AUDIO-only now (R23-WB's edit+audio row is superseded — Resolve's Edit
+       page shows a mixer only via Workspace, and the user's ruling wins), so
+       an open mixer carried into ANY other page — edit included — would be
+       unclosable from that page's toolbar: the exit law keeps every console
+       closable on the page that owns it (audio). */
+    ...(p !== 'audio' && s.mixerState !== 'collapsed' ? { mixerState: 'collapsed' as MixerDockState } : {}),
   })),
   setActiveScene: (id) => set((s) => {
     // lockAll is scene-derived view state — re-derive on switch so the toolbar
@@ -1599,6 +1618,10 @@ export const useUi = create<UiState>((set, get) => ({
          the FX engine's seam zones on a page that never asked for them. */
       fxMode: false,
       ...(s.page === 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
+      /* R24-W0 (W0.1's belt-and-braces — the RAW page writer twin): this
+         action writes `page` directly, so it carries the fx-domain exit
+         itself (the fxMode coupling above is the pattern). */
+      ...(s.page === 'fx' ? { selectedFxObject: null } : {}),
       mixer,
       mixerState: 'full',
       audioLaneBoost: true,
@@ -1614,15 +1637,28 @@ export const useUi = create<UiState>((set, get) => ({
     audioLaneBoost: false,
     fxMode: false,
     ...(s.page === 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
+    /* R24-W0 (W0.1 belt-and-braces): exit is only reachable from the audio
+       page (where the domain is already dead per the entry clear above),
+       but the raw writer keeps the full exit law like its fxMode twin. */
+    ...(s.page === 'fx' ? { selectedFxObject: null } : {}),
+    /* R24-W1 (A3-R3, the raw-writer twin of setPage's exit law): exit writes
+       `page` directly, so it carries the audio-only mixer collapse itself —
+       the dock must not survive the exit onto an Edit page that carries no
+       mixer toggle (the stranded-unclosable law). */
+    ...(s.mixerState !== 'collapsed' ? { mixerState: 'collapsed' as MixerDockState } : {}),
   })),
   setMixerState: (m) => set({ mixerState: m }),
-  cycleMixerState: () => set((s) => {
-    // R20-W1 (DESIGN-R20 D1.4, thread #61): Edit — collapsed → meters →
-    // full → collapsed; Audio — meters ↔ full (the page-aware branch is
-    // PRESERVED from the v2.2 revision — pinned by useUiStore.test).
-    if (s.page === 'audio') return { mixerState: s.mixerState === 'full' ? 'meters' : 'full' };
-    return { mixerState: s.mixerState === 'collapsed' ? 'meters' : s.mixerState === 'meters' ? 'full' : 'collapsed' };
-  }),
+  /* R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 — cycleMixerState is
+     DELETED, deletion-pinned in useUiStore.test): the BINARY open/close
+     toggle WITH lastVisual memory. Open = any visual state; close =
+     'collapsed' + remember; re-open = the remembered visual ('full' by
+     default; 'meters' if that was the last non-collapsed state — the audio
+     page's meters mode is a legit memory). */
+  toggleMixerOpen: () => set((s) => (
+    s.mixerState !== 'collapsed'
+      ? { mixerState: 'collapsed' as MixerDockState, mixerLastVisual: s.mixerState }
+      : { mixerState: s.mixerLastVisual }
+  )),
   toggleStripArm: (trackId) => set((s) => ({ stripArm: { ...s.stripArm, [trackId]: !(s.stripArm[trackId] ?? false) } })),
   toggleStripInserts: (trackId) => set((s) => ({ stripInsertsOn: { ...s.stripInsertsOn, [trackId]: !(s.stripInsertsOn[trackId] ?? true) } })),
   /* R23-WC (D-C3/#70): the master/bus bank's meters-only collapse — plain
@@ -2054,6 +2090,17 @@ export const useUi = create<UiState>((set, get) => ({
       delete right.linkedTo;
       t.elements.splice(idx, 1, left, right);
     }
+    /* R24-W0 (DESIGN-R24 §3 W0.3 — F5's lying rail): the transition moves to
+       the NEW right-half id (left.transitionOut is deleted above), so a
+       selectedFxObject pointing at the ORIGINAL (now left-half) id renders
+       a lying rail after the split — and Add would mint a second transition
+       one seam over. The pointing domain dies with the element it
+       referenced (the removeFade/removeEffect belt-and-braces pattern: the
+       set() runs BEFORE withHistory's own set, one React commit). */
+    const st = get();
+    if (st.selectedFxObject !== null && st.selectedFxObject.elementId === id) {
+      set({ selectedFxObject: null });
+    }
     return scenes;
   }),
   toggleEffect: (elementId, fxId) => withHistory(set, get, (scenes) => {
@@ -2246,6 +2293,17 @@ export const useUi = create<UiState>((set, get) => ({
   setTransition: (id, patch) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, id);
     if (!hit || hit.track.locked) return;
+    /* R24-W0 (DESIGN-R24 §3 W0.2 — A1's no-op twin): an IDENTICAL patch on
+       an EXISTING transition mints NO history entry (the drag-replace
+       gesture short-circuits earlier with its 'Already X' toast; this is
+       the belt-and-braces store twin). The guard fires ONLY when a
+       transition already exists — the fresh-mint path (no transitionOut)
+       is a real change and must keep minting. */
+    if (hit.el.transitionOut) {
+      const cur = hit.el.transitionOut as unknown as Record<string, unknown>;
+      const nxt = patch as unknown as Record<string, unknown>;
+      if (Object.keys(nxt).length > 0 && Object.keys(nxt).every((k) => cur[k] === nxt[k])) return;
+    }
     if (!hit.el.transitionOut) hit.el.transitionOut = { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 };
     Object.assign(hit.el.transitionOut, patch);
     return scenes;

@@ -29,11 +29,18 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
   });
 
   it('panel buttons mirror the booted panels state via aria-pressed', () => {
-    // store boot: mediaPool+inspector open (§4.1 defaults); mixer collapsed
-    const { getByRole } = renderPlain(<Toolbar2 />);
+    // store boot: mediaPool+inspector open (§4.1 defaults); mixer collapsed.
+    // R24-W1 (A3-R3): the Mixer toggle is AUDIO-ONLY — on the EDIT boot page
+    // it is DOM-absent; its pressed state is pinned in the audio-page boots
+    // below (the binary-toggle describe).
+    const { getByRole, rerender } = renderPlain(<Toolbar2 />);
     expect(getByRole('button', { name: 'Media Pool' })).toHaveAttribute('aria-pressed', 'true');
-    expect(getByRole('button', { name: 'Mixer' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('shell-toolbar-btn-mixer')).toBeNull();
     expect(getByRole('button', { name: 'Inspector' })).toHaveAttribute('aria-pressed', 'true');
+    useUi.setState({ page: 'audio' });
+    rerender(<Toolbar2 />);
+    expect(getByRole('button', { name: 'Mixer' })).toHaveAttribute('aria-pressed', 'false'); // collapsed
+    useUi.setState({ page: 'edit' });
   });
 
   it('clicking Media Pool toggles panels.mediaPool in the store and re-renders', () => {
@@ -46,15 +53,17 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
     expect(getByRole('button', { name: 'Media Pool' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('Mixer and Inspector toggles are independent of each other (#73: the mixer lives here now)', () => {
+  it('Mixer and Inspector toggles are independent of each other (#73/#65: the mixer lives here now — audio page only)', () => {
+    useUi.setState({ page: 'audio' });
     const { getByRole } = renderPlain(<Toolbar2 />);
     fireEvent.click(getByRole('button', { name: 'Mixer' }));
     fireEvent.click(getByRole('button', { name: 'Inspector' }));
-    // §4.1: each toggle flips exactly its own bit (the mixer cycle is honest:
-    // collapsed → meters, one stop per click)
-    expect(S().mixerState).toBe('meters');
+    // §4.1: each toggle flips exactly its own bit — the mixer is BINARY now
+    // (R24-W1): collapsed → the remembered visual ('full' by default)
+    expect(S().mixerState).toBe('full');
     expect(S().panels.inspector).toBe(false);
     expect(getByRole('button', { name: 'Mixer' })).toHaveAttribute('aria-pressed', 'true');
+    useUi.setState({ page: 'edit', mixerState: 'collapsed' });
   });
 
   it('reflects a pre-booted non-default panels state', () => {
@@ -127,25 +136,71 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
     useUi.setState({ colorScopesState: 'off', colorNodesDock: false });
   });
 
-  /* R23-WB (DESIGN-R23 D-B5, issue #92 — supersedes #73 for the color page):
-     the Mixer toggle renders on Edit + Audio ONLY (DOM-absent elsewhere). */
-  it('R23-WB (D-B5/#92): the Mixer toggle is Edit+Audio only — DOM-absent on color/fx/deliver', () => {
+  /* R23-WB (D-B5, #92) → R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 —
+     supersedes R23-WB's edit+audio row): the Mixer toggle renders on the
+     AUDIO page ONLY (DOM-absent on edit/color/fx/deliver). */
+  it('R24-W1 (A3-R3/#65/#66): the Mixer toggle is AUDIO-only — DOM-absent on edit/color/fx/deliver', () => {
     const { rerender } = renderPlain(<Toolbar2 />);
-    useUi.setState({ page: 'edit' });
-    rerender(<Toolbar2 />);
-    expect(screen.getByTestId('shell-toolbar-btn-mixer')).toBeInTheDocument();
     useUi.setState({ page: 'audio' });
     rerender(<Toolbar2 />);
     expect(screen.getByTestId('shell-toolbar-btn-mixer')).toBeInTheDocument();
-    for (const p of ['color', 'fx', 'deliver'] as const) {
+    expect(screen.getByRole('button', { name: 'Mixer' })).toBeInTheDocument();
+    for (const p of ['edit', 'color', 'fx', 'deliver'] as const) {
       useUi.setState({ page: p });
       rerender(<Toolbar2 />);
       expect(screen.queryByTestId('shell-toolbar-btn-mixer')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Mixer' })).toBeNull();
     }
-    useUi.setState({ page: 'edit' });
+    useUi.setState({ page: 'audio' });
     rerender(<Toolbar2 />);
     expect(screen.getByTestId('shell-toolbar-btn-mixer')).toBeInTheDocument();
+    useUi.setState({ page: 'edit' });
+  });
+
+  /* R24-W1 (A3-R3; #65 "why mixer can turn on but cannot toggle off?" +
+     #66): the toggle is BINARY with lastVisual memory — open/close/open
+     round-trips, and a meters visual is remembered (the audio page's mode). */
+  it('R24-W1: the Mixer toggle is a binary open/close with memory (collapsed ↔ full; meters remembered)', () => {
+    useUi.setState({ page: 'audio' });
+    const { getByRole } = renderPlain(<Toolbar2 />);
+    const btn = getByRole('button', { name: 'Mixer' });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    expect(btn).toHaveAttribute('title', 'Show audio mixer'); // binary wording
+    fireEvent.click(btn);
+    expect(S().mixerState).toBe('full'); // the default memory
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    expect(btn).toHaveAttribute('title', 'Hide audio mixer');
+    fireEvent.click(btn);
+    expect(S().mixerState).toBe('collapsed'); // TOGGLE OFF — #65's fix
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(btn);
+    expect(S().mixerState).toBe('full'); // re-open returns to the memory
+    // the dock header's mode action writes 'meters'; a close REMEMBERS it
+    act(() => { S().setMixerState('meters'); });
+    fireEvent.click(btn);
+    expect(S().mixerState).toBe('collapsed');
+    fireEvent.click(btn);
+    expect(S().mixerState).toBe('meters');
+    useUi.setState({ page: 'edit', mixerState: 'collapsed' });
+  });
+
+  /* R24-W1 (A3-R3): the glyph law — AudioLines when CLOSED (opening shows
+     strips), SlidersVertical when OPEN; NEVER SlidersHorizontal on the Mixer
+     button (F1's Inspector-collision glyph — the Inspector next door is the
+     one control that legitimately carries it, which is exactly the point). */
+  it('R24-W1: the Mixer glyph law — AudioLines closed / SlidersVertical open; never SlidersHorizontal (the Inspector collision)', () => {
+    useUi.setState({ page: 'audio' });
+    const { getByRole } = renderPlain(<Toolbar2 />);
+    const mixerGlyph = () => screen.getByTestId('shell-toolbar-btn-mixer').querySelector('svg')!.getAttribute('class') ?? '';
+    const inspectorGlyph = () => screen.getByTestId('shell-toolbar-btn-inspector').querySelector('svg')!.getAttribute('class') ?? '';
+    expect(mixerGlyph()).toContain('lucide-audio-lines'); // closed → AudioLines
+    expect(mixerGlyph()).not.toContain('lucide-sliders-horizontal');
+    expect(inspectorGlyph()).toContain('lucide-sliders-horizontal'); // the collision twin next door
+    fireEvent.click(getByRole('button', { name: 'Mixer' }));
+    expect(mixerGlyph()).toContain('lucide-sliders-vertical'); // open → SlidersVertical
+    expect(mixerGlyph()).not.toContain('lucide-sliders-horizontal');
+    expect(mixerGlyph()).not.toContain('lucide-audio-lines');
+    useUi.setState({ page: 'edit', mixerState: 'collapsed' });
   });
 
   it('shows the project title and status from the mock document (§4.1 center)', () => {
@@ -190,9 +245,27 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     await user.tab(); // "before"
     await user.tab(); // enters the toolbar — single tab stop
     expect(document.activeElement).toBe(btn('Media Pool'));
-    // one tab stop: the other three are removed from the tab order
-    expect(btn('Mixer')).toHaveAttribute('tabindex', '-1');
+    // one tab stop: the other one is removed from the tab order (R24-W1:
+    // edit = [Media Pool, Inspector] — the Mixer is audio-only now)
     expect(btn('Inspector')).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('R24-W1: the AUDIO page — [Mixer, Inspector] is the cycle; the left toggle is DOM-absent', () => {
+    useUi.setState({ page: 'audio' });
+    renderPlain(<Toolbar2 />);
+    const focus = (name: string) => act(() => { btn(name).focus(); });
+    expect(screen.queryByTestId('shell-toolbar-btn-mediapool')).toBeNull(); // audio owns the slot
+    focus('Mixer');
+    fireEvent.keyDown(btn('Mixer'), { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(btn('Inspector'));
+    fireEvent.keyDown(btn('Inspector'), { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(btn('Mixer')); // wraps over TWO buttons
+    focus('Mixer');
+    fireEvent.keyDown(btn('Mixer'), { key: 'End' });
+    expect(document.activeElement).toBe(btn('Inspector'));
+    fireEvent.keyDown(btn('Inspector'), { key: 'Home' });
+    expect(document.activeElement).toBe(btn('Mixer'));
+    useUi.setState({ page: 'edit' });
   });
 
   it('ArrowRight/ArrowLeft move focus between buttons in DOM order (wrapping)', () => {
@@ -201,14 +274,13 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     const focus = (name: string) => act(() => { btn(name).focus(); });
     focus('Media Pool');
     fireEvent.keyDown(btn('Media Pool'), { key: 'ArrowRight' });
-    expect(document.activeElement).toBe(btn('Mixer'));
-    fireEvent.keyDown(btn('Mixer'), { key: 'ArrowRight' });
+    // R24-W1: the Mixer is absent on edit — the next stop is Inspector
     expect(document.activeElement).toBe(btn('Inspector'));
     // ← walks back
     fireEvent.keyDown(btn('Inspector'), { key: 'ArrowLeft' });
-    expect(document.activeElement).toBe(btn('Mixer'));
+    expect(document.activeElement).toBe(btn('Media Pool'));
     // wrap: ← from the first lands on the LAST (Inspector), → from the last
-    // on the first (R22: 3 buttons on edit — the consoles are color-only)
+    // on the first (R24-W1: 2 buttons on edit — the mixer is audio-only)
     focus('Media Pool');
     fireEvent.keyDown(btn('Media Pool'), { key: 'ArrowLeft' });
     expect(document.activeElement).toBe(btn('Inspector'));
@@ -267,8 +339,9 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     act(() => { btn('Stills').focus(); });
     fireEvent.keyDown(btn('Stills'), { key: 'End' });
     expect(document.activeElement).toBe(btn('Inspector'));
-    // flip to edit (3 buttons): the stale rover would point past the set —
-    // the clamped stop keeps EXACTLY ONE tab stop (the §11.1 law)
+    // flip to edit (2 buttons — R24-W1: the mixer is audio-only): the stale
+    // rover would point past the set — the clamped stop keeps EXACTLY ONE
+    // tab stop (the §11.1 law)
     useUi.setState({ page: 'edit' });
     rerender(<Toolbar2 />);
     expect(btn('Inspector')).toHaveAttribute('tabindex', '0');
@@ -386,5 +459,36 @@ describe('R23-WD (D-D1): the leftDockContent table drives the left toggle', () =
     rerender(<Toolbar2 />);
     expect(screen.getByRole('button', { name: 'Media Pool' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Media Pool' })).toHaveAttribute('tabindex', '0');
+  });
+});
+
+/* ---------- R24-W1 (#63 — "after so many times of mentioning this, we
+   still call it Media Pool under color?"): the table-driven name law. The
+   left-dock surface names come from leftDockContent — the ONE table both
+   Toolbar2's toggle and the LeftDock read — so the class of "Media Pool
+   under a non-edit page" can never return. "Pin both names": W2 renames
+   the color stills panel to Gallery; at THIS wave the table's truth is
+   'Stills' (the live-probe note in DESIGN-R24 §0) — W2's rename re-pins
+   this row to 'Gallery'. ---------- */
+describe('R24-W1 (#63): the left-dock naming law — no "Media Pool" off the edit page', () => {
+  it('table-driven: every page ≠ edit names its left dock something OTHER than "Media Pool"', () => {
+    for (const p of ['color', 'audio', 'fx'] as const) {
+      const c = leftDockContent(p)!;
+      expect(c.label).not.toBe('Media Pool'); // the #63 class dies here
+    }
+    expect(leftDockContent('deliver')).toBeNull(); // the hidden law (ruling 16)
+    // the edit page KEEPS the pool name (it IS the media pool there)
+    expect(leftDockContent('edit')!.label).toBe('Media Pool');
+  });
+
+  it('the color left-dock label is "Stills" today — the current truth (W2\'s Gallery rename re-pins this)', () => {
+    act(() => { useUi.setState({ page: 'color' }); });
+    const { rerender } = renderPlain(<Toolbar2 />);
+    expect(screen.getByRole('button', { name: 'Stills' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Media Pool' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Gallery' })).toBeNull(); // W2's rename has NOT landed in this wave
+    act(() => { useUi.setState({ page: 'edit' }); });
+    rerender(<Toolbar2 />);
+    expect(screen.getByRole('button', { name: 'Media Pool' })).toBeInTheDocument();
   });
 });

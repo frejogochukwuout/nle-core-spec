@@ -5,11 +5,18 @@
    fades workflow view, ⌘5) / Deliver. Icon-only in resolve theme, icon+label
    in studio/light; aria-label keeps the accessible name regardless of label. */
 
-import { ScissorsLineDashed, Palette, AudioLines, Blend, Send, Keyboard, Settings2, House } from 'lucide-react';
+import { Clapperboard, Palette, AudioLines, Blend, Send, Keyboard, Settings2, House } from 'lucide-react';
 import { useUi, type Page } from '../../state/useUiStore';
 
-const PAGES: { id: Page; label: string; icon: typeof ScissorsLineDashed; tip: string }[] = [
-  { id: 'edit', label: 'Edit', icon: ScissorsLineDashed, tip: 'Edit — rough cut (⌘1)' },
+const PAGES: { id: Page; label: string; icon: typeof Clapperboard; tip: string }[] = [
+  /* R24-W1 (DESIGN-R24 §1.3 A3-R5; issue #61 "this icon is really bad" →
+     #115's rationale): the REFERENCE page dock pairs the Cut page with the
+     scissors glyph; our Edit page is the rough-cut workspace, so it takes
+     the CLAPPERBOARD — the old dashed-scissors glyph read as "the Cut page"
+     and collided with that reference pairing. Tip frozen (same wording as
+     the scissors era); zero scissors glyphs left in src (grep pin in
+     AppDock.test). */
+  { id: 'edit', label: 'Edit', icon: Clapperboard, tip: 'Edit — rough cut (⌘1)' },
   { id: 'color', label: 'Color', icon: Palette, tip: 'Color — grading (⌘2)' },
   { id: 'audio', label: 'Audio', icon: AudioLines, tip: 'Audio focus — BGM / SFX mixing (⌘4)' },
   /* R23-WA (D-A1): FX BETWEEN audio and deliver. Icon = Blend (lucide's

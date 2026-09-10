@@ -189,12 +189,16 @@ tests can target the same surface.
   elsewhere keep the base token; both forks are registered here per the
   deviation law (the token itself stays the semantic source).
 
-- **R23-WB (mixer toggle: Edit + Audio only — #92 supersedes #73):** issue
-  #73's R22-era "mixer renders on ALL pages" is reversed for the color page
-  (and FX/deliver) per issue #92 + DESIGN-R23 Part IX ruling 15: the Toolbar2
-  Mixer toggle is DOM-absent off Edit/Audio, and entering color collapses an
-  open mixer (the setPage exit law) so no console is left unclosable on a
-  page without its toggle.
+- **R24-W1 (mixer toggle: AUDIO only — #65/#66 supersede R23-WB's #92
+  edit+audio row):** the Toolbar2/TimelineToolbar Mixer control is a BINARY
+  open/close toggle (with lastVisual memory — `toggleMixerOpen`) and renders
+  on the AUDIO page ONLY; Resolve's Edit page can show a mixer only via
+  Workspace, and the user's ruling wins ("mixer shouldn't be here when it is
+  not audio workflow"). Entering any non-audio page collapses an open mixer
+  (the setPage/exitAudioFocus exit law) so no console is left unclosable on
+  a page without its toggle; the meters↔full mode lives in the dock header's
+  own mode actions; below the 280px strip floor the dock silently
+  pure-renders the meter columns (no toast, no state change).
 - **R23-WB (W4c scopes-simultaneity reversal):** R20-W4c's "colorists watch
   all four scopes at once under the viewer" law is REVERSED by issues
   #90/#95 (DESIGN-R23 D-B1): the scopes are TABS in the timeline-area
