@@ -273,7 +273,9 @@ describe('SourceEditBar — hover-placement preview (C48, ≥150ms dwell, fake t
 describe('SourceEditBar — the mode-button set (#83: always inline, no overflow)', () => {
   /* R22 #83: the kebab overflow is RETIRED — all 7 mode buttons are always
      inline (the reviewer saw only two: "you only showed two buttons here").
-     The bar WRAPS at narrow widths instead of hiding modes. */
+     R24-W5b (F1 P1) SUPERSEDES the narrow-width WRAP law: the bar lives in
+     the FIXED 32px transport row, so at narrow widths it now SCROLLS
+     (overflow-x-auto) — one row, never a second. */
   it('R22 #83: ALL SEVEN mode buttons are always visible inline — no kebab, no overflow menu', () => {
     boot();
     const labels = ['Insert', 'Overwrite', 'Replace', 'Append at End', 'Ripple Overwrite', 'Place on Top', 'Fit to Fill'];
@@ -282,8 +284,28 @@ describe('SourceEditBar — the mode-button set (#83: always inline, no overflow
     }
     expect(screen.queryByTestId('shell-source-edit-overflow')).toBeNull();
     expect(screen.queryByTestId('shell-source-edit-overflow-menu')).toBeNull();
-    // the bar wraps at narrow widths (the flex-wrap law)
-    expect(screen.getByTestId('shell-source-edit-bar').className).toContain('flex-wrap');
+  });
+
+  it('R24-W5b (F1 P1): the bar is ONE ROW — h-8, NO flex-wrap, h-scroll escape, 24px hit floor (the 46px wrap is dead)', () => {
+    boot();
+    const bar = screen.getByTestId('shell-source-edit-bar');
+    /* jsdom measures no layout — the CLASS grammar is the pin: h-8 is one
+       32px row == the transport row's own height (a second row cannot fit
+       inside the FIXED 32px row); flex-wrap is GONE (F1 measured the bar
+       46px tall / 2 rows, the 7th button occluded by the HSplitter z-10);
+       overflow-x-auto is the narrow-width escape — buttons scroll, every
+       button stays reachable, nothing is occluded. */
+    expect(bar.className).toContain('flex');
+    expect(bar.className).toContain('h-8');
+    expect(bar.className).not.toContain('flex-wrap');
+    expect(bar.className).toContain('overflow-x-auto');
+    // the house 24px hit floor on every mode button (was 22px — the F1
+    // hit-floor sweep)
+    for (const slug of SLUGS) {
+      const b = screen.getByTestId(`shell-source-edit-${slug}`);
+      expect(b.className).toContain('!h-[24px]');
+      expect(b.className).toContain('!w-[24px]');
+    }
   });
 
   it('R22 #83: the 7-button arrow cycle covers every mode in DOM order (no hidden stops)', () => {

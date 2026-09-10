@@ -757,6 +757,33 @@ describe('app dock cheat-sheet button (spec 16 §7.3 entry point)', () => {
     expect(screen.getByTestId('shell-cheatsheet')).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Keyboard cheat sheet' })).toBeInTheDocument();
   });
+
+  it('R24-W5b (F1 P2): plain F6 does NOT escape the open cheat sheet — the region cycler never fires under the modal', () => {
+    renderAppShellWithCheatSheet();
+    // open the sheet through the real dock entry
+    fireEvent.click(screen.getByRole('button', { name: 'Keyboard cheat sheet' }));
+    const sheet = screen.getByTestId('shell-cheatsheet');
+    expect(sheet).toHaveAttribute('aria-modal', 'true');
+    // focus a NON-field element inside the sheet — the search input would be
+    // masked by the AppShell F6 handler's text-field guard; the close button
+    // is the honest probe for F1's escape (focus used to land on a
+    // background shell region while the modal stayed open)
+    const close = screen.getByLabelText('Close cheat sheet');
+    close.focus();
+    fireEvent.keyDown(close, { key: 'F6', bubbles: true, cancelable: true });
+    // the sheet owns the keyboard while open: focus stays inside the dialog…
+    expect(document.activeElement).toBe(close);
+    expect(sheet).toContainElement(document.activeElement as HTMLElement);
+    // …the sheet is still open (F6 consumed, not a close)…
+    expect(store().cheatOpen).toBe(true);
+    // …and Esc still closes through the capture listener (the existing law
+    // survives the new all-keys shield)
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    expect(store().cheatOpen).toBe(false);
+    expect(screen.queryByTestId('shell-cheatsheet')).not.toBeInTheDocument();
+  });
 });
 
 describe('splitter keyboard resize (R14 — the keyStep implementation finally pinned)', () => {

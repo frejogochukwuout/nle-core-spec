@@ -220,6 +220,15 @@ describe('MediaPool (spec 18 §4.2)', () => {
       act(() => { vi.advanceTimersByTime(1); });
       expect(screen.getByTestId('shell-mediapool-preview-chip')).toHaveTextContent('PREVIEW');
       expect(screen.getByTestId('shell-mediapool-preview-progress')).toBeInTheDocument();
+      /* R24-W5b (F1 P2): the hairline MOUNTS AT width 0 with the width
+         transition declared, then flips to the target on the NEXT FRAME —
+         the sweep actually animates now (the audio sibling's keyframes
+         law). The old width:100%-at-mount never fired the transition. */
+      const hair = screen.getByTestId('shell-mediapool-preview-progress');
+      expect(hair.style.width).toBe('0%'); // the sweep's from-state at mount
+      expect(hair.style.transition).toContain('width 6s linear');
+      act(() => { vi.advanceTimersByTime(16); }); // one frame (rAF = 16ms under the jsdom polyfill)
+      expect(hair.style.width).toBe('100%'); // the transition's to-state armed
       // gap C42 honesty: the preview is ambient state — never a toast event
       expect(S().toasts).toHaveLength(0);
       // leave resets immediately (no reverse theater)

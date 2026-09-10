@@ -26,9 +26,15 @@
    - R22 (#83: "i think we are missing a few timeline insert / edit modes you
      only showed two buttons here"): ALL SEVEN mode buttons are ALWAYS
      visible inline — the old <560px kebab collapse HID five modes (the
-     reviewer saw two) and is RETIRED. At genuinely narrow widths the bar
-     WRAPS to a second row (flex-wrap) and the labels truncate; the mode
-     set is the reference's six (insert/overwrite/replace/append/ripple/
+     reviewer saw two) and is RETIRED. R24-W5b (DESIGN-R24 §2 F1-P1)
+     SUPERSEDES the R22 narrow-width WRAP law: the bar lives in the FIXED
+     32px transport row, and flex-wrap made it two rows tall (46px, measured
+     at the 1280×800 floor — the 7th button occluded by the HSplitter z-10,
+     colliding with the SourceRangeBar band). The bar is now ONE ROW,
+     always: h-8 single-line + overflow-x-auto at genuinely narrow widths
+     (the buttons scroll horizontally — reachable, never occluded, never
+     wrapped) + the 24px house hit floor on every button; the mode set is
+     the reference's six (insert/overwrite/replace/append/ripple/
      fitfill) + placeOnTop (nle_edit_workflow §3.4).
    - R22 (#83): the hover placement preview FADES+SLIDES in/out (the
      reference's own motion: 0.3s ease-in-out, translateY 4px — CSS on the
@@ -132,7 +138,9 @@ function ModeButton({ def, mediaId, run, setHover, refusal, asMenuItem = false, 
       type="button"
       {...(asMenuItem ? { role: 'menuitem' as const, tabIndex: -1 } : {})}
       {...(extraProps ?? {})}
-      className="icon-btn !h-[22px] !w-[22px]"
+      /* the house 24px hit floor (R24-W5b): was 22px — the F1 hit-floor
+         sweep; icon-btn is flex-shrink:0 so the row scrolls, never squishes */
+      className="icon-btn !h-[24px] !w-[24px]"
       aria-label={def.label}
       aria-describedby={DESC_ID}
       data-testid={`shell-source-edit-${slug(def.label)}`}
@@ -225,7 +233,10 @@ export function SourceEditBar() {
       aria-label="Edit functions"
       aria-orientation="horizontal"
       onKeyDown={onToolbarKey}
-      className="flex w-full min-w-0 flex-wrap items-center gap-0.5"
+      /* R24-W5b (F1 P1): ONE ROW — h-8 (the transport row's own height,
+         no two-row wrap can overflow it), no flex-wrap, overflow-x-auto
+         as the narrow-width escape (buttons scroll, never hide/occlude). */
+      className="flex h-8 w-full min-w-0 items-center gap-0.5 overflow-x-auto"
     >
       {primary.map((def, i) => (
         <ModeButton

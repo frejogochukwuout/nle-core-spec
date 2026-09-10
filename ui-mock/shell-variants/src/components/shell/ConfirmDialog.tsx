@@ -1,6 +1,7 @@
 /* ConfirmDialog — spec 18 §6.4 destructive-action confirmation: focus-
    trapped alertdialog, Esc and ⌘. cancel, danger styling on the confirm
-   button (var(--danger)). API (context pattern, mounted in AppShell):
+   button (var(--danger)), focus restored to the invoker on close
+   (R24-W5b). API (context pattern, mounted in AppShell):
 
      const confirm = useConfirm();
      confirm({ title, body, confirmLabel, danger, onConfirm });
@@ -37,8 +38,22 @@ export function useConfirm(): ConfirmFn {
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [req, setReq] = useState<ConfirmOptions | null>(null);
   const reqRef = useRef<ConfirmOptions | null>(null);
+  /* R24-W5b (DESIGN-R24 §2 F1-P3): the INVOKER — captured at open (the
+     moment the request arrives, BEFORE the dialog's initial-focus effect
+     moves focus), restored on EVERY close route. Both funnel points
+     (cancel/accept) are the only writers that dismiss the dialog — the
+     dialog's Esc/⌘./backdrop routes all call onCancel — so the restore
+     lives in them (WAI dialog guidance: focus returns to the element
+     that invoked the dialog). */
+  const openerRef = useRef<HTMLElement | null>(null);
+  const restoreOpenerFocus = () => {
+    const el = openerRef.current;
+    openerRef.current = null;
+    el?.focus();
+  };
 
   const confirm = useCallback<ConfirmFn>((opts) => {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     reqRef.current = opts;
     setReq(opts);
   }, []);
@@ -46,12 +61,14 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const cancel = useCallback(() => {
     reqRef.current = null;
     setReq(null);
+    restoreOpenerFocus();
   }, []);
 
   const accept = useCallback(() => {
     const r = reqRef.current;
     reqRef.current = null;
     setReq(null);
+    restoreOpenerFocus();
     r?.onConfirm();
   }, []);
 

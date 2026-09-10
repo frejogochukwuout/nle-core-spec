@@ -112,6 +112,26 @@ function cmpBy(sortBy: SortBy, a: MediaRecord, b: MediaRecord): number {
 const HOVER_DWELL_MS = 400;
 const PREVIEW_SWEEP_S = 6; // pan + hairline window — one gentle sweep, no loop
 
+/* R24-W5b (DESIGN-R24 §2 F1-P2): the progress hairline MOUNTS AT width 0
+ * and flips to the target on the NEXT FRAME — the declared width transition
+ * actually fires then (the audio sibling's keyframes sweep animates from
+ * mount by its own law; the old width:100%-at-mount rendered a full bar and
+ * the transition never ran — F1: "the hairline never sweeps"). */
+function PreviewHairline() {
+  const [sweep, setSweep] = useState(false);
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => setSweep(true));
+    return () => window.cancelAnimationFrame(id);
+  }, []);
+  return (
+    <div
+      data-testid="shell-mediapool-preview-progress"
+      className="absolute bottom-0 left-0 h-[2px]"
+      style={{ width: sweep ? '100%' : '0%', background: 'var(--accent-selection)', transition: `width ${PREVIEW_SWEEP_S}s linear` }}
+    />
+  );
+}
+
 function Thumb({ m, small = false, preview = false }: { m: MediaRecord; small?: boolean; preview?: boolean }) {
   if (m.type === 'audio') {
     // deterministic mini-waveform as the audio "thumbnail"
@@ -246,13 +266,7 @@ function MediaCard({ m, selected, active, onClick, onDoubleClick, onContextMenu,
             PREVIEW
           </span>
         )}
-        {preview && (
-          <div
-            data-testid="shell-mediapool-preview-progress"
-            className="absolute bottom-0 left-0 h-[2px]"
-            style={{ width: '100%', background: 'var(--accent-selection)', transition: `width ${PREVIEW_SWEEP_S}s linear`, transitionProperty: 'width' }}
-          />
-        )}
+        {preview && <PreviewHairline />}
       </div>
       <div className="flex flex-col gap-0.5 px-2 py-1.5">
         <span className="truncate text-[11px] text-tprimary">{m.name}</span>

@@ -62,19 +62,45 @@ describe('Viewer (spec 18 §4.3)', () => {
   it('Eye toggle hides the in-canvas overlays (store pref, §4.3 viewer-toolbar)', () => {
     render(<Viewer duration={DUR} />);
     expect(screen.getByText(/Marina interview · 00:00:03:00/)).toBeInTheDocument(); // source chip
+    // R24-W5b (F1 P3): the Eye now hides ALL FOUR in-canvas overlay groups —
+    // the text overlay + the safe guides join the name/res chips (the old
+    // half-law left them painting under an "off" Eye — a lying button)
+    act(() => { S().setPlayhead(10); }); // el-5 (text overlay) under the playhead
+    act(() => { useUi.getState().toggleViewerSafeGuides(); });
+    expect(screen.getByText('MARINA — FISHERWOMAN')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-viewer-safe-guides')).toBeInTheDocument();
     const eye = screen.getByRole('button', { name: 'Toggle in-canvas overlays' });
     expect(eye).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(eye);
     expect(S().viewerOverlays).toBe(false);
     expect(eye).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByText(/Marina interview · 00:00:03:00/)).not.toBeInTheDocument();
+    expect(screen.queryByText('MARINA — FISHERWOMAN')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-viewer-safe-guides')).not.toBeInTheDocument();
   });
 
-  it('a non-select tool hides overlays even while the Eye pref is on (§4.3/§9)', () => {
-    useUi.setState({ tool: 'blade' });
+  it('a non-select tool hides ALL FOUR overlay groups even while the Eye pref is on (§4.3/§9)', () => {
+    /* R24-W5b (F1 P3) re-pin: this test used to document the HALF-law (the
+       name chip hid on tool-armed, the text overlay + safe guides kept
+       painting). hideOverlays now covers every in-canvas group: name chip,
+       res chips, text overlay, safe guides. */
+    useUi.setState({ tool: 'blade', viewerSafeGuides: true });
     render(<Viewer duration={DUR} />);
     expect(screen.getByRole('button', { name: 'Toggle in-canvas overlays' })).toHaveAttribute('aria-pressed', 'true');
+    act(() => { S().setPlayhead(10); }); // el-2 + the el-5 text overlay
+    // group 1+2: the name + res chips
     expect(screen.queryByText(/Marina interview · 00:00:03:00/)).not.toBeInTheDocument();
+    expect(screen.queryByText('24p')).not.toBeInTheDocument();
+    // group 3: the text overlay
+    expect(screen.queryByText('MARINA — FISHERWOMAN')).not.toBeInTheDocument();
+    // group 4: the safe guides (viewerSafeGuides is ON — the tool law wins)
+    expect(screen.queryByTestId('shell-viewer-safe-guides')).not.toBeInTheDocument();
+    // disarm → all four groups return (the Eye pref never dropped)
+    act(() => { useUi.setState({ tool: 'select' }); });
+    expect(screen.getByText(/Marina interview · 00:00:03:00/)).toBeInTheDocument();
+    expect(screen.getByText('24p')).toBeInTheDocument();
+    expect(screen.getByText('MARINA — FISHERWOMAN')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-viewer-safe-guides')).toBeInTheDocument();
   });
 
   it('safe-area guides render the 90/80 frames only while toggled on', () => {
@@ -342,6 +368,61 @@ describe('Viewer source preview mode (R19 th_mto3504c)', () => {
     expect(screen.getByText('No source media — select a pool card')).toBeInTheDocument();
     expect(container.querySelector('img')).toBeNull();
   });
+
+  /* ---- R24-W5b (DESIGN-R24 §2 F1-P2): the trim buttons' honest-control law
+         — no more enabled no-ops with a "set the range start" tip. */
+  it('R24-W5b: NO range → trim-in/out/clear render aria-disabled with reason tips; clicks mint NOTHING (the full-range mint is dead)', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    render(<Viewer duration={DUR} />);
+    const inB = screen.getByTestId('shell-source-trim-in');
+    const outB = screen.getByTestId('shell-source-trim-out');
+    const clr = screen.getByTestId('shell-source-trim-clear');
+    expect(inB).toHaveAttribute('aria-disabled', 'true');
+    expect(outB).toHaveAttribute('aria-disabled', 'true');
+    expect(clr).toHaveAttribute('aria-disabled', 'true');
+    expect(inB.getAttribute('data-tip')).toContain('set a range first');
+    expect(outB.getAttribute('data-tip')).toContain('set a range first');
+    expect(clr.getAttribute('data-tip')).toContain('no range is set');
+    // the F1 bug: the old buttons minted a semantically-identical full range
+    // on click (readout byte-identical semantics). Now nothing dispatches.
+    fireEvent.click(inB);
+    fireEvent.click(outB);
+    fireEvent.click(clr);
+    expect(S().sourceRanges['m-02']).toBeUndefined();
+    expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Source duration 00:01:35:05');
+  });
+
+  it('R24-W5b: WITH a range the commits are VISIBLE (the readout moves) — reset-to-head / extend-to-tail, honest-disabled at the ends', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    render(<Viewer duration={DUR} />);
+    act(() => { useUi.getState().setSourceRangeIn('m-02', 10); });
+    act(() => { useUi.getState().setSourceRangeOut('m-02', 60); });
+    const inB = screen.getByTestId('shell-source-trim-in');
+    const outB = screen.getByTestId('shell-source-trim-out');
+    expect(inB).not.toHaveAttribute('aria-disabled');
+    expect(outB).not.toHaveAttribute('aria-disabled');
+    // trim-in: the range start resets to the source head — the readout moves
+    fireEvent.click(inB);
+    expect(S().sourceRanges['m-02']!.in).toBe(0);
+    expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Range 00:00:00:00–00:01:00:00');
+    // at the head now → honest-disabled with the reason (a commit that would
+    // move nothing renders disabled)
+    expect(inB).toHaveAttribute('aria-disabled', 'true');
+    expect(inB.getAttribute('data-tip')).toContain('already starts at the source head');
+    fireEvent.click(inB); // the disabled click still mints nothing
+    expect(S().sourceRanges['m-02']!.in).toBe(0);
+    // trim-out: the end extends to the source tail — the readout moves again
+    fireEvent.click(outB);
+    expect(S().sourceRanges['m-02']!.out).toBeCloseTo(95.2, 5);
+    expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Range 00:00:00:00–00:01:35:05');
+    expect(outB).toHaveAttribute('aria-disabled', 'true');
+    expect(outB.getAttribute('data-tip')).toContain('already runs to the source tail');
+    // clear: back to the honest no-range state — all three disabled again
+    fireEvent.click(screen.getByTestId('shell-source-trim-clear'));
+    expect(S().sourceRanges['m-02']).toBeUndefined();
+    expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Source duration');
+    expect(screen.getByTestId('shell-source-trim-in')).toHaveAttribute('aria-disabled', 'true');
+  });
 });
 
 /* ---- R19: caption overlay (caption-track elements under the playhead) --- */
@@ -416,6 +497,27 @@ describe('Viewer edit-function placement (R20-W2)', () => {
     for (const label of ['Insert', 'Overwrite', 'Replace', 'Append at End', 'Ripple Overwrite', 'Place on Top', 'Fit to Fill']) {
       expect(within(transport).getByRole('button', { name: label })).toBeInTheDocument();
     }
+  });
+
+  it('R24-W5b (F1 P1): the SourceEditBar is ONE ROW inside the FIXED 32px transport row (no wrap, h-scroll escape)', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    render(<Viewer duration={DUR} />);
+    const transport = screen.getByTestId('shell-viewer-transport');
+    expect(transport.style.height).toBe('32px'); // the FIXED row (F1's transportRect)
+    const bar = within(transport).getByTestId('shell-source-edit-bar');
+    /* jsdom measures no layout — the CLASS grammar is the pin: h-8 is one
+       32px row (== the row's own height, a second row cannot fit), NO
+       flex-wrap (F1 measured the bar 46px tall over the 32px row, the 7th
+       button occluded by the HSplitter z-10), overflow-x-auto is the
+       narrow-width escape (buttons scroll — reachable, never occluded). */
+    expect(bar.className).toContain('h-8');
+    expect(bar.className).not.toContain('flex-wrap');
+    expect(bar.className).toContain('overflow-x-auto');
+    // all 7 buttons are flex children of the one row — reachable, and each
+    // carries the 24px house hit floor
+    const btns = within(bar).getAllByRole('button');
+    expect(btns).toHaveLength(7);
+    for (const b of btns) expect(b.className).toContain('!h-[24px]');
   });
 
   it('program mode: NO edit buttons in the transport row (play/mark cluster owns it)', () => {

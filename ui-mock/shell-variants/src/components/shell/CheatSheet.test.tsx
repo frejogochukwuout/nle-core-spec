@@ -5,8 +5,8 @@
    listener, and the §4.10 sample-project footer are exercised against the
    real store. */
 
-import { describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { CheatSheet } from './CheatSheet';
@@ -132,5 +132,41 @@ describe('CheatSheet (spec 16 §7.3)', () => {
     renderShell(<CheatSheet />, { patch: { cheatOpen: true } });
     expect(screen.getByTestId('shell-cheatsheet')).toHaveClass('z-[86]');
     expect(screen.getByTestId('shell-cheatsheet')).not.toHaveClass('z-[70]'); // the old rung is gone
+  });
+
+  /* R24-W5b (DESIGN-R24 §2 F1-P2): plain F6 used to sail through to the
+     AppShell's region cycler — focus landed on a background shell region
+     while the aria-modal dialog stayed open (the ConfirmDialog is safe via
+     its stopPropagation-on-all-keys). The sheet now owns the keyboard while
+     open. */
+  it('R24-W5b (F1 P2): plain F6 does NOT escape the open sheet — the sheet owns the keyboard (ConfirmDialog pattern)', () => {
+    renderShell(<CheatSheet />, { patch: { cheatOpen: true } });
+    // a window-bubble listener standing in for the AppShell region cycler
+    const shellKeys = vi.fn();
+    window.addEventListener('keydown', shellKeys);
+    try {
+      const sheet = screen.getByTestId('shell-cheatsheet');
+      expect(sheet).toHaveAttribute('aria-modal', 'true');
+      // focus a NON-field element inside the sheet (the close button): the
+      // search input would be masked by the F6 text-field guard — the close
+      // button is the honest probe (F1: focus escaped to a background region)
+      const close = screen.getByLabelText('Close cheat sheet');
+      close.focus();
+      fireEvent.keyDown(close, { key: 'F6', bubbles: true, cancelable: true });
+      // focus never left the dialog…
+      expect(document.activeElement).toBe(close);
+      // …and no window-level shell handler ever saw the key (the region
+      // cycler class never fires)
+      expect(shellKeys).not.toHaveBeenCalled();
+      // the sheet stays open — F6 is consumed, not a close
+      expect(store().cheatOpen).toBe(true);
+      // belt-and-braces (the strayed-focus case): F6 dispatched at the BODY
+      // while the modal is open is still eaten by the window-capture shield
+      fireEvent.keyDown(document.body, { key: 'F6', bubbles: true, cancelable: true });
+      expect(shellKeys).not.toHaveBeenCalled();
+      expect(store().cheatOpen).toBe(true);
+    } finally {
+      window.removeEventListener('keydown', shellKeys);
+    }
   });
 });

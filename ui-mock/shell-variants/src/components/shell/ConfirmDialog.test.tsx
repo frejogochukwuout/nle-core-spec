@@ -111,4 +111,41 @@ describe('ConfirmDialog (spec 18 §6.4)', () => {
     function Bare() { useConfirm(); return null; }
     expect(() => renderPlain(<Bare />)).toThrow(/ConfirmProvider/);
   });
+
+  /* ---- R24-W5b (DESIGN-R24 §2 F1-P3): focus returns to the INVOKER on
+     close — every route (WAI dialog guidance; the old dialog never
+     restored, focus fell to <body> after the unmount). ---- */
+  it('R24-W5b: the CANCEL route restores focus to the invoker', () => {
+    renderShell(<Harness onConfirm={() => {}} />);
+    const opener = screen.getByRole('button', { name: 'open' });
+    opener.focus(); // the invoker holds focus when confirm() fires
+    fireEvent.click(opener);
+    // the trap took focus (danger → cancel-first)…
+    expect(screen.getByTestId('shell-confirm-cancel')).toHaveFocus();
+    fireEvent.click(screen.getByTestId('shell-confirm-cancel'));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(opener).toHaveFocus(); // …and the close gave it back — the F1 finding, dead
+  });
+
+  it('R24-W5b: the CONFIRM route restores focus to the invoker too (after onConfirm runs)', () => {
+    const onConfirm = vi.fn();
+    renderShell(<Harness onConfirm={onConfirm} />);
+    const opener = screen.getByRole('button', { name: 'open' });
+    opener.focus();
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByTestId('shell-confirm-confirm'));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+
+  it('R24-W5b: the Esc route restores focus as well (the restore rides the shared close funnel)', () => {
+    renderShell(<Harness onConfirm={() => {}} />);
+    const opener = screen.getByRole('button', { name: 'open' });
+    opener.focus();
+    fireEvent.click(opener);
+    fireEvent.keyDown(screen.getByTestId('shell-confirm'), { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
 });

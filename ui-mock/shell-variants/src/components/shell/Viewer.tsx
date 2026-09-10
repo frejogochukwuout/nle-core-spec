@@ -371,8 +371,13 @@ export function Viewer({ duration }: { duration: number }) {
             </div>
           )}
 
-          {/* text overlay element composited over the frame */}
-          {overlayEl && (
+          {/* text overlay element composited over the frame — R24-W5b
+              (F1 P3): joins the hideOverlays law (the 4th group of
+              in-canvas overlay chrome: name chip, res chips, THIS text
+              overlay, the safe guides — a non-select tool or the Eye pref
+              off hides ALL of them; the Eye's aria-pressed stays the
+              honest PREF state) */}
+          {overlayEl && !hideOverlays && (
             <div className="pointer-events-none absolute bottom-[14%] left-1/2 -translate-x-1/2 text-center">
               <span className="text-[20px] font-semibold uppercase tracking-[0.22em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
                 {overlayEl.name}
@@ -414,8 +419,11 @@ export function Viewer({ duration }: { duration: number }) {
       {/* safe-area guides (viewer UI pref) — broadcast convention:
               90% action-safe + 80% title-safe centered rects, thin lines
               (labels: 10px strip-family floor + drop-shadow like the
-              other in-canvas chips — spec 18 §11.12 / §9) */}
-          {safeGuides && (
+              other in-canvas chips — spec 18 §11.12 / §9).
+              R24-W5b (F1 P3): the guides join the hideOverlays law —
+              all FOUR in-canvas overlay groups hide together while a
+              non-select tool is armed or the Eye pref is off. */}
+          {safeGuides && !hideOverlays && (
             <div className="pointer-events-none absolute inset-0" data-testid="shell-viewer-safe-guides" aria-hidden="true">
               <div className="absolute inset-[5%] border border-white/45" />
               <div className="absolute inset-[10%] border border-white/25" />
@@ -523,45 +531,88 @@ export function Viewer({ duration }: { duration: number }) {
           the mark/loop ops belong to the program timeline). */}
       {sourceMode ? (
         <div className="relative flex shrink-0 items-center gap-2 px-2" style={{ height: 32, minHeight: 32 }} data-testid="shell-viewer-transport">
-          <div className="flex min-w-0 flex-1 items-center">
+          {/* R24-W5b (F1 P1): the bar's wrapper takes the row's flex-1 share
+              ALONE — the old empty trailing flex-1 spacer split the free
+              space 50/50, squeezing the bar to ~173px at the 1280×800 floor
+              (the wrap root cause) and pushing the duration TC off the
+              right edge the header comment promises ("RIGHT = the static
+              source duration TC"). */}
+          <div className="flex h-8 min-w-0 flex-1 items-center">
             <SourceEditBar />
           </div>
-          {/* R22 #84/#85: the trim-edit controls — set in/out at the range
-              head/tail + clear; the playhead-position variants are honest
-              mocks of the Resolve grammar (the source poster has no
-              playhead — the buttons clamp to the current range ends). */}
+          {/* R22 #84/#85: the trim-edit controls. R24-W5b (F1 P2, the
+              honest-control law): the source poster has NO playhead, so the
+              definite commit is the head/tail reset — trim-in resets the
+              range start to the source head, trim-out extends the end to
+              the tail (both through the SAME store setters the handles
+              use, so the readout moves). Until a range exists (and once an
+              edge already sits at its end) the button is aria-disabled
+              with the reason in the tip and carries NO onClick — nothing
+              can mint the old semantically-identical full range. */}
           {sourceMediaId && sourceDur != null && (
             <div role="group" aria-label="Source trim controls" className="flex shrink-0 items-center gap-1" data-testid="shell-source-trim-controls">
-              <button
-                type="button"
-                className="icon-btn !h-[20px] !w-[22px] !text-[13px] !font-bold"
-                data-tip="Trim in — set the range start (drag the IN handle for fine trim)"
-                aria-label="Set source in point"
-                data-testid="shell-source-trim-in"
-                onClick={() => useUi.getState().setSourceRangeIn(sourceMediaId, useUi.getState().sourceRanges[sourceMediaId]?.in ?? 0)}
-              >
-                <span aria-hidden>[</span>
-              </button>
-              <button
-                type="button"
-                className="icon-btn !h-[20px] !w-[22px] !text-[13px] !font-bold"
-                data-tip="Trim out — set the range end (drag the OUT handle for fine trim)"
-                aria-label="Set source out point"
-                data-testid="shell-source-trim-out"
-                onClick={() => useUi.getState().setSourceRangeOut(sourceMediaId, useUi.getState().sourceRanges[sourceMediaId]?.out ?? sourceDur)}
-              >
-                <span aria-hidden>]</span>
-              </button>
-              <button
-                type="button"
-                className="icon-btn !h-[20px] !w-[20px] !text-[12px] !font-bold"
-                data-tip="Clear the trim range — the full source inserts again"
-                aria-label="Clear source trim range"
-                data-testid="shell-source-trim-clear"
-                onClick={() => useUi.getState().clearSourceRange(sourceMediaId)}
-              >
-                <span aria-hidden>×</span>
-              </button>
+              {(() => {
+                /* enabled ⟺ the commit would move the readout (range exists
+                   AND the edge is not already at its end) — a control that
+                   would commit nothing renders honestly disabled */
+                const range = sourceRange ?? null;
+                const inDisabled = !range || range.in <= 0;
+                const outDisabled = !range || range.out >= sourceDur;
+                const clearDisabled = !range;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      className={`icon-btn !h-[20px] !w-[22px] !text-[13px] !font-bold ${inDisabled ? 'disabled' : ''}`}
+                      data-tip={
+                        !range
+                          ? 'Trim in — disabled: drag the IN handle below to set a range first'
+                          : inDisabled
+                            ? 'Trim in — disabled: the range already starts at the source head'
+                            : 'Trim in — reset the range start to the source head (drag the IN handle for fine trim)'
+                      }
+                      aria-label="Set source in point"
+                      data-testid="shell-source-trim-in"
+                      aria-disabled={inDisabled || undefined}
+                      onClick={inDisabled ? undefined : () => useUi.getState().setSourceRangeIn(sourceMediaId!, 0)}
+                    >
+                      <span aria-hidden>[</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`icon-btn !h-[20px] !w-[22px] !text-[13px] !font-bold ${outDisabled ? 'disabled' : ''}`}
+                      data-tip={
+                        !range
+                          ? 'Trim out — disabled: drag the OUT handle below to set a range first'
+                          : outDisabled
+                            ? 'Trim out — disabled: the range already runs to the source tail'
+                            : 'Trim out — extend the range end to the source tail (drag the OUT handle for fine trim)'
+                      }
+                      aria-label="Set source out point"
+                      data-testid="shell-source-trim-out"
+                      aria-disabled={outDisabled || undefined}
+                      onClick={outDisabled ? undefined : () => useUi.getState().setSourceRangeOut(sourceMediaId!, sourceDur!)}
+                    >
+                      <span aria-hidden>]</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`icon-btn !h-[20px] !w-[20px] !text-[12px] !font-bold ${clearDisabled ? 'disabled' : ''}`}
+                      data-tip={
+                        clearDisabled
+                          ? 'Clear trim range — disabled: no range is set (the full source already inserts)'
+                          : 'Clear the trim range — the full source inserts again'
+                      }
+                      aria-label="Clear source trim range"
+                      data-testid="shell-source-trim-clear"
+                      aria-disabled={clearDisabled || undefined}
+                      onClick={clearDisabled ? undefined : () => useUi.getState().clearSourceRange(sourceMediaId!)}
+                    >
+                      <span aria-hidden>×</span>
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           )}
           <span className="mono shrink-0 text-[11px] text-tmuted" data-testid="shell-viewer-source-duration">
@@ -569,7 +620,6 @@ export function Viewer({ duration }: { duration: number }) {
               ? `Range ${tc(sourceRange.in)}–${tc(sourceRange.out)} · ${tc(sourceRange.out - sourceRange.in)} of ${tc(sourceDur)}`
               : `Source duration ${sourceDur !== null ? tc(sourceDur) : '— still image'}`}
           </span>
-          <div className="flex flex-1 items-center justify-end" />
         </div>
       ) : (
       <div className="relative flex shrink-0 items-center px-2" style={{ height: 32, minHeight: 32 }} data-testid="shell-viewer-transport">
