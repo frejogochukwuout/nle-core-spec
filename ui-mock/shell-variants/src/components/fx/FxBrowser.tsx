@@ -15,6 +15,13 @@
 import { Sparkles } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { TRANSITION_PRESENTATIONS } from '../../lib/mockData';
+/* R24-W3 (A1-R7): the frozen MIME now lives with its parser — Clip.tsx owns
+   the drop law (applyFxRowToClip), so it owns the contract constant too;
+   this file's local copy is DELETED (pinned at the source level in
+   FxBrowser.test). The double-click apply route imports the SAME parser —
+   no fork: a transition row resolves to the clip's outgoing seam, an
+   effect row stacks (×N toast), a fade row writes setFade. */
+import { EFFECT_DRAG_TYPE, applyFxRowToClip } from '../timeline/Clip';
 
 /* ---------- the row registry ----------
    Shipped row set (byte-identical payload cats: 'Blur' | 'Stylize' |
@@ -51,8 +58,8 @@ const SECTIONS: { label: string; rows: { name: string; cat: string }[] }[] = [
 /* drag-to-clip payload contract (spec 15 §5.4 drag-to-lane spirit): the
    timeline Clip drop target consumes this exact MIME type + JSON shape and
    applies the effect through addEffectToElement. FIXED CONTRACT — do not
-   change the type string or the payload keys. */
-const EFFECT_DRAG_TYPE = 'application/x-nle-effect';
+   change the type string or the payload keys. R24-W3: the constant itself
+   moved to Clip.tsx (the parser's owner) — imported above. */
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
 export function FxBrowser() {
@@ -70,12 +77,14 @@ export function FxBrowser() {
           <div key={section.label} className="mb-2">
             <div className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-tfaint">{section.label}</div>
             {section.rows.map((e) => (
-              /* dual route (R14 no-op fix): DnD rows are the REAL apply path
-                 (drag → Clip drop target / seam zone → setTransition /
-                 setFade / addEffectToElement), while click is the honest
-                 fallback for users who can't complete a drag — a toast
-                 explains where the apply + param UI actually live. A button
-                 element keeps the fallback keyboard-operable. */
+              /* dual route (R14 no-op fix) + the R24-W3 DOUBLE-CLICK apply
+                 (A1-R7): DnD rows are the REAL apply path (drag → Clip
+                 body / seam zone / transition box → the shared parser in
+                 Clip.tsx), click stays the honest fallback toast, and
+                 DOUBLE-CLICK applies the row to the SINGLE selected clip
+                 through the same shared parser — zero/multi selection gets
+                 the honest count-naming refusal instead. A button element
+                 keeps both fallback routes keyboard-operable. */
               <button
                 key={e.name}
                 type="button"
@@ -85,10 +94,24 @@ export function FxBrowser() {
                   ev.dataTransfer.effectAllowed = 'copy';
                   ev.dataTransfer.dropEffect = 'copy';
                 }}
+                onDoubleClick={() => {
+                  const sel = useUi.getState().selection;
+                  if (sel.length !== 1) {
+                    pushToast({
+                      kind: 'info',
+                      title: 'Select one clip',
+                      detail: sel.length === 0
+                        ? 'no clip is selected — double-click applies to the single selected clip (A1-R7)'
+                        : `${sel.length} clips are selected — double-click applies to exactly one clip (A1-R7)`,
+                    });
+                    return;
+                  }
+                  applyFxRowToClip(e, sel[0]!);
+                }}
                 onClick={() => pushToast({
                   kind: 'info',
                   title: `Add ${e.name}`,
-                  detail: 'drag the row onto a timeline clip to apply (mock drag-to-clip, spec 15 §5.4); the FX inspector carries the param UI',
+                  detail: 'drag the row onto a timeline clip to apply (mock drag-to-clip, spec 15 §5.4), or double-click it to apply to the selected clip; the FX inspector carries the param UI',
                 })}
                 data-testid={`shell-fxbrowser-row-${slug(e.name)}`}
                 aria-label={`${e.cat === 'Transition' ? 'Transition' : e.cat === 'Fade' ? 'Fade preset' : 'Effect'} ${e.name}`}

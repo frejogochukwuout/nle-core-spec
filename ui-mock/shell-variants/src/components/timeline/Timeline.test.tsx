@@ -287,19 +287,25 @@ describe('Timeline', () => {
     expect(screen.queryByTestId('transition-el-2')).not.toBeInTheDocument();
   });
 
-  /* fixes th_mto31dyp — Resolve-style transition restyle */
-  it('transition block restyle: full lane height minus 4px inset, clean 1px border, vertical 30→70% gradient (th_mto31dyp)', () => {
+  /* fixes th_mto31dyp — Resolve-style transition restyle. R24-W3 re-pin:
+     the F3 split moved the paint law onto the VISUAL child — the WRAPPER
+     keeps the box geometry (height + top-[2px]), the visual carries the
+     border/gradient/rounded/glyph grammar byte-identical. */
+  it('transition block restyle (F3 split): the WRAPPER keeps height + top-[2px]; the VISUAL child carries border/gradient/rounded/glyph (th_mto31dyp)', () => {
     boot({});
-    const tr = screen.getByTestId('transition-el-2');
-    expect(tr.style.height).toBe('76px'); // main lane 80 − 4 inset
-    expect(tr.className).toContain('top-[2px]'); // 2px inset top/bottom
-    expect(tr.style.border).toBe('1px solid var(--transition-mark)');
-    expect(tr.style.background).toContain('to bottom'); // VERTICAL gradient
-    expect(tr.style.background).toContain('30%, transparent');
-    expect(tr.style.background).toContain('70%, transparent');
-    expect(tr.className).toContain('rounded-[2px]');
+    const wrap = screen.getByTestId('transition-el-2');
+    expect(wrap.style.height).toBe('76px'); // main lane 80 − 4 inset
+    expect(wrap.className).toContain('top-[2px]'); // 2px inset top/bottom
+    expect(wrap.className).not.toContain('overflow-hidden'); // F3: the wrapper is UN-clipped — handles hang outside
+    const vis = screen.getByTestId('transition-visual-el-2');
+    expect(vis.className).toContain('overflow-hidden'); // the paint child clips
+    expect(vis.style.border).toBe('1px solid var(--transition-mark)');
+    expect(vis.style.background).toContain('to bottom'); // VERTICAL gradient
+    expect(vis.style.background).toContain('30%, transparent');
+    expect(vis.style.background).toContain('70%, transparent');
+    expect(vis.className).toContain('rounded-[2px]');
     // slim crossfade glyph: two overlapping triangles (not the old X)
-    const paths = tr.querySelectorAll('svg path');
+    const paths = vis.querySelectorAll('svg path');
     expect(paths.length).toBe(2);
     for (const p of Array.from(paths)) expect(p.getAttribute('fill')).toBe('white');
   });
@@ -1363,13 +1369,17 @@ describe('R23-WA: the FX engine gates (fxMode renders the zones; absence otherwi
     expect(screen.queryByTestId('transition-trim-r-el-2')).not.toBeInTheDocument();
   });
 
-  it('fxMode ON (the FX tool): zones render on every unlocked lane — butt-spliced seams + head/tail per track', () => {
+  it('fxMode ON (the FX tool): zones render on every unlocked lane — EMPTY butt-spliced seams + head/tail per track', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
-    // the tr-main seams: el-1|el-2 (8.5s) + el-2|el-3 (17s); el-3|el-4 rides
-    // el-4's virtualization cull (900px jsdom viewport — the zones share the
-    // clips' window law)
+    // the tr-main seams: el-1|el-2 (8.5s) + el-3|el-4 rides el-4's
+    // virtualization cull (900px jsdom viewport — the zones share the
+    // clips' window law). R24-W3 re-pin: el-2|el-3 is OCCUPIED
+    // (el-2.transitionOut) — its zone is ABSENT now (F3 root cause b: the
+    // object owns its edge); the transition BOX answers that seam (the
+    // click-select + the ⇄ drop door).
     expect(screen.getByTestId('fx-seam-el-1-el-2')).toBeInTheDocument();
-    expect(screen.getByTestId('fx-seam-el-2-el-3')).toBeInTheDocument();
+    expect(screen.queryByTestId('fx-seam-el-2-el-3')).not.toBeInTheDocument();
+    expect(screen.getByTestId('transition-el-2')).toBeInTheDocument(); // the box answers
     expect(screen.queryByTestId('fx-seam-el-3-el-4')).not.toBeInTheDocument();
     // D-A2.3's LETTER: head/tail = the TRACK's first/last element. The
     // tr-main first/last carry SEEDED demo fades (el-1 fadeIn 0.5 / el-4
@@ -1445,12 +1455,13 @@ describe('R23-WA: seam-zone click law (apply-default / select-existing)', () => 
     expect(screen.getByTestId('transition-el-1')).toHaveAttribute('role', 'slider');
   });
 
-  it('a seam WITH a transition: click SELECTS it — no doc write, no new history entry', () => {
+  it('a seam WITH a transition: the BOX\'s pointerdown SELECTS it — no doc write, no new history entry (R24-W3 re-point: the zone is gone, F3)', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
     const pastBefore = store().past.length;
-    const zone = screen.getByTestId('fx-seam-el-2-el-3');
-    expect(zone.getAttribute('aria-label')).toContain('Select transition');
-    fireEvent.click(zone);
+    // the occupied seam renders NO zone — the transition box owns the edge
+    expect(screen.queryByTestId('fx-seam-el-2-el-3')).not.toBeInTheDocument();
+    const box = screen.getByTestId('transition-el-2');
+    fireEvent.pointerDown(box, { button: 0, pointerId: 21 });
     expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' });
     expect(store().past.length).toBe(pastBefore);
   });
@@ -1479,6 +1490,165 @@ describe('R23-WA: seam-zone click law (apply-default / select-existing)', () => 
     };
     fireEvent.drop(screen.getByTestId('fx-seam-el-1-el-2'), { dataTransfer: dt });
     expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Seam drops take transitions' });
+  });
+});
+
+/* ---------- R24-W3 (DESIGN-R24 §3 W3 — A1/F3): the FX-row DnD round.
+   ONE shared parser (Clip.tsx's applyFxRowToSeam / applyFxRowToClip) behind
+   THREE doors — the Clip body, the empty SeamZone, the OCCUPIED-seam
+   TransitionBox — plus the dragOver visual grammar (HTML5 drags never fire
+   hover) and the F3 wrapper/visual split that makes short transitions
+   trimmable. dataTransfer stubs follow the file's drop pattern. ---------- */
+
+const fxRow = (name: string, cat: string) => ({
+  types: ['application/x-nle-effect'],
+  getData: () => JSON.stringify({ name, cat }),
+  dropEffect: 'copy',
+});
+const elById = (id: string) => scene1().tracks.flatMap((t) => t.elements).find((e) => e.id === id)!;
+
+describe('R24-W3 (A1-R4): drag-over visuals — the empty-seam zone + the occupied-seam ⇄ surface', () => {
+  it('an fx-row dragOver arms the seam zone: the 24px drop zone (24 wide × 24 tall, centered), the 26% mark fill, 1px border, the + glyph; dragLeave disarms', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const seam = screen.getByTestId('fx-seam-el-1-el-2');
+    expect(seam.style.width).toBe('12px'); // rest grammar unchanged
+    expect(seam.style.height).toBe('80px'); // the full-lane hit strip
+    fireEvent.dragOver(seam, { dataTransfer: fxRow('Dip to Black', 'Transition') });
+    expect(seam.style.width).toBe('24px');
+    expect(seam.style.height).toBe('24px'); // A1-R4: the drop zone renders 24px tall
+    expect(seam.style.top).toBe('28px');    // vertically centered in the 80px main lane
+    expect(seam.style.background).toContain('26%, transparent');
+    expect(seam.style.border).toBe('1px solid var(--transition-mark)');
+    expect(seam.textContent).toBe('+');     // the affordance HTML5 drags cannot hover into
+    fireEvent.dragLeave(seam, { dataTransfer: fxRow('Dip to Black', 'Transition') });
+    expect(seam.style.width).toBe('12px');
+    expect(seam.style.height).toBe('80px');
+    expect(seam.textContent).toBe('');
+  });
+
+  it('a POOL drag never arms the seam affordance (the MIME guard — the zone stays at rest; the lane\'s own pool grammar may answer below it)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const seam = screen.getByTestId('fx-seam-el-1-el-2');
+    fireEvent.dragOver(seam, { dataTransfer: { types: [POOL_DRAG_TYPE], dropEffect: '' } });
+    expect(seam.style.width).toBe('12px'); // the zone never armed
+    expect(seam.style.height).toBe('80px'); // no dragOver state
+    expect(seam.textContent).toBe('');      // no '+' affordance
+  });
+
+  it('the box as the ⇄ drop surface: a compatible dragOver widens the 14px floor box to the 24px drop floor, drops the paint to the 26% fill, swaps the glyph to ⇄; dragLeave restores', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    // shrink el-2's transition to the 0.1s domain floor — the 4.6px box
+    // renders the 14px minimum (the F3 repro geometry)
+    act(() => { useUi.getState().setTransition('el-2', { duration: 0.1 }); });
+    const box = screen.getByTestId('transition-el-2');
+    expect(box.style.width).toBe('14px'); // the sub-0.3s floor box
+    fireEvent.dragOver(box, { dataTransfer: fxRow('Wipe Left', 'Transition') });
+    expect(box.style.width).toBe('24px'); // the 24px drop floor — a real target
+    const vis = screen.getByTestId('transition-visual-el-2');
+    expect(vis.style.background).toContain('26%, transparent'); // paint drops to the fill
+    expect(box.textContent).toContain('⇄');                     // the replace affordance
+    fireEvent.dragLeave(box, { dataTransfer: fxRow('Wipe Left', 'Transition') });
+    expect(box.style.width).toBe('14px');
+    expect(vis.style.background).toContain('to bottom');        // the 30→70% gradient back
+    expect(box.textContent).not.toContain('⇄');
+  });
+
+  it('the clip body keeps its drag ring in fxMode (the fxMode twin of Clip.test\'s ring pin)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const clip = screen.getByTestId('clip-el-1');
+    fireEvent.dragOver(clip, { dataTransfer: fxRow('Vignette', 'Stylize') });
+    expect(clip.className).toContain('ring-accent');
+    fireEvent.dragLeave(clip, { dataTransfer: fxRow('Vignette', 'Stylize') });
+    expect(clip.className).not.toContain('ring-accent');
+  });
+});
+
+describe('R24-W3 (A1-R1): the occupied-seam box — the third door (replace-never-stack)', () => {
+  it('a transition row dropped on the box REPLACES the presentation and RETAINS duration + alignment (the partial patch)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    fireEvent.drop(screen.getByTestId('transition-el-2'), { dataTransfer: fxRow('Wipe Left', 'Transition') });
+    const tr = elById('el-2').transitionOut!;
+    expect(tr.presentation).toBe('Wipe Left');
+    expect(tr.type).toBe('crossfade'); // the presentation/type swap ONLY
+    expect(tr.duration).toBe(0.75);    // the user's tuning rides through
+    expect(tr.alignment).toBe(0.5);
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' }); // the fx-domain select
+    expect(store().past).toHaveLength(1); // ONE replace entry — never a stack
+  });
+
+  it('an IDENTICAL presentation short-circuits BEFORE setTransition: the Already toast + the fx-domain select, no doc write, no history (the W0 no-op twin\'s front door)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const before = JSON.stringify(elById('el-2').transitionOut);
+    fireEvent.drop(screen.getByTestId('transition-el-2'), { dataTransfer: fxRow('Cross Dissolve', 'Transition') });
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Already Cross Dissolve' });
+    expect(JSON.stringify(elById('el-2').transitionOut)).toBe(before); // untouched
+    expect(store().past).toHaveLength(0);
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' }); // the select still lands
+  });
+
+  it('the seam refusal detail splits per row-kind: a fade row names the clip-body route; an effect row names the stack route', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    fireEvent.drop(screen.getByTestId('fx-seam-el-1-el-2'), { dataTransfer: fxRow('Fade In 1s', 'Fade') });
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Seam drops take transitions' });
+    expect(store().toasts.at(-1)!.detail).toContain('fade presets drop on a clip body');
+    fireEvent.drop(screen.getByTestId('transition-el-2'), { dataTransfer: fxRow('Gaussian Blur', 'Blur') });
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Seam drops take transitions' });
+    expect(store().toasts.at(-1)!.detail).toContain('effects stack on a clip body');
+    expect(store().past).toHaveLength(0); // refusals never write
+  });
+});
+
+describe('R24-W3 (A1-R3): routing at the integrated surface', () => {
+  it('a transition row dropped on the CLIP BODY routes to the clip\'s OUTgoing seam (el-1\'s seam with el-2 mints on el-1)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    fireEvent.drop(screen.getByTestId('clip-el-1'), { dataTransfer: fxRow('Dip to Black', 'Transition') });
+    expect(elById('el-1').transitionOut).toMatchObject({ type: 'crossfade', presentation: 'Dip to Black' });
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-1' });
+    expect(store().past).toHaveLength(1); // the mint — one entry
+  });
+
+  it('an fx-row drop on the EMPTY LANE is a pure no-op — no highlight, no toast, no commit (the lane\'s pool-only guard)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const lane = laneOf('el-1');
+    const toastsBefore = store().toasts.length;
+    const ev = createEvent.dragOver(lane, { dataTransfer: fxRow('Gaussian Blur', 'Blur') });
+    fireEvent(lane, ev);
+    expect(ev.defaultPrevented).toBe(false); // never a drop target for fx rows
+    expect(lane.className).not.toContain('pool-lane-ok'); // no highlight
+    fireEvent.drop(lane, { dataTransfer: fxRow('Gaussian Blur', 'Blur') });
+    expect(store().toasts).toHaveLength(toastsBefore); // silence is the law
+    expect(elById('el-1').effects).toHaveLength(1); // the seeded instance only — no stack push
+    expect(store().past).toHaveLength(0);
+  });
+});
+
+describe('R24-W3 (F3): the wrapper/visual split — trim handles reachable on SHORT transitions', () => {
+  it('hit geometry: the WRAPPER is un-clipped (height + top-[2px]); the VISUAL child is the overflow-hidden paint; the handles hang -3px/12px OUTSIDE as the visual\'s siblings, pointer-events INHERIT', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const wrap = screen.getByTestId('transition-el-2');
+    expect(wrap.className).not.toContain('overflow-hidden'); // UN-clipped — nothing eats the handle zones
+    expect(wrap.style.height).toBe('76px');
+    expect(wrap.className).toContain('top-[2px]');
+    expect(wrap.style.pointerEvents).toBe('auto'); // the fxMode gate lives on the wrapper
+    const vis = screen.getByTestId('transition-visual-el-2');
+    expect(vis.className).toContain('overflow-hidden'); // the paint child clips
+    expect(vis.style.pointerEvents).toBe('inherit');    // the visual follows the wrapper's gate
+    for (const side of ['l', 'r'] as const) {
+      const handle = screen.getByTestId(`transition-trim-${side}-el-2`);
+      expect(handle.parentElement).toBe(wrap); // the visual's SIBLINGS, the wrapper's children
+      expect(handle.style.pointerEvents).toBe('inherit'); // the handles follow the gate too
+      expect(side === 'l' ? handle.style.left : handle.style.right).toBe('-3px'); // 3px OUTSIDE the edge
+      expect(handle.style.width).toBe('12px');
+    }
+  });
+
+  it('a seam WITH a transitionOut renders NO SeamZone (the EdgeFadeZone law cloned, F3 root cause b): at the 0.1s floor the box + its handles stand alone', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    act(() => { useUi.getState().setTransition('el-2', { duration: 0.1 }); }); // the F3 repro: the 14px floor box
+    expect(screen.queryByTestId('fx-seam-el-2-el-3')).not.toBeInTheDocument(); // NO z-8 strip over the box
+    expect(screen.getByTestId('transition-el-2')).toBeInTheDocument();
+    expect(screen.getByTestId('transition-trim-l-el-2')).toBeInTheDocument(); // reachable — nothing covers them
+    expect(screen.getByTestId('transition-trim-r-el-2')).toBeInTheDocument();
   });
 });
 

@@ -15,7 +15,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useUi, trackHeights, mintTrackIds } from '../../state/useUiStore';
 import { useVariant } from '../debug/VariantProvider';
-import { sceneDuration, mediaById, findElement, effectiveFade, TRANSITION_PRESENTATIONS, type ElementJSON, type TrackJSON } from '../../lib/mockData';
+import { sceneDuration, mediaById, findElement, effectiveFade, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { tc, snapToFrame } from '../../lib/timecode';
 import { dynamicContentWidth, snapPxToDeviceGrid, zoomMinPps, PLAYHEAD_LINE_PX, HORIZONTAL_WHEEL_STEP_PX, DRAG_THRESHOLD_PX } from '../../lib/pixel';
 import {
@@ -31,7 +31,7 @@ import { createEdgeAutoScroll } from '../../lib/edgeScroll';
 import { zoomController, zoomBus, createWheelZoomAccumulator } from '../../lib/zoomController';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
-import { Clip, buildClipMenuItems, CAPTION_PARCHMENT, EFFECT_DRAG_TYPE, type ClipDragEvent, type ClipDragHost } from './Clip';
+import { Clip, buildClipMenuItems, CAPTION_PARCHMENT, EFFECT_DRAG_TYPE, applyFxRowToSeam, type ClipDragEvent, type ClipDragHost } from './Clip';
 import { SpeedGaugeIcon } from './editModeIcons';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { POOL_DRAG_TYPE, isDroppable } from '../shell/MediaPool';
@@ -89,25 +89,43 @@ interface DragPreview {
 
 const SEAM_W = 12;
 const SEAM_HOVER_W = 24;
+/* R24-W3 (A1-R4): the drag-over drop zone's height — the empty-seam zone
+ * renders 24px tall while a compatible fx-row drag is over it (the house
+ * hit floor in both dimensions; HTML5 drags never fire mouseenter/leave,
+ * so the dragOver state carries the affordance the hover state cannot). */
+const SEAM_DROP_H = 24;
 /** R23-WA ruling: the duration domain a transition object can be trimmed to —
  *  [0.1, 2 s] (the Inspector Transition row's own min/max — Home lands the
  *  0.1 floor, never 0; Delete owns removal). Frame-snapped at 24 fps. */
 const TRANSITION_DUR_MAX = 2;
 /* the domain FLOOR — matches the Inspector's TransitionSection Duration
-   row min (0.1 s): keyboard Home / drag floor land here, never 0 (a 0 s
-   transition would render a ghost 14 px box the Inspector cannot
-   reproduce — R23-WA-REV P3 #8) */
+ *  row min (0.1 s): keyboard Home / drag floor land here, never 0 (a 0 s
+ *  transition would render a ghost 14 px box the Inspector cannot
+ *  reproduce — R23-WA-REV P3 #8) */
 const TRANSITION_DUR_MIN = 0.1;
+/* R24-W3 (A1-R4): the occupied box's WIDTH floor — 14px at rest (the
+ *  sub-0.3s minimum box), 24px while a compatible drag is over it, so the
+ *  floor box becomes a real drop target (the ⇄ surface). */
+const TRANSITION_MIN_BOX_W = 14;
+const TRANSITION_DROP_FLOOR_W = 24;
 
 /** mid-seam zone (D-A2.2): centered on the cut, 12px → 24px on hover; click
  *  applies the DEFAULT transition (setTransition's verified {} = Cross
- *  Dissolve 0.5 s centered) or SELECTS an existing one; accepts a 'Transition'
- *  browser row drop (that presentation via setTransition). */
+ *  Dissolve 0.5 s centered). R24-W3: the zone renders ONLY on EMPTY seams
+ *  (the builder below skips occupied ones — the transition box owns its
+ *  edge, the EdgeFadeZone law cloned, F3), and the drop is DOOR 2 of the
+ *  shared parser (Clip.tsx's applyFxRowToSeam — mint / replace-never-stack
+ *  + the per-row-kind refusal toasts). */
 function SeamZone({ a, b, h, pxPerSec }: { a: ElementJSON; b: ElementJSON; h: number; pxPerSec: number }) {
   const [hover, setHover] = useState(false);
+  /* A1-R4: HTML5 drags never fire mouseenter/leave — the dragOver state is
+     the drag-time twin of the hover affordance (the 24px drop zone + the
+     26% mark fill + 1px border + the '+' glyph). */
+  const [dragOver, setDragOver] = useState(false);
   const cut = a.startTime + a.duration;
-  const existing = a.transitionOut;
-  const w = hover ? SEAM_HOVER_W : SEAM_W;
+  const existing = a.transitionOut; // unreachable from the builder (empty seams only) — kept honest
+  const armed = hover || dragOver;
+  const w = armed ? SEAM_HOVER_W : SEAM_W;
   const applyOrSelect = () => {
     if (existing) {
       useUi.getState().selectFxObject({ kind: 'transition', elementId: a.id });
@@ -126,14 +144,17 @@ function SeamZone({ a, b, h, pxPerSec }: { a: ElementJSON; b: ElementJSON; h: nu
       aria-label={existing
         ? `Select transition at the ${a.name} to ${b.name} cut`
         : `Add Cross Dissolve at the ${a.name} to ${b.name} cut`}
-      className="absolute top-0 flex items-center justify-center rounded-[2px]"
+      className="absolute flex items-center justify-center rounded-[2px]"
       style={{
         left: cut * pxPerSec - w / 2,
         width: w,
-        height: h,
+        /* the drag-over drop zone renders 24px tall, centered in the lane
+           (the rest state keeps the full-lane hit strip) */
+        top: dragOver ? Math.max(0, (h - SEAM_DROP_H) / 2) : 0,
+        height: dragOver ? SEAM_DROP_H : h,
         zIndex: 8,
-        background: hover ? 'color-mix(in srgb, var(--transition-mark) 26%, transparent)' : 'transparent',
-        border: hover ? '1px solid var(--transition-mark)' : '1px solid transparent',
+        background: armed ? 'color-mix(in srgb, var(--transition-mark) 26%, transparent)' : 'transparent',
+        border: armed ? '1px solid var(--transition-mark)' : '1px solid transparent',
         cursor: 'pointer',
       }}
       onMouseEnter={() => setHover(true)}
@@ -143,27 +164,26 @@ function SeamZone({ a, b, h, pxPerSec }: { a: ElementJSON; b: ElementJSON; h: nu
         if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
+        setDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setDragOver(false);
       }}
       onDrop={(e) => {
         if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
         e.preventDefault();
+        setDragOver(false);
         let payload: { name: string; cat: string } | null = null;
         try { payload = JSON.parse(e.dataTransfer.getData(EFFECT_DRAG_TYPE) || 'null'); } catch { payload = null; }
         if (!payload || typeof payload.name !== 'string' || typeof payload.cat !== 'string') return;
-        if (payload.cat === 'Transition') {
-          const pres = TRANSITION_PRESENTATIONS.find((p) => p === payload!.name);
-          if (!pres) {
-            useUi.getState().pushToast({ kind: 'info', title: 'Unknown transition', detail: `'${payload.name}' is not in the mock's transition vocabulary (spec 09 §3.4 presentations)` });
-            return;
-          }
-          useUi.getState().setTransition(a.id, { presentation: pres });
-          useUi.getState().selectFxObject({ kind: 'transition', elementId: a.id });
-        } else {
-          useUi.getState().pushToast({ kind: 'info', title: 'Seam drops take transitions', detail: 'fade presets drop on a clip body — the seam applies a transition (DESIGN-R23 D-A5)' });
-        }
+        /* DOOR 2 — the shared parser (mint on the empty seam; effect/fade
+           rows get the per-row-kind refusal toast). */
+        applyFxRowToSeam(payload, a.id);
       }}
     >
-      {hover && !existing && (
+      {armed && !existing && (
         <span aria-hidden="true" className="pointer-events-none text-[13px] font-bold leading-none" style={{ color: 'var(--transition-mark)' }}>+</span>
       )}
     </button>
@@ -231,12 +251,25 @@ const clientToContentX = (clientX: number): number => {
   return clientX - box.left + sc.scrollLeft;
 };
 
-/** the transition box (th_mto31dyp visual, kept verbatim) — INTERACTIVE only
- *  in fxMode (D-A2.4): click selects into the FX domain; edge-drag trims the
- *  duration under the fade-object clamp-commit grammar; keyboard ±1 frame
- *  (⇧ ×10) / Home 0 / End the domain max; Delete is the useShortcuts rung
- *  (selectedFxObject FIRST). In edit mode the box stays today's inert
- *  title/aria-only marker. */
+/** the transition box (th_mto31dyp visual, kept byte-identical in the
+ *  VISUAL child) — INTERACTIVE only in fxMode (D-A2.4): click selects into
+ *  the FX domain; edge-drag trims the duration under the fade-object
+ *  clamp-commit grammar; keyboard ±1 frame (⇧ ×10) / Home 0.1 / End the
+ *  domain max; Delete is the useShortcuts rung (selectedFxObject FIRST).
+ *  In edit mode the box stays today's inert title/aria-only marker.
+ *  R24-W3 — TWO structural laws on top:
+ *  (F3-a) the box is SPLIT into an UN-clipped WRAPPER (this element: testid,
+ *      role=slider, focus, keyboard, pointerdown-select, and the DnD drop
+ *      target — pointer-events carries the fxMode gate) + an overflow-hidden
+ *      VISUAL child that owns the paint; the 12px trim handles hang 3px
+ *      OUTSIDE the wrapper's edges as the visual's SIBLINGS, so nothing
+ *      clips their hit zones (the old overflow-hidden box ate them — the F3
+ *      root cause: mouse trim of a 0.1s floor box was impossible).
+ *  (A1-R1/A1-R4) the wrapper is DOOR 3 of the shared parser (the occupied
+ *      seam's drop = REPLACE), and while a compatible fx-row drag is over
+ *      it the box becomes the ⇄ surface: the width floor rises 14→24px (the
+ *      drop floor), the paint drops to the 26% mark fill, and the glyph
+ *      swaps to ⇄. */
 const capturePointer = (el: HTMLElement, pointerId: number) => {
   try { el.setPointerCapture(pointerId); } catch { /* inactive pointer id */ }
 };
@@ -251,12 +284,16 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
    * the ×2 the first pointermove would collapse the preview to half (the
    * R23-WA-REV P1 — a grab-at-actual-edge must be a no-op, pinned). */
   const [trDrag, setTrDrag] = useState<{ side: 'l' | 'r'; t: number } | null>(null);
+  /* R24-W3 (A1-R4): the occupied-seam ⇄ surface state — the drag-time twin
+   * of the SeamZone's affordance (HTML5 drags never fire hover). */
+  const [dragOver, setDragOver] = useState(false);
   const dur = trDrag ? trDrag.t : tr.duration;
   const w = dur * pxPerSec;
   const commit = (t: number) => {
     if (t === tr.duration) return; // no-op — no history entry
     useUi.getState().setTransition(el.id, { duration: t });
   };
+
   const trimTo = (e: React.PointerEvent, side: 'l' | 'r') => {
     const x = clientToContentX(e.clientX);
     /* ×2: the cut-centered box puts the edge at dur/2 from the cut — the
@@ -266,21 +303,25 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
     const t = Math.max(TRANSITION_DUR_MIN, Math.min(snapToFrame(raw), TRANSITION_DUR_MAX));
     setTrDrag({ side, t });
   };
+  /* the rendered width: the sub-0.3s floor (14px) normally — 24px (the
+     drop floor) while a compatible drag is over, so the floor box is a
+     real target. The left edge centers on the RENDERED width (R23-FIX
+     R3-P3#5) — see the visual child below. */
+  const boxW = Math.max(w, dragOver ? TRANSITION_DROP_FLOOR_W : TRANSITION_MIN_BOX_W);
   return (
+    /* the F3-a WRAPPER — UN-clipped (no overflow-hidden): the hit/legal
+       surface that owns testid/role/focus/keyboard/pointerdown-select/the
+       DnD target, and the pointer-events gate the children INHERIT. */
     <div
-      className="absolute top-[2px] flex items-center justify-center overflow-hidden rounded-[2px]"
+      className="absolute top-[2px]"
       style={{
-        /* R23-FIX (review-sweep R3-P3#5): the left edge centers on the
-           RENDERED width (Math.max(w, 14)) — the sub-0.3s floor renders the
-           14px minimum box, but left used the raw w/2, so a minimum box sat
-           off-center by (14 − w)/2 px (the glyph + handles shifted left). */
-        left: cut - Math.max(w, 14) / 2,
-        width: Math.max(w, 14),
+        /* R23-FIX (review-sweep R3-P3#5) still law: the left edge centers
+           on the RENDERED width (now boxW) so the minimum box never sits
+           off-center by (floor − w)/2 px. */
+        left: cut - boxW / 2,
+        width: boxW,
         height: h - 4,
         zIndex: 7,
-        background: 'linear-gradient(to bottom, color-mix(in srgb, var(--transition-mark) 30%, transparent), color-mix(in srgb, var(--transition-mark) 70%, transparent))',
-        border: '1px solid var(--transition-mark)',
-        boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
         ...(fxMode && selected ? { outline: '1.5px solid var(--accent-selection)', outlineOffset: 0 } : {}),
         ...(fxMode ? { cursor: 'pointer' } : {}),
         /* R23-FIX (review-sweep item 1, R3-P1#1): the box is CLICK-THROUGH
@@ -290,7 +331,9 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
            edit-mode title tooltip on the box is now click-through-
            unavailable — the seam zone's data-tip + the fx-mode box carry
            the info (elementFromPoint-style hit assertions are jsdom-
-           impossible; the style-level pin carries the law). */
+           impossible; the style-level pin carries the law).
+           The visual child + handles INHERIT this value (pointer-events is
+           an inherited property) — the F3 law, pinned at the style level. */
         pointerEvents: fxMode && !locked ? 'auto' : 'none',
       }}
       title={`Crossfade · ${tr.presentation} · ${tr.duration}s`}
@@ -307,6 +350,9 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
           if (e.button !== 0) return;
           e.stopPropagation(); // never a clip gesture / marquee
           (e.currentTarget as HTMLElement).focus();
+          /* click-on-occupied-seam = SELECT (A1-R1) — no doc write, no
+             history; the seam zone no longer renders here (F3-b), so the
+             box is the seam's whole answer. */
           useUi.getState().selectFxObject({ kind: 'transition', elementId: el.id });
         },
         onKeyDown: (e: React.KeyboardEvent) => {
@@ -325,16 +371,66 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
           }
           commit(next);
         },
+        /* R24-W3 (A1-R4): DOOR 3 — the occupied seam's ⇄ drop surface. */
+        onDragOver: (e: React.DragEvent) => {
+          if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          setDragOver(true);
+        },
+        onDragLeave: (e: React.DragEvent) => {
+          if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+          setDragOver(false);
+        },
+        onDrop: (e: React.DragEvent) => {
+          if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+          e.preventDefault();
+          setDragOver(false);
+          let payload: { name: string; cat: string } | null = null;
+          try { payload = JSON.parse(e.dataTransfer.getData(EFFECT_DRAG_TYPE) || 'null'); } catch { payload = null; }
+          if (!payload || typeof payload.name !== 'string' || typeof payload.cat !== 'string') return;
+          /* the shared parser — REPLACE (retained duration/alignment) or
+             the 'Already X' short-circuit; effect/fade rows refuse. */
+          applyFxRowToSeam(payload, el.id);
+        },
       } : {})}
     >
-      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-        {/* slim crossfade glyph: two overlapping triangles */}
-        <path d="M3 3 L8.5 7 L3 11 Z" fill="white" opacity="0.92" />
-        <path d="M11 3 L5.5 7 L11 11 Z" fill="white" opacity="0.92" />
-      </svg>
+      {/* the F3-a VISUAL — the overflow-hidden paint child: the 30→70% mark
+          gradient, 1px border, 2px radius and the glyph grammar kept
+          byte-identical; while a compatible drag is over, the paint drops
+          to the 26% mark fill and the glyph swaps to ⇄. pointer-events
+          INHERITS the wrapper's gate. */}
+      <div
+        data-testid={`transition-visual-${el.id}`}
+        aria-hidden="true"
+        className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-[2px]"
+        style={{
+          pointerEvents: 'inherit',
+          background: dragOver
+            ? 'color-mix(in srgb, var(--transition-mark) 26%, transparent)'
+            : 'linear-gradient(to bottom, color-mix(in srgb, var(--transition-mark) 30%, transparent), color-mix(in srgb, var(--transition-mark) 70%, transparent))',
+          border: '1px solid var(--transition-mark)',
+          boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
+        }}
+      >
+        {dragOver ? (
+          /* the ⇄ replace affordance (A1-R4) */
+          <span className="text-[13px] font-bold leading-none text-white">⇄</span>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            {/* slim crossfade glyph: two overlapping triangles */}
+            <path d="M3 3 L8.5 7 L3 11 Z" fill="white" opacity="0.92" />
+            <path d="M11 3 L5.5 7 L11 11 Z" fill="white" opacity="0.92" />
+          </svg>
+        )}
+      </div>
       {/* handles + interactive props gate on fxMode && !locked (the wave's
           own locked-lane ruling — R23-WA-REV P3 #4: a locked lane's box must
-          not select/drag/keyboard-trim while its store writes no-op) */}
+          not select/drag/keyboard-trim while its store writes no-op).
+          F3-a: the 12px zones hang 3px OUTSIDE the WRAPPER's edges as the
+          visual's siblings — the wrapper is un-clipped, so their full hit
+          zones survive (R23-FIX R3-P3#6 keeps the 12px/−3px geometry). */}
       {fxMode && !locked && (
         <>
           <div
@@ -345,7 +441,7 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
                meet at its middle (the right zone wins the 4px overlap,
                last-in-DOM). */
             className="absolute inset-y-0"
-            style={{ left: -3, width: 12, cursor: 'ew-resize' }}
+            style={{ left: -3, width: 12, cursor: 'ew-resize', pointerEvents: 'inherit' }}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
               e.stopPropagation();
@@ -374,7 +470,7 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
           <div
             data-testid={`transition-trim-r-${el.id}`}
             className="absolute inset-y-0" /* R23-FIX R3-P3#6 — see the left handle */
-            style={{ right: -3, width: 12, cursor: 'ew-resize' }}
+            style={{ right: -3, width: 12, cursor: 'ew-resize', pointerEvents: 'inherit' }}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
               e.stopPropagation();
@@ -1403,6 +1499,15 @@ export function Timeline() {
                   for (let i = 0; i + 1 < sorted.length; i++) {
                     const a = sorted[i]!;
                     const b = sorted[i + 1]!;
+                    /* R24-W3 (F3 root cause b — the EdgeFadeZone law
+                       cloned): a seam WITH a transitionOut renders NO zone
+                       at all — the object owns its edge. The z-8 full-height
+                       strip used to sit over the box's 14px floor box and
+                       ate its pointer, which (stacked with the old
+                       overflow-hidden box) made short transitions
+                       un-trimmable; the transition BOX answers the seam now
+                       (click-select + the ⇄ drop door). */
+                    if (a.transitionOut) continue;
                     if (Math.abs(a.startTime + a.duration - b.startTime) < 0.001) seams.push({ a, b });
                   }
                   /* the TRACK's first/last element (min start / max end) —

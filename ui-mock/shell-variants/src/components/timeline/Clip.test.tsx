@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { act, fireEvent, screen } from '@testing-library/react';
-import { Clip, EFFECT_DRAG_TYPE, CLIP_WAVEFORM_RAMP, textBarHeight } from './Clip';
+import { Clip, EFFECT_DRAG_TYPE, CLIP_WAVEFORM_RAMP, textBarHeight, buttSplicedFollower } from './Clip';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 import { snapToFrame } from '../../lib/timecode';
@@ -1200,5 +1200,39 @@ describe('R23-WA: the Fades browser-row drop parser (D-A5 — setFade, never add
     expect(store().toasts.at(-1)!.title).toBe('Unknown fade preset');
     expect(el('el-3').fadeIn).toBe(0.5); // untouched
     expect(store().past).toHaveLength(0);
+  });
+});
+
+/* ---------- R24-W3 (DESIGN-R24 §3 W3 — A1): the shared FX-row parser.
+   The Clip body drop is DOOR 1 — the routing table lands here at the
+   component surface: the butt-spliced-follower adjacency law, the honest
+   refusal when a transition row has no cut behind it, and the effect STACK
+   with the ×N toast (duplicates legal — the Resolve/Premiere OFX law). ---------- */
+
+describe('R24-W3 (A1-R3): the parser\'s routing at the body door', () => {
+  it('buttSplicedFollower: exact butt-splices resolve (el-1→el-2, el-2→el-3); gaps + lane-last clips do not (s2-1, el-4) — the seams builder\'s 1ms tolerance', () => {
+    expect(buttSplicedFollower('el-1')?.id).toBe('el-2');
+    expect(buttSplicedFollower('el-2')?.id).toBe('el-3');
+    expect(buttSplicedFollower('el-4')).toBeNull(); // tr-main's LAST clip — no out seam
+    expect(buttSplicedFollower('s2-1')).toBeNull(); // sc-2's 0.25 s gap — not a butt-splice
+  });
+
+  it('a transition row on a clip body with NO butt-spliced follower refuses honestly — no mint, no history (the adjacency guard)', () => {
+    boot({});
+    fireEvent.drop(screen.getByTestId('clip-el-4'), { dataTransfer: fxPayload('Dip to Black', 'Transition') });
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Transitions need a cut' });
+    expect(store().toasts.at(-1)!.detail).toContain('no clip after this one — transitions need a cut');
+    expect(el('el-4').transitionOut).toBeUndefined(); // nothing minted — no cut, no transition
+    expect(store().past).toHaveLength(0);
+  });
+
+  it('effect rows STACK: a duplicate Gaussian Blur on el-1 (seeded) reaches ×2 with the honest count toast', () => {
+    boot({});
+    fireEvent.drop(screen.getByTestId('clip-el-1'), { dataTransfer: fxPayload('Gaussian Blur', 'Blur') });
+    const fx = el('el-1').effects!;
+    expect(fx).toHaveLength(2); // the seeded instance + the pushed one — duplicates are legal
+    expect(fx.every((f) => f.name === 'Gaussian Blur')).toBe(true);
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Gaussian Blur × 2' });
+    expect(store().past).toHaveLength(1); // one addEffectToElement entry
   });
 });
