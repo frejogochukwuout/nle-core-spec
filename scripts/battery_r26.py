@@ -545,7 +545,7 @@ check("the R25 count movements recorded (app 174→206 live-run; the post-D30 ce
 
 # === REPORT ====================================================================
 fails = [r for r in results if not r[1]]
-print(f"\nbattery_r25: {len(results) - len(fails)}/{len(results)} PASS")
+print(f"\nbattery_r26: {len(results) - len(fails)}/{len(results)} PASS")
 for name, ok, detail in results:
     if not ok:
         print(f"  FAIL  {name}  [{detail}]")
