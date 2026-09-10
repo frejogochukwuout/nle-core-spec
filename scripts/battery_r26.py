@@ -440,8 +440,8 @@ def _variants_census():
                 s = line.strip()
                 if s.startswith("it(") or s.startswith("it ("):
                     blocks += 1
-    ok = ("1521+" in reg and "355" in reg and len(files) == 61 and blocks == 1588)
-    return ok, f"{blocks} it-blocks / {len(files)} files (register: 1,588/61, canon 1521+)"
+    ok = ("1521+" in reg and "355" in reg and len(files) == 61 and blocks == 1613)
+    return ok, f"{blocks} it-blocks / {len(files)} files (register: 1,613/61, canon 1521+)"
 check("the suite-count pins hold (variants 1521+ / mini 355) — the variants it-census re-derived (D35.2)", _variants_census, "suite pins")
 
 # === P. THE PLAN'S D36 ROWS (ARCH-R25 §7 class 5) ============================
