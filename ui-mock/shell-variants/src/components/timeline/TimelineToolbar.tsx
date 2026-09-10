@@ -1,19 +1,20 @@
 /* TimelineToolbar — spec 18 §4.5: tool cluster (radio, spec 16 keys),
    snap/link/lock toggles, marker cluster, zoom cluster, master audio.
    Mock's sync-bin/auto-sync/dyntrim dropped (§8.10 / §8.9).
-   R23-WB (DESIGN-R23 D-B3; issue #94): the DENSITY toggle — compact strip
-   ↔ full tracks, available on every page EXCEPT FX ("this super compact
-   mode we should allow to be used everywhere"); the pressed state reads
-   the ONE store resolver (resolveTimelineCompact) so the button never lies
-   about what is rendered, and the click writes the user's per-session
-   override ('on'/'off'; 'auto' remains the boot default per page).
-   R23-WD (DESIGN-R23 D-D2; issue #108, Part IX ruling 15): the PER-PAGE
+   R23-WB (DESIGN-R23 D-B3; issue #94) → R24-W1 (DESIGN-R24 §1.3 A3-R4;
+   issues #64/#62): the DENSITY toggle is RE-HOMED into the
+   ViewOptionsPopover's "Compact tracks" menuitemcheckbox — the standalone
+   toolbar button is RETIRED (same resolver read + per-session override
+   write, one home) and the R14 dev-jargon view-options toast died with it.
+   R23-WD (DESIGN-R23 D-D2; issue #108, Part IX ruling 15) → R24-W1
+   (A3-R3): the PER-PAGE
    cluster matrix — [research-informed: Resolve's pages carry different
    toolbars: Color has no timeline toolbar (the filmstrip replaces it),
    Deliver none, Cut/Edit carry the editing tools]. Our first-pass matrix
-   (R23-FIX review-sweep R-b: the FX density cell is ✗ now — D-A1/ruling 8
-   wins over the matrix's density row; the design doc's matrix row is
-   updated to match):
+   (R23-FIX review-sweep R-b: the FX density cell is ✗ — D-A1/ruling 8
+   wins over the matrix's density row; R24-W1: the mixer row is AUDIO-only
+   — A3-R3 supersedes R23-WB's edit+audio; edit keeps the master-audio row
+   per its own L915-919 law):
 
      cluster               | Edit | Color | Audio | FX | Deliver |
      ----------------------|------|-------|-------|----|---------|
@@ -21,26 +22,27 @@
      snap                  |  ✔  |   —   |   ✔   | —  |    —    |
      link / lock           |  ✔  |   —   |   —   | —  |    —    |
      markers               |  ✔  |   —   |   —   | —  |    —    |
-     density               |  ✔  |   ✔   |   ✔   | ✗  |    ✔    |
+     density (popover)     |  ✔  |   ✔   |   ✔   | ✗  |    ✔    |
      zoom                  |  ✔  |   ✔   |   ✔   | ✔  | ✔ (read-mostly) |
-     mixer state           |  ✔  |   —   |   ✔   | —  |    —    |
+     mixer state           |  —  |   —   |   ✔   | —  |    —    |
      master audio          |  ✔  |   —   |   ✔   | —  |    —    |
 
    Every hidden cluster is DOM-ABSENT (never display:none — the F6/rover
    dense laws); the vseps ride along (a separator between two clusters
    renders only when BOTH clusters render — an absent cluster never leaves
-   a dangling bar). The mixer-state + master-audio clusters hide on color
-   AND fx AND deliver (ruling 15: Edit + Audio only). The view-options
+   a dangling bar). The mixer-state cluster hides on every page EXCEPT
+   audio (A3-R3 — the binary toggle's only home); master-audio stays
+   Edit+Audio (its own ruling-15 law). The view-options
    button is the pre-matrix house button — it stays on every page. */
 
 import { useRef } from 'react';
-import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, AudioLines, PanelRight, SlidersHorizontal, Rows3 } from 'lucide-react';
-import { useUi, resolveTimelineCompact, type Page, type ToolId } from '../../state/useUiStore';
+import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, AudioLines, SlidersVertical } from 'lucide-react';
+import { useUi, type Page, type ToolId } from '../../state/useUiStore';
 import { sceneDuration } from '../../lib/mockData';
 import { StripMeter } from '../mixer/MixerPrimitives';
-import { mixerStateLabel } from '../mixer/MixerDock';
 import { ContextMenu, useContextMenu } from '../shell/ContextMenu';
 import { markerColorItems } from './Ruler';
+import { ViewOptionsPopover } from './ViewOptionsPopover';
 
 const BladeIcon = () => (
   <svg width="13" height="15" viewBox="0 0 20 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -106,15 +108,18 @@ interface PageClusters {
                        link domain) */
   linkLock: boolean;/* link A/V + lock-all — Edit only */
   markers: boolean; /* add-marker + marker-color — Edit only */
-  density: boolean; /* the D-B3 toggle — every page EXCEPT fx (R-b: the FX
-                       timeline is the full Timeline, always) */
+  density: boolean; /* the D-B3 toggle (the popover's Compact-tracks item) —
+                       every page EXCEPT fx (R-b: the FX timeline is the full
+                       Timeline, always) */
   zoom: boolean;    /* the zoom cluster — every page (read-mostly on deliver:
                        the deliver timeline is live, so zoom still works) */
-  mixer: boolean;   /* mixer-state — Edit + Audio (ruling 15) */
-  master: boolean;  /* master mute/volume/meter/DIM — Edit + Audio (ruling 15) */
+  mixer: boolean;   /* mixer-state — AUDIO ONLY (R24-W1 A3-R3 supersedes
+                       R23-WB's edit+audio; the binary toggle's only home) */
+  master: boolean;  /* master mute/volume/meter/DIM — Edit + Audio (ruling 15,
+                       its own law — edit keeps the master-audio row) */
 }
 const CLUSTERS: Record<Page, PageClusters> = {
-  edit:    { tools: true,  snap: true,  linkLock: true,  markers: true,  density: true, zoom: true, mixer: true,  master: true },
+  edit:    { tools: true,  snap: true,  linkLock: true,  markers: true,  density: true, zoom: true, mixer: false, master: true },
   color:   { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, mixer: false, master: false },
   audio:   { tools: false, snap: true,  linkLock: false, markers: false, density: true, zoom: true, mixer: true,  master: true },
   fx:      { tools: false, snap: false, linkLock: false, markers: false, density: false, zoom: true, mixer: false, master: false },
@@ -145,11 +150,11 @@ export function TimelineToolbar() {
   const setMasterVolume = useUi((s) => s.setMasterVolume);
   const mixerState = useUi((s) => s.mixerState);
   const page = useUi((s) => s.page);
-  const cycleMixerState = useUi((s) => s.cycleMixerState);
-  /* R23-WB (D-B3): the density law — the ONE resolver, shared with the
-     AppShell's mount decision (they can never disagree). */
-  const compact = useUi((s) => resolveTimelineCompact(s));
-  const setTimelineCompact = useUi((s) => s.setTimelineCompact);
+  const toggleMixerOpen = useUi((s) => s.toggleMixerOpen);
+  /* R23-WB (D-B3) → R24-W1 (A3-R4): the density law lives in the
+     ViewOptionsPopover now (the ONE resolver + the override write — shared
+     with AppShell's mount decision, they can never disagree); this toolbar
+     no longer reads it. */
   const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
   const pushToast = useUi((s) => s.pushToast);
   const menu = useContextMenu(); // §4.9 marker-color dropdown (R14 no-op sweep)
@@ -225,46 +230,13 @@ export function TimelineToolbar() {
       className="flex shrink-0 items-center gap-1 border-b border-hairline bg-shell px-2.5"
       style={{ height: 'var(--bar-h)', minHeight: 'var(--bar-h)' }}
     >
-      {/* view options — honest mock: the popover isn't specced; density and
-          clip-style live in the debug overlay, so the button explains instead
-          of silently doing nothing (R14 no-op sweep). R23-WD (D-D2): this is
-          the one PRE-matrix house button — it is not a matrix cluster and
-          stays on every page. */}
-      <button
-        className="icon-btn"
-        data-testid="shell-timeline-toolbar-btn-view-options"
-        data-tip="Timeline view options"
-        aria-label="Timeline view options"
-        onClick={() => pushToast({ kind: 'info', title: 'View options', detail: 'popover not specced — density/clip-style live in the debug overlay (ctrl+`)' })}
-      >
-        <svg width="16" height="13" viewBox="0 0 24 18" fill="none" stroke="currentColor" strokeWidth="1.6">
-          <rect x="1" y="1" width="22" height="4" /><rect x="1" y="7" width="22" height="4" /><rect x="1" y="13" width="22" height="4" />
-        </svg>
-      </button>
-
-      {/* R23-WB (D-B3/#94): the density toggle — compact strip (frozen) ↔
-          full tracks, on every page EXCEPT fx.
-          R23-FIX (review-sweep R-b, R3-P2#3): on the FX page the toggle is
-          DOM-ABSENT — the page forces the full Timeline (seam hit-zones +
-          transition boxes need real lane geometry; ruling 8), so a toggle
-          there would advertise a compact strip the page can never render
-          (the lying-control law; the resolver ignores the override on fx).
-          Elsewhere: aria-pressed is the RESOLVED state (honest — it
-          reflects the timeline actually rendered); the click writes the
-          per-session override, so 'auto' only survives until the user
-          speaks. R23-WD (D-D2): only the render gate reads the matrix. */}
-      {m.density && (
-        <button
-          className={`icon-btn ${compact ? 'toggled' : ''}`}
-          data-testid="shell-timeline-toolbar-btn-density"
-          data-tip="Compact strip (frozen) ↔ full tracks"
-          aria-label="Toggle compact timeline"
-          aria-pressed={compact}
-          onClick={() => setTimelineCompact(compact ? 'off' : 'on')}
-        >
-          <Rows3 size={14} strokeWidth={1.8} />
-        </button>
-      )}
+      {/* view options — R24-W1 (A3-R4; issues #64 + #62): the R14 dev-jargon
+          toast is DEAD; the hamburger opens the real APG ViewOptionsPopover
+          (Compact tracks / Clip style / Audio waveforms — the density toggle
+          is re-homed here from the retired standalone button). R23-WD
+          (D-D2): this is still the one PRE-matrix house button — it is not a
+          matrix cluster and stays on every page. */}
+      <ViewOptionsPopover showCompact={m.density} />
 
       <div className="grow" />
 
@@ -450,28 +422,27 @@ export function TimelineToolbar() {
       {/* vsep law: renders only between two PRESENT clusters (D-D2) */}
       {vsep.mixer && <div className="vsep" />}
 
-      {/* mixer dock state — R20-W1 (DESIGN-R20 D1.4): Edit cycles
-          closed→meters→full→closed; Audio toggles meters↔full. B4: the
-          glyph + label reflect the CURRENT state (closed → SlidersHorizontal,
-          meters → PanelRight, full → AudioLines strips). No chord (⌘M is
-          spec 16 §3.5 focused-track mute).
-          R23-WD (D-D2, ruling 15): Edit + Audio ONLY — DOM-absent on
-          color/fx/deliver (same law as Toolbar2's Mixer toggle). */}
+      {/* mixer dock open/close — R20-W1 (D1.4) → R24-W1 (A3-R3; issues
+          #65/#66): the 3-state cycle is DEAD — this is the BINARY
+          toggleMixerOpen (with lastVisual memory), and the cluster renders
+          on the AUDIO page ONLY (the master-audio cluster below keeps its
+          own Edit+Audio law). Glyph law: AudioLines when CLOSED (opening
+          shows strips), SlidersVertical when OPEN — NEVER the
+          Inspector-collision glyph (Toolbar2's twin). Binary
+          wording; no chord (⌘M is spec 16 §3.5 focused-track mute). */}
       {m.mixer && (
         <button
           className={`icon-btn ${mixerState !== 'collapsed' ? 'toggled' : ''}`}
-          data-tip={mixerStateLabel(mixerState, page)}
-          aria-label={mixerStateLabel(mixerState, page)}
+          data-tip={mixerState !== 'collapsed' ? 'Hide audio mixer' : 'Show audio mixer'}
+          aria-label={mixerState !== 'collapsed' ? 'Hide audio mixer' : 'Show audio mixer'}
           aria-pressed={mixerState !== 'collapsed'}
-          onClick={cycleMixerState}
+          onClick={toggleMixerOpen}
           data-testid="btn-mixer-state"
         >
-          {mixerState === 'full' ? (
-            <AudioLines size={14} strokeWidth={1.6} />
-          ) : mixerState === 'meters' ? (
-            <PanelRight size={14} strokeWidth={1.6} />
+          {mixerState !== 'collapsed' ? (
+            <SlidersVertical size={14} strokeWidth={1.6} />
           ) : (
-            <SlidersHorizontal size={14} strokeWidth={1.6} />
+            <AudioLines size={14} strokeWidth={1.6} />
           )}
         </button>
       )}

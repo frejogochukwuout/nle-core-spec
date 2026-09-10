@@ -480,17 +480,38 @@ describe('audio focus', () => {
     expect(S().mixer.tracks[newId].fader).toBe(-6);
   });
 
-  it('cycleMixerState: Edit walks collapsed → meters → full → collapsed; Audio toggles meters ↔ full (R20-W1 D1.4)', () => {
-    act(() => { S().cycleMixerState(); });
-    expect(S().mixerState).toBe('meters');
-    act(() => { S().cycleMixerState(); });
-    expect(S().mixerState).toBe('full');
-    act(() => { S().cycleMixerState(); });
+  /* R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 — cycleMixerState is
+     DELETED; these pins guard the deletion so it can never silently
+     return): the store exposes NO cycle action and NO floor-warn flag. */
+  it('R24-W1 deletion pins: cycleMixerState + mixerFloorWarned are gone from the store (they can never silently return)', () => {
+    const s = S() as unknown as Record<string, unknown>;
+    expect(s.cycleMixerState).toBeUndefined();
+    expect(s.mixerFloorWarned).toBeUndefined();
+    // the cycle's page-aware meters↔full branch died with it — the only
+    // writers left are setMixerState (raw) + toggleMixerOpen (binary)
+    expect(typeof s.setMixerState).toBe('function');
+    expect(typeof s.toggleMixerOpen).toBe('function');
+  });
+
+  it('R24-W1 (A3-R3/#65/#66): toggleMixerOpen is a BINARY toggle with lastVisual memory (full by default)', () => {
     expect(S().mixerState).toBe('collapsed');
-    act(() => { S().setPage('audio'); S().setMixerState('full'); S().cycleMixerState(); });
-    expect(S().mixerState).toBe('meters');
-    act(() => { S().cycleMixerState(); });
-    expect(S().mixerState).toBe('full');
+    expect(S().mixerLastVisual).toBe('full'); // the default re-open target
+    act(() => { S().toggleMixerOpen(); });
+    expect(S().mixerState).toBe('full'); // collapsed → the remembered visual
+    act(() => { S().toggleMixerOpen(); });
+    expect(S().mixerState).toBe('collapsed'); // open → closed, memory kept
+    expect(S().mixerLastVisual).toBe('full');
+    act(() => { S().toggleMixerOpen(); });
+    expect(S().mixerState).toBe('full'); // round-trip returns to the memory
+    // the meters visual is a legit memory (the audio page's mode — the dock
+    // header's mode action writes it, the close remembers it)
+    act(() => { S().setMixerState('meters'); });
+    act(() => { S().toggleMixerOpen(); });
+    expect(S().mixerState).toBe('collapsed');
+    expect(S().mixerLastVisual).toBe('meters');
+    act(() => { S().toggleMixerOpen(); });
+    expect(S().mixerState).toBe('meters'); // re-open returns to the LAST non-collapsed state
+    act(() => { useUi.setState({ mixerState: 'collapsed', mixerLastVisual: 'full' }); });
   });
 
   it('strip display flags (R20-W1 B6): R/I toggle in STORE view-state, defaulting off/on', () => {
@@ -504,7 +525,8 @@ describe('audio focus', () => {
     expect(S().stripInsertsOn['tr-audio-2']).toBe(false); // boots ON (?? true)
     act(() => { S().toggleStripInserts('tr-audio-2'); });
     expect(S().stripInsertsOn['tr-audio-2']).toBe(true);
-    expect(S().mixerFloorWarned).toBe(false); // D1.3 one-toast flag boots clear
+    // R24-W1: mixerFloorWarned is DELETED (the floor is a silent render-level
+    // fallback in MixerDock's container now — deletion-pinned above)
   });
 
   /* R23-WC (DESIGN-R23 D-C3; issue #70): the full dock's master/bus bank
@@ -2454,15 +2476,22 @@ describe('R23-WB D-B1: the scopes console state (the 4-state machine dies)', () 
   });
 });
 
-describe('R23-WB D-B5/#92: entering the color page collapses the mixer (the exit law)', () => {
-  it('an open mixer carried into color collapses; other page entries do not touch it', () => {
+describe('R23-WB D-B5/#92 → R24-W1 A3-R3: entering any page ≠ audio collapses the mixer (the exit law)', () => {
+  it('an open mixer carried into ANY non-audio page collapses — edit included (audio-only surfaces)', () => {
     act(() => { S().setMixerState('full'); });
     act(() => { S().setPage('color'); });
     expect(S().page).toBe('color');
     expect(S().mixerState).toBe('collapsed'); // #92 supersedes #73 for the color page
-    // entering edit/audio leaves the mixer state alone (audio seeds its own via enterAudioFocus)
+    // R24-W1 (A3-R3 — supersedes R23-WB's edit+audio): EDIT carries no mixer
+    // toggle either (audio-only), so an open mixer carried there would strand
+    // unclosable — the exit law collapses it too
     act(() => { S().setMixerState('meters'); });
     act(() => { S().setPage('edit'); });
+    expect(S().mixerState).toBe('collapsed');
+    // entering AUDIO leaves the mixer state alone (audio seeds its own via
+    // enterAudioFocus; setPage('audio') itself never fights an external write)
+    act(() => { S().setMixerState('meters'); });
+    act(() => { S().setPage('audio'); });
     expect(S().mixerState).toBe('meters');
   });
 
@@ -2471,6 +2500,14 @@ describe('R23-WB D-B5/#92: entering the color page collapses the mixer (the exit
     expect(S().mixerState).toBe('collapsed');
     act(() => { S().setPage('color'); }); // a no-op page write must not clobber
     expect(S().mixerState).toBe('collapsed');
+  });
+
+  it('R24-W1: exitAudioFocus carries the exit law too (the raw-writer twin) — the dock never survives onto the edit page', () => {
+    act(() => { S().enterAudioFocus('dock'); });
+    expect(S().mixerState).toBe('full');
+    act(() => { S().exitAudioFocus(); });
+    expect(S().page).toBe('edit');
+    expect(S().mixerState).toBe('collapsed'); // no stranded unclosable dock on edit
   });
 });
 
