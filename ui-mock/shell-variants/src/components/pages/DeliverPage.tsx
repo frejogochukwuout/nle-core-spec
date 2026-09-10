@@ -14,16 +14,26 @@
                        summary (the metadata the reviewer wanted "in
                        inspector, or as a separate console panel", #88).
    th_mto38qzp: preset tiles keep the breathing-room grammar.
+   R24-W4 (F5's P2): the VIEW state (jobs + showQueue) lives in the NEW
+   module-level zustand store src/state/deliverViewStore.ts (the
+   stills/sourceRanges/stripArm unmount-survival precedents) — the queue
+   SURVIVES page switches (export → page away → back: the queued job +
+   rendering state persist), and the mock render COMPLETES on the
+   store-owned timer (500ms ticks: queued → running +25%/tick → done
+   'just now', FIFO) even while this page is unmounted. showQueue is the
+   center view's SINGLE WRITER: the queue toggle is honest mid-render
+   (F5's P3 — allow-collapse, no silent no-op; a collapsed render keeps
+   walking in the store).
    Honest mock: the export CTA / Reveal / Retry never run an encode — each
    pushes an info toast that says the render queue is mock, and the CTA
-   appends a static queued job row (it never progresses — so the queue view
-   persists after queueing; that IS the "rendering is happening" state).
-   Render settings stay LOCAL state the queue READS. §4.2 state rows: an
-   empty active scene honestly disables the CTA + the queue's empty row. */
+   queues a job row the store timer carries to completion. Render settings
+   stay LOCAL state the queue READS. §4.2 state rows: an empty active scene
+   honestly disables the CTA + the queue's empty row. */
 
 import { FileVideo, FileCode2, Camera, Download, RefreshCw, CheckCircle2, LoaderCircle, Clock, TriangleAlert, MonitorPlay } from 'lucide-react';
 import { useState } from 'react';
 import { useUi } from '../../state/useUiStore';
+import { useDeliverView } from '../../state/deliverViewStore';
 import { Viewer } from '../shell/Viewer';
 import { project, sceneDuration } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
@@ -40,19 +50,6 @@ const CODECS = [
   { id: 'prores', label: 'ProRes 422' },
 ];
 
-type Job = { id: string; name: string; progress: number; state: 'done' | 'running' | 'queued' | 'failed'; time: string; bundle?: boolean };
-
-const JOBS: Job[] = [
-  /* §4.2 error-state fixture (R14): one permanently-failed row — the Retry
-     affordance already exists for non-done rows and fires the honest toast.
-     R22 W5: NO running row by default — the center shows the PREVIEW (#88);
-     queueing an export flips it to the queue (#89's replacement rule). */
-  { id: 'j-0', name: 'Beach Doc — v2 master.mp4', progress: 62, state: 'failed', time: '12m ago' },
-  { id: 'j-1', name: 'Beach Doc — v3 master.mp4', progress: 100, state: 'done', time: '2m ago' },
-  { id: 'j-2', name: 'Beach Doc — v3.fcpxml', progress: 100, state: 'done', time: '2m ago' },
-  { id: 'j-3', name: 'Interview selects master.mp4', progress: 100, state: 'done', time: '26m ago' },
-];
-
 /* file suffix for a queued row per preset — keeps the honest-mock story */
 const EXPORT_EXT: Record<string, string> = { fcpxml: 'fcpxml', master: 'mp4', frame: 'png' };
 
@@ -60,11 +57,17 @@ const MOCK_RENDER_DETAIL = 'render queue is mock — no encode runs';
 
 export function DeliverPage() {
   const [preset, setPreset] = useState('fcpxml');
-  const [jobs, setJobs] = useState<Job[]>(JOBS);
-  /* the center-view toggle: queueing an export auto-shows the queue; the
-     header toggle lets the user inspect past renders while idle (#89's
-     center home + #88's preview-default) */
-  const [showQueue, setShowQueue] = useState(false);
+  /* R24-W4 (F5's P2): jobs + showQueue live in the module-level
+     deliverViewStore now (NOT local useState) — the queue survives page
+     switches and the mock render walks on the store-owned timer while this
+     page is unmounted. showQueue is the center view's SINGLE WRITER: the
+     toggle below is honest mid-render (allow-collapse — a collapsed render
+     keeps walking in the store; the old renderActive-locked view made the
+     toggle a silent no-op). */
+  const jobs = useDeliverView((s) => s.jobs);
+  const showQueue = useDeliverView((s) => s.showQueue);
+  const queueExport = useDeliverView((s) => s.queueExport);
+  const toggleShowQueue = useDeliverView((s) => s.toggleShowQueue);
   const pushToast = useUi((s) => s.pushToast);
   const scenes = useUi((s) => s.scenes);
   const activeSceneId = useUi((s) => s.activeSceneId);
@@ -90,30 +93,25 @@ export function DeliverPage() {
   const emptyTimeline = scene.tracks.every((t) => t.elements.length === 0);
   const duration = sceneDuration(scene);
 
-  /** honest-mock export: toast the preset + append a static queued row whose
-      name reflects the current range/resolution choices */
-  const queueExport = () => {
+  /** honest-mock export: toast the preset + queue a row whose name reflects
+      the current range/resolution choices (the STORE timer walks it to done) */
+  const queueExportRow = () => {
     if (emptyTimeline) return; // aria-disabled guard — nothing to export
     const p = PRESETS.find((x) => x.id === preset)!;
     pushToast({ kind: 'info', title: `Export queued: ${p.name}`, detail: MOCK_RENDER_DETAIL });
-    setJobs((prev) => [...prev, {
-      id: `j-${prev.length + 1}`,
+    queueExport({
       name: `Beach Doc — Rough Cut — ${resLabel} · ${rangeLabel}.${EXPORT_EXT[preset]}`,
-      progress: 0,
-      state: 'queued',
-      time: '',
       bundle: bundleMedia,
-    }]);
-    setShowQueue(true); // the center flips to the queue (#89)
+    });
+    /* the store's queueExport auto-shows the queue (the center flips — #89) */
   };
 
-  /* R22 W5 (#89): "rendering is happening" = any queued/running row. While
-     true the CENTER swaps the video preview for the queue; the honest mock
-     queued row never progresses, so the queue view persists after the CTA
-     (that IS the mock's rendering state). The header toggle reviews past
-     renders while idle. */
+  /* R22 W5 (#89): "rendering is happening" = any queued/running row — the
+     header label + the queue view's spinner ride it. R24-W4: the VIEW
+     itself is showQueue's alone (single writer); a render may be collapsed
+     to the preview and it keeps walking in the store. */
   const renderActive = jobs.some((j) => j.state === 'queued' || j.state === 'running');
-  const queueView = renderActive || showQueue;
+  const queueView = showQueue;
 
   return (
     <div data-testid="shell-deliver" className="flex h-full w-full min-h-0 min-w-0 flex-col bg-panel">
@@ -127,7 +125,7 @@ export function DeliverPage() {
           aria-pressed={queueView}
           data-testid="shell-deliver-queue-toggle"
           data-tip={queueView ? 'Back to the video preview' : 'Review the render queue (past + active renders)'}
-          onClick={() => setShowQueue((v) => !v)}
+          onClick={toggleShowQueue}
         >
           <Clock size={12} strokeWidth={1.7} />
           <span>Queue{renderActive ? ' · rendering' : ` · ${jobs.length}`}</span>
@@ -183,7 +181,7 @@ export function DeliverPage() {
         {/* ---- CENTER: the video PREVIEW (idle) / the QUEUE (rendering) —
               #88 + #89 ------------------------------------------------------ */}
         {queueView ? (
-          <div data-testid="shell-deliver-summary" className="flex min-w-0 min-w-0 flex-1 flex-col">
+          <div data-testid="shell-deliver-summary" className="flex min-w-0 flex-1 flex-col">
             <div className="scroll-y min-h-0 flex-1 px-5 py-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -201,7 +199,7 @@ export function DeliverPage() {
                     <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Render queue</span>
                   )}
                 </div>
-                <span className="text-[10px] text-tfaint" data-tip="The queued row is the honest mock — no encode runs; the preview returns when the mock completes">mock render</span>
+                <span className="text-[10px] text-tfaint" data-tip="The queued row is the honest mock — no encode runs; the store's timer walks it to done (500ms ticks) — the queue toggle returns to the preview">mock render</span>
               </div>
               {/* §4.2: the empty scene swaps the queue for the empty-state row */}
               {emptyTimeline ? (
@@ -395,7 +393,7 @@ export function DeliverPage() {
               data-tip={emptyTimeline ? 'nothing to export — the timeline is empty' : undefined}
               className="mb-2 flex w-full items-center justify-center gap-2 rounded-[var(--radius)] px-3 py-2.5 text-[12px] font-semibold transition-opacity hover:opacity-90"
               style={{ background: 'var(--accent-selection)', color: 'var(--accent-contrast)' }}
-              onClick={emptyTimeline ? undefined : queueExport}
+              onClick={emptyTimeline ? undefined : queueExportRow}
             >
               <Download size={13} />
               Export {PRESETS.find((p) => p.id === preset)?.name}

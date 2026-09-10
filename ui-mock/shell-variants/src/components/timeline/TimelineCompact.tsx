@@ -32,17 +32,28 @@
    the border + tint + badge so the strip reads at 24px lane height. The
    previous all-grey #2a2b31 is dead.
 
-   R23-WF (DESIGN-R23 D-F1, issue #107): on the DELIVER composition the
-   22px read-only ruler head row is REPLACED by the 32px interactive
-   in/out RANGE BAND (RangeBand.tsx — the export range = the loop seam;
-   the drag grammar cloned from the Ruler brackets per ruling 21). The
-   LANES stay frozen on every page — the band is the strip's one
-   interactive head surface, asked for only by the deliver mount
-   (AppShell passes rangeBand on the deliver branch); every other page
-   keeps the ruler. */
+   R23-WF (DESIGN-R23 D-F1, issue #107): the 32px interactive in/out RANGE
+   BAND (RangeBand.tsx) — the export range = the loop seam; the drag
+   grammar cloned from the Ruler brackets per ruling 21.
+
+   R24-W4 (DESIGN-R24 A3-R7, issue #71 — the COEXISTENCE law, superseding
+   R23-WF's head-row swap): the 22px read-only ruler is UNCONDITIONAL on
+   EVERY page (rulerTiers ticks + TC labels, the full Ruler's grammar at
+   compact scale), and the 32px RangeBand mounts BELOW it on the DELIVER
+   branch only — a 54px head stack ("under export view timeline is
+   compacted but there's no ruler and no range clamp which is like the
+   BIGGEST if not the only thing we need here": the ruler answers the
+   no-ruler half on every page, the band the no-clamp half on deliver).
+   The ruler gains READ-ONLY in/out bracket FLAGS at the loop edges —
+   pointer-events-none thin glyphs (the loop seam's brackets in miniature;
+   the band below is the interactive writer). The LANES stay frozen on
+   every page — the band is the strip's one interactive head surface,
+   asked for only by the deliver mount (AppShell passes rangeBand on the
+   deliver branch); every other page keeps the ruler alone. */
 
 import { useUi, useActiveScene } from '../../state/useUiStore';
 import { getRulerConfig, formatRulerLabel, shouldShowLabel } from '../../lib/rulerTiers';
+import { snapPxToDeviceGrid } from '../../lib/pixel';
 import { RangeBand } from './RangeBand';
 
 /* ---------- geometry (C51 compact set, unchanged) ---------- */
@@ -73,11 +84,11 @@ export interface TimelineCompactProps {
    *  R23-FIX R3-P3#8, the honest per-page label: a "set grade target"
    *  label on pages with no grade surface was a lying affordance). */
   clipClick?: 'grade' | 'select';
-  /** R23-WF (D-F1, #107): mount the 32px interactive in/out RANGE BAND as
-   *  the head row instead of the read-only 22px ruler. The deliver
-   *  composition's ask ("just the head range selection should be normal
-   *  height"); the lanes stay frozen either way — the band is the strip's
-   *  one interactive head surface, and only the deliver mount asks for it. */
+  /** R24-W4 (A3-R7, #71): mount the 32px interactive in/out RANGE BAND
+   *  BELOW the (now unconditional) 22px read-only ruler — a 54px head
+   *  stack on the deliver composition only. The lanes stay frozen either
+   *  way — the band is the strip's one interactive head surface, and only
+   *  the deliver mount asks for it. */
   rangeBand?: boolean;
 }
 
@@ -85,6 +96,11 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
   const scene = useActiveScene();
   const pps = useUi((s) => s.pxPerSec);
   const playhead = useUi((s) => s.playhead);
+  /* A3-R7: the read-only in/out FLAGS ride the (unconditional) ruler — the
+     loop seam's edges marked at the ruler's own scale (the interactive
+     writers are the band below on deliver, the Ruler brackets / I-O keys
+     elsewhere; these glyphs never take a pointer). */
+  const loop = useUi((s) => s.loop);
   const setSelection = useUi((s) => s.setSelection);
   const setColorGradeTarget = useUi((s) => s.setColorGradeTarget);
   /* R23-WB (D-B3/#96): the trackhead selection domain — the badge cell
@@ -127,31 +143,63 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
     >
       <div className="scroll-x flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-hidden" style={{ background: '#191a1d' }}>
         <div className="relative" style={{ width: contentW }}>
-          {/* head row — D-F1 (#107): on deliver the 32px interactive RANGE
-              BAND replaces the 22px read-only ruler (the export range = the
-              loop seam; the lanes below stay frozen on every page) */}
-          {rangeBand ? (
-            <RangeBand duration={duration} pps={pps} />
-          ) : (
-            <div data-testid="shell-timeline-compact-ruler" className="sticky left-0 flex" style={{ height: RULER_H }}>
-              <div aria-hidden className="sticky left-0 z-[2] shrink-0 border-r border-hairline bg-panel" style={{ width: BADGE_W, height: RULER_H }} />
-              <div className="relative flex-1" style={{ height: RULER_H, background: 'var(--bg-shell)' }}>
-                {ticks.map((t) => {
-                  const show = shouldShowLabel(t, labelInterval);
-                  return (
-                    <div key={t} className="absolute bottom-0 top-0" style={{ left: t * pps }}>
-                      <span aria-hidden className="absolute bottom-[1px] block h-[4px] w-px" style={{ background: '#555' }} />
-                      {show && (
-                        <span className="mono absolute left-[4px] top-[1px] whitespace-nowrap text-[9px] leading-[9px] text-tmuted">
-                          {formatRulerLabel(t)}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+          {/* head stack — A3-R7 (#71) COEXISTENCE: the 22px READ-ONLY ruler
+              is UNCONDITIONAL on every page (rulerTiers ticks + TC labels —
+              the full Timeline's Ruler grammar at compact scale; this block
+              IS the strip's ruler, read against the full Ruler's law),
+              carrying the read-only in/out bracket FLAGS at the loop edges.
+              On the DELIVER branch only, the 32px interactive RANGE BAND
+              mounts BELOW it (54px total head stack; the R23-WF
+              ruler-replacement is dead). */}
+          <div data-testid="shell-timeline-compact-ruler" className="sticky left-0 flex" style={{ height: RULER_H }}>
+            <div aria-hidden className="sticky left-0 z-[2] shrink-0 border-r border-hairline bg-panel" style={{ width: BADGE_W, height: RULER_H }} />
+            <div className="relative flex-1" style={{ height: RULER_H, background: 'var(--bg-shell)' }}>
+              {ticks.map((t) => {
+                const show = shouldShowLabel(t, labelInterval);
+                return (
+                  <div key={t} className="absolute bottom-0 top-0" style={{ left: t * pps }}>
+                    <span aria-hidden className="absolute bottom-[1px] block h-[4px] w-px" style={{ background: '#555' }} />
+                    {show && (
+                      <span className="mono absolute left-[4px] top-[1px] whitespace-nowrap text-[9px] leading-[9px] text-tmuted">
+                        {formatRulerLabel(t)}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              {/* the read-only in/out bracket FLAGS (A3-R7): thin 1px glyphs
+                  at the loop edges — the loop seam's brackets in miniature,
+                  pointer-events-none by law (the band below / the Ruler
+                  brackets elsewhere are the interactive writers). Anchored
+                  INSIDE the loop span like the Ruler's own bracket glyphs. */}
+              {(['in', 'out'] as const).map((side) => {
+                const x = side === 'in'
+                  ? snapPxToDeviceGrid(loop.start * pps)
+                  : Math.max(0, snapPxToDeviceGrid(loop.end * pps) - 8);
+                return (
+                  <svg
+                    key={side}
+                    data-testid={`shell-timeline-compact-flag-${side}`}
+                    aria-hidden="true"
+                    className="pointer-events-none absolute top-0"
+                    width="8"
+                    height={RULER_H - 2}
+                    style={{ left: x }}
+                  >
+                    <path
+                      d={side === 'in'
+                        ? `M7 1 L2 1 L2 ${RULER_H - 3} L7 ${RULER_H - 3}`
+                        : `M1 1 L6 1 L6 ${RULER_H - 3} L1 ${RULER_H - 3}`}
+                      stroke="color-mix(in srgb, var(--accent-selection) 60%, transparent)"
+                      strokeWidth="1"
+                      fill="none"
+                    />
+                  </svg>
+                );
+              })}
             </div>
-          )}
+          </div>
+          {rangeBand && <RangeBand duration={duration} pps={pps} />}
 
           {/* mini lanes: video 24 / caption 20 / audio 16 dimmed (C51) — each
               kind now carries its V/A/T color coding (D6, #75) */}

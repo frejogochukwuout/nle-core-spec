@@ -8,16 +8,22 @@
    - click-to-target: a clip click sets selection + re-targets clip mode;
    - NO drag/trim handles ever (frozen by law — the surface has no
      interactive children beyond the clip buttons).
-   R23-WF (DESIGN-R23 D-F1, issue #107): the deliver head-row swap — the
-   rangeBand prop replaces the ruler with the 32px interactive in/out RANGE
-   BAND. Pins: the swap + 32px geometry; the bracket grammar's slider
-   semantics; ruling 21's drag law (local preview, ONE commit per gesture,
-   cancel discards, no-op release writes nothing, [0, duration] clamp);
-   the R14 ordering law from the band's own writer; the ±1-frame (⇧ ×10)
-   keyboard law; the ruler keeps the head row on every other mount. */
+   R23-WF (DESIGN-R23 D-F1, issue #107) → R24-W4 (A3-R7, #71 — the
+   COEXISTENCE law): the 22px read-only ruler is UNCONDITIONAL in the head
+   stack (rulerTiers ticks/TC + the read-only in/out bracket FLAGS at the
+   loop edges) and the 32px RANGE BAND mounts BELOW it on the rangeBand
+   mount (54px total). Pins: the coexistence stack; the bracket grammar's
+   slider semantics; ruling 21's drag law (local preview, ONE commit per
+   gesture, cancel discards, no-op release writes nothing, [0, duration]
+   clamp); the A3-R7 band grammar (solid 30% accent-tint fill + 1px 65%
+   edges, the ~40% dark mask outside in→out, hover-brighten handles, the
+   STATE-INDEPENDENT fill — the R23 loop-dim wash dead); the F3 P3-2
+   honest-preview clamp (the mouse preview pins at the opposite LIVE edge,
+   the release commits exactly the preview; keyboard keeps the R14
+   drag-along ordering law verbatim). */
 
 import { describe, expect, it, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { TimelineCompact } from './TimelineCompact';
 import { useUi } from '../../state/useUiStore';
 import { type UiPatch } from '../../test/helpers';
@@ -39,8 +45,8 @@ const mount = (patch?: Patch) => {
   return render(<TimelineCompact />);
 };
 
-/* D-F1: the band mount — the deliver head-row shape (the lanes beneath are
- * the same frozen strip; only the head row swaps) */
+/* D-F1 → A3-R7: the band mount — the deliver head-stack shape (ruler
+ * UNCONDITIONAL + band below; the lanes beneath are the same frozen strip) */
 const mountBand = (patch?: Patch) => {
   setStore(patch);
   return render(<TimelineCompact rangeBand />);
@@ -163,22 +169,49 @@ describe('R23-WB (D-B3/#96, ruling 19) — the trackhead badge becomes a REAL bu
   });
 });
 
-/* ---------- R23-WF (DESIGN-R23 D-F1, #107): the deliver range band ----------
+/* ---------- R23-WF (D-F1, #107) → R24-W4 (A3-R7, #71): the deliver band ----------
    Fixture: loop {2, 28}, sc-1 duration 30 s, 46 pps, playhead 16 (the same
-   grid the Ruler bracket pins ride). The band's grammar is the ruling-21
-   clone of the Ruler brackets / fade-object clamp-commit law. */
-describe('R23-WF (D-F1, #107) — the range band replaces the ruler head row', () => {
+   grid the Ruler bracket pins ride). The band's drag grammar is the
+   ruling-21 clone (local preview + ONE commit); its preview clamp is the
+   F3 P3-2 honest law; its paint is the A3-R7 state-independent grammar. */
+describe('R23-WF (D-F1) → R24-W4 (A3-R7, #71) — the coexistence head stack: ruler + band', () => {
   const inH = () => screen.getByTestId('shell-deliver-range-band-in');
   const outH = () => screen.getByTestId('shell-deliver-range-band-out');
 
-  it('the band mounts at 32px ("normal height") and the ruler row is DOM-ABSENT on the band mount', () => {
+  it('A3-R7: the 22px ruler is UNCONDITIONAL + the 32px band mounts BELOW it — the 54px head stack', () => {
     mountBand();
     const band = screen.getByTestId('shell-deliver-range-band');
+    const ruler = screen.getByTestId('shell-timeline-compact-ruler');
     expect(band).toBeInTheDocument();
     expect(band.style.height).toBe('32px');
-    expect(screen.queryByTestId('shell-timeline-compact-ruler')).not.toBeInTheDocument();
-    // the lanes beneath are the SAME frozen strip (the swap is head-row only)
+    expect(ruler.style.height).toBe('22px');
+    // the band is the ruler's NEXT sibling — BELOW it in the stack (54px total)
+    expect(band.previousElementSibling).toBe(ruler);
+    // the ruler's read-only in/out FLAGS ride the coexistence mount too
+    expect(screen.getByTestId('shell-timeline-compact-flag-in')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline-compact-flag-out')).toBeInTheDocument();
+    // the lanes beneath are the SAME frozen strip (the coexistence is head-stack only)
     expect(screen.getByTestId('shell-timeline-compact-clip-el-1')).toBeInTheDocument();
+  });
+
+  it("A3-R7: the ruler's read-only in/out bracket FLAGS — thin glyphs at the loop edges, pointer-events-none (the loop seam in miniature)", () => {
+    mount();
+    const fin = screen.getByTestId('shell-timeline-compact-flag-in');
+    const fout = screen.getByTestId('shell-timeline-compact-flag-out');
+    // read-only by law: the flags never take a pointer (the band below on
+    // deliver / the Ruler brackets elsewhere are the interactive writers).
+    // SVG className is an SVGAnimatedString in jsdom — read the attribute.
+    expect(fin.getAttribute('class')).toContain('pointer-events-none');
+    expect(fout.getAttribute('class')).toContain('pointer-events-none');
+    // geometry at the 46 pps fixture (loop {2, 28}): in at the edge, out
+    // anchored INSIDE the loop span (the Ruler bracket glyph's anchor law)
+    expect(fin.style.left).toBe('92px');    // 2 s × 46
+    expect(fout.style.left).toBe('1280px'); // 28 s × 46 − 8
+    // they MOVE with the loop seam (one seam, every readout follows) — the
+    // store write is act-wrapped so the subscribed strip re-renders now
+    act(() => { setStore({ loop: { start: 5, end: 20 } }); });
+    expect(screen.getByTestId('shell-timeline-compact-flag-in').style.left).toBe('230px');
+    expect(screen.getByTestId('shell-timeline-compact-flag-out').style.left).toBe('912px');
   });
 
   it('the DEFAULT mount keeps its ruler — the band is the deliver ask only (no band leaks)', () => {
@@ -222,14 +255,57 @@ describe('R23-WF (D-F1, #107) — the range band replaces the ruler head row', (
     const fill = screen.getByTestId('shell-deliver-range-band-fill');
     expect(fill.style.left).toBe('92px');
     expect(fill.style.width).toBe('1196px');      // 26 s × 46
-    // the Ruler loop-band dim law: dimmed (not erased) while loop playback is off
-    expect(fill.style.opacity).toBe('0.13');
+    // A3-R7: the fill is the SOLID accent tint — no opacity dim survives
+    // (the R23 loop-dim wash is dead on the band; the next test pins the law)
+    expect(fill.style.opacity).toBe('');
   });
 
-  it('the fill dims honest-to-state: loopEnabled on → 0.24; the live TC readout rides the fill', () => {
-    mountBand({ loopEnabled: true });
-    expect(screen.getByTestId('shell-deliver-range-band-fill').style.opacity).toBe('0.24');
+  it('A3-R7: the fill grammar is STATE-INDEPENDENT — the R23 loop-dim wash is dead on the band', () => {
+    const fillBg = () => screen.getByTestId('shell-deliver-range-band-fill').style.background;
+    const first = mountBand();
+    expect(fillBg()).toBe('color-mix(in srgb, var(--accent-selection) 30%, var(--bg-shell))');
+    first.unmount();
+    mountBand({ loopEnabled: true }); // loop playback ON — the band reads IDENTICALLY
+    expect(fillBg()).toBe('color-mix(in srgb, var(--accent-selection) 30%, var(--bg-shell))');
+    // the live TC readout rides the fill
     expect(screen.getByTestId('shell-deliver-range-band-tcs')).toHaveTextContent('00:00:02:00 → 00:00:28:00');
+  });
+
+  it('A3-R7: the ~40% dark mask OUTSIDE in→out — two strips (left of in + right of out)', () => {
+    mountBand();
+    const ml = screen.getByTestId('shell-deliver-range-band-mask-l');
+    const mr = screen.getByTestId('shell-deliver-range-band-mask-r');
+    expect(ml.style.background).toBe('rgba(0, 0, 0, 0.4)');
+    expect(mr.style.background).toBe('rgba(0, 0, 0, 0.4)');
+    // geometry at 46 pps, loop {2, 28}: [0, 92] + [1288, → the area's right edge]
+    expect(ml.style.left).toBe('0px');
+    expect(ml.style.width).toBe('92px');
+    expect(mr.style.left).toBe('1288px');
+    expect(mr.style.right).toBe('0px');
+    // the mask never steals the band's hits
+    expect(ml.className).toContain('pointer-events-none');
+    expect(mr.className).toContain('pointer-events-none');
+  });
+
+  it('A3-R7: the fill carries the 1px 65%-accent top/bottom edges', () => {
+    mountBand();
+    const fill = screen.getByTestId('shell-deliver-range-band-fill');
+    expect(fill.style.borderTop).toBe('1px solid color-mix(in srgb, var(--accent-selection) 65%, transparent)');
+    expect(fill.style.borderBottom).toBe('1px solid color-mix(in srgb, var(--accent-selection) 65%, transparent)');
+  });
+
+  it('A3-R7 hover-brighten: 60%-accent rest stroke → full accent + the 18% tint wash (and back)', () => {
+    mountBand();
+    const handle = inH();
+    const glyph = handle.querySelector('path')!;
+    expect(glyph.getAttribute('stroke')).toBe('color-mix(in srgb, var(--accent-selection) 60%, transparent)');
+    expect(handle.style.background).toBe(''); // no wash at rest
+    fireEvent.pointerEnter(handle);
+    expect(glyph.getAttribute('stroke')).toBe('var(--accent-selection)');
+    expect(handle.style.background).toBe('color-mix(in srgb, var(--accent-selection) 18%, transparent)');
+    fireEvent.pointerLeave(handle);
+    expect(glyph.getAttribute('stroke')).toBe('color-mix(in srgb, var(--accent-selection) 60%, transparent)');
+    expect(handle.style.background).toBe('');
   });
 });
 
@@ -270,29 +346,39 @@ describe('R23-WF (D-F1) — the band drag law (ruling 21: local preview, ONE com
 
   it('the band domain clamps to [0, scene duration] — an export range cannot exceed the timeline', () => {
     mountBand();
-    fireEvent.pointerDown(inH(), { pointerId: 2, button: 0 });
-    fireEvent.pointerMove(inH(), { pointerId: 2, buttons: 1, clientX: 9999 });
-    expect(inH()).toHaveAttribute('aria-valuenow', '720'); // live preview clamped to 30 s
-    fireEvent.pointerUp(inH(), { pointerId: 2 });
-    expect(S().loop).toEqual({ start: 30, end: 30 }); // ordering law: out dragged along
+    // the OUT handle: the domain cap (30 s) is the ONLY binding limit here
+    // (the opposite-edge clamp is a floor on the out side — 30 > live in 2)
+    fireEvent.pointerDown(outH(), { pointerId: 3, button: 0 });
+    fireEvent.pointerMove(outH(), { pointerId: 3, buttons: 1, clientX: 9999 });
+    expect(outH()).toHaveAttribute('aria-valuenow', '720'); // live preview clamped to 30 s
+    fireEvent.pointerUp(outH(), { pointerId: 3 });
+    expect(S().loop).toEqual({ start: 2, end: 30 }); // the domain cap; in edge untouched
   });
 
-  it('the ordering law from the band: dragging in past the out point drags out along — never inverted', () => {
+  /* F3 P3-2 (R24-W4 item 5): the R23 defect — the drag preview CROSSED the
+   * far edge (readout "00:00:29:19 → 00:00:28:00", handles swapped) and the
+   * release then dragged the far edge along. Both halves die here: the
+   * preview PINS at the opposite LIVE edge, and the release commits exactly
+   * what the readout showed. */
+  it('F3 P3-2: dragging IN past the LIVE out PINS the preview at out — the release commits exactly the preview (no crossed readout, no drag-along)', () => {
     mountBand();
     fireEvent.pointerDown(inH(), { pointerId: 2, button: 0 });
-    fireEvent.pointerMove(inH(), { pointerId: 2, buttons: 1, clientX: 1380 }); // 30 s > 28 s
+    fireEvent.pointerMove(inH(), { pointerId: 2, buttons: 1, clientX: 1380 }); // 30 s > live out 28
+    // the PREVIEW pins at the live out — the readout never crosses itself
+    expect(inH()).toHaveAttribute('aria-valuenow', '672');
+    expect(screen.getByTestId('shell-deliver-range-band-tcs')).toHaveTextContent('00:00:28:00 → 00:00:28:00');
     fireEvent.pointerUp(inH(), { pointerId: 2 });
-    expect(S().loop.start).toBe(30);
-    expect(S().loop.end).toBe(30); // never inverted — the playback tick cannot hang
+    expect(S().loop).toEqual({ start: 28, end: 28 }); // EXACTLY the previewed value
   });
 
-  it('dragging out below start pulls start along (the markOut formula, cloned verbatim)', () => {
+  it('F3 P3-2: dragging OUT past the LIVE in pins the preview at in — release commits exactly the preview', () => {
     mountBand();
     fireEvent.pointerDown(outH(), { pointerId: 3, button: 0 });
-    fireEvent.pointerMove(outH(), { pointerId: 3, buttons: 1, clientX: 46 }); // 1 s < 2 s
+    fireEvent.pointerMove(outH(), { pointerId: 3, buttons: 1, clientX: 46 }); // 1 s < live in 2
+    expect(outH()).toHaveAttribute('aria-valuenow', '48');
+    expect(screen.getByTestId('shell-deliver-range-band-tcs')).toHaveTextContent('00:00:02:00 → 00:00:02:00');
     fireEvent.pointerUp(outH(), { pointerId: 3 });
-    expect(S().loop.end).toBe(1);
-    expect(S().loop.start).toBe(1); // pulled along, never left behind
+    expect(S().loop).toEqual({ start: 2, end: 2 }); // pinned at the live in — never crossed
   });
 });
 
@@ -310,7 +396,10 @@ describe('R23-WF (D-F1) — the band keyboard law (±1 frame, ⇧ ×10, Home/End
     expect(S().loop.start).toBeCloseTo(2 - 1 / 24 + 10 / 24, 5);
   });
 
-  it('Home/End jump the edges; the keyboard ordering law holds from the band too', () => {
+  /* F3 P3-2's twin law: the KEYBOARD path keeps the R14 ordering law
+   * VERBATIM — the far edge drags along (the mouse path's honest clamp is a
+   * pointer-only grammar; keyboard steps stay single-frame intents). */
+  it('Home/End jump the edges; the keyboard ordering law holds from the band too (R14 drag-along, verbatim)', () => {
     mountBand();
     fireEvent.keyDown(outH(), { key: 'ArrowLeft' });
     expect(S().loop.end).toBeCloseTo(28 - 1 / 24, 5);

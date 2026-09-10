@@ -324,12 +324,14 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     expect(screen.getByTestId('shell-deliver')).toBeInTheDocument();
     // leaving audio focus by any route resets the lane boost (design §3.3)
     expect(store().audioLaneBoost).toBe(false);
-    // D-B3: 'auto' resolves compact on deliver — R23-WF (D-F1) fills the seam
-    // in: the compact strip carries the RANGE BAND head row (ruler replaced)
-    // and the mainbody takes deliver's 50% rebalance
+    // D-B3: 'auto' resolves compact on deliver — R24-W4 (A3-R7, #71)
+    // supersedes R23-WF: the 22px read-only ruler is UNCONDITIONAL and the
+    // 32px RANGE BAND mounts below it (54px head stack) — no-ruler and
+    // no-range-clamp both answered; the mainbody takes deliver's 50%
+    // rebalance
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
-    expect(screen.queryByTestId('shell-timeline-compact-ruler')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline-compact-ruler')).toBeInTheDocument();
     expect(document.querySelector('.mainbody')).toHaveStyle({ height: '50%' });
     expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('shell-dock-page-edit'));
@@ -420,21 +422,25 @@ describe('R23-WB (DESIGN-R23 D-B3, issue #94) → R24-W1: the timeline density l
   });
 });
 
-/* ---------- R23-WF (DESIGN-R23 D-F1, #107): the deliver composition ----------
-   The compact strip (auto → on, D-B3) carries the 32px RANGE BAND head row
-   in place of its ruler, and the mainbody takes deliver's 50% rebalance
-   (the same while-compact interaction law color's 55% rides, ruling 11's
-   shape). The band's own grammar is pinned in TimelineCompact.test. */
+/* ---------- R23-WF (DESIGN-R23 D-F1, #107) → R24-W4 (A3-R7): the deliver
+   composition ----------
+   The compact strip (auto → on, D-B3) carries the coexistence head stack —
+   the 22px read-only ruler + the 32px RANGE BAND below it (54px; the R23-WF
+   ruler-replacement is dead, #71's "no ruler" half answered on every page) —
+   and the mainbody takes deliver's 50% rebalance (the same while-compact
+   interaction law color's 55% rides, ruling 11's shape). The band's own
+   grammar is pinned in TimelineCompact.test. */
 describe('R23-WF (DESIGN-R23 D-F1, #107): the deliver composition', () => {
   const mainbody = () => document.querySelector('.mainbody') as HTMLElement;
   const mainbodyH = () => mainbody().style.height;
 
-  it('deliver auto: compact strip + the RANGE BAND head row (ruler replaced) + the 50% mainbody default', () => {
+  it('deliver auto: compact strip + the ruler+BAND coexistence head row + the 50% mainbody default', () => {
     renderAppShell({ page: 'deliver' });
     expect(screen.getByTestId('shell-deliver')).toBeInTheDocument();
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
-    expect(screen.queryByTestId('shell-timeline-compact-ruler')).not.toBeInTheDocument();
+    // A3-R7 coexistence: the read-only ruler is UNCONDITIONAL (never replaced)
+    expect(screen.getByTestId('shell-timeline-compact-ruler')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
     expect(mainbodyH()).toBe('50%');
   });

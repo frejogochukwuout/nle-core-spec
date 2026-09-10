@@ -6,23 +6,51 @@
    range block + select options, the render-settings block, the job queue
    (done rows + one running row with progress + retry, §6.4 error UX), and
    the honest-mock export behavior (R13: CTA + Reveal/Retry push info
-   toasts — no encode ever runs — and the CTA appends a static queued job
-   row). */
+   toasts — no encode ever runs — and the CTA queues a job row the store
+   timer completes).
+   R24-W4 (deliverViewStore): jobs + showQueue are MODULE state now — every
+   test here starts from the pristine fixture via the act-wrapped
+   file-level reset below, and the store's own laws are pinned in
+   deliverViewStore.test. */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DeliverPage } from './DeliverPage';
 import { TimelineCompact } from '../timeline/TimelineCompact';
 import { useUi } from '../../state/useUiStore';
+import { useDeliverView, __mockTimerActive } from '../../state/deliverViewStore';
 
 const S = () => useUi.getState();
 
-/** R22 W5: the queue lives in the CENTER only while queued/running (or the
- *  toggle is on) — the default center is the video preview (#88). */
+/* R24-W4 act() HYGIENE (the original wave's act()-warning storm): RTL's
+ * cleanup registers its global afterEach at MODULE IMPORT time — BEFORE
+ * this file's own hooks register — and vitest runs same-scope afterEach
+ * hooks in REVERSE registration order, so RTL cleanup runs AFTER the
+ * file-level afterEach below: during it, the previous test's tree is STILL
+ * MOUNTED. A bare resetDeliverView() (a useDeliverView.setState) would
+ * update that tree outside act() — one warning per test. Both resets are
+ * act-wrapped (setup.ts dodges the same trap by calling cleanup() BEFORE
+ * its useUi reset; the file-level hooks run earlier than that). */
+const resetDeliverView = () => useDeliverView.getState().resetDeliverView();
+
+beforeEach(() => {
+  act(() => { resetDeliverView(); });
+});
+
+afterEach(() => {
+  act(() => { resetDeliverView(); });
+});
+
+/** R22 W5 → R24-W4: the queue view is showQueue's alone (the single
+ *  writer — queueing auto-shows it; the toggle reviews past/active renders
+ *  whenever it wants, mid-render included). The default center is the
+ *  video preview (#88). */
 const openQueue = async (user?: ReturnType<typeof userEvent.setup>) => {
   const toggle = screen.getByTestId('shell-deliver-queue-toggle');
-  if (user) await user.click(toggle); else toggle.click();
+  /* the no-user branch uses fireEvent (act-wrapped) — a raw el.click() fires
+   * the React onClick outside act() and warns (the R24-W4 hygiene sweep) */
+  if (user) await user.click(toggle); else fireEvent.click(toggle);
 };
 
 describe('DeliverPage (spec 18 §4.8 export rail)', () => {
@@ -327,5 +355,90 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     await user.click(master);
     expect(master).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('shell-deliver-preset-fcpxml')).toHaveAttribute('aria-pressed', 'false'); // one at a time
+  });
+
+  /* ---------- R24-W4 (deliverViewStore, F5's P2 + the P3 toggle) ---------- */
+
+  it('R24-W4: the queue SURVIVES page switches — export → page away → back keeps the queued job + the rendering state', async () => {
+    const user = userEvent.setup();
+    const first = render(<DeliverPage />);
+    await user.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+    expect(screen.getAllByTestId('shell-deliver-job')).toHaveLength(5); // queued row appended + auto-shown
+    first.unmount(); // "page away" — the shell unmounts DeliverPage
+    // the STORE keeps the queue while unmounted (the unmount-survival law)
+    expect(useDeliverView.getState().jobs).toHaveLength(5);
+    expect(useDeliverView.getState().jobs.at(-1)).toMatchObject({ state: 'queued', progress: 0 });
+    expect(useDeliverView.getState().showQueue).toBe(true);
+    render(<DeliverPage />); // "back" — the queued job + the rendering state persist
+    expect(screen.getAllByTestId('shell-deliver-job')).toHaveLength(5);
+    expect(screen.getByText('Beach Doc — Rough Cut — 1080p · In–Out.fcpxml')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-queue-toggle')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Render queue — rendering')).toBeInTheDocument(); // the rendering state survived too
+  });
+
+  it('R24-W4: the queue toggle is HONEST mid-render — allow-collapse (showQueue the single writer, no silent no-op)', async () => {
+    const user = userEvent.setup();
+    render(<DeliverPage />);
+    await user.click(screen.getByTestId('shell-deliver-btn-export-fcpxml')); // auto-show + rendering
+    expect(screen.getByTestId('shell-deliver-summary')).toBeInTheDocument();
+    // collapse WHILE RENDERING — the toggle works (the old renderActive-locked
+    // view made this a silent no-op: aria-pressed flipped, the view stayed)
+    await user.click(screen.getByTestId('shell-deliver-queue-toggle'));
+    expect(screen.getByTestId('shell-deliver-preview')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-queue-toggle')).toHaveAttribute('aria-pressed', 'false');
+    // the render keeps walking in the store — the header badge still says rendering
+    expect(screen.getByTestId('shell-deliver-queue-toggle').textContent).toContain('rendering');
+    expect(useDeliverView.getState().jobs.at(-1)).toMatchObject({ state: 'queued' });
+    // re-expand: the queued job is still there
+    await user.click(screen.getByTestId('shell-deliver-queue-toggle'));
+    expect(screen.getAllByTestId('shell-deliver-job')).toHaveLength(5);
+  });
+
+  it('R24-W4: the mock render COMPLETES on the store-owned timer — 4 × 500ms: queued → running +25%/tick → done "just now"', () => {
+    vi.useFakeTimers();
+    try {
+      render(<DeliverPage />);
+      fireEvent.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+      expect(useDeliverView.getState().jobs.at(-1)).toMatchObject({ state: 'queued', progress: 0 });
+      expect(__mockTimerActive()).toBe(true);
+      act(() => { vi.advanceTimersByTime(500); }); // tick 1: queued → running 25%
+      expect(useDeliverView.getState().jobs.at(-1)).toMatchObject({ state: 'running', progress: 25 });
+      expect(screen.getByText('25%')).toBeInTheDocument(); // the row's live progress readout
+      act(() => { vi.advanceTimersByTime(500); }); // tick 2
+      expect(useDeliverView.getState().jobs.at(-1)!.progress).toBe(50);
+      act(() => { vi.advanceTimersByTime(500); }); // tick 3
+      expect(useDeliverView.getState().jobs.at(-1)!.progress).toBe(75);
+      act(() => { vi.advanceTimersByTime(500); }); // tick 4: done + self-stop
+      expect(useDeliverView.getState().jobs.at(-1)).toMatchObject({ state: 'done', progress: 100, time: 'just now' });
+      expect(__mockTimerActive()).toBe(false);
+      expect(screen.getByText('just now')).toBeInTheDocument();
+      // completion is honest: the header drops the rendering label
+      expect(screen.getByText('Render queue')).toBeInTheDocument();
+      expect(screen.queryByText('Render queue — rendering')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('R24-W4: FIFO — two queued jobs render ONE AT A TIME in queue order', () => {
+    vi.useFakeTimers();
+    try {
+      render(<DeliverPage />);
+      fireEvent.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+      fireEvent.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+      const jobs = () => useDeliverView.getState().jobs;
+      expect(jobs().at(-2)).toMatchObject({ state: 'queued' });
+      expect(jobs().at(-1)).toMatchObject({ state: 'queued' });
+      act(() => { vi.advanceTimersByTime(500); }); // the FIRST row runs; the second waits
+      expect(jobs().at(-2)).toMatchObject({ state: 'running', progress: 25 });
+      expect(jobs().at(-1)).toMatchObject({ state: 'queued', progress: 0 });
+      act(() => { vi.advanceTimersByTime(1500); }); // the first row → done 'just now'
+      expect(jobs().at(-2)).toMatchObject({ state: 'done', time: 'just now' });
+      expect(jobs().at(-1)).toMatchObject({ state: 'queued' }); // still waiting its turn
+      act(() => { vi.advanceTimersByTime(500); }); // now the second starts
+      expect(jobs().at(-1)).toMatchObject({ state: 'running', progress: 25 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -294,7 +294,9 @@ function AppShellInner() {
      50% while the compact strip (with its range band head row) carries the
      timeline area ("the shorter timeline area can leave more room for
      export settings too"), 40% when full tracks are asked for (the same
-     filmstrip lane-room law, deliver-shaped). */
+     filmstrip lane-room law, deliver-shaped). R24-W4 (A3-R7, #71): the
+     strip's head stack is the 22px ruler + the 32px range band (54px) on
+     deliver — the same compact-timeline-area rebalance carries it. */
   const mainBodyHeight = mainBodyH !== 0
     ? mainBodyH
     : page === 'color' && !mainBodyUserSet ? (compact ? '55%' : '40%')
@@ -444,7 +446,10 @@ function AppShellInner() {
                  every other page gets honest selection-only with a
                  'select clip' label (the old copy claimed "set grade
                  target" on pages that have no grade surface — a lying
-                 label). */
+                 label). R24-W4 (A3-R7, #71): rangeBand rides the DELIVER
+                 branch only — the strip's 22px read-only ruler is
+                 unconditional on every page; the 32px RangeBand mounts
+                 BELOW it (the 54px coexistence head stack) exactly here. */
               <TimelineCompact rangeBand={page === 'deliver'} clipClick={page === 'color' ? 'grade' : 'select'} />
             ) : (
               <Timeline />
