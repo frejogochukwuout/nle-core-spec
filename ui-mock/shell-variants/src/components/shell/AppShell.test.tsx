@@ -230,7 +230,7 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     expect(screen.getByRole('button', { name: 'Color' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('the R23-WB consoles: the ScopesDock joins the timeline-area console row as TABS; the Nodes toggle swaps the VIEWER (#90/#95/#93)', async () => {
+  it('the R24-W2 consoles: the SCOPES PANE under the viewer + the NODE GRAPH in the console row (#67/#68 — A2-R1/R2 supersede R23-WB D-B1/D-B2)', async () => {
     const user = userEvent.setup();
     renderAppShell({ mixerState: 'full' });
     expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument(); // edit page: side by side
@@ -239,36 +239,37 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     // dock does not render there, and its toggle is DOM-absent
     expect(store().mixerState).toBe('collapsed');
     expect(screen.queryByTestId('mixer-dock-full')).not.toBeInTheDocument();
-    // the scopes console: off → open via the toolbar toggle; the dock sits in
-    // the TIMELINE-AREA CONSOLE ROW (beside the compact strip), TABS, one
-    // scope at a time — never the squeezed under-viewer strip
+    // the scopes console: off → open via the toolbar toggle; the ~160px pane
+    // rides at the BOTTOM of the viewer's column (A2-R2 — "near the viewer",
+    // immediately visible) — the R22/R23 console-row strip is DEAD
     await user.click(screen.getByTestId('shell-toolbar-btn-scopes'));
+    const pane = screen.getByTestId('shell-color-scopes-pane');
+    expect(pane).toBeInTheDocument();
+    expect(pane).toHaveClass('h-[160px]');
+    expect(pane).toHaveClass('shrink-0');
+    expect(screen.getByTestId('shell-viewer')).toBeInTheDocument(); // the viewer STAYS — the pane only splits the column
     expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
-    // the D-B1 geometry law: the console-row wrapper takes the row's flex
-    // share (flex-1 + the 320px floor) and the dock fills it by
-    // flex/min-h-0 — NEVER a % height (the R22 percentage-in-flex law)
-    const scopes = screen.getByTestId('shell-color-scopes');
-    const rowShare = scopes.parentElement!;
-    expect(rowShare).toHaveClass('min-w-[320px]');
-    expect(rowShare).toHaveClass('flex-1');
-    expect(scopes).toHaveClass('h-full');
-    expect(scopes).toHaveClass('min-h-0');
-    expect(scopes.style.height).toBe('');
     expect(screen.getByTestId('shell-color-scopes-tab-waveform')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('shell-color-scope-waveform')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-color-scope-vectorscope')).toBeNull();
     await user.click(screen.getByTestId('shell-color-scopes-tab-vectorscope'));
     expect(screen.getByTestId('shell-color-scope-vectorscope')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-color-scope-waveform')).toBeNull();
-    // the compact strip still owns the timeline lanes beside the dock
+    // the compact strip still owns the timeline lanes (the console row is
+    // empty while the nodes dock is closed — no stray stop)
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
-    // the nodes console: the toggle swaps the VIEWER REGION — the header
-    // names the grade target, × restores the viewer (D-B2)
+    expect(screen.queryByTestId('shell-color-nodeviewer')).toBeNull();
+    // the nodes console: the toggle mounts the graph in the CONSOLE-ROW slot
+    // [6] (A2-R1 — NEVER the viewer swap) — the header names the grade
+    // target, × closes; the VIEWER never leaves region [2]
     await user.click(screen.getByTestId('shell-toolbar-btn-nodes'));
-    expect(screen.getByTestId('shell-color-nodeviewer')).toBeInTheDocument();
+    const nv = screen.getByTestId('shell-color-nodeviewer');
+    expect(nv).toBeInTheDocument();
+    expect(nv).toHaveClass('min-w-[480px]');
+    expect(nv).toHaveClass('flex-1');
     expect(screen.getByTestId('shell-color-nodegraph')).toBeInTheDocument();
     expect(screen.getByTestId('shell-color-nodeviewer-target')).toHaveTextContent('Marina interview');
-    expect(screen.queryByTestId('shell-viewer')).toBeNull();
+    expect(screen.getByTestId('shell-viewer')).toBeInTheDocument(); // #67: the preview stays live while grading
     await user.click(screen.getByTestId('shell-color-nodeviewer-close'));
     expect(screen.queryByTestId('shell-color-nodeviewer')).toBeNull();
     expect(screen.getByTestId('shell-viewer')).toBeInTheDocument();
@@ -277,16 +278,22 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
     expect(screen.queryByTestId('shell-color-nodeviewer')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('shell-color-scopes')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-scopes-pane')).not.toBeInTheDocument();
   });
 
-  it('D-B2: the nodes surface keeps its F6 stop [2] — the wrapper survives the swap (the surface swap stays inside it)', () => {
+  it('A2-R1: the node console keeps an F6 stop — now slot [6] in the console row (the center region [2] stays VIEWER-led)', () => {
     renderAppShell({ page: 'color', colorNodesDock: true });
-    expect(screen.queryByTestId('shell-viewer')).toBeNull();
+    expect(screen.getByTestId('shell-viewer')).toBeInTheDocument(); // the swap is dead — the viewer stays
     // three F6s walk toolbar → left dock → the CENTER region; the third stop
-    // is still the mainbody center wrapper — now hosting the node surface
-    // (the region did not multiply, vanish, or lose its place in the cycle)
+    // is region [2] hosting the VIEWER (the graph never takes it — D-B2 died)
     for (let i = 0; i < 3; i++) {
+      fireEvent(window, new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true }));
+    }
+    expect(document.activeElement?.contains(screen.getByTestId('shell-viewer'))).toBe(true);
+    expect(document.activeElement?.contains(screen.getByTestId('shell-color-nodeviewer'))).toBe(false);
+    // three more walk inspector → timeline → dock; the 7th lands on the node
+    // console's own slot [6] (single-writer, an off dock leaves no stop)
+    for (let i = 0; i < 4; i++) {
       fireEvent(window, new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true }));
     }
     expect(document.activeElement?.contains(screen.getByTestId('shell-color-nodeviewer'))).toBe(true);
@@ -688,20 +695,30 @@ describe('F6 region cycling (spec 18 §11.5)', () => {
     pressF6(); activeRegionHolds('shell-toolbar');
   });
 
-  it('R23-WB (D-B1): color + scopes open — the ScopesDock takes the [6] stop the NodeGraphDock vacated', () => {
+  it("R24-W2 (A2-R2): color + scopes open — the pane adds NO F6 stop (it rides inside the viewer region's column); the nodes console takes slot [6]", () => {
     renderAppShell({ page: 'color', colorScopesState: 'open' });
-    // 7 stops: toolbar, left dock (the Stills gallery on color), viewer,
-    // the COLOR inspector (the color page's rail — D-B2 kept the stop [2]
-    // wrapper through the viewer swap), timeline block, app dock, then the
-    // scopes console (the mixer is collapsed on color, D-B5 — never a stop)
+    // 6 stops: toolbar, left dock (the Gallery on color), the viewer region
+    // (its column CONTAINS the scopes pane — no new stop, the cycle count is
+    // unchanged), the color inspector, timeline block, app dock (the mixer
+    // is collapsed on color, D-B5 — never a stop)
     pressF6(); activeRegionHolds('shell-toolbar');
+    pressF6(); activeRegionHolds('shell-stills');
+    pressF6(); activeRegionHolds('shell-viewer');
+    expect(screen.getByTestId('shell-color-scopes-pane')).toBeInTheDocument(); // the pane is INSIDE this region's column
+    pressF6(); activeRegionHolds('shell-color-inspector');
+    pressF6(); activeRegionHolds('shell-timeline-compact');
+    pressF6(); activeRegionHolds('shell-dock');
+    pressF6(); activeRegionHolds('shell-toolbar'); // wraps at SIX — no scopes stop ever
+    // opening the nodes console adds slot [6] (single-writer — the graph
+    // takes the stop the scopes vacated when it moved under the viewer)
+    act(() => { useUi.setState({ colorNodesDock: true }); });
     pressF6(); activeRegionHolds('shell-stills');
     pressF6(); activeRegionHolds('shell-viewer');
     pressF6(); activeRegionHolds('shell-color-inspector');
     pressF6(); activeRegionHolds('shell-timeline-compact');
     pressF6(); activeRegionHolds('shell-dock');
-    pressF6(); // stop 7 — the scopes dock (inherited slot [6])
-    activeRegionHolds('shell-color-scopes');
+    pressF6(); // stop 7 — the node graph console (slot [6])
+    activeRegionHolds('shell-color-nodeviewer');
     expect(document.activeElement).not.toContainElement(screen.getByTestId('shell-timeline-compact'));
     pressF6(); activeRegionHolds('shell-toolbar'); // wraps
   });

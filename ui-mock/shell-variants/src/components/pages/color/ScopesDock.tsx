@@ -1,36 +1,40 @@
-/* ScopesDock — R23-WB (DESIGN-R23 D-B1; issues #90/#95; supersedes the R22
-   ColorScopeStrip, deleted this wave). The scopes console moved from
-   UNDER-THE-VIEWER to the TIMELINE-AREA CONSOLE ROW — the row that already
-   carries the MixerDock ("stacked next to the multi-track just like where
-   Mixer console is", #90) — and the four scopes became TABS (Luma WFM /
-   RGB Parade / Vector / Histogram): ONE scope renders at a time at the
-   panel's FULL size ("make these multi-tabs so they can render normally
-   instead of being squeezed", #95). The W4c simultaneity law (colorists
-   watch all four scopes at once under the viewer) is REVERSED by this
-   ruling — registered in the README deviation ledger.
+/* ScopesDock — R23-WB (DESIGN-R23 D-B1) → R24-W2 (DESIGN-R24 §1.2
+   A2-R2/R3; issues #90/#95/#68/#67). The scopes console moved AGAIN —
+   from the timeline-area console row to the ~160px PANE UNDER THE
+   VIEWER, inside F6 region [2]'s column (Viewer flex-1 + the pane below),
+   colorScopesState-gated ('off' = not rendered) and NEVER a new F6 stop
+   (the pane adds no region to the cycle). The R23-WB ruling-14 stale-frame
+   hint is DELETED with the re-home: region [2] is always Viewer-led now
+   (A2-R1), so the viewer keeps publishing frames while every console is
+   open — there is no stale state left to confess.
 
-   The REAL trace machinery is unchanged from W4c, moved verbatim: the data
-   is the CURRENT graded display buffer published by GradedViewerCanvas on
-   the frame bus (gradedFrameBus — the BUFFER half of the seam;
-   useScopeSource is the STORE half: target/grades/preview flag); traces are
-   W4a's scopesMath reductions drawn by scopeDraw's painters, REDRAWN at the
-   10fps throttle (spec 08 §11.4). While the node graph owns the viewer
-   region (D-B2) no NEW frames publish — the dock honestly keeps drawing the
-   LAST published frame and says so in the status line (Part IX ruling 14,
-   registered deviation).
+   The tabs carry the REFERENCE's exact labels (Parade / Waveform /
+   Vectorscope / Histogram — A2-R2) and keep the R23-WB one-scope-at-a-time
+   law (#95) + the ARIA tabs roving pattern. The 2×2 four-up layout is NOT
+   a mode: Resolve's pane menu offers single/2-up/4-up layouts, but this
+   mock's window bar is fake — the four-up button fires a ONE-SHOT honest
+   toast telling the reviewer the 2×2 is reference-only (the layout lands
+   with the window-chrome round).
 
-   Geometry law (the R22 percentage-in-flex law): the dock fills the console
-   row's FULL height via flex/min-h-0 — never a % height; the width is the
-   row's flex share (min 320px, owned by the AppShell wrapper). The canvas
-   keeps the 320×160 native resolution and is CSS-stretched to the panel
-   (the W4c stretch law — the trace math and its pins are
-   resolution-stable). */
+   The REAL trace machinery is unchanged: the data is the CURRENT graded
+   display buffer published by GradedViewerCanvas on the frame bus
+   (gradedFrameBus — the BUFFER half of the seam; useScopeSource is the
+   STORE half: target/grades/preview flag); traces are W4a's scopesMath
+   reductions drawn by scopeDraw's painters, REDRAWN at the 10fps throttle
+   (spec 08 §11.4).
+
+   Geometry law: the dock fills the pane's FULL height via flex/min-h-0 —
+   never a % height; the pane wrapper owns the seam border (the splitter
+   seam law). The canvas keeps the 320×160 native resolution and is
+   CSS-stretched to the panel (the W4c stretch law — the trace math and its
+   pins are resolution-stable). */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Activity } from 'lucide-react';
+import { Activity, LayoutGrid } from 'lucide-react';
 import { waveformColumns, parade, vectorscopePoints, histogram } from '../../../lib/color';
 import { useUi, resolveGradeTargetId, gradeOf, TIMELINE_GRADE_KEY, type MockGrade } from '../../../state/useUiStore';
 import { getGradedFrame, subscribeGradedFrame, type GradedFrame } from './gradedFrameBus';
+import { useHonestToast } from './useHonestToast';
 import {
   drawWaveformScope,
   drawParadeScope,
@@ -67,9 +71,9 @@ const PANEL_W = 320;
 const PANEL_H = 160;
 
 const PANELS: { kind: ScopeKind; label: string; a11y: string }[] = [
-  { kind: 'waveform', label: 'Luma WFM', a11y: 'Luma waveform scope (BT.601 column histogram)' },
-  { kind: 'parade', label: 'RGB Parade', a11y: 'RGB parade scope (three channel waveforms, shared scale)' },
-  { kind: 'vectorscope', label: 'Vector', a11y: 'Vectorscope (BT.601, spec 08 §11.3 graticule + 123° skin-tone line)' },
+  { kind: 'parade', label: 'Parade', a11y: 'RGB parade scope (three channel waveforms, shared scale)' },
+  { kind: 'waveform', label: 'Waveform', a11y: 'Luma waveform scope (BT.601 column histogram)' },
+  { kind: 'vectorscope', label: 'Vectorscope', a11y: 'Vectorscope (BT.601, spec 08 §11.3 graticule + 123° skin-tone line)' },
   { kind: 'histogram', label: 'Histogram', a11y: 'RGB histogram scope (three stacked 256-bin tracks)' },
 ];
 
@@ -77,16 +81,23 @@ const PANELS: { kind: ScopeKind; label: string; a11y: string }[] = [
 export const SCOPE_THROTTLE_MS = 100;
 
 export function ScopesDock() {
-  /* R22-D3 → R23-WB: the dock state is STORE-driven ('off' = NOT rendered at
-     all — the mixer's collapsed law; the AppShell gates the console row slot
-     and the Toolbar2 toggle writes this). */
+  /* R22-D3 → R23-WB → R24-W2: the dock state is STORE-driven ('off' = NOT
+     rendered at all — the mixer's collapsed law; the AppShell gates the
+     viewer-column pane and the Toolbar2 toggle writes this). */
   const mode = useUi((s) => s.colorScopesState);
-  const nodesOwnViewer = useUi((s) => s.colorNodesDock);
   const src = useScopeSource(); // the store half stays live (status line)
   const [frame, setFrame] = useState<GradedFrame | null>(() => getGradedFrame());
   /* D-B1: ONE scope at a time — the active tab (local view state; the
      4-state machine's row/grid layouts died with the squeeze). */
   const [active, setActive] = useState<ScopeKind>('waveform');
+  /* A2-R2/R3: the 2×2 four-up is a ONE-SHOT honest toast, not a mode —
+     Resolve's pane menu layouts (single/2-up/4-up) need a real window
+     bar; this mock's is fake, so the button says exactly that, once per
+     mount (the useHonestToast law). */
+  const tellFourUp = useHonestToast(
+    'Scopes',
+    'the 2×2 four-up layout is reference-only — this mock renders one scope at a time (pane layouts land with the window-chrome round)',
+  );
 
   /* the buffer half: subscribe to the viewer's graded-frame publishes */
   useEffect(() => subscribeGradedFrame(setFrame), []);
@@ -167,24 +178,33 @@ export function ScopesDock() {
     <div
       data-testid="shell-color-scopes"
       aria-label="Scopes console"
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden border-l border-hairline bg-panel"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-panel"
     >
       {/* the dock header — the reference's window-bar anatomy (title +
           status), 26px shell-bar height; the layout/collapse toggles died
-          with the 4-state machine (the TABS are the layout now) */}
+          with the 4-state machine (the TABS are the layout now — the 2×2
+          four-up is the one-shot honest toast, A2-R2/R3) */}
       <div className="flex h-[26px] shrink-0 items-center gap-1 border-b border-hairline px-2">
         <Activity size={12} aria-hidden className="text-tmuted" />
         <span className="px-1 text-[11px] font-medium text-tprimary">Scopes</span>
+        <button
+          type="button"
+          data-testid="shell-color-scopes-fourup"
+          aria-label="2×2 four-up scopes layout"
+          data-tip="2×2 four-up — reference-only in this mock (one scope at a time)"
+          className="icon-btn"
+          onClick={tellFourUp}
+        >
+          <LayoutGrid size={13} strokeWidth={1.7} />
+        </button>
         <span data-testid="shell-color-scopes-status" className="mono ml-auto truncate text-[10px] text-tfaint">
           {frame ? `${frame.width}×${frame.height} · 10 fps` : 'standby — no graded frame'}
           {src.qualifierPreviewOn ? ' · matte preview on' : ''}
-          {/* ruling 14: while the node graph owns the viewer region no NEW
-              frames publish — the dock keeps the LAST frame and says so */}
-          {frame && nodesOwnViewer ? ' · stale — node graph owns the viewer' : ''}
         </span>
       </div>
 
-      {/* the four scopes as TABS (#95 — one scope at a time, never squeezed) */}
+      {/* the four scopes as TABS (#95 — one scope at a time, never
+          squeezed; A2-R2: the reference's exact labels) */}
       <div
         role="tablist"
         aria-label="Scope views"

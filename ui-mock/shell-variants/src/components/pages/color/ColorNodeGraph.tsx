@@ -13,17 +13,23 @@
    Topology/anatomy unchanged: 38px toolbar (arrow/hand tools, page dots,
    Clip chip, zoom look, …), 64px grid workspace, 106×86 cards, ports/edges
    exactly as before.
-   R23-WB (DESIGN-R23 D-B2; issue #93): the graph now mounts as the
-   VIEWER-REGION surface (the AppShell swaps it in for the Viewer while
-   colorNodesDock is on — the timeline-area NodeGraphDock is deleted, and
-   with it this component's `docked` prop). The component itself is
-   UNCHANGED: the 706×268 workspace scrolls at natural size (it fits a
-   viewer-region width ≥ 700px and pans below — the #74 law). */
+   R23-WB (D-B2, #93): the graph mounted as the VIEWER-REGION surface
+   (the AppShell swapped it in for the Viewer while colorNodesDock was on).
+   R24-W2 (DESIGN-R24 §1.2 A2-R1, issues #67/#64 — SUPERSEDES D-B2): the
+   viewer swap is DELETED — region [2] is ALWAYS Viewer-led ("make it a
+   panel like next to the timeline but NOT here blocking the preview"),
+   and the graph re-homes to the TIMELINE-AREA CONSOLE ROW (the F6 slot
+   [6] the ScopesDock vacated when it moved under the viewer). The
+   component now CARRIES ITS OWN 26px nodeviewer header (Layers glyph +
+   label, the grade-target chip, × → toggleColorNodesDock) above its 38px
+   toolbar + the natural-size 706×268 scroll-both workspace; the AppShell
+   wrapper owns the min-w-[480px] flex-1 console-row share. */
 
 import { useState } from 'react';
-import { Hand, Layers, MousePointer2 } from 'lucide-react';
+import { Hand, Layers, MousePointer2, X } from 'lucide-react';
 import { useHonestToast } from './useHonestToast';
-import { useUi } from '../../../state/useUiStore';
+import { useUi, resolveGradeTargetId } from '../../../state/useUiStore';
+import { gradeTargetLabel } from './useGradeTarget';
 
 /* ---------- geometry (color-cluster.md §3.4) ---------- */
 
@@ -281,6 +287,10 @@ export function ColorNodeGraph() {
   const setColorInspectorTab = useUi((s) => s.setColorInspectorTab);
   const [tool, setTool] = useState<'arrow' | 'hand'>('arrow');
   const [page, setPage] = useState(1);
+  /* A2-R1: the 26px nodeviewer header names the GRADE TARGET the graph
+     edits — the same resolver the inspector/console share (they can never
+     disagree). */
+  const nodeGraphTarget = useUi((s) => gradeTargetLabel(s.scenes, resolveGradeTargetId(s)));
 
   const clickNode = (id: string) => {
     if (selected === id) {
@@ -294,7 +304,9 @@ export function ColorNodeGraph() {
   };
 
   const workspace = (
-    <div className="min-h-0 flex-1 overflow-auto" style={{ background: 'var(--nodegraph-bg)' }}>
+    /* A2-R1: the natural-size 706×268 workspace, scroll-both (the #74 law —
+       the console-row wrapper's flex share pans below ~706px width) */
+    <div className="scroll-both min-h-0 flex-1 overflow-auto" style={{ background: 'var(--nodegraph-bg)' }}>
       <div
         className="relative"
         style={{
@@ -346,11 +358,32 @@ export function ColorNodeGraph() {
     </div>
   );
 
-  /* R23-WB (D-B2): the graph renders the SAME standalone anatomy everywhere
-     (its own 38px toolbar + the scrollable workspace); the surface swap —
-     Viewer ⇄ this graph — is the AppShell's job, not a prop. */
+  /* R23-WB (D-B2) → R24-W2 (A2-R1): the graph renders the SAME console
+     anatomy everywhere — its own 26px nodeviewer header (Layers + the
+     grade-target chip + × → toggleColorNodesDock) above the 38px toolbar
+     + the scrollable workspace; the console-row slot + the surface swap
+     are the AppShell's job, not a prop. */
   return (
-    <div data-testid="shell-color-nodegraph" className="flex h-full min-h-0 w-full min-w-[400px] flex-col" style={{ background: 'var(--nodegraph-bg)' }}>
+    <div data-testid="shell-color-nodegraph" className="flex h-full min-h-0 w-full flex-col" style={{ background: 'var(--nodegraph-bg)' }}>
+      {/* the 26px nodeviewer header (A2-R1) — Layers + label, the target
+          chip, × closes the console (toggleColorNodesDock) */}
+      <div className="flex h-[26px] shrink-0 items-center gap-2 border-b border-hairline bg-shell px-2">
+        <Layers size={12} aria-hidden className="text-tmuted" />
+        <span className="text-[11px] font-medium text-tprimary">Nodes</span>
+        <span data-testid="shell-color-nodeviewer-target" className="truncate text-[11px] text-tmuted">
+          {nodeGraphTarget}
+        </span>
+        <button
+          type="button"
+          className="icon-btn ml-auto"
+          data-testid="shell-color-nodeviewer-close"
+          aria-label="Close node graph console"
+          data-tip="Close the node graph console"
+          onClick={() => useUi.getState().toggleColorNodesDock()}
+        >
+          <X size={13} strokeWidth={1.8} />
+        </button>
+      </div>
       {/* 38px toolbar (ref §3.2) */}
       <div className="flex h-[38px] shrink-0 items-center justify-between border-b border-hairline bg-shell px-4" style={{ color: '#b0b0b0' }}>
         <div className="flex items-center gap-4">

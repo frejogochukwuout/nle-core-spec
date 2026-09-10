@@ -7,19 +7,24 @@
    Deliver → export panel) — all at the same resizable inspectorW.
 
    R22 (DESIGN-R22 D1) — the color page composition REWRITTEN (issues
-   #74/#77/#78/#79) → R23-WB (DESIGN-R23 track B — #90–#97): the scopes
-   console moved to the TIMELINE-AREA CONSOLE ROW as the tabbed ScopesDock
-   (D-B1, F6 slot [6]); the node graph is the VIEWER-REGION surface while
-   colorNodesDock is on (D-B2 — the Viewer swaps out, a header bar with the
-   target clip + × restores it); the timeline density is the D-B3 store
+   #74/#77/#78/#79) → R23-WB (DESIGN-R23 track B — #90–#97) → R24-W2
+   (DESIGN-R24 §1.2 A2-R1/R2/R3; issues #67/#64/#68 — SUPERSEDES the
+   R23-WB D-B1/D-B2 composition): the timeline density is the D-B3 store
    law (compact default on color, the EVERY-PAGE toggle overrides; the
    mainbody default is 55% ONLY while compact, 40% when full tracks are
    asked for — the filmstrip needs lane room); the left dock on color is
-   the Stills GALLERY (D-B4/#91). Page-aware defaults (D2/D8): the color
-   page's inspector = 420px until the user drags (inspectorWUserSet). */
+   the Stills GALLERY (D-B4/#91 → W2 renames it Gallery, A2-R5). THE W2
+   COMPOSITION: region [2] is ALWAYS Viewer-led (the ColorNodeGraph ⇄
+   Viewer swap is DELETED — #67 "NOT here blocking the preview"); the
+   graph re-homes to the console-row slot [6] with its own 26px
+   nodeviewer header + 38px toolbar + the 706×268 scroll-both workspace;
+   the ScopesDock re-homes to the ~160px pane at the BOTTOM of region
+   [2]'s column (colorScopesState-gated, never a new F6 stop). Page-aware
+   defaults (D2/D8): the color page's inspector = 420px until the user
+   drags (inspectorWUserSet). */
 
 import { useEffect, useRef, type ReactNode } from 'react';
-import { useUi, resolveGradeTargetId, resolveTimelineCompact } from '../../state/useUiStore';
+import { useUi, resolveTimelineCompact } from '../../state/useUiStore';
 import { leftDockContent } from './leftDockContent';
 import { Toolbar2 } from './Toolbar2';
 import { MixerDock } from '../mixer/MixerDock';
@@ -32,8 +37,6 @@ import { TimelineToolbar } from '../timeline/TimelineToolbar';
 import { SceneTabs } from '../timeline/SceneTabs';
 import { Timeline } from '../timeline/Timeline';
 import { ColorInspector, ColorNodeGraph, ScopesDock } from '../pages/ColorPage';
-import { gradeTargetLabel } from '../pages/color/useGradeTarget';
-import { Layers, X } from 'lucide-react';
 import { TimelineCompact } from '../timeline/TimelineCompact';
 import { DeliverPage } from '../pages/DeliverPage';
 import { ChannelEditor } from '../mixer/ChannelEditor';
@@ -243,19 +246,19 @@ function AppShellInner() {
      grade target the console edits). */
   const captionSelected = selection.length === 1
     && findElement(scenes, selection[0])?.track.kind === 'caption';
-  /* R22 → R23-WB: the console dock view-states + the user-drag flags for
-     the page-aware defaults below. colorNodesDock re-points at the
-     VIEWER-REGION surface (D-B2); colorScopesState is 'off' | 'open' (D-B1). */
+  /* R22 → R23-WB → R24-W2: the console dock view-states + the user-drag
+     flags for the page-aware defaults below. colorNodesDock gates the
+     CONSOLE-ROW slot [6] (the graph mounts beside/above the compact strip,
+     never blocking the viewer — A2-R1); colorScopesState is 'off' | 'open'
+     and gates the viewer-column pane (A2-R2). */
   const colorScopesState = useUi((s) => s.colorScopesState);
   const colorNodesDock = useUi((s) => s.colorNodesDock);
+
   const mainBodyUserSet = useUi((s) => s.mainBodyUserSet);
   const inspectorWUserSet = useUi((s) => s.inspectorWUserSet);
   /* R23-WB (D-B3): the density resolution — ONE store resolver shared with
      the TimelineToolbar's toggle (the honest aria-pressed law). */
   const compact = useUi((s) => resolveTimelineCompact(s));
-  /* D-B2: the node-graph header names the GRADE TARGET the graph edits (the
-     same resolver the inspector/console share — they can never disagree). */
-  const nodeGraphTarget = useUi((s) => gradeTargetLabel(s.scenes, resolveGradeTargetId(s)));
 
   /* R23-WC (DESIGN-R23 D-C2, issue #99 + Part IX ruling 10 — the
      channel-selected law): a focused mixer strip (stripFocus — the mixer's
@@ -375,47 +378,26 @@ function AppShellInner() {
             })()}
 
             <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region panel-shadow flex min-h-0 min-w-0 flex-1 flex-col">
-              {/* R23-WB (D-B2, #93): while the nodes console is on, the node
-                  graph IS the viewer-region surface ("fit better on the
-                  preview window … we can cross it out just like a normal
-                  asset preview") — the header bar names the grade target and
-                  the × restores the Viewer. The F6 stop [2] wrapper is
-                  UNCHANGED (the surface swap stays inside it). While this
-                  surface owns the region the viewer publishes no NEW graded
-                  frames — the ScopesDock honestly draws the LAST one
-                  (ruling 14, registered). */}
-              {page === 'color' && colorNodesDock ? (
+              {/* R24-W2 (A2-R1, issues #67/#64 — SUPERSEDES R23-WB D-B2):
+                  region [2] is ALWAYS Viewer-led — the ColorNodeGraph ⇄
+                  Viewer swap is DELETED (the reviewer's "NOT here blocking
+                  the preview" ruling; the graph re-homes to the console-row
+                  slot [6] below and the viewer keeps publishing graded
+                  frames while every console is open). A2-R2/R3: the ~160px
+                  SCOPES PANE rides at the BOTTOM of this column (Viewer
+                  flex-1 + the pane below), colorScopesState-gated — the
+                  pane is INSIDE region [2]'s column and NEVER a new F6
+                  stop (no regionsRef entry; the cycle count is unchanged). */}
+              <div className="min-h-0 flex-1">
+                <Viewer duration={duration} />
+              </div>
+              {page === 'color' && colorScopesState === 'open' && (
                 <div
-                  data-testid="shell-color-nodeviewer"
-                  aria-label="Node graph viewer surface"
-                  className="flex min-h-0 flex-1 flex-col overflow-hidden bg-panel"
+                  data-testid="shell-color-scopes-pane"
+                  aria-label="Scopes pane"
+                  className="flex h-[160px] shrink-0 border-t border-hairline"
                 >
-                  <div className="flex h-[26px] shrink-0 items-center gap-2 border-b border-hairline bg-shell px-2">
-                    <Layers size={12} aria-hidden className="text-tmuted" />
-                    <span className="text-[11px] font-medium text-tprimary">Nodes</span>
-                    <span data-testid="shell-color-nodeviewer-target" className="truncate text-[11px] text-tmuted">
-                      {nodeGraphTarget}
-                    </span>
-                    <button
-                      type="button"
-                      className="icon-btn ml-auto"
-                      data-testid="shell-color-nodeviewer-close"
-                      aria-label="Close node graph and restore the viewer"
-                      data-tip="Restore the viewer"
-                      onClick={() => useUi.getState().toggleColorNodesDock()}
-                    >
-                      <X size={13} strokeWidth={1.8} />
-                    </button>
-                  </div>
-                  {/* the graph at natural size — its own workspace scrolls
-                      (706×268; the region clips below ~700px width) */}
-                  <div className="scroll-both min-h-0 flex-1 overflow-auto">
-                    <ColorNodeGraph />
-                  </div>
-                </div>
-              ) : (
-                <div className="min-h-0 flex-1">
-                  <Viewer duration={duration} />
+                  <ScopesDock />
                 </div>
               )}
             </div>
@@ -440,14 +422,17 @@ function AppShellInner() {
       {/* ---- timeline block + console docks (design doc v2.2 §4 — the
           mixer sits SIDE BY SIDE with the multi-track lanes, not under them;
           F6 region slots [6]/[7], single-writer per index) ----
-          R23-WB (DESIGN-R23 D-B1/D-B3): the timeline lanes resolve through
-          the DENSITY law (compact → TimelineCompact, full → Timeline —
-          compact DEFAULTS on color+deliver, the every-page TimelineToolbar
-          toggle overrides per session, #94); the SCOPES DOCK joins the
-          console row in the F6 slot [6] the NodeGraphDock vacated (the node
-          graph now owns the viewer region while toggled, D-B2). The mixer
-          renders only where its page leaves it open — entering color
-          collapses it (D-B5/#92, the setPage exit law). */}
+          R23-WB (D-B3): the timeline lanes resolve through the DENSITY law
+          (compact → TimelineCompact, full → Timeline — compact DEFAULTS on
+          color+deliver, the every-page TimelineToolbar toggle overrides per
+          session, #94). R24-W2 (A2-R1): the NODE GRAPH console takes the F6
+          slot [6] the ScopesDock vacated (the scopes moved UNDER the viewer,
+          A2-R2) — the graph carries its own 26px nodeviewer header + 38px
+          toolbar + the natural-size 706×268 scroll-both workspace; this
+          wrapper takes the row's flex share (min 480px) and fills the row's
+          height via flex/min-h-0 (NEVER a % height). The mixer renders only
+          where its page leaves it open — entering color collapses it
+          (D-B5/#92, the setPage exit law). */}
       <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />
@@ -465,14 +450,21 @@ function AppShellInner() {
               <Timeline />
             )}
           </div>
-          {/* F6 region slot [6] on color = the SCOPES DOCK (D-B1 — inherited
-              from the retired NodeGraphDock; single-writer per index, a
-              collapsed/off dock never leaves an invisible stop). The dock
-              fills the row's FULL height via flex/min-h-0 (NEVER a % height)
-              and takes the row's flex share (min 320px). */}
-          {page === 'color' && colorScopesState === 'open' && (
-            <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 min-w-[320px] flex-1">
-              <ScopesDock />
+          {/* F6 region slot [6] on color = the NODE GRAPH CONSOLE (R24-W2
+              A2-R1 — the slot the ScopesDock vacated when it moved under
+              the viewer; single-writer per index, an off dock never leaves
+              an invisible stop). The graph fills the wrapper by
+              flex/min-h-0 (NEVER a % height) and takes the row's flex share
+              (min 480px, owned here). */}
+          {page === 'color' && colorNodesDock && (
+            <div
+              ref={(el) => { regionsRef.current[6] = el; }}
+              tabIndex={-1}
+              data-testid="shell-color-nodeviewer"
+              aria-label="Node graph console"
+              className="shell-region flex min-h-0 min-w-[480px] flex-1"
+            >
+              <ColorNodeGraph />
             </div>
           )}
           {mixerVisible && (

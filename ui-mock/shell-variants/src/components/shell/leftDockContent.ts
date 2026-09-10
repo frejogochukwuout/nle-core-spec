@@ -1,13 +1,15 @@
-/* leftDockContent — R23-WD (DESIGN-R23 D-D1; issues #100/#106/#91, Part IX
-   rulings 4 + 16): the ONE table for what the left dock IS on each page.
-   Toolbar2's left toggle (label + icon + whether it renders at all) and
-   LeftDock's content routing both read it, so the button can never lie
+/* leftDockContent — R23-WD (DESIGN-R23 D-D1) → R24-W2 (DESIGN-R24 §1.2
+   A2-R5, issue #70): the ONE table for what the left dock IS on each
+   page. Toolbar2's left toggle (label + icon + whether it renders at all)
+   and LeftDock's content routing both read it, so the button can never lie
    about the dock it opens (#100) and the dock can never mount a surface
    the label doesn't name (#106: "this tab is unnecessary if you name
    things correctly"). Single content per page = no tab bar anywhere.
      Edit    = Media Pool   (pool ONLY — the Effects TAB retired with the FX
                              view in Wave A, ruling 4; AppShell.test pins it)
-     Color   = Stills       (the Wave B stills-only gallery — kept as landed)
+     Color   = Gallery      (R24-W2 A2-R5: the stills-only gallery RENAMED —
+                             Resolve's own name; the surface key 'stills' +
+                             every testid STABLE, only the label changed)
      Audio   = Sound Library
      FX      = Effects      (the FxBrowser)
      Deliver = HIDDEN       (null — DeliverPage owns its own presets rail in
@@ -40,7 +42,7 @@ export interface LeftDockContent {
  *  is exhaustive by construction — a future page MUST decide here. */
 export const LEFT_DOCK_CONTENT: Record<Page, LeftDockContent | null> = {
   edit: { label: 'Media Pool', icon: PanelLeft, surface: 'media-pool', gatedByPool: true },
-  color: { label: 'Stills', icon: ImageIcon, surface: 'stills', gatedByPool: true },
+  color: { label: 'Gallery', icon: ImageIcon, surface: 'stills', gatedByPool: true },
   audio: { label: 'Sound Library', icon: AudioWaveform, surface: 'sound-library', gatedByPool: false },
   fx: { label: 'Effects', icon: Sparkles, surface: 'fx-browser', gatedByPool: false },
   deliver: null,

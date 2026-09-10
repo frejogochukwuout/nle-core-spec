@@ -138,8 +138,11 @@ describe('ScopesDock — the D-B1 tab law (one scope at a time, #95)', () => {
 
   it('the ARIA tabs pattern (roving tabindex): one tab stop, aria-selected follows, arrows switch + wrap', () => {
     renderDock();
-    const wf = screen.getByTestId('shell-color-scopes-tab-waveform');
+    // R24-W2 (A2-R2): the tab DOM order is the reference's panel order
+    // (parade, waveform, vectorscope, histogram) — the R23 order died with
+    // the label rename; the default active stays Waveform
     const par = screen.getByTestId('shell-color-scopes-tab-parade');
+    const wf = screen.getByTestId('shell-color-scopes-tab-waveform');
     const vec = screen.getByTestId('shell-color-scopes-tab-vectorscope');
     const his = screen.getByTestId('shell-color-scopes-tab-histogram');
     expect(wf).toHaveAttribute('tabindex', '0');
@@ -148,24 +151,32 @@ describe('ScopesDock — the D-B1 tab law (one scope at a time, #95)', () => {
     expect(par).toHaveAttribute('aria-selected', 'false');
     // arrows switch the scope AND move focus (radios: focus follows selection)
     fireEvent.keyDown(screen.getByRole('tablist', { name: 'Scope views' }), { key: 'ArrowRight' });
-    expect(par).toHaveAttribute('aria-selected', 'true');
-    expect(par).toHaveFocus();
+    expect(vec).toHaveAttribute('aria-selected', 'true');
+    expect(vec).toHaveFocus();
     fireEvent.keyDown(screen.getByRole('tablist', { name: 'Scope views' }), { key: 'ArrowLeft' });
     expect(wf).toHaveAttribute('aria-selected', 'true');
     expect(wf).toHaveFocus();
-    // wrap: ← from the first lands on the LAST (Histogram)
+    // ← from Waveform lands on Parade (the DOM-first), ← again wraps to the LAST (Histogram)
+    fireEvent.keyDown(screen.getByRole('tablist', { name: 'Scope views' }), { key: 'ArrowLeft' });
+    expect(par).toHaveAttribute('aria-selected', 'true');
+    expect(par).toHaveFocus();
     fireEvent.keyDown(screen.getByRole('tablist', { name: 'Scope views' }), { key: 'ArrowLeft' });
     expect(his).toHaveAttribute('aria-selected', 'true');
     expect(his).toHaveFocus();
+    // and → from the LAST wraps back to the DOM-first (Parade)
     fireEvent.keyDown(screen.getByRole('tablist', { name: 'Scope views' }), { key: 'ArrowRight' });
-    expect(wf).toHaveAttribute('aria-selected', 'true');
+    expect(par).toHaveAttribute('aria-selected', 'true');
     expect(vec).toHaveAttribute('aria-selected', 'false');
   });
 
-  it('the four tabs carry the full-scope labels (Luma WFM / RGB Parade / Vector / Histogram)', () => {
+  it('the four tabs carry the reference\'s exact labels (Parade / Waveform / Vectorscope / Histogram — A2-R2)', () => {
     renderDock();
-    for (const label of ['Luma WFM', 'RGB Parade', 'Vector', 'Histogram']) {
+    for (const label of ['Parade', 'Waveform', 'Vectorscope', 'Histogram']) {
       expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
+    }
+    // the R23-era compound labels are gone (the rename is total)
+    for (const old of ['Luma WFM', 'RGB Parade']) {
+      expect(screen.queryByRole('tab', { name: old })).toBeNull();
     }
   });
 
@@ -192,14 +203,17 @@ describe('ScopesDock — the status line (the store half stays live)', () => {
     expect(screen.getByTestId('shell-color-scopes-status')).not.toHaveTextContent(/matte preview on/);
   });
 
-  it('ruling 14: while the node graph owns the viewer the status line says the frame is STALE', async () => {
+  it('ruling 14 is DEAD (A2-R1): the graph never owns the viewer now — no stale confession, the pane stays live even with nodes open', async () => {
     renderDock();
     act(() => { publish(red()); });
     await act(async () => { vi.advanceTimersByTime(0); });
-    expect(screen.getByTestId('shell-color-scopes-status')).not.toHaveTextContent(/stale/);
+    expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/64×36 · 10 fps/);
+    // the R23-WB viewer-swap (graph ⇄ viewer) is deleted — the graph lives
+    // in the console row (W2 item 1), so opening it can NEVER make the
+    // scopes pane's frame stale; the honest hint died with the defect
     act(() => { useUi.setState({ colorNodesDock: true }); });
-    expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/stale — node graph owns the viewer/);
-    // closing the surface restores the viewer — the hint leaves with it
+    expect(screen.getByTestId('shell-color-scopes-status')).not.toHaveTextContent(/stale/);
+    expect(screen.getByTestId('shell-color-scopes-status')).toHaveTextContent(/64×36 · 10 fps/);
     act(() => { useUi.setState({ colorNodesDock: false }); });
     expect(screen.getByTestId('shell-color-scopes-status')).not.toHaveTextContent(/stale/);
   });

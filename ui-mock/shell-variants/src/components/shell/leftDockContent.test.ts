@@ -12,9 +12,9 @@ import type { Page } from '../../state/useUiStore';
 const PAGES: Page[] = ['edit', 'color', 'audio', 'fx', 'deliver'];
 
 describe('leftDockContent (R23-WD D-D1 — the one table)', () => {
-  it('names every page: Media Pool / Stills / Sound Library / Effects — the label IS the dock content (#100/#106)', () => {
+  it('names every page: Media Pool / Gallery (R24-W2 A2-R5 — the stills rename) / Sound Library / Effects — the label IS the dock content (#100/#106)', () => {
     expect(leftDockContent('edit')!.label).toBe('Media Pool');
-    expect(leftDockContent('color')!.label).toBe('Stills');
+    expect(leftDockContent('color')!.label).toBe('Gallery'); // R24-W2: the stills-only gallery renamed
     expect(leftDockContent('audio')!.label).toBe('Sound Library');
     expect(leftDockContent('fx')!.label).toBe('Effects');
   });

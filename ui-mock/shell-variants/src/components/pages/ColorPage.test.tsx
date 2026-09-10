@@ -21,7 +21,9 @@ import {
   QualifierPanel,
 } from './ColorPage';
 import { useUi, TIMELINE_GRADE_KEY } from '../../state/useUiStore';
-import { DEFAULT_GRADE, DEFAULT_QUALIFIER } from '../../lib/color';
+import { DEFAULT_GRADE, DEFAULT_QUALIFIER, luma601 } from '../../lib/color';
+import { publishGradedFrame, __clearGradedFrameBus } from './color/gradedFrameBus';
+import { makeTestImageData } from '../../test/canvas2d';
 
 const S = () => useUi.getState();
 
@@ -202,32 +204,107 @@ describe('WheelsPanel (Primaries — store-driven GradeParams)', () => {
   });
 });
 
-describe('CurvesPanel (C55 — master RGB spline, record-stored points)', () => {
+describe('CurvesPanel (C55 → R24-W2 A2-R4 — the YRGB rebuild, issue #69)', () => {
   const mountCurves = (patch?: Patch) => {
     setStore({ colorInspectorTab: 'curves', ...patch });
     return render(<CurvesPanel />);
   };
-  it('boots at the identity diagonal: two endpoint points, monotone path renders', () => {
+
+  /* the graded-frame bus half of the histogram seam (the ScopesDock law) */
+  const redFrame = () =>
+    publishGradedFrame({ imageData: makeTestImageData(8, 4, () => [255, 0, 0]), width: 8, height: 4, mediaId: 'm-02', elementId: 'el-2', mode: 'program' as const });
+  const grayFrame = () =>
+    publishGradedFrame({ imageData: makeTestImageData(8, 4, () => [128, 128, 128]), width: 8, height: 4, mediaId: 'm-02', elementId: 'el-2', mode: 'program' as const });
+
+  it('boots at the identity diagonal on Y: two endpoint handles, the monotone path, NO readout/footer', () => {
     mountCurves();
     expect(screen.getByTestId('shell-color-curves')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-curves-title')).toHaveTextContent('Curves — Master RGB');
+    expect(screen.getByTestId('shell-color-curves-title')).toHaveTextContent('Curves');
     expect(screen.getByTestId('shell-color-curve-point-0')).toBeInTheDocument();
     expect(screen.getByTestId('shell-color-curve-point-1')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-color-curve-point-2')).toBeNull();
     const editor = screen.getByTestId('shell-color-curve-editor');
     const path = editor.querySelector('svg path');
     expect(path?.getAttribute('d')).toMatch(/^M 0\.00 100\.00/); // identity = the diagonal
+    // A2-R4: the readout row + footer are DELETED
+    expect(screen.queryByTestId('shell-color-curve-readout')).toBeNull();
+    // square aspect + the max-w-[360px] cap
+    expect(editor).toHaveClass('max-w-[360px]');
+    expect(editor).toHaveStyle({ aspectRatio: '1 / 1' });
   });
 
-  it('arrow keys move a point and WRITE the record (one commit per press)', () => {
+  it('the [Y|R|G|B] radiogroup: four radios, Y checked, arrow roving selects + focuses (wrap)', () => {
+    mountCurves();
+    const group = screen.getByRole('radiogroup', { name: 'Curve channel' });
+    expect(group).toBeInTheDocument();
+    for (const id of ['y', 'r', 'g', 'b']) {
+      expect(screen.getByTestId(`shell-color-curves-channel-${id}`)).toHaveAttribute('role', 'radio');
+    }
+    expect(screen.getByTestId('shell-color-curves-channel-y')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('shell-color-curves-channel-r')).toHaveAttribute('tabindex', '-1');
+    fireEvent.keyDown(group, { key: 'ArrowRight' });
+    expect(screen.getByTestId('shell-color-curves-channel-r')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('shell-color-curves-channel-r')).toHaveFocus();
+    // wrap: ← from the FIRST (Y) lands on the LAST (B)
+    fireEvent.click(screen.getByTestId('shell-color-curves-channel-y'));
+    fireEvent.keyDown(group, { key: 'ArrowLeft' });
+    expect(screen.getByTestId('shell-color-curves-channel-b')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('shell-color-curves-channel-b')).toHaveFocus();
+    fireEvent.click(screen.getByTestId('shell-color-curves-channel-y'));
+    expect(screen.getByTestId('shell-color-curves-channel-y')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('grid grammar: the 25% grid + center crosshair + the SOLID 25%-white diagonal (the dashed diagonal is dead)', () => {
+    mountCurves();
+    const svg = screen.getByTestId('shell-color-curve-editor').querySelector('svg')!;
+    const lines = Array.from(svg.querySelectorAll('line'));
+    // 10 grid lines (5 vertical + 5 horizontal at 0/25/50/75/100) + the 2
+    // crosshair lines + the diagonal reference
+    expect(lines).toHaveLength(13);
+    const diagonal = lines.find((l) => l.getAttribute('x1') === '0' && l.getAttribute('y1') === '100' && l.getAttribute('x2') === '100' && l.getAttribute('y2') === '0')!;
+    expect(diagonal.getAttribute('stroke')).toBe('rgba(255,255,255,0.25)'); // SOLID 25% white
+    expect(diagonal.getAttribute('stroke-dasharray')).toBeNull();           // the dashed diagonal died
+    // the center crosshair
+    expect(lines.some((l) => l.getAttribute('x1') === '50' && l.getAttribute('x2') === '50')).toBe(true);
+    expect(lines.some((l) => l.getAttribute('y1') === '50' && l.getAttribute('y2') === '50')).toBe(true);
+  });
+
+  it('the 10px white handles with the 1.5px dark ring + the accent ring classes (A2-R4)', () => {
+    mountCurves();
+    const p = screen.getByTestId('shell-color-curve-point-1');
+    expect(p).toHaveClass('h-[10px]');
+    expect(p).toHaveClass('w-[10px]');
+    expect(p).toHaveClass('border-[1.5px]');
+    expect(p).toHaveClass('bg-white');
+    expect(p).toHaveClass('hover:ring-2');
+    expect(p).toHaveClass('hover:ring-[var(--accent)]');
+    expect(p).toHaveClass('active:ring-2');
+    expect(p).toHaveClass('active:ring-[var(--accent)]');
+  });
+
+  it('arrow keys move a point and WRITE the record on the ACTIVE channel (one commit per press)', () => {
     mountCurves();
     fireEvent.keyDown(screen.getByTestId('shell-color-curve-point-1'), { key: 'ArrowDown' });
-    const pts = S().mockGrades['el-2'].curves?.master;
-    expect(pts).toEqual([{ x: 0, y: 0 }, { x: 1, y: 0.99 }]);
+    // the Y channel is untagged storage (the legacy master seam)
+    expect(S().mockGrades['el-2'].curves?.master).toEqual([{ x: 0, y: 0 }, { x: 1, y: 0.99 }]);
     expect(S().past).toHaveLength(1);
   });
 
-  it('endpoints move in Y only; interior points cannot cross neighbors', () => {
+  it('a channel edit lands TAGGED: the R channel writes r-tagged points while Y stays untouched', () => {
+    mockBox(400, 400);
+    mountCurves();
+    fireEvent.click(screen.getByTestId('shell-color-curves-channel-r'));
+    // single-click insert on the R channel at x=0.5
+    fireEvent.click(screen.getByTestId('shell-color-curve-editor'), { clientX: 200, clientY: 200 });
+    const master = S().mockGrades['el-2'].curves?.master;
+    expect(master).toHaveLength(3); // the two R endpoints + the inserted mid — Y is absent
+    expect(master?.every((p) => p.ch === 'r')).toBe(true);
+    expect(master?.[1]).toMatchObject({ x: 0.5, ch: 'r' });
+    // the editor shows the R channel's three handles
+    expect(screen.getByTestId('shell-color-curve-point-2')).toBeInTheDocument();
+  });
+
+  it('endpoints move in Y only; interior points cannot cross neighbors (per channel)', () => {
     mountCurves();
     fireEvent.keyDown(screen.getByTestId('shell-color-curve-point-1'), { key: 'ArrowLeft' });
     expect(S().mockGrades['el-2'].curves?.master[1].x).toBe(1); // x locked on endpoints
@@ -235,19 +312,41 @@ describe('CurvesPanel (C55 — master RGB spline, record-stored points)', () => 
     expect(S().mockGrades['el-2'].curves?.master[1].y).toBe(0);
   });
 
-  it('double-click inserts a point ON the curve; Delete removes interior points; endpoints persist', () => {
+  it('SINGLE-CLICK inserts a point ON the curve; the 8% near-band SNAPS to the nearest handle instead', () => {
     mockBox(400, 400);
     mountCurves();
     const editor = screen.getByTestId('shell-color-curve-editor');
-    fireEvent.dblClick(editor, { clientX: 200, clientY: 100 }); // x=0.5 (y lands on the diagonal = 0.5)
+    // a plain click at x=0.5 (y lands on the diagonal = 0.5)
+    fireEvent.click(editor, { clientX: 200, clientY: 200 });
     expect(S().mockGrades['el-2'].curves?.master).toHaveLength(3);
     const mid = S().mockGrades['el-2'].curves?.master[1];
     expect(mid?.x).toBeCloseTo(0.5, 5);
     expect(mid?.y).toBeCloseTo(0.5, 5);
+    // a click INSIDE the 8% band of the new handle (x=0.5 → click at 0.54) —
+    // no second point, the nearest handle takes focus instead
+    fireEvent.click(editor, { clientX: 216, clientY: 200 });
+    expect(S().mockGrades['el-2'].curves?.master).toHaveLength(3);
+    expect(screen.getByTestId('shell-color-curve-point-1')).toHaveFocus();
+    // OUTSIDE the band (x=0.65) inserts again
+    fireEvent.click(editor, { clientX: 260, clientY: 200 });
+    expect(S().mockGrades['el-2'].curves?.master).toHaveLength(4);
+  });
+
+  it('Delete removes interior points; right-click removes interior points; endpoints are immutable', () => {
+    mockBox(400, 400);
+    mountCurves();
+    fireEvent.click(screen.getByTestId('shell-color-curve-editor'), { clientX: 200, clientY: 200 });
+    expect(S().mockGrades['el-2'].curves?.master).toHaveLength(3);
+    // Delete key on the interior point
     fireEvent.keyDown(screen.getByTestId('shell-color-curve-point-1'), { key: 'Delete' });
     expect(S().mockGrades['el-2'].curves?.master).toHaveLength(2);
-    // endpoints are permanent
+    // right-click on an interior point removes it too (the browser menu is suppressed)
+    fireEvent.click(screen.getByTestId('shell-color-curve-editor'), { clientX: 200, clientY: 200 });
+    fireEvent.contextMenu(screen.getByTestId('shell-color-curve-point-1'));
+    expect(S().mockGrades['el-2'].curves?.master).toHaveLength(2);
+    // endpoints are permanent — Delete and right-click are both no-ops there
     fireEvent.keyDown(screen.getByTestId('shell-color-curve-point-0'), { key: 'Delete' });
+    fireEvent.contextMenu(screen.getByTestId('shell-color-curve-point-0'));
     expect(S().mockGrades['el-2'].curves?.master).toHaveLength(2);
   });
 
@@ -265,11 +364,75 @@ describe('CurvesPanel (C55 — master RGB spline, record-stored points)', () => 
     expect(pt?.y).toBeCloseTo(0.75, 5);
   });
 
-  it('reset restores the identity diagonal record', () => {
+  it('LOST-POINTER-CAPTURE COMMITS — the terminal gesture event lands the buffer (the color-family law)', () => {
+    mockBox(400, 400);
     mountCurves();
+    const p = screen.getByTestId('shell-color-curve-point-1');
+    fireEvent.pointerDown(p, { pointerId: 1, clientX: 380, clientY: 100, buttons: 1 });
+    fireEvent.pointerMove(p, { pointerId: 1, clientX: 380, clientY: 120, buttons: 1 });
+    fireEvent(p, new Event('lostpointercapture', { bubbles: true }));
+    expect(S().past).toHaveLength(1); // committed without a pointerup
+    expect(S().mockGrades['el-2'].curves?.master[1].y).toBeCloseTo(0.7, 5);
+  });
+
+  it('reset restores the ACTIVE channel to identity (the other channels survive)', () => {
+    mockBox(400, 400);
+    mountCurves();
+    // an r-channel curve exists (its 3 tagged points)
+    fireEvent.click(screen.getByTestId('shell-color-curves-channel-r'));
+    fireEvent.click(screen.getByTestId('shell-color-curve-editor'), { clientX: 200, clientY: 200 });
+    // a y curve too (2 untagged points)
+    fireEvent.click(screen.getByTestId('shell-color-curves-channel-y'));
     fireEvent.keyDown(screen.getByTestId('shell-color-curve-point-1'), { key: 'ArrowDown' });
+    expect(S().mockGrades['el-2'].curves?.master).toHaveLength(5); // 2 y + 3 r
+    // reset while Y is active → Y identity, the r channel untouched
     fireEvent.click(screen.getByRole('button', { name: 'Reset curve' }));
-    expect(S().mockGrades['el-2'].curves).toEqual({ master: [{ x: 0, y: 0 }, { x: 1, y: 1 }] });
+    const master = S().mockGrades['el-2'].curves?.master;
+    expect(master).toHaveLength(3); // the r channel's 3 points survive
+    expect(master?.every((p) => p.ch === 'r')).toBe(true);
+  });
+
+  it('the ~64-bin channel histogram: no frame → absent; a frame paints BEHIND the grid; the channel picks which histogram', async () => {
+    vi.useFakeTimers();
+    try {
+      mountCurves();
+      expect(screen.queryByTestId('shell-color-curve-histogram')).toBeNull(); // no graded frame yet
+      act(() => { redFrame(); });
+      await act(async () => { vi.advanceTimersByTime(0); });
+      // red → the Y channel: BT.601 luma of red ≈ 76.2 → bin 19 of 64
+      const histY = screen.getByTestId('shell-color-curve-histogram');
+      expect(histY.querySelectorAll('rect')).toHaveLength(1);
+      expect(Number(histY.querySelector('rect')!.getAttribute('x'))).toBeCloseTo((19 * 100) / 64, 1);
+      // switch to R → the R channel histogram (red 255 → the LAST bin)
+      fireEvent.click(screen.getByTestId('shell-color-curves-channel-r'));
+      await act(async () => { vi.advanceTimersByTime(0); });
+      const histR = screen.getByTestId('shell-color-curve-histogram');
+      expect(Number(histR.querySelector('rect')!.getAttribute('x'))).toBeCloseTo((63 * 100) / 64, 1);
+    } finally {
+      vi.useRealTimers();
+      __clearGradedFrameBus();
+    }
+  });
+
+  it('the histogram rides the family 10fps throttle: a second frame inside the window defers, latest wins', async () => {
+    vi.useFakeTimers();
+    try {
+      mountCurves();
+      act(() => { redFrame(); });
+      await act(async () => { vi.advanceTimersByTime(0); });
+      const binOf = () => Number(screen.getByTestId('shell-color-curve-histogram').querySelector('rect')!.getAttribute('x'));
+      expect(binOf()).toBeCloseTo((19 * 100) / 64, 1); // red's luma bin
+      act(() => { grayFrame(); }); // inside the 100ms window
+      expect(binOf()).toBeCloseTo((19 * 100) / 64, 1); // deferred — nothing yet
+      await act(async () => { vi.advanceTimersByTime(100); });
+      // gray 128: BT.601 luma lands at 127.999… in fp → bin 31 (derived from
+      // the same luma601 the panel uses — the pin never fights the fp)
+      const grayBin = Math.min(63, Math.floor((luma601(128, 128, 128) / 256) * 64));
+      expect(binOf()).toBeCloseTo((grayBin * 100) / 64, 1);
+    } finally {
+      vi.useRealTimers();
+      __clearGradedFrameBus();
+    }
   });
 });
 

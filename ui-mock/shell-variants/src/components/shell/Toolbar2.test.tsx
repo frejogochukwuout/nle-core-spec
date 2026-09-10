@@ -88,7 +88,7 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
      the whole left slot unconditionally (the dock mounts regardless of the
      pool flag), so a toggle there would claim a toggle it cannot perform —
      DOM-absent, the lying-control #100 law. */
-  it('R22-D5 (#80) → R23-FIX R-c: the left toggle follows the page asset domain (Stills on color, Media Pool on edit; audio/fx own the slot — no toggle)', () => {
+  it('R22-D5 (#80) → R23-FIX R-c → R24-W2 (A2-R5): the left toggle follows the page asset domain (Gallery on color — the stills panel RENAMED, Media Pool on edit; audio/fx own the slot — no toggle)', () => {
     useUi.setState({ page: 'audio' });
     const { getByRole, rerender } = renderPlain(<Toolbar2 />);
     // AUDIO owns the slot — the toggle is DOM-absent (the SoundLibrary IS the dock)
@@ -96,12 +96,12 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
     expect(screen.queryByRole('button', { name: 'Sound Library' })).toBeNull();
     useUi.setState({ page: 'color' });
     rerender(<Toolbar2 />);
-    expect(getByRole('button', { name: 'Stills' })).toBeInTheDocument();
+    expect(getByRole('button', { name: 'Gallery' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Media Pool' })).toBeNull();
     useUi.setState({ page: 'edit' });
     rerender(<Toolbar2 />);
     expect(getByRole('button', { name: 'Media Pool' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Stills' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Gallery' })).toBeNull();
     useUi.setState({ page: 'fx' });
     rerender(<Toolbar2 />);
     // FX owns the slot too — no "Effects" toggle (the FxBrowser IS the dock)
@@ -313,8 +313,8 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     useUi.setState({ page: 'color' });
     renderPlain(<Toolbar2 />);
     const focus = (name: string) => act(() => { btn(name).focus(); });
-    focus('Stills');
-    fireEvent.keyDown(btn('Stills'), { key: 'ArrowRight' });
+    focus('Gallery');
+    fireEvent.keyDown(btn('Gallery'), { key: 'ArrowRight' });
     expect(document.activeElement).toBe(btn('Scopes'));
     fireEvent.keyDown(btn('Scopes'), { key: 'ArrowRight' });
     expect(document.activeElement).toBe(btn('Nodes'));
@@ -324,10 +324,10 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     // mixer's index would sit left focus stranded on Nodes here.)
     expect(document.activeElement).toBe(btn('Inspector'));
     fireEvent.keyDown(btn('Inspector'), { key: 'ArrowRight' });
-    expect(document.activeElement).toBe(btn('Stills')); // wraps
+    expect(document.activeElement).toBe(btn('Gallery')); // wraps
     // End from the first = the last (Inspector)
-    focus('Stills');
-    fireEvent.keyDown(btn('Stills'), { key: 'End' });
+    focus('Gallery');
+    fireEvent.keyDown(btn('Gallery'), { key: 'End' });
     expect(document.activeElement).toBe(btn('Inspector'));
     useUi.setState({ page: 'edit' });
   });
@@ -336,8 +336,8 @@ describe('Toolbar2 roving tabindex (spec 18 §11.1 P2, ARIA toolbar pattern)', (
     useUi.setState({ page: 'color' });
     const { rerender } = renderPlain(<Toolbar2 />);
     // drive the rover to the LAST color button (Inspector, index 3)
-    act(() => { btn('Stills').focus(); });
-    fireEvent.keyDown(btn('Stills'), { key: 'End' });
+    act(() => { btn('Gallery').focus(); });
+    fireEvent.keyDown(btn('Gallery'), { key: 'End' });
     expect(document.activeElement).toBe(btn('Inspector'));
     // flip to edit (2 buttons — R24-W1: the mixer is audio-only): the stale
     // rover would point past the set — the clamped stop keeps EXACTLY ONE
@@ -481,12 +481,12 @@ describe('R24-W1 (#63): the left-dock naming law — no "Media Pool" off the edi
     expect(leftDockContent('edit')!.label).toBe('Media Pool');
   });
 
-  it('the color left-dock label is "Stills" today — the current truth (W2\'s Gallery rename re-pins this)', () => {
+  it('R24-W2 (A2-R5): the color left-dock label is "Gallery" — the rename landed (W1 pinned Stills as the then-truth)', () => {
     act(() => { useUi.setState({ page: 'color' }); });
     const { rerender } = renderPlain(<Toolbar2 />);
-    expect(screen.getByRole('button', { name: 'Stills' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Gallery' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Media Pool' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Gallery' })).toBeNull(); // W2's rename has NOT landed in this wave
+    expect(screen.queryByRole('button', { name: 'Stills' })).toBeNull(); // the R23 name is gone
     act(() => { useUi.setState({ page: 'edit' }); });
     rerender(<Toolbar2 />);
     expect(screen.getByRole('button', { name: 'Media Pool' })).toBeInTheDocument();
