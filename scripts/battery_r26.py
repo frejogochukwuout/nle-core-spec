@@ -487,8 +487,8 @@ check("LIVE: the engine repo HEAD is 0a49286 (the E1/E2 fix + folds + PLAN tick)
     _git("nle-engine", "rev-parse", "--short", "HEAD") == "0a49286", _git("nle-engine", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
 check("LIVE: the WDC repo HEAD is 387f327 (the waveform promotion + folds)", lambda: (
     _git("web-daw-core", "rev-parse", "--short", "HEAD") == "387f327", _git("web-daw-core", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
-check("LIVE: the app repo HEAD is 3e4f0cd (the census-CI + folds + the WDC re-pin)", lambda: (
-    _git("nle-test-app", "rev-parse", "--short", "HEAD") == "3e4f0cd", _git("nle-test-app", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
+check("LIVE: the app repo HEAD is 3c91ffe (the census-CI + folds + the WDC re-pin + the maintainPitch scoping)", lambda: (
+    _git("nle-test-app", "rev-parse", "--short", "HEAD") == "3c91ffe", _git("nle-test-app", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
 check("LIVE: the OT repo HEAD is fdb771c (unmoved — the code pin stands)", lambda: (
     _git("opencut-timeline", "rev-parse", "--short", "HEAD") == "fdb771c", _git("opencut-timeline", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
 check("LIVE: the engine's E1/E2 pin file exists (timeline-linked-source-edit.test.ts, 13 it-blocks)", lambda: (
