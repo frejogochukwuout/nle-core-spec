@@ -4,21 +4,25 @@
    row, 5-slot FX rack + "I" power (store-backed display state, B6), graph
    thumbnails, 48px pan crosshair box, routing bus buttons, NAME title row,
    R/S/M, and the TERMINAL fader section — [scale | fader | meter] columns
-   (D1 order) with the cross-strip dB gridlines (D2). The height tiers
-   (D1.3) and the narrow width fallback are pinned here at the strip level;
-   the dock-level measurement/tier wiring is MixerDock.test. */
+   (D1 order) with the cross-strip dB gridlines (D2). The height ladder
+   (D1.3 → R25-W4-E density ladder), the R25-W4-A block-visibility toggles,
+   the R25-W4-B hover-invariance law, and the narrow width fallback are
+   pinned here at the strip level; the dock-level measurement/density
+   wiring is MixerDock.test. */
 
 import { describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { ChannelStrip, AuxStrip, t3FaderLayout } from './ChannelStrip';
+import * as ChannelStripModule from './ChannelStrip';
+import { ChannelStrip, AuxStrip, MasterStrip } from './ChannelStrip';
 import { EqThumb, DynThumb } from './StripGraphs';
 import { renderPlain, store } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 import { meterGetSnapshot, __setLevel } from '../../lib/meterEngine';
 
-/** Strip harness reading the track from the store (fresh on doc mutations). */
-function Strip({ trackId, tier = 0, narrow = false, stripH, focused = false, flashing = false, index = 0 }: {
-  trackId: string; tier?: 0 | 1 | 2 | 3; narrow?: boolean; stripH?: number; focused?: boolean; flashing?: boolean; index?: number;
+/** Strip harness reading the track from the store (fresh on doc mutations).
+ *  R25-W4-E: the density prop joins the tier prop (T0/T1/T2 within 'full'). */
+function Strip({ trackId, tier = 0, density = 'full', narrow = false, focused = false, flashing = false, index = 0 }: {
+  trackId: string; tier?: 0 | 1 | 2; density?: 'full' | 'lean' | 'core'; narrow?: boolean; focused?: boolean; flashing?: boolean; index?: number;
 }) {
   const scene = useUi((s) => s.scenes.find((x) => x.id === 'sc-1')!);
   const track = scene.tracks.find((t) => t.id === trackId);
@@ -29,8 +33,8 @@ function Strip({ trackId, tier = 0, narrow = false, stripH, focused = false, fla
         track={track}
         sceneId="sc-1"
         tier={tier}
+        density={density}
         narrow={narrow}
-        stripH={stripH}
         focused={focused}
         flashing={flashing}
         index={index}
@@ -330,38 +334,77 @@ describe('ChannelStrip height tiers (D1.3, contract §4.2 revised)', () => {
     expect(within(pop).getAllByText('—')).toHaveLength(2); // the 2 model slots, empty
   });
 
-  it('T3: the accessory stack scrolls inside the strip; the trio + RSM pin at the bottom (clamp formula exact)', () => {
-    renderPlain(<Strip trackId="tr-audio-2" tier={3} stripH={300} />);
-    const s = strip('A2');
-    const scroll = within(s).getByTestId('strip-scroll-A2');
-    expect(scroll.className).toContain('scroll-y');
-    // scrollMin = max(40, 300−53−164) = 83
-    expect(scroll.style.minHeight).toBe('83px');
-    // the full accessory stack lives INSIDE the scroll (T0 rows)
-    expect(within(scroll).getByTestId('strip-input')).toBeInTheDocument();
-    expect(within(scroll).getByTestId('fx-rack').style.height).toBe('105px');
-    expect(within(scroll).getByTestId('strip-graphs')).toBeInTheDocument();
-    expect(within(scroll).getByTestId('pan-box')).toBeInTheDocument();
-    expect(within(scroll).getByTestId('strip-bus-1')).toBeInTheDocument();
-    expect(within(scroll).getByTestId('strip-title')).toBeInTheDocument();
-    // faderSection = clamp(300−53−83, 164, 260) = 164 — the travel floor wins
-    const section = within(s).getByTestId('fader-section-A2');
-    expect(section.style.height).toBe('164px');
-    expect(section.className).not.toContain('flex-1'); // FIXED height, not flex
-    // nothing below the fader; RSM sits directly above it, pinned
-    expect(s.lastElementChild).toBe(section);
+  /* R25-W4-E (th_mtzozdvo — "responsive design, not mini-style switch"): the
+     T3 per-channel-scroll tier is DEAD. RE-PINNED (was "T3: the accessory
+     stack scrolls inside the strip; the trio + RSM pin at the bottom (clamp
+     formula exact)" + the t3FaderLayout formula pins) to the DENSITY LADDER:
+     below MIN 340 the strip HIDES elements instead of scrolling them — lean
+     [280,340) keeps fader+meters+RSM; core [200,280) keeps meters+fader;
+     below 200 (the dock's true floor) the CONTAINER falls back to MetersDock
+     (pinned in MixerDock.test). The deletion is module-level: t3FaderLayout
+     and the strip-scroll-* surface can never silently return. */
+  it('R25-W4-E deletion pin: t3FaderLayout + the per-strip scroll surface are gone (the ladder replaced the T3 scroll)', () => {
+    const mod = ChannelStripModule as unknown as Record<string, unknown>;
+    expect(mod.t3FaderLayout).toBeUndefined();
   });
 
-  it('t3FaderLayout: the clamp formula pinned at the band edges (travel floor wins, scroll floor 40)', () => {
-    expect(t3FaderLayout(339)).toEqual({ faderHeight: 164, scrollMin: 122 });
-    expect(t3FaderLayout(300)).toEqual({ faderHeight: 164, scrollMin: 83 });
-    expect(t3FaderLayout(280)).toEqual({ faderHeight: 164, scrollMin: 63 });
-    // below the 53+40+164=257 collapse the scroll floor yields to 40px
-    expect(t3FaderLayout(250)).toEqual({ faderHeight: 164, scrollMin: 40 });
-    // the scroll absorbs the remainder (fader pinned at the 164 travel
-    // floor); the 260 upper clamp is the formula's structural guard —
-    // scrollMin keeps growing on hypothetical tall-T3 heights instead
-    expect(t3FaderLayout(420)).toEqual({ faderHeight: 164, scrollMin: 203 });
+  it('R25-W4-E lean density (ladder L1, [280,340)): the optional blocks hide — fader+meters+RSM stay, name in the header', () => {
+    renderPlain(<Strip trackId="tr-audio-2" density="lean" />);
+    const s = strip('A2');
+    // the W4-A element set is gone WITHOUT any user toggle
+    expect(within(s).queryByTestId('fx-rack')).toBeNull();
+    expect(within(s).queryByTestId('pan-box')).toBeNull();
+    expect(within(s).queryByTestId('strip-input')).toBeNull();
+    expect(within(s).queryByTestId('strip-graphs')).toBeNull();
+    // plus the ladder's own removals (I row / routing / title rows)
+    expect(within(s).queryByTestId('fx-power')).toBeNull();
+    expect(within(s).queryByTestId('strip-bus-1')).toBeNull();
+    expect(within(s).queryByTestId('strip-title')).toBeNull();
+    // the keep-list: RSM + the terminal fader section (fader + meter cols)
+    expect(within(s).getByTestId('strip-rec-arm')).toBeInTheDocument();
+    const section = within(s).getByTestId('fader-section-A2');
+    expect(section.className).toContain('flex-1');
+    expect(s.lastElementChild).toBe(section);
+    expect(within(s).getByTestId('fader-cols-A2').querySelector('[data-col="meter"]')).not.toBeNull();
+    // the name merges into the header (the title row is gone)
+    expect(within(s).getByText('A2', { selector: '.truncate' })).toBeInTheDocument();
+    // no scroll surface ever (hiding, never scrolling)
+    expect(within(s).queryByTestId('strip-scroll-A2')).toBeNull();
+  });
+
+  it('R25-W4-E core density (ladder L2, [200,280)): meters+fader only — RSM goes too', () => {
+    renderPlain(<Strip trackId="tr-audio-2" density="core" />);
+    const s = strip('A2');
+    expect(within(s).queryByTestId('strip-rec-arm')).toBeNull(); // RSM dropped
+    expect(within(s).queryByTestId('fx-rack')).toBeNull();
+    expect(within(s).queryByTestId('pan-box')).toBeNull();
+    // the identification chrome survives (an anonymous strip would be unusable)
+    expect(screen.getByTestId('mixer-topbar-A2')).toBeInTheDocument();
+    expect(within(s).getByText('A2', { selector: '.truncate' })).toBeInTheDocument();
+    // meters+fader only: the terminal section with BOTH columns
+    const section = within(s).getByTestId('fader-section-A2');
+    expect(s.lastElementChild).toBe(section);
+    expect(within(s).getByTestId('fader-cols-A2').querySelector('[data-col="fader"]')).not.toBeNull();
+    expect(within(s).getByTestId('fader-cols-A2').querySelector('[data-col="meter"]')).not.toBeNull();
+  });
+
+  it('R25-W4-A/W4-E composition: user-hidden stays hidden at every level; the ladder only removes more (visible = user ∧ ladder ∧ tier)', () => {
+    // user hides FX at full density → the rack is gone at full AND lean
+    act(() => { useUi.getState().toggleMixerElement('fx'); });
+    const full = renderPlain(<Strip trackId="tr-audio-2" />);
+    expect(within(strip('A2')).queryByTestId('fx-rack')).toBeNull(); // user-hidden at full
+    full.unmount();
+    const lean = renderPlain(<Strip trackId="tr-audio-2" density="lean" />);
+    expect(within(strip('A2')).queryByTestId('fx-rack')).toBeNull(); // still hidden at lean
+    // re-enabling at lean does NOT bring it back — the ladder removes more
+    act(() => { useUi.getState().toggleMixerElement('fx'); });
+    expect(within(strip('A2')).queryByTestId('fx-rack')).toBeNull();
+    lean.unmount();
+    // but at full density the rack returns (user toggle back on, ladder allows)
+    const full2 = renderPlain(<Strip trackId="tr-audio-2" />);
+    expect(within(strip('A2')).getByTestId('fx-rack')).toBeInTheDocument();
+    full2.unmount();
+    act(() => { useUi.getState().toggleMixerElement('fx'); }); // restore the default for later tests
   });
 
   it('narrow strips (D1.3 width fallback): 72px, trio drops the meter column (scale+fader only)', () => {
@@ -559,5 +602,134 @@ describe('AuxStrip', () => {
     expect(screen.getByTestId('mixer-nosource-a2')).toBeInTheDocument(); // a2 still unfed
     // the engine side of the honesty is already pinned: bus OFF → silent
     expect(meterGetSnapshot('auxB').muted).toBe(true);
+  });
+});
+
+/* ---------- R25-W4-A (th_mtzou0op): the strip block-visibility law ---------- */
+describe('R25-W4-A: mixerElementVisibility (strip element toggles)', () => {
+  it('each key hides its block across the strip kinds (channel + aux + master — the alignment mirrors collapse too)', () => {
+    // ONE render — the strips subscribe to the atom, so toggles re-render
+    // in place (RTL renders each call into a NEW root; multiple renders
+    // would duplicate every testid).
+    renderPlain(
+      <>
+        <Strip trackId="tr-audio-2" />
+        <AuxStrip bus="a1" />
+        <MasterStrip />
+      </>,
+    );
+    const ch = () => strip('A2');
+    const aux = () => screen.getByTestId('mixer-strip-aux-a1');
+    const master = () => screen.getByTestId('mixer-strip-master');
+
+    // boots all-visible (the default)
+    for (const s of [ch(), aux(), master()]) {
+      expect(within(s).getByTestId('fx-rack')).toBeInTheDocument();
+      expect(within(s).getByTestId('strip-graphs')).toBeInTheDocument();
+    }
+    expect(within(ch()).getByTestId('pan-box')).toBeInTheDocument();
+    expect(within(ch()).getByTestId('strip-input')).toBeInTheDocument();
+
+    // fx: the racks hide in EVERY strip (the toggles hide the block in every
+    // strip — the per-tier law composes via AND)
+    act(() => { useUi.getState().toggleMixerElement('fx'); });
+    for (const s of [ch(), aux(), master()]) {
+      expect(within(s).queryByTestId('fx-rack')).toBeNull();
+    }
+    // the OTHER blocks stay (pan/input/graphs untoggled)
+    expect(within(ch()).getByTestId('pan-box')).toBeInTheDocument();
+    expect(within(ch()).getByTestId('strip-input')).toBeInTheDocument();
+    expect(within(ch()).getByTestId('strip-graphs')).toBeInTheDocument();
+    act(() => { useUi.getState().toggleMixerElement('fx'); });
+
+    // pan: the channel pan row goes; the aux/master pan-mirror SPACERS
+    // collapse with it (the #72 fader-top alignment law — the mirrored
+    // block disappears, not just the channel's)
+    act(() => { useUi.getState().toggleMixerElement('pan'); });
+    expect(within(ch()).queryByTestId('pan-box')).toBeNull();
+    expect(within(ch()).getByTestId('strip-input')).toBeInTheDocument(); // neighbors stay
+    expect(within(ch()).getByTestId('fx-rack')).toBeInTheDocument();
+    act(() => { useUi.getState().toggleMixerElement('pan'); });
+    expect(within(ch()).getByTestId('pan-box')).toBeInTheDocument(); // round-trip
+
+    // input: the channel input row ("that [I] thing at the top") hides
+    act(() => { useUi.getState().toggleMixerElement('input'); });
+    expect(within(ch()).queryByTestId('strip-input')).toBeNull();
+    expect(within(ch()).getByTestId('fx-rack')).toBeInTheDocument(); // fx untouched
+    act(() => { useUi.getState().toggleMixerElement('input'); });
+
+    // graphs: the EQ/dynamics thumbnails hide in every strip
+    act(() => { useUi.getState().toggleMixerElement('graphs'); });
+    for (const s of [ch(), aux(), master()]) {
+      expect(within(s).queryByTestId('strip-graphs')).toBeNull();
+    }
+    act(() => { useUi.getState().toggleMixerElement('graphs'); });
+    for (const s of [ch(), aux(), master()]) {
+      expect(within(s).getByTestId('strip-graphs')).toBeInTheDocument();
+    }
+  });
+
+  it('view state, never data: a toggle mints NO withHistory entry (past/future unchanged, doc untouched)', () => {
+    const pastBefore = store().past.length;
+    const futureBefore = store().future.length;
+    act(() => { useUi.getState().toggleMixerElement('pan'); });
+    act(() => { useUi.getState().toggleMixerElement('fx'); });
+    expect(store().past).toHaveLength(pastBefore); // no history mint on toggle
+    expect(store().future).toHaveLength(futureBefore);
+    expect(store().mixerElementVisibility).toEqual({ fx: false, pan: false, input: true, graphs: true });
+    // the G-slice is untouched — visibility is never data
+    expect(g('tr-audio-2').pan).toBe(0);
+    expect(g('tr-audio-2').inserts).toEqual([null, null]);
+    act(() => { useUi.getState().toggleMixerElement('pan'); });
+    act(() => { useUi.getState().toggleMixerElement('fx'); });
+  });
+});
+
+/* ---------- R25-W4-B (th_mtzovsvz — "hover cause the dailer area to jump a bit") ----------
+   DIAGNOSIS (live DOM, headed Chromium on the dev server): the RSM row's
+   [data-tip] tooltip is display:none→block on hover and absolutely
+   positioned — it does NOT affect flow — but the ~180px nowrap box centered
+   on a 20px button in an 86px strip EXTENDS the channel scroll region's
+   scrollable overflow when the LAST strip is hovered (scrollWidth 172 → 230
+   measured) → a horizontal scrollbar appears inside the overflow-x-auto
+   region → the classic scrollbar consumes 9px of the region's content
+   height (measured) → the items-stretch strips re-layout and the fader/
+   meters column jumps. THE FIX: strip-scope tooltips carry data-tip-in — a
+   CSS variant (app.css, pinned in appLayers.test) clamping the tooltip
+   inside the strip box (max-width 72 + wrap) so it never enters the
+   scrollable overflow. THE PINS: (1) the class-list hover-invariance law
+   (jsdom does no layout — the STRUCTURAL law: no hover class may change a
+   dimension/border-width/shadow — guarded by comparing the className
+   strings across a forced hover); (2) the DOM-level clamp law (every
+   data-tip control inside the channel strips carries data-tip-in). */
+describe('R25-W4-B: the RSM hover layout-invariance law (th_mtzovsvz)', () => {
+  it('pointerenter on the RSM row changes NO class on the RSM row, the pan row, or the fader columns (hover = color-only, never dimensions)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    const s = strip('A2');
+    const rsmRow = s.querySelector('[data-testid="rsm-row"]') as HTMLElement;
+    const recBtn = within(s).getByTestId('strip-rec-arm');
+    const panRow = s.querySelector('[data-testid="pan-box"]') as HTMLElement;
+    const faderCols = within(s).getByTestId('fader-cols-A2');
+    const stripEl = s;
+    const before = [rsmRow, panRow, faderCols, stripEl].map((el) => el.className);
+    fireEvent.pointerEnter(recBtn); // forced hover on the R button (the thread's repro)
+    fireEvent.mouseEnter(recBtn);
+    const after = [rsmRow, panRow, faderCols, stripEl].map((el) => el.className);
+    expect(after).toEqual(before); // the hover className diff is EMPTY — the structural law
+    // and the RSM row keeps its fixed 24px box (the row never re-lays-out)
+    expect(rsmRow.className).toContain('h-[24px]');
+    expect(rsmRow.className).toContain('shrink-0');
+  });
+
+  it('the clamp law: every [data-tip] control inside the channel strips carries data-tip-in (the tooltip never enters the scrollable overflow)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" />);
+    const s = strip('A2');
+    // the strip's data-tip controls: RSM R, I power, fx-add, the bus pair
+    const tipped = s.querySelectorAll('[data-tip]');
+    expect(tipped.length).toBeGreaterThanOrEqual(4); // rec-arm, fx-power, fx-add, bus-1, bus-2
+    for (const el of Array.from(tipped)) {
+      expect(el.hasAttribute('data-tip-in')).toBe(true);
+      expect(el.getAttribute('data-tip')).toBeTruthy();
+    }
   });
 });

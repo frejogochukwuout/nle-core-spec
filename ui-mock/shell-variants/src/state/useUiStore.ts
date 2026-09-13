@@ -571,6 +571,21 @@ interface UiState {
      scene), NEVER inside a withHistory snapshot (the snapshot slice stays
      scenes/activeSceneId/lockAll/selection/mockGrades). */
   masterBusCollapsed: boolean;
+  /* R25-W4 (DESIGN-R25 §1 R13 / §3 W4-A; thread th_mtzou0op "mini toggle
+   *  buttons to toggle visibility of console elements, esp. the FX / pan
+   *  grid etc. and also that [I] thing at the top"): per-block strip
+   *  VISIBILITY for the full dock — the dock header's mini toggle group
+   *  flips these keys; the blocks are the FX sends/inserts grid, the pan
+   *  control row, the input row ("that [I] thing at the top" — the
+   *  "No Input" row, gap C40), and the EQ/dynamics graph thumbnails. View
+   *  state ONLY in the masterBusCollapsed precedent's law (B6): plain set,
+   *  NEVER inside a withHistory snapshot (the snapshot slice stays
+   *  scenes/activeSceneId/lockAll/selection/mockGrades — no doc writes, no
+   *  history mint on toggle); defaults ALL visible. Composes with the W4-E
+   *  density ladder (a block renders iff its user toggle is on AND the
+   *  ladder allows it — user-hidden stays hidden at every level; the
+   *  ladder only removes more). */
+  mixerElementVisibility: { fx: boolean; pan: boolean; input: boolean; graphs: boolean };
   /* spec 18 §4.9 track-header Height rows (Compact/Normal/Tall): GLOBAL lane-
      height pref (null = auto: kind-based trackHeights()). B3 registration: the
      state-home question (per-track vs global) is a seal item — the mock answers
@@ -831,6 +846,10 @@ interface UiState {
   /** R23-WC (D-C3/#70): flips masterBusCollapsed — the full dock's master +
    *  bus bank meters-only collapse (view state, the stripArm precedent). */
   toggleMasterBus: () => void;
+  /** R25-W4-A (th_mtzou0op): flips one mixerElementVisibility key — the
+   *  dock header's strip-element toggle group (view state, the
+   *  masterBusCollapsed precedent: plain set, no history mint). */
+  toggleMixerElement: (key: 'fx' | 'pan' | 'input' | 'graphs') => void;
   setAudioLaneBoost: (v: boolean) => void;
   setTrackHeightPref: (p: UiState['trackHeightPref']) => void;
   /** R20-W5 (thread #58): per-track height write. `px` is clamped by the
@@ -1095,6 +1114,7 @@ export const useUi = create<UiState>((set, get) => ({
   stripArm: {},
   stripInsertsOn: {},
   masterBusCollapsed: false, // R23-WC (D-C3/#70): the bank boots FULL strips
+  mixerElementVisibility: { fx: true, pan: true, input: true, graphs: true }, // R25-W4-A: all visible by default
   trackHeightPref: null,
   trackHeightOverrides: {}, // R20-W5: per-track view state, absent = auto
   poolModeFilter: true, // R20-W5: default ON — the audio page boots filtered
@@ -1837,6 +1857,12 @@ export const useUi = create<UiState>((set, get) => ({
   /* R23-WC (D-C3/#70): the master/bus bank's meters-only collapse — plain
      view-state set (the stripArm law: no withHistory entry, no doc clone). */
   toggleMasterBus: () => set((s) => ({ masterBusCollapsed: !s.masterBusCollapsed })),
+  /* R25-W4-A (th_mtzou0op): one strip-element visibility key flips — plain
+     view-state set in the toggleMasterBus law (no withHistory entry, no doc
+     clone; the G-slice is untouched — visibility is never data). */
+  toggleMixerElement: (key) => set((s) => ({
+    mixerElementVisibility: { ...s.mixerElementVisibility, [key]: !s.mixerElementVisibility[key] },
+  })),
   setAudioLaneBoost: (v) => set({ audioLaneBoost: v }),
   setTrackHeightPref: (p) => set({ trackHeightPref: p }), /* §4.9 Height pref — view state, no history */
   setTrackHeight: (trackId, px) => set((s) => {

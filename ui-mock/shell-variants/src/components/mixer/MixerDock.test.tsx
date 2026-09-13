@@ -4,16 +4,19 @@
    PanelLeft → 'meters', both MODE actions with no aria-pressed):
    state-driven rendering, the meters-dock columns (thread #61), shared
    master values, strip focus + escalation flash, the MIXER_TIER constants
-   + tier wiring (mocked offsetHeight fed through a recording
-   ResizeObserver — jsdom's default stub never fires), the <FLOOR SILENT
-   render fallback (R24-W1/#60 — the `mixer-dock` wrapper pure-renders
-   MetersDock below 280px while the store stays untouched), the narrow
-   width trigger, and the D-C3 master/bus bank's meters-only collapse. */
+   + the R25-W4-E DENSITY LADDER wiring (mocked offsetHeight fed through a
+   recording ResizeObserver — jsdom's default stub never fires; the wrapper
+   `mixer-dock` is the ONE measurement site), the data-density attribute,
+   the true-floor MetersDock fallback (R24-W1/#60 re-based: full ≥340 →
+   lean [280,340) hides optional blocks → core [200,280) meters+fader only
+   → mini <200, the LAST resort), the R25-W4-A strip-element toggle group,
+   the narrow width trigger, and the D-C3 master/bus bank's meters-only
+   collapse (glyph re-pinned R25-W4-C: Gauge → BarChart3). */
 
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import * as MixerDockModule from './MixerDock';
-import { MixerDock, MIXER_TIER, mixerTierFor } from './MixerDock';
+import { MixerDock, MIXER_TIER, mixerDensityFor, mixerTierFor } from './MixerDock';
 import { TimelineToolbar } from '../timeline/TimelineToolbar';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
@@ -260,25 +263,58 @@ describe('MixerDock', () => {
   });
 });
 
-/* ---------- R20-W1 D1.3: height tiers + FLOOR fallback + narrow ---------- */
-describe('MixerDock height tiers (D1.3)', () => {
-  it('MIXER_TIER pins the four boundaries; mixerTierFor walks the bands', () => {
+/* ---------- R20-W1 D1.3 → R25-W4-E: the density ladder + the narrow trigger ---------- */
+describe('MixerDock height ladder (D1.3 → R25-W4-E)', () => {
+  /* RE-PINNED (R25-W4-E, th_mtzozdvo): the constants stay the four R24
+     boundaries but now carry the DENSITY bands (MIN = full→lean, FLOOR =
+     lean→core) + MIXER_CORE_FLOOR 200 (core→mini — the TRUE floor, where
+     even meters+fader cannot fit: 3px bar + 25px header + the 164px fader
+     travel floor ≈ 192). The tier walker is T0/T1/T2 ONLY now — the old T3
+     band [280,339) belongs to the 'lean' density (element hiding, never
+     the per-channel scroll — that tier is deletion-pinned). */
+  it('MIXER_TIER pins the boundaries; mixerDensityFor walks the ladder; mixerTierFor is T0/T1/T2 only', () => {
     expect(MIXER_TIER).toEqual({ FULL: 560, LEAN: 420, MIN: 340, FLOOR: 280 });
+    expect(MixerDockModule.MIXER_CORE_FLOOR).toBe(200);
+    expect(mixerDensityFor(600)).toBe('full');
+    expect(mixerDensityFor(340)).toBe('full');
+    expect(mixerDensityFor(339)).toBe('lean');
+    expect(mixerDensityFor(280)).toBe('lean');
+    expect(mixerDensityFor(279)).toBe('core');
+    expect(mixerDensityFor(200)).toBe('core');
+    expect(mixerDensityFor(199)).toBe('mini'); // the true floor — the mini style's LAST resort
+    // the tier pair (inside 'full' only): T3 is DEAD
     expect(mixerTierFor(560)).toBe(0);
     expect(mixerTierFor(559)).toBe(1);
     expect(mixerTierFor(420)).toBe(1);
     expect(mixerTierFor(419)).toBe(2);
     expect(mixerTierFor(340)).toBe(2);
-    expect(mixerTierFor(339)).toBe(3);
-    expect(mixerTierFor(280)).toBe(3);
-    expect(mixerTierFor(0)).toBe(3); // the <FLOOR fallback is the dock's job
+    expect(mixerTierFor(280)).toBe(2); // below MIN the density's own row set wins — the strips ignore the tier
+    // deletion pins: the T3 walker branch + the per-strip scroll surface
+    expect(mixerTierFor(339)).not.toBe(3);
+    expect(mixerTierFor(0)).not.toBe(3);
+  });
+
+  it('the dock body carries data-density, flipped by the MEASURED height (the wrapper is the one measurement site — RE-PINNED from the mixer-dock-full measurement)', () => {
+    withRecordingRO((fire) => {
+      boot({ mixerState: 'full' });
+      const wrapper = screen.getByTestId('mixer-dock');
+      expect(wrapper).toHaveAttribute('data-density', 'full'); // un-measured (jsdom) default
+      for (const [h, d] of [[600, 'full'], [300, 'lean'], [250, 'core'], [150, 'mini']] as const) {
+        Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: h });
+        fire();
+        expect(wrapper).toHaveAttribute('data-density', d);
+      }
+    });
   });
 
   it('the dock shares ONE measured tier with every strip (T0 ≥560: full reference anatomy)', () => {
     withRecordingRO((fire) => {
       boot({ mixerState: 'full' });
-      const dock = screen.getByTestId('mixer-dock-full');
-      Object.defineProperty(dock, 'offsetHeight', { configurable: true, value: 600 });
+      // RE-PINNED (R25-W4-E): the WRAPPER (mixer-dock) is the one measurement
+      // surface now (density + tier both derive from it; the FullDock's own
+      // height measurement died with the consolidation)
+      const wrapper = screen.getByTestId('mixer-dock');
+      Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 600 });
       fire();
       const a1 = screen.getByTestId('mixer-strip-A1');
       const a2 = screen.getByTestId('mixer-strip-A2');
@@ -296,7 +332,8 @@ describe('MixerDock height tiers (D1.3)', () => {
   it('T1 (420-559): graphs → ONE combined row, pan 36, rack 3 slots, name in the header — on every strip', () => {
     withRecordingRO((fire) => {
       boot({ mixerState: 'full' });
-      Object.defineProperty(screen.getByTestId('mixer-dock-full'), 'offsetHeight', { configurable: true, value: 460 });
+      // RE-PINNED (R25-W4-E): the wrapper measurement (was mixer-dock-full)
+      Object.defineProperty(screen.getByTestId('mixer-dock'), 'offsetHeight', { configurable: true, value: 460 });
       fire();
       for (const tid of ['mixer-strip-A1', 'mixer-strip-A2']) {
         const s = screen.getByTestId(tid);
@@ -314,7 +351,7 @@ describe('MixerDock height tiers (D1.3)', () => {
   it('T2 (340-419): graphs + input + rack hidden; the fx-count chip replaces the rack', () => {
     withRecordingRO((fire) => {
       boot({ mixerState: 'full' });
-      Object.defineProperty(screen.getByTestId('mixer-dock-full'), 'offsetHeight', { configurable: true, value: 380 });
+      Object.defineProperty(screen.getByTestId('mixer-dock'), 'offsetHeight', { configurable: true, value: 380 });
       fire();
       const s = screen.getByTestId('mixer-strip-A2');
       expect(within(s).queryByTestId('strip-graphs')).toBeNull();
@@ -325,37 +362,59 @@ describe('MixerDock height tiers (D1.3)', () => {
     });
   });
 
-  it('T3 (280-339): the accessory stack scrolls INSIDE each strip; the trio pins at the bottom (D1.3 gate tier)', () => {
+  /* RE-PINNED (R25-W4-E): the old T3 pin (the accessory stack scrolls INSIDE
+     each strip at 280-339) — the scroll tier is DEAD; the ladder's 'lean'
+     level owns the band now (element HIDING, the reviewer's ruling). */
+  it('lean density (280-339): the FX grid is absent in EVERY strip WITHOUT any user toggle (the ladder, not the toggles)', () => {
     withRecordingRO((fire) => {
       boot({ mixerState: 'full' });
-      Object.defineProperty(screen.getByTestId('mixer-dock-full'), 'offsetHeight', { configurable: true, value: 300 });
+      Object.defineProperty(screen.getByTestId('mixer-dock'), 'offsetHeight', { configurable: true, value: 300 });
       fire();
-      const s = screen.getByTestId('mixer-strip-A2');
-      const scroll = within(s).getByTestId('strip-scroll-A2');
-      expect(scroll.style.minHeight).toBe('83px'); // max(40, 300−53−164)
-      expect(within(scroll).getByTestId('strip-input')).toBeInTheDocument();
-      expect(within(scroll).getByTestId('fx-rack')).toBeInTheDocument();
-      // fader section FIXED at the 164 travel floor, terminal
-      const section = within(s).getByTestId('fader-section-A2');
-      expect(section.style.height).toBe('164px');
-      expect(s.lastElementChild).toBe(section);
-      // the master strip scrolls its spacer stack the same way
-      expect(within(screen.getByTestId('mixer-strip-master')).getByTestId('strip-scroll-master')).toBeInTheDocument();
+      expect(store().mixerElementVisibility).toEqual({ fx: true, pan: true, input: true, graphs: true }); // untouched atom
+      for (const tid of ['mixer-strip-A1', 'mixer-strip-A2', 'mixer-strip-aux-a1', 'mixer-strip-aux-a2', 'mixer-strip-master']) {
+        const s = screen.getByTestId(tid);
+        expect(within(s).queryByTestId('fx-rack')).toBeNull();
+        expect(within(s).queryByTestId('pan-box')).toBeNull();
+        expect(within(s).queryByTestId('strip-graphs')).toBeNull();
+        expect(within(s).queryByTestId('strip-input')).toBeNull();
+      }
+      // strips keep fader+meters+RSM (the channels) — the ladder's keep-list
+      expect(within(screen.getByTestId('mixer-strip-A2')).getByTestId('strip-rec-arm')).toBeInTheDocument();
+      expect(within(screen.getByTestId('mixer-strip-A2')).getByTestId('fader-section-A2')).toBeInTheDocument();
+      // the old per-strip scroll surface is gone
+      expect(screen.queryByTestId('strip-scroll-A2')).toBeNull();
     });
   });
 
-  it('R24-W1 (#60): below FLOOR (280) the container SILENTLY pure-renders MetersDock — store untouched, no toast, strips return when the height grows', () => {
+  it('core density (200-279): meters+fader only — the FULL dock still renders (not the mini fallback)', () => {
+    withRecordingRO((fire) => {
+      boot({ mixerState: 'full' });
+      Object.defineProperty(screen.getByTestId('mixer-dock'), 'offsetHeight', { configurable: true, value: 250 });
+      fire();
+      expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument();
+      expect(store().mixerState).toBe('full'); // never a store write
+      const s = screen.getByTestId('mixer-strip-A2');
+      expect(within(s).queryByTestId('strip-rec-arm')).toBeNull(); // RSM gone — meters+fader only
+      expect(within(s).getByTestId('fader-section-A2')).toBeInTheDocument();
+    });
+  });
+
+  /* RE-PINNED (R25-W4-E, th_mtzozdvo): the #60 floor law — the mini meters
+     style is the LAST RESORT, reached only below MIXER_CORE_FLOOR 200 (was:
+     below FLOOR 280 the container jumped STRAIGHT to MetersDock — the
+     reviewer's complaint; the lean/core levels now cover 200-339). */
+  it('R24-W1 (#60) → R25-W4-E: below the TRUE floor (200) the container SILENTLY pure-renders MetersDock — store untouched, no toast, strips return when the height grows', () => {
     withRecordingRO((fire) => {
       boot({ mixerState: 'full' });
       expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument();
-      // the WRAPPER (mixer-dock) is the measurement surface now
       const wrapper = screen.getByTestId('mixer-dock');
-      Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 250 });
+      Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 150 });
       fire();
       expect(store().mixerState).toBe('full'); // #60: NO store write — the state is untouched
       expect(store().toasts).toHaveLength(0); // no floor toast, ever (the flag + toast are DELETED)
       expect(screen.queryByTestId('mixer-dock-full')).toBeNull(); // the full dock does not render
       expect(screen.getByTestId('mixer-dock-meters')).toBeInTheDocument(); // pure render fallback
+      expect(wrapper).toHaveAttribute('data-density', 'mini');
       // strips RETURN when the height grows back — still with no state change
       Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 600 });
       fire();
@@ -368,7 +427,7 @@ describe('MixerDock height tiers (D1.3)', () => {
   it('R24-W1 (#60): the meters state itself is unaffected by the floor (it IS the fallback surface)', () => {
     withRecordingRO((fire) => {
       boot({ mixerState: 'meters' });
-      Object.defineProperty(screen.getByTestId('mixer-dock'), 'offsetHeight', { configurable: true, value: 200 });
+      Object.defineProperty(screen.getByTestId('mixer-dock'), 'offsetHeight', { configurable: true, value: 120 });
       fire();
       expect(store().mixerState).toBe('meters');
       expect(screen.getByTestId('mixer-dock-meters')).toBeInTheDocument();
@@ -422,7 +481,14 @@ describe('R23-WC D-C3 (#70): master/bus bank meters-only collapse', () => {
     const btn = screen.getByTestId('mixer-masterbus-toggle');
     expect(btn).toHaveAttribute('aria-pressed', 'false'); // boots FULL strips
     expect(btn.getAttribute('aria-label')).toBe('Master/buses: full strips (click for meters only)');
-    expect(btn.querySelector('svg')!.getAttribute('class')).toContain('lucide-gauge'); // distinct from the cycle controls
+    /* RE-PINNED (R25-W4-C, th_mtzoxrhb "wrong icon" — the reviewer's line
+       pointed at this button): the Gauge speedometer read as an instrument,
+       not a meters-only collapse; BarChart3 = the collapsed bank's own shape
+       (thin vertical meter columns). lucide-react v1.39 aliases BarChart3 to
+       chart-column — the svg class is lucide-chart-column. Still distinct
+       from the PanelLeft/PanelRight mode-action pair (the B4 law). */
+    expect(btn.querySelector('svg')!.getAttribute('class')).toContain('lucide-chart-column');
+    expect(btn.querySelector('svg')!.getAttribute('class')).not.toContain('lucide-gauge');
     // it lives in the dock header (the B4 state-controls rail), a sibling of
     // the dock-level cycle control — not a per-strip control
     expect(btn.parentElement).toBe(screen.getByRole('button', { name: 'Collapse to meter columns' }).parentElement);
@@ -495,5 +561,83 @@ describe('R23-WC D-C3 (#70): master/bus bank meters-only collapse', () => {
   it('the meters state carries no bank toggle (the whole dock is meters-only already)', () => {
     boot({ mixerState: 'meters' });
     expect(screen.queryByTestId('mixer-masterbus-toggle')).toBeNull();
+  });
+});
+
+/* ---------- R25-W4-A (DESIGN-R25 §1 R13; thread th_mtzou0op — "mini toggle
+   buttons to toggle visibility of console elements, esp. the FX / pan grid
+   etc. and also that [I] thing at the top"): the dock header's strip
+   element-visibility toggle group. View-state only (mixerElementVisibility
+   — the masterBusCollapsed precedent); the strip-level block-flip law is
+   ALSO pinned in ChannelStrip.test (aux/master mirrors + composition). ---------- */
+describe('R25-W4-A: the dock header strip-element toggle group (th_mtzou0op)', () => {
+  it('renders the four mini toggles in the dock-header column (the strips\' shared header) with the house grammar + honest pressed state', () => {
+    boot({ mixerState: 'full' });
+    const group = screen.getByRole('group', { name: 'Strip elements' });
+    expect(group).toBeInTheDocument();
+    for (const [key, label] of [
+      ['fx', 'FX sends grid'],
+      ['pan', 'Pan control'],
+      ['input', 'Input row'],
+      ['graphs', 'EQ/dynamics graphs'],
+    ] as const) {
+      const btn = screen.getByTestId(`mixer-element-${key}`);
+      expect(group).toContainElement(btn);
+      expect(btn.className).toContain('icon-btn');
+      expect(btn.className).toContain('icon-btn-sm');
+      expect(btn.className).toContain('toggled'); // boots visible
+      expect(btn).toHaveAttribute('aria-pressed', 'true');
+      expect(btn.getAttribute('aria-label')).toBe(`${label} visibility`);
+      expect(btn.getAttribute('data-tip')).toContain(label); // the element name in the tip
+      // the glyph law: house lucide icons, one distinct glyph per element
+      expect(btn.querySelector('svg')!.getAttribute('class')).toMatch(/lucide-(sparkles|move-horizontal|plug|activity)/);
+    }
+  });
+
+  it('each toggle flips its block\'s DOM presence across the strips (fx: every rack; input: the channel input row)', () => {
+    boot({ mixerState: 'full' });
+    // fx: the racks in the channel + aux + master strips
+    fireEvent.click(screen.getByTestId('mixer-element-fx'));
+    expect(store().mixerElementVisibility.fx).toBe(false);
+    for (const tid of ['mixer-strip-A1', 'mixer-strip-A2', 'mixer-strip-aux-a1', 'mixer-strip-master']) {
+      expect(within(screen.getByTestId(tid)).queryByTestId('fx-rack')).toBeNull();
+    }
+    expect(screen.getByTestId('mixer-element-fx')).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByTestId('mixer-element-fx'));
+    for (const tid of ['mixer-strip-A1', 'mixer-strip-A2', 'mixer-strip-aux-a1', 'mixer-strip-master']) {
+      expect(within(screen.getByTestId(tid)).getByTestId('fx-rack')).toBeInTheDocument();
+    }
+    // input: "that [I] thing at the top" — the channel input row (gap C40)
+    fireEvent.click(screen.getByTestId('mixer-element-input'));
+    expect(within(screen.getByTestId('mixer-strip-A1')).queryByTestId('strip-input')).toBeNull();
+    fireEvent.click(screen.getByTestId('mixer-element-input'));
+    expect(within(screen.getByTestId('mixer-strip-A1')).getByTestId('strip-input')).toBeInTheDocument();
+    // pan: the pan box
+    fireEvent.click(screen.getByTestId('mixer-element-pan'));
+    expect(within(screen.getByTestId('mixer-strip-A1')).queryByTestId('pan-box')).toBeNull();
+    fireEvent.click(screen.getByTestId('mixer-element-pan'));
+    // graphs: the thumbnails
+    fireEvent.click(screen.getByTestId('mixer-element-graphs'));
+    expect(within(screen.getByTestId('mixer-strip-A1')).queryByTestId('strip-graphs')).toBeNull();
+    fireEvent.click(screen.getByTestId('mixer-element-graphs'));
+  });
+
+  it('view-state law: toggling mints NO withHistory entry (the count unchanged) and never writes the G-slice', () => {
+    boot({ mixerState: 'full' });
+    const pastBefore = store().past.length;
+    const mixerBefore = store().mixer;
+    fireEvent.click(screen.getByTestId('mixer-element-pan'));
+    fireEvent.click(screen.getByTestId('mixer-element-graphs'));
+    expect(store().past).toHaveLength(pastBefore); // no history mint — the withHistory count unchanged
+    expect(store().mixer).toBe(mixerBefore); // the G-slice reference is untouched (visibility is never data)
+    // restore
+    fireEvent.click(screen.getByTestId('mixer-element-pan'));
+    fireEvent.click(screen.getByTestId('mixer-element-graphs'));
+  });
+
+  it('the meters state carries no element toggles (the whole dock is meter columns — nothing to toggle)', () => {
+    boot({ mixerState: 'meters' });
+    expect(screen.queryByTestId('mixer-element-fx')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Strip elements' })).toBeNull();
   });
 });
