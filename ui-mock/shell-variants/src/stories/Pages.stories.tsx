@@ -8,7 +8,7 @@
 
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ColorPage } from '../components/pages/ColorPage';
-import { DeliverPage } from '../components/pages/DeliverPage';
+import { DeliverPage, DeliverExportConsole } from '../components/pages/DeliverPage';
 import { ChannelEditor } from '../components/mixer/ChannelEditor';
 import { FxBrowser } from '../components/fx/FxBrowser';
 import { FxInspector } from '../components/fx/FxInspector';
@@ -46,13 +46,16 @@ export const ColorPageStory: StoryObj = {
 /* ---- deliver page (spec 18 §4.8 / specs 10-11) — R19 full-view surface --- */
 
 /** The whole-mainbody export surface at its own geometry (R22 W5, #88/#89
- *  — captions re-truthed R24-W4): LEFT = presets ONLY (2-col
- *  breathing-room tiles, th_mto38qzp — the queue is NOT here); CENTER = the
+ *  — captions re-truthed R24-W4, then R25-W5 / th_mtzp4arw): LEFT =
+ *  presets ONLY (2-col breathing-room tiles, th_mto38qzp — FOUR tiles now:
+ *  the Custom JSON interchange preset joined, th_mtzp4xeb); CENTER = the
  *  video preview (the queue replaces it while rendering / whenever the
- *  header toggle asks); RIGHT = the deliver INSPECTOR — the export summary
- *  (incl. the store-loop-driven In → Out range) + the render settings. The
- *  fixture boots IDLE: one failed row + three done rows, no running row
- *  (§4.2's error state rides the failed row's Retry). */
+ *  header toggle asks); RIGHT = the deliver INSPECTOR — inspection-family
+ *  content alone: the project metadata row + the render settings + the
+ *  export CTA. The export SUMMARY card no longer renders here — R25-W5
+ *  moved it to the console row's Export tab (see the export-console story
+ *  below). The fixture boots IDLE: one failed row + three done rows, no
+ *  running row (§4.2's error state rides the failed row's Retry). */
 export const DeliverPageStory: StoryObj = {
   name: 'Deliver page — full export view',
   parameters: { layout: 'padded' },
@@ -68,8 +71,10 @@ export const DeliverPageStory: StoryObj = {
 
 /** Cloud-master preset selected + a custom loop range (the play step clicks
  *  the card; the loop patch is what timeline I/O marks would write): accent
- *  tile ring, re-labeled CTA, the summary range block follows — the queue
- *  stays the CENTER view's swap (never the presets rail). */
+ *  tile ring, re-labeled CTA — the queue stays the CENTER view's swap (never
+ *  the presets rail). R25-W5 / th_mtzp4arw: the summary + its range readout
+ *  live in the CONSOLE ROW's Export tab now (the export-console story below
+ *  carries the range block at its own geometry). */
 export const DeliverMasterPreset: StoryObj = {
   name: 'Deliver page — cloud master + custom range',
   parameters: { layout: 'padded' },
@@ -84,6 +89,39 @@ export const DeliverMasterPreset: StoryObj = {
       <PanelBox width={1100} height={700}>
         <DeliverPage />
       </PanelBox>
+    </>
+  ),
+};
+
+/** R25-W5 (DESIGN-R25 §1 R18/R19 / §3 W5; threads th_mtzp4arw +
+ *  th_mtzp4xeb): the deliver CONSOLE ROW — the shell's page stack as a
+ *  stand-in (the page in the mainbody above, the Export console panel in
+ *  the timeline block's console row below; the AppShell owns the real
+ *  mount under the [Timeline | Export] strip). The play step selects the
+ *  CUSTOM JSON preset so the summary shows its JSON-honest rows (Schema
+ *  nle-interchange/1, Pretty-printed on, the honest em-dash resolution)
+ *  instead of a render format's; click the other tiles to flip the rows.
+ *  The Export CTA on the json preset REALLY downloads the interchange file
+ *  (the one export this mock owns end-to-end). */
+export const DeliverExportConsoleStory: StoryObj = {
+  name: 'Deliver page — export console (the Export tab, custom JSON)',
+  parameters: { layout: 'padded' },
+  play: async ({ canvasElement }) => {
+    canvasElement
+      ?.querySelector<HTMLButtonElement>('[data-testid="shell-deliver-preset-json"]')
+      ?.click();
+  },
+  render: () => (
+    <>
+      <StoreBoot patch={{ page: 'deliver', consoleTab: 'export', loop: { start: 2, end: 28 } }} />
+      <div className="flex flex-col gap-2">
+        <PanelBox width={1100} height={430}>
+          <DeliverPage />
+        </PanelBox>
+        <PanelBox width={1100} height={230}>
+          <DeliverExportConsole />
+        </PanelBox>
+      </div>
     </>
   ),
 };

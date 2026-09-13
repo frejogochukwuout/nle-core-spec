@@ -47,9 +47,13 @@ export const Color: StoryObj = {
 
 /** Deliver page — the R22-W5 whole-mainbody takeover (DeliverPage): presets
  *  LEFT (280px) · the video preview / render queue CENTER (flex) · the
- *  export summary + render settings in the RIGHT inspector (340px), with the
- *  ruler + range band compact strip below (A3-R7: the 22px read-only ruler +
- *  the 32px in/out band — the export range = the loop seam). */
+ *  render settings + export CTA in the RIGHT inspector (340px — R25-W5 /
+ *  th_mtzp4arw: inspection-family content alone, the export summary MOVED
+ *  to the console row), with the ruler + range band compact strip below
+ *  (A3-R7: the 22px read-only ruler + the 32px in/out band — the export
+ *  range = the loop seam). The console row's strip is [Timeline | Export]
+ *  — click Export for the summary console panel (the export-console
+ *  geometry story lives in Pages). */
 export const Deliver: StoryObj = {
   name: 'Full Shell — Deliver',
   render: () => <FullShell patch={{ page: 'deliver' }} />,

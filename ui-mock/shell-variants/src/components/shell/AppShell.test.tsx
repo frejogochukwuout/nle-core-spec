@@ -14,6 +14,7 @@ import { AppShell } from './AppShell';
 import { CheatSheet } from './CheatSheet';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
+import { useDeliverView } from '../../state/deliverViewStore';
 
 /** 1280×800 host (§3.2 minimum) — jsdom ignores geometry, but the size keeps
  *  the DOM honest about the real mount contract. */
@@ -299,7 +300,14 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     expect(screen.queryByTestId('shell-color-nodeviewer')).not.toBeInTheDocument();
     expect(screen.queryByTestId('shell-color-scopes-pane')).not.toBeInTheDocument();
     expect(store().consoleTab).toBe('timeline'); // the setPage exit law
-    expect(screen.queryByTestId('shell-console-tabs')).toBeNull(); // the strip is color-only
+    /* RE-PIN (R25-W5): the strip now mounts on color AND deliver (the W5
+       grammar — the deliver page's Export tab); THIS assertion lands on the
+       EDIT page where the strip is still absent (a lone Timeline tab answers
+       nothing — the no-strip law carries for every non-owning page). */
+    expect(screen.queryByTestId('shell-console-tabs')).toBeNull(); // edit: no strip (color/deliver own it)
+    // the color page's own strip law: no Export tab there (W5 changed the
+    // LIST per page, not the color trio)
+    expect(screen.queryByTestId('shell-console-tab-export')).toBeNull();
   });
 
   it('A2-R1 → R25-W3: the node console keeps an F6 stop — slot [6] as the console row\'s NODES TAB (the center region [2] stays VIEWER-led)', () => {
@@ -503,6 +511,91 @@ describe('R23-WF (DESIGN-R23 D-F1, #107): the deliver composition', () => {
     expect(screen.getByTestId('shell-timeline-compact-ruler')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-deliver-range-band')).not.toBeInTheDocument();
     expect(mainbodyH()).toBe('40%'); // edit never carries a page default
+  });
+});
+
+/* ---------- R25-W5 (DESIGN-R25 §1 R18 / §3 W5; issue th_mtzp4arw "a
+   separate panel the same place we do mixer console etc. … it is not
+   inspection"): the deliver console row — the export summary's new home.
+   The W3 tab grammar extends to deliver: the strip = [Timeline | Export];
+   the ACTIVE tab's panel takes the row (the scopes/nodes precedent); the
+   deliver inspector (right column) keeps INSPECTION-family content alone. */
+describe('R25-W5 (th_mtzp4arw): the deliver console row — the Export tab', () => {
+  it('the strip renders [Timeline | Export] on deliver; the console row is the timeline by default', () => {
+    act(() => { useDeliverView.getState().resetDeliverView(); }); // pristine queue fixture
+    renderAppShell({ page: 'deliver' });
+    const strip = screen.getByTestId('shell-console-tabs');
+    expect(strip).toBeInTheDocument();
+    expect(screen.getByTestId('shell-console-tab-timeline')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('shell-console-tab-export')).toHaveAttribute('aria-selected', 'false');
+    // the deliver pair carries NO color tabs (nodes/scopes are color-only)
+    expect(screen.queryByTestId('shell-console-tab-nodes')).toBeNull();
+    expect(screen.queryByTestId('shell-console-tab-scopes')).toBeNull();
+    // the default row = the timeline (compact on deliver, D-B3) + the band
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-deliver-export-console')).toBeNull();
+  });
+
+  it('activating the Export tab SWAPS the console panel: the summary testids appear in the CONSOLE ROW, absent from the right column', async () => {
+    const user = userEvent.setup();
+    act(() => { useDeliverView.getState().resetDeliverView(); });
+    renderAppShell({ page: 'deliver' });
+    await user.click(screen.getByTestId('shell-console-tab-export'));
+    expect(store().consoleTab).toBe('export');
+    // the ACTIVE tab's panel takes the row: the export console mounts, the timeline hides
+    expect(screen.getByTestId('shell-deliver-export-console')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-export-summary')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact')).toBeNull();
+    expect(screen.queryByTestId('shell-deliver-range-band')).toBeNull();
+    // the mainbody is untouched (the deliver page keeps its three regions)
+    expect(screen.getByTestId('shell-deliver')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-preview')).toBeInTheDocument();
+    /* th_mtzp4arw's ruling pinned at the DOM: the summary card is NOT in the
+       right column anymore — the settings panel holds inspection-family
+       content only (no summary heading, no scene-name row, no range block) */
+    const settings = screen.getByTestId('shell-deliver-settings');
+    expect(settings.contains(screen.getByTestId('shell-deliver-export-summary'))).toBe(false);
+    expect(settings.textContent).not.toContain('Export summary');
+    expect(settings.textContent).not.toContain('Rough Cut v3');
+    expect(settings.contains(screen.getByTestId('shell-deliver-range'))).toBe(false);
+    expect(settings.textContent).toContain('Render settings'); // the inspector half stays
+    // the console panel DOES carry the moved content (verbatim rows + range)
+    const panel = screen.getByTestId('shell-deliver-export-console');
+    expect(panel.textContent).toContain('Export summary');
+    expect(panel.textContent).toContain('Rough Cut v3');
+    expect(panel.contains(screen.getByTestId('shell-deliver-range'))).toBe(true);
+    // the read-only queue status strip (the W5 "what else makes sense")
+    expect(screen.getByTestId('shell-deliver-export-queue-state')).toHaveTextContent('idle');
+    // back on the Timeline tab the row is the timeline again
+    await user.click(screen.getByTestId('shell-console-tab-timeline'));
+    expect(screen.queryByTestId('shell-deliver-export-console')).toBeNull();
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+  });
+
+  it('the strip is DELIVER+COLOR only: edit/audio/fx render no strip (a lone Timeline tab answers nothing)', () => {
+    for (const p of ['edit', 'audio', 'fx'] as const) {
+      renderAppShell({ page: p, ...(p === 'fx' ? { fxMode: true } : {}) });
+      expect(screen.queryByTestId('shell-console-tabs')).toBeNull();
+      expect(screen.queryByTestId('shell-console-tab-export')).toBeNull();
+      document.querySelectorAll('body > [data-appshell-host]').forEach((el) => el.remove());
+    }
+  });
+
+  it('leaving deliver resets the console tab (the W5-widened setPage exit law)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ page: 'deliver', consoleTab: 'export' });
+    expect(screen.getByTestId('shell-deliver-export-console')).toBeInTheDocument();
+    await user.click(screen.getByTestId('shell-dock-page-color'));
+    // deliver → color: the 'export' tab died with the page (color's own trio)
+    expect(store().consoleTab).toBe('timeline');
+    expect(screen.queryByTestId('shell-deliver-export-console')).toBeNull();
+    expect(screen.getByTestId('shell-console-tab-timeline')).toHaveAttribute('aria-selected', 'true');
+    // and the reverse route: color's 'scopes' carried into deliver resets too
+    await user.click(screen.getByTestId('shell-console-tab-scopes'));
+    expect(store().consoleTab).toBe('scopes');
+    await user.click(screen.getByTestId('shell-dock-page-deliver'));
+    expect(store().consoleTab).toBe('timeline'); // the color exit law, deliver-bound
   });
 });
 

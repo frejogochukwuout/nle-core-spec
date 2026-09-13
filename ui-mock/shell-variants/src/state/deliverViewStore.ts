@@ -3,8 +3,18 @@
    ("deliver jobs/showQueue component-local useState vs the store's
    unmount-survival law"). A NEW module-level zustand store (plain create(),
    the stills/sourceRanges/stripArm unmount-survival precedents — view state
-   that must outlive its surface) — NOT a useUiStore edit (W2–W5 never touch
-   it; the disjoint-file law).
+   that must outlive its surface) — NOT a useUiStore edit for the jobs (W2–W5
+   never touch it for THOSE; the disjoint-file law).
+   R25-W5 (DESIGN-R25 §1 R18/R19 / §3 W5): the store's deliver mandate
+   WIDENS — the RENDER SETTINGS (preset/codec/resolution/range/bundleMedia)
+   move in too. Reason: the export summary moved to the CONSOLE-ROW Export
+   tab (th_mtzp4arw — "kept in a separate panel the same place we do mixer
+   console etc. … it is not inspection"), and that panel is an AppShell-
+   rendered SIBLING tree of DeliverPage — component-local useState cannot be
+   shared across the two trees, so the settings join the store the jobs
+   already live in (the preset tiles + the format select + the summary rows
+   are ONE choice — they can never disagree). Everything here stays VIEW
+   state: never snapshotted, never undo history, reset by resetDeliverView.
 
    What lives here:
    - `jobs` — the render queue rows (the §4.2/§6.4 fixture: one permanently
@@ -17,6 +27,12 @@
      a render walked: aria-pressed flipped but the view could not leave the
      queue). Now `showQueue` alone decides the center view; a render may be
      collapsed to the preview and it keeps walking in the store.
+   - the RENDER SETTINGS (R25-W5): preset (the preset-tile/format-select
+     choice, 'json' = the Custom JSON interchange export), codec (the video
+     master's codec row), resolution + range (feed the queued row's name),
+     bundleMedia (the sidecar chip) — one `setExportSettings` writer, and
+     they SURVIVE page switches like the jobs (the choice you made is still
+     selected when you come back).
    - the MOCK RENDER TIMER — a module-level 500ms interval that walks the
      queue even while the page is unmounted (the survival pin) and
      self-stops when nothing is queued/running: one tick advances the FIRST
@@ -25,15 +41,24 @@
      completion (or resetDeliverView) disarms it.
 
    Test seams: `resetDeliverView()` restores the pristine fixture (jobs +
-   showQueue + the id counter) and DISARMS the timer; `__mockTimerActive()`
-   is the containment probe — every test file that touches this store resets
-   it in file-level beforeEach/afterEach, and those resets must be act()
-   WRAPPED (see DeliverPage.test's header note: RTL cleanup registers LAST,
-   so the file-level hooks run while the previous test's tree is still
-   mounted — a bare setState there is the act() warning storm). */
+   showQueue + the render settings + the id counter) and DISARMS the timer;
+   `__mockTimerActive()` is the containment probe — every test file that
+   touches this store resets it in file-level beforeEach/afterEach, and
+   those resets must be act() WRAPPED (see DeliverPage.test's header note:
+   RTL cleanup registers LAST, so the file-level hooks run while the
+   previous test's tree is still mounted — a bare setState there is the
+   act() warning storm). */
 import { create } from 'zustand';
 
 export type DeliverJobState = 'done' | 'running' | 'queued' | 'failed';
+
+/* R25-W5 (DESIGN-R25 §1 R19 / §3 W5; thread th_mtzp4xeb "add a custom JSON
+   format too"): the preset ids gain 'json' — the Custom JSON interchange
+   export. The union lives HERE (the store types the choice); DeliverPage's
+   PRESETS table is the id's render-side truth. */
+export type DeliverPresetId = 'fcpxml' | 'master' | 'frame' | 'json';
+export type DeliverResolutionId = '1080' | '2160';
+export type DeliverRangeMode = 'inout' | 'full';
 
 export type DeliverJob = {
   id: string;
@@ -65,11 +90,36 @@ const FIRST_MINTED_ID = JOBS.length;
 
 const initialJobs = () => JOBS.map((j) => ({ ...j }));
 
+/** the export-settings patch — the ONE writer surface (the page's selects,
+   the preset tiles, and any future surface all funnel through here). */
+export interface ExportSettingsPatch {
+  preset?: DeliverPresetId;
+  codec?: string;
+  resolution?: DeliverResolutionId;
+  range?: DeliverRangeMode;
+  bundleMedia?: boolean;
+}
+
 interface DeliverView {
   jobs: DeliverJob[];
   /** the center-view flag — SINGLE WRITER for which surface the deliver
    *  mainbody's center renders (queue vs preview). */
   showQueue: boolean;
+  /* ---- R25-W5: the render settings (lifted from DeliverPage's local
+   *  useState so the console-row Export panel — an AppShell-rendered sibling
+   *  tree — reads the SAME choice the deliver inspector edits). View state;
+   *  the queued-row name + the summary rows are its readers. */
+  /** the selected export preset ('json' = the Custom JSON interchange export —
+   *  the R25-W5 real-download preset). */
+  preset: DeliverPresetId;
+  /** the video master's codec row (only meaningful while preset='master'). */
+  codec: string;
+  /** 1080p/2160p — feeds the queued row's name + the summary's size row. */
+  resolution: DeliverResolutionId;
+  /** In–Out vs Full — feeds the queued row's name. */
+  range: DeliverRangeMode;
+  /** sidecar media chip on the queued row (spec 10 round-trip). */
+  bundleMedia: boolean;
   /** append a queued row (name + bundle chip from the page's render
    *  settings) + auto-show the queue view (#89: queueing an export flips
    *  the center) + arm the mock timer. */
@@ -77,9 +127,13 @@ interface DeliverView {
   /** the center-view toggle — ALWAYS honest, mid-render included (F5 P3:
    *  no silent no-op; the render keeps walking in the store either way). */
   toggleShowQueue: () => void;
-  /** test seam: pristine fixture + disarmed timer (containment contract —
-   *  mirror of setup.ts's useUi reset; files that touch this store call it
-   *  act-wrapped in file-level beforeEach/afterEach). */
+  /** the export settings' one writer (a plain set — view state, never a
+   *  history entry; the settings SURVIVE page switches like the jobs). */
+  setExportSettings: (patch: ExportSettingsPatch) => void;
+  /** test seam: pristine fixture + default render settings + disarmed
+   *  timer (containment contract — mirror of setup.ts's useUi reset; files
+   *  that touch this store call it act-wrapped in file-level
+   *  beforeEach/afterEach). */
   resetDeliverView: () => void;
 }
 
@@ -127,6 +181,14 @@ export const __mockTimerActive = () => mockTimer !== null;
 export const useDeliverView = create<DeliverView>((set) => ({
   jobs: initialJobs(),
   showQueue: false,
+  /* R25-W5: the render settings' pristine values — the R24-W4 defaults
+     DeliverPage's local useState used to boot with (fcpxml master-of-record,
+     h264, 1080p, In–Out, bundle ON). */
+  preset: 'fcpxml',
+  codec: 'h264',
+  resolution: '1080',
+  range: 'inout',
+  bundleMedia: true,
   queueExport: ({ name, bundle }) => {
     const id = `j-${nextId}`;
     nextId += 1;
@@ -137,9 +199,18 @@ export const useDeliverView = create<DeliverView>((set) => ({
     }));
   },
   toggleShowQueue: () => set((s) => ({ showQueue: !s.showQueue })),
+  setExportSettings: (patch) => set(patch),
   resetDeliverView: () => {
     stopMockTimer();
     nextId = FIRST_MINTED_ID;
-    set({ jobs: initialJobs(), showQueue: false });
+    set({
+      jobs: initialJobs(),
+      showQueue: false,
+      preset: 'fcpxml',
+      codec: 'h264',
+      resolution: '1080',
+      range: 'inout',
+      bundleMedia: true,
+    });
   },
 }));

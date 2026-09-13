@@ -1,22 +1,35 @@
 /* DeliverPage — spec 18 §4.8 / specs 10-11 export surface. R19 th_mto37ba3:
    the page is now a FULL-VIEW 3-region export surface (queue+presets /
-   summary incl. the store-driven range / render settings). Presets are local
-   React state; the toast queue lives in the store. These tests pin the
-   three regions, the preset→CTA label coupling, the store-loop-driven
-   range block + select options, the render-settings block, the job queue
-   (done rows + one running row with progress + retry, §6.4 error UX), and
-   the honest-mock export behavior (R13: CTA + Reveal/Retry push info
-   toasts — no encode ever runs — and the CTA queues a job row the store
-   timer completes).
+   summary incl. the store-driven range / render settings). Presets are
+   deliverViewStore state now (R25-W5); the toast queue lives in the ui
+   store. These tests pin the three regions, the preset→CTA label coupling,
+   the store-loop-driven range block + select options, the render-settings
+   block, the job queue (done rows + one running row with progress + retry,
+   §6.4 error UX), and the honest-mock export behavior (R13: CTA + Reveal/
+   Retry push info toasts — no encode ever runs — and the CTA queues a job
+   row the store timer completes).
    R24-W4 (deliverViewStore): jobs + showQueue are MODULE state now — every
    test here starts from the pristine fixture via the act-wrapped
    file-level reset below, and the store's own laws are pinned in
-   deliverViewStore.test. */
+   deliverViewStore.test.
+   R25-W5 (DESIGN-R25 §1 R18/R19 / §3 W5; threads th_mtzp4arw +
+   th_mtzp4xeb):
+   - th_mtzp4xeb: PRESETS grew the Custom JSON tile (four tiles) — its
+     export is REAL (buildExportJson + downloadJson), so the json CTA
+     pins: the anchor download fires (stubbed click seam), a SUCCESS toast
+     lands, and NO mock render row is queued (the queue exists because
+     encodes don't run — this one did).
+   - th_mtzp4arw: the export summary card MOVED to the console-row Export
+     tab (DeliverExportConsole — the AppShell mounts it as a SIBLING tree
+     of this page). Tests that pin the summary rows co-mount the panel
+     (the R23-WF co-mount precedent: "the shell mounts them; here the
+     co-mount stands in"); the AppShell-level swap (console row vs right
+     column) is pinned in AppShell.test. */
 
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DeliverPage } from './DeliverPage';
+import { DeliverPage, DeliverExportConsole } from './DeliverPage';
 import { TimelineCompact } from '../timeline/TimelineCompact';
 import { useUi } from '../../state/useUiStore';
 import { useDeliverView, __mockTimerActive } from '../../state/deliverViewStore';
@@ -42,6 +55,18 @@ afterEach(() => {
   act(() => { resetDeliverView(); });
 });
 
+/** R25-W5 (th_mtzp4arw): the co-mount stand-in for the shell's deliver
+ * composition — the AppShell renders DeliverPage in the mainbody AND
+ * DeliverExportConsole in the console row (the Export tab); tests that pin
+ * the summary rows mount both (the R23-WF TimelineCompact precedent). */
+const renderDeliver = () =>
+  render(
+    <>
+      <DeliverPage />
+      <DeliverExportConsole />
+    </>,
+  );
+
 /** R22 W5 → R24-W4: the queue view is showQueue's alone (the single
  *  writer — queueing auto-shows it; the toggle reviews past/active renders
  *  whenever it wants, mid-render included). The default center is the
@@ -63,9 +88,12 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(screen.getByText('Edited')).toBeInTheDocument();
   });
 
-  it('renders all three presets with FCPXML active by default', () => {
+  /* RE-PIN (R25-W5 / th_mtzp4xeb): the preset family grew — three tiles →
+   * FOUR (the Custom JSON interchange tile). The CTA coupling pin below
+   * rides the default (fcpxml) unchanged. */
+  it('renders all four presets (R25-W5: the Custom JSON tile joined) with FCPXML active by default', () => {
     render(<DeliverPage />);
-    for (const id of ['fcpxml', 'master', 'frame']) {
+    for (const id of ['fcpxml', 'master', 'frame', 'json']) {
       expect(screen.getByTestId(`shell-deliver-preset-${id}`)).toBeInTheDocument();
     }
     // CTA reflects the default preset (fcpxml) before any click
@@ -107,9 +135,13 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
   });
 
   /* th_mto37ba3: the RANGE block reads the STORE loop (spec 16 §3.4 —
-     timeline I/O marks are the deliver range), not a hardcoded string */
-  it('the range summary mirrors the store loop in/out TCs and follows a loop change', () => {
-    render(<DeliverPage />);
+     timeline I/O marks are the deliver range), not a hardcoded string.
+     RE-PIN (R25-W5 / th_mtzp4arw): the block MOVED — from the right
+     column's summary card to the console-row Export panel
+     (DeliverExportConsole); the co-mount stands in for the shell's
+     sibling-tree mount (the R23-WF precedent). */
+  it('the range summary mirrors the store loop in/out TCs and follows a loop change (R25-W5: in the console panel)', () => {
+    renderDeliver();
     const rangeBlock = screen.getByTestId('shell-deliver-range');
     expect(rangeBlock).toHaveTextContent('00:00:02:00 → 00:00:28:00'); // boot loop {2, 28}
     expect(screen.getByText('In → Out range selection')).toBeInTheDocument();
@@ -126,11 +158,13 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
    * shell's timeline area) writes the SAME s.loop seam markIn/markOut and the
    * Ruler brackets write, so this page's readout follows the band's edits
    * with no prop/threading of its own. Both surfaces render in one tree to
-   * pin the seam (the shell mounts them; here the co-mount stands in). */
+   * pin the seam (the shell mounts them; here the co-mount stands in).
+   * R25-W5: the readout co-mounted the Export console panel (th_mtzp4arw). */
   it('R23-WF: the readout follows the range band’s drag commit — one seam, every readout moves', () => {
     render(
       <>
         <DeliverPage />
+        <DeliverExportConsole />
         <TimelineCompact rangeBand />
       </>,
     );
@@ -150,6 +184,7 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     render(
       <>
         <DeliverPage />
+        <DeliverExportConsole />
         <TimelineCompact rangeBand />
       </>,
     );
@@ -159,11 +194,14 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(useUi.getState().loop).toEqual({ start: 2, end: 671 / 24 });
   });
 
-  it('center summary shows the active timeline name and the right region owns the settings selects', async () => {
+  /* RE-PIN (R25-W5 / th_mtzp4arw): the summary rows moved to the Export
+   * console panel — the scene name + the format/codec follow pins point at
+   * the panel's testid now; the format select + the codec-disable law stay
+   * the page's (the render settings block never moved). */
+  it('the console summary shows the active timeline name and the right region owns the settings selects', async () => {
     const user = userEvent.setup();
-    render(<DeliverPage />);
-    await openQueue(user);
-    expect(screen.getByText('Rough Cut v3')).toBeInTheDocument(); // active scene = the export target
+    renderDeliver();
+    expect(screen.getByText('Rough Cut v3')).toBeInTheDocument(); // active scene = the export target (in the console panel)
     // format select mirrors preset state (fcpxml default)
     expect((screen.getByLabelText('Export format') as HTMLSelectElement).value).toBe('fcpxml');
     // codec only applies to the video master — honestly disabled otherwise
@@ -173,13 +211,16 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect((screen.getByLabelText('Export codec') as HTMLSelectElement)).toBeEnabled();
     // the format select and the preset tiles are the SAME choice
     expect(screen.getByTestId('shell-deliver-btn-export-fcpxml')).toHaveTextContent('Export Master · H.264');
-    // the export summary (now in the right inspector, #88) follows the format + codec
-    expect(screen.getByTestId('shell-deliver-settings').textContent).toContain('Codec');
+    // the export summary (R25-W5: the Export console panel) follows the format + codec
+    expect(screen.getByTestId('shell-deliver-export-summary').textContent).toContain('Codec');
     fireEvent.change(screen.getByLabelText('Export codec'), { target: { value: 'prores' } });
-    expect(screen.getByTestId('shell-deliver-settings').textContent).toContain('ProRes 422');
+    expect(screen.getByTestId('shell-deliver-export-summary').textContent).toContain('ProRes 422');
+    // the panel is a SIBLING of the page: the right column does NOT carry the summary rows anymore
+    expect(screen.getByTestId('shell-deliver-settings').textContent).not.toContain('Export summary');
+    expect(screen.getByTestId('shell-deliver-settings').textContent).not.toContain('Rough Cut v3');
   });
 
-  it('clicking a preset updates the export CTA label (local state, §4.8)', async () => {
+  it('clicking a preset updates the export CTA label (store-backed choice, §4.8)', async () => {
     const user = userEvent.setup();
     render(<DeliverPage />);
     await user.click(screen.getByTestId('shell-deliver-preset-master'));
@@ -188,18 +229,22 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(screen.getByTestId('shell-deliver-btn-export-fcpxml')).toHaveTextContent('Export Current frame · PNG');
     await user.click(screen.getByTestId('shell-deliver-preset-fcpxml'));
     expect(screen.getByTestId('shell-deliver-btn-export-fcpxml')).toHaveTextContent('Export FCPXML 1.10');
+    // R25-W5: the Custom JSON preset relabels the CTA too
+    await user.click(screen.getByTestId('shell-deliver-preset-json'));
+    expect(screen.getByTestId('shell-deliver-btn-export-fcpxml')).toHaveTextContent('Export Custom JSON');
   });
 
   it('renders the render-settings block: range/resolution selects + bundle checkbox', () => {
-    render(<DeliverPage />);
+    /* RE-PIN (R25-W5): the destination readout is TWO honest mirrors —
+       the settings field (this page's right column) + the console panel's
+       summary row — so the co-mount keeps the count at 2 (previously the
+       right column carried both copies) */
+    renderDeliver();
     const range = screen.getByLabelText('Export range') as HTMLSelectElement;
     expect(range.value).toBe('inout');
     expect(within(range).getByRole('option', { name: /Full timeline/ })).toBeInTheDocument();
     const res = screen.getByLabelText('Export resolution') as HTMLSelectElement;
     expect(within(res).getAllByRole('option')).toHaveLength(2);
-    /* th_mto37ba3 (full-view redesign): the destination readout now lives in
-       BOTH the center summary and the right settings field — one string, two
-       honest mirrors; assert both instead of the old single rail copy */
     expect(screen.getAllByText('~/Downloads/beach-doc/')).toHaveLength(2);
     expect(screen.getByLabelText('Bundle media with FCPXML')).toBeChecked();
   });
@@ -263,6 +308,56 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(screen.getAllByTestId('shell-deliver-job-bundle')).toHaveLength(1); // only the first row
   });
 
+  /* ---------- R25-W5 (th_mtzp4xeb): the Custom JSON interchange preset ---------- */
+
+  it('R25-W5: the json preset gets JSON-honest summary rows (schema + pretty-print; resolution is the honest em-dash)', async () => {
+    const user = userEvent.setup();
+    renderDeliver();
+    await user.click(screen.getByTestId('shell-deliver-preset-json'));
+    const summary = screen.getByTestId('shell-deliver-export-summary');
+    expect(summary.textContent).toContain('Custom JSON'); // the format row
+    expect(summary.textContent).toContain('Schema');
+    expect(summary.textContent).toContain('nle-interchange/1');
+    expect(summary.textContent).toContain('Pretty-printed');
+    expect(summary.textContent).toContain('on');
+    // resolution does not apply to a JSON interchange — the honest dash
+    expect(summary.textContent).toContain('—');
+    // the duration row (the W5 "what else makes sense" addition)
+    expect(summary.textContent).toContain('00:00:30:00 · 24 fps');
+    // the codec select stays honestly disabled (codec applies to the master)
+    expect(screen.getByLabelText('Export codec')).toBeDisabled();
+  });
+
+  it('R25-W5: the json CTA DOWNLOADS the interchange doc — success toast, NO mock render row, the center stays the preview', async () => {
+    /* the DOM half runs for real here (this host HAS URL.createObjectURL);
+       the anchor's click is stubbed so jsdom does not attempt navigation —
+       the spy still records the anchor (its download name is the pin) */
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function noop() { /* no-op */ });
+    try {
+      const user = userEvent.setup();
+      renderDeliver();
+      await user.click(screen.getByTestId('shell-deliver-preset-json'));
+      await user.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+      // the REAL download: one anchor click carrying the interchange file name
+      expect(click).toHaveBeenCalledTimes(1);
+      expect((click.mock.instances[0] as HTMLAnchorElement).download).toBe('Beach Doc — Rough Cut — Rough Cut v3.json');
+      // the honest toast: a SUCCESS (the file is local), naming the file + schema
+      expect(S().toasts).toHaveLength(1);
+      expect(S().toasts[0]).toMatchObject({
+        kind: 'success',
+        title: 'Export downloaded: Beach Doc — Rough Cut — Rough Cut v3.json',
+        detail: 'custom JSON interchange (schema nle-interchange/1) — no render queued: the file is already local',
+      });
+      // the mock render queue is NOT involved: no row, no auto-show, no timer
+      expect(useDeliverView.getState().jobs).toHaveLength(4);
+      expect(useDeliverView.getState().showQueue).toBe(false);
+      expect(__mockTimerActive()).toBe(false);
+      expect(screen.getByTestId('shell-deliver-preview')).toBeInTheDocument(); // the center never flipped
+    } finally {
+      click.mockRestore();
+    }
+  });
+
   it('§4.2 empty state: empty active scene swaps the queue + honestly disables the CTA', async () => {
     // sc-1 with every lane emptied — direct setState (no command churn)
     const sc = S().scenes.find((s) => s.id === 'sc-1')!;
@@ -309,11 +404,11 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
   });
 
   /* R23-FIX (review-sweep item 8, R2-F6/R5-P2-3): the three-region row keeps
-     its minimums (280+flex+340 ≥ ~900px), so a narrow shell CLIPPED the row
-     with no scroll reachable. The row now carries overflow-x-auto + min-w-0 —
-     jsdom has no layout engine, so the pin is class-level (the CSS law itself
-     is the observable; Pages.stories' narrow-container story claims the same
-     behavior and now tells the truth). */
+   * its minimums (280+flex+340 ≥ ~900px), so a narrow shell CLIPPED the row
+   * with no scroll reachable. The row now carries overflow-x-auto + min-w-0 —
+   * jsdom has no layout engine, so the pin is class-level (the CSS law itself
+   * is the observable; Pages.stories' narrow-container story claims the same
+   * behavior and now tells the truth). */
   it('R23-FIX item 8: the region row scrolls horizontally instead of clipping (overflow-x-auto + min-w-0 on the row)', () => {
     render(<DeliverPage />);
     const row = screen.getByTestId('shell-deliver-queue').parentElement as HTMLElement;
@@ -328,9 +423,9 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
   });
 
   /* R23-FIX (review-sweep item 9, R2-F7): the queue header's spinner +
-     'rendering' label ride renderActive — the queue view is reachable while
-     IDLE (the header toggle / past-renders review), and an idle queue
-     claiming 'rendering' was a lying header. */
+   * 'rendering' label ride renderActive — the queue view is reachable while
+   * IDLE (the header toggle / past-renders review), and an idle queue
+   * claiming 'rendering' was a lying header. */
   it('R23-FIX item 9: the idle queue header is the honest "Render queue" (no spinner); queueing flips it to rendering', async () => {
     const user = userEvent.setup();
     render(<DeliverPage />);
@@ -345,7 +440,7 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
   });
 
   /* R23-FIX (review-sweep R4-P3#9): the preset tiles are honest pressed-state
-     buttons — aria-pressed + a label-in-name that carries the preset name. */
+   * buttons — aria-pressed + a label-in-name that carries the preset name. */
   it('R23-FIX R4-P3#9: preset tiles carry aria-pressed + label-in-name (the active tile is the pressed one)', async () => {
     const user = userEvent.setup();
     render(<DeliverPage />);
@@ -374,6 +469,20 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     expect(screen.getByText('Beach Doc — Rough Cut — 1080p · In–Out.fcpxml')).toBeInTheDocument();
     expect(screen.getByTestId('shell-deliver-queue-toggle')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Render queue — rendering')).toBeInTheDocument(); // the rendering state survived too
+  });
+
+  /* R25-W5: the RENDER SETTINGS survive page switches too (they joined the
+   * store with the console panel — the one-choice law's flip side: the
+   * preset you selected is still selected when you come back). */
+  it('R25-W5: the render settings SURVIVE page switches (the store-backed choice)', async () => {
+    const user = userEvent.setup();
+    const first = render(<DeliverPage />);
+    await user.click(screen.getByTestId('shell-deliver-preset-json'));
+    expect(useDeliverView.getState().preset).toBe('json');
+    first.unmount();
+    render(<DeliverPage />);
+    expect(screen.getByTestId('shell-deliver-btn-export-fcpxml')).toHaveTextContent('Export Custom JSON');
+    expect(screen.getByTestId('shell-deliver-preset-json')).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('R24-W4: the queue toggle is HONEST mid-render — allow-collapse (showQueue the single writer, no silent no-op)', async () => {
@@ -440,5 +549,21 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  /* ---------- R25-W5 (th_mtzp4arw): the Export console panel ---------- */
+
+  it('R25-W5: the console panel mirrors the queue status read-only — jobs count + idle, flipping with a live render', async () => {
+    const user = userEvent.setup();
+    renderDeliver();
+    const strip = screen.getByTestId('shell-deliver-export-queue');
+    expect(strip.textContent).toContain('4 jobs');
+    expect(screen.getByTestId('shell-deliver-export-queue-state')).toHaveTextContent('idle');
+    // a queued export flips the mirror (read-only — the strip writes nothing)
+    await user.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+    expect(screen.getByTestId('shell-deliver-export-queue-state')).toHaveTextContent('rendering');
+    expect(strip.textContent).toContain('5 jobs');
+    // the queue DETAIL rows stay in the center view (auto-shown by the store)
+    expect(screen.getAllByTestId('shell-deliver-job')).toHaveLength(5);
   });
 });
