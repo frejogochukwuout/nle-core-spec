@@ -24,6 +24,121 @@ export interface Track {
    *  law (the lane dims, the head carries an M chip); audible rendering is
    *  the nle-engine audio seam's job at swap time. */
   muted?: boolean;
+  /** R24-miniplus (DESIGN-R24 D8): per-track SOLO flag — solo-in-place
+   *  law: effectiveMute = muted || (anySolo && !solo). Doc state (one
+   *  history entry per toggle), optional like muted. */
+  solo?: boolean;
+}
+
+/* ---------- R24-miniplus: the effect/transition model (D2) ---------- */
+
+/** EffectJSON (the spec-15 wire shape, ported from the variants): a clip's
+ *  effect stack entry. Data-only in the mini — no renderer; the Inspector
+ *  edits params, the doc carries them (the honest-mock subset). */
+export interface EffectJSON {
+  id: string;
+  name: string;
+  enabled: boolean;
+  params?: Record<string, number>;
+}
+
+export interface EffectDef {
+  id: string;
+  name: string;
+  /** param specs: min/max/step/default (the NumberField + slider laws) */
+  params: { key: string; label: string; min: number; max: number; step: number; default: number }[];
+}
+
+/** The 5-def honest-mock registry (the variants' EFFECT_DEFS, verbatim in
+ *  shape): Gaussian/Motion Blur, Vignette, Glow, Chromatic Aberration. */
+export const EFFECT_DEFS: EffectDef[] = [
+  {
+    id: 'fx-blur',
+    name: 'Gaussian Blur',
+    params: [{ key: 'radius', label: 'Radius', min: 0, max: 100, step: 1, default: 4 }],
+  },
+  {
+    id: 'fx-motion-blur',
+    name: 'Motion Blur',
+    params: [
+      { key: 'length', label: 'Length', min: 0, max: 100, step: 1, default: 12 },
+      { key: 'angle', label: 'Angle', min: 0, max: 360, step: 1, default: 0 },
+    ],
+  },
+  {
+    id: 'fx-vignette',
+    name: 'Vignette',
+    params: [
+      { key: 'amount', label: 'Amount', min: 0, max: 100, step: 1, default: 25 },
+      { key: 'feather', label: 'Feather', min: 0, max: 100, step: 1, default: 50 },
+    ],
+  },
+  {
+    id: 'fx-glow',
+    name: 'Glow',
+    params: [
+      { key: 'intensity', label: 'Intensity', min: 0, max: 100, step: 1, default: 30 },
+      { key: 'radius', label: 'Radius', min: 0, max: 100, step: 1, default: 10 },
+    ],
+  },
+  {
+    id: 'fx-chromatic',
+    name: 'Chromatic Aberration',
+    params: [{ key: 'offset', label: 'Offset', min: 0, max: 50, step: 0.5, default: 2 }],
+  },
+];
+
+/** The clip's effect id mint (deterministic, like mintClipId). */
+let fxSeq = 0;
+export function mintEffectId(): string {
+  fxSeq += 1;
+  return `fx_${fxSeq}`;
+}
+/** Test hook: reset the effect id sequence. */
+export function __resetEffectIds(): void {
+  fxSeq = 0;
+}
+
+export type TransitionPresentation =
+  | 'Cross Dissolve'
+  | 'Dip to Black'
+  | 'Dip to White'
+  | 'Wipe Left'
+  | 'Wipe Right'
+  | 'Wipe Up'
+  | 'Wipe Down'
+  | 'Slide Push';
+
+/** The 8-presentation mini registry (DESIGN-R24 D2/F19b: the variants' 27
+ *  trimmed; fade in/out at clip edges are the Clip.fadeIn/fadeOut FIELDS,
+ *  not presentations — this list carries no fade names). */
+export const TRANSITION_PRESENTATIONS: TransitionPresentation[] = [
+  'Cross Dissolve',
+  'Dip to Black',
+  'Dip to White',
+  'Wipe Left',
+  'Wipe Right',
+  'Wipe Up',
+  'Wipe Down',
+  'Slide Push',
+];
+
+/** TransitionJSON (the spec-07 §6.1A two-tier shape, ported): carried as
+ *  `transitionOut` on the LEFT clip of a seam (the single outgoing
+ *  transition per element — no between-clip pair object). */
+export interface TransitionJSON {
+  type: 'crossfade';
+  presentation: TransitionPresentation;
+  /** seconds, 0.5-grid, <= min(left.duration, right.duration) - MIN */
+  duration: number;
+  /** 0..1 — the cut position within the transition (0.5 = centered) */
+  alignment: number;
+}
+
+/** The spec-09 default a mint lands with (the variants' setTransition
+ *  default, grid-adapted). */
+export function defaultTransition(): TransitionJSON {
+  return { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 };
 }
 
 export interface Clip {
@@ -32,6 +147,38 @@ export interface Clip {
   mediaId: string;
   start: number; // seconds, grid-clean
   duration: number; // seconds, grid-clean, >= 0.5, <= media duration
+  /* ---------- R24-miniplus (DESIGN-R24 D2 — all optional, absent = the
+   * legacy semantic; the legacy seeds stay byte-identical) ---------- */
+  /** in-point into the media window (absent = 0 — the R23 full-window
+   *  law). Not a placement fact: not grid-bound. */
+  sourceStart?: number;
+  /** recorded rate (absent = 1). Approximate: duration is grid-quantized
+   *  (README deviation #1); the recorded rate is the window/duration ratio. */
+  speed?: number;
+  /** LINEAR gain [0, 2] (absent = 1 — unity). The spec-15 ClipJSON
+   *  vocabulary; the UI maps dB (the ONE map: lib/audioDb.ts, −18..+6). */
+  volume?: number;
+  /** 0..1 (absent = 1). */
+  opacity?: number;
+  /** seconds, 0.5-grid, clamped to duration. */
+  fadeIn?: number;
+  fadeOut?: number;
+  /** the effect stack (D4). */
+  effects?: EffectJSON[];
+  /** the outgoing seam transition (D5) — the LEFT clip of the pair. */
+  transitionOut?: TransitionJSON;
+}
+
+/** R24-miniplus (D2, the F1 P0 fix): the ONE deep-clone law for Clip —
+ *  nested effects/transitionOut MUST be cloned (a shallow {...c} shares
+ *  references: a nested mutation would write through into the live doc
+ *  AND every history entry — undo corruption). Every copy site uses this. */
+export function cloneClip(c: Clip): Clip {
+  return {
+    ...c,
+    effects: c.effects?.map((e) => ({ ...e, params: e.params ? { ...e.params } : undefined })),
+    transitionOut: c.transitionOut ? { ...c.transitionOut } : undefined,
+  };
 }
 
 export interface Doc {

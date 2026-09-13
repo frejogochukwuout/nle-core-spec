@@ -79,7 +79,7 @@ check("18 §16.2 carries the R22 drag-law notice", lambda: (
     "R22 (user directive — the full drag-machinery retirement)" in specs[18] and "RETIRED" in specs[18], "notice"))
 check("18 §16.3 re-pointed at the crawl app as the MVP vehicle", lambda: (
     "The MVP vehicle (R22 amendment" in specs[18], "vehicle"))
-check("18 test count re-baselined to 355 (R23 seal census)", lambda: ("355 vitest tests" in specs[18], "count"))
+check("18 test count re-baselined to 357 (R24 census)", lambda: ("357 vitest tests" in specs[18], "count"))
 check("14 drag law = the R22 R18k verbatim (retired machinery stays retired)", lambda: (
     "R22-directive R18k law verbatim" in specs[14] and "stays retired" in specs[14], "freeze"))
 
@@ -109,15 +109,15 @@ check("17 re-tier row carries the R22 counts", lambda: (
 check("17 §17A fleet counts re-baselined", lambda: ("R22 counts" in specs[17], "17A"))
 check("19 tier-4 assets present (nle-ui + nle-test-app THE APP)", lambda: (
     "nle-ui" in specs[19] and "THE APP" in specs[19], "tier-4"))
-check("mini law count current (355) in 18 + 14 + ARCH", lambda: (
-    "355 vitest tests" in specs[18] and "355-test net" in specs[14] and "355" in arch, "mini count"))
+check("mini law count current (357) in 18 + 14 + ARCH", lambda: (
+    "357 vitest tests" in specs[18] and "357-test net" in specs[14] and "357" in arch, "mini count"))
 check("mini count staleness sweep: no live 333 claims in the spec set", lambda: (
     not any(re.search(r"mini 333|333 tests|333 vitest|333/333|333-test", specs[n]) for n in specs),
     "stale 333"))
 check("LAW-NET-INVENTORY exists + carries the exact census", lambda: (
     os.path.exists("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md")
-    and "355" in open("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md").read()
-    and "115" in open("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md").read(), "inventory"))
+    and "357" in open("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md").read()
+    and "116" in open("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md").read(), "inventory"))
 check("CORE-SEAMS exists (the whole-surface seam audit)", lambda: (
     os.path.exists("ui-mock/shell-mini/docs/CORE-SEAMS.md"), "core-seams"))
 check("otProject bridge module + tests exist", lambda: (
@@ -174,7 +174,7 @@ check("REVIEW-R22 transcripts exist in audits/", lambda: (
 
 # === G. THE R23 SEAL CHECKS (drift-proof: SCRAPE the live suite, not the text) ==
 MINI_DIR = os.path.join(REPO, "ui-mock/shell-mini")
-DECLARED_MINI_TESTS = 355   # the sealed census; bump WITH the census, never alone
+DECLARED_MINI_TESTS = 357   # the R24 census (R23 sealed 355 + the audio-clip-box nets); bump WITH the census, never alone
 DECLARED_MINI_FILES = 8
 
 def _scrape_mini():
@@ -213,12 +213,12 @@ def _inventory_math():
     total_row = re.search(r"\*\*Total\*\*\s*\|\s*\*\*(\d+)\*\*\s*\|\s*\*\*(\d+)\*\*", inv)
     holds = next((int(t) for n, _, t in rows if n == "HOLDS-on-OT"), 0)
     authored = re.search(r"(\d+) tests across (\d+) GAP census\s*units", inv)
-    ok = (units == 128 and tests == 355
-          and total_row and int(total_row.group(1)) == 128 and int(total_row.group(2)) == 355
-          and authored and int(authored.group(1)) == 355 - holds and int(authored.group(2)) == 128 - 13)
+    ok = (units == 129 and tests == 357
+          and total_row and int(total_row.group(1)) == 129 and int(total_row.group(2)) == 357
+          and authored and int(authored.group(1)) == 357 - holds and int(authored.group(2)) == 129 - 13)
     return ok, f"units={units} tests={tests} holds={holds} authored={authored.groups() if authored else None}"
 
-check("LAW-NET-INVENTORY arithmetic parses + sums (128 units / 355 / authored=355−HOLDS)", _inventory_math, "census math")
+check("LAW-NET-INVENTORY arithmetic parses + sums (129 units / 357 / authored=357−HOLDS)", _inventory_math, "census math")
 
 check("CORE-SEAMS carries the store partition + seam inventory (content, not existence)", lambda: (
     "## 2. The store partition" in read("ui-mock/shell-mini/docs/CORE-SEAMS.md")

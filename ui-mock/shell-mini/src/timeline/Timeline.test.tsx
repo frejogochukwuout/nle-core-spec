@@ -45,6 +45,60 @@ describe('render', () => {
   });
 });
 
+describe('R24 mini-plus feature gate (DESIGN-R24 D1)', () => {
+  it('the gate chip lives in the tools row, default ON, toggles the store flag', () => {
+    render(<Timeline />);
+    const chip = screen.getByTestId('mini-btn-miniplus');
+    expect(chip).toBeInTheDocument();
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(chip);
+    expect(S().miniPlus).toBe(false);
+    expect(screen.getByTestId('mini-btn-miniplus')).toHaveAttribute('aria-pressed', 'false');
+    // the chip renders in BOTH gate states (it is the door, not a plus
+    // affordance — the additive-by-construction law)
+    fireEvent.click(screen.getByTestId('mini-btn-miniplus'));
+    expect(S().miniPlus).toBe(true);
+  });
+
+  it('toggling the gate is NOT an undo entry and never mutates the doc (view state)', () => {
+    render(<Timeline />);
+    const before = JSON.stringify(S().doc);
+    const pastLen = S().past.length;
+    fireEvent.click(screen.getByTestId('mini-btn-miniplus'));
+    fireEvent.click(screen.getByTestId('mini-btn-miniplus'));
+    expect(JSON.stringify(S().doc)).toBe(before);
+    expect(S().past.length).toBe(pastLen);
+    expect(S().future.length).toBe(0);
+  });
+
+  it('the gate is drag-gated (the view-family law: no relayout mid-gesture)', () => {
+    render(<Timeline />);
+    act(() => {
+      S().beginDrag();
+    });
+    fireEvent.click(screen.getByTestId('mini-btn-miniplus'));
+    expect(S().miniPlus).toBe(true); // unchanged — the toggle refused
+    act(() => {
+      S().endDrag();
+    });
+    fireEvent.click(screen.getByTestId('mini-btn-miniplus'));
+    expect(S().miniPlus).toBe(false);
+  });
+
+  it('the legacy seeds carry no plus fields (byte-identical R23 seeds)', () => {
+    render(<Timeline />);
+    for (const c of S().doc.clips) {
+      expect(c.sourceStart).toBeUndefined();
+      expect(c.speed).toBeUndefined();
+      expect(c.volume).toBeUndefined();
+      expect(c.opacity).toBeUndefined();
+      expect(c.fadeIn).toBeUndefined();
+      expect(c.effects).toBeUndefined();
+      expect(c.transitionOut).toBeUndefined();
+    }
+  });
+});
+
 describe('selection', () => {
   it('pointerdown selects the clip', async () => {
     render(<Timeline />);
@@ -401,6 +455,36 @@ describe('R18e filmstrip toggle (feedback #15)', () => {
     expect(c4.querySelector('.qc-track-item__waveform')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('mini-btn-filmstrip'));
     expect(c4.querySelector('.qc-track-item__waveform')).toBeInTheDocument();
+  });
+});
+
+describe('R24 audio clip surrounding box (user report: clip blended into track)', () => {
+  it('audio clips carry the block body (the box) in both filmstrip modes, under the waveform', () => {
+    render(<Timeline />);
+    const c4 = screen.getByTestId('mini-clip-c4');
+    // the body exists in filmstrip-ON (the mode audio ignores)…
+    let body = c4.querySelector(':scope > .qc-track-item__block--audio');
+    expect(body).toBeInTheDocument();
+    // …and it carries the media hue (the box is media-kind coded)…
+    expect(body!.getAttribute('style')).toContain('--qc-block-hue');
+    // …and the waveform stacks ABOVE it (block is the earlier sibling)
+    const wave = c4.querySelector(':scope > .qc-track-item__waveform');
+    expect(wave).toBeInTheDocument();
+    expect(body!.compareDocumentPosition(wave!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    fireEvent.click(screen.getByTestId('mini-btn-filmstrip'));
+    // …and it survives the filmstrip toggle (the box is unconditional)
+    body = c4.querySelector(':scope > .qc-track-item__block--audio');
+    expect(body).toBeInTheDocument();
+  });
+
+  it('video clips do NOT gain the audio body (no class bleed across kinds)', () => {
+    render(<Timeline />);
+    expect(screen.getByTestId('mini-clip-c2').querySelector('.qc-track-item__block--audio')).toBeNull();
+    fireEvent.click(screen.getByTestId('mini-btn-filmstrip'));
+    // filmstrip-OFF video blocks are the plain block, never the audio variant
+    const block = screen.getByTestId('mini-clip-c2').querySelector('.qc-track-item__block');
+    expect(block).toBeInTheDocument();
+    expect(block!.className).not.toContain('audio');
   });
 });
 
