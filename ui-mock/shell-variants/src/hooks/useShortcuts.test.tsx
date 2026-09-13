@@ -652,3 +652,64 @@ describe('R23-WA: the FX page + the FX-object Delete rung', () => {
     expect(S().past.length).toBe(0);
   });
 });
+
+/* ---- W1-B (DESIGN-R25 §3 / §6 A1): the SOURCE-mode transport keys — routed
+   through the SAME window-keydown seam, gated on viewerMode === 'source'.
+   Space/arrows/Home/End/J/K/L drive the SOURCE playhead while the source
+   monitor is open; the program playhead/flag never move under it. ---- */
+describe('W1-B: source-mode transport keys (gated on viewerMode)', () => {
+  const enterSource = () => useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-03' }); // 18.6 s
+
+  it('Space toggles the SOURCE play flag — the program playhead/flag never move', () => {
+    enterSource();
+    press({ key: ' ' });
+    expect(S().sourcePlaying).toBe(true);
+    expect(S().playing).toBe(false);
+    press({ key: ' ' });
+    expect(S().sourcePlaying).toBe(false);
+  });
+
+  it('← / → step the SOURCE playhead ±1 frame (⇧ ×10), clamped into the trim range domain', () => {
+    enterSource();
+    act(() => { S().seekSource('m-03', 5); });
+    press({ key: 'ArrowRight' });
+    expect(S().sourcePlayhead['m-03']).toBeCloseTo(5 + 1 / 24, 5);
+    press({ key: 'ArrowLeft', shiftKey: true }); // ⇧×10 → −10 frames
+    expect(S().sourcePlayhead['m-03']).toBeCloseTo(5 + 1 / 24 - 10 / 24, 5);
+    // a range clamps the domain (the documented ruling): the effective
+    // playhead (stranded below the new range.in) clamps to the domain floor,
+    // THEN the +1-frame step lands — 10 + 1/24
+    act(() => { S().setSourceRangeIn('m-03', 10); });
+    press({ key: 'ArrowRight' });
+    expect(S().sourcePlayhead['m-03']).toBeCloseTo(10 + 1 / 24, 5);
+    // the program playhead never moved
+    expect(S().playhead).toBe(16);
+  });
+
+  it('Home / End seek the SOURCE playhead to the domain ends (range.in / range.out when trimmed)', () => {
+    enterSource();
+    press({ key: 'End' });
+    expect(S().sourcePlayhead['m-03']).toBeCloseTo(18.6, 5);
+    act(() => { S().setSourceRangeIn('m-03', 2); });
+    act(() => { S().setSourceRangeOut('m-03', 8); });
+    press({ key: 'Home' });
+    expect(S().sourcePlayhead['m-03']).toBe(2);
+    press({ key: 'End' });
+    expect(S().sourcePlayhead['m-03']).toBe(8);
+    expect(S().playhead).toBe(16); // the program playhead is untouched
+  });
+
+  it('J / K / L drive the SOURCE transport at a fixed ±1× (no accel ladder — the documented mock simplification)', () => {
+    enterSource();
+    press({ key: 'l' });
+    expect(S().sourcePlaying).toBe(true);
+    expect(S().sourcePlayRate).toBe(1);
+    expect(S().playing).toBe(false); // the program shuttle never fires
+    press({ key: 'j' });
+    expect(S().sourcePlayRate).toBe(-1);
+    expect(S().sourcePlaying).toBe(true);
+    press({ key: 'k' });
+    expect(S().sourcePlaying).toBe(false);
+    expect(S().sourcePlayRate).toBe(1);
+  });
+});

@@ -27,15 +27,18 @@
      only showed two buttons here"): ALL SEVEN mode buttons are ALWAYS
      visible inline — the old <560px kebab collapse HID five modes (the
      reviewer saw two) and is RETIRED. R24-W5b (DESIGN-R24 §2 F1-P1)
-     SUPERSEDES the R22 narrow-width WRAP law: the bar lives in the FIXED
-     32px transport row, and flex-wrap made it two rows tall (46px, measured
-     at the 1280×800 floor — the 7th button occluded by the HSplitter z-10,
-     colliding with the SourceRangeBar band). The bar is now ONE ROW,
-     always: h-8 single-line + overflow-x-auto at genuinely narrow widths
-     (the buttons scroll horizontally — reachable, never occluded, never
-     wrapped) + the 24px house hit floor on every button; the mode set is
-     the reference's six (insert/overwrite/replace/append/ripple/
-     fitfill) + placeOnTop (nle_edit_workflow §3.4).
+     superseded the R22 narrow-width WRAP law (the FIXED 32px row cannot
+     hold a second row). W1-A (DESIGN-R25 §3, R1 — the flex-starvation
+     rescue) SUPERSEDES the W5b overflow-as-primary law: the bar is the
+     row's PRIORITY consumer and now degrades by its OWN measured width
+     (ResizeObserver, the MixerDock D1.3 pattern): FULL label buttons
+     (icon + name) while the bar can hold them, ICON-ONLY below the label
+     floor (the names live in aria-label + data-tip — every button stays
+     reachable and named). ONE ROW always (h-8, no flex-wrap); the W5b
+     overflow-x-auto survives ONLY as the LAST resort below the icon-only
+     floor (~190px of content — buttons scroll, never hide/occlude). The
+     mode set is the reference's six (insert/overwrite/replace/append/
+     ripple/fitfill) + placeOnTop (nle_edit_workflow §3.4).
    - R22 (#83): the hover placement preview FADES+SLIDES in/out (the
      reference's own motion: 0.3s ease-in-out, translateY 4px — CSS on the
      timeline's insert-preview layer, prefers-reduced-motion honored), never
@@ -59,6 +62,14 @@ import {
  *  pointer pass never flashes geometry, short enough to feel instant. */
 const DWELL_MS = 150;
 const slug = (label: string) => label.toLowerCase().replace(/\s+/g, '-');
+
+/* W1-A (DESIGN-R25 §3, R1): the bar's own label-mode floor — the honest
+ * content math for all 7 LABELED buttons: Σ(icon 16 + gap 4 + text 33–88 +
+ * pad 12) ≈ 633 + the 7 × 2px gaps + the 9px divider ≈ 655 → 660. Below it
+ * the bar drops to icon-only (7 × 24px + gaps ≈ 190px of content; the
+ * names live on in aria-label + data-tip). Un-measured (jsdom's silent
+ * ResizeObserver) = FULL — the deterministic default every pin boots on. */
+const EDIT_BAR_LABELS_MIN_PX = 660;
 
 /* primary pair + the secondary five — reference descriptions condensed to
    one line each (contract §1.2 verbatim source, §1.4 condensation law);
@@ -102,11 +113,14 @@ interface ModeButtonProps {
   asMenuItem?: boolean;
   /** rover props (ref/tabIndex/onFocus) injected by the parent toolbar. */
   extraProps?: Record<string, unknown>;
+  /** W1-A label mode: 'full' = icon + visible name, 'icons' = icon only
+   * (the name stays in aria-label + data-tip). */
+  labels?: 'full' | 'icons';
 }
 
 /* The one-shot action button. Owns its dwell timer + arm/clear law; reads
    the LIVE store on clear so it never clobbers a sibling's armed preview. */
-function ModeButton({ def, mediaId, run, setHover, refusal, asMenuItem = false, extraProps }: ModeButtonProps) {
+function ModeButton({ def, mediaId, run, setHover, refusal, asMenuItem = false, extraProps, labels = 'full' }: ModeButtonProps) {
   const dwellRef = useRef<number | null>(null);
   const arm = () => {
     if (dwellRef.current !== null || !mediaId) return;
@@ -138,9 +152,12 @@ function ModeButton({ def, mediaId, run, setHover, refusal, asMenuItem = false, 
       type="button"
       {...(asMenuItem ? { role: 'menuitem' as const, tabIndex: -1 } : {})}
       {...(extraProps ?? {})}
-      /* the house 24px hit floor (R24-W5b): was 22px — the F1 hit-floor
-         sweep; icon-btn is flex-shrink:0 so the row scrolls, never squishes */
-      className="icon-btn !h-[24px] !w-[24px]"
+      /* W1-A: the house 24px hit FLOOR is the height law in BOTH modes
+         (a labeled button is naturally ≥24 wide; icon mode pins the width
+         too). icon-btn is flex-shrink:0 so the row scrolls, never squishes. */
+      className={labels === 'full'
+        ? 'icon-btn !h-[24px] !w-auto gap-1 px-1.5'
+        : 'icon-btn !h-[24px] !w-[24px]'}
       aria-label={def.label}
       aria-describedby={DESC_ID}
       data-testid={`shell-source-edit-${slug(def.label)}`}
@@ -153,6 +170,9 @@ function ModeButton({ def, mediaId, run, setHover, refusal, asMenuItem = false, 
       onBlur={disarm}
     >
       <def.Icon size={16} />
+      {/* W1-A: the visible name — full mode only; icons mode keeps it in
+          aria-label + data-tip (the a11y name never changes). */}
+      {labels === 'full' && <span className="whitespace-nowrap text-[11px] font-medium">{def.label}</span>}
     </button>
   );
   return button;
@@ -164,6 +184,29 @@ export function SourceEditBar() {
   const pushToast = useUi((s) => s.pushToast);
   const setHover = useUi((s) => s.setHoverInsertPreview);
   const plan = useInsertPreview();
+
+  /* ---- W1-A (R1): the bar's OWN measured width (ResizeObserver, the
+     MixerDock D1.3 pattern — jsdom's silent stub never fires, so un-measured
+     = the FULL rendering: deterministic pins). Drives the label mode:
+     full while 7 labeled buttons fit, icon-only below the floor (the
+     names survive in aria-label + data-tip). The bar's width never depends
+     on its own label mode (the wrapper is flex-1 — width = the row's free
+     share), so the ladder cannot oscillate. */
+  const barRef = useRef<HTMLDivElement>(null);
+  const [barW, setBarW] = useState<number | null>(null);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const w = el.getBoundingClientRect().width;
+      if (w > 0) setBarW(w);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const labels: 'full' | 'icons' = barW !== null && barW < EDIT_BAR_LABELS_MIN_PX ? 'icons' : 'full';
 
   /* ---- roving tabindex (Toolbar2 pattern, horizontal): ONE tab stop;
      ←/→ move in DOM order (wrapping), Home/End jump the ends. The roster
@@ -228,14 +271,19 @@ export function SourceEditBar() {
 
   return (
     <div
+      ref={barRef}
       data-testid="shell-source-edit-bar"
+      data-labels={labels}
       role="toolbar"
       aria-label="Edit functions"
       aria-orientation="horizontal"
       onKeyDown={onToolbarKey}
       /* R24-W5b (F1 P1): ONE ROW — h-8 (the transport row's own height,
-         no two-row wrap can overflow it), no flex-wrap, overflow-x-auto
-         as the narrow-width escape (buttons scroll, never hide/occlude). */
+         no two-row wrap can overflow it), no flex-wrap. W1-A (R1): the
+         overflow-x-auto is demoted to the LAST RESORT — it only engages
+         below the icon-only floor (~190px of content) where even the
+         priority ladder cannot feed the bar; above it the measured label
+         mode keeps every button in view. */
       className="flex h-8 w-full min-w-0 items-center gap-0.5 overflow-x-auto"
     >
       {primary.map((def, i) => (
@@ -246,6 +294,7 @@ export function SourceEditBar() {
           run={run}
           setHover={setHover}
           refusal={refusalFor(def.mode)}
+          labels={labels}
           extraProps={roverProps(i)}
         />
       ))}
@@ -261,6 +310,7 @@ export function SourceEditBar() {
           run={run}
           setHover={setHover}
           refusal={refusalFor(def.mode)}
+          labels={labels}
           extraProps={roverProps(i + 2)}
         />
       ))}

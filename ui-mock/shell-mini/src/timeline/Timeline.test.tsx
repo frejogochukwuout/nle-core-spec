@@ -45,6 +45,60 @@ describe('render', () => {
   });
 });
 
+describe('R24 mini-plus feature gate (DESIGN-R24 D1)', () => {
+  it('the gate chip lives in the tools row, default ON, toggles the store flag', () => {
+    render(<Timeline />);
+    const chip = screen.getByTestId('mini-btn-miniplus');
+    expect(chip).toBeInTheDocument();
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(chip);
+    expect(S().miniPlus).toBe(false);
+    expect(screen.getByTestId('mini-btn-miniplus')).toHaveAttribute('aria-pressed', 'false');
+    // the chip renders in BOTH gate states (it is the door, not a plus
+    // affordance — the additive-by-construction law)
+    fireEvent.click(screen.getByTestId('mini-btn-miniplus'));
+    expect(S().miniPlus).toBe(true);
+  });
+
+  it('toggling the gate is NOT an undo entry and never mutates the doc (view state)', () => {
+    render(<Timeline />);
+    const before = JSON.stringify(S().doc);
+    const pastLen = S().past.length;
+    fireEvent.click(screen.getByTestId('mini-btn-miniplus'));
+    fireEvent.click(screen.getByTestId('mini-btn-miniplus'));
+    expect(JSON.stringify(S().doc)).toBe(before);
+    expect(S().past.length).toBe(pastLen);
+    expect(S().future.length).toBe(0);
+  });
+
+  it('the gate is drag-gated (the view-family law: no relayout mid-gesture)', () => {
+    render(<Timeline />);
+    act(() => {
+      S().beginDrag();
+    });
+    fireEvent.click(screen.getByTestId('mini-btn-miniplus'));
+    expect(S().miniPlus).toBe(true); // unchanged — the toggle refused
+    act(() => {
+      S().endDrag();
+    });
+    fireEvent.click(screen.getByTestId('mini-btn-miniplus'));
+    expect(S().miniPlus).toBe(false);
+  });
+
+  it('the legacy seeds carry no plus fields (byte-identical R23 seeds)', () => {
+    render(<Timeline />);
+    for (const c of S().doc.clips) {
+      expect(c.sourceStart).toBeUndefined();
+      expect(c.speed).toBeUndefined();
+      expect(c.volume).toBeUndefined();
+      expect(c.opacity).toBeUndefined();
+      expect(c.fadeIn).toBeUndefined();
+      expect(c.effects).toBeUndefined();
+      expect(c.transitionOut).toBeUndefined();
+    }
+  });
+});
+
 describe('selection', () => {
   it('pointerdown selects the clip', async () => {
     render(<Timeline />);

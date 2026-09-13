@@ -54,6 +54,7 @@ import {
   Film,
   Eye,
   EyeOff,
+  Sparkles,
   PanelBottomClose,
   PanelBottomOpen,
 } from 'lucide-react';
@@ -114,6 +115,8 @@ export function ToolsRow() {
   const rippleOn = useMini((s) => s.rippleOn);
   const filmstripOn = useMini((s) => s.filmstripOn);
   const audioLaneVisible = useMini((s) => s.audioLaneVisible);
+  const miniPlus = useMini((s) => s.miniPlus);
+  const toggleMiniPlus = useMini((s) => s.toggleMiniPlus);
   /* R18k (thread #23): video-only mode has no audio lane — the eye toggle
    * would control state nothing renders, so it leaves the toolbar. */
   const trackMode = useMini((s) => s.trackMode);
@@ -266,6 +269,27 @@ export function ToolsRow() {
             {audioLaneVisible ? <Eye /> : <EyeOff />}
           </button>
         )}
+        {/* R24-miniplus (DESIGN-R24 D1/F13): the feature gate — a chip in the
+         *  timeline TOOLS ROW (the Topbar law forbids stateful chrome: "keep
+         *  this bar minimal and stateless"). ONE flag covers the whole
+         *  mini-plus surface; additive-by-construction (gate-OFF is the R23
+         *  surface). The chip itself renders in BOTH gate states — it is the
+         *  door, not a plus affordance. */}
+        <button
+          type="button"
+          className={`qc-toolbar__icon${miniPlus ? ' is-active' : ''}`}
+          aria-label={miniPlus ? 'Mini-plus features on' : 'Mini-plus features off'}
+          aria-pressed={miniPlus}
+          title={
+            miniPlus
+              ? 'Mini-plus ON — property editing, effects, transitions, trim/insert modes, source viewer, mixer. Toggle for the classic minimal surface'
+              : 'Mini-plus OFF — the classic minimal surface. Toggle for the feature-parity surface'
+          }
+          onClick={() => toggleMiniPlus()}
+          data-testid="mini-btn-miniplus"
+        >
+          <Sparkles size={16} strokeWidth={1.75} aria-hidden="true" />
+        </button>
       </div>
       <div className="qc-toolbar__group qc-toolbar__group--right" data-testid="mini-timeline-zoom">
         <button

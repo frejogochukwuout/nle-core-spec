@@ -58,9 +58,19 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
       const now = performance.now();
 
       /* ---- JKL shuttle: tap-accel 1× → 2× → 4×, reset on K / Space.
-          spec 16 §3.1: ⇧J/⇧L jump straight to 2× (no accel ladder). ---- */
+          spec 16 §3.1: ⇧J/⇧L jump straight to 2× (no accel ladder).
+          W1-B (DESIGN-R25 §3): while the SOURCE viewer is open, J/L/K drive
+          the SOURCE transport instead (fixed ±1× — the program shuttle's
+          accel ladder stays program-only, the documented mock
+          simplification; the program playhead must never move under the
+          open source monitor). ---- */
       if (!cmd && !alt && (lower === 'j' || lower === 'l')) {
         const dir: 1 | -1 = lower === 'l' ? 1 : -1;
+        if (s.viewerMode === 'source') {
+          jklRef.current = null;
+          s.playSource(dir);
+          return;
+        }
         if (e.shiftKey) {
           jklRef.current = null; // ⇧ variant is a fixed rate, not a ladder step
           s.setShuttle(dir * 2);
@@ -74,6 +84,10 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
       }
       if (!cmd && !alt && lower === 'k') {
         jklRef.current = null;
+        if (s.viewerMode === 'source') {
+          s.pauseSource(); // K stops the SOURCE transport (A1 joins the grammar)
+          return;
+        }
         s.setShuttle(0);
         return;
       }
@@ -85,14 +99,28 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
         case ' ':
           e.preventDefault();
           jklRef.current = null;
-          s.togglePlay();
+          /* W1-B (DESIGN-R25 §3): source mode owns Space — the SOURCE
+             transport plays; the program playhead never moves under the
+             open source monitor (the same seam, gated on viewerMode). */
+          if (s.viewerMode === 'source') s.toggleSourcePlay();
+          else s.togglePlay();
           return;
         case 'ArrowLeft':
           e.preventDefault();
+          /* W1-B: source mode owns the frame-step keys — the source
+             playhead steps (⇧ ×10), clamped into the trim range's domain. */
+          if (s.viewerMode === 'source') {
+            if (s.sourceMediaId) s.nudgeSource(s.sourceMediaId, e.shiftKey ? -10 : -1);
+            return;
+          }
           s.nudgePlayhead(e.shiftKey ? -10 : -1);
           return;
         case 'ArrowRight':
           e.preventDefault();
+          if (s.viewerMode === 'source') {
+            if (s.sourceMediaId) s.nudgeSource(s.sourceMediaId, e.shiftKey ? 10 : 1);
+            return;
+          }
           s.nudgePlayhead(e.shiftKey ? 10 : 1);
           return;
         case 'ArrowUp':
@@ -105,10 +133,20 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           return;
         case 'Home':
           e.preventDefault();
+          /* W1-B: source mode seeks the SOURCE playhead to the domain start
+             (range.in when a trim range is set — the store's clamp law). */
+          if (s.viewerMode === 'source') {
+            if (s.sourceMediaId) s.seekSource(s.sourceMediaId, 0);
+            return;
+          }
           s.setPlayhead(0);
           return;
         case 'End':
           e.preventDefault();
+          if (s.viewerMode === 'source') {
+            if (s.sourceMediaId) s.seekSource(s.sourceMediaId, Infinity);
+            return;
+          }
           s.setPlayhead(duration);
           return;
         case 'PageUp':

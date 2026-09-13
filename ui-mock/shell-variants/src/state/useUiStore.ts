@@ -668,6 +668,34 @@ interface UiState {
   setSourceRangeIn: (mediaId: string, t: number) => void;
   setSourceRangeOut: (mediaId: string, t: number) => void;
   clearSourceRange: (mediaId: string) => void;
+  /* W1-B (DESIGN-R25 §3 / §6 A1 — R2 "no play control, I/O crop not
+   * functional"): the SOURCE transport. Per-media playhead (seconds) + a
+   * global play flag + a playback direction — all VIEW STATE, never inside
+   * a withHistory snapshot (the hoverInsertPreview/sourceRanges family;
+   * plain set, no undo entries, the snapshot slice stays
+   * scenes/activeSceneId/lockAll/selection/mockGrades). A1's law: a STILL
+   * is a normal 5s clip in Resolve — duration-less media ride
+   * SOURCE_STILL_PSEUDO_DUR ("play" plays the frozen frame: the honest
+   * mock is a moving playhead + running TC over the poster). */
+  sourcePlayhead: Record<string, number>;
+  /** playback direction: J = −1, L = +1 (fixed 1× — the accel ladder stays
+   * program-shuttle-only; documented mock simplification). View state. */
+  sourcePlayRate: number;
+  sourcePlaying: boolean;
+  /** seek the source playhead — frame-snapped, clamped into its domain
+   * ([in,out] when a trim range exists, else [0,dur]; stills → [0,5]). */
+  seekSource: (mediaId: string, t: number) => void;
+  /** nudge the source playhead ±frames (the transport's step buttons). */
+  nudgeSource: (mediaId: string, frames: number) => void;
+  /** W1-B's TESTABLE playback seam: advance the open source by `dt` seconds
+   * (the Viewer's rAF loop calls this every frame; tests drive it directly —
+   * no rAF reliance in jsdom). Play STOPS at the out point (or the source
+   * end when no range is set — the design doc's loop law). */
+  tickSourcePlayback: (dt: number) => void;
+  toggleSourcePlay: () => void;
+  /** start source playback at `rate` (default +1); inert with no source. */
+  playSource: (rate?: number) => void;
+  pauseSource: () => void;
   /* R20-W2 (DESIGN-R20 D2 / C48 hover-placement preview): the store holds
      THE MODE, never a plan object (REV-B P2-4 — a stored plan goes stale
      and fresh-object identity traps zustand-v5 selectors). The plan is
@@ -959,6 +987,35 @@ let toastSeq = 1;
 let idSeq = 0;
 const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}-${idSeq++}`;
 
+/* ---- W1-B (DESIGN-R25 §3 / §6 A1): the source-transport domain helpers ---- */
+
+/** A1's ruling: a STILL is a normal 5s clip in Resolve — the source
+ * transport's pseudo-duration for duration-less media (a real duration
+ * always wins; only images ride the 5s). */
+export const SOURCE_STILL_PSEUDO_DUR = 5;
+
+/** the source transport's playhead DOMAIN — [in,out] when a trim range
+ * exists, else [0,dur] (stills ride the 5s pseudo). Domain ruling (the
+ * simpler honest law, documented per the wave contract): scrub, Home/End
+ * and playback all clamp to the trimmed span — what you preview is the
+ * span every insert commits (Resolve scrubs the whole source; the mock
+ * previews the range). */
+export function sourceDomainOf(mediaId: string, range?: { in: number; out: number } | null): { lo: number; hi: number } {
+  const m = mediaById(mediaId);
+  const dur = m ? (m.duration ?? SOURCE_STILL_PSEUDO_DUR) : 0;
+  return range ? { lo: range.in, hi: Math.min(range.out, dur) } : { lo: 0, hi: dur };
+}
+
+/** the EFFECTIVE source playhead — clamped into its domain. The raw map may
+ * hold a value stranded outside a since-narrowed range (the range setters
+ * predate the transport); the READ side clamps so the marker, the TC and
+ * the tick never advance from outside the previewed span. An absent key
+ * defaults to the domain's lo (a trimmed source previews from its head). */
+export function sourcePlayheadOf(s: Pick<UiState, 'sourceRanges' | 'sourcePlayhead'>, mediaId: string): number {
+  const { lo, hi } = sourceDomainOf(mediaId, s.sourceRanges[mediaId]);
+  return Math.min(hi, Math.max(lo, s.sourcePlayhead[mediaId] ?? lo));
+}
+
 export const useUi = create<UiState>((set, get) => ({
   page: 'edit',
   activeSceneId: 'sc-1',
@@ -1002,6 +1059,9 @@ export const useUi = create<UiState>((set, get) => ({
   sourceMediaId: null,
   hoverInsertPreview: null, // R20-W2: view-state, never snapshotted
   sourceRanges: {}, // R22 #84/#85: per-media source trim ranges (view state)
+  sourcePlayhead: {}, // W1-B: per-media source transport position (view state)
+  sourcePlayRate: 1, // W1-B: J/L direction (fixed 1×, no accel ladder)
+  sourcePlaying: false, // W1-B: the source monitor's transport flag (view state)
   toasts: [],
   saveAttempt: 0,
   simulateSaveFail: false,
@@ -1292,8 +1352,10 @@ export const useUi = create<UiState>((set, get) => ({
   enterSourcePreview: (mediaId) => set({ viewerMode: 'source', sourceMediaId: mediaId }),
   /* R20-W2 (DESIGN-R20 D2): exiting source preview also DISARMS the hover
      preview — program mode is the output view and never previews inserts
-     (the guard is the law, the clearing is the side-effect). */
-  exitSourcePreview: () => set({ viewerMode: 'program', sourceMediaId: null, hoverInsertPreview: null }),
+     (the guard is the law, the clearing is the side-effect). W1-B: it also
+     PAUSES the source transport — no ghost rAF loop or stale play flag
+     survives the monitor it belongs to (the exit is the one owner). */
+  exitSourcePreview: () => set({ viewerMode: 'program', sourceMediaId: null, hoverInsertPreview: null, sourcePlaying: false }),
   /* R22 #84/#85: the source trim-range setters — clamp to the media's
    * duration; in < out always (an inverted/equal range refuses by keeping
    * the previous edge — the honest guard, no silent snap). */
@@ -1314,6 +1376,47 @@ export const useUi = create<UiState>((set, get) => ({
     delete next[mediaId];
     return { sourceRanges: next };
   }),
+  /* ---- W1-B (DESIGN-R25 §3 / §6 A1, R2 "no play control"): the SOURCE
+     transport — plain `set` only (view state: hovering/playing/scrubbing
+     can never mint an undo entry; the sourceRanges law). The playhead's
+     domain is [in,out] when a range exists (sourceDomainOf — the documented
+     ruling: scrub/Home/End/playback preview exactly the span an insert
+     commits). */
+  seekSource: (mediaId, t) => set((s) => {
+    if (!mediaById(mediaId)) return {}; // unknown/still-less id — true no-op
+    const { lo, hi } = sourceDomainOf(mediaId, s.sourceRanges[mediaId]);
+    const v = Math.min(hi, Math.max(lo, snapToFrame(t)));
+    return { sourcePlayhead: { ...s.sourcePlayhead, [mediaId]: v } };
+  }),
+  nudgeSource: (mediaId, frames) => set((s) => {
+    if (!mediaById(mediaId)) return {};
+    const { lo, hi } = sourceDomainOf(mediaId, s.sourceRanges[mediaId]);
+    const v = Math.min(hi, Math.max(lo, snapToFrame(sourcePlayheadOf(s, mediaId) + frames / 24)));
+    return { sourcePlayhead: { ...s.sourcePlayhead, [mediaId]: v } };
+  }),
+  /* the rAF loop's seam (Viewer calls it per frame with the clamped dt;
+   * tests drive it directly — the W1-B pin contract: no rAF in jsdom).
+   * Inert without the play flag, so a late frame after the stop-at-out
+   * writes nothing. */
+  tickSourcePlayback: (dt) => set((s) => {
+    if (!s.sourcePlaying) return {};
+    const id = s.sourceMediaId;
+    if (!id || !mediaById(id)) return {};
+    const { lo, hi } = sourceDomainOf(id, s.sourceRanges[id]);
+    const t = sourcePlayheadOf(s, id) + dt * s.sourcePlayRate;
+    /* the loop law (design doc §3 W1): play STOPS at the out point (or the
+     * source end when no range is set) — the flag drops, the playhead parks
+     * exactly on the boundary; the rate resets to forward. */
+    if (t >= hi) return { sourcePlaying: false, sourcePlayRate: 1, sourcePlayhead: { ...s.sourcePlayhead, [id]: hi } };
+    if (t <= lo) return { sourcePlaying: false, sourcePlayRate: 1, sourcePlayhead: { ...s.sourcePlayhead, [id]: lo } };
+    return { sourcePlayhead: { ...s.sourcePlayhead, [id]: t } };
+  }),
+  toggleSourcePlay: () => set((s) => (s.sourcePlaying
+    ? { sourcePlaying: false, sourcePlayRate: 1 }
+    : s.sourceMediaId ? { sourcePlaying: true } : {})), // inert with no source — the flag never lies
+  playSource: (rate) => set((s) => (s.sourceMediaId
+    ? { sourcePlaying: true, sourcePlayRate: rate ?? 1 } : {})),
+  pauseSource: () => set({ sourcePlaying: false, sourcePlayRate: 1 }),
   /* R20-W2: view-state arm/disarm for the hover-placement preview — plain
      set, deliberately OUTSIDE any withHistory call (hovering can never mint
      an undo entry; the snapshot slice stays scenes/activeSceneId/lockAll/

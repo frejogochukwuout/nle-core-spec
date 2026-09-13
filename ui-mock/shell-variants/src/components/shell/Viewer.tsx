@@ -10,11 +10,24 @@
    R20-W2 (D2 / issues #63+#64): the 7 edit functions moved INTO the source
    transport row as the horizontal SourceEditBar — the program-monitor
    EditOverlay dock is REMOVED (the program monitor is a clean full-frame
-   output; the bar's mount point is the source-mode transport). */
+   output; the bar's mount point is the source-mode transport).
+   W1-B (DESIGN-R25 §3 / §6 A1 — R2 "no play control, I/O crop not
+   functional"): the SOURCE mode gains the FULL transport (A1: a still is a
+   normal 5s clip in Resolve — play "plays" the frozen frame; the honest
+   mock is a moving playhead + running TC over the poster). The source-mode
+   transport row = [left: live source TC] [center: go-to-start / step / /
+   play / step / go-to-end — the program grammar] | [SourceEditBar — the
+   PRIORITY cluster] [trim cluster] [duration readout]. W1-A (R1, the
+   flex-starvation rescue): the row degrades by PRIORITY — the readouts
+   hide first, the edit bar drops to icon-only, the trim icons + the
+   transport + the 7 mode buttons NEVER hide (a ResizeObserver-driven
+   ladder; the W5b overflow-x-scroll stays only as the LAST resort below
+   the icon-only floor). NO dimming on the poster image (A1: the feedback
+   is the strip); the poster gets a 2px playhead progress line instead. */
 
 import { useEffect, useRef, useState } from 'react';
 import { Play, Pause, ChevronDown, ChevronLeft, ChevronRight, SkipBack, SkipForward, Repeat, Flag, Frame, Eye, X } from 'lucide-react';
-import { useUi } from '../../state/useUiStore';
+import { useUi, sourcePlayheadOf, SOURCE_STILL_PSEUDO_DUR } from '../../state/useUiStore';
 import { mediaById, type ElementJSON, type SceneJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
@@ -68,6 +81,18 @@ const MARKER_PALETTE = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'] as
    plain click would add next (honest radio state, no fake default) */
 const MARKER_CYCLE = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'] as const;
 
+/* ---- W1-A (DESIGN-R25 §3, R1 — the flex-starvation rescue): the source
+   transport row's degradation thresholds (row widths, measured via RO).
+   The honest content math: readout-visible row ≈ TC 73 + transport 140 +
+   divider 10 + icon-bar 190 + trim 72 + readout 178 + gaps/padding 56
+   ≈ 719 → 720; TC-visible row ≈ 475 → 490. Below the floors the READOUTS
+   drop (full text survives in data-tip + the strip's aria-label) — the
+   5 transport buttons, the trim icons and the 7 edit-mode buttons NEVER
+   hide; the W5b overflow-x-auto inside the edit bar stays only as the
+   LAST resort below its icon-only floor. */
+const SOURCE_ROW_READOUT_MIN_PX = 720;
+const SOURCE_ROW_TC_MIN_PX = 490;
+
 export function Viewer({ duration }: { duration: number }) {
   const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
   const playhead = useUi((s) => s.playhead);
@@ -89,6 +114,15 @@ export function Viewer({ duration }: { duration: number }) {
      is the timeline monitor. */
   const viewerMode = useUi((s) => s.viewerMode);
   const sourceMediaId = useUi((s) => s.sourceMediaId);
+  /* W1-B (DESIGN-R25 §6 A1): the source transport's live state — the
+     effective playhead (store-clamped into the [in,out] domain) drives
+     the TC readout, the strip marker and the poster progress line; the
+     play flag drives the rAF loop + the play button's honest state. */
+  const sourcePlaying = useUi((s) => s.sourcePlaying);
+  const sourcePh = useUi((s) => (sourceMediaId ? sourcePlayheadOf(s, sourceMediaId) : 0));
+  const seekSource = useUi((s) => s.seekSource);
+  const nudgeSource = useUi((s) => s.nudgeSource);
+  const toggleSourcePlay = useUi((s) => s.toggleSourcePlay);
   /* R23-FIX (review-sweep item 7, R2-F5): the source-range readout
      SUBSCRIBES to sourceRanges — it previously read useUi.getState()
      mid-render, so a keyboard trim (SourceRangeBar / the in-out buttons)
@@ -101,6 +135,9 @@ export function Viewer({ duration }: { duration: number }) {
   const sourceMode = viewerMode === 'source';
   const sourceMedia = sourceMode ? mediaById(sourceMediaId ?? undefined) : undefined;
   const sourceDur = sourceMedia?.duration ?? null;
+  /* the transport's duration: a real media duration, or A1's 5s
+     pseudo-duration for stills ("a still = a normal 5s clip"). */
+  const sourceTransportDur = sourceMedia ? (sourceMedia.duration ?? SOURCE_STILL_PSEUDO_DUR) : null;
 
   const scrubRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLSpanElement>(null);
@@ -186,6 +223,55 @@ export function Viewer({ duration }: { duration: number }) {
     // playhead mover (R13 review: raw pixel-derived times landed off-grid)
     setPlayhead(snapToFrame(((clientX - box.left) / box.width) * duration));
   };
+
+  /* ---- W1-A (DESIGN-R25 §3, R1 — the priority-row ladder) ----
+     The source-mode transport row's MEASURED width (ResizeObserver, the
+     MixerDock D1.3 pattern; jsdom's silent stub never fires → null = the
+     full rendering, deterministic tests). Drives the readout degradation:
+     the duration readout hides below SOURCE_ROW_READOUT_MIN_PX, the live
+     TC below SOURCE_ROW_TC_MIN_PX — the transport buttons, the trim icons
+     and the 7 edit-mode buttons NEVER hide (the edit bar's own ladder in
+     SourceEditBar drops it to icon-only). */
+  const sourceRowRef = useRef<HTMLDivElement>(null);
+  const [sourceRowW, setSourceRowW] = useState<number | null>(null);
+  useEffect(() => {
+    if (!sourceMode) return;
+    const rowEl = sourceRowRef.current;
+    if (!rowEl || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const w = rowEl.getBoundingClientRect().width;
+      if (w > 0) setSourceRowW(w);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(rowEl);
+    return () => ro.disconnect();
+  }, [sourceMode]);
+  const sourceReadoutHidden = sourceRowW !== null && sourceRowW < SOURCE_ROW_READOUT_MIN_PX;
+  const sourceTcHidden = sourceRowW !== null && sourceRowW < SOURCE_ROW_TC_MIN_PX;
+
+  /* ---- W1-B (DESIGN-R25 §3/§6 A1): the source playback loop — the rAF
+     twin of AppShell's program loop. Each frame advances the playhead
+     through the STORE's testable seam (tickSourcePlayback), which stops
+     at the out point / the source end by dropping sourcePlaying (this
+     effect then tears the loop down via its deps). dt is capped at 100ms
+     so a background tab's catch-up burst never jumps the playhead. Tests
+     drive tickSourcePlayback directly — NO rAF reliance in jsdom (the
+     seam is the documented contract). */
+  useEffect(() => {
+    if (!sourceMode || !sourcePlaying || !sourceMediaId) return;
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      useUi.getState().tickSourcePlayback(dt);
+      const s = useUi.getState();
+      if (s.sourcePlaying && s.viewerMode === 'source' && s.sourceMediaId) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { if (raf) cancelAnimationFrame(raf); };
+  }, [sourceMode, sourcePlaying, sourceMediaId]);
 
   /* fit-anchored magnification ladder — honest labels for what the code
      does: Fit = letterbox-fill (1× fit width), the rest multiply the fit
@@ -318,6 +404,20 @@ export function Viewer({ duration }: { duration: number }) {
             >
               Source preview — spec 18 §4.3 v1.1
             </span>
+            {/* W1-B (Fix C — A1: NEVER dim the image; the feedback is the
+                strip). The poster's "playing" state = the live TC ticking +
+                this thin accent progress line at the bottom edge (2px,
+                width = playhead/duration, the house --playhead color) —
+                its style tracks the playhead, playing or paused. Offline
+                media carries no poster to preview, so no line. */}
+            {sourceTransportDur != null && !sourceMedia?.offline && (
+              <div
+                data-testid="shell-viewer-source-progress"
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-0 left-0 h-[2px]"
+                style={{ width: `${(sourcePh / sourceTransportDur) * 100}%`, background: 'var(--playhead)', opacity: 0.9 }}
+              />
+            )}
           </>
         ) : (
           <>
@@ -441,11 +541,12 @@ export function Viewer({ duration }: { duration: number }) {
         </div>
       </div>
 
-      {/* scrub-row — SOURCE mode (R22 #84/#85): the in/out TRIM RANGE bar
-          (dual handles + the range band — one clamped view-state write per
-          drag step; the trimmed range rides the insert planner). Stills (no
-          duration) keep the honest static band (th_mto3504c). The program
-          mode keeps the timeline scrub row below. */}
+      {/* scrub-row — SOURCE mode (W1-B, A1): the real SCRUB STRIP
+          (SourceRangeBar — the source PLAYHEAD marker + the dual in/out
+          trim handles + the out-of-range dimming; playhead clamps to the
+          range when one is set). Stills ride the 5s pseudo-duration (A1: a
+          still = a normal 5s clip). The program mode keeps the timeline
+          scrub row below. */}
       {sourceMode ? (
         sourceMediaId ? (
           <SourceRangeBar mediaId={sourceMediaId} />
@@ -524,24 +625,112 @@ export function Viewer({ duration }: { duration: number }) {
       )}
 
       {/* transport-row (32px, spec 18 §4.3): CENTER = transport cluster,
-          RIGHT = loop + marks + marker palette. SOURCE mode (th_mto3504c):
-          LEFT = the SourceEditBar (R20-W2: the 7 one-shot edit functions,
-          reference icons, hover-placement preview arming), RIGHT = the
-          static source duration TC — honest (no fake playback of a poster;
-          the mark/loop ops belong to the program timeline). */}
+          RIGHT = loop + marks + marker palette. SOURCE mode (W1-B, A1):
+          [LEFT: the live source TC] [CENTER: the 5-button transport —
+          go-to-start / step / play / step / go-to-end, the program mode's
+          exact grammar] | [the SourceEditBar — the PRIORITY cluster] [the
+          trim cluster] [the duration readout]. The mark/loop ops stay
+          program-mode (markIn/markOut write the program loop — A1's
+          Mark-In/Out right cluster is covered by the source-range I/O
+          handles + trim buttons per the R22 W4 law). W1-A (R1): the row
+          degrades by PRIORITY — readouts hide first, the buttons NEVER. */}
       {sourceMode ? (
-        <div className="relative flex shrink-0 items-center gap-2 px-2" style={{ height: 32, minHeight: 32 }} data-testid="shell-viewer-transport">
-          {/* R24-W5b (F1 P1): the bar's wrapper takes the row's flex-1 share
-              ALONE — the old empty trailing flex-1 spacer split the free
-              space 50/50, squeezing the bar to ~173px at the 1280×800 floor
-              (the wrap root cause) and pushing the duration TC off the
-              right edge the header comment promises ("RIGHT = the static
-              source duration TC"). */}
-          <div className="flex h-8 min-w-0 flex-1 items-center">
+        <div
+          ref={sourceRowRef}
+          className="relative flex shrink-0 items-center gap-2 px-2"
+          style={{ height: 32, minHeight: 32 }}
+          data-testid="shell-viewer-transport"
+        >
+          {/* W1-B: LEFT = the live source TC — tc(sourcePlayhead), mono 11px;
+              ticks live while playing (the readout IS the playing feedback,
+              with the poster progress line). W1-A: hides below the row's
+              TC floor (data-tip keeps the position; the strip's aria-label
+              carries it too). */}
+          <span
+            data-testid="shell-viewer-source-tc"
+            data-tip={`Source playhead ${tc(sourcePh)}`}
+            hidden={sourceTcHidden || undefined}
+            className="mono shrink-0 text-[11px] text-tmuted"
+          >
+            {tc(sourcePh)}
+          </span>
+          {/* W1-B: the CENTER transport cluster — the program mode's exact
+              5-button pattern, riding the SOURCE playhead's store seam.
+              The store's domain clamp makes Home/End honor a set trim
+              range (go-to-start lands on range.in when trimmed). No
+              source open → the handlers guard to no-ops (honest inert,
+              no toast spam). */}
+          <div role="group" aria-label="Source transport" data-testid="shell-source-transport" className="flex shrink-0 items-center gap-2">
+            <button
+              className="icon-btn !h-[20px] !w-[20px]"
+              onClick={() => sourceMediaId && seekSource(sourceMediaId, 0)}
+              data-tip="Go to start (Home)"
+              aria-label="Go to start"
+              data-testid="shell-source-btn-goto-start"
+            >
+              <SkipBack size={13} strokeWidth={1.6} />
+            </button>
+            <button
+              className="icon-btn !h-[20px] !w-[20px]"
+              onClick={() => sourceMediaId && nudgeSource(sourceMediaId, -1)}
+              data-tip="Step back 1 frame (←)"
+              aria-label="Step back one frame"
+              data-testid="shell-source-btn-step-back"
+            >
+              <ChevronLeft size={14} strokeWidth={1.6} />
+            </button>
+            <button
+              className="flex h-[24px] w-[28px] items-center justify-center rounded-[var(--radius)] transition-colors"
+              onClick={() => sourceMediaId && toggleSourcePlay()}
+              data-testid="shell-viewer-btn-play"
+              data-tip="Play / Pause (Space)"
+              aria-label="Play or pause"
+              style={{
+                color: 'var(--text-primary)',
+                background: sourcePlaying ? 'var(--active-overlay)' : 'var(--bg-inset)',
+                border: `1px solid ${sourcePlaying ? 'var(--border-strong)' : 'var(--border-soft)'}`,
+              }}
+            >
+              {sourcePlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-[2px]" />}
+            </button>
+            <button
+              className="icon-btn !h-[20px] !w-[20px]"
+              onClick={() => sourceMediaId && nudgeSource(sourceMediaId, 1)}
+              data-tip="Step forward 1 frame (→)"
+              aria-label="Step forward one frame"
+              data-testid="shell-source-btn-step-fwd"
+            >
+              <ChevronRight size={14} strokeWidth={1.6} />
+            </button>
+            <button
+              className="icon-btn !h-[20px] !w-[20px]"
+              onClick={() => sourceMediaId && seekSource(sourceMediaId, Infinity)}
+              data-tip="Go to end (End)"
+              aria-label="Go to end"
+              data-testid="shell-source-btn-goto-end"
+            >
+              <SkipForward size={13} strokeWidth={1.6} />
+            </button>
+          </div>
+          {/* the divider: the transport | the edit functions (A1: the 7
+              edit-mode buttons stay in the row — Premiere's Source-Monitor
+              placement — behind a clear divider). */}
+          <div role="separator" aria-orientation="vertical" aria-label="Transport and edit functions" className="h-[16px] w-px shrink-0 bg-hairline" />
+          {/* W1-A (R1 — THE RESCUE): the edit bar is the row's PRIORITY
+              consumer — flex-1 + a 190px FLEX BASIS (the 7-icon-only floor:
+              7 × 24px + gaps). The old row starved the flex-1 wrapper to
+              0px at ≤900px canvas because the shrink-0 siblings (trim 72 +
+              readout 178) always won; the basis + the readouts' degradation
+              (they hide below their floors) keep the wrapper fed — the 7
+              mode buttons are visible at every usable width, and the bar's
+              own measured ladder (SourceEditBar) drops it to icon-only
+              before it can starve. */}
+          <div className="flex h-8 min-w-0 flex-1 items-center" style={{ flexBasis: '190px' }}>
             <SourceEditBar />
           </div>
-          {/* R22 #84/#85: the trim-edit controls. R24-W5b (F1 P2, the
-              honest-control law): the source poster has NO playhead, so the
+          {/* R22 #84/#85: the trim-edit controls (the source-range I/O
+              cluster — W1-A: degrades SECOND, i.e. it KEEPS its icons at
+              every width). R24-W5b (F1 P2, the honest-control law): the
               definite commit is the head/tail reset — trim-in resets the
               range start to the source head, trim-out extends the end to
               the tail (both through the SAME store setters the handles
@@ -615,7 +804,22 @@ export function Viewer({ duration }: { duration: number }) {
               })()}
             </div>
           )}
-          <span className="mono shrink-0 text-[11px] text-tmuted" data-testid="shell-viewer-source-duration">
+          {/* W1-A: the duration readout DEGRADES FIRST — below the row's
+              readout floor it hides entirely (the full text survives in
+              data-tip + the scrub strip's aria-label); above it, it may
+              truncate (min-w-0 + shrink) instead of starving the priority
+              clusters. The R23-FIX reactive subscription stays (the
+              readout follows every range writer). */}
+          <span
+            hidden={sourceReadoutHidden || undefined}
+            className="mono min-w-0 shrink truncate text-[11px] text-tmuted"
+            data-testid="shell-viewer-source-duration"
+            data-tip={
+              sourceMediaId && sourceDur != null && sourceRange
+                ? `Range ${tc(sourceRange.in)}–${tc(sourceRange.out)} · ${tc(sourceRange.out - sourceRange.in)} of ${tc(sourceDur)}`
+                : `Source duration ${sourceDur !== null ? tc(sourceDur) : '— still image'}`
+            }
+          >
             {sourceMediaId && sourceDur != null && sourceRange
               ? `Range ${tc(sourceRange.in)}–${tc(sourceRange.out)} · ${tc(sourceRange.out - sourceRange.in)} of ${tc(sourceDur)}`
               : `Source duration ${sourceDur !== null ? tc(sourceDur) : '— still image'}`}

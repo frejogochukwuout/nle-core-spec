@@ -1157,3 +1157,76 @@ describe('R6 (R5-b P2-1): post-edit selection keeps the XOR law (one inspector s
     expect(S().selectedTrackId).toBeNull();
   });
 });
+
+/* ---- R24-miniplus W0 (DESIGN-R24 D2): the commit/docChanged surgery ---- */
+
+describe('R24 W0: the deep-clone + no-alias law (the F1 P0 fix)', () => {
+  beforeEach(() => {
+    S().reset();
+  });
+
+  it('a commit CLONES nested effects/transitionOut (no shared refs into history)', () => {
+    /* A doc carrying plus fields; nudge drives a real commit through the
+     * draft. The old shallow {...c} kept the SAME effects array object in
+     * the live doc and every history entry — a nested mutation would
+     * write through (undo corruption). The no-alias assertion is the
+     * discriminator: the committed clip's nested objects are fresh. */
+    useMini.setState({
+      doc: {
+        ...S().doc,
+        clips: S().doc.clips.map((c) =>
+          c.id === 'c1'
+            ? {
+                ...c,
+                effects: [{ id: 'fx_1', name: 'Gaussian Blur', enabled: true, params: { radius: 8 } }],
+                transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 },
+              }
+            : c,
+        ),
+      },
+    });
+    const docBefore = S().doc;
+    const effectsBefore = docBefore.clips[0].effects!;
+    const transitionBefore = docBefore.clips[0].transitionOut!;
+
+    S().nudge('c1', 0.5); // a real commit through the clone draft
+
+    const committed = S().doc.clips[0];
+    expect(committed.start).toBe(0.5);
+    // the no-alias law: history + live doc own SEPARATE nested objects
+    expect(committed.effects).not.toBe(effectsBefore);
+    expect(committed.effects![0]).not.toBe(effectsBefore[0]);
+    expect(committed.effects![0].params).not.toBe(effectsBefore[0].params);
+    expect(committed.transitionOut).not.toBe(transitionBefore);
+    // the CONTENT survived the clone
+    expect(committed.effects).toEqual(effectsBefore);
+    expect(committed.transitionOut).toEqual(transitionBefore);
+    // and the history entry holds the ORIGINAL objects (still pristine)
+    expect(S().past.at(-1)!.clips[0].effects).toBe(effectsBefore);
+  });
+
+  it('the undo round-trip restores nested plus fields intact', () => {
+    useMini.setState({
+      doc: {
+        ...S().doc,
+        clips: S().doc.clips.map((c) =>
+          c.id === 'c2'
+            ? { ...c, effects: [{ id: 'fx_1', name: 'Glow', enabled: true, params: { intensity: 30, radius: 10 } }] }
+            : c,
+        ),
+      },
+    });
+    S().nudge('c2', -0.5);
+    expect(S().doc.clips.find((c) => c.id === 'c2')!.start).toBe(4);
+    S().undo();
+    const restored = S().doc.clips.find((c) => c.id === 'c2')!;
+    expect(restored.start).toBe(4.5);
+    expect(restored.effects).toEqual([{ id: 'fx_1', name: 'Glow', enabled: true, params: { intensity: 30, radius: 10 } }]);
+  });
+
+  it('reset() restores the miniPlus gate to ON (a session surface)', () => {
+    useMini.setState({ miniPlus: false });
+    S().reset();
+    expect(S().miniPlus).toBe(true);
+  });
+});

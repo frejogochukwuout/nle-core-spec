@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { Viewer } from './Viewer';
 import { useUi } from '../../state/useUiStore';
+import { snapToFrame } from '../../lib/timecode';
 
 const S = () => useUi.getState();
 const DUR = 30; // sceneDuration(sc-1)
@@ -288,7 +289,14 @@ describe('Viewer (spec 18 §4.3)', () => {
    clip-menu "Open in viewer" — these tests boot the store state directly
    and pin the chrome swap + the honest static transport. */
 describe('Viewer source preview mode (R19 th_mto3504c)', () => {
-  it('source chrome: exit control + asset name + SOURCE chip; letterboxed poster + spec caption; static duration TC', () => {
+  /* RE-PIN (W1-B, DESIGN-R25 §6 A1 supersedes the R19 no-fake-playback
+     law): a STILL is a normal 5s clip in Resolve with the FULL transport —
+     the honest mock is a moving playhead + running TC over the poster (the
+     old "no transport buttons — no fake playback of a jpg" pin dies with
+     the research verdict). Mark-in/out STAY program-mode (markIn/markOut
+     write the program loop; the source-range I/O handles + trim buttons
+     own the source domain). */
+  it('source chrome: exit control + asset name + SOURCE chip; letterboxed poster + spec caption; the FULL transport (A1); duration TC readout', () => {
     useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
     const { container } = render(<Viewer duration={DUR} />);
     expect(screen.getByTestId('shell-viewer-source-chip')).toHaveTextContent('SOURCE');
@@ -300,13 +308,19 @@ describe('Viewer source preview mode (R19 th_mto3504c)', () => {
     // the media's OWN specs (m-02 is 1080p24 — honest, not the project chip)
     expect(screen.getByText('1920×1080')).toBeInTheDocument();
     expect(screen.getByText('24 fps')).toBeInTheDocument();
-    // scrub row is STATIC (no slider role — no fake scrubbing of a poster)
-    expect(screen.getByTestId('shell-viewer-scrub')).not.toHaveAttribute('role', 'slider');
+    // W1-B: the strip is a real scrub strip — the source PLAYHEAD is a
+    // role=slider (the old "static, no slider" pin re-pinned to A1)
+    expect(screen.getByTestId('shell-source-playhead')).toHaveAttribute('role', 'slider');
+    // W1-B: the 5 transport buttons + the live TC render in source mode
+    expect(within(screen.getByTestId('shell-source-transport')).getAllByRole('button')).toHaveLength(5);
+    expect(screen.getByTestId('shell-viewer-btn-play')).toBeInTheDocument();
+    // W1-B: the LEFT cluster shows the CURRENT source TC (mono 11px)
+    expect(screen.getByTestId('shell-viewer-source-tc')).toHaveTextContent('00:00:00:00');
     // transport row carries the source duration TC (m-02 = 95.2 s)
     expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Source duration 00:01:35:05');
-    // no transport buttons — no fake playback of a jpg
-    expect(screen.queryByTestId('shell-viewer-btn-play')).toBeNull();
+    // mark-in/mark-out stay program-mode (the program loop's writers)
     expect(screen.queryByRole('button', { name: 'Mark in' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mark out' })).toBeNull();
   });
 
   it('the exit control (X / "Back to program") returns the monitor to program mode', () => {
@@ -422,6 +436,167 @@ describe('Viewer source preview mode (R19 th_mto3504c)', () => {
     expect(S().sourceRanges['m-02']).toBeUndefined();
     expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Source duration');
     expect(screen.getByTestId('shell-source-trim-in')).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+/* ---- W1-B (DESIGN-R25 §3 / §6 A1, R2): the SOURCE transport + the poster
+   feedback + W1-A (R1) the priority-row ladder. The rAF loop is NEVER
+   driven here — playback advances through the store's tickSourcePlayback
+   seam (the documented test contract); the responsive ladder is driven by
+   a recording ResizeObserver + stubbed rects (the MixerDock pattern). ---- */
+const fakeRect = (width: number) =>
+  ({ top: 0, left: 0, right: width, bottom: 32, width, height: 32, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+
+/** Recording ResizeObserver — captures callbacks so the test can fire them
+ *  with a stubbed rect (jsdom's default stub never fires). */
+function withRecordingRO<T>(fn: (fire: () => void) => T): T {
+  const cbs: ResizeObserverCallback[] = [];
+  const Orig = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class {
+    constructor(cb: ResizeObserverCallback) { cbs.push(cb); }
+    observe() { /* no-op */ }
+    unobserve() { /* no-op */ }
+    disconnect() { /* no-op */ }
+  } as unknown as typeof ResizeObserver;
+  try {
+    return fn(() => { act(() => { cbs.forEach((cb) => cb([], {} as ResizeObserver)); }); });
+  } finally {
+    globalThis.ResizeObserver = Orig;
+  }
+}
+
+describe('W1-B (A1): the source transport + poster feedback', () => {
+  it('the 5 transport buttons render; play toggles the STORE flag; the buttons seek (go-to-start sets 0, go-to-end the duration, steps ±1 frame)', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-03' }); // 18.6 s
+    render(<Viewer duration={DUR} />);
+    expect(within(screen.getByTestId('shell-source-transport')).getAllByRole('button')).toHaveLength(5);
+    // the live LEFT TC follows the source playhead (tc(sourcePlayhead))
+    act(() => { useUi.getState().seekSource('m-03', 5); });
+    expect(screen.getByTestId('shell-viewer-source-tc')).toHaveTextContent('00:00:05:00');
+    fireEvent.click(screen.getByTestId('shell-source-btn-goto-start'));
+    expect(useUi.getState().sourcePlayhead['m-03']).toBe(0);
+    // go-to-end clamps to the source duration (18.6 s)
+    fireEvent.click(screen.getByTestId('shell-source-btn-goto-end'));
+    expect(useUi.getState().sourcePlayhead['m-03']).toBeCloseTo(18.6, 5);
+    // step ±1 frame (the program transport's grammar; the house frame grid
+    // — 18.6 s is off-grid, so the snapped values are the honest law)
+    fireEvent.click(screen.getByTestId('shell-source-btn-step-back'));
+    const snappedBack = snapToFrame(18.6 - 1 / 24);
+    expect(useUi.getState().sourcePlayhead['m-03']).toBeCloseTo(snappedBack, 5);
+    fireEvent.click(screen.getByTestId('shell-source-btn-step-fwd'));
+    expect(useUi.getState().sourcePlayhead['m-03']).toBeCloseTo(snapToFrame(snappedBack + 1 / 24), 5);
+    // play toggles the SOURCE flag only — the program playhead/flag untouched
+    fireEvent.click(screen.getByTestId('shell-viewer-btn-play'));
+    expect(useUi.getState().sourcePlaying).toBe(true);
+    expect(useUi.getState().playing).toBe(false);
+    expect(useUi.getState().playhead).toBe(16);
+    fireEvent.click(screen.getByTestId('shell-viewer-btn-play'));
+    expect(useUi.getState().sourcePlaying).toBe(false);
+  });
+
+  it('play-then-out STOPS (the loop law) — driven through the STORE seam, never rAF', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-03' });
+    render(<Viewer duration={DUR} />);
+    act(() => { useUi.getState().setSourceRangeIn('m-03', 2); });
+    act(() => { useUi.getState().setSourceRangeOut('m-03', 4); });
+    act(() => { useUi.getState().seekSource('m-03', 3); });
+    act(() => { useUi.getState().playSource(); });
+    // advance via tickSourcePlayback — the rAF loop's own seam
+    act(() => { useUi.getState().tickSourcePlayback(0.5); });
+    expect(useUi.getState().sourcePlayhead['m-03']).toBeCloseTo(3.5, 5);
+    // 3.5 + 1.0 ≥ out (4) → the flag drops, the playhead parks ON the out point
+    act(() => { useUi.getState().tickSourcePlayback(1.0); });
+    expect(useUi.getState().sourcePlaying).toBe(false);
+    expect(useUi.getState().sourcePlayhead['m-03']).toBe(4);
+  });
+
+  it("Fix C (A1: never dim the image): the poster progress line's style tracks the playhead", () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-03' });
+    render(<Viewer duration={DUR} />);
+    const line = screen.getByTestId('shell-viewer-source-progress');
+    expect(line.style.width).toBe('0%'); // playhead 0 of 18.6
+    expect(line.style.background).toContain('var(--playhead)');
+    act(() => { useUi.getState().seekSource('m-03', 9.3); });
+    // the line tracks the FRAME-SNAPPED playhead (the seek's house law)
+    expect(parseFloat(screen.getByTestId('shell-viewer-source-progress').style.width))
+      .toBeCloseTo((snapToFrame(9.3) / 18.6) * 100, 5);
+  });
+
+  it('stills ride the A1 5s pseudo transport (a still = a normal 5s clip; play "plays" the frozen frame)', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-08' }); // title_card.png, duration null
+    render(<Viewer duration={DUR} />);
+    fireEvent.click(screen.getByTestId('shell-source-btn-goto-end'));
+    expect(useUi.getState().sourcePlayhead['m-08']).toBe(5); // the pseudo-duration domain
+    expect(screen.getByTestId('shell-viewer-source-progress').style.width).toBe('100%');
+    // the duration READOUT stays honest (the still law, unchanged)
+    expect(screen.getByTestId('shell-viewer-source-duration')).toHaveTextContent('Source duration — still image');
+  });
+
+  it('exiting source preview PAUSES the source transport (no ghost rAF survives the monitor it belongs to)', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-03' });
+    render(<Viewer duration={DUR} />);
+    act(() => { useUi.getState().playSource(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to program' }));
+    expect(useUi.getState().viewerMode).toBe('program');
+    expect(useUi.getState().sourcePlaying).toBe(false);
+  });
+});
+
+describe('W1-A (R1): the source transport row priority ladder', () => {
+  it('the readouts degrade FIRST (duration readout, then the live TC); the 15 buttons NEVER hide; un-measured = full', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    let fire = () => { /* assigned below */ };
+    withRecordingRO((f) => { fire = f; render(<Viewer duration={DUR} />); });
+    const row = screen.getByTestId('shell-viewer-transport');
+    const readout = screen.getByTestId('shell-viewer-source-duration');
+    const tc = screen.getByTestId('shell-viewer-source-tc');
+    // un-measured (jsdom's silent RO): everything renders — deterministic
+    expect(readout).not.toHaveAttribute('hidden');
+    expect(tc).not.toHaveAttribute('hidden');
+    // the buttons never hide, at every rung of the ladder
+    const buttonsNeverHide = () => {
+      expect(within(screen.getByTestId('shell-source-transport')).getAllByRole('button')).toHaveLength(5);
+      expect(within(screen.getByTestId('shell-source-edit-bar')).getAllByRole('button')).toHaveLength(7);
+      expect(within(screen.getByTestId('shell-source-trim-controls')).getAllByRole('button')).toHaveLength(3);
+    };
+    // rung 1 — wide row (800px): everything visible
+    row.getBoundingClientRect = () => fakeRect(800);
+    act(() => fire());
+    expect(readout).not.toHaveAttribute('hidden');
+    expect(tc).not.toHaveAttribute('hidden');
+    buttonsNeverHide();
+    // rung 2 — 700px: the duration readout hides (data-tip keeps the full
+    // text); the TC stays
+    row.getBoundingClientRect = () => fakeRect(700);
+    act(() => fire());
+    expect(readout).toHaveAttribute('hidden');
+    expect(readout.getAttribute('data-tip')).toContain('Source duration 00:01:35:05');
+    expect(tc).not.toHaveAttribute('hidden');
+    buttonsNeverHide();
+    // rung 3 — 400px: the TC hides too; the buttons STILL never hide
+    row.getBoundingClientRect = () => fakeRect(400);
+    act(() => fire());
+    expect(readout).toHaveAttribute('hidden');
+    expect(tc).toHaveAttribute('hidden');
+    buttonsNeverHide();
+  });
+
+  it('the edit-bar wrapper owns the flex basis (the starvation fix): flex-1 + 190px basis inside the FIXED 32px row', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    render(<Viewer duration={DUR} />);
+    const row = screen.getByTestId('shell-viewer-transport');
+    expect(row.style.height).toBe('32px'); // the FIXED row (F1's transportRect)
+    // the wrapper: flex-1 (grow with the row) + a 190px BASIS — the 7-icon
+    // floor the shrink-0 siblings can never starve below again (R1's root
+    // cause: two shrink-0 siblings starved the old flex-1 wrapper to 0px)
+    const wrapper = screen.getByTestId('shell-source-edit-bar').parentElement!;
+    expect(wrapper.className).toContain('flex-1');
+    expect(wrapper.className).toContain('min-w-0');
+    expect(wrapper.style.flexBasis).toBe('190px');
+    // the trim cluster keeps its icons at every width (degrades SECOND =
+    // it stays); the readout may shrink+truncate instead of starving
+    expect(screen.getByTestId('shell-source-trim-controls').className).toContain('shrink-0');
+    expect(screen.getByTestId('shell-viewer-source-duration').className).toContain('truncate');
   });
 });
 
