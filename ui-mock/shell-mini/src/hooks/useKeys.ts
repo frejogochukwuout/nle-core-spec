@@ -57,12 +57,28 @@ export function useKeys() {
        * classic surface keeps its map). The form-control skip above
        * already covers typing in fields; no repeat (the C16 gate). */
       if (s.miniPlus) {
-        if (e.key.toLowerCase() === 'v') {
+        const k = e.key.toLowerCase();
+        if (k === 'v') {
           e.preventDefault();
           s.setTrimTool('select');
           return;
         }
-        if (e.key.toLowerCase() === 'x') {
+        if (k === 't') {
+          e.preventDefault();
+          s.setTrimTool('roll');
+          return;
+        }
+        if (k === 'y') {
+          e.preventDefault();
+          s.setTrimTool('slip');
+          return;
+        }
+        if (k === 'u') {
+          e.preventDefault();
+          s.setTrimTool('slide');
+          return;
+        }
+        if (k === 'x') {
           e.preventDefault();
           s.setTrimTool('transition');
           return;

@@ -292,11 +292,12 @@ export function ToolsRow() {
         >
           <Sparkles size={16} strokeWidth={1.75} aria-hidden="true" />
         </button>
-        {/* R24-miniplus W2 (DESIGN-R24 D5/D6): the tool radio — 'select' is
-         *  the R18k law (the default); W2 lands the transition entry (W3
-         *  adds roll/slip/slide). role=radiogroup with aria-checked members
-         *  (F4: a radio member never carries aria-pressed). Gate ON only;
-         *  additive — the row's existing buttons are untouched. */}
+        {/* R24-miniplus W2+W3 (DESIGN-R24 D5/D6): the tool radio — 'select'
+         *  is the R18k law (the default); the entries: select (V), roll
+         *  (T), slip (Y), slide (U), transition (X). role=radiogroup with
+         *  aria-checked members (F4: a radio member never carries
+         *  aria-pressed). Gate ON only; additive — the row's existing
+         *  buttons are untouched. */}
         {miniPlus && (
           <div
             className="qc-toolbar__tools"
@@ -304,22 +305,26 @@ export function ToolsRow() {
             aria-label="Edit tool"
             data-testid="mini-tool-radio"
           >
-            {(['select', 'transition'] as const).map((t) => (
+            {(
+              [
+                ['select', 'V', 'Select tool (V) — the classic drag/trim law'],
+                ['roll', 'T', 'Roll tool (T) — drag a touching cut: one side shortens, the other extends (the timeline length stays)'],
+                ['slip', 'Y', 'Slip tool (Y) — drag a clip body to shift its content under a fixed placement'],
+                ['slide', 'U', 'Slide tool (U) — drag a clip; the neighbors’ facing edges trim to make room'],
+                ['transition', 'X', 'Transition tool (X) — click a seam between touching clips for a cross transition; a detached head/tail for a fade'],
+              ] as const
+            ).map(([t, glyph, tip]) => (
               <button
                 key={t}
                 type="button"
                 className={`qc-toolbar__tool${trimTool === t ? ' is-active' : ''}`}
                 role="radio"
                 aria-checked={trimTool === t}
-                title={
-                  t === 'select'
-                    ? 'Select tool (V) — the classic drag/trim law'
-                    : 'Transition tool (X) — click a seam between touching clips for a cross transition; a detached head/tail for a fade'
-                }
+                title={tip}
                 onClick={() => setTrimTool(t)}
                 data-testid={`mini-tool-${t}`}
               >
-                {t === 'select' ? 'V' : 'X'}
+                {glyph}
               </button>
             ))}
           </div>
@@ -464,6 +469,10 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
   const cancelDrag = useMini((s) => s.cancelDrag);
   const previewMove = useMini((s) => s.previewMove);
   const previewTrim = useMini((s) => s.previewTrim);
+  /* R24-miniplus W3: the tool-mode previews (the seam's dispatch table). */
+  const previewSlip = useMini((s) => s.previewSlip);
+  const previewSlide = useMini((s) => s.previewSlide);
+  const previewRoll = useMini((s) => s.previewRoll);
   const trimClip = useMini((s) => s.trimClip);
   const rippleOn = useMini((s) => s.rippleOn); // R18f: handle hints change under ripple
   const [dragging, setDragging] = useState(false);
@@ -471,8 +480,13 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
   /* gesture session (component-held; the store holds the doc snapshot).
    *  R18i adds contentEl + lastX: the edge auto-scroll loop re-applies the
    *  gesture against the LIVE content rect while the timeline scrolls. */
+  /* R24-miniplus W3 (DESIGN-R24 D6 — deviation #9, the tool-dispatch
+   *  seam): the gesture kind union gains the tool modes. The seam reads
+   *  the tool ONCE at gesture start; the select-family dispatch below is
+   *  byte-identical to the R23 routing (the freeze's diff gate). */
   const g = useRef<{
-    kind: 'move' | 'trim-start' | 'trim-end' | null;
+    kind: 'move' | 'trim-start' | 'trim-end' | 'slip' | 'slide' | 'roll' | null;
+    rollEdge?: 'start' | 'end'; // the grabbed edge for roll gestures
     pointerId: number | null; // this gesture owns exactly one pointer (fix #4)
     startX: number;
     grabOffset: number; // pointerTime − clip.start at pointerdown
@@ -517,11 +531,22 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
     if (e.button !== 0) return;
     if (useMini.getState().dragActive) return; // one gesture at a time (fix #4)
     select(clip.id); // select-on-pointerdown (before the lock can engage)
+    /* deviation #9 — the tool dispatch (read ONCE, remap the kind; the
+     * select/transition tools keep the raw kind — the select-family
+     * routing in applyGesture is byte-identical). Roll rides the trim
+     * handles; slip/slide ride the clip body. */
+    const tool = useMini.getState().trimTool;
+    const miniPlusOn = useMini.getState().miniPlus;
+    let effKind: 'move' | 'trim-start' | 'trim-end' | 'slip' | 'slide' | 'roll' = kind;
+    if (miniPlusOn && tool === 'slip' && kind === 'move') effKind = 'slip';
+    else if (miniPlusOn && tool === 'slide' && kind === 'move') effKind = 'slide';
+    else if (miniPlusOn && tool === 'roll' && (kind === 'trim-start' || kind === 'trim-end')) effKind = 'roll';
     // R19: the clip owns this pointerdown — the lane's empty-area track
     // select (thread #26) must not fire through the bubbling phase
     e.stopPropagation();
     g.current = {
-      kind,
+      kind: effKind,
+      rollEdge: effKind === 'roll' ? (kind === 'trim-start' ? 'start' : 'end') : undefined,
       pointerId: e.pointerId,
       startX: e.clientX,
       grabOffset: timeAt(e.clientX, e.currentTarget as HTMLElement) - clip.start,
@@ -563,6 +588,24 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
      * with the machinery) — during playback the playhead target moves,
      * exactly the R18k law. */
     const targets = [useMini.getState().playhead, ...snapTargets];
+    /* deviation #9: the tool kinds dispatch to the W3 previews; the
+     * select family below is byte-identical to the R23 routing. */
+    if (gs.kind === 'slip') {
+      const raw = t - gs.grabOffset - clip.start;
+      previewSlip(clip.id, raw);
+      return;
+    }
+    if (gs.kind === 'slide') {
+      const raw = t - gs.grabOffset;
+      onSnapGuide(snapOn ? magnetTarget(raw, pps, targets) : null);
+      previewSlide(clip.id, resolveSnap(raw, snapOn, pps, targets));
+      return;
+    }
+    if (gs.kind === 'roll') {
+      onSnapGuide(snapOn ? magnetTarget(t, pps, targets) : null);
+      previewRoll(clip.id, gs.rollEdge ?? 'end', resolveSnap(t, snapOn, pps, targets));
+      return;
+    }
     if (gs.kind === 'move') {
       const raw = t - gs.grabOffset;
       // R18e: report the engaged magnet (guide paints at the TARGET)
