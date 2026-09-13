@@ -1,25 +1,27 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-14, end of the R27 round (THE FINAL-TIGHTNESS AUDIT — the 49-dispatch fleet; D37-D41; ~160 amendments; battery_r27 149/149 GREEN). **Read this FIRST; everything below the `-----` divider is R18-era serving/environment detail that is still ACCURATE as background but predates R19-R27.**
+**Written:** 2026-09-13, end of the R25-variants round (THE REACTION + AUDIT-FLEET round). **Read this FIRST; the spec-track state below the divider is R26-era background still accurate as environment context.**
 
-## Current state (R27 — the spec corpus is tight at the R27 pin world; the plan is estimate-free and cold-executable)
+## Current state (R25-variants — COMPLETE: 19/19 reviewer threads resolved; exit gates PASS)
 
-- **The user's R27 asks are all MET:** the exhaustive multi-pass audit ran (49 dispatches: 5 module scouts → 6 mock analysts → 20 per-spec auditors → 5 cross-cuts → 3 adversarial reviewers → the W-A..W-D amendment agents); the two DaVinci HTML mocks deeply analyzed (**ZERO P1 law gaps — the R25 D30-D32 law verified at sub-spec depth; the no-man's-land is a BUILD problem** — the leverage map + the 7 build contracts now drive r1's Stage 0-4); the color verdict (**everything Resolve-copied is WebGPU-reproducible; the blocker is the engine's 46 rgba8unorm sites, not GPU capability** — D37 the y∘ch curve order + D39 the A3 wheels widen-via-projection landed); the module evolution fully absorbed (**the wire census 31 = 28 routed + 3 exceptions** — D-ARCH-6; **el.preservePitch in ElementJSON** — the R26 model ask RESOLVED, D38.1; the volume-dB [−60,+20] one-home law D38.2; the 02 §7.4 diagnostics/heartbeat law; the M2 Wave-1 mixer set); every spec 00-20 audited + amended (~160 edits); **the plan overhauled per D40** (ALL time estimates removed; gate-defined phases; the eight-stream parallel carve; E1-E11; the cold-executor bar).
-- **The R27 pin world (battery_r27-enforced):** engine `f9ac806` (748/748; code anchor `50b91f5`) · OT HEAD `55c81c0` (code pin `970948a`, 632/632) · WDC `ec8fd5c` (777/777) · nle-ui `32abd58` (690/690) · app `c020b2a` (252/252; census 42=36+5+1) · mini 495 in-flight (the sibling's R24-2 W6/W7 pending) · variants register-declared 1,796/65 (their R25 waves mid-flight — re-key at their WRAP only, per §2A.11).
-- **battery_r27 149/149** (the standing battery — run it after every round; the new classes: census-coherence, registry-export, the line-pin map, the WRAP-gated register, E2-consistency, zero-orphan, estimates-absence + D38-presence, the 739-trap, the D30 flips).
-- **The D-ledger runs D1-D41** (00 §4 + ARCH-R27). The register: 21 families (the mixer + view-state rows NEW); the OPEN table 5 rows (4 QUEUED design-rounds: marker v2 / captions / the page shape / FX grammar + the A3-wheels RULED-pending-r3).
+- **The round's driver:** the user's directive — check the new SB feedbacks (19 open threads, the reviewer's second pass over R24); deep-apply `ui-mock/trim_edit_modes.html`; fix the "not functional" timeline insert/edit mode; then 50+ sub-agent rounds of deep UX audit till ≤P3.
+- **The 19 threads are ALL resolved** (annotakit PATCH with wave evidence; 0 open; the GH mirror syncs). The headline fixes: the insert-mode bar's flex-starvation root cause (0px below ~1000px canvas); the source viewer's full Resolve transport (stills = normal clips, play/scrub honest, I/O flags + strip dimming); the wheels REWRITTEN to Resolve's relative/accumulating trackball grammar (research-verified); the 3-chip GRADE TARGET breadcrumb; the console-row TAB strip ([Timeline|Nodes|Scopes] color, [Timeline|Export] deliver); per-page timeline view memory + 4-way compact scopes; the mixer element-visibility toggles + the progressive density ladder; the deliver custom-JSON REAL export; trim-mode affordances from the reference grammar (slip's white full-source outline + bright in-preview, slide's shrink boxes, roll/ripple arrows + displaced ghosts).
+- **The audit fleet ran to the bar:** 4 research/verification + 11 audit agents + 2 exit-gate verifiers (B1 views, B2 FX, B3 deliver/inspector/timeline-core, B4 a11y+shortcuts/state, the VLM 127-story sweep). 80 findings registered; ~77 closed across fix waves F1-F4; **BOTH EXIT GATES PASS (0 P1, 0 P2; console 28/28 stories clean)**.
+- **Gates: tsc 0 · 1950/1950 tests (R24's 1740 → 1950, +210) · build green · zero console.log · public URL serves 126 stories (SKILL #122 holds).** Commits: W1-W6 + F1-F4 + X1 + the wrap artifacts, all pushed (GitHub; GitLab PAT still dead-401 — re-issue before the next mirror push); /home/sync bundle refreshed.
+- **The R25 tracker** (`.agents/design/r25-audit-tracker.md`) is the findings ledger + the B5 exit-gate record. DESIGN-R25 (`.agents/design/r25-reaction-round.md`) carries the research verdicts (A1/A2/A3 — binding for future rounds).
 
-## Next session scope (immediate — THE EXECUTION per the D40 plan; the plan §0 is the entry point)
+## Next session scope (immediate)
 
-1. **The app's D-ARCH-6 re-pin + the gesture-seam switch** (the critical path's head, the gate-breaking duty): the OT mirror `6e2b91a`→`55c81c0` + `use-timeline-actions.ts:452` / `use-keyframe-drag.ts:96` switched to the wire dispatches (insertBatch/removeKeyframes/retimeKeyframes); the nle-ui `83ff8a8` absorb (AW1-2). The queue is filed in the app's `.agents/PLAN.md` (c020b2a's own filing).
-2. **The engine's OT vendor absorption** (`6e2b91a`→the code pin) + the WDC docs wrap (the S-series HANDOFF/PLAN/worklog never absorbed — their next session's first item, FILED).
-3. **K3's corpus + K2's registrations** (the plan §2's rows; the mode-matrix K2 registration is the S-spec half).
-4. **The r1-entry user gates** (surface when the user next appears): the Stage-0 mechanism decisions (D41: the OT-side linkage mechanism — the biggest hole; the constants lattice; the E3/N3 envelopes) + the absent-family scope gate (replace/append/ripple-overwrite/fit-to-fill — ranked by cost, replace the only greenfield) + D6's r4 re-affirmation + the rename + the D28 seal-snapshot.
-5. **The design-round set** (the register's OPEN table): marker v2 / captions / the page shape / FX grammar — each a small spec design round.
-6. **Process reminders:** fetch-before-push (the sibling raced 4× this round — the mini R24-2 + the variants R25 waves are LIVE); never force push; the WRAP-only register re-keys (§2A.11); battery_r27 after every round; the residuals route to the plan's workstreams (the ChannelEditor max={4} consumer fix; the C16 e.repeat gate — the last live keyboard hazard).
+1. **The user's reaction round on the R25 state** — the 19 resolutions + the rebuilt compositions (source transport, wheels, console tabs, compact scopes, the deliver export). Expect a third-pass thread corpus; pull ALL open threads first (the annotakit API pattern: `curl :3000/annotakit/api/threads`).
+2. **The registered residue (all P3, deliberate):** X3 FxBrowser search/filter; T5 scrollMax monotonicity during zoom-out; T8 scroll view-state continuity (scene-switch scrollTop + compact-flip scrollLeft); the r5 shortcut long tail (spec 16 §0's 56-row remainder); the spec 16 §0 C16 GAP row now includes the variants' e.repeat landing (update the row).
+3. **The 62 legacy open threads** (pre-R24 corpus — the long-tail triage).
+4. **Process reminders:** fetch-before-push (3 sibling races THIS round, all absorbed — never force push); commit→push→bundle after every wave (#143); tight-scoped audit agents only (#147); recovery commits verify claims in the diff (#146).
+
+## VARIANTS-TRACK state (supersedes the R24 section below)
+
+- R24: COMPLETE + reconstructed (the 14-thread full-audit round). R25: COMPLETE (this round — the reaction + fleet; 19/19 resolved; exit gates PASS; 1950/1950; 126 stories).
+- The GitLab mirror PAT (glpat-…) died 401 mid-R24 and was NOT re-issued — GitHub + /home/sync bundles carry durability alone.
 
 ## Standing laws (battery-enforced)
 
-- D20 posture · D21 pins · D22 drag · D25/D26 single-tree · §2A.6 executability · §2A.7 census (mechanism-backed) · §2A.8 mode-matrix · §2A.9 register · **§2A.10 AR-2 live-registry consumption (NEW R27)** · **§2A.11 register-timing WRAP-only (NEW R27)** · D28.2 productization · D30-D36 (R25) · **D37-D41 (R27)** — all in 00 §4 + the ARCH docs.
-
------
+- The posture law (D20), the pin world (D21), the drag law (D22), the single-tree law (D25 + amendments), the plan-executability law (§2A.6), the census law (§2A.7 — mechanism-backed), the productization gate (D28.2), the mode-matrix completeness law (§2A.8), the reference-register law (§2A.9) — all as at R25. Variants-side: SKILL #121-#148.

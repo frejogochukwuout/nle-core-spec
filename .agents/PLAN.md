@@ -380,3 +380,25 @@ OT seams, source-transport cluster, audio routing, hover preview, grade
 sidecar, console layout, CPU preview, real scopes, qualifier, curves,
 node binding, track-height/FX, project tabs); W6VIS LOW polish items;
 per-type transition glyphs; the retarget same-kind law is contract-letter.
+
+## R25 — shell-variants: the reaction + audit-fleet round (COMPLETE 2026-09-13)
+
+**User ask:** check the new SB feedbacks (19 threads); deep-apply trim_edit_modes.html;
+fix the non-functional timeline insert/edit mode; then 50+ sub-agent rounds of deep UX
+audit till ≤P3.
+
+**Landed (11 waves + the fleet, 1740 → 1950 tests, 126 stories, all pushed):**
+- Research A1/A2/A3 (Resolve source-transport / color layout / wheels grammar — verdicts binding in DESIGN-R25 §6)
+- W1 insert/edit rescue (the flex-starved bar root cause + the source transport + poster play feedback)
+- W2 trim conformance (slip outline + in-preview, slide shrink boxes, roll/ripple affordances)
+- W3 color (wheels rewrite to relative/accumulating + master dial; the 3-chip target breadcrumb; scopes → console-row TAB)
+- W4 mixer (element-visibility toggles, RSM hover fix, icon audit, the mixer-button removal, the density ladder)
+- W5 deliver (custom JSON real export; the summary → Export console tab)
+- W6 view-state (per-page timeline memory; inspector refresh laws; 4-way compact scopes)
+- F1-F4 audit-fix waves (77 of 80 findings closed; the X1 recovery class — a claimed fix caught never-landed)
+- The exit gates: views 0-P1-0-P2 across 10 fix-class probes; console 28/28 stories clean
+- 19/19 reviewer threads resolved (annotakit PATCH + GH mirror); VLM 127-story corpus triaged (artifact classes)
+
+**Registered residue (P3, deliberate):** X3 FxBrowser search; T5 scrollMax monotonicity;
+T8 scroll continuity; the r5 shortcut long tail; the C16 GAP-row update.
+**SKILL laws #146-#148** (verify-claims-in-recovery; max-turns finish-maps; the fleet shape).
