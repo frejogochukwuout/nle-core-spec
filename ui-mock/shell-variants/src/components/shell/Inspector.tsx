@@ -58,7 +58,7 @@ import {
 } from 'lucide-react';
 import { activeTrackOf, useUi } from '../../state/useUiStore';
 import {
-  EFFECT_DEFS, TRANSITION_PRESENTATIONS, findElement, mediaById, project, sceneDuration,
+  EFFECT_DEFS, TRANSITION_PRESENTATIONS, effectiveFade, findElement, mediaById, project, sceneDuration,
   type EffectJSON, type ElementJSON, type SceneJSON, type TrackJSON, type TransitionJSON, type TransitionPresentation,
 } from '../../lib/mockData';
 import { ROLE_LABEL, type MixerTrackSettings, type Role } from '../../state/mockMixer';
@@ -1291,30 +1291,40 @@ function AudioSection({
             onCommit={(v) => setFieldAll({ pitchCents: clamp(Math.round(v), -100, 100) })}
           />
         </Group>
-        <Group title="Fades" onReset={() => setFieldAll({ audioFadeIn: 0, audioFadeOut: 0 })}>
+        {/* R25-F1 X1 (audit re-filed as batch-3 P1): the Fades group routes
+            through the ONE effective-fade domain — effectiveFade reads +
+            per-element setFade writes (clamp-to-duration + frame-snap + the
+            no-op guard — the store's declared single writer). The old raw
+            audioFadeIn writes were DEAD DATA for video clips (the model's
+            video owner is fadeIn — mockData.fieldOfFade) and bypassed every
+            guard; the FxInspector's FadeSection has always routed this way. */}
+        <Group
+          title="Fades"
+          onReset={() => els.forEach((e) => { useUi.getState().setFade(e.id, 'in', 0); useUi.getState().setFade(e.id, 'out', 0); })}
+        >
           <ParamRow
             label="Fade in"
-            {...agg((e) => e.audioFadeIn ?? 0)}
+            {...agg((e) => effectiveFade(e, 'in'))}
             min={0}
-            max={10}
+            max={Math.min(10, ...els.map((e) => e.duration))}
             step={0.1}
             unit="s"
             decimals={2}
             timeField
             resetTo={0}
-            onCommit={(v) => setFieldAll({ audioFadeIn: v })}
+            onCommit={(v) => els.forEach((e) => useUi.getState().setFade(e.id, 'in', v))}
           />
           <ParamRow
             label="Fade out"
-            {...agg((e) => e.audioFadeOut ?? 0)}
+            {...agg((e) => effectiveFade(e, 'out'))}
             min={0}
-            max={10}
+            max={Math.min(10, ...els.map((e) => e.duration))}
             step={0.1}
             unit="s"
             decimals={2}
             timeField
             resetTo={0}
-            onCommit={(v) => setFieldAll({ audioFadeOut: v })}
+            onCommit={(v) => els.forEach((e) => useUi.getState().setFade(e.id, 'out', v))}
           />
         </Group>
       </div>

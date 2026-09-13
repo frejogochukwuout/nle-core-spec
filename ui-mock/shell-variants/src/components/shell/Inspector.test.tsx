@@ -90,7 +90,7 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expectSections(['transform', 'composite', 'speed-change', 'effects'], true);
     expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'multi');
     expect(screen.getByTestId('inspector-entity-name')).toHaveTextContent('2 clips selected');
-    expect(screen.getByTestId('chip-mixed-values')).toHaveTextContent('Mixed values');
+    expect(screen.getAllByTestId('chip-mixed-values').length).toBeGreaterThanOrEqual(1); // R25-F1 X1: the Fades rows can ALSO be mixed now (el-1 carries demo fades, el-4 doesn't — the honest effectiveFade domain)
     expect(screen.queryByRole('slider', { name: 'Opacity slider' })).not.toBeInTheDocument();
     const field = screen.getByLabelText('Opacity — mixed values; typing sets all selected');
     expect(field).toHaveValue('');
@@ -340,6 +340,22 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     fireEvent.change(field, { target: { value: 'nope' } });
     expect(screen.getByRole('alert')).toHaveTextContent('Invalid — HH:MM:SS:FF, SS.s or Nf');
     expect(el('el-6').audioFadeIn).toBe(0.5); // invalid = no dispatch
+  });
+
+  it('R25-F1 X1 (batch-3 P1): the Fades group carries the VIDEO fade domain — effectiveFade reads, setFade writes (the single owner)', () => {
+    boot({ selection: ['el-1'] }); // VIDEO clip: fadeIn 0.5, fadeOut 0.75 (the R23-WA demo fixture)
+    // READ: the group shows the video clip's OWN domain (the old audioFadeIn reads showed 0.00 while the FX view painted 0.50/0.75)
+    expect(screen.getByLabelText('Fade in value')).toHaveValue('0.50s');
+    expect(screen.getByLabelText('Fade out value')).toHaveValue('0.75s');
+    // WRITE: a commit lands on the video owner field (fadeIn) through the clamped/snapped single writer
+    fireEvent.change(screen.getByLabelText('Fade in value'), { target: { value: '48f' } }); // 2 frames * 24 = 2.0s
+    fireEvent.keyDown(screen.getByLabelText('Fade in value'), { key: 'Enter' });
+    expect(el('el-1').fadeIn).toBe(2); // the video owner — NOT audioFadeIn (the dead field)
+    expect(el('el-1').audioFadeIn).toBeUndefined();
+    // the field-level duration cap: el-1 duration 8.5s → max 8.5 — a 99s commit is REFUSED by the field (invalid range, no dispatch; setFade's own clamp is the second belt)
+    fireEvent.change(screen.getByLabelText('Fade out value'), { target: { value: '99' } });
+    fireEvent.keyDown(screen.getByLabelText('Fade out value'), { key: 'Enter' });
+    expect(el('el-1').fadeOut).toBe(0.75); // refused — the original survives
   });
 
   it('section Reset restores store-backed AND mock-local fields through the write path', () => {
