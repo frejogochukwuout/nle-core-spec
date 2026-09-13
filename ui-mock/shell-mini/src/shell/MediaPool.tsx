@@ -11,7 +11,7 @@
    edit decision, not a media fact). */
 
 import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from 'react';
-import { Film, Image as ImageIcon, AudioLines, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Film, Image as ImageIcon, AudioLines, MonitorPlay, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useMini } from '../state/useMini';
 import { thumbGradientFor } from '../lib/filmstrip';
 import { fmtTimecode } from '../lib/timecode';
@@ -61,6 +61,10 @@ const PREVIEW_TICK_MS = 100;
 
 function MediaCard({ media }: { media: Media }) {
   const addClipFromMedia = useMini((s) => s.addClipFromMedia);
+  const enterSourcePreview = useMini((s) => s.enterSourcePreview);
+  /* R24-miniplus (D1): the gate owns the ENTRY (the affordance unmounts
+   * gate-OFF); the card's own click/drag laws are untouched either way. */
+  const miniPlus = useMini((s) => s.miniPlus);
   const [dragSource, setDragSource] = useState(false);
   /** R18j (thread #15) "autoplay videos when hovering": a real app mounts a
    *  <video> and .play()s it on hover (poster = first frame). This mock's
@@ -117,52 +121,78 @@ function MediaCard({ media }: { media: Media }) {
   const durLabel = media.kind === 'image' ? '' : ` (${fmtTimecode(media.duration)})`;
 
   return (
-    <button
-      type="button"
-      className={`mini-media-card${dragSource ? ' is-drag-source' : ''}${previewing ? ' is-previewing' : ''}`}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onClick={() => {
-        const now = Date.now();
-        if (now - lastAppendAt.current < 300) return; // PR69 C55
-        lastAppendAt.current = now;
-        addClipFromMedia(media.id);
-      }}
-      onMouseEnter={startPreview}
-      onMouseLeave={stopPreview}
-      onFocus={startPreview}
-      onBlur={stopPreview}
-      data-testid={`mini-media-${media.id}`}
-      data-media-id={media.id}
-      aria-label={`Add ${media.name}${durLabel} — click appends, drag places on the timeline`}
-      title="Click to append · drag onto a timeline lane to place"
-    >
-      <span
-        className={`mini-media-card__thumb${previewing ? ' is-previewing' : ''}`}
-        aria-hidden="true"
-        style={{ background: thumbGradientFor(media) }}
+    /* R24-miniplus W4 (DESIGN-R24 D7, F7): the card gains a wrap — the
+     * "open in source" affordance is a SIBLING button (interactive
+     * content never nests inside the card's own <button>; the card's
+     * click-append + drag-DnD laws stay byte-identical). The affordance
+     * reveals on hover/focus-within (progressive disclosure — a quiet
+     * pool, a visible affordance when the user is on the card). */
+    <div className={`mini-media-card-wrap${dragSource ? ' is-drag-source' : ''}`}>
+      <button
+        type="button"
+        className={`mini-media-card${previewing ? ' is-previewing' : ''}`}
+        draggable
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onClick={() => {
+          const now = Date.now();
+          if (now - lastAppendAt.current < 300) return; // PR69 C55
+          lastAppendAt.current = now;
+          addClipFromMedia(media.id);
+        }}
+        onMouseEnter={startPreview}
+        onMouseLeave={stopPreview}
+        onFocus={startPreview}
+        onBlur={stopPreview}
+        data-testid={`mini-media-${media.id}`}
+        data-media-id={media.id}
+        aria-label={`Add ${media.name}${durLabel} — click appends, drag places on the timeline`}
+        title="Click to append · drag onto a timeline lane to place"
       >
-      <span
-        className="mini-media-card__kind"
-        aria-hidden="true"
-        title={media.kind}
-      >
-        <KindIcon kind={media.kind} />
-      </span>
-      </span>
-      <span className="mini-media-card__meta">
-        <span className="mini-media-card__name">{media.name}</span>
-        {/* R18j thread #18: no duration chip for images. While a video
-            preview runs (thread #15) the chip scrubs live; at rest it
-            shows the source length. */}
-        {media.kind !== 'image' && (
-          <span className="mini-media-card__dur mini-mono" data-testid={`mini-dur-${media.id}`}>
-            {previewing ? `▶ ${fmtTimecode(previewT ?? 0)}` : fmtTimecode(media.duration)}
-          </span>
-        )}
-      </span>
-    </button>
+        <span
+          className={`mini-media-card__thumb${previewing ? ' is-previewing' : ''}`}
+          aria-hidden="true"
+          style={{ background: thumbGradientFor(media) }}
+        >
+        <span
+          className="mini-media-card__kind"
+          aria-hidden="true"
+          title={media.kind}
+        >
+          <KindIcon kind={media.kind} />
+        </span>
+        </span>
+        <span className="mini-media-card__meta">
+          <span className="mini-media-card__name">{media.name}</span>
+          {/* R18j thread #18: no duration chip for images. While a video
+              preview runs (thread #15) the chip scrubs live; at rest it
+              shows the source length. */}
+          {media.kind !== 'image' && (
+            <span className="mini-media-card__dur mini-mono" data-testid={`mini-dur-${media.id}`}>
+              {previewing ? `▶ ${fmtTimecode(previewT ?? 0)}` : fmtTimecode(media.duration)}
+            </span>
+          )}
+        </span>
+      </button>
+      {miniPlus && (
+        <button
+          type="button"
+          className="mini-media-card__srcbtn"
+          aria-label={`Open ${media.name} in the source viewer`}
+          title="Open in source viewer (mark in/out, insert modes)"
+          onClick={(e) => {
+            /* the card's append law never fires from here (a sibling —
+               * the click does not bubble into the card button; the stop
+               * is the defensive seam). */
+            e.stopPropagation();
+            enterSourcePreview(media.id);
+          }}
+          data-testid={`mini-btn-source-open-${media.id}`}
+        >
+          <MonitorPlay size={13} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      )}
+    </div>
   );
 }
 
