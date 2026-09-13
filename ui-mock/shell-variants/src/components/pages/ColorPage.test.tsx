@@ -140,13 +140,20 @@ describe('WheelsPanel (Primaries — store-driven GradeParams)', () => {
     expect(S().mockGrades['el-2'].offset).toBeCloseTo(0.2, 5);
     // R/G/B cells are t_c·amount — amount is still 0, so they read 0.00
     expect(screen.getByLabelText('Offset R')).toHaveTextContent('0.00');
-    // drag the offset puck straight UP (θ=0 → hue 0 = red, amount 1)
-    // → R cell = 1·1023 = 1023.00 (the ×1023 law, color-layout §3.5)
+    /* RE-PIN (R25-W3/A3 — the absolute puck drag is DEAD): the old pin
+       jumped the puck with a pointerdown AT the 400px-mocked box's top
+       (θ=0 → hue 0 = red, amount 1). The trackball law: pointerdown never
+       moves the puck — only Δpointer does; a 100px upward drag from the
+       box center (200,200) accumulates v=(0,100), rim-clamps to (0,62) →
+       amount 1 at hue 330 (straight up on the vectorscope ring = 30° past
+       the upper-left red, toward magenta). */
     const wheel = screen.getByTestId('shell-color-wheel-offset');
-    fireEvent.pointerDown(wheel, { pointerId: 1, clientX: 200, clientY: 0, buttons: 1 });
+    fireEvent.pointerDown(wheel, { pointerId: 1, clientX: 200, clientY: 200, buttons: 1 });
+    fireEvent.pointerMove(wheel, { pointerId: 1, clientX: 200, clientY: 100, buttons: 1 });
     fireEvent.pointerUp(wheel, { pointerId: 1 });
-    expect(S().mockGrades['el-2'].offHue).toBe(0);
+    expect(S().mockGrades['el-2'].offHue).toBe(330);
     expect(S().mockGrades['el-2'].offAmount).toBeCloseTo(1, 2);
+    // R cell = t_r · 1 · 1023 = 1023.00 (the ×1023 law, color-layout §3.5)
     expect(screen.getByLabelText('Offset R')).toHaveTextContent('1023.00');
   });
 
@@ -643,6 +650,40 @@ describe('ColorNodeGraph (left dock — reference topology kept, C56 binding)', 
     expect(screen.getByRole('button', { name: 'Node page 1' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Node graph menu' })).toBeInTheDocument();
   });
+
+  /* R25-W3 (A2, th_mtzonhlu): the graph header mirrors the inspector's
+     level chip — the SAME GradeTargetSegmented (one source: colorGradeTarget
+     — resolveGradeTargetId feeds both surfaces' labels), and × returns the
+     console row to the Timeline tab (the side-by-side slot is retired). */
+  it('R25-W3: the header carries the level segmented control (ONE source with the inspector) + × back to the Timeline tab', () => {
+    setStore({ consoleTab: 'nodes' });
+    render(<ColorNodeGraph />);
+    const clip = screen.getByTestId('shell-color-nodegraph-target-clip');
+    const tl = screen.getByTestId('shell-color-nodegraph-target-timeline');
+    expect(clip).toHaveAttribute('aria-pressed', 'true');
+    expect(tl).toHaveAttribute('aria-pressed', 'false');
+    // the graph's segmented writes the SAME atom the inspector's chip 2 does
+    fireEvent.click(tl);
+    expect(S().colorGradeTarget).toBe('timeline');
+    expect(screen.getByTestId('shell-color-nodeviewer-target')).toHaveTextContent('Timeline');
+    fireEvent.click(clip);
+    expect(S().colorGradeTarget).toBe('clip');
+    expect(screen.getByTestId('shell-color-nodeviewer-target')).toHaveTextContent('Marina interview');
+    // × returns the console row to the Timeline tab (the tab seam)
+    fireEvent.click(screen.getByTestId('shell-color-nodeviewer-close'));
+    expect(S().consoleTab).toBe('timeline');
+    expect(S().colorNodesDock).toBe(false); // the legacy flag stays dead for rendering
+  });
+
+  /* R25-W3 (A2): the selected node's highlight is the ACCENT border (the
+     inspector's node-chip click lands on this same highlight). */
+  it('R25-W3: the selected node card carries the accent selection ring', () => {
+    render(<ColorNodeGraph />);
+    const primary = screen.getByTestId('shell-color-node-primary');
+    const card = primary.lastElementChild as HTMLElement; // [title span, NodeCard]
+    expect(card.style.border).toContain('var(--accent-selection)');
+    expect(card.style.boxShadow).toContain('var(--accent-selection)');
+  });
 });
 
 describe('ScopesDock (C53 — real since W4c; R23-WB re-home: the tabbed console row, D-B1)', () => {
@@ -673,13 +714,17 @@ describe('ScopesDock (C53 — real since W4c; R23-WB re-home: the tabbed console
 });
 
 describe('ColorInspector (C51 fold — the W3 grammar, same target resolver)', () => {
-  it('chip shows WHICH target; the Timeline target adds the Timeline grade badge', () => {
+  it('chip shows WHICH target (A2 breadcrumb: name · track); the timeline target shows the whole-timeline copy', () => {
     mountPanel(<ColorInspector />);
     expect(screen.getByTestId('shell-color-inspector-chip')).toHaveTextContent('Marina interview');
+    /* RE-PIN (R25-W3/A2, th_mtzomdge): the old `shell-color-inspector-
+       timeline-badge` is FOLDED into the breadcrumb's scope chip — the
+       badge's testid retired with the R22 grammar (the breadcrumb + the
+       segmented tooltip subsume its meaning). */
     expect(screen.queryByTestId('shell-color-inspector-timeline-badge')).toBeNull();
     act(() => { useUi.setState({ colorGradeTarget: 'timeline' }); });
-    expect(screen.getByTestId('shell-color-inspector-chip')).toHaveTextContent('Timeline');
-    expect(screen.getByTestId('shell-color-inspector-timeline-badge')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-inspector-chip')).toHaveTextContent('Timeline (all clips)');
+    expect(screen.queryByTestId('shell-color-inspector-timeline-badge')).toBeNull(); // folded — re-pinned
   });
 
   it('R22 (#78): the inspector carries the PANELS as tabs — the wheels mount on Primaries', () => {

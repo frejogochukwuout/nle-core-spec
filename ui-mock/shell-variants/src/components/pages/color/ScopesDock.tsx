@@ -1,12 +1,23 @@
 /* ScopesDock — R23-WB (DESIGN-R23 D-B1) → R24-W2 (DESIGN-R24 §1.2
-   A2-R2/R3; issues #90/#95/#68/#67). The scopes console moved AGAIN —
-   from the timeline-area console row to the ~160px PANE UNDER THE
-   VIEWER, inside F6 region [2]'s column (Viewer flex-1 + the pane below),
-   colorScopesState-gated ('off' = not rendered) and NEVER a new F6 stop
-   (the pane adds no region to the cycle). The R23-WB ruling-14 stale-frame
-   hint is DELETED with the re-home: region [2] is always Viewer-led now
-   (A2-R1), so the viewer keeps publishing frames while every console is
-   open — there is no stale state left to confess.
+   A2-R2/R3; issues #90/#95/#68/#67) → R25-W3 (DESIGN-R25 §3 W3 / §6 A2;
+   issues th_mtzokuem "panel or under inspector?" / th_mtzoi7vr "console
+   multi-tab next to timeline"). The scopes console moved a THIRD time:
+   the R24 ~160px pane under the viewer is RETIRED (superseded by the
+   reviewer's latest — A2 confirms scopes are ALWAYS-ON analysis beside
+   the node graph), and the dock re-homes to the COLOR PAGE'S CONSOLE-ROW
+   TAB (the [Timeline | Nodes | Scopes] strip's 'scopes' panel; the
+   AppShell mounts it and the ACTIVE tab takes the row). The component
+   body is unchanged: same reference-exact tabs (Parade / Waveform /
+   Vectorscope / Histogram), same one-scope-at-a-time law, same trace
+   machinery, same 26px dock header (title + status + the one-shot
+   four-up toast — it stays as the panel's own body header under the
+   strip).
+
+   Mount law: the dock renders when EITHER its own power switch says so
+   (colorScopesState 'open' — the SOLO/story/test grammar, kept verbatim:
+   'off' = not rendered at all) OR the console tab selects it
+   (consoleTab === 'scopes' — the app's mount gate; the tab IS the
+   visibility, so no second state can strand a ghost panel).
 
    The tabs carry the REFERENCE's exact labels (Parade / Waveform /
    Vectorscope / Histogram — A2-R2) and keep the R23-WB one-scope-at-a-time
@@ -81,10 +92,12 @@ const PANELS: { kind: ScopeKind; label: string; a11y: string }[] = [
 export const SCOPE_THROTTLE_MS = 100;
 
 export function ScopesDock() {
-  /* R22-D3 → R23-WB → R24-W2: the dock state is STORE-driven ('off' = NOT
-     rendered at all — the mixer's collapsed law; the AppShell gates the
-     viewer-column pane and the Toolbar2 toggle writes this). */
+  /* R22-D3 → R23-WB → R24-W2 → R25-W3: the dock state is STORE-driven
+     ('off' = NOT rendered at all — the mixer's collapsed law) with the
+     console-row tab as the app's second legitimate mount context
+     (consoleTab === 'scopes'). */
   const mode = useUi((s) => s.colorScopesState);
+  const consoleTab = useUi((s) => s.consoleTab);
   const src = useScopeSource(); // the store half stays live (status line)
   const [frame, setFrame] = useState<GradedFrame | null>(() => getGradedFrame());
   /* D-B1: ONE scope at a time — the active tab (local view state; the
@@ -171,8 +184,9 @@ export function ScopesDock() {
 
   /* 'off' = NOT rendered at all (the mixer's collapsed law — the AppShell
      gates too; solo mounts see the same law so a story/test never shows a
-     ghost dock). */
-  if (mode === 'off') return null;
+     ghost dock) — UNLESS the console-row Scopes tab is active (R25-W3: the
+     tab is the app's mount gate; the legacy state stays for solo mounts). */
+  if (mode === 'off' && consoleTab !== 'scopes') return null;
 
   return (
     <div

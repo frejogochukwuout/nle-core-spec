@@ -618,13 +618,30 @@ interface UiState {
    *  test patch site; colorScopesLastVisual is REMOVED (Part IX ruling 13).
    *  View state, never snapshotted. */
   colorScopesState: 'off' | 'open';
+  /** R25-W3 (DESIGN-R25 §3 W3 / §6 A2; issues th_mtzokuem "panel or under
+   *  inspector?" + th_mtzoi7vr "console multi-tab next to timeline"): the
+   *  CONSOLE-ROW TAB — which panel owns the timeline block's console row on
+   *  the color page. 'timeline' (the default) = exactly the pre-W3 row
+   *  (the compact strip / full lanes + the mixer slot); 'nodes' = the
+   *  ColorNodeGraph; 'scopes' = the ScopesDock. The ACTIVE tab's panel takes
+   *  the row's space (the reviewer's "it takes the same space just a thin
+   *  tab" ruling) — the R24-W2 side-by-side nodeviewer slot AND the R24-#68
+   *  under-viewer scopes pane are RETIRED (superseded placements; the
+   *  colorNodesDock flag is dead-but-harmless view state now, the
+   *  panels.effects precedent). View state, NEVER snapshotted; leaving the
+   *  color page resets it to 'timeline' (the setPage exit law — the simple
+   *  reset, no per-page memory). */
+  consoleTab: 'timeline' | 'nodes' | 'scopes';
   /** R22-D4 → R23-WB (DESIGN-R23 D-B2; issue #93): the node-graph flag now
    *  points at the VIEWER-REGION surface — true = ColorNodeGraph replaces
    *  the Viewer in the mainbody center ("fit better on the preview window …
    *  we can cross it out just like a normal asset preview"); the timeline-
    *  area dock died ("stacking next to multi-track is perhaps not a great
    *  place as we need more space for it"). Toggled from Toolbar2 on color;
-   *  the surface's × restores the viewer. View state, never snapshotted. */
+   *  the surface's × restores the viewer. View state, never snapshotted.
+   *  R25-W3: DEAD for rendering (the consoleTab 'nodes' tab mounts the
+   *  graph; Toolbar2/the graph × write the tab) — kept for the legacy
+   *  StoreBoot patches + solo-mount gates, the panels.effects law. */
   colorNodesDock: boolean;
   /** R23-WB (DESIGN-R23 D-B3; issue #94): timeline density — 'auto' resolves
    *  per page (COMPACT on color + deliver per D-F1, full elsewhere);
@@ -833,6 +850,8 @@ interface UiState {
   /** R22-D3 → R23-WB: sets the scopes console state (dedicated setter —
    *  togglePanel is boolean-keyed; the 'open' state is the only visual now). */
   setColorScopesState: (state: UiState['colorScopesState']) => void;
+  /** R25-W3: the console-row tab writer (view-state, never a history entry). */
+  setConsoleTab: (tab: UiState['consoleTab']) => void;
   /** R22-D4 → R23-WB: toggles the node-graph viewer-region surface (D-B2). */
   toggleColorNodesDock: () => void;
   /** R23-WB (D-B3): the density override write ('auto' | 'on' | 'off'). */
@@ -1085,7 +1104,8 @@ export const useUi = create<UiState>((set, get) => ({
   mockGrades: {},
   colorInspectorTab: 'primaries',
   colorScopesState: 'off', // R22-D3/R23-WB: default OFF (#77 "shouldn't always be there")
-  colorNodesDock: false, // R23-WB (D-B2): the viewer-region surface, default OFF
+  consoleTab: 'timeline', // R25-W3: the console row is the timeline's until a tab says otherwise
+  colorNodesDock: false, // R23-WB (D-B2): the viewer-region surface, default OFF — R25-W3: DEAD for rendering (consoleTab owns the mount)
   timelineCompact: 'auto', // R23-WB (D-B3): per-page resolution until the user toggles
   colorStills: SEED_STILLS, // R23-WB (D-B4): the Gallery's seed stills (view state)
   colorGradeTarget: 'clip',
@@ -1124,6 +1144,13 @@ export const useUi = create<UiState>((set, get) => ({
        unclosable from that page's toolbar: the exit law keeps every console
        closable on the page that owns it (audio). */
     ...(p !== 'audio' && s.mixerState !== 'collapsed' ? { mixerState: 'collapsed' as MixerDockState } : {}),
+    /* R25-W3 (DESIGN-R25 §3 W3): the console-tab exit law — leaving the
+       color page resets the console row to 'timeline'. The Nodes/Scopes
+       panels are color-page surfaces; a carried tab on another page would
+       either render nothing (the AppShell mounts them color-only) or strand
+       a boot patch, so the row resets with the same one-transition pattern
+       as the mixer exit law above (simple reset, no per-page memory). */
+    ...(s.page === 'color' && p !== 'color' && s.consoleTab !== 'timeline' ? { consoleTab: 'timeline' as UiState['consoleTab'] } : {}),
   })),
   setActiveScene: (id) => set((s) => {
     // lockAll is scene-derived view state — re-derive on switch so the toolbar
@@ -1872,6 +1899,9 @@ export const useUi = create<UiState>((set, get) => ({
   }),
   setColorInspectorTab: (tab) => set({ colorInspectorTab: tab }),
   setColorScopesState: (state) => set({ colorScopesState: state }),
+  /* R25-W3: plain view-state write (the sourceRanges law — a tab flip never
+   * mints undo history; the AppShell re-renders on the atom). */
+  setConsoleTab: (tab) => set({ consoleTab: tab }),
   toggleColorNodesDock: () => set((s) => ({ colorNodesDock: !s.colorNodesDock })),
   setTimelineCompact: (v) => set({ timelineCompact: v }),
   /* R23-WB (D-B4): the Gallery writes — plain view-state `set`, never a
