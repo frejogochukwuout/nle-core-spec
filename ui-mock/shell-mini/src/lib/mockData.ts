@@ -88,17 +88,6 @@ export const EFFECT_DEFS: EffectDef[] = [
   },
 ];
 
-/** The clip's effect id mint (deterministic, like mintClipId). */
-let fxSeq = 0;
-export function mintEffectId(): string {
-  fxSeq += 1;
-  return `fx_${fxSeq}`;
-}
-/** Test hook: reset the effect id sequence. */
-export function __resetEffectIds(): void {
-  fxSeq = 0;
-}
-
 export type TransitionPresentation =
   | 'Cross Dissolve'
   | 'Dip to Black'

@@ -1529,16 +1529,63 @@ describe('R24 W2: the transition layer + tool (Timeline surface)', () => {
     expect(screen.queryByTestId('mini-wedge-cA')).toBeNull();
   });
 
-  it('the wedge renders for a clip with transitionOut (any tool, gate ON); click selects the owner', () => {
+  it('the wedge renders for a clip with transitionOut (any tool, gate ON); the X hit selects the owner', () => {
     act(() => {
       useMini.setState({ doc: touchingDoc() });
       S().setTransition('cA');
     });
     render(<Timeline />);
+    // F4: the wedge BOX is a visual (aria-hidden span); the X button is the hit
     const wedge = screen.getByTestId('mini-wedge-cA');
     expect(wedge).toBeInTheDocument();
-    fireEvent.click(wedge);
+    const hit = screen.getByTestId('mini-wedge-hit-cA');
+    expect(hit).toBeInTheDocument();
+    fireEvent.click(hit);
     expect(S().selectedId).toBe('cA');
+  });
+
+  it('F2 (deviation #15): an ORPHANED transition is deleted by the next commit (move breaks the seam)', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc() });
+      S().setTransition('cA');
+    });
+    // move cB right — the seam at 3.5 dies, cA's transition is orphaned
+    act(() => {
+      S().moveClip('cB', 4.5);
+    });
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut).toBeUndefined();
+  });
+
+  it('F9a: the wedge geometry — left = cut − duration·(1−alignment) (alignment honored)', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc() });
+      S().setTransition('cA');
+      S().setTransition('cA', { alignment: 1 }); // fully on the right side of the cut
+    });
+    render(<Timeline />);
+    const wedge = screen.getByTestId('mini-wedge-cA') as HTMLElement;
+    // cut at 3.5s * 48pps = 168px; alignment 1 => left = cut (168), width = 0.5*48 = 24
+    expect(wedge.style.left).toBe('168px');
+    expect(wedge.style.width).toBe('24px');
+  });
+
+  it('F9g: video-only mode renders the layer on the single bound video lane', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc(), trackMode: 'video', trimTool: 'transition' });
+    });
+    render(<Timeline />);
+    expect(screen.getByTestId('mini-seam-cA')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('mini-seam-cA'));
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut).toBeDefined();
+  });
+
+  it('F9f: the minimized strip renders NO wedges (the MinLane ruling — deviation #18)', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc(), timelineMinimized: true });
+      S().setTransition('cA');
+    });
+    render(<Timeline />);
+    expect(screen.queryByTestId('mini-wedge-cA')).toBeNull();
   });
 
   it('transition tool: clicking a touching EMPTY seam mints the default transition', () => {
