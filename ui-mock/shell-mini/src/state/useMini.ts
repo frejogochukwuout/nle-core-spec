@@ -272,6 +272,10 @@ export interface MiniState {
   /** R20 (thread #29, wave 8): flip a track's MUTE edit-state flag (the
    *  inspector track card's named basic control — commit + one entry). */
   toggleTrackMute: (trackId: string) => void;
+  /** R24-miniplus W5 (DESIGN-R24 D8): flip a track's SOLO flag —
+   *  solo-in-place (the anySolo law via geometry.isTrackAudible).
+   *  Commit + one entry, like mute. */
+  toggleTrackSolo: (trackId: string) => void;
   /** R19 (thread #53): seek to the head of the under-playhead clip (the
    *  bound VIDEO world — the viewer's world); taps at a clip head walk
    *  back edit by edit. */
@@ -1006,6 +1010,30 @@ export const useMini = create<MiniState>((set, get) => {
         if (!t) return;
         doc.tracks = doc.tracks.map((x) =>
           x.id === trackId ? { ...x, muted: !x.muted } : x,
+        );
+      });
+    },
+
+    toggleTrackSolo: (trackId) => {
+      const state = get();
+      const track = state.doc.tracks.find((t) => t.id === trackId);
+      if (!track) return;
+      commit((doc) => {
+        /* NEW track objects (the draft shares the tracks array with the
+         * live doc — an in-place t.solo = true would alias and
+         * docChanged would see nothing; the mute law maps, so does solo). */
+        doc.tracks = doc.tracks.map((t) =>
+          t.id === trackId
+            ? /* the absent-is-default law: solo true <-> absent (a false
+               * solo is the default state — never stored) */
+              t.solo === true
+              ? (() => {
+                  const next = { ...t };
+                  delete next.solo;
+                  return next;
+                })()
+              : { ...t, solo: true }
+            : t,
         );
       });
     },

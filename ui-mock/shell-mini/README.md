@@ -10,13 +10,13 @@ set + DOM anatomy).
 The build contract is [`docs/DESIGN-mvp.md`](docs/DESIGN-mvp.md) (v2.1
 FINAL — design-audit + code-review rounds folded). `../shell-variants/`
 remains the full spec-18 study; this app is the deliberately small sibling:
-~36 source files vs 100+, 441 tests vs ~1340, 13 stories vs ~122 (PR69
+~36 source files vs 100+, 445 tests vs ~1340, 13 stories vs ~122 (PR69
 refresh; the test lineage: 358 → 333 at the R22 drag-machinery retirement
 (user directive) → 343 with the review-loop nets → 355 with the R23 seal round's
 otProject bridge + fix-round nets → 357 with the R24 audio-clip-box
 nets → 377 with the mini-plus W0 foundation nets → 396 with the W1
 property-editing + effects nets → 415 with the W2 transitions + fades → 428 with the W2 wave-review
-fix round → 441 with the W3 trim modes).
+fix round → 445 with the W3 trim modes).
 
 **The seam family (R23 seal round — the transport-readiness docs):**
 [`docs/OT-SEAMS.md`](docs/OT-SEAMS.md) — the timeline-ops seam map (the
@@ -35,7 +35,7 @@ npm install         # Node ^20.19 || >=22.12 (Vite 8 floor); .npmrc sets legacy-
 npm run dev         # the APP — http://localhost:3001/ (localhost dev surface;
                     #   run via `python3 scripts/dev3000.py` double-fork daemon so it
                     #   survives the per-toolcall process reaping — plain nohup/setsid die)
-npm test            # vitest — 10 files / 441 tests (jsdom)
+npm test            # vitest — 10 files / 445 tests (jsdom)
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # static bundle → dist/ (base: '/')
 npm run storybook   # the FULL dev server on :3000 (run via `python3

@@ -77,6 +77,7 @@ import {
   PPS_STEPS,
   timeToPx,
   pxToTime,
+  isTrackAudible,
 } from '../lib/geometry';
 import { fmtRulerLabel, fmtTimecode } from '../lib/timecode';
 import { filmstripFor } from '../lib/filmstrip';
@@ -889,6 +890,8 @@ function TrackHead({ track, collapsed }: { track: Track; collapsed: boolean }) {
    * the chip carries what the edit says; even a locked (host-bound) lane
    * shows its mute state honestly). A real button — click unmutes. */
   const toggleTrackMute = useMini((s) => s.toggleTrackMute);
+  const toggleTrackSolo = useMini((s) => s.toggleTrackSolo);
+  const miniPlus = useMini((s) => s.miniPlus);
   const candidates = doc.tracks.filter((t) => t.kind === track.kind);
   const showSelect = !locked && !collapsed && candidates.length >= 2;
   /* R19 (thread #28) — the head law, revised: multi-track + unlocked →
@@ -945,6 +948,23 @@ function TrackHead({ track, collapsed }: { track: Track; collapsed: boolean }) {
           data-testid={`mini-track-mute-chip-${track.id}`}
         >
           M
+        </button>
+      )}
+      {/* R24-miniplus W5 (DESIGN-R24 D8): the S button — the M chip keeps
+       *  its conditional law (additive); S is gate-ON-only. The
+       *  solo-in-place law: effectiveMute = muted || (anySolo && !solo)
+       *  — read via the ONE selector, never the raw flags. */}
+      {miniPlus && !collapsed && (
+        <button
+          type="button"
+          className={`qc-track-solo-chip${track.solo ? ' is-active' : ''}`}
+          onClick={() => toggleTrackSolo(track.id)}
+          aria-pressed={track.solo === true}
+          aria-label={`${track.solo ? 'Clear solo on' : 'Solo'} ${track.label} lane`}
+          title={`${track.label} solo — solo-in-place: other lanes go silent while any solo is on (saved with the project)`}
+          data-testid={`mini-track-solo-${track.id}`}
+        >
+          S
         </button>
       )}
     </div>
@@ -1304,7 +1324,12 @@ function Lane({
 
   return (
     <div
-      className={`qc-track-row__content${dropping ? ' is-drop-target' : ''}${track.muted ? ' is-muted' : ''}`}
+      className={`qc-track-row__content${dropping ? ' is-drop-target' : ''}${
+        /* R24-miniplus W5: the dim reads EFFECTIVE audibility (the ONE
+         * selector — the anySolo law). No solos anywhere -> identical to
+         * the R20 muted law (the nets hold). */
+        !isTrackAudible(doc, track.id) ? ' is-muted' : ''
+      }`}
       role="group"
       aria-label={`${track.kind === 'audio' ? 'Audio' : 'Video'} track ${track.label}`}
       data-testid={`mini-lane-${track.id}`}

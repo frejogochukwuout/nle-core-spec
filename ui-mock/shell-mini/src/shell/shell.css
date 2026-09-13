@@ -1098,3 +1098,9 @@
   line-height: 1.5;
   color: rgba(255, 255, 255, 0.55);
 }
+
+.mini-inspector__mute.is-solo {
+  border-color: rgba(250, 204, 21, 0.55);
+  background: rgba(250, 204, 21, 0.12);
+  color: rgb(250, 204, 21);
+}
