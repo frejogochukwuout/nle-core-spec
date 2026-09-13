@@ -5,10 +5,11 @@
    altKey exactly. F6 region cycling stays in AppShell (spec 18 §11.5). */
 
 import { useEffect, useRef } from 'react';
-import { useUi, sourcePlayheadOf } from '../state/useUiStore';
+import { useUi, sourcePlayheadOf, resolveGradeTargetId } from '../state/useUiStore';
 import { snapToFrame } from '../lib/timecode';
 import { zoomBus } from '../lib/zoomController';
 import { isGestureActive } from '../lib/timelinePlacement';
+import { findElement } from '../lib/mockData';
 import { DEFAULT_PPS } from '../lib/pixel';
 import type { Marker } from '../lib/mockData';
 import type { ConfirmFn } from '../components/shell/ConfirmDialog';
@@ -52,10 +53,32 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
          leak). The Clip owns the module flag (lib/timelinePlacement — set on
          5px activation, cleared on every end + unmount); while it holds we
          swallow the key entirely (no store write, no preventDefault — the
-         default for these keys is inert here). */
+         default for these keys is inert here).
+         R25-F4 (SS6): Escape JOINS the gate — during an active drag the
+         gesture's own cancel owns Esc; the domain ladder below must not
+         run under it (a mid-drag Esc used to clear the selection / point
+         domains while the Clip's pointer-up still committed into the
+         shifted world). */
       const destructive = key === 'Delete' || key === 'Backspace' || (cmd && !alt && lower === 'z');
-      if (destructive && isGestureActive()) return;
+      if ((destructive || key === 'Escape') && isGestureActive()) return;
       const now = performance.now();
+
+      /* R25-F4 (SS2 — the mini's C16 law): the e.repeat gate — held keys
+         must not machine-gun DISCRETE doc writers (one press, one write).
+         The gated family: M (add/remove marker), I/O (loop + source-range
+         writers), [ ] (trim), ⌘B (split), ⌘D (duplicate), the ⌘M mute
+         family (⌘M / ⌘⇧M mute-all), ⌥⇧M (marker-with-color) and the ⌫
+         destructive family. DELIBERATELY repeat-ALLOWED — the
+         continuous-motion class, the documented choice per the wave
+         contract: arrow nudges (held frame-stepping is desirable), JKL
+         multi-tap (performance.now-driven — each repeat re-arms the accel
+         ladder anyway), held-scrub keys, zoom +/-, and ⌘Z (the one held
+         combo users EXPECT to repeat — multi-undo). */
+      const discreteDocKey =
+        (!cmd && !alt && (lower === 'm' || lower === 'i' || lower === 'o' || key === '[' || key === ']' || key === 'Delete' || key === 'Backspace'))
+        || (cmd && !alt && (lower === 'b' || lower === 'd' || lower === 'm'))
+        || (alt && e.shiftKey && e.code === 'KeyM');
+      if (e.repeat && discreteDocKey) return;
 
       /* ---- JKL shuttle: tap-accel 1× → 2× → 4×, reset on K / Space.
           spec 16 §3.1: ⇧J/⇧L jump straight to 2× (no accel ladder).
@@ -233,7 +256,13 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
              domains held): the shell-level domain clears join the ladder
              (tool → marker → FX object → clip selection; the page exit and
              modal-close layers own theirs — cheatOpen returns early above,
-             ConfirmDialog traps Escape at its own layer). */
+             ConfirmDialog traps Escape at its own layer).
+             R25-F4 (SS5): the SOURCE-MODE EXIT rung rides FIRST — Esc now
+             leaves the open source viewer (the X / "Back to program"
+             button was previously the only exit door; the mouse owned it).
+             The source monitor is the topmost transient surface, so it
+             beats every rung below it. */
+          if (s.viewerMode === 'source') { s.exitSourcePreview(); return; }
           if (s.page === 'audio') s.exitAudioFocus();
           else if (s.tool !== 'select') s.setTool('select');
           else if (s.selectedMarkerId) s.selectMarker(null);
@@ -444,14 +473,33 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
         return;
       }
 
-      /* ---- plain single-key bindings (tools, in/out, markers, slip) ---- */
+      /* ---- plain single-key bindings (tools, in/out, markers, slip) ----
+         R25-F4 (SS8): the TOOL keys (V/B/T/Y/U/R) are EDIT/FX-page
+         grammar — Color / Deliver / Audio mount no tool rail, so firing
+         there armed tools whose affordances live on unmounted surfaces
+         (R on Color even SHADOWED spec 16 §3.11's kbd-reset-color row).
+         On COLOR, R is that row: reset the CURRENT grade target —
+         resolveGradeTargetId's single seam (the same id every grading
+         surface resolves: 'timeline' or selection[0]); a null target is
+         honestly inert (nothing to reset — no toast, the grade record
+         doesn't exist). */
+      const toolKeysLive = s.page === 'edit' || s.page === 'fx';
       switch (lower) {
-        case 'v': s.setTool('select'); return;
-        case 'b': s.setTool('blade'); return;
-        case 't': s.setTool('roll'); return;
-        case 'y': s.setTool('slip'); return;
-        case 'u': s.setTool('slide'); return;
-        case 'r': s.setTool('ripple'); return;
+        case 'v': if (!toolKeysLive) return; s.setTool('select'); return;
+        case 'b': if (!toolKeysLive) return; s.setTool('blade'); return;
+        case 't': if (!toolKeysLive) return; s.setTool('roll'); return;
+        case 'y': if (!toolKeysLive) return; s.setTool('slip'); return;
+        case 'u': if (!toolKeysLive) return; s.setTool('slide'); return;
+        case 'r':
+          /* SS8: color owns R as the kbd-reset-color row (§3.11) */
+          if (s.page === 'color') {
+            const target = resolveGradeTargetId(s);
+            if (target) s.resetGrade(target);
+            return;
+          }
+          if (!toolKeysLive) return;
+          s.setTool('ripple');
+          return;
         case 'n': s.toggleSnap(); return;
         case 'i':
         case 'o': {
@@ -486,22 +534,53 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           return;
         }
         case ',':
-        case '.':
+        case '.': {
           /* R20-W2 (DESIGN-R20 D2, C46): source-mode insert/overwrite — the
              Premiere grammar (`,` = insert, `.` = overwrite) acting on the
              SOURCE asset. GATED to the source viewer, which makes it
-             CONTEXT-DISJOINT from spec 16 §3.6's clips-slip (`, / .` slip
-             the SELECTION — program mode keeps that ladder below, and the
-             source-mode handoff is registered in the deviation register).
-             Bind only while a source with duration could load; the store's
-             honest toasts carry the refusals. */
+             CONTEXT-DISJOINT from spec 16 §3.6's clips-slip (program mode
+             keeps the tool ladder below, and the source-mode handoff is
+             registered in the deviation register). Bind only while a source
+             with duration could load; the store's honest toasts carry the
+             refusals.
+             R25-F4 (SS7 — spec D34.3's four-meaning law): in PROGRAM mode
+             ,/. dispatches by the ARMED TOOL — select NUDGES the clip
+             (moveElements, the batch engine's own overlap + frame-snap
+             laws), slide SLIDES (slideMove — the neighbors' facing edges
+             follow, the keyboard twin of the slide gesture), slip SLIPS
+             (sourceStart only — the old universal default), and every other
+             tool (blade/roll/ripple/fx) is HONESTLY INERT: those tools edit
+             by gesture semantics, and a frame-nudge under them would be a
+             silent surprise write. */
           if (s.viewerMode === 'source' && s.sourceMediaId) {
             e.preventDefault();
             s.insertMediaAt(s.sourceMediaId, key === ',' ? 'insert' : 'overwrite');
             return;
           }
-          if (s.selection.length > 0) s.slipNudge(s.selection, e.shiftKey ? (key === ',' ? -10 : 10) : (key === ',' ? -1 : 1));
-          return;
+          if (s.selection.length === 0) return;
+          const dir = key === ',' ? -1 : 1;
+          const frames = (e.shiftKey ? 10 : 1) * dir;
+          if (s.tool === 'slip') {
+            s.slipNudge(s.selection, frames);
+            return;
+          }
+          if (s.tool === 'slide') {
+            for (const id of s.selection) {
+              const hit = findElement(s.scenes, id);
+              if (hit) s.slideMove(id, snapToFrame(hit.element.startTime + frames / 24));
+            }
+            return;
+          }
+          if (s.tool === 'select') {
+            const moves = s.selection.flatMap((id) => {
+              const hit = findElement(s.scenes, id);
+              return hit ? [{ id, trackId: hit.track.id, startTime: snapToFrame(hit.element.startTime + frames / 24) }] : [];
+            });
+            if (moves.length > 0) s.moveElements({ moves });
+            return;
+          }
+          return; // blade / roll / ripple / fx — honestly inert (documented above)
+        }
         /* spec 16 §3.4 ⇧,/⇧. = 10-frame slip ladder (R14 — was 1-frame only);
            spec 16 §3.8 zoom keys: ×1.7 canonical step (R15 T1 revision,
            same factor as the toolbar buttons) via the zoom bus */

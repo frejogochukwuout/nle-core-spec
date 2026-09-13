@@ -80,11 +80,28 @@ describe('CaptionInspector (R19 captions)', () => {
     expect(S().playhead).toBeCloseTo(237 / 24, 6); // cap-4 startTime
     fireEvent.click(screen.getByTestId('shell-caption-inspector-prev'));
     expect(S().selection).toEqual(['cap-3']);
-    // boundary: Prev on the first caption is a real disabled, not a silent no-op
+    /* boundary: RE-PINNED R25-F4 (AA8) — Prev on the first caption is
+       HONEST-disabled (aria-disabled + the reason tip, still tabbable —
+       the ViewOptionsPopover waveforms law), not the old native disabled
+       that swallowed the boundary silently and left the tab order. */
     first.unmount();
-    boot({ selection: ['cap-1'], selectedMarkerId: null });
-    expect(screen.getByTestId('shell-caption-inspector-prev')).toBeDisabled();
+    const second = boot({ selection: ['cap-1'], selectedMarkerId: null });
+    const prev = screen.getByTestId('shell-caption-inspector-prev');
+    expect(prev).toHaveAttribute('aria-disabled', 'true');
+    expect(prev).toHaveAttribute('data-tip', 'no earlier caption — this is the first');
+    expect(prev).not.toHaveAttribute('disabled'); // native disabled is GONE — the tab stop survives (AA8)
+    // a boundary click is a guarded no-op: selection + playhead unmoved
+    fireEvent.click(prev);
+    expect(S().selection).toEqual(['cap-1']);
     expect(screen.getByTestId('shell-caption-inspector-next')).toBeEnabled();
+    expect(screen.getByTestId('shell-caption-inspector-next')).not.toHaveAttribute('aria-disabled');
+    // the LAST row mirrors it on Next
+    second.unmount();
+    const last = boot({ selection: ['cap-5'], selectedMarkerId: null });
+    expect(screen.getByTestId('shell-caption-inspector-next')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('shell-caption-inspector-next')).toHaveAttribute('data-tip', 'no later caption — this is the last');
+    expect(screen.getByTestId('shell-caption-inspector-prev')).not.toHaveAttribute('aria-disabled');
+    last.unmount();
   });
 
   /* RE-PIN (R25-F3 I5): In/Out ride the REAL commands — In through

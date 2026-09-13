@@ -21,7 +21,8 @@
        the 8% near-band of an existing handle SNAPS to that handle
        instead (focus, no insert, no commit);
      - Delete key OR right-click removes an interior point (endpoints
-       immutable);
+       immutable); '+'/'=' on a focused handle INSERTS one midway toward
+       the next neighbor (R25-F4/AA4 — the keyboard insert route);
      - the readout row + footer are DELETED; square aspect, max-w-[360px];
      - the D3 gesture law (the house Fader/Knob pattern: pointer capture,
        a transient drag buffer, ONE undoable setGrade at pointer-up /
@@ -187,6 +188,23 @@ export function CurvesPanel() {
     setChannel(next);
   };
 
+  /* R25-F4 (AA4): the KEYBOARD insert route — on a focused handle,
+     '+' (or '=' on layouts without a shifted plus) inserts a point
+     MIDWAY TO THE NEXT neighbor; the LAST handle (no next) inserts
+     midway toward its PREVIOUS neighbor — the only span it borders.
+     The new point rides the curve (y = the channel's spline at x,
+     insertCurvePointOnChannel's own law) and is interior by
+     construction (strictly between two distinct x's), so the handle
+     count + each handle's aria-valuetext announce it (the existing
+     readouts — Delete is the symmetric removal route). */
+  const insertFromHandle = (i: number) => {
+    if (pts.length < 2) return; // the endpoints always exist — belt + braces
+    const neighborX = i < pts.length - 1 ? pts[i + 1].x : pts[i - 1].x;
+    const x = (pts[i].x + neighborX) / 2;
+    tell();
+    setChannel(insertCurvePointOnChannel(pts, ch, x).pts);
+  };
+
   const keyStep = (e: React.KeyboardEvent) => (e.shiftKey ? 0.05 : 0.01);
 
   /* the [Y|R|G|B] radiogroup — arrow roving (focus follows selection,
@@ -316,7 +334,7 @@ export function CurvesPanel() {
                 aria-valuemax={100}
                 aria-valuenow={Math.round(p.y * 100)}
                 aria-valuetext={`${(p.x * 100).toFixed(0)}, ${(p.y * 100).toFixed(0)}`}
-                title={isEndpoint ? 'Endpoint — Y only' : 'Drag or arrow-key; Delete or right-click removes'}
+                title={isEndpoint ? 'Endpoint — Y only' : 'Drag or arrow-key; + inserts; Delete or right-click removes'}
                 className="absolute z-10 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-[1.5px] border-[#111] bg-white shadow-md transition-shadow hover:ring-2 hover:ring-[var(--accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] active:cursor-grabbing active:ring-2 active:ring-[var(--accent)]"
                 style={{ left: `${p.x * 100}%`, top: `${(1 - p.y) * 100}%` }}
                 onClick={(e) => e.stopPropagation()}
@@ -384,6 +402,10 @@ export function CurvesPanel() {
                     e.preventDefault();
                     tell();
                     setChannel(removeCurvePoint(pts, i));
+                  } else if (e.key === '+' || e.key === '=') {
+                    /* AA4: the keyboard insert rung (see insertFromHandle) */
+                    e.preventDefault();
+                    insertFromHandle(i);
                   }
                 }}
               />

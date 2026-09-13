@@ -152,7 +152,13 @@ export function MarkerInspector() {
         <FieldRow label="Color">
           {/* 8-dot palette — role=tablist per the R19 contract (arrow keys
               cycle, aria-selected marks the current color; the store write is
-              updateMarker({color}), undoable like every field) */}
+              updateMarker({color}), undoable like every field).
+              R25-F4 (AA6): the tablist ROVES now — tabIndex 0 only on the
+              selected dot, −1 on the rest (ONE tab stop, the 6-site house
+              radio/tab law); ←/→ move the SELECTION (updateMarker) and the
+              focus together, wrapping — the ColorInspector-tab pattern. The
+              old shape put all 8 dots in the tab order (8 stops for one
+              setting). */}
           <div
             role="tablist"
             aria-label="Marker color"
@@ -165,7 +171,9 @@ export function MarkerInspector() {
               if (dots.length === 0) return;
               const idx = dots.findIndex((d) => d === document.activeElement);
               const dir = e.key === 'ArrowRight' ? 1 : -1;
-              dots[(idx + dir + dots.length) % dots.length]?.focus();
+              const next = (idx + dir + dots.length) % dots.length;
+              updateMarker(m.id, { color: MARKER_COLOR_ORDER[next] });
+              dots[next]?.focus();
             }}
           >
             {MARKER_COLOR_ORDER.map((c) => {
@@ -176,6 +184,9 @@ export function MarkerInspector() {
                   type="button"
                   role="tab"
                   aria-selected={selected}
+                  /* AA6: the roving tab stop — the selected dot alone is
+                     tabbable (the house tablist law) */
+                  tabIndex={selected ? 0 : -1}
                   aria-label={`Marker color ${c}`}
                   data-testid={`shell-marker-inspector-color-${c}`}
                   title={`Marker color ${c}`}

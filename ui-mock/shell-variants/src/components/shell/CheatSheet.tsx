@@ -3,11 +3,12 @@
    searchable (200 ms debounce, matches action/desc/keys), sections in
    SHORTCUT_GROUPS order, per-row data-testid={`shortcut-${action}`} so
    tests can assert cheat-sheet completeness. Esc closes (capture — beats
-   the shell handler); the footer offers the 30s sample project (spec 18
+   the shell handler) and EVERY close route restores focus to the opener
+   (R25-F4/AA3 — the ConfirmDialog law); the footer offers the 30s sample project (spec 18
    §4.10) as a one-click way to try every shortcut — it also doubles as the
    deterministic test fixture (see the footer's code comment). */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X, Search, FolderOpen } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { SHORTCUT_MAP, SHORTCUT_GROUPS } from '../../lib/shortcutMap';
@@ -22,6 +23,35 @@ export function CheatSheet() {
 
   const [input, setInput] = useState(''); // immediate (controlled field)
   const [query, setQuery] = useState(''); // debounced filter value
+
+  /* R25-F4 (AA3): focus RESTORE — the ConfirmDialog:48-53 law applied to the
+     sheet. ConfirmDialog captures its invoker inside its own open() call;
+     the sheet has MANY openers ('?' in useShortcuts, the dock Keyboard
+     button, the help menu row), so the opener is tracked the robust way: a
+     capture-phase FOCUS listener records the last element focused OUTSIDE
+     the sheet while it is closed (the search field's autoFocus moves focus
+     during the open commit — before any effect could read the old focus).
+     Every close route (Esc below, backdrop, X, the footer loader) funnels
+     through closeSheet, which returns focus to that element (WAI dialog
+     guidance: focus goes back to the invoker). */
+  const openerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (open) return; // open — stop tracking; the modal owns focus
+    const onFocus = () => {
+      const a = document.activeElement;
+      if (a instanceof HTMLElement && !a.closest('[data-testid="shell-cheatsheet"]')) {
+        openerRef.current = a;
+      }
+    };
+    window.addEventListener('focus', onFocus, true);
+    return () => window.removeEventListener('focus', onFocus, true);
+  }, [open]);
+  const closeSheet = useCallback(() => {
+    close(false);
+    const el = openerRef.current;
+    openerRef.current = null;
+    el?.focus();
+  }, [close]);
 
   /* 200 ms debounce on the filter state */
   useEffect(() => {
@@ -56,7 +86,7 @@ export function CheatSheet() {
         e.stopPropagation(); // no region cycling under an open aria-modal dialog
         return;
       }
-      if (e.key === 'Escape') { e.stopPropagation(); close(false); }
+      if (e.key === 'Escape') { e.stopPropagation(); closeSheet(); }
       if (e.key === 'Tab') {
         const sheet = document.querySelector('[data-testid="shell-cheatsheet"]');
         if (!sheet) return;
@@ -74,7 +104,7 @@ export function CheatSheet() {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [open, close]);
+  }, [open, closeSheet]);
 
   /* filter by action / desc / keys, then bucket into ordered sections */
   const filtered = useMemo(() => {
@@ -109,7 +139,7 @@ export function CheatSheet() {
       role="dialog"
       aria-modal="true"
       aria-label="Keyboard cheat sheet"
-      onClick={() => close(false)}
+      onClick={() => closeSheet()}
     >
       <div
         className="max-h-[80vh] w-[640px] max-w-[92vw] overflow-hidden rounded-lg border border-strong bg-panel shadow-2xl"
@@ -128,7 +158,7 @@ export function CheatSheet() {
             spec 16 · {SHORTCUT_MAP.length} bindings · auto-generated from ShortcutMap
           </span>
           <div className="grow" />
-          <button onClick={() => close(false)} aria-label="Close cheat sheet" className="icon-btn !h-7 !w-7"><X size={14} strokeWidth={1.6} /></button>
+          <button onClick={() => closeSheet()} aria-label="Close cheat sheet" className="icon-btn !h-7 !w-7"><X size={14} strokeWidth={1.6} /></button>
         </div>
 
         {/* search — filters by action / description / keys */}
@@ -181,7 +211,7 @@ export function CheatSheet() {
             className="ml-auto rounded-[var(--radius-sm)] text-accent underline-offset-2 hover:underline"
             onClick={() => {
               loadSampleProject();
-              close(false);
+              closeSheet();
               pushToast({ kind: 'success', title: 'Sample project loaded' });
             }}
           >

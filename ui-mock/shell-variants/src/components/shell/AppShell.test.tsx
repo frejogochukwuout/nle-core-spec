@@ -876,6 +876,43 @@ describe('F6 region cycling (spec 18 §11.5)', () => {
     // cleanup: the shared store leaves the tab at 'timeline' for later tests
     act(() => { useUi.setState({ consoleTab: 'timeline' }); });
   });
+
+  /* R25-F4 (AA1 — the P1): every F6 region stop is a NAMED landmark. 7 of 8
+     stops had no role="region"/aria-label — a reachable tabIndex stop that
+     announces as nothing but "region". The honest name follows the slot's
+     live content (the left-dock table's own label; the rail-priority chain
+     for slot [3]). */
+  it('R25-F4 (AA1): every F6 stop carries role="region" + a non-empty aria-label (the honest name per slot)', () => {
+    renderAppShell({ mixerState: 'full' }); // the mixer joins as the 7th stop
+    // walk the whole cycle — every focused stop is a NAMED region
+    for (let i = 0; i < 7; i++) {
+      pressF6();
+      const stop = document.activeElement as HTMLElement;
+      expect(stop, `F6 stop ${i + 1}`).toHaveAttribute('role', 'region');
+      expect(stop.getAttribute('aria-label') ?? '', `F6 stop ${i + 1} label`).not.toBe('');
+    }
+    // the specific honest names (region wrapper = the nearest .shell-region
+    // ancestor of each panel's root testid)
+    const regionOf = (testid: string) => screen.getByTestId(testid).closest('.shell-region')!;
+    expect(regionOf('shell-toolbar')).toHaveAttribute('aria-label', 'Toolbar');
+    expect(regionOf('shell-mediapool')).toHaveAttribute('aria-label', 'Media Pool'); // the dock table's own label
+    expect(regionOf('shell-viewer')).toHaveAttribute('aria-label', 'Viewer');
+    expect(regionOf('shell-inspector')).toHaveAttribute('aria-label', 'Inspector');
+    expect(regionOf('shell-timeline')).toHaveAttribute('aria-label', 'Timeline');
+    expect(regionOf('mixer-dock-full')).toHaveAttribute('aria-label', 'Mixer console');
+    expect(regionOf('shell-dock')).toHaveAttribute('aria-label', 'App dock');
+    // slot [6] — the color nodes console (the 8th stop: had the label, never
+    // the role; AA1 adds it)
+    act(() => { useUi.setState({ page: 'color', consoleTab: 'nodes' }); });
+    const node = screen.getByTestId('shell-color-nodeviewer');
+    expect(node).toHaveAttribute('role', 'region');
+    expect(node).toHaveAttribute('aria-label', 'Node graph console');
+    // the status strip is a named region too (not an F6 stop — the same law)
+    expect(screen.getByTestId('shell-status')).toHaveAttribute('role', 'region');
+    expect(screen.getByTestId('shell-status')).toHaveAttribute('aria-label', 'Status strip');
+    // cleanup: back to edit for the siblings below
+    act(() => { useUi.setState({ page: 'edit', consoleTab: 'timeline' }); });
+  });
 });
 
 describe('keyboard multi-delete confirm (spec 18 §6.4 — R13 parity with the clip-menu path)', () => {

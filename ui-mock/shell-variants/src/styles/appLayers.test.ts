@@ -109,3 +109,34 @@ describe('R23-FIX R-d + item 12 + the wrap-round #57: the z-ladder + the danger 
     expect(/\.confirm-btn\.danger\s*\{[^}]*background:\s*#cf2f37\s*;/.test(css)).toBe(true);
   });
 });
+
+/* ---------- R25-F4 (AA5): the informative-text token law. tokens.css's own
+ * comment on --text-faint reads "decorative hints only — NEVER body text
+ * (18 §9)", yet five sites carried real INFORMATION on text-tfaint (incl.
+ * the grade-target chip and the deliver metadata row). Pinned at the
+ * source-text level — this file's own precedent (jsdom runs css:false, so
+ * the class strings in source are the render truth; the token law is a
+ * source law). Each site is pinned by its unique anchor text; the assertion
+ * reads the NEAREST className before the anchor (the row's own class — the
+ * site's class, not a neighbor's). */
+const AA5_SITES: [file: string, anchor: string][] = [
+  ['src/components/pages/color/ColorInspector.tsx', 'Color — no clip selected'],
+  ['src/components/pages/DeliverPage.tsx', 'project.settings.fps} fps'],
+  ['src/components/timeline/Timeline.tsx', 'Drop clips here, or press Cmd+I'],
+  ['src/components/pages/color/ScopesDock.tsx', 'standby — no graded frame'],
+  ['src/components/pages/color/StillsPanel.tsx', 'Applies to the selected clip'],
+];
+
+describe('R25-F4 (AA5): informative text rides text-tmuted — the 5 former text-tfaint sites', () => {
+  for (const [file, anchor] of AA5_SITES) {
+    it(`${file.split('/').pop()}: the "${anchor.slice(0, 26)}…" row carries text-tmuted, never text-tfaint`, () => {
+      const src = readFileSync(resolve(process.cwd(), file), 'utf8');
+      const i = src.indexOf(anchor);
+      expect(i, `anchor "${anchor}" not found in ${file}`).toBeGreaterThan(-1);
+      // the row's OWN class = the nearest className before the anchor text
+      const cls = [...src.slice(0, i).matchAll(/className="([^"]*)"/g)].pop()?.[1] ?? '';
+      expect(cls, `${file} — the site's class`).toContain('text-tmuted');
+      expect(cls, `${file} — text-tfaint is decorative-only, never informative`).not.toContain('text-tfaint');
+    });
+  }
+});

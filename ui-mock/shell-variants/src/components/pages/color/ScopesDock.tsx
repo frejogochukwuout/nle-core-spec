@@ -211,7 +211,9 @@ export function ScopesDock() {
         >
           <LayoutGrid size={13} strokeWidth={1.7} />
         </button>
-        <span data-testid="shell-color-scopes-status" className="mono ml-auto truncate text-[10px] text-tfaint">
+        {/* R25-F4 (AA5): informative status readout — tmuted, never tfaint
+            (the token's own decorative-only law). */}
+        <span data-testid="shell-color-scopes-status" className="mono ml-auto truncate text-[10px] text-tmuted">
           {frame ? `${frame.width}×${frame.height} · 10 fps` : 'standby — no graded frame'}
           {src.qualifierPreviewOn ? ' · matte preview on' : ''}
         </span>

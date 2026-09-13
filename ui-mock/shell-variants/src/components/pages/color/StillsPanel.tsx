@@ -246,8 +246,10 @@ export function StillsPanel() {
           ))}
         </div>
         {/* the #97 answer, IN the UI: what a still applies to (clip level —
-            the researched Resolve answer; track level is NOT offered) */}
-        <p data-testid="shell-stills-scope" className="px-1 pt-2 text-[10px] leading-relaxed text-tfaint">
+            the researched Resolve answer; track level is NOT offered).
+            R25-F4 (AA5): informative copy rides tmuted — tfaint is the
+            decorative-only token (tokens.css 18 §9). */}
+        <p data-testid="shell-stills-scope" className="px-1 pt-2 text-[10px] leading-relaxed text-tmuted">
           {scenes.length
             ? 'Applies to the selected clip\u2019s grade (clip level) — click a card to apply, right-click a card for apply / delete / export. Clip-level presets (gap C59).'
             : ''}

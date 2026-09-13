@@ -1425,7 +1425,10 @@ export function Timeline() {
             return (
               <div
                 key={track.id}
-                aria-disabled={frozenLane || undefined}
+                /* R25-F4 (AA9): aria-disabled is DROPPED from the frozen
+                   lane divs — a non-interactive div can't be disabled (a
+                   false promise to AT); data-frozen + the 0.55 dim + the
+                   not-allowed cursor carry the frozen state honestly. */
                 data-frozen={frozenLane || undefined}
                 className={`relative shrink-0 border-b border-hairline cursor-crosshair${laneDropCls}`}
                 style={{
@@ -1904,9 +1907,11 @@ export function Timeline() {
             />
           )}
 
-          {/* empty-scene state row (spec 18 §4.2 state table): no tracks at all */}
+          {/* empty-scene state row (spec 18 §4.2 state table): no tracks at all.
+              R25-F4 (AA5): informative text rides tmuted — tfaint is the
+              decorative-only token (tokens.css 18 §9). */}
           {scene.tracks.length === 0 && (
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-2 text-[12px] text-tfaint" data-testid="shell-timeline-state-empty">
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-2 text-[12px] text-tmuted" data-testid="shell-timeline-state-empty">
               <span>Drop clips here, or press Cmd+I</span>
             </div>
           )}

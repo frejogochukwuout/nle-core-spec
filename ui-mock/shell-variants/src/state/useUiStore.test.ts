@@ -280,6 +280,50 @@ describe('selection semantics', () => {
     act(() => { S().setActiveScene('sc-1'); }); // restore for the siblings below
   });
 
+  /* R25-F4 (SS1 — the 9th domain, added to BOTH scene-switch writers): the
+   * track focus dies with the scene switch — a carried focusedTrackId aims
+   * ⌘A / ↑/↓ / activeTrackOf's fallback at a track that exists in no new
+   * scene. */
+  it('R25-F4 SS1: setActiveScene clears focusedTrackId — the 9th clear-site domain', () => {
+    act(() => { S().setActiveScene('sc-1'); });
+    act(() => { useUi.setState({ focusedTrackId: 'tr-main' }); });
+    expect(S().focusedTrackId).toBe('tr-main');
+    act(() => { S().setActiveScene('sc-2'); });
+    expect(S().focusedTrackId).toBe(null); // no stale track focus on the successor scene
+    act(() => { S().setActiveScene('sc-1'); }); // restore for the siblings below
+  });
+
+  /* R25-F4 (SS1 — the P2): deleteScene of the ACTIVE scene mirrors
+   * setActiveScene's ENTIRE clear-site return — the stale-rail class is
+   * dead at the delete door too (the old delete cleared only selection +
+   * marker, so a stale fx-object / effect ids / track id / stripFocus /
+   * focusedTrackId survived into the successor scene). */
+  it('R25-F4 SS1: deleting the ACTIVE scene clears the full clear-site domain set (fx-object, effect ids, track, marker, stripFocus, focusedTrackId)', () => {
+    act(() => {
+      useUi.setState({
+        activeSceneId: 'sc-1',
+        selection: ['el-2'],
+        selectedTrackId: 'tr-audio-1',
+        selectedEffectId: 'ef-x',
+        selectedEffectClipId: 'el-2',
+        selectedFxObject: { kind: 'transition', elementId: 'el-2' },
+        selectedMarkerId: 'mk-2',
+        stripFocus: 'tr-audio-2',
+        focusedTrackId: 'tr-main',
+      });
+    });
+    act(() => { S().deleteScene('sc-1'); });
+    expect(S().activeSceneId).toBe('sc-2'); // the successor scene
+    expect(S().selection).toEqual([]);
+    expect(S().selectedTrackId).toBeNull();
+    expect(S().selectedEffectId).toBeNull();
+    expect(S().selectedEffectClipId).toBeNull();
+    expect(S().selectedFxObject).toBeNull();
+    expect(S().selectedMarkerId).toBeNull();
+    expect(S().stripFocus).toBeNull();
+    expect(S().focusedTrackId).toBeNull();
+  });
+
   it('R23-FIX item 3 (R5-P2-2): Tab selection clears the marker domain (+ track + project mode)', () => {
     /* the prior state a Tab walk can hit: marker rail live + a selection
        cursor + project mode on (booted directly — the domain writers can't
@@ -437,6 +481,31 @@ describe('markers', () => {
     const pastBefore = S().past.length;
     act(() => { S().setPlayhead(19.7); S().removeMarkersAt(19.7); }); // no marker there
     expect(S().past.length).toBe(pastBefore);
+  });
+
+  /* R25-F4 (SS3): the identical-patch no-op guard — updateMarker was the
+   * one unguarded member of the writer family (moveElement / moveElements /
+   * slipDrag / slideMove mint NOTHING on a no-change call; a no-change
+   * marker commit used to mint a dead history entry). Identity is judged
+   * AFTER normalization (the same clamp/snap the write applies). */
+  it('R25-F4 SS3: an identical updateMarker patch mints NO history (the sibling-writer no-op law)', () => {
+    const marker = () => S().scenes.find((sc) => sc.id === 'sc-1')!.markers.find((m) => m.id === 'mk-3')!;
+    // mk-3 fixture: time 15.5 (frame-snapped), label 'Pull quote', color yellow
+    const pastBefore = S().past.length;
+    // the empty patch — nothing provided at all
+    act(() => { S().updateMarker('mk-3', {}); });
+    expect(S().past.length).toBe(pastBefore);
+    // identical values (already normalized — the fixtures are frame-snapped)
+    act(() => { S().updateMarker('mk-3', { time: 15.5, label: 'Pull quote', color: 'yellow' }); });
+    expect(S().past.length).toBe(pastBefore);
+    // an off-grid time that NORMALIZES to the held value (snapToFrame: 15.501 → 15.5)
+    act(() => { S().updateMarker('mk-3', { time: 15.5 + 1 / 1000 }); });
+    expect(S().past.length).toBe(pastBefore);
+    expect(marker().time).toBe(15.5);
+    // a REAL change still mints exactly one entry
+    act(() => { S().updateMarker('mk-3', { label: 'Renamed' }); });
+    expect(S().past.length).toBe(pastBefore + 1);
+    expect(marker().label).toBe('Renamed');
   });
 });
 
@@ -1042,6 +1111,31 @@ describe('scene management', () => {
     act(() => { S().deleteScene('sc-1'); });
     expect(S().activeSceneId).toBe('sc-2');
     expect(S().selection).toEqual([]);
+  });
+
+  /* R25-F4 (SS4): the track ids ride the nextId mint (addTrack's own
+   * `t-${kind}-` helper family) — the ordinal template collided after a
+   * delete: create scene 3 + scene 4, delete scene 3, and the NEXT create
+   * re-derived n=4, minting `t-ov-4`/`t-mn-4`/`t-au-4` on top of the
+   * SURVIVING scene 4's lanes (one id in two scenes — every
+   * find-by-track-id resolved the wrong lane). */
+  it('R25-F4 SS4: delete-then-create mints NON-colliding track ids (nextId, not the ordinal template)', () => {
+    act(() => { S().createScene(); }); // scene 3
+    act(() => { S().createScene(); }); // scene 4 — the ordinal the next create would re-derive
+    const survivor = S().scenes.at(-1)!;
+    act(() => { S().deleteScene(S().scenes.at(-2)!.id); }); // delete scene 3 → length 3 again
+    act(() => { S().createScene(); }); // n=4 — the OLD template would collide with the survivor
+    const newest = S().scenes.at(-1)!;
+    expect(newest.id).not.toBe(survivor.id);
+    // no id appears in two scenes — the whole doc's track ids are unique
+    const all = S().scenes.flatMap((sc) => sc.tracks.map((t) => t.id));
+    expect(new Set(all).size).toBe(all.length);
+    // the new scene's tracks are DISJOINT from the survivor's
+    expect(survivor.tracks.map((t) => t.id).filter((id) => newest.tracks.some((t) => t.id === id))).toEqual([]);
+    // and they ride the mint pattern (t-ov-/t-mn-/t-au- prefixes like addTrack)
+    for (const id of newest.tracks.map((t) => t.id)) {
+      expect(id).toMatch(/^t-(ov|mn|au)-/);
+    }
   });
 });
 

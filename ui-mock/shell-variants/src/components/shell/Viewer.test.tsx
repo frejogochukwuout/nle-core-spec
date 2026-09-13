@@ -314,6 +314,36 @@ describe('Viewer (spec 18 §4.3)', () => {
     expect(screen.queryByRole('menu', { name: 'Marker color' })).not.toBeInTheDocument();
   });
 
+  /* R25-F4 (AA2 — the P1): the palette is a REAL APG menu now — the
+     ViewOptionsPopover grammar cloned: initial focus on the FIRST item,
+     ↑/↓/←/→ roving with wrap, Escape + item-click close RETURNING focus to
+     the trigger (the chevron), and the radio selection still commits. */
+  it('R25-F4 (AA2): menu grammar — first-item focus on open, arrow roving, Esc returns focus to the trigger, the radio still commits', () => {
+    render(<Viewer duration={DUR} />);
+    const chevron = screen.getByRole('button', { name: 'Marker color' });
+    fireEvent.click(chevron);
+    const menu = screen.getByRole('menu', { name: 'Marker color' });
+    // open → the FIRST item takes focus
+    expect(document.activeElement).toBe(within(menu).getByRole('menuitemradio', { name: 'Marker color red' }));
+    // ↑/↓/←/→ rove (Right here; wrap + the other three follow the same law)
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(within(menu).getByRole('menuitemradio', { name: 'Marker color orange' }));
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(within(menu).getByRole('menuitemradio', { name: 'Marker color red' }));
+    // Escape closes AND returns focus to the TRIGGER (the §4.9 menu law)
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: 'Marker color' })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(chevron);
+    // the radio selection still commits — and the item-click close returns
+    // focus to the trigger too
+    fireEvent.click(chevron);
+    fireEvent.click(within(screen.getByRole('menu', { name: 'Marker color' })).getByRole('menuitemradio', { name: 'Marker color green' }));
+    expect(S().scenes[0].markers.at(-1)!.color).toBe('green');
+    expect(S().scenes[0].markers).toHaveLength(6); // 5 fixtures + the committed one
+    expect(screen.queryByRole('menu', { name: 'Marker color' })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(chevron);
+  });
+
   it('NaN-safe: duration 0 (empty scene) renders 0% positions, never NaN%', () => {
     render(<Viewer duration={0} />);
     const scrub = screen.getByTestId('shell-viewer-scrub');

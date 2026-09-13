@@ -356,24 +356,28 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
 
   /* R25-F3 (D5): per-preset applicability — the codec row's own honest-disabled
    * grammar extended: a single-frame export has no range; FCPXML/JSON carry no
-   * render resolution. */
-  it('R25-F3 D5: Range dies for the single-frame preset; Resolution dies for FCPXML + JSON (reason titles, the codec law)', async () => {
+   * render resolution.
+   * RE-PINNED R25-F4 (AA7): the disabled reasons ride data-tip now — the
+   * house's ONE tooltip channel (the native title= channel is dead at these
+   * sites; same reasons, same rows, new attribute). */
+  it('R25-F3 D5: Range dies for the single-frame preset; Resolution dies for FCPXML + JSON (reason data-tips, the codec law)', async () => {
     const user = userEvent.setup();
     render(<DeliverPage />);
     // fcpxml default: resolution honestly disabled (handoff follows the project)
     const res = screen.getByLabelText('Export resolution');
     expect(res).toBeDisabled();
-    expect(res).toHaveAttribute('title', expect.stringContaining('FCPXML'));
+    expect(res).toHaveAttribute('data-tip', expect.stringContaining('FCPXML'));
+    expect(res).not.toHaveAttribute('title');
     expect(screen.getByLabelText('Export range')).toBeEnabled(); // range is live for sequences
     // the frame preset: range disabled (a single frame has no in/out span)
     await user.click(screen.getByTestId('shell-deliver-preset-frame'));
     const range = screen.getByLabelText('Export range');
     expect(range).toBeDisabled();
-    expect(range).toHaveAttribute('title', expect.stringContaining('single-frame'));
+    expect(range).toHaveAttribute('data-tip', expect.stringContaining('single-frame'));
     // json: resolution disabled too (no raster — the summary's em-dash twin)
     await user.click(screen.getByTestId('shell-deliver-preset-json'));
     expect(screen.getByLabelText('Export resolution')).toBeDisabled();
-    expect(screen.getByLabelText('Export resolution')).toHaveAttribute('title', expect.stringContaining('raster'));
+    expect(screen.getByLabelText('Export resolution')).toHaveAttribute('data-tip', expect.stringContaining('raster'));
     // master: everything live
     await user.click(screen.getByTestId('shell-deliver-preset-master'));
     expect(screen.getByLabelText('Export range')).toBeEnabled();

@@ -99,6 +99,37 @@ describe('MarkerInspector (R19 marker v2)', () => {
     expect(screen.getByTestId('shell-marker-inspector-color-yellow')).toHaveAttribute('aria-selected', 'false');
   });
 
+  /* R25-F4 (AA6): the color tablist ROVES — ONE tab stop (the selected dot
+   * carries tabIndex 0, the rest −1 — the house tablist law); ←/→ move the
+   * SELECTION and the focus together (the ColorInspector-tab pattern). The
+   * old shape was 8 tab stops for one setting. */
+  it('R25-F4 (AA6): the color tablist roves — one tab stop, arrows move the selection + focus', () => {
+    boot({ selectedMarkerId: 'mk-3', selection: [] }); // mk-3 = yellow
+    const list = screen.getByTestId('shell-marker-inspector-color');
+    const yellow = screen.getByTestId('shell-marker-inspector-color-yellow');
+    const green = screen.getByTestId('shell-marker-inspector-color-green');
+    const orange = screen.getByTestId('shell-marker-inspector-color-orange');
+    // ONE tab stop: the selected dot alone is tabbable
+    expect(yellow).toHaveAttribute('tabindex', '0');
+    for (const c of ['red', 'orange', 'green', 'blue', 'purple', 'pink', 'gray']) {
+      expect(screen.getByTestId(`shell-marker-inspector-color-${c}`)).toHaveAttribute('tabindex', '-1');
+    }
+    // ←/→ move the SELECTION (updateMarker) and the focus together
+    yellow.focus();
+    fireEvent.keyDown(list, { key: 'ArrowRight' });
+    expect(mk('mk-3').color).toBe('green');
+    expect(green).toHaveAttribute('aria-selected', 'true');
+    expect(green).toHaveFocus();
+    expect(green).toHaveAttribute('tabindex', '0'); // the stop follows the selection
+    expect(yellow).toHaveAttribute('tabindex', '-1');
+    fireEvent.keyDown(list, { key: 'ArrowLeft' });
+    expect(mk('mk-3').color).toBe('yellow'); // back
+    expect(yellow).toHaveFocus();
+    fireEvent.keyDown(list, { key: 'ArrowLeft' });
+    expect(mk('mk-3').color).toBe('orange'); // ← wraps through yellow to orange
+    expect(orange).toHaveFocus();
+  });
+
   it('Remove Marker deletes the marker AND clears the selection', () => {
     boot({ selectedMarkerId: 'mk-3', selection: [] });
     fireEvent.click(screen.getByTestId('shell-marker-inspector-remove'));

@@ -147,7 +147,13 @@ export function CaptionInspector() {
             Use Track Style
           </label>
 
-          {/* action row: Add New / Prev / Next (reference's flex-1 trio) */}
+          {/* action row: Add New / Prev / Next (reference's flex-1 trio).
+              R25-F4 (AA8): Prev/Next are HONEST-disabled — aria-disabled +
+              the reason in the data-tip, still TABBABLE (the ViewOptionsPopover
+              waveforms law): native disabled would drop them from the tab
+              order AND kill the hover the reason tip needs, while swallowing
+              the boundary silently. A click at the boundary is a guarded
+              no-op — nothing fires, the tip already said why. */}
           <div className="flex gap-2">
             <button
               type="button"
@@ -163,8 +169,9 @@ export function CaptionInspector() {
               className="mini-btn flex-1"
               data-testid="shell-caption-inspector-prev"
               aria-label="Previous caption"
-              disabled={currentIndex <= 0}
-              onClick={() => goTo(currentIndex - 1)}
+              aria-disabled={currentIndex <= 0 || undefined}
+              data-tip={currentIndex <= 0 ? 'no earlier caption — this is the first' : 'Previous caption'}
+              onClick={() => { if (currentIndex > 0) goTo(currentIndex - 1); }}
             >
               <ChevronLeft size={11} strokeWidth={1.7} className="mr-1" aria-hidden="true" /> Prev
             </button>
@@ -173,8 +180,9 @@ export function CaptionInspector() {
               className="mini-btn flex-1"
               data-testid="shell-caption-inspector-next"
               aria-label="Next caption"
-              disabled={currentIndex === -1 || currentIndex >= rows.length - 1}
-              onClick={() => goTo(currentIndex + 1)}
+              aria-disabled={currentIndex === -1 || currentIndex >= rows.length - 1 || undefined}
+              data-tip={currentIndex >= rows.length - 1 ? 'no later caption — this is the last' : 'Next caption'}
+              onClick={() => { if (currentIndex >= 0 && currentIndex < rows.length - 1) goTo(currentIndex + 1); }}
             >
               Next <ChevronRight size={11} strokeWidth={1.7} className="ml-1" aria-hidden="true" />
             </button>

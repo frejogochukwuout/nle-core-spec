@@ -481,11 +481,15 @@ describe('Timeline', () => {
     expect(store().toasts.at(-1)!.title).toBe('Overwrote interview_marina.mp4');
   });
 
-  it('frozen-lane guard (thread #65): source-mode audio source freezes non-audio lanes — dimmed + aria-disabled + honest drop refusal', () => {
+  /* RE-PINNED R25-F4 (AA9): the frozen lane div carries NO aria-disabled
+     anymore — a non-interactive div cannot be disabled (a false promise to
+     AT). data-frozen + the 0.55 dim + the not-allowed cursor + the honest
+     drop refusal carry the frozen state. */
+  it('frozen-lane guard (thread #65): source-mode audio source freezes non-audio lanes — dimmed (data-frozen) + honest drop refusal; aria-disabled dropped (AA9)', () => {
     boot({ viewerMode: 'source', sourceMediaId: 'm-06', mediaDrag: { mediaId: 'm-01', overTrackId: 'tr-main', allowed: true } });
     const mainLane = laneOf('el-1');
     expect(mainLane).toHaveAttribute('data-frozen', 'true');
-    expect(mainLane).toHaveAttribute('aria-disabled', 'true');
+    expect(mainLane).not.toHaveAttribute('aria-disabled'); // AA9: a lane div is not a control — no fake disabled
     expect(mainLane.style.opacity).toBe('0.55'); // 1 × 0.55 frozen dim
     // the audio lane stays fully interactive
     expect(laneOf('el-6')).not.toHaveAttribute('data-frozen');

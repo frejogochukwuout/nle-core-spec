@@ -67,6 +67,10 @@ export function StatusStrip() {
       className="flex shrink-0 items-center gap-3 border-t border-hairline bg-shell px-2 text-[11px] text-tmuted"
       style={{ height: 12, minHeight: 12 }}
       data-testid="shell-status"
+      /* R25-F4 (AA1): a named landmark for the strip — not an F6 stop, but
+         the same law: a strip AT users land on announces its name. */
+      role="region"
+      aria-label="Status strip"
     >
       {/* R23-FIX (R1-P3): the SAVE chip is one persistent role=status live
           region — Saving… → Saved/failed transitions are announced politely

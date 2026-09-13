@@ -83,6 +83,50 @@ describe('CheatSheet (spec 16 §7.3)', () => {
     expect(screen.queryByTestId('shell-cheatsheet')).not.toBeInTheDocument();
   });
 
+  /* R25-F4 (AA3): the sheet restores focus to the OPENER on every close
+   * route — the ConfirmDialog:48-53 law. The opener is whatever held focus
+   * before the sheet opened (the sheet's search field autoFocus steals it
+   * during the open commit, so the capture-focus tracker is the only
+   * reliable channel). */
+  it('R25-F4 (AA3): open → Escape → focus RESTORED to the opener (the ConfirmDialog law, Esc route)', () => {
+    const opener = document.createElement('button');
+    opener.setAttribute('data-testid', 'cheatsheet-opener-probe');
+    document.body.appendChild(opener);
+    try {
+      renderShell(<CheatSheet />);
+      opener.focus(); // the opener — focused while the sheet is closed
+      expect(document.activeElement).toBe(opener);
+      act(() => { useUi.setState({ cheatOpen: true }); });
+      // the sheet owns focus while open (the search field's autoFocus)
+      expect(screen.getByTestId('cheatsheet-search')).toHaveFocus();
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      expect(store().cheatOpen).toBe(false);
+      expect(screen.queryByTestId('shell-cheatsheet')).not.toBeInTheDocument();
+      expect(document.activeElement).toBe(opener); // restored — never stranded on body
+    } finally {
+      opener.remove();
+    }
+  });
+
+  it('R25-F4 (AA3): the close-BUTTON route restores the opener too (every close route funnels through closeSheet)', async () => {
+    const user = userEvent.setup();
+    const opener = document.createElement('button');
+    opener.setAttribute('data-testid', 'cheatsheet-opener-probe');
+    document.body.appendChild(opener);
+    try {
+      renderShell(<CheatSheet />);
+      opener.focus();
+      act(() => { useUi.setState({ cheatOpen: true }); });
+      await user.click(screen.getByRole('button', { name: 'Close cheat sheet' }));
+      expect(store().cheatOpen).toBe(false);
+      expect(document.activeElement).toBe(opener);
+    } finally {
+      opener.remove();
+    }
+  });
+
   it('the close button and the backdrop click both dismiss the sheet', async () => {
     const user = userEvent.setup();
     renderShell(<CheatSheet />, { patch: { cheatOpen: true } });

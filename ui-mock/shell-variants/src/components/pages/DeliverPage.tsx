@@ -350,7 +350,9 @@ export function DeliverPage() {
                 <MonitorPlay size={18} strokeWidth={1.6} className="shrink-0 text-accent" aria-hidden="true" />
                 <div className="min-w-0">
                   <div className="truncate text-[12px] font-semibold text-tprimary">{project.metadata.name} — {scene.name}</div>
-                  <div className="mono text-[11px] text-tfaint">{tc(duration)} · {project.settings.fps} fps · {project.settings.width}×{project.settings.height}</div>
+                  {/* R25-F4 (AA5): informative readout — tmuted, never tfaint
+                      (the token's own law: decorative hints only). */}
+                  <div className="mono text-[11px] text-tmuted">{tc(duration)} · {project.settings.fps} fps · {project.settings.width}×{project.settings.height}</div>
                 </div>
               </div>
               <span className="shrink-0 rounded-full border border-soft px-2 py-0.5 text-[11px] text-tmuted">{project.metadata.status}</span>
@@ -384,7 +386,11 @@ export function DeliverPage() {
                   aria-label="Export codec"
                   value={codec}
                   disabled={preset !== 'master'}
-                  title={preset !== 'master' ? 'codec applies to the video master preset' : 'Export codec'}
+                  /* R25-F4 (AA7): the disabled reasons ride data-tip — the
+                     house's ONE tooltip channel (a native title can't be
+                     styled, synced, or tested; the D5 reasons are real
+                     content, they belong in the house channel). */
+                  data-tip={preset !== 'master' ? 'codec applies to the video master preset' : 'Export codec'}
                   onChange={(e) => setExportSettings({ codec: e.target.value })}
                 >
                   {CODECS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
@@ -400,7 +406,7 @@ export function DeliverPage() {
                   aria-label="Export range"
                   value={range}
                   disabled={preset === 'frame'}
-                  title={preset === 'frame' ? 'a single-frame export has no in/out range' : 'Export range'}
+                  data-tip={preset === 'frame' ? 'a single-frame export has no in/out range' : 'Export range'}
                   onChange={(e) => setExportSettings({ range: e.target.value as 'inout' | 'full' })}
                 >
                   <option value="inout">In → Out ({tc(loop.start)} – {tc(loop.end)})</option>
@@ -417,7 +423,7 @@ export function DeliverPage() {
                   aria-label="Export resolution"
                   value={resolution}
                   disabled={preset === 'fcpxml' || preset === 'json'}
-                  title={preset === 'fcpxml'
+                  data-tip={preset === 'fcpxml'
                     ? 'FCPXML carries the project’s own resolution — the handoff format has no render size'
                     : preset === 'json'
                       ? 'the JSON interchange has no raster output — resolution does not apply'

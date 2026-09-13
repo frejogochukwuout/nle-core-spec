@@ -24,11 +24,12 @@ interface PressInit {
   metaKey?: boolean;
   altKey?: boolean;
   shiftKey?: boolean;
+  repeat?: boolean;
 }
 
 function press(init: PressInit) {
-  const { key, code = '', ctrlKey = false, metaKey = false, altKey = false, shiftKey = false } = init;
-  window.dispatchEvent(new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ctrlKey, metaKey, altKey, shiftKey }));
+  const { key, code = '', ctrlKey = false, metaKey = false, altKey = false, shiftKey = false, repeat = false } = init;
+  window.dispatchEvent(new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ctrlKey, metaKey, altKey, shiftKey, repeat }));
 }
 
 /** grab an element out of the current doc */
@@ -265,7 +266,12 @@ describe('clip + selection keys', () => {
     expect(el(S().selection[0]).startTime).toBeCloseTo(17, 5);
   });
 
-  it(', / . slip the selection ∓1 frame', () => {
+  /* RE-PINNED R25-F4 (SS7 — spec D34.3's four-meaning law): ,/. in PROGRAM
+     mode dispatches by the ARMED TOOL. The old universal
+     slip-under-any-tool behavior is dead — the slip rung needs the slip
+     tool armed (the slide/select pins live in the SS7 describe below). */
+  it(', / . slip the selection ∓1 frame under the SLIP tool (SS7 re-pin — no more tool-agnostic slip)', () => {
+    useUi.setState({ tool: 'slip' });
     press({ key: ',' });
     expect(el('el-2').sourceStart).toBeCloseTo(3 - 1 / 24, 6);
     press({ key: '.' });
@@ -534,7 +540,8 @@ describe('R14: [ / ] non-ripple trim + ⇧,/⇧. 10-frame slip + ⇧J/⇧L fixed
     expect(el('el-2').startTime).toBe(12);
     expect(el('el-3').startTime).toBe(17); // neighbor NOT shifted (non-ripple)
   });
-  it('⇧, slips 10 frames', () => {
+  it('⇧, slips 10 frames (under the slip tool — the SS7 re-pin)', () => {
+    useUi.setState({ tool: 'slip' });
     press({ key: ',', shiftKey: true });
     expect(el('el-2').sourceStart).toBeCloseTo(3.0 - 10 / 24, 5);
   });
@@ -566,6 +573,142 @@ describe('R15-F1: destructive keys are swallowed while a gesture is active', () 
     setGestureActive(false);
     press({ key: 'Delete' });
     expect(() => el('el-2')).toThrow(); // deleted
+  });
+
+  /* R25-F4 (SS6): Escape joins the mid-drag gesture gate — the gesture's
+   * own cancel owns Esc; the domain ladder must not run under an active
+   * drag (a mid-drag Esc used to clear the tool/selection while the Clip's
+   * pointer-up still committed into the shifted world). */
+  it('R25-F4 SS6: Esc does NOTHING to the domains while a gesture is active (the gesture cancel owns it)', () => {
+    useUi.setState({ tool: 'blade', selection: ['el-2'] });
+    setGestureActive(true);
+    press({ key: 'Escape' });
+    expect(S().tool).toBe('blade'); // the tool rung never fired
+    expect(S().selection).toEqual(['el-2']); // the selection rung never fired
+    setGestureActive(false);
+    press({ key: 'Escape' });
+    expect(S().tool).toBe('select'); // the ladder lives again once the gesture ends
+  });
+});
+
+/* ---------- R25-F4 (SS2 — the mini's C16 law): the e.repeat gate ---------- */
+
+describe('R25-F4 (SS2): held keys never machine-gun discrete writers (the e.repeat gate)', () => {
+  it('a repeat:true keydown on the M path mints NOTHING (past length unchanged); arrows still repeat-nudge', () => {
+    const markers = () => S().scenes.find((sc) => sc.id === 'sc-1')!.markers;
+    const before = markers().length;
+    const pastBefore = S().past.length;
+    press({ key: 'm', repeat: true }); // the OS auto-repeat of a held M
+    expect(markers()).toHaveLength(before); // no marker minted
+    expect(S().past).toHaveLength(pastBefore); // no history minted
+    // a fresh press writes — one press, one write
+    press({ key: 'm' });
+    expect(markers()).toHaveLength(before + 1);
+    expect(S().past).toHaveLength(pastBefore + 1);
+    // the continuous-motion family is deliberately repeat-ALLOWED (documented):
+    // held arrows keep frame-stepping the playhead
+    const ph = S().playhead;
+    press({ key: 'ArrowRight', repeat: true });
+    expect(S().playhead).toBeCloseTo(ph + 1 / 24, 6);
+  });
+
+  it('the gate covers the whole discrete family: ⌘B / ⌘D / I / [ — a repeat press mints nothing', () => {
+    for (const k of ['b', 'd'] as const) {
+      const pastBefore = S().past.length;
+      press({ key: k, metaKey: true, repeat: true });
+      expect(S().past).toHaveLength(pastBefore);
+    }
+    const pastBefore = S().past.length;
+    const loopBefore = { ...S().loop };
+    press({ key: 'i', repeat: true });
+    expect(S().loop.start).toBe(loopBefore.start); // no in-mark minted
+    expect(S().past).toHaveLength(pastBefore);
+    press({ key: '[', repeat: true });
+    expect(el('el-2').startTime).toBe(8.5); // no trim minted
+    expect(S().past).toHaveLength(pastBefore);
+  });
+});
+
+/* ---------- R25-F4 (SS5): the Escape source-mode exit rung ---------- */
+
+describe('R25-F4 (SS5): Esc exits the source viewer (the FIRST rung, above the ladder)', () => {
+  it('source mode: Esc exits the source preview — the tool/selection rungs never fire under it', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02', tool: 'blade', selection: ['el-2'] });
+    press({ key: 'Escape' });
+    expect(S().viewerMode).toBe('program');
+    expect(S().sourceMediaId).toBeNull();
+    // the lower rungs SURVIVED — the source exit is the whole Esc, not a ladder step
+    expect(S().tool).toBe('blade');
+    expect(S().selection).toEqual(['el-2']);
+    // and a second Esc (program mode) walks the ladder normally
+    press({ key: 'Escape' });
+    expect(S().tool).toBe('select');
+  });
+});
+
+/* ---------- R25-F4 (SS7 — spec D34.3's four-meaning law): ,/. by tool ---------- */
+
+describe('R25-F4 (SS7): ,/. dispatches by the ARMED TOOL in program mode', () => {
+  it('under the SLIDE tool, ,. moves the CLIP (slide) — the source window NEVER moves', () => {
+    useUi.setState({ tool: 'slide' });
+    press({ key: ',' });
+    expect(el('el-2').startTime).toBeCloseTo(8.5 - 1 / 24, 6); // the clip slid left (neighbors follow)
+    expect(el('el-2').sourceStart).toBe(3); // the source window is untouched — that is the slip's signature
+    press({ key: '.' });
+    expect(el('el-2').startTime).toBeCloseTo(8.5, 6); // slid back
+    expect(el('el-2').sourceStart).toBe(3);
+  });
+
+  it('under the SELECT tool, ,. nudges the clip through moveElements (the overlap law governs); gesture tools are inert', () => {
+    // sc-2 has a real gap (s2-1 ends 6.25, s2-2 starts 6.5) — a legal 1-frame nudge
+    useUi.setState({ activeSceneId: 'sc-2', selection: ['s2-2'] });
+    const srcBefore = el('s2-2').sourceStart;
+    press({ key: ',' });
+    expect(el('s2-2').startTime).toBeCloseTo(6.5 - 1 / 24, 6);
+    expect(el('s2-2').sourceStart).toBe(srcBefore); // a MOVE, never a slip
+    // blade (a gesture-semantics tool) is honestly inert — no silent surprise write
+    useUi.setState({ tool: 'blade' });
+    press({ key: '.' });
+    expect(el('s2-2').startTime).toBeCloseTo(6.5 - 1 / 24, 6); // unmoved
+  });
+});
+
+/* ---------- R25-F4 (SS8): tool keys are page-gated; R = kbd-reset-color ---------- */
+
+describe('R25-F4 (SS8): the tool keys gate to edit/fx; Color owns R as the reset-grade row', () => {
+  it('Color / Deliver / Audio ignore V/B/T/Y/U/R — no tool arms off the edit/fx pages', () => {
+    useUi.setState({ page: 'color', tool: 'select' });
+    for (const k of ['v', 'b', 't', 'y', 'u', 'r']) press({ key: k });
+    expect(S().tool).toBe('select'); // nothing armed on color
+    useUi.setState({ page: 'deliver' });
+    press({ key: 'b' });
+    expect(S().tool).toBe('select'); // nothing armed on deliver
+    useUi.setState({ page: 'audio' });
+    press({ key: 'y' });
+    expect(S().tool).toBe('select'); // nothing armed on audio
+    // the FX page keeps the grammar (the fxMode coupling is page-native)
+    useUi.setState({ page: 'fx' });
+    press({ key: 'b' });
+    expect(S().tool).toBe('blade');
+    // restore for the siblings below
+    useUi.setState({ page: 'edit' });
+    press({ key: 'v' });
+  });
+
+  it('R on COLOR is spec 16 §3.11 kbd-reset-color: the grade target resets, ripple never arms', () => {
+    // seed a grade record for el-2 (the boot selection = the resolved target)
+    act(() => { S().setGrade('el-2', { hue: 5 }); });
+    expect(S().mockGrades['el-2']).toBeDefined();
+    useUi.setState({ page: 'color', tool: 'select' });
+    press({ key: 'r' });
+    expect(S().tool).toBe('select'); // R did NOT arm the ripple tool
+    expect(S().mockGrades['el-2']).toBeUndefined(); // resetGrade removed the record (identity)
+    // a NULL target is honestly inert — no record, no throw, no tool change
+    useUi.setState({ selection: [] });
+    expect(() => press({ key: 'r' })).not.toThrow();
+    expect(S().tool).toBe('select');
+    // restore for the siblings below
+    useUi.setState({ page: 'edit', selection: ['el-2'] });
   });
 });
 

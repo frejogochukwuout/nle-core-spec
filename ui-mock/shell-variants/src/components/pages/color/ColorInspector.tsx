@@ -137,7 +137,10 @@ export function ColorInspector() {
       >
         <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.08em] text-tfaint">Grade target</span>
         {targetId == null ? (
-          <span data-testid="shell-color-inspector-chip" className="min-w-0 flex-1 truncate text-[11px] font-medium text-tfaint">
+          /* R25-F4 (AA5): informative text rides text-tmuted — tfaint is
+             decorative-only (tokens.css's own law, 18 §9); the no-target
+             chip is real information, not a watermark. */
+          <span data-testid="shell-color-inspector-chip" className="min-w-0 flex-1 truncate text-[11px] font-medium text-tmuted">
             Color — no clip selected
           </span>
         ) : (

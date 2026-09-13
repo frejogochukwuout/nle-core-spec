@@ -372,6 +372,17 @@ function AppShellInner() {
     : page === 'audio' ? <ChannelEditor />
     : channelRailLive ? <ChannelEditor />
     : <Inspector />;
+  /* R25-F4 (AA1): the right rail's region NAME follows the SAME chain as
+     its content — a generic "Inspector" label would lie every time the
+     rail swap mounts a different surface (the rail-priority chain above is
+     the single source; the label derives from it, never drifts from it). */
+  const railLabel =
+    markerRailLive ? 'Marker inspector'
+    : captionRailLive ? 'Caption inspector'
+    : page === 'color' ? 'Color inspector'
+    : page === 'fx' ? 'FX inspector'
+    : page === 'audio' || channelRailLive ? 'Mixer channel editor'
+    : 'Inspector';
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-app" role="application" aria-label="NLE shell study">
@@ -379,7 +390,15 @@ function AppShellInner() {
         Skip to timeline
       </a>
 
-      <div ref={(el) => { regionsRef.current[0] = el; }} tabIndex={-1} className="shell-region">
+      {/* R25-F4 (AA1 — the P1): every F6 region stop is a NAMED landmark
+          (role="region" + aria-label). A reachable tabIndex stop with no
+          accessible name announces as nothing but "region" — 7 of 8 stops
+          were exactly that. The name is the HONEST one for the slot's live
+          content: slot [1] reads the left-dock table's own label (Media
+          Pool / Gallery / Sound Library / Effects — #106's "name things
+          correctly" table), slot [3] rides the rail-priority chain above,
+          and slot [6] keeps its existing "Node graph console". */}
+      <div ref={(el) => { regionsRef.current[0] = el; }} tabIndex={-1} role="region" aria-label="Toolbar" className="shell-region">
         <Toolbar2 />
       </div>
 
@@ -396,7 +415,7 @@ function AppShellInner() {
         style={{ height: mainBodyHeight, minHeight: 320 }}
       >
         {page === 'deliver' ? (
-          <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 flex-1">
+          <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} role="region" aria-label="Deliver" className="shell-region panel-shadow flex h-full min-h-0 flex-1">
             <DeliverPage />
           </div>
         ) : (
@@ -419,7 +438,9 @@ function AppShellInner() {
               if (!showLeftDock) return null;
               return (
                 <>
-                  <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
+                  {/* AA1: the dock table's own label is the region's name —
+                      the single-source surface label (#106), reused verbatim */}
+                  <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} role="region" aria-label={dock!.label} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
                     <LeftDock />
                   </div>
                   <VSplitter onDrag={(dx) => setMediaW(dx === 0 ? 280 : useUi.getState().mediaW + dx)} />
@@ -427,7 +448,7 @@ function AppShellInner() {
               );
             })()}
 
-            <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region panel-shadow flex min-h-0 min-w-0 flex-1 flex-col">
+            <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} role="region" aria-label="Viewer" className="shell-region panel-shadow flex min-h-0 min-w-0 flex-1 flex-col">
               {/* R24-W2 (A2-R1, issues #67/#64 — SUPERSEDES R23-WB D-B2):
                   region [2] is ALWAYS Viewer-led — the ColorNodeGraph ⇄
                   Viewer swap is DELETED (the reviewer's "NOT here blocking
@@ -455,7 +476,7 @@ function AppShellInner() {
               <VSplitter onDrag={(dx) => (dx === 0 ? resetInspectorW() : setInspectorW(useUi.getState().inspectorW - dx))} />
             )}
             {panels.inspector && (
-              <div ref={(el) => { regionsRef.current[3] = el; }} tabIndex={-1} className="shell-region panel-shadow z-10 flex h-full min-h-0 shrink-0" style={{ width: effectiveInspectorW }}>
+              <div ref={(el) => { regionsRef.current[3] = el; }} tabIndex={-1} role="region" aria-label={railLabel} className="shell-region panel-shadow z-10 flex h-full min-h-0 shrink-0" style={{ width: effectiveInspectorW }}>
                 {rightPanel}
               </div>
             )}
@@ -482,7 +503,7 @@ function AppShellInner() {
           no strip (their row is timeline-only — a lone tab answers
           nothing). The mixer renders only where its page leaves it open —
           entering color collapses it (D-B5/#92, the setPage exit law). */}
-      <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
+      <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} role="region" aria-label="Timeline" className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />
         {/* R25-W3 → R25-W5: the strip mounts on the pages that OWN tabs —
@@ -498,6 +519,7 @@ function AppShellInner() {
               ref={(el) => { regionsRef.current[6] = el; }}
               tabIndex={-1}
               data-testid="shell-color-nodeviewer"
+              role="region"
               aria-label="Node graph console"
               className="shell-region flex min-h-0 min-w-[480px] flex-1"
             >
@@ -545,7 +567,7 @@ function AppShellInner() {
                 )}
               </div>
               {mixerVisible && (
-                <div ref={(el) => { regionsRef.current[7] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0">
+                <div ref={(el) => { regionsRef.current[7] = el; }} tabIndex={-1} role="region" aria-label="Mixer console" className="shell-region flex min-h-0 shrink-0">
                   <MixerDock />
                 </div>
               )}
@@ -555,7 +577,7 @@ function AppShellInner() {
       </div>
 
       <StatusStrip />
-      <div ref={(el) => { regionsRef.current[5] = el; }} tabIndex={-1} className="shell-region">
+      <div ref={(el) => { regionsRef.current[5] = el; }} tabIndex={-1} role="region" aria-label="App dock" className="shell-region">
         <AppDock />
       </div>
 

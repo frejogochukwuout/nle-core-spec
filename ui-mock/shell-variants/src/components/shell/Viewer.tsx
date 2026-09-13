@@ -25,7 +25,7 @@
    the icon-only floor). NO dimming on the poster image (A1: the feedback
    is the strip); the poster gets a 2px playhead progress line instead. */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Play, Pause, ChevronDown, ChevronLeft, ChevronRight, SkipBack, SkipForward, Repeat, Flag, Frame, Eye, X } from 'lucide-react';
 import { useUi, sourcePlayheadOf, SOURCE_STILL_PSEUDO_DUR } from '../../state/useUiStore';
 import { mediaById, sceneDuration, type ElementJSON, type SceneJSON, type TrackJSON } from '../../lib/mockData';
@@ -156,9 +156,31 @@ export function Viewer({ duration }: { duration: number }) {
 
   const scrubRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLSpanElement>(null);
+  /* R25-F4 (AA2): the palette's APG menu grammar — the TRIGGER (the chevron,
+     the labelled keyboard-open path) is the focus-return owner, and the
+     menu container owns the initial-focus / roving layout effect below. */
+  const paletteTriggerRef = useRef<HTMLButtonElement>(null);
+  const paletteRef = useRef<HTMLSpanElement>(null);
   const [hoverX, setHoverX] = useState<number | null>(null);
   const [zoom, setZoom] = useState('Fit');
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  /* AA2: every programmatic close (Esc, item-click, Tab) returns focus to
+     the trigger — the §4.9 menu law (the ViewOptionsPopover pattern). An
+     OUTSIDE pointerdown keeps plain setPaletteOpen(false): focus already
+     moved with the click, so "restoring" it would fight the user. */
+  const closePalette = () => {
+    setPaletteOpen(false);
+    paletteTriggerRef.current?.focus();
+  };
+
+  /* AA2: initial focus lands on the FIRST menuitemradio the moment the
+     palette mounts (the ViewOptionsPopover layout-effect law). */
+  useLayoutEffect(() => {
+    if (!paletteOpen) return;
+    const first = paletteRef.current?.querySelector<HTMLButtonElement>('[role="menuitemradio"]');
+    if (first) first.focus();
+  }, [paletteOpen]);
 
   // viewer UI prefs — store-level (spec 18 §4.3): testable/pinnable mock state
   const overlaysOn = useUi((s) => s.viewerOverlays);
@@ -218,11 +240,13 @@ export function Viewer({ duration }: { duration: number }) {
   /* palette dismissal while open (R13 fix): outside pointerdown closes (the
      trigger + palette span is the safe zone); Esc closes via a CAPTURE
      listener that stops propagation — the global Esc ladder in useShortcuts
-     deselects, this popover consumes Esc locally (CheatSheet pattern). */
+     deselects, this popover consumes Esc locally (CheatSheet pattern).
+     R25-F4 (AA2): Esc now RETURNS focus to the trigger on its way out
+     (closePalette) — the APG menu-dismissal law, same as every house menu. */
   useEffect(() => {
     if (!paletteOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); setPaletteOpen(false); }
+      if (e.key === 'Escape') { e.stopPropagation(); closePalette(); }
     };
     const onPointerDown = (e: PointerEvent) => {
       if (markerRef.current && !markerRef.current.contains(e.target as Node)) setPaletteOpen(false);
@@ -929,8 +953,11 @@ export function Viewer({ duration }: { duration: number }) {
                 the flag (R13 fix — the palette was right-click-only).
                 R25-F2 (E9): the chevron's hit zone widens 16→24px — the house
                 ≥24px-wide floor (the row is 32px tall; 24×20 clears the floor
-                without out-growing its siblings). */}
+                without out-growing its siblings).
+                R25-F4 (AA2): the chevron is the palette's TRIGGER — it owns
+                the focus return on every menu close. */}
             <button
+              ref={paletteTriggerRef}
               className="icon-btn !h-[20px] !w-[24px]"
               onClick={() => setPaletteOpen(!paletteOpen)}
               data-tip="Marker color palette"
@@ -941,7 +968,52 @@ export function Viewer({ duration }: { duration: number }) {
               <ChevronDown size={11} strokeWidth={1.8} />
             </button>
             {paletteOpen && (
-              <span className="absolute right-0 top-[110%] z-50 flex items-center gap-1 rounded-[var(--radius)] border border-strong bg-inset p-1" role="menu" aria-label="Marker color">
+              /* R25-F4 (AA2 — the P1): the palette is a REAL APG menu now —
+                 first-item focus on open, ↑/↓/←/→ roving with wrap, Esc +
+                 Tab + item-click close RETURNING focus to the trigger
+                 (the ViewOptionsPopover grammar, cloned). stopPropagation
+                 on every menu keydown keeps the shell shortcut ladder out
+                 while the menu is open (arrows no longer nudge the playhead
+                 under an open menu). */
+              <span
+                ref={paletteRef}
+                role="menu"
+                aria-label="Marker color"
+                tabIndex={-1}
+                className="absolute right-0 top-[110%] z-50 flex items-center gap-1 rounded-[var(--radius)] border border-strong bg-inset p-1"
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closePalette();
+                    return;
+                  }
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    const items = Array.from(paletteRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []);
+                    if (items.length === 0) return;
+                    const dir = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
+                    const cur = items.findIndex((m) => m === document.activeElement);
+                    const next = cur === -1
+                      ? (dir === 1 ? 0 : items.length - 1)
+                      : (dir === 1 ? (cur + 1) % items.length : (cur - 1 + items.length) % items.length);
+                    items[next].focus();
+                    return;
+                  }
+                  if (e.key === 'Tab') {
+                    e.preventDefault(); // menus are not tab stops; Tab dismisses
+                    closePalette();
+                    return;
+                  }
+                  if (e.key === 'Enter') {
+                    /* Enter activates the focused item — the one guaranteed
+                       activation under jsdom (Space stays native/keyup). */
+                    e.preventDefault();
+                    const a = document.activeElement as HTMLElement | null;
+                    if (a && paletteRef.current?.contains(a)) a.click();
+                  }
+                }}
+              >
                 {MARKER_PALETTE.map((c) => (
                   <button
                     key={c}
@@ -951,7 +1023,7 @@ export function Viewer({ duration }: { duration: number }) {
                     aria-label={`Marker color ${c}`}
                     className="h-[12px] w-[12px] rounded-full border border-black/40 hover:scale-110"
                     style={{ background: `var(--mk-${c})` }}
-                    onClick={() => { addMarker(playhead, c); setPaletteOpen(false); }}
+                    onClick={() => { addMarker(playhead, c); closePalette(); }}
                   />
                 ))}
               </span>

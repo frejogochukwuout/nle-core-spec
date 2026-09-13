@@ -35,13 +35,19 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
   { action: 'transport-start-end', keys: '⌘← / ⌘→', group: 'Transport', desc: 'Playhead to timeline start / end' },
     { action: 'transport-loop', keys: '⌘⇧G', group: 'Transport', desc: 'Toggle loop playback' },
 
-  /* ---- Tools (spec 16 §3.2) ---- */
-  { action: 'tool-select', keys: 'V', group: 'Tools', desc: 'Select tool' },
-  { action: 'tool-blade', keys: 'B', group: 'Tools', desc: 'Blade (razor) tool' },
-  { action: 'tool-roll', keys: 'T', group: 'Tools', desc: 'Roll trim tool' },
-  { action: 'tool-slip', keys: 'Y', group: 'Tools', desc: 'Slip tool' },
-  { action: 'tool-slide', keys: 'U', group: 'Tools', desc: 'Slide tool' },
-  { action: 'tool-ripple', keys: 'R', group: 'Tools', desc: 'Ripple tool' },
+  /* ---- Tools (spec 16 §3.2) ----
+     R25-F4 (SS8): the tool keys are EDIT/FX-page grammar — Color / Deliver /
+     Audio mount no tool rail, so the six rows are scoped (and Color owns R
+     as spec 16 §3.11's kbd-reset-color row below). */
+  { action: 'tool-select', keys: 'V', group: 'Tools', desc: 'Select tool (Edit / FX pages)' },
+  { action: 'tool-blade', keys: 'B', group: 'Tools', desc: 'Blade (razor) tool (Edit / FX pages)' },
+  { action: 'tool-roll', keys: 'T', group: 'Tools', desc: 'Roll trim tool (Edit / FX pages)' },
+  { action: 'tool-slip', keys: 'Y', group: 'Tools', desc: 'Slip tool (Edit / FX pages)' },
+  { action: 'tool-slide', keys: 'U', group: 'Tools', desc: 'Slide tool (Edit / FX pages)' },
+  { action: 'tool-ripple', keys: 'R', group: 'Tools', desc: 'Ripple tool (Edit / FX pages — on Color, R resets the grade instead)' },
+  /* R25-F4 (SS8): spec 16 §3.11's kbd-reset-color row — the same R key,
+     the Color page's own meaning (the tools are inert there). */
+  { action: 'color-reset-grade', keys: 'R (Color page)', group: 'Tools', desc: 'Reset the current grade target (spec 16 §3.11 kbd-reset-color)' },
   { action: 'tool-snap', keys: 'N', group: 'Tools', desc: 'Toggle snapping' },
 
   /* ---- Clips + edit history (spec 16 §3.3/§3.4/§3.10) ---- */
@@ -55,7 +61,9 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
   { action: 'clips-trim-end', keys: '⌥]', group: 'Clips', desc: 'Ripple-trim clip end to playhead' },
   { action: 'clips-trim-start-noripple', keys: '[', group: 'Clips', desc: 'Trim clip start to playhead (leaves gap)' },
   { action: 'clips-trim-end-noripple', keys: ']', group: 'Clips', desc: 'Trim clip end to playhead (leaves gap)' },
-  { action: 'clips-slip', keys: ', / . (⇧ ×10)', group: 'Clips', desc: 'Slip selection ∓1 frame (∓10 with ⇧) — source mode hands , / . to insert/overwrite' },
+  /* R25-F4 (SS7 — spec D34.3's four-meaning law): program-mode ,/. is
+     TOOL-DISPATCHED (the old universal slip-under-any-tool is dead). */
+  { action: 'clips-slip', keys: ', / . (⇧ ×10)', group: 'Clips', desc: 'Tool-dispatched: slip tool slips the selection ∓1 frame (⇧ ×10); select nudges the clip, slide slides it, other tools inert — source mode hands , / . to insert/overwrite' },
   /* R20-W2 (D2 / C46): the source-viewer insert family — Premiere grammar,
      gated to source-preview mode so the binding is context-disjoint from
      spec 16 §3.6's slip ladder above (registered deviation). */
@@ -71,7 +79,7 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
 
   /* ---- Selection (spec 16 §3.3 / §5.4) ---- */
   { action: 'selection-track-focus', keys: '↑ / ↓', group: 'Selection', desc: 'Move track focus up / down' },
-  { action: 'selection-escape', keys: 'Esc', group: 'Selection', desc: 'Tool → select; else clear the marker / FX-object domain, else the clip selection (R24-W5d: the marker + fx-object clears joined the ladder)' },
+  { action: 'selection-escape', keys: 'Esc', group: 'Selection', desc: 'Source viewer → exit it FIRST (R25-F4/SS5); audio focus → exit; tool → select; else clear the marker / FX-object domain, else the clip selection (R24-W5d ladder)' },
 
   /* ---- Timeline nav (spec 16 §3.6) ---- */
   { action: 'timeline-home-end', keys: 'Home / End', group: 'Timeline', desc: 'Jump playhead to start / end' },

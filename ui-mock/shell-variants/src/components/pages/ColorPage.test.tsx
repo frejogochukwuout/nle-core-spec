@@ -360,6 +360,32 @@ describe('CurvesPanel (C55 → R24-W2 A2-R4 — the YRGB rebuild, issue #69)', (
     expect(S().mockGrades['el-2'].curves?.master).toHaveLength(2);
   });
 
+  /* R25-F4 (AA4): the keyboard INSERT route — '+' (or its unshifted twin
+   * '=') on a focused handle mints a point MIDWAY TO THE NEXT neighbor; the
+   * LAST handle (no next) inserts midway toward its PREVIOUS neighbor. The
+   * handle count + every handle's aria-valuetext (the existing readouts)
+   * announce the new point. */
+  it("R25-F4 (AA4): '+' on a focused handle inserts a point midway to the NEXT neighbor (the keyboard insert route)", () => {
+    mountCurves();
+    // boot = the Y identity pair. '+' on the LEFT endpoint → midpoint (0.5),
+    // y rides the curve (the diagonal → 0.5)
+    fireEvent.keyDown(screen.getByTestId('shell-color-curve-point-0'), { key: '+' });
+    expect(S().mockGrades['el-2'].curves?.master).toHaveLength(3);
+    const mid = S().mockGrades['el-2'].curves?.master[1];
+    expect(mid?.x).toBeCloseTo(0.5, 5);
+    expect(mid?.y).toBeCloseTo(0.5, 5);
+    // the readouts announce it: a third handle renders with its own values
+    expect(screen.getByTestId('shell-color-curve-point-2')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-curve-point-1')).toHaveAttribute('aria-valuetext', '50, 50');
+    // '=' (the unshifted twin) on the LAST handle — no next neighbor →
+    // midway toward its PREVIOUS one (x=1 vs x=0.5 → 0.75)
+    fireEvent.keyDown(screen.getByTestId('shell-color-curve-point-2'), { key: '=' });
+    expect(S().mockGrades['el-2'].curves?.master).toHaveLength(4);
+    expect(S().mockGrades['el-2'].curves?.master[2].x).toBeCloseTo(0.75, 5);
+    // one undoable commit per insert (the D3 single-write law per keypress)
+    expect(S().past).toHaveLength(2);
+  });
+
   it('point drag is transient; pointer-up commits ONCE (the D3 gesture law)', () => {
     mockBox(400, 400);
     mountCurves();

@@ -1346,18 +1346,34 @@ export const useUi = create<UiState>((set, get) => ({
          store stop carrying the stale id at all). W5c's ONLY useUiStore
          change — the wave's partition exception, documented. */
       stripFocus: null,
+      /* R25-F4 (SS1 — the 9th clear-site domain, added to BOTH scene-switch
+         writers): the TRACK FOCUS dies with the scene switch too — a
+         carried focusedTrackId exists in no new scene, yet ⌘A, ↑/↓ and
+         activeTrackOf's fallback all read it (a stale focus silently
+         retargets the FIRST track until the next ↑/↓ heals it). */
+      focusedTrackId: null,
       ...(sc ? { lockAll: sc.tracks.every((t) => t.locked) } : {}),
     };
   }),
   createScene: () => withHistory(set, get, (scenes) => {
     const n = scenes.length + 1;
+    /* R25-F4 (SS4): the track ids ride the nextId mint (addTrack's own
+       `t-${kind}-` helper family) instead of the ordinal template. The
+       template collided after a delete: delete scene 2 of 3 → n = 3 →
+       `t-ov-3`/`t-mn-3`/`t-au-3` collided with the SURVIVING scene 3's
+       lanes — one id in two scenes, every find-by-track-id resolved the
+       wrong lane. The NAME stays ordinal (display-only; duplicate names
+       are legal, duplicate ids never are). */
+    const ovId = nextId('t-ov-');
+    const mnId = nextId('t-mn-');
+    const auId = nextId('t-au-');
     const sc: SceneJSON = {
       id: nextId('sc-'),
       name: `Scene ${n}`,
       tracks: [
-        { id: `t-ov-${n}`, kind: 'overlay', name: `Text 1`, badge: `T1`, muted: false, solo: false, locked: false, visible: true, elements: [] },
-        { id: `t-mn-${n}`, kind: 'main', name: 'Video 1', badge: 'V1', muted: false, solo: false, locked: false, visible: true, elements: [] },
-        { id: `t-au-${n}`, kind: 'audio', name: 'Audio 1', badge: 'A1', muted: false, solo: false, locked: false, visible: true, waveform: true, elements: [] },
+        { id: ovId, kind: 'overlay', name: `Text 1`, badge: `T1`, muted: false, solo: false, locked: false, visible: true, elements: [] },
+        { id: mnId, kind: 'main', name: 'Video 1', badge: 'V1', muted: false, solo: false, locked: false, visible: true, elements: [] },
+        { id: auId, kind: 'audio', name: 'Audio 1', badge: 'A1', muted: false, solo: false, locked: false, visible: true, waveform: true, elements: [] },
       ],
       markers: [],
       dirty: true,
@@ -1368,7 +1384,7 @@ export const useUi = create<UiState>((set, get) => ({
        tracks in this scene" fallback on the audio page while the A1 strip
        rendered beside it (the strips read through the DEFAULT guards; the
        editor reads the sidecar directly). */
-    set({ activeSceneId: sc.id, selection: [], mixer: seedMixerTrack(get().mixer, `t-au-${n}`) });
+    set({ activeSceneId: sc.id, selection: [], mixer: seedMixerTrack(get().mixer, auId) });
     return scenes;
   }),
   deleteScene: (id) => withHistory(set, get, (scenes) => {
@@ -1378,8 +1394,28 @@ export const useUi = create<UiState>((set, get) => ({
     const s = get();
     /* R23-FIX (item 2): deleting the ACTIVE scene is a scene switch — the
        marker domain clears with it (the 7th clear-site law; a stale id
-       would otherwise blank the rail on the newly active scene). */
-    if (s.activeSceneId === id) set({ activeSceneId: scenes[Math.max(0, idx - 1)].id, selection: [], selectedMarkerId: null });
+       would otherwise blank the rail on the newly active scene).
+       R25-F4 (SS1): the delete door now mirrors setActiveScene's ENTIRE
+       clear-site return, domain-for-domain — the old delete cleared only
+       selection + marker, so a stale fx-object / effect ids / track id /
+       stripFocus / focusedTrackId survived into the successor scene and
+       re-mounted the stale rail (the same class the 7th/8th domain laws
+       closed at the switch door). */
+    if (s.activeSceneId === id) set({
+      activeSceneId: scenes[Math.max(0, idx - 1)].id,
+      selection: [],
+      selectedTrackId: null,
+      selectedEffectId: null,
+      selectedEffectClipId: null,
+      selectedFxObject: null,
+      selectedMarkerId: null,
+      stripFocus: null,
+      /* the 9th domain — the SAME wave adds it to BOTH scene-switch
+         writers (setActiveScene below): a stale focusedTrackId aims ↑/↓,
+         ⌘A and activeTrackOf's fallback at a track that exists in NO
+         scene. */
+      focusedTrackId: null,
+    });
     return scenes;
   }),
   /* R23-WA (Part IX ruling 2 — fxMode single source): setTool is the writer
@@ -1488,6 +1524,25 @@ export const useUi = create<UiState>((set, get) => ({
     const m = sc.markers.find((x) => x.id === id);
     if (!m) return; // unknown marker — true no-op
     const dur = sceneDuration(sc) || 30;
+    /* R25-F4 (SS3): the identical-patch no-op guard — updateMarker was the
+       one unguarded member of the writer family (moveElement / moveElements
+       / slipDrag / slideMove all mint NOTHING on a no-change call; a
+       no-change marker commit used to mint a dead history entry). The
+       comparison runs on the NORMALIZED would-be values (the exact clamp /
+       snap the write below applies), so a patch whose values already hold
+       after normalization is identity → no mutation, no history entry. */
+    const nextTime = patch.time !== undefined ? Math.max(0, Math.min(snapToFrame(patch.time), dur)) : undefined;
+    const nextDuration = patch.duration !== undefined
+      ? (patch.duration === null ? undefined : Math.max(1 / 24, Math.min(snapToFrame(patch.duration), dur - m.time)))
+      : undefined;
+    if (
+      (nextTime === undefined || nextTime === m.time) &&
+      (nextDuration === undefined || nextDuration === m.duration) &&
+      (patch.label === undefined || patch.label === m.label) &&
+      (patch.notes === undefined || patch.notes === m.notes) &&
+      (patch.keyword === undefined || patch.keyword === m.keyword) &&
+      (patch.color === undefined || patch.color === m.color)
+    ) return; // identity — no write, no history entry
     if (patch.time !== undefined) m.time = Math.max(0, Math.min(snapToFrame(patch.time), dur));
     if (patch.duration !== undefined) {
       // range law: >= 1 frame, end clamped to scene duration; undefined/neg → point
