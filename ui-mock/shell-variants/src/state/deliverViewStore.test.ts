@@ -6,6 +6,10 @@
    scope, so a page switch never loses them):
    - the pristine fixture: 1 failed + 3 done, IDLE (no running row), the
      queue view hidden (the preview owns the center, #88);
+   - R25-W5: the pristine render settings (the R24-W4 DeliverPage boot
+     defaults, now store-owned) + setExportSettings — the ONE writer (a
+     plain set, partial patches leave the rest alone) + the reset
+     restoring them;
    - queueExport: appends a queued row minted from the fixture tail +
      auto-shows the queue view (#89) + ARMS the timer (the probe);
    - the tick walk: queued → running +25%/tick → done 'just now'
@@ -43,6 +47,31 @@ describe('deliverViewStore (R24-W4, F5 P2) — the module-level view state', () 
     // R22 W5 (#88): the queue boots IDLE — the preview owns the center
     expect(S().jobs.some((j) => j.state === 'running' || j.state === 'queued')).toBe(false);
     expect(S().showQueue).toBe(false);
+    expect(__mockTimerActive()).toBe(false);
+  });
+
+  it('R25-W5: the pristine render settings — the R24-W4 DeliverPage boot defaults, now store-owned', () => {
+    expect(S()).toMatchObject({
+      preset: 'fcpxml',
+      codec: 'h264',
+      resolution: '1080',
+      range: 'inout',
+      bundleMedia: true,
+    });
+  });
+
+  it('R25-W5: setExportSettings is the ONE writer — partial patches apply, the rest stay untouched', () => {
+    S().setExportSettings({ preset: 'json' }); // the Custom JSON interchange preset
+    expect(S().preset).toBe('json');
+    expect(S().codec).toBe('h264'); // untouched by the partial patch
+    S().setExportSettings({ resolution: '2160', range: 'full', bundleMedia: false });
+    expect(S().resolution).toBe('2160');
+    expect(S().range).toBe('full');
+    expect(S().bundleMedia).toBe(false);
+    expect(S().preset).toBe('json'); // still the json choice
+    // the settings are VIEW STATE at store level too: writing them mints no
+    // queue row, arms no timer (the mock render stays untouched)
+    expect(S().jobs).toHaveLength(4);
     expect(__mockTimerActive()).toBe(false);
   });
 
@@ -131,6 +160,12 @@ describe('deliverViewStore (R24-W4, F5 P2) — the module-level view state', () 
     // the reset also arms nothing: time passes, nothing changes
     vi.advanceTimersByTime(5000);
     expect(S().jobs).toHaveLength(4);
+  });
+
+  it('R25-W5: resetDeliverView restores the DEFAULT render settings too (test determinism)', () => {
+    S().setExportSettings({ preset: 'json', resolution: '2160', range: 'full', bundleMedia: false, codec: 'prores' });
+    reset();
+    expect(S()).toMatchObject({ preset: 'fcpxml', codec: 'h264', resolution: '1080', range: 'inout', bundleMedia: true });
   });
 
   it('__mockTimerActive: false at boot, true while anything is queued/running, false after completion (the containment probe)', () => {

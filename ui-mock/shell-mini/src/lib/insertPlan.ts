@@ -95,6 +95,15 @@ function placedClip(
  *  right half's sourceStart advances by it. Nested effects/transitionOut
  *  are cloned — the halves never alias (the F1 undo-corruption class). */
 function splitClipAt(c: Clip, cut: number, rightStart: number, rightDur: number, consumedSource: number): Clip {
+  /* F1 (W4 review): off-grid clips (R18i raw-pointer trims commit
+   *  off-grid edges by design) can straddle a GRID-clean playhead so a
+   *  half falls below MIN_DUR — the reference guards this
+   *  (planOverwriteSpans drops degenerate halves); the cut CLAMPS into
+   *  [start+MIN, end-MIN] (the splitPoint law's shape). */
+  const MIN = 0.5;
+  const end = c.start + c.duration;
+  const safeCut = Math.min(Math.max(cut, c.start + MIN), end - MIN);
+  cut = safeCut;
   const leftDur = cut - c.start;
   const right: Clip = { id: mintClipId(), trackId: c.trackId, mediaId: c.mediaId, start: rightStart, duration: rightDur };
   if (c.sourceStart !== undefined || consumedSource > 0) right.sourceStart = (c.sourceStart ?? 0) + consumedSource;
@@ -231,15 +240,21 @@ export function planInsert(doc: Doc, media: Media, mode: InsertMode, opts: Inser
     /* ripple insert: straddlers split at the playhead (the D2 table —
      * the right half rests after the placed clip), every same-track clip
      * at/after the placed start shifts right by the placed duration.
-     * Grid law: time and clip edges are 0.5-clean, so both split halves
-     * are >= MIN_DUR by construction. */
+     * F1 (W4 review): clip edges are NOT always 0.5-clean (R18i raw
+     * pointer trims) — splitClipAt clamps the cut so both halves keep
+     * MIN_DUR, and the straddle branches drop degenerate remainders. */
     const patch = (d: Doc) => {
       const halves: Clip[] = [];
       for (const c of d.clips.filter((x) => x.trackId === trackId)) {
         if (c.start < time - EPS && c.start + c.duration > time + EPS) {
-          // straddler → split; the right half's content = [time, end)
+          // straddler → split; the right half's content = [time, end).
+          // F1 (W4 review): the CUT clamps so both halves keep MIN_DUR
+          // (off-grid edges from R18i raw trims; splitClipAt re-clamps
+          // defensively — here the caller passes CONSISTENT values).
           const rate = c.speed ?? 1;
-          const right = splitClipAt(c, time, time + dur, c.start + c.duration - time, (time - c.start) * rate);
+          const end0 = c.start + c.duration;
+          const cut = Math.min(Math.max(time, c.start + MIN_DUR), end0 - MIN_DUR);
+          const right = splitClipAt(c, cut, time + dur, end0 - cut, (cut - c.start) * rate);
           halves.push(right);
         } else if (c.start >= time - EPS) {
           c.start += dur; // later clips (incl. head-covered) ride right
@@ -254,6 +269,12 @@ export function planInsert(doc: Doc, media: Media, mode: InsertMode, opts: Inser
     };
   }
 
+  /* F5 (W4 review): in this accounting displaced <= dur in every branch
+   *  (full/head/tail = overlap <= dur; middle = dur), so ripple's delta
+   *  is >= 0 ALWAYS — the reference card's "shorter clips pull things in"
+   *  direction is unreachable here (inherited from the variants; the
+   *  floor below is defensive only). A future accounting change must
+   *  re-derive this invariant or the seams can silently break. */
   /* overwrite (+ the ripple delta): fully-covered clips are removed; head
    * straddles trim from the left (start moves, sourceStart advances — the
    * head-trim law); tail straddles trim the tail; middle straddles split
@@ -270,8 +291,15 @@ export function planInsert(doc: Doc, media: Media, mode: InsertMode, opts: Inser
         removals.add(c.id); // fully covered — removed (transitionOut drops with it)
         displaced += c.duration;
       } else if (c.start >= time - EPS) {
-        // head straddle — the covered head leaves; the window advances
+        // head straddle — the covered head leaves; the window advances.
+        // F1 (W4 review): a remaining tail < MIN_DUR is a degenerate half —
+        // the clip is fully removed (the reference's drop-degenerate law).
         const cut = time + dur - c.start;
+        if (c.duration - cut < MIN_DUR - EPS) {
+          removals.add(c.id);
+          displaced += c.duration;
+          continue;
+        }
         c.sourceStart = (c.sourceStart ?? 0) + cut * (c.speed ?? 1);
         c.start = time + dur;
         c.duration -= cut;
@@ -279,7 +307,13 @@ export function planInsert(doc: Doc, media: Media, mode: InsertMode, opts: Inser
         if (c.fadeOut !== undefined) c.fadeOut = Math.min(c.fadeOut, c.duration);
         displaced += cut;
       } else if (end <= time + dur + EPS) {
-        // tail straddle — the covered tail leaves (the head family stays)
+        // tail straddle — the covered tail leaves (the head family stays).
+        // F1: a remaining head < MIN_DUR -> fully removed (same law).
+        if (time - c.start < MIN_DUR - EPS) {
+          removals.add(c.id);
+          displaced += c.duration;
+          continue;
+        }
         displaced += end - time;
         c.duration = time - c.start;
         if (c.fadeIn !== undefined) c.fadeIn = Math.min(c.fadeIn, c.duration);
@@ -289,7 +323,17 @@ export function planInsert(doc: Doc, media: Media, mode: InsertMode, opts: Inser
         // lands after the placed clip, its window advanced past the span
         displaced += dur;
         const rate = c.speed ?? 1;
-        halves.push(splitClipAt(c, time, time + dur, end - (time + dur), (time + dur - c.start) * rate));
+        /* F1: the right half [time+dur, end) can be degenerate (< MIN)
+         *  on off-grid clips — the reference drops it (the clip just
+         *  trims to `time`); the left keeps its MIN via the cut clamp. */
+        if (end - (time + dur) >= MIN_DUR - EPS) {
+          halves.push(splitClipAt(c, time, time + dur, end - (time + dur), (time + dur - c.start) * rate));
+        } else {
+          c.duration = time - c.start;
+          if (c.fadeIn !== undefined) c.fadeIn = Math.min(c.fadeIn, c.duration);
+          if (c.fadeOut !== undefined) c.fadeOut = Math.min(c.fadeOut, c.duration);
+          delete c.transitionOut; // the tail died with the degenerate half
+        }
       }
     }
     if (mode === 'rippleOverwrite') {

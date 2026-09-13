@@ -11,7 +11,9 @@
    (DESIGN-R24 §1.2 A2-R1/R2/R3; issues #67/#64/#68 — SUPERSEDES the
    R23-WB D-B1/D-B2 composition) → R25-W3 (DESIGN-R25 §3 W3 / §6 A2;
    issues th_mtzokuem/th_mtzoi7vr — SUPERSEDES R24-#68/R24-W2's console
-   wiring): the timeline density is the D-B3 store law (compact default on
+   wiring) → R25-W5 (DESIGN-R25 §1 R18 / §3 W5; issue th_mtzp4arw — the
+   console-row tab grammar extends to deliver): the timeline density is
+   the D-B3 store law (compact default on
    color, the EVERY-PAGE toggle overrides; the mainbody default is 55% ONLY
    while compact, 40% when full tracks are asked for — the filmstrip needs
    lane room); the left dock on color is the Stills GALLERY (D-B4/#91 → W2
@@ -19,9 +21,11 @@
    Viewer-led (the ColorNodeGraph ⇄ Viewer swap is DELETED — #67; the
    R24-#68 under-viewer scopes pane is DELETED with it — A2's scopes ruling
    re-homes them to the console row); the console row carries the thin
-   [Timeline | Nodes | Scopes] TAB STRIP whose ACTIVE panel takes the row
-   (Timeline = the pre-W3 layout exactly; ConsoleTabs + the consoleTab
-   atom). Page-aware defaults (D2/D8): the color page's inspector = 420px
+   page-aware TAB STRIP whose ACTIVE panel takes the row — color:
+   [Timeline | Nodes | Scopes] (Timeline = the pre-W3 layout exactly;
+   ConsoleTabs + the consoleTab atom), deliver: [Timeline | Export] (the
+   export summary console, R25-W5 — the deliver inspector keeps
+   inspection-family content alone). Page-aware defaults (D2/D8): the color page's inspector = 420px
    until the user drags (inspectorWUserSet). */
 
 import { useEffect, useRef, type ReactNode } from 'react';
@@ -39,7 +43,7 @@ import { SceneTabs } from '../timeline/SceneTabs';
 import { Timeline } from '../timeline/Timeline';
 import { ColorInspector, ColorNodeGraph, ScopesDock } from '../pages/ColorPage';
 import { TimelineCompact } from '../timeline/TimelineCompact';
-import { DeliverPage } from '../pages/DeliverPage';
+import { DeliverPage, DeliverExportConsole } from '../pages/DeliverPage';
 import { ChannelEditor } from '../mixer/ChannelEditor';
 import { MarkerInspector } from '../panels/MarkerInspector';
 import { CaptionInspector } from '../panels/CaptionInspector';
@@ -262,19 +266,27 @@ function AppShellInner() {
   const captionSelected = selection.length === 1
     && findElement(scenes, selection[0])?.track.kind === 'caption';
   /* R22 → R23-WB → R24-W2 → R25-W3 (DESIGN-R25 §3 W3 / §6 A2; issues
-     th_mtzokuem/th_mtzoi7vr — SUPERSEDES the R24-W2 console wiring): the
-     console row is now the TAB strip's [Timeline | Nodes | Scopes] — the
-     ACTIVE tab's panel takes the row (Timeline = exactly the pre-W3 row).
-     colorScopesState/colorNodesDock are DEAD for rendering here (kept as
-     store view-state for the dock's solo mounts + legacy boot patches —
-     the panels.effects law); the Toolbar2 buttons + this row write
-     consoleTab. */
+     th_mtzokuem/th_mtzoi7vr — SUPERSEDES the R24-W2 console wiring) →
+     R25-W5 (DESIGN-R25 §1 R18 / §3 W5; issue th_mtzp4arw "a separate
+     panel the same place we do mixer console etc. … not inspection"):
+     the console row is the TAB strip's — color: [Timeline | Nodes |
+     Scopes], deliver: [Timeline | Export] (the export summary console).
+     The ACTIVE tab's panel takes the row (Timeline = exactly the pre-W3
+     row). colorScopesState/colorNodesDock are DEAD for rendering here
+     (kept as store view-state for the dock's solo mounts + legacy boot
+     patches — the panels.effects law); the Toolbar2 buttons + this row
+     write consoleTab. */
   const consoleTab = useUi((s) => s.consoleTab);
 
   const mainBodyUserSet = useUi((s) => s.mainBodyUserSet);
   const inspectorWUserSet = useUi((s) => s.inspectorWUserSet);
-  /* R23-WB (D-B3): the density resolution — ONE store resolver shared with
-     the TimelineToolbar's toggle (the honest aria-pressed law). */
+  /* R23-WB (D-B3) → R25-W6 (W6-A/W6-C): the density resolution — ONE store
+     resolver shared with the ViewOptionsPopover's radio group. W6: 'all'
+     (the frozen strip) is the only scope that compacts the whole timeline
+     area; 'off' and the hybrid 'video'/'audio' scopes mount the FULL
+     Timeline (per-kind heights inside it). The color/deliver auto-strip
+     defaults died with the per-page map (each page's own default = the
+     honest full timeline; the strip is an explicit remembered choice). */
   const compact = useUi((s) => resolveTimelineCompact(s));
 
   /* R23-WC (DESIGN-R23 D-C2, issue #99 + Part IX ruling 10 — the
@@ -441,19 +453,23 @@ function AppShellInner() {
           (compact → TimelineCompact, full → Timeline — compact DEFAULTS on
           color+deliver, the every-page TimelineToolbar toggle overrides per
           session, #94). R25-W3 (DESIGN-R25 §3 W3 / §6 A2 — issues
-          th_mtzokuem/th_mtzoi7vr, SUPERSEDES R24-W2's console wiring): the
-          COLOR page's console row gets the thin 26px TAB STRIP
-          [Timeline | Nodes | Scopes] at its top edge; the ACTIVE tab's
-          panel takes the row (Timeline = exactly the pre-W3 layout —
-          lanes + the mixer slot; Nodes/Scopes = the full row; the
-          side-by-side nodeviewer slot is RETIRED). Other pages render no
-          strip (their row is timeline-only — a lone tab answers nothing).
-          The mixer renders only where its page leaves it open — entering
-          color collapses it (D-B5/#92, the setPage exit law). */}
+          th_mtzokuem/th_mtzoi7vr, SUPERSEDES R24-W2's console wiring) →
+          R25-W5 (DESIGN-R25 §1 R18 / §3 W5 — issue th_mtzp4arw): the
+          console-row TAB STRIP is PAGE-AWARE — COLOR: [Timeline | Nodes |
+          Scopes], DELIVER: [Timeline | Export] — at the row's top edge; the
+          ACTIVE tab's panel takes the row (Timeline = exactly the pre-W3
+          row — lanes + the mixer slot; Nodes/Scopes/Export = the full row;
+          the side-by-side nodeviewer slot is RETIRED). Other pages render
+          no strip (their row is timeline-only — a lone tab answers
+          nothing). The mixer renders only where its page leaves it open —
+          entering color collapses it (D-B5/#92, the setPage exit law). */}
       <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />
-        {page === 'color' && <ConsoleTabs />}
+        {/* R25-W3 → R25-W5: the strip mounts on the pages that OWN tabs —
+            color ([Timeline|Nodes|Scopes]) + deliver ([Timeline|Export]);
+            every other page's row is timeline-only (no lone tab) */}
+        {(page === 'color' || page === 'deliver') && <ConsoleTabs page={page} />}
         <div className="flex min-h-0 flex-1">
           {page === 'color' && consoleTab === 'nodes' ? (
             /* the NODES tab — the graph takes the whole row (its own 26px
@@ -480,6 +496,17 @@ function AppShellInner() {
             >
               <ScopesDock />
             </div>
+          ) : page === 'deliver' && consoleTab === 'export' ? (
+            /* the EXPORT tab (R25-W5, th_mtzp4arw "a separate panel the
+               same place we do mixer console etc. … it is not
+               inspection"): the export summary console takes the whole
+               row (the readout card + the loop range block + the
+               queue-status strip — moved from the deliver inspector's
+               right column). NO F6 stop of its own (region [4] covers it —
+               the scopes-tab precedent); the panel reads the SHARED
+               render settings from deliverViewStore (the same choice the
+               deliver inspector edits — the one-choice law). */
+            <DeliverExportConsole />
           ) : (
             <>
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">

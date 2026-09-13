@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useActiveScene, trackHeights, useUi, mintTrackIds, activeTrackOf, resolveTimelineCompact } from './useUiStore';
+import { useActiveScene, trackHeights, useUi, mintTrackIds, activeTrackOf, resolveTimelineCompact, resolveTimelineCompactScope, resolveTrackClipStyle, pageTimelineViewFor } from './useUiStore';
 import { resolveGroupMove } from '../lib/timelinePlacement';
 import { project } from '../lib/mockData';
 
@@ -2580,46 +2580,196 @@ describe('R23-WB D-B5/#92 → R24-W1 A3-R3: entering any page ≠ audio collapse
   });
 });
 
-describe('R23-WB D-B3: the timeline density law (timelineCompact + the ONE resolver)', () => {
-  it("boots 'auto' and resolves per page: compact on color + deliver, full elsewhere", () => {
-    expect(S().timelineCompact).toBe('auto');
-    act(() => { S().setPage('edit'); });
-    expect(resolveTimelineCompact(S())).toBe(false);
-    act(() => { S().setPage('color'); });
-    expect(resolveTimelineCompact(S())).toBe(true);
-    act(() => { S().setPage('deliver'); });
-    expect(resolveTimelineCompact(S())).toBe(true); // deliver per D-F1 (Wave F fills the range band)
+describe('R23-WB D-B3 → R25-W6 (DESIGN-R25 §1 R3+R5 / §3 W6-A+W6-C): the per-page timeline view law (pageTimelineView + the ONE resolver family)', () => {
+  it("RE-PIN (W6-A / th_mtzp94ms): boots the per-page map — every page 'off' EXCEPT audio='video' (the reviewer's ask); resolveTimelineCompact = the strip under 'all' only", () => {
+    // the seeded map (the R23-WB 'auto' heuristic is SUPERSEDED: color +
+    // deliver now boot the honest full timeline — the strip is an explicit
+    // remembered choice; audio boots the compact-video hybrid)
+    expect(S().pageTimelineView).toEqual({
+      edit: { compact: 'off', clipStyle: null, waveforms: true },
+      color: { compact: 'off', clipStyle: null, waveforms: true },
+      audio: { compact: 'video', clipStyle: null, waveforms: true },
+      fx: { compact: 'off', clipStyle: null, waveforms: true },
+      deliver: { compact: 'off', clipStyle: null, waveforms: true },
+    });
+    for (const p of ['edit', 'color', 'deliver'] as const) {
+      act(() => { S().setPage(p); });
+      expect(resolveTimelineCompactScope(S())).toBe('off');
+      expect(resolveTimelineCompact(S())).toBe(false); // the full Timeline
+    }
     act(() => { S().setPage('audio'); });
-    expect(resolveTimelineCompact(S())).toBe(false);
+    expect(resolveTimelineCompactScope(S())).toBe('video'); // the hybrid scope
+    expect(resolveTimelineCompact(S())).toBe(false); // NOT the strip — per-kind compaction
     act(() => { S().setPage('fx'); });
-    expect(resolveTimelineCompact(S())).toBe(false);
+    expect(resolveTimelineCompactScope(S())).toBe('off');
   });
 
-  it("the user's 'on'/'off' override wins on every page EXCEPT fx (per-session, not a pref)", () => {
-    act(() => { S().setTimelineCompact('on'); });
+  it('RE-PIN (W6-A): the writes land in the ACTIVE page\'s entry — the memory is per-page and page switching RESTORES the target entry (no restore action exists)', () => {
     act(() => { S().setPage('edit'); });
-    expect(resolveTimelineCompact(S())).toBe(true); // compact on edit — #94 "everywhere"
-    act(() => { S().setTimelineCompact('off'); });
+    act(() => { S().setTimelineCompact('all'); });
+    act(() => { S().setTimelineClipStyle('blocks'); });
+    act(() => { S().setTimelineWaveforms(false); });
+    expect(S().pageTimelineView.edit).toEqual({ compact: 'all', clipStyle: 'blocks', waveforms: false });
+    expect(resolveTimelineCompact(S())).toBe(true); // the strip on edit — #94 "everywhere"
+    // view state — no history entry ever (the mixerElementVisibility law)
+    const past = S().past.length;
+    expect(past).toBe(0);
+    // switching pages restores the TARGET page's own defaults — edit's entry
+    // never leaks into color (the reviewer's exact ask)
     act(() => { S().setPage('color'); });
-    expect(resolveTimelineCompact(S())).toBe(false); // full tracks on color — the #94 ask
-    act(() => { S().setTimelineCompact('auto'); });
-    expect(S().timelineCompact).toBe('auto');
+    expect(resolveTimelineCompact(S())).toBe(false); // color's own default — full tracks
+    expect(resolveTrackClipStyle(S(), 'audio', 'filmstrip')).toBe('filmstrip'); // color's null entry → the variant
+    expect(S().pageTimelineView.color).toEqual({ compact: 'off', clipStyle: null, waveforms: true });
+    expect(S().pageTimelineView.edit).toEqual({ compact: 'all', clipStyle: 'blocks', waveforms: false }); // untouched
+    // and switching BACK restores edit's memory
+    act(() => { S().setPage('edit'); });
+    expect(S().pageTimelineView.edit).toEqual({ compact: 'all', clipStyle: 'blocks', waveforms: false });
+    expect(resolveTimelineCompact(S())).toBe(true);
   });
 
-  /* R23-FIX (review-sweep R-b, R3-P2#3 — RE-PINNED): the FX page forces the
-     FULL Timeline — even the user's 'on' override yields there (D-A1/ruling 8:
-     seam hit-zones + transition boxes need real lane pixel geometry). The old
-     "wins on EVERY page" law above was the D-D2 matrix's density row; ruling 8
-     supersedes it for fx (the matrix + the toolbar's DOM-absence are updated
-     to match — see TimelineToolbar.test). */
-  it("R23-FIX R-b: fx + the user's 'on' override STILL resolves the full Timeline (the resolver is the single writer of the truth)", () => {
-    act(() => { S().setTimelineCompact('on'); });
+  /* R23-FIX (review-sweep R-b, R3-P2#3 — RE-PINNED R25-W6): the FX page forces
+     the FULL Timeline — even a patched 'all' entry yields there (D-A1/ruling 8:
+     seam hit-zones + transition boxes need real lane pixel geometry; the
+     compact group is DOM-absent on fx so no control can write the entry). */
+  it("R23-FIX R-b (RE-PIN): fx + a patched 'all' entry STILL resolves the full Timeline (the resolver is the single writer of the truth)", () => {
+    act(() => { useUi.setState({ pageTimelineView: pageTimelineViewFor('fx', { compact: 'all' }) }); });
     act(() => { S().setPage('fx'); });
-    expect(resolveTimelineCompact(S())).toBe(false); // the page beats the session word on fx
+    expect(resolveTimelineCompactScope(S())).toBe('off'); // the page beats the entry on fx
+    expect(resolveTimelineCompact(S())).toBe(false);
     act(() => { S().setPage('edit'); });
-    expect(resolveTimelineCompact(S())).toBe(true); // the override still works everywhere else
-    act(() => { S().setTimelineCompact('auto'); });
+    expect(resolveTimelineCompact(S())).toBe(false); // edit's own 'off' default
+  });
+
+  it('W6-C (th_mtzors21): resolveTrackClipStyle — the per-kind resolution (compacted kinds render blocks; caption exempt; the page entry ?? the live variant default)', () => {
+    // scope 'video': the video family compacts, audio stays full, caption exempt
+    act(() => { useUi.setState({ page: 'audio', pageTimelineView: pageTimelineViewFor('audio', { compact: 'video' }) }); });
+    expect(resolveTrackClipStyle(S(), 'main', 'filmstrip')).toBe('blocks');
+    expect(resolveTrackClipStyle(S(), 'overlay', 'filmstrip')).toBe('blocks');
+    expect(resolveTrackClipStyle(S(), 'audio', 'filmstrip')).toBe('filmstrip');
+    expect(resolveTrackClipStyle(S(), 'caption', 'filmstrip')).toBe('filmstrip'); // the 32px chip law — never compacted
+    // scope 'audio': the mirror hybrid
+    act(() => { useUi.setState({ pageTimelineView: pageTimelineViewFor('audio', { compact: 'audio' }) }); });
+    expect(resolveTrackClipStyle(S(), 'main', 'filmstrip')).toBe('filmstrip');
+    expect(resolveTrackClipStyle(S(), 'audio', 'filmstrip')).toBe('blocks');
+    // scope 'all': every kind compacts (the strip mounts in the shell; the
+    // resolver stays total + honest)
+    act(() => { useUi.setState({ pageTimelineView: pageTimelineViewFor('audio', { compact: 'all' }) }); });
+    expect(resolveTrackClipStyle(S(), 'main', 'filmstrip')).toBe('blocks');
+    expect(resolveTrackClipStyle(S(), 'audio', 'filmstrip')).toBe('blocks');
+    // the page's clip-style memory (entry) beats the variant for NON-compacted kinds
+    act(() => { useUi.setState({ pageTimelineView: pageTimelineViewFor('audio', { compact: 'off', clipStyle: 'blocks' }) }); });
+    expect(resolveTrackClipStyle(S(), 'main', 'filmstrip')).toBe('blocks'); // the entry beats the variant
+    expect(resolveTrackClipStyle(S(), 'audio', 'filmstrip')).toBe('blocks');
+    // null entry → the LIVE variant default
+    act(() => { useUi.setState({ pageTimelineView: pageTimelineViewFor('audio', { clipStyle: null }) }); });
+    expect(resolveTrackClipStyle(S(), 'main', 'blocks')).toBe('blocks'); // variant blocks wins
     act(() => { S().setPage('edit'); });
+  });
+
+  it('W6-A: setTimelineWaveforms is the view gate (no history, doc untouched) — the setAllTrackWaveforms batch stays the doc seam (the W5d law unchanged)', () => {
+    act(() => { S().setPage('edit'); });
+    act(() => { S().setTimelineWaveforms(false); });
+    expect(S().pageTimelineView.edit.waveforms).toBe(false);
+    expect(S().past.length).toBe(0);
+    expect(track('sc-1', 'tr-audio-1').waveform).toBeUndefined(); // the doc untouched
+    // and the batch (the ON-path doc seam) still converges in ONE write
+    act(() => { S().setAllTrackWaveforms(true); });
+    expect(track('sc-1', 'tr-audio-1').waveform).toBe(true);
+    expect(S().past.length).toBe(1);
+  });
+});
+
+describe('R25-W6-B (DESIGN-R25 §1 R4 / §3 W6-B; th_mtzp5tvg): the fx-scope domain clear — the inspector refresh law', () => {
+  const fxObj = { kind: 'transition' as const, elementId: 'el-2' };
+  const holdDomain = () => useUi.setState({ selectedFxObject: fxObj, selection: ['el-2'] });
+
+  it('setTool leaving the fx tool KILLS the FX domain with the engine (the edit-page stale-chip bug)', () => {
+    act(() => { useUi.setState({ page: 'edit', tool: 'fx', fxMode: true }); });
+    holdDomain();
+    act(() => { S().setTool('select'); });
+    expect(S().fxMode).toBe(false);
+    expect(S().selectedFxObject).toBeNull(); // the domain dies with the scope — no stale FX editor on the edit rail
+    // re-entering the engine keeps a fresh domain (the write only fires on the KILL)
+    act(() => { S().setTool('fx'); });
+    expect(S().fxMode).toBe(true);
+    expect(S().selectedFxObject).toBeNull();
+    // on the FX PAGE tool changes never kill the engine (the page owns fxMode)
+    act(() => { holdDomain(); });
+    act(() => { useUi.setState({ page: 'fx' }); });
+    act(() => { S().setTool('blade'); });
+    expect(S().fxMode).toBe(true);
+    expect(S().selectedFxObject).toEqual(fxObj); // the page scope holds the domain
+    act(() => { S().setPage('edit'); });
+  });
+
+  it('setPage: leaving the fx SCOPE (page fx OR fxMode) clears the domain — edit-with-engine flipping pages cannot strand it', () => {
+    // the W0 fx-page exit law (already held)...
+    act(() => { useUi.setState({ page: 'fx', fxMode: true }); });
+    holdDomain();
+    act(() => { S().setPage('edit'); });
+    expect(S().selectedFxObject).toBeNull();
+    // ...widened: the fx TOOL on edit + a page flip kills the engine → the domain follows
+    act(() => { useUi.setState({ page: 'edit', tool: 'fx', fxMode: true }); });
+    holdDomain();
+    act(() => { S().setPage('color'); });
+    expect(S().fxMode).toBe(false);
+    expect(S().selectedFxObject).toBeNull();
+    // entering the fx page KEEPS a held domain (the scope opens; never cleared)
+    act(() => { useUi.setState({ page: 'edit', tool: 'select', fxMode: false }); });
+    holdDomain();
+    act(() => { S().setPage('fx'); });
+    expect(S().fxMode).toBe(true);
+    expect(S().selectedFxObject).toEqual(fxObj);
+    act(() => { S().setPage('edit'); });
+  });
+
+  it('enterAudioFocus / exitAudioFocus: the raw page writers carry the widened clear (the domain never survives an fxMode kill)', () => {
+    // entering focus from EDIT with the fx tool armed + the domain held
+    act(() => { useUi.setState({ page: 'edit', tool: 'fx', fxMode: true }); });
+    holdDomain();
+    act(() => { S().enterAudioFocus('dock'); });
+    expect(S().page).toBe('audio');
+    expect(S().fxMode).toBe(false);
+    expect(S().selectedFxObject).toBeNull(); // died with the engine — no stale resurface on the exit
+    // the exit twin (belt-and-braces — the domain is already null here)
+    act(() => { S().exitAudioFocus(); });
+    expect(S().page).toBe('edit');
+    expect(S().fxMode).toBe(false);
+    expect(S().selectedFxObject).toBeNull();
+  });
+
+  it('the SURVIVING domains (the converse law — audited, correct): clip selection, marker, effect and stripFocus survive page switches; the source/program flip clears nothing', () => {
+    // a clip selection survives page switches (Resolve keeps it — the rail
+    // on every page can honestly re-render it)
+    act(() => { useUi.setState({ page: 'edit', selection: ['el-2'], selectedFxObject: null, selectedMarkerId: null, selectedTrackId: null, selectedEffectId: null, selectedEffectClipId: null }); });
+    act(() => { S().setPage('color'); });
+    act(() => { S().setPage('edit'); });
+    expect(S().selection).toEqual(['el-2']);
+    // a marker selection survives too (the R-a rail-swap law: an ACTIVE
+    // selection domain is newer intent than the page default — the
+    // MarkerInspector outranks the page rails by design)
+    act(() => { S().selectMarker('mk-2'); });
+    expect(S().selection).toEqual([]);
+    act(() => { S().setPage('fx'); });
+    expect(S().selectedMarkerId).toBe('mk-2');
+    act(() => { S().setPage('edit'); });
+    // the effect domain survives while its clip stays selected (a clip-child
+    // sub-selection — the FX page's clip-mode rail renders it honestly)
+    act(() => { S().selectMarker(null); });
+    act(() => { S().selectElement('el-1', false); });
+    act(() => { S().selectEffect('el-1', 'fx-1'); });
+    act(() => { S().setPage('color'); });
+    act(() => { S().setPage('edit'); });
+    expect(S().selectedEffectClipId).toBe('el-1');
+    expect(S().selection).toContain('el-1');
+    // the source/program viewer flip: no inspector domain is invalidated (the
+    // timeline selection stays the honest inspection target — audited)
+    act(() => { S().enterSourcePreview('m-02'); });
+    expect(S().selection).toContain('el-1');
+    expect(S().selectedEffectClipId).toBe('el-1');
+    act(() => { S().exitSourcePreview(); });
+    expect(S().selection).toContain('el-1');
+    act(() => { S().setSelection([]); });
   });
 });
 

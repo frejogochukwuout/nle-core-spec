@@ -291,11 +291,16 @@ function SourceStage({ media }: { media: Media }) {
       </div>
       {/* the range bar IS the scrub surface (the stage's own playhead — F9) */}
       <div className="mini-src__rangewrap" data-testid="mini-src-range">
-        <SourceRangeBar media={media} />
+        {/* F3 (W4 review, the variants' A1 law): a STILL has no source
+         *  range — no handles, no marks row (an editable mark the insert
+         *  planner would silently discard is a lie). The bar still
+         *  scrubs the (meaningless but harmless) position. */}
+        <SourceRangeBar media={media} hideHandles={media.kind === 'image'} />
         <span className="mini-src__tc mini-mono" data-testid="mini-src-tc">
           {fmtTimecode(sourcePlayhead)}
         </span>
       </div>
+      {media.kind !== 'image' && (
       <div className="mini-src__marks">
         <button
           type="button"
@@ -326,6 +331,7 @@ function SourceStage({ media }: { media: Media }) {
           Clear
         </button>
       </div>
+      )}
       {/* the mode row: 6 ONE-SHOT action buttons (never disabled — an
           impossible edit toasts honestly, the store's refusal law) */}
       <div className="mini-src__modes" role="group" aria-label="Insert modes" data-testid="mini-src-modes">

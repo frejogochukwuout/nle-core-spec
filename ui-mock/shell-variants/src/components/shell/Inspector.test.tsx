@@ -697,6 +697,79 @@ describe('R23-WA: the FX section embeds at the TOP of the Edit-page rail (D-A4)'
   });
 });
 
+/* ---------- R25-W6-B (DESIGN-R25 §1 R4 / §3 W6-B; thread th_mtzp5tvg "make
+   sure the inspector content refresh after view / editor mode change"): the
+   fx-SCOPE clear law, pinned at the rail. The store owns the fix (setTool /
+   setPage / enterAudioFocus+exitAudioFocus kill selectedFxObject whenever
+   they kill the engine — `page === 'fx' || fxMode` is the domain's scope);
+   the Inspector REFLECTS state (no component effect — the honest-state law).
+   The surviving domains are pinned as the converse: the clip selection (the
+   Resolve law) and the effect sub-selection survive page switches. ---------- */
+
+describe('R25-W6-B (th_mtzp5tvg): the inspector refresh after view / editor mode change', () => {
+  it('editor-mode change (setTool off the FX tool): the stale FX embed CLEARS with the engine — the honest clip rail returns (chip: the selected clip, as ever)', () => {
+    boot({ page: 'edit', tool: 'fx', fxMode: true, selection: ['el-1'], selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'in' } });
+    // the fade-object press selects clip AND object — the chip names the clip
+    // (the priority chain), the FX EDITOR embed is the domain's observable
+    expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'clip');
+    expect(screen.getByRole('button', { name: 'Remove fade in' })).toBeInTheDocument();
+    // the toolbar radio click / Escape's tool rung both land here — the engine dies
+    act(() => { S().setTool('select'); });
+    expect(S().fxMode).toBe(false);
+    expect(S().selectedFxObject).toBeNull();
+    // the embed is GONE — the clip's own rail is the whole body now
+    expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'clip');
+    expect(screen.getByTestId('inspector-entity-name')).toHaveTextContent('A012_C034_beach_wide');
+    expect(screen.queryByRole('button', { name: 'Remove fade in' })).not.toBeInTheDocument();
+    expect(hasSection('transform')).toBe(true); // the clip's own sections returned
+  });
+
+  it('view change (page switch out of the fx scope): the domain dies with the engine — and the CLIP SELECTION SURVIVES (the Resolve law, pinned as the converse)', () => {
+    boot({ page: 'edit', tool: 'fx', fxMode: true, selection: ['el-1'], selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'in' } });
+    act(() => { S().setPage('color'); });
+    expect(S().fxMode).toBe(false);
+    expect(S().selectedFxObject).toBeNull(); // the widened exit law — no stale resurface
+    // the surviving domain: Resolve keeps the clip selection across pages
+    expect(S().selection).toEqual(['el-1']);
+    act(() => { S().setPage('edit'); });
+    // back on edit the rail shows the CLIP, never the dead FX editor
+    expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'clip');
+    expect(screen.queryByRole('button', { name: 'Remove fade in' })).not.toBeInTheDocument();
+  });
+
+  it('view change (audio-focus enter/exit): the raw page writers carry the clear — no stale fx-object after the round-trip', () => {
+    boot({ page: 'edit', tool: 'fx', fxMode: true, selection: [], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+    act(() => { S().enterAudioFocus('dock'); });
+    expect(S().page).toBe('audio');
+    expect(S().fxMode).toBe(false);
+    expect(S().selectedFxObject).toBeNull();
+    // the exit lands on edit with an honest rail (the fallback sheet — the
+    // transition body is GONE, not carried)
+    act(() => { S().exitAudioFocus(); });
+    expect(screen.getByTestId('inspector-entity-chip')).not.toHaveAttribute('data-entity', 'fx-object');
+    expect(screen.queryByTestId('transition-presentation')).not.toBeInTheDocument();
+  });
+
+  it('the transition-owned body (no clip selection) degrades honestly on the mode change — the fallback sheet, never the stale editor', () => {
+    boot({ page: 'edit', tool: 'fx', fxMode: true, selection: [], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+    expect(screen.getByTestId('transition-presentation')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-track-sheet')).not.toBeInTheDocument();
+    act(() => { S().setTool('select'); });
+    expect(screen.queryByTestId('transition-presentation')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-track-sheet')).toHaveAttribute('data-via', 'fallback');
+  });
+
+  it('the surviving-domain converse: the effect sub-selection + breadcrumb survive page switches (a clip-child domain — the FX page renders it honestly too)', () => {
+    boot({ selection: ['el-1'], selectedEffectId: 'fx-1', selectedEffectClipId: 'el-1', page: 'edit' });
+    expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'effect');
+    act(() => { S().setPage('color'); });
+    act(() => { S().setPage('edit'); });
+    expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'effect');
+    expect(screen.getByTestId('inspector-breadcrumb')).toHaveTextContent('Gaussian Blur');
+    expect(screen.getByTestId('shell-effect-editor-fx-1')).toBeInTheDocument();
+  });
+});
+
 /* ---------- R24-W5a (DESIGN-R24 §2 F2-P2): TransitionSection's honest ----------
    mixed state. The section is EXPORTED (the FX inspector reuses it), so the
    mixed els[] contract pins at the component level: the Inspector frame's

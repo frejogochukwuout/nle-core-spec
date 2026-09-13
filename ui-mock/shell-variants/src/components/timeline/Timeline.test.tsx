@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { act, createEvent, fireEvent, screen, within } from '@testing-library/react';
 import { Timeline } from './Timeline';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
-import { useUi } from '../../state/useUiStore';
+import { useUi, pageTimelineViewFor } from '../../state/useUiStore';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import { zoomController } from '../../lib/zoomController';
 import { sceneDuration } from '../../lib/mockData';
@@ -176,6 +176,82 @@ describe('Timeline', () => {
     expect(laneOf('el-1').style.height).toBe('40px');
     expect(laneOf('el-5').style.height).toBe('28px');
     expect(laneOf('el-6').style.height).toBe('34px');
+  });
+
+  /* ---- R25-W6 (DESIGN-R25 §1 R3+R5 / §3 W6-A+W6-C; th_mtzp94ms +
+     th_mtzors21): the per-page view options — the per-KIND compact scopes +
+     the per-page clip-style memory + the waveform view gate, pinned at the
+     lane-height resolver (the ONE resolver: resolveTrackClipStyle feeds
+     trackHeights, so the lane divs ARE the per-kind law's DOM). ---- */
+
+  it('W6-C: the AUDIO page boots compact-video — V1 renders the blocks height (40), the audio lanes stay FULL (60) with their waveforms; the caption lane is exempt (32)', () => {
+    const { unmount } = boot({ page: 'audio' }); // the seeded default: scope 'video'
+    expect(store().pageTimelineView.audio.compact).toBe('video');
+    expect(laneOf('el-1').style.height).toBe('40px'); // main → blocks (compacted)
+    expect(laneOf('el-5').style.height).toBe('28px'); // overlay → blocks (compacted)
+    expect(laneOf('el-6').style.height).toBe('60px'); // audio stays FULL (filmstrip)
+    expect(laneOf('el-7').style.height).toBe('60px');
+    expect(laneOf('cap-1').style.height).toBe('32px'); // the chip law — never compacted
+    // the audio clips keep their filmstrip bodies (the waveform lanes render)
+    expect(screen.getByTestId('clip-waveform-el-6')).toBeInTheDocument();
+    expect(screen.getByTestId('clip-waveform-el-7')).toBeInTheDocument();
+    // 'off' restores the filmstrip heights for the video family
+    act(() => { useUi.getState().setTimelineCompact('off'); });
+    expect(laneOf('el-1').style.height).toBe('80px');
+    expect(laneOf('el-5').style.height).toBe('60px');
+    expect(laneOf('el-6').style.height).toBe('60px');
+    unmount();
+  });
+
+  it('W6-C: scope "audio" is the mirror hybrid — the audio lanes compact to blocks (34, NO waveform lanes), the video family stays filmstrip (80/60)', () => {
+    const { unmount } = boot({ page: 'edit', pageTimelineView: pageTimelineViewFor('edit', { compact: 'audio' }) });
+    expect(laneOf('el-1').style.height).toBe('80px'); // main stays FULL
+    expect(laneOf('el-5').style.height).toBe('60px'); // overlay stays FULL
+    expect(laneOf('el-6').style.height).toBe('34px'); // audio → blocks (compacted)
+    expect(laneOf('el-7').style.height).toBe('34px');
+    // compacted audio = the blocks body — no waveform lane to render
+    expect(screen.queryByTestId('clip-waveform-el-6')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('clip-waveform-el-7')).not.toBeInTheDocument();
+    unmount();
+  });
+
+  it('W6-A: the per-page clip-style memory — blocks on EDIT leaves the COLOR null entry (the variant filmstrip) alone; the heights follow the ACTIVE page', () => {
+    const first = boot({ page: 'edit' });
+    act(() => { useUi.getState().setTimelineClipStyle('blocks'); });
+    expect(laneOf('el-1').style.height).toBe('40px'); // edit's own memory
+    first.unmount();
+    // color: null entry → the LIVE variant default (filmstrip — the page write
+    // never touched the variant)
+    boot({ page: 'color' });
+    expect(store().pageTimelineView.edit.clipStyle).toBe('blocks'); // edit's memory intact
+    expect(laneOf('el-1').style.height).toBe('80px'); // color resolves filmstrip
+    expect(laneOf('el-6').style.height).toBe('60px');
+  });
+
+  it('W6-A: the waveform VIEW GATE — a page-wide off hides every waveform lane while the §4.7 doc flags stay (the per-page restore works BECAUSE the doc is untouched)', () => {
+    const first = boot({ page: 'edit' });
+    // converge the flags explicit-true first (the ON-path batch), so the gate
+    // is the ONLY thing under test
+    act(() => { useUi.getState().setAllTrackWaveforms(true); });
+    expect(screen.getByTestId('clip-waveform-el-6')).toBeInTheDocument();
+    act(() => { useUi.getState().setTimelineWaveforms(false); });
+    expect(screen.queryByTestId('clip-waveform-el-6')).not.toBeInTheDocument(); // the gate hides
+    expect(screen.queryByTestId('clip-waveform-el-7')).not.toBeInTheDocument();
+    // the doc flags SURVIVED the off (the isolation law)
+    expect(scene1().tracks.find((t) => t.id === 'tr-audio-1')!.waveform).toBe(true);
+    first.unmount();
+    // another page's gate is its own — the lanes render there
+    boot({ page: 'color' });
+    expect(screen.getByTestId('clip-waveform-el-6')).toBeInTheDocument();
+  });
+
+  it('W6-C × the focus boost: the audio page via the DOCK (enterAudioFocus) composes — video blocks 40 (capped), audio filmstrip 60 × 1.6 = 96', () => {
+    const { unmount } = boot({ page: 'audio', audioLaneBoost: true });
+    expect(laneOf('el-1').style.height).toBe('40px'); // blocks 40, main cap 40 — unchanged
+    expect(laneOf('el-5').style.height).toBe('28px'); // blocks 28, overlay cap 28
+    expect(laneOf('el-6').style.height).toBe('96px'); // filmstrip 60 × 1.6 — the waveform room
+    expect(laneOf('cap-1').style.height).toBe('32px'); // the caption exemption rides every composition
+    unmount();
   });
 
   /* ---- R20-W5 (thread #58 / D1.5, gap C57): PER-TRACK lane heights ---- */

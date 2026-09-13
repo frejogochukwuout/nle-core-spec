@@ -9,6 +9,7 @@
 
 import { create } from 'zustand';
 import { project, sceneDuration, mediaById, fieldOfFade, type SceneJSON, type ElementJSON, type TrackJSON, type Marker, type EffectJSON, type TransitionPresentation, type ElementType } from '../lib/mockData';
+import type { ClipStyle } from '../lib/variants';
 import { clamp, snapToFrame } from '../lib/timecode';
 import { PPS_MIN as MIN_PPS, PPS_MAX as MAX_PPS } from '../lib/pixel';
 import { trackAcceptsElement, spansOverlap, zeroAnchorShift, dragRejectionToast, type GroupMoveFail } from '../lib/timelinePlacement';
@@ -55,6 +56,38 @@ export type ToolId = 'select' | 'blade' | 'roll' | 'ripple' | 'slip' | 'slide' |
    browser, right rail = FX inspector, timeline area = the full Timeline in
    fxMode). Dock order: Edit / Color / Audio / FX / Deliver (⌘5). */
 export type Page = 'edit' | 'color' | 'audio' | 'fx' | 'deliver';
+/* R25-W6 (DESIGN-R25 §1 R3+R5 / §3 W6-A+W6-C; threads th_mtzp94ms "the
+ *  timeline style mode should be remembered on per view mode basis" +
+ *  th_mtzors21 "compact - video, compact - audio, compact - all"): the
+ *  timeline view options are PER-PAGE view state. compact is a SCOPE, not a
+ *  boolean — which track KIND the compaction applies to:
+ *  - 'off'   — full tracks, no compaction (the filmstrip defaults);
+ *  - 'video' — the VIDEO family (main + overlay) compacts to the blocks
+ *              anatomy, audio tracks stay FULL (the AUDIO page default — the
+ *              reviewer's exact ask: audio tracks need the waveform room);
+ *  - 'audio' — audio tracks compact to blocks, video stays full;
+ *  - 'all'   — everything compact = the frozen compact STRIP mounts (the
+ *              R23-WB D-B3 surface — 'all' is the old 'on').
+ * 'video'/'audio' are HYBRID modes: the FULL Timeline renders with per-kind
+ * lane heights + clip bodies resolved per kind (resolveTrackClipStyle — the
+ * compacted kinds render the blocks style at the blocks heights). */
+export type TimelineCompactScope = 'off' | 'video' | 'audio' | 'all';
+/* R25-W6-A (th_mtzp94ms): ONE page's remembered timeline view options. All
+ * VIEW state — the mixerElementVisibility law (plain set, NEVER inside a
+ * withHistory snapshot; the snapshot slice stays scenes/activeSceneId/
+ * lockAll/selection/mockGrades). clipStyle: null = INHERIT the live variant
+ * default (the debug overlay's global Clip rendering dimension — the
+ * VariantProvider is the global seam; a concrete entry is THIS page's own
+ * memory, written by the ViewOptionsPopover). waveforms: the page-wide VIEW
+ * GATE — the rendered lane = per-track §4.7 doc flag AND this gate, so a
+ * page's off never converges the doc flags (the per-page restore works
+ * BECAUSE the doc is untouched; the on-path converges via setAllTrackWaveforms
+ * — the W5d batch — so "every audio track" is honest). */
+export interface PageTimelineView {
+  compact: TimelineCompactScope;
+  clipStyle: ClipStyle | null;
+  waveforms: boolean;
+}
 /* R23-WA (D-A3): the FX selection domain — a seam transition or a clip fade
    object. Mirrors the R20-W3 domain laws: mutually exclusive with the other
    selection domains (clears at every existing clear-site), kept alive by
@@ -194,23 +227,55 @@ export function gradeOf(s: Pick<UiState, 'mockGrades'>, id: string): MockGrade {
   return s.mockGrades[id] ?? DEFAULT_MOCK_GRADE;
 }
 
-/* R23-WB (DESIGN-R23 D-B3; issue #94): the ONE density resolver — 'auto'
- * means COMPACT on color + deliver (deliver per D-F1's ruling that Wave F
- * mounts the strip), full tracks elsewhere; 'on'/'off' are the user's
- * per-session overrides. Both consumers (the AppShell mount decision + the
- * TimelineToolbar toggle's honest aria-pressed) read THIS so they can never
- * disagree about what is rendered.
- * R23-FIX (review-sweep R-b, R3-P2#3 — supersedes the D-D2 matrix's density
- * row for FX): the FX page FORCES the full Timeline — even the user's 'on'
- * override yields there (D-A1/ruling 8: seam hit-zones and transition boxes
- * need real lane pixel geometry; the compact strip is frozen by law). The
- * density toggle is DOM-absent on the FX page, so no control can claim the
- * override there; the resolver is the single writer of the truth.) */
-export function resolveTimelineCompact(s: Pick<UiState, 'timelineCompact' | 'page'>): boolean {
-  if (s.page === 'fx') return false; // R-b: the FX timeline is the FULL Timeline
-  if (s.timelineCompact === 'on') return true;
-  if (s.timelineCompact === 'off') return false;
-  return s.page === 'color' || s.page === 'deliver';
+/* R23-WB (DESIGN-R23 D-B3; issue #94) → R25-W6 (DESIGN-R25 §1 R3+R5 / §3
+ * W6-A+W6-C; threads th_mtzp94ms + th_mtzors21 — the per-page memory law
+ * SUPERSEDES the D-B3 'auto' heuristic): the ONE density resolver family.
+ * The per-page map carries a concrete TimelineCompactScope per page; the
+ * resolvers below are the single writers of the truth (the AppShell mount
+ * decision, the ViewOptionsPopover radio, the Timeline lane-height resolver
+ * and every test read THIS — they can never disagree):
+ * - resolveTimelineCompactScope — the page's scope (fx FORCES 'off': the
+ *   R23-FIX R-b law carries over — the FX timeline is the FULL Timeline,
+ *   even a patched entry yields there; D-A1/ruling 8: seam hit-zones and
+ *   transition boxes need real lane pixel geometry).
+ * - resolveTimelineCompact — the STRIP mount decision: only 'all' (the
+ *   frozen compact strip) compacts the whole timeline area; 'off' and the
+ *   hybrid 'video'/'audio' scopes mount the FULL Timeline.
+ * - resolveTrackClipStyle — the per-kind height/clip-style resolver: the
+ *   kinds a scope compacts render the BLOCKS anatomy (blocks heights + solid
+ *   clip bodies — compaction ≡ the blocks style for that kind); the others
+ *   render the page's clipStyle (the entry, else the live variant default).
+ *   The caption kind is EXEMPT (its own 32px chip law — gap C34; the
+ *   R23-FIX R5-P3#6 caption-exemption law carries over per-kind). */
+export function resolveTimelineCompactScope(s: Pick<UiState, 'pageTimelineView' | 'page'>): TimelineCompactScope {
+  if (s.page === 'fx') return 'off'; // R-b: the FX timeline is the FULL Timeline
+  return s.pageTimelineView[s.page].compact;
+}
+export function resolveTimelineCompact(s: Pick<UiState, 'pageTimelineView' | 'page'>): boolean {
+  return resolveTimelineCompactScope(s) === 'all';
+}
+/** R25-W6-C: the per-kind resolver — compacted kinds resolve 'blocks' (the
+ *  compact anatomy), the others resolve the page's style (entry ?? variant). */
+export function resolveTrackClipStyle(
+  s: Pick<UiState, 'pageTimelineView' | 'page'>,
+  kind: TrackJSON['kind'],
+  variantClipStyle: ClipStyle,
+): ClipStyle {
+  const scope = resolveTimelineCompactScope(s);
+  const videoFamily = kind === 'main' || kind === 'overlay';
+  const compacted = kind !== 'caption' && (
+    scope === 'all'
+    || (scope === 'video' && videoFamily)
+    || (scope === 'audio' && kind === 'audio')
+  );
+  if (compacted) return 'blocks';
+  return s.pageTimelineView[s.page].clipStyle ?? variantClipStyle;
+}
+/** R25-W6-A: the per-page map with ONE entry overridden — the patch seam for
+ *  tests/stories (UiPatch is a shallow record; the map must be rebuilt whole). */
+export function pageTimelineViewFor(page: Page, partial: Partial<PageTimelineView>): Record<Page, PageTimelineView> {
+  const base = useUi.getState().pageTimelineView;
+  return { ...base, [page]: { ...base[page], ...partial } };
 }
 
 const findEl = (scenes: SceneJSON[], id: string): { el: ElementJSON; track: TrackJSON; scene: SceneJSON } | null => {
@@ -633,20 +698,22 @@ interface UiState {
    *  test patch site; colorScopesLastVisual is REMOVED (Part IX ruling 13).
    *  View state, never snapshotted. */
   colorScopesState: 'off' | 'open';
-  /** R25-W3 (DESIGN-R25 §3 W3 / §6 A2; issues th_mtzokuem "panel or under
-   *  inspector?" + th_mtzoi7vr "console multi-tab next to timeline"): the
-   *  CONSOLE-ROW TAB — which panel owns the timeline block's console row on
-   *  the color page. 'timeline' (the default) = exactly the pre-W3 row
+  /** R25-W3 → R25-W5 (DESIGN-R25 §3 W3/W5 / §6 A2; issues th_mtzokuem
+   *  "panel or under inspector?" + th_mtzoi7vr "console multi-tab next to
+   *  timeline"; W5 adds th_mtzp4arw "export summary → separate panel, not
+   *  inspection"): the CONSOLE-ROW TAB — which panel owns the timeline
+   *  block's console row. 'timeline' (the default) = exactly the pre-W3 row
    *  (the compact strip / full lanes + the mixer slot); 'nodes' = the
-   *  ColorNodeGraph; 'scopes' = the ScopesDock. The ACTIVE tab's panel takes
-   *  the row's space (the reviewer's "it takes the same space just a thin
-   *  tab" ruling) — the R24-W2 side-by-side nodeviewer slot AND the R24-#68
-   *  under-viewer scopes pane are RETIRED (superseded placements; the
-   *  colorNodesDock flag is dead-but-harmless view state now, the
-   *  panels.effects precedent). View state, NEVER snapshotted; leaving the
-   *  color page resets it to 'timeline' (the setPage exit law — the simple
-   *  reset, no per-page memory). */
-  consoleTab: 'timeline' | 'nodes' | 'scopes';
+   *  ColorNodeGraph (color page); 'scopes' = the ScopesDock (color page);
+   *  'export' = the deliver Export summary console (deliver page — R18's
+   *  ruling: the export summary is operational readout, NOT inspection, so
+   *  it joins the console-row family "the same place we do mixer console
+   *  etc."). The ACTIVE tab's panel takes the row's space (the reviewer's
+   *  "it takes the same space just a thin tab" ruling). View state, NEVER
+   *  snapshotted; leaving the OWNING page (color OR deliver) resets it to
+   *  'timeline' (the setPage exit law — the simple reset, no per-page
+   *  memory). */
+  consoleTab: 'timeline' | 'nodes' | 'scopes' | 'export';
   /** R22-D4 → R23-WB (DESIGN-R23 D-B2; issue #93): the node-graph flag now
    *  points at the VIEWER-REGION surface — true = ColorNodeGraph replaces
    *  the Viewer in the mainbody center ("fit better on the preview window …
@@ -658,13 +725,18 @@ interface UiState {
    *  graph; Toolbar2/the graph × write the tab) — kept for the legacy
    *  StoreBoot patches + solo-mount gates, the panels.effects law. */
   colorNodesDock: boolean;
-  /** R23-WB (DESIGN-R23 D-B3; issue #94): timeline density — 'auto' resolves
-   *  per page (COMPACT on color + deliver per D-F1, full elsewhere);
-   *  'on'/'off' are the per-session user overrides from the TimelineToolbar's
-   *  density toggle (available on EVERY page — "this super compact mode we
-   *  should allow to be used everywhere"). View state, not a pref (resets on
-   *  reload); never snapshotted. */
-  timelineCompact: 'auto' | 'on' | 'off';
+  /** R23-WB (D-B3) → R25-W6 (DESIGN-R25 §1 R3+R5 / §3 W6-A+W6-C; threads
+   *  th_mtzp94ms + th_mtzors21): the PER-PAGE timeline view options — each
+   *  page remembers its own compact scope / clip style / waveform gate;
+   *  switching pages RESTORES the target page's entry automatically (every
+   *  consumer keys by `page` — no restore action exists). The R23-WB
+   *  'auto'-heuristic (compact strip defaulting on color + deliver) is
+   *  SUPERSEDED: every page now boots the honest full timeline EXCEPT audio
+   *  (the reviewer's ask: compact-video — audio tracks stay full for the
+   *  waveform room); the strip is an explicit per-page choice ('all') that
+   *  is remembered like every other style. View state, not a pref (resets on
+   *  reload); never snapshotted (the mixerElementVisibility law). */
+  pageTimelineView: Record<Page, PageTimelineView>;
   /** R23-WB (D-B4; #97/#91): the color page's Gallery — view state, never
    *  snapshotted (stills survive unmounts; grades are NOT doc data). */
   colorStills: Still[];
@@ -873,8 +945,23 @@ interface UiState {
   setConsoleTab: (tab: UiState['consoleTab']) => void;
   /** R22-D4 → R23-WB: toggles the node-graph viewer-region surface (D-B2). */
   toggleColorNodesDock: () => void;
-  /** R23-WB (D-B3): the density override write ('auto' | 'on' | 'off'). */
-  setTimelineCompact: (v: UiState['timelineCompact']) => void;
+  /** R23-WB (D-B3) → R25-W6 (W6-A/W6-C): writes the ACTIVE page's compact
+   *  scope (view state — no history mint ever; the popover's radio is the
+   *  user surface). On the FX page this write is unreachable from the UI
+   *  (the compact group is DOM-absent there) and the resolver ignores the
+   *  fx entry — the R23-FIX R-b law. */
+  setTimelineCompact: (v: TimelineCompactScope) => void;
+  /** R25-W6-A (th_mtzp94ms): writes the ACTIVE page's clip-style memory
+   *  (view state; the VARIANT default is untouched — the debug overlay stays
+   *  the global seam, this is the page's own override). */
+  setTimelineClipStyle: (v: ClipStyle) => void;
+  /** R25-W6-A (th_mtzp94ms): writes the ACTIVE page's waveform view GATE
+   *  (view state, no history). The popover's ON path also converges the
+   *  §4.7 per-track doc flags through setAllTrackWaveforms (the W5d batch —
+   *  ONE undoable entry, the honest no-op arm); the OFF path is the gate
+   *  ALONE — converging the flags to false would leak the off into every
+   *  other page (the doc is global), breaking the per-page restore. */
+  setTimelineWaveforms: (target: boolean) => void;
   /** R23-WB (D-B4): saves a Gallery still from a grade record (the id is
    *  minted HERE, monotonic over the existing ids — a delete can never cause
    *  a collision). View-state write, no history entry. */
@@ -1124,9 +1211,23 @@ export const useUi = create<UiState>((set, get) => ({
   mockGrades: {},
   colorInspectorTab: 'primaries',
   colorScopesState: 'off', // R22-D3/R23-WB: default OFF (#77 "shouldn't always be there")
-  consoleTab: 'timeline', // R25-W3: the console row is the timeline's until a tab says otherwise
+  consoleTab: 'timeline', // R25-W3/W5: the console row is the timeline's until a tab says otherwise
   colorNodesDock: false, // R23-WB (D-B2): the viewer-region surface, default OFF — R25-W3: DEAD for rendering (consoleTab owns the mount)
-  timelineCompact: 'auto', // R23-WB (D-B3): per-page resolution until the user toggles
+  /* R25-W6 (DESIGN-R25 §3 W6-A+W6-C): the per-page timeline view map. The
+     seeded defaults: audio = compact-video (the reviewer's exact ask —
+     "under audio view, by default Audio track should not be compacted": the
+     video family compacts, the audio lanes stay full for the waveforms);
+     every other page = 'off' (the W6-A pin: each page's own default is the
+     honest full timeline — the R23-WB auto-strip heuristic on color/deliver
+     is superseded by the per-page memory law). clipStyle null everywhere =
+     inherit the live variant default; waveform gates on. */
+  pageTimelineView: {
+    edit: { compact: 'off', clipStyle: null, waveforms: true },
+    color: { compact: 'off', clipStyle: null, waveforms: true },
+    audio: { compact: 'video', clipStyle: null, waveforms: true },
+    fx: { compact: 'off', clipStyle: null, waveforms: true },
+    deliver: { compact: 'off', clipStyle: null, waveforms: true },
+  },
   colorStills: SEED_STILLS, // R23-WB (D-B4): the Gallery's seed stills (view state)
   colorGradeTarget: 'clip',
   qualifierPreviewOn: false,
@@ -1152,8 +1253,14 @@ export const useUi = create<UiState>((set, get) => ({
        ruling-22 rung reads the domain before the clip selection) — the exit
        law now covers all seven selection domains the way the scene switch
        does. The fx-page entry is always fresh (the domain can only be set
-       while on fx — selectFxObject is fx-page-driven). */
-    ...(s.page === 'fx' && p !== 'fx' ? { selectedFxObject: null } : {}),
+       while on fx — selectFxObject is fx-page-driven).
+       R25-W6-B (th_mtzp5tvg): the exit law widens to the whole fx SCOPE
+       (`page === 'fx' || fxMode`) — the engine also dies when the EDIT page
+       (fx tool armed) flips to any other page, and that flip must carry the
+       domain clear too, else the stale fx-object resurfaces when the user
+       returns to edit. The fx-page ENTRY keeps the domain (entering the
+       scope never clears — p === 'fx' guards the whole arm). */
+    ...((s.page === 'fx' || s.fxMode) && p !== 'fx' ? { selectedFxObject: null } : {}),
     /* R23-WB (D-B5/#92) → R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 —
        AUDIO-ONLY mixer surfaces, registered in the README deviation ledger):
        entering a page whose toolbar carries NO mixer toggle collapses the
@@ -1164,13 +1271,20 @@ export const useUi = create<UiState>((set, get) => ({
        unclosable from that page's toolbar: the exit law keeps every console
        closable on the page that owns it (audio). */
     ...(p !== 'audio' && s.mixerState !== 'collapsed' ? { mixerState: 'collapsed' as MixerDockState } : {}),
-    /* R25-W3 (DESIGN-R25 §3 W3): the console-tab exit law — leaving the
-       color page resets the console row to 'timeline'. The Nodes/Scopes
-       panels are color-page surfaces; a carried tab on another page would
-       either render nothing (the AppShell mounts them color-only) or strand
-       a boot patch, so the row resets with the same one-transition pattern
-       as the mixer exit law above (simple reset, no per-page memory). */
-    ...(s.page === 'color' && p !== 'color' && s.consoleTab !== 'timeline' ? { consoleTab: 'timeline' as UiState['consoleTab'] } : {}),
+    /* R25-W3 → R25-W5 (DESIGN-R25 §3 W3/W5): the console-tab exit law —
+       leaving the page that OWNS the tabs resets the console row to
+       'timeline'. W3: the Nodes/Scopes panels are color-page surfaces; a
+       carried tab on another page would either render nothing (the AppShell
+       mounts them color-only) or strand a boot patch. W5 widens the law to
+       deliver (the Export panel is a deliver surface — same reasoning,
+       one-transition pattern as the mixer exit law above; simple reset,
+       no per-page memory). */
+    ...(
+      ((s.page === 'color' && p !== 'color') || (s.page === 'deliver' && p !== 'deliver'))
+      && s.consoleTab !== 'timeline'
+        ? { consoleTab: 'timeline' as UiState['consoleTab'] }
+        : {}
+    ),
   })),
   setActiveScene: (id) => set((s) => {
     // lockAll is scene-derived view state — re-derive on switch so the toolbar
@@ -1242,8 +1356,20 @@ export const useUi = create<UiState>((set, get) => ({
      OFF the FX page (fx tool ⇔ fxMode); ON the FX page the PAGE owns the
      flag, so tool changes there never kill the engine (the page has no
      Escape rung — a page, not a mode; Escape's tool→select rung stays
-     harmless there). */
-  setTool: (t) => set((s) => ({ tool: t, fxMode: s.page === 'fx' ? true : t === 'fx' })),
+     harmless there).
+     R25-W6-B (DESIGN-R25 §1 R4 / §3 W6-B; thread th_mtzp5tvg "make sure the
+     inspector content refresh after view / editor mode change"): the FX
+     selection domain's scope is `page === 'fx' || fxMode` — this writer KILLS
+     the engine whenever it turns fxMode off (any tool off 'fx' on a non-fx
+     page), so it clears selectedFxObject in the same commit. A carried
+     domain kept the Edit-page Inspector rendering the FxInspectorSection +
+     the fx-object chip while the engine was OFF — the stale-entity refresh
+     bug (Escape's tool rung + the toolbar radio both land here). */
+  setTool: (t) => set((s) => ({
+    tool: t,
+    fxMode: s.page === 'fx' ? true : t === 'fx',
+    ...(s.page !== 'fx' && s.fxMode && t !== 'fx' ? { selectedFxObject: null } : {}),
+  })),
   toggleSnap: () => set((s) => ({ snap: !s.snap })),
   toggleLink: () => set((s) => ({ link: !s.link })),
   toggleLockAll: () => {
@@ -1813,8 +1939,12 @@ export const useUi = create<UiState>((set, get) => ({
       ...(s.page === 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
       /* R24-W0 (W0.1's belt-and-braces — the RAW page writer twin): this
          action writes `page` directly, so it carries the fx-domain exit
-         itself (the fxMode coupling above is the pattern). */
-      ...(s.page === 'fx' ? { selectedFxObject: null } : {}),
+         itself (the fxMode coupling above is the pattern).
+         R25-W6-B (th_mtzp5tvg): widened to the whole fx SCOPE — entering
+         audio focus kills fxMode unconditionally, so a domain held on the
+         EDIT page (fx tool armed) dies HERE too (not just when leaving the
+         fx page), else it resurfaces stale when focus exits back to edit. */
+      ...((s.page === 'fx' || s.fxMode) ? { selectedFxObject: null } : {}),
       mixer,
       mixerState: 'full',
       audioLaneBoost: true,
@@ -1832,8 +1962,12 @@ export const useUi = create<UiState>((set, get) => ({
     ...(s.page === 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
     /* R24-W0 (W0.1 belt-and-braces): exit is only reachable from the audio
        page (where the domain is already dead per the entry clear above),
-       but the raw writer keeps the full exit law like its fxMode twin. */
-    ...(s.page === 'fx' ? { selectedFxObject: null } : {}),
+       but the raw writer keeps the full exit law like its fxMode twin.
+       R25-W6-B (th_mtzp5tvg): the same fx-SCOPE widening as the entry —
+       exit lands on edit with fxMode false, so any domain that somehow
+       holds (a patch, a future writer) dies with the scope, never with the
+       engine re-arming. */
+    ...((s.page === 'fx' || s.fxMode) ? { selectedFxObject: null } : {}),
     /* R24-W1 (A3-R3, the raw-writer twin of setPage's exit law): exit writes
        `page` directly, so it carries the audio-only mixer collapse itself —
        the dock must not survive the exit onto an Edit page that carries no
@@ -1929,7 +2063,18 @@ export const useUi = create<UiState>((set, get) => ({
    * mints undo history; the AppShell re-renders on the atom). */
   setConsoleTab: (tab) => set({ consoleTab: tab }),
   toggleColorNodesDock: () => set((s) => ({ colorNodesDock: !s.colorNodesDock })),
-  setTimelineCompact: (v) => set({ timelineCompact: v }),
+  /* R25-W6 (W6-A/W6-C): the three per-page view writes — each replaces ONLY
+     the active page's entry object (the map is rebuilt shallow so zustand
+     notifies once; the other pages' memories are untouched by construction). */
+  setTimelineCompact: (v) => set((s) => ({
+    pageTimelineView: { ...s.pageTimelineView, [s.page]: { ...s.pageTimelineView[s.page], compact: v } },
+  })),
+  setTimelineClipStyle: (v) => set((s) => ({
+    pageTimelineView: { ...s.pageTimelineView, [s.page]: { ...s.pageTimelineView[s.page], clipStyle: v } },
+  })),
+  setTimelineWaveforms: (target) => set((s) => ({
+    pageTimelineView: { ...s.pageTimelineView, [s.page]: { ...s.pageTimelineView[s.page], waveforms: target } },
+  })),
   /* R23-WB (D-B4): the Gallery writes — plain view-state `set`, never a
    *  withHistory entry (the sourceRanges law: stills are captured working
    *  state, not doc edits; the APPLY path is the one that mints history via
