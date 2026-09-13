@@ -117,6 +117,8 @@ export function ToolsRow() {
   const audioLaneVisible = useMini((s) => s.audioLaneVisible);
   const miniPlus = useMini((s) => s.miniPlus);
   const toggleMiniPlus = useMini((s) => s.toggleMiniPlus);
+  const trimTool = useMini((s) => s.trimTool);
+  const setTrimTool = useMini((s) => s.setTrimTool);
   /* R18k (thread #23): video-only mode has no audio lane — the eye toggle
    * would control state nothing renders, so it leaves the toolbar. */
   const trackMode = useMini((s) => s.trackMode);
@@ -290,6 +292,38 @@ export function ToolsRow() {
         >
           <Sparkles size={16} strokeWidth={1.75} aria-hidden="true" />
         </button>
+        {/* R24-miniplus W2 (DESIGN-R24 D5/D6): the tool radio — 'select' is
+         *  the R18k law (the default); W2 lands the transition entry (W3
+         *  adds roll/slip/slide). role=radiogroup with aria-checked members
+         *  (F4: a radio member never carries aria-pressed). Gate ON only;
+         *  additive — the row's existing buttons are untouched. */}
+        {miniPlus && (
+          <div
+            className="qc-toolbar__tools"
+            role="radiogroup"
+            aria-label="Edit tool"
+            data-testid="mini-tool-radio"
+          >
+            {(['select', 'transition'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={`qc-toolbar__tool${trimTool === t ? ' is-active' : ''}`}
+                role="radio"
+                aria-checked={trimTool === t}
+                title={
+                  t === 'select'
+                    ? 'Select tool (V) — the classic drag/trim law'
+                    : 'Transition tool (X) — click a seam between touching clips for a cross transition; a detached head/tail for a fade'
+                }
+                onClick={() => setTrimTool(t)}
+                data-testid={`mini-tool-${t}`}
+              >
+                {t === 'select' ? 'V' : 'X'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="qc-toolbar__group qc-toolbar__group--right" data-testid="mini-timeline-zoom">
         <button
@@ -978,6 +1012,156 @@ function useTargetsById(magnetClips: Clip[]): Map<string, number[]> {
   }, [magnetClips]);
 }
 
+/* ---------- R24-miniplus W2 (DESIGN-R24 D5): the transition layer ---------- */
+
+/** The lane-level transition overlay: the seam wedges + the fade
+ *  triangles (render when the gate is ON, any tool — they are clip
+ *  visuals) + the MINT zones (only in the transition tool: a touching
+ *  seam mints a crossfade on click; a detached clip head/tail mints a
+ *  fade). Lane-level, NOT inside ClipItem: the wedge spans the cut
+ *  (both clips' territory) and the layer keeps the R18k gesture files
+ *  untouched (the additive law). */
+function TransitionLayer({
+  clips,
+  pps,
+}: {
+  clips: Clip[];
+  pps: number;
+}) {
+  const miniPlus = useMini((s) => s.miniPlus);
+  const trimTool = useMini((s) => s.trimTool);
+  const select = useMini((s) => s.select);
+  const setTransition = useMini((s) => s.setTransition);
+  const setFade = useMini((s) => s.setFade);
+  const pushToast = useMini((s) => s.pushToast);
+  const minting = miniPlus && trimTool === 'transition';
+  if (!miniPlus || clips.length === 0) return null;
+
+  const eps = 1e-9;
+  const sorted = [...clips].sort((a, b) => a.start - b.start);
+  const items: React.ReactElement[] = [];
+
+  sorted.forEach((c, i) => {
+    const right = sorted[i + 1];
+    const touching = right !== undefined && Math.abs(right.start - (c.start + c.duration)) < eps;
+    /* the wedge: the clip's transitionOut renders centered on the cut —
+     * span = [cut − dur·(1−alignment), cut + dur·alignment] */
+    if (c.transitionOut) {
+      const cut = c.start + c.duration;
+      const t = c.transitionOut;
+      const w = t.duration * pps;
+      const leftPx = (cut - t.duration * (1 - t.alignment)) * pps;
+      items.push(
+        <button
+          key={`wedge-${c.id}`}
+          type="button"
+          className="qc-transition-wedge"
+          aria-label={`Transition ${t.presentation} on the cut after this clip (${t.duration}s)`}
+          title={`${t.presentation} — ${t.duration}s (click to select the clip and edit)`}
+          style={{ left: leftPx, width: Math.max(w, 6) }}
+          onClick={(e) => {
+            e.stopPropagation();
+            select(c.id); // the owner + the Inspector's Transition group
+          }}
+          data-testid={`mini-wedge-${c.id}`}
+        >
+          <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+            <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.4" />
+          </svg>
+        </button>,
+      );
+    }
+    /* the fade triangles: head (fadeIn) + tail (fadeOut) */
+    if (c.fadeIn) {
+      items.push(
+        <span
+          key={`fin-${c.id}`}
+          className="qc-fade qc-fade--in"
+          aria-hidden="true"
+          style={{ left: c.start * pps, width: c.fadeIn * pps }}
+        />,
+      );
+    }
+    if (c.fadeOut) {
+      items.push(
+        <span
+          key={`fout-${c.id}`}
+          className="qc-fade qc-fade--out"
+          aria-hidden="true"
+          style={{ left: (c.start + c.duration - c.fadeOut) * pps, width: c.fadeOut * pps }}
+        />,
+      );
+    }
+    /* the MINT zones (transition tool only): a touching EMPTY seam →
+     * crossfade; a detached head/tail → fade. An occupied seam (a
+     * wedge/triangle exists) renders no zone — the visual answers it. */
+    if (minting && touching && !c.transitionOut && right) {
+      const cut = (c.start + c.duration) * pps;
+      const seamOk = Math.min(c.duration, right.duration) - 0.5 >= 0.5;
+      items.push(
+        <button
+          key={`seam-${c.id}`}
+          type="button"
+          className="qc-seam-zone"
+          aria-label={`Add cross transition on the cut between the clips`}
+          title={seamOk ? 'Add cross transition (cross dissolve, 0.5s)' : 'Both clips need at least 1s for a transition'}
+          style={{ left: cut - 12, width: 24 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!seamOk) {
+              pushToast('info', 'Both clips need at least 1s for a transition.');
+              return;
+            }
+            setTransition(c.id);
+          }}
+          data-testid={`mini-seam-${c.id}`}
+        />,
+      );
+    }
+    if (minting) {
+      const prev = sorted[i - 1];
+      const headDetached = !prev || prev.start + prev.duration < c.start - eps;
+      const tailDetached = !right || right.start > c.start + c.duration + eps;
+      if (headDetached && !c.fadeIn) {
+        items.push(
+          <button
+            key={`fhead-${c.id}`}
+            type="button"
+            className="qc-edge-zone qc-edge-zone--in"
+            aria-label={`Add fade in at the head of this clip`}
+            title="Add fade in (0.5s from black / silence)"
+            style={{ left: c.start * pps, width: 24 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setFade(c.id, 'in');
+            }}
+            data-testid={`mini-edge-in-${c.id}`}
+          />,
+        );
+      }
+      if (tailDetached && !c.fadeOut && !c.transitionOut) {
+        items.push(
+          <button
+            key={`ftail-${c.id}`}
+            type="button"
+            className="qc-edge-zone qc-edge-zone--out"
+            aria-label={`Add fade out at the tail of this clip`}
+            title="Add fade out (0.5s to black / silence)"
+            style={{ left: (c.start + c.duration) * pps - 24, width: 24 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setFade(c.id, 'out');
+            }}
+            data-testid={`mini-edge-out-${c.id}`}
+          />,
+        );
+      }
+    }
+  });
+
+  return <div className="qc-transition-layer">{items}</div>;
+}
+
 function Lane({
   track,
   pps,
@@ -1097,6 +1281,10 @@ function Lane({
           onSnapGuide={onSnapGuide}
         />
       ))}
+      {/* R24-miniplus W2: the transition layer — wedges/fades (gate ON)
+       *  + the mint zones (transition tool). Lane-level: keeps the
+       *  ClipItem gesture surface untouched (the additive law). */}
+      <TransitionLayer clips={clips} pps={pps} />
       {drop && (
         <div
           className="qc-drop-outline"

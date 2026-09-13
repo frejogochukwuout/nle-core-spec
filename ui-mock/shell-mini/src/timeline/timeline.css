@@ -1111,3 +1111,154 @@
     transition: none;
   }
 }
+
+/* ---------- R24-miniplus W2: the transition layer (DESIGN-R24 D5) ------- */
+
+/* the layer: absolute, non-interactive except its own buttons */
+.qc-transition-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4; /* above clips (z 1-3), below the snap guide */
+}
+
+.qc-transition-layer > * {
+  pointer-events: auto;
+}
+
+/* the wedge: the X-crossed box on the cut */
+.qc-transition-wedge {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(56, 189, 248, 0.65);
+  border-radius: 3px;
+  background:
+    linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(56, 189, 248, 0.05));
+  color: rgba(186, 230, 253, 0.95);
+  padding: 0;
+  cursor: pointer;
+}
+
+.qc-transition-wedge svg {
+  width: 10px;
+  height: 10px;
+}
+
+.qc-transition-wedge:hover {
+  border-color: rgba(56, 189, 248, 0.95);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.28), rgba(56, 189, 248, 0.1));
+}
+
+.qc-transition-wedge:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
+/* the fade triangles: head (in) darkens toward the clip edge, tail (out) away */
+.qc-fade {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  pointer-events: none;
+}
+
+.qc-fade--in {
+  background: linear-gradient(90deg, rgba(10, 10, 12, 0.78), transparent);
+  border-radius: 4px 0 0 4px;
+}
+
+.qc-fade--out {
+  background: linear-gradient(270deg, rgba(10, 10, 12, 0.78), transparent);
+  border-radius: 0 4px 4px 0;
+}
+
+/* the MINT zones (transition tool): hairline hit targets that bloom on hover */
+.qc-seam-zone,
+.qc-edge-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: copy;
+  border-left: 1px dashed rgba(56, 189, 248, 0.5);
+}
+
+.qc-edge-zone--in {
+  border-left: none;
+  border-right: 1px dashed rgba(56, 189, 248, 0.5);
+}
+
+.qc-seam-zone::after,
+.qc-edge-zone::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, 0.35);
+  transition: width 0.1s, height 0.1s, background 0.1s;
+}
+
+.qc-seam-zone:hover::after,
+.qc-edge-zone:hover::after {
+  width: 16px;
+  height: 16px;
+  background: rgba(56, 189, 248, 0.6);
+}
+
+.qc-seam-zone:hover,
+.qc-edge-zone:hover {
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.qc-seam-zone:focus-visible,
+.qc-edge-zone:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: -2px;
+}
+
+/* the tool radio (W2): segmented, compact */
+.qc-toolbar__tools {
+  display: flex;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 2px;
+  border-radius: var(--canvas-editor-radius-pill);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.qc-toolbar__tool {
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.qc-toolbar__tool:hover {
+  color: var(--canvas-editor-text-default);
+}
+
+.qc-toolbar__tool.is-active {
+  background: rgba(56, 189, 248, 0.22);
+  color: #bae6fd;
+}
+
+.qc-toolbar__tool:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}

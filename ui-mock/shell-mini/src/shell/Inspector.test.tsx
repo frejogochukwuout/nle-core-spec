@@ -7,6 +7,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import App from '../App';
 import { useMini } from '../state/useMini';
+import { seedDoc } from '../lib/mockData';
 
 const S = () => useMini.getState();
 const setStore = (fn: () => void) => act(fn);
@@ -303,5 +304,77 @@ describe('R24 W1: audioDb (the ONE map)', () => {
     expect(dbToVol(-18)).toBeCloseTo(0.126, 3);
     expect(dbToVol(12)).toBeCloseTo(1.995, 2); // clamped to the pair
     expect(dbToVol(volToDb(0.7))).toBeCloseTo(0.7, 5);
+  });
+});
+
+/* ---- R24-miniplus W2 (DESIGN-R24 D5): the transition/fade groups ---- */
+
+describe('R24 W2: the Inspector transition + fade groups', () => {
+  const touchingDoc = () => ({
+    ...seedDoc(),
+    clips: [
+      { id: 'cA', trackId: 'V1', mediaId: 'm-drone', start: 0, duration: 3.5 },
+      { id: 'cB', trackId: 'V1', mediaId: 'm-beach', start: 3.5, duration: 3.5 },
+    ],
+  });
+
+  beforeEach(() => {
+    setStore(() => {
+      S().reset();
+      useMini.setState({ doc: touchingDoc() });
+      S().select('cA');
+    });
+  });
+
+  it('a touching empty seam: the add button mints; presentation select patches', () => {
+    renderApp();
+    fireEvent.click(screen.getByTestId('mini-btn-transition-add'));
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut!.presentation).toBe('Cross Dissolve');
+    fireEvent.change(screen.getByTestId('mini-transition-presentation'), { target: { value: 'Wipe Left' } });
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut!.presentation).toBe('Wipe Left');
+  });
+
+  it('duration field + alignment slider edit through the store (clamped)', () => {
+    renderApp();
+    fireEvent.click(screen.getByTestId('mini-btn-transition-add'));
+    const dur = screen.getByTestId('mini-field-transition-dur');
+    fireEvent.change(dur, { target: { value: '1.5' } });
+    fireEvent.keyDown(dur, { key: 'Enter' });
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut!.duration).toBe(1.5);
+    fireEvent.change(screen.getByTestId('mini-transition-alignment'), { target: { value: '100' } });
+    fireEvent.pointerUp(screen.getByTestId('mini-transition-alignment'));
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut!.alignment).toBe(1);
+  });
+
+  it('remove transition deletes the field; the hint returns', () => {
+    renderApp();
+    fireEvent.click(screen.getByTestId('mini-btn-transition-add'));
+    fireEvent.click(screen.getByTestId('mini-btn-transition-remove'));
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut).toBeUndefined();
+    expect(screen.getByTestId('mini-btn-transition-add')).toBeInTheDocument();
+  });
+
+  it('a DETACHED tail: the hint says fades; no add button (the honest refusal)', () => {
+    renderApp();
+    // cA [0,3.5], cB at 3.5 → touching. Use cB instead: its tail is detached.
+    setStore(() => {
+      S().select('cB');
+    });
+    expect(screen.queryByTestId('mini-btn-transition-add')).toBeNull();
+    expect(screen.getByTestId('mini-group-transition').textContent).toMatch(/detached/i);
+  });
+
+  it('the fade group: add → edit → remove, both sides', () => {
+    renderApp();
+    fireEvent.click(screen.getByTestId('mini-btn-fadein-add'));
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.fadeIn).toBe(0.5);
+    const field = screen.getByTestId('mini-field-fadein');
+    fireEvent.change(field, { target: { value: '1.5' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.fadeIn).toBe(1.5);
+    fireEvent.click(screen.getByTestId('mini-btn-fadein-remove'));
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.fadeIn).toBeUndefined();
+    fireEvent.click(screen.getByTestId('mini-btn-fadeout-add'));
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.fadeOut).toBe(0.5);
   });
 });

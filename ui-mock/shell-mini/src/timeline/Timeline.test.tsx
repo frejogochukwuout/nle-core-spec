@@ -1486,3 +1486,120 @@ describe('R6 — the KEPT clip edge auto-scroll (R18i/R18k law, now netted)', ()
     }
   });
 });
+
+/* ---- R24-miniplus W2 (DESIGN-R24 D5): the transition tool + layer ---- */
+
+describe('R24 W2: the transition layer + tool (Timeline surface)', () => {
+  const touchingDoc = () => ({
+    ...seedDoc(),
+    clips: [
+      { id: 'cA', trackId: 'V1', mediaId: 'm-drone', start: 0, duration: 3.5 },
+      { id: 'cB', trackId: 'V1', mediaId: 'm-beach', start: 3.5, duration: 3.5 },
+      { id: 'c4', trackId: 'A1', mediaId: 'm-interview', start: 1.5, duration: 7 },
+    ],
+  });
+
+  beforeEach(() => {
+    S().reset();
+  });
+
+  it('the tool radio renders (gate ON): select + transition, aria-checked members', () => {
+    render(<Timeline />);
+    const radio = screen.getByTestId('mini-tool-radio');
+    expect(radio).toHaveAttribute('role', 'radiogroup');
+    expect(screen.getByTestId('mini-tool-select')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('mini-tool-transition')).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(screen.getByTestId('mini-tool-transition'));
+    expect(S().trimTool).toBe('transition');
+    expect(screen.getByTestId('mini-tool-transition')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('gate OFF: the radio + the layer unmount (the additive law)', () => {
+    render(<Timeline />);
+    act(() => {
+      useMini.setState({ miniPlus: false, doc: touchingDoc() });
+    });
+    expect(screen.queryByTestId('mini-tool-radio')).toBeNull();
+    // a doc WITH a transition still renders no wedge when gated off
+    act(() => {
+      useMini.setState({ miniPlus: true, trimTool: 'transition' });
+      S().setTransition('cA');
+      useMini.setState({ miniPlus: false });
+    });
+    expect(screen.queryByTestId('mini-wedge-cA')).toBeNull();
+  });
+
+  it('the wedge renders for a clip with transitionOut (any tool, gate ON); click selects the owner', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc() });
+      S().setTransition('cA');
+    });
+    render(<Timeline />);
+    const wedge = screen.getByTestId('mini-wedge-cA');
+    expect(wedge).toBeInTheDocument();
+    fireEvent.click(wedge);
+    expect(S().selectedId).toBe('cA');
+  });
+
+  it('transition tool: clicking a touching EMPTY seam mints the default transition', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc(), trimTool: 'transition' });
+    });
+    render(<Timeline />);
+    const seam = screen.getByTestId('mini-seam-cA');
+    fireEvent.click(seam);
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut).toEqual({
+      type: 'crossfade',
+      presentation: 'Cross Dissolve',
+      duration: 0.5,
+      alignment: 0.5,
+    });
+  });
+
+  it('a seam WITH a transition renders NO mint zone (the wedge answers it)', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc(), trimTool: 'transition' });
+      S().setTransition('cA');
+    });
+    render(<Timeline />);
+    expect(screen.queryByTestId('mini-seam-cA')).toBeNull();
+    expect(screen.getByTestId('mini-wedge-cA')).toBeInTheDocument();
+  });
+
+  it('transition tool: a detached head/tail click mints a fade; occupied edges answer instead', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc(), trimTool: 'transition' });
+    });
+    render(<Timeline />);
+    // cA head is detached (track start): head zone present; cA tail touches cB: no out zone
+    fireEvent.click(screen.getByTestId('mini-edge-in-cA'));
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.fadeIn).toBe(0.5);
+    // cB tail is detached: out zone present
+    fireEvent.click(screen.getByTestId('mini-edge-out-cB'));
+    expect(S().doc.clips.find((c) => c.id === 'cB')!.fadeOut).toBe(0.5);
+    // now the edges are occupied: zones answer (no re-mint)
+    expect(screen.queryByTestId('mini-edge-in-cA')).toBeNull();
+    expect(screen.queryByTestId('mini-edge-out-cB')).toBeNull();
+    // the fade triangle renders
+    expect(screen.getByTestId('mini-lane-V1').querySelector('.qc-fade--in')).toBeInTheDocument();
+  });
+
+  it('the honest refusal: a 0.5/0.5 seam refuses the mint with a toast', () => {
+    act(() => {
+      useMini.setState({
+        doc: {
+          ...seedDoc(),
+          clips: [
+            { id: 'cA', trackId: 'V1', mediaId: 'm-drone', start: 0, duration: 0.5 },
+            { id: 'cB', trackId: 'V1', mediaId: 'm-beach', start: 0.5, duration: 0.5 },
+          ],
+        },
+        trimTool: 'transition',
+      });
+    });
+    render(<Timeline />);
+    fireEvent.click(screen.getByTestId('mini-seam-cA'));
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut).toBeUndefined();
+    expect(S().toast?.text).toMatch(/1s/);
+  });
+});

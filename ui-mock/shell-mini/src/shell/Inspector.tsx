@@ -11,7 +11,7 @@ import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, MousePointerClick, P
 import { useMini } from '../state/useMini';
 import { fmtTimecode } from '../lib/timecode';
 import { neighborBounds, MIN_DUR } from '../lib/geometry';
-import { EFFECT_DEFS, type EffectDef, type EffectJSON } from '../lib/mockData';
+import { EFFECT_DEFS, TRANSITION_PRESENTATIONS, type EffectDef } from '../lib/mockData';
 import { volToDb, dbToVol, DB_MIN, DB_MAX } from '../lib/audioDb';
 import { NumberField, ParamRow, Group } from './fields';
 
@@ -473,6 +473,183 @@ function PlusSections({ clipId }: { clipId: string }) {
       <TimingGroup clipId={clipId} />
       <ClipPropsGroup clipId={clipId} />
       <EffectsGroup clipId={clipId} />
+      <TransitionGroup clipId={clipId} />
+      <FadeGroup clipId={clipId} />
     </>
+  );
+}
+
+/* ---------- R24-miniplus W2 (DESIGN-R24 D5): the transition/fade groups ---- */
+
+/** The Transition group: the selected clip's outgoing seam transition —
+ *  presentation select (8), duration (clamped to the seam bound),
+ *  alignment (0..100%), remove. The "Hard cut" affordance when the seam
+ *  is touching + empty. */
+function TransitionGroup({ clipId }: { clipId: string }) {
+  const clip = useMini((s) => s.doc.clips.find((c) => c.id === clipId));
+  const clips = useMini((s) => s.doc.clips);
+  const setTransition = useMini((s) => s.setTransition);
+  const removeTransition = useMini((s) => s.removeTransition);
+  if (!clip) return null;
+  const eps = 1e-9;
+  const right = clips.find(
+    (c) => c.trackId === clip.trackId && Math.abs(c.start - (clip.start + clip.duration)) < eps,
+  );
+  const touching = right !== undefined;
+  const t = clip.transitionOut;
+  const seamMax = Math.max(0.5, Math.min(clip.duration, right?.duration ?? Infinity) - 0.5);
+  const canMint = touching && seamMax >= 0.5;
+  return (
+    <Group title="Transition" testid="mini-group-transition" defaultOpen={!!t}>
+      {t ? (
+        <>
+          <label className="mini-field">
+            <span className="mini-field__label">Style</span>
+            <select
+              className="mini-field__select"
+              value={t.presentation}
+              aria-label="Transition style"
+              data-testid="mini-transition-presentation"
+              onChange={(e) => setTransition(clip.id, { presentation: e.target.value as never })}
+            >
+              {TRANSITION_PRESENTATIONS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </label>
+          <NumberField
+            label="Duration"
+            value={t.duration}
+            min={0.5}
+            max={seamMax}
+            step={0.5}
+            testid="mini-field-transition-dur"
+            onCommit={(v) => setTransition(clip.id, { duration: v })}
+          />
+          <ParamRow
+            label="Alignment"
+            value={Math.round(t.alignment * 100)}
+            min={0}
+            max={100}
+            step={1}
+            format={(v) => `${v}%`}
+            testid="mini-transition-alignment"
+            onCommit={(v) => setTransition(clip.id, { alignment: v / 100 })}
+          />
+          <button
+            type="button"
+            className="mini-inspector__mute"
+            onClick={() => removeTransition(clip.id)}
+            data-testid="mini-btn-transition-remove"
+          >
+            <X size={14} strokeWidth={1.75} aria-hidden="true" />
+            <span>Remove transition</span>
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="mini-inspector__hint">
+            {touching
+              ? canMint
+                ? 'Hard cut — the clips touch; add a cross transition.'
+                : 'The seam is too short for a transition (both clips need 1s).'
+              : 'No touching clip after this one — the tail is detached (use a fade instead).'}
+          </p>
+          {canMint && (
+            <button
+              type="button"
+              className="mini-inspector__mute"
+              onClick={() => setTransition(clip.id)}
+              data-testid="mini-btn-transition-add"
+            >
+              <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
+              <span>Add cross transition</span>
+            </button>
+          )}
+        </>
+      )}
+    </Group>
+  );
+}
+
+/** The Fade group: the clip-edge fades (in/out) — mint/edit/remove. */
+function FadeGroup({ clipId }: { clipId: string }) {
+  const clip = useMini((s) => s.doc.clips.find((c) => c.id === clipId));
+  const setFade = useMini((s) => s.setFade);
+  const removeFade = useMini((s) => s.removeFade);
+  if (!clip) return null;
+  const maxDur = Math.min(clip.duration, 4);
+  return (
+    <Group title="Fades" testid="mini-group-fades" defaultOpen={!!(clip.fadeIn || clip.fadeOut)}>
+      {(clip.fadeIn === undefined && clip.fadeOut === undefined) && (
+        <p className="mini-inspector__hint">No fades on this clip.</p>
+      )}
+      {clip.fadeIn !== undefined ? (
+        <>
+          <NumberField
+            label="Fade in"
+            value={clip.fadeIn}
+            min={0.5}
+            max={maxDur}
+            step={0.5}
+            testid="mini-field-fadein"
+            onCommit={(v) => setFade(clip.id, 'in', v)}
+          />
+          <button
+            type="button"
+            className="mini-inspector__mute"
+            onClick={() => removeFade(clip.id, 'in')}
+            data-testid="mini-btn-fadein-remove"
+          >
+            <X size={14} strokeWidth={1.75} aria-hidden="true" />
+            <span>Remove fade in</span>
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="mini-inspector__mute"
+          onClick={() => setFade(clip.id, 'in')}
+          data-testid="mini-btn-fadein-add"
+        >
+          <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
+          <span>Add fade in</span>
+        </button>
+      )}
+      {clip.fadeOut !== undefined ? (
+        <>
+          <NumberField
+            label="Fade out"
+            value={clip.fadeOut}
+            min={0.5}
+            max={maxDur}
+            step={0.5}
+            testid="mini-field-fadeout"
+            onCommit={(v) => setFade(clip.id, 'out', v)}
+          />
+          <button
+            type="button"
+            className="mini-inspector__mute"
+            onClick={() => removeFade(clip.id, 'out')}
+            data-testid="mini-btn-fadeout-remove"
+          >
+            <X size={14} strokeWidth={1.75} aria-hidden="true" />
+            <span>Remove fade out</span>
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="mini-inspector__mute"
+          onClick={() => setFade(clip.id, 'out')}
+          data-testid="mini-btn-fadeout-add"
+        >
+          <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
+          <span>Add fade out</span>
+        </button>
+      )}
+    </Group>
   );
 }
