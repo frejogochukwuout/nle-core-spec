@@ -1529,16 +1529,63 @@ describe('R24 W2: the transition layer + tool (Timeline surface)', () => {
     expect(screen.queryByTestId('mini-wedge-cA')).toBeNull();
   });
 
-  it('the wedge renders for a clip with transitionOut (any tool, gate ON); click selects the owner', () => {
+  it('the wedge renders for a clip with transitionOut (any tool, gate ON); the X hit selects the owner', () => {
     act(() => {
       useMini.setState({ doc: touchingDoc() });
       S().setTransition('cA');
     });
     render(<Timeline />);
+    // F4: the wedge BOX is a visual (aria-hidden span); the X button is the hit
     const wedge = screen.getByTestId('mini-wedge-cA');
     expect(wedge).toBeInTheDocument();
-    fireEvent.click(wedge);
+    const hit = screen.getByTestId('mini-wedge-hit-cA');
+    expect(hit).toBeInTheDocument();
+    fireEvent.click(hit);
     expect(S().selectedId).toBe('cA');
+  });
+
+  it('F2 (deviation #15): an ORPHANED transition is deleted by the next commit (move breaks the seam)', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc() });
+      S().setTransition('cA');
+    });
+    // move cB right — the seam at 3.5 dies, cA's transition is orphaned
+    act(() => {
+      S().moveClip('cB', 4.5);
+    });
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut).toBeUndefined();
+  });
+
+  it('F9a: the wedge geometry — left = cut − duration·(1−alignment) (alignment honored)', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc() });
+      S().setTransition('cA');
+      S().setTransition('cA', { alignment: 1 }); // fully on the right side of the cut
+    });
+    render(<Timeline />);
+    const wedge = screen.getByTestId('mini-wedge-cA') as HTMLElement;
+    // cut at 3.5s * 48pps = 168px; alignment 1 => left = cut (168), width = 0.5*48 = 24
+    expect(wedge.style.left).toBe('168px');
+    expect(wedge.style.width).toBe('24px');
+  });
+
+  it('F9g: video-only mode renders the layer on the single bound video lane', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc(), trackMode: 'video', trimTool: 'transition' });
+    });
+    render(<Timeline />);
+    expect(screen.getByTestId('mini-seam-cA')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('mini-seam-cA'));
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut).toBeDefined();
+  });
+
+  it('F9f: the minimized strip renders NO wedges (the MinLane ruling — deviation #18)', () => {
+    act(() => {
+      useMini.setState({ doc: touchingDoc(), timelineMinimized: true });
+      S().setTransition('cA');
+    });
+    render(<Timeline />);
+    expect(screen.queryByTestId('mini-wedge-cA')).toBeNull();
   });
 
   it('transition tool: clicking a touching EMPTY seam mints the default transition', () => {
@@ -1601,5 +1648,108 @@ describe('R24 W2: the transition layer + tool (Timeline surface)', () => {
     fireEvent.click(screen.getByTestId('mini-seam-cA'));
     expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut).toBeUndefined();
     expect(S().toast?.text).toMatch(/1s/);
+  });
+});
+
+/* ---- R24-miniplus W3 (DESIGN-R24 D6): the trim-mode tools + dispatch ---- */
+
+describe('R24 W3: the trim-mode radio + the tool-dispatch seam', () => {
+  const chainDoc = () => ({
+    ...seedDoc(),
+    clips: [
+      { id: 'cA', trackId: 'V1', mediaId: 'm-gopro', start: 0, duration: 3.5, sourceStart: 0.5 }, // media 5.5
+      { id: 'cB', trackId: 'V1', mediaId: 'm-sunset', start: 3.5, duration: 3, sourceStart: 0.5 }, // media 4
+      { id: 'c4', trackId: 'A1', mediaId: 'm-interview', start: 1.5, duration: 7 },
+    ],
+  });
+
+  beforeEach(() => {
+    S().reset();
+  });
+
+  it('the radio renders FIVE entries with aria-checked members', () => {
+    render(<Timeline />);
+    for (const t of ['select', 'roll', 'slip', 'slide', 'transition'] as const) {
+      expect(screen.getByTestId(`mini-tool-${t}`)).toBeInTheDocument();
+    }
+    expect(screen.getByTestId('mini-tool-select')).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByTestId('mini-tool-slip'));
+    expect(screen.getByTestId('mini-tool-slip')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('the keyboard map: V/T/Y/U/X set the tool (gate ON)', () => {
+    render(<Timeline />);
+    // the App-level key handler owns the window; drive it through the store
+    for (const [k, tool] of [
+      ['t', 'roll'],
+      ['y', 'slip'],
+      ['u', 'slide'],
+      ['x', 'transition'],
+      ['v', 'select'],
+    ] as const) {
+      fireEvent.keyDown(window, { key: k });
+      expect(S().trimTool).toBe(tool);
+    }
+  });
+
+  it('ROLL tool: dragging the end handle rolls the junction (through the real gesture engine)', () => {
+    act(() => {
+      useMini.setState({ doc: chainDoc(), trimTool: 'roll' });
+    });
+    render(<Timeline />);
+    const handle = screen.getByTestId('mini-trim-end-cA');
+    // the lane origin is RENDER_ORIGIN_PX=46: x = t*48 + 46; junction 3.5s
+    // -> 214px; roll +0.5s -> the pointer at 4.0s -> 238px
+    drag(handle, 214, 238);
+    const a = S().doc.clips.find((c) => c.id === 'cA')!;
+    const b = S().doc.clips.find((c) => c.id === 'cB')!;
+    expect(a.duration).toBe(4);
+    expect(b.start).toBe(4);
+    expect(b.duration).toBe(2.5);
+    expect(b.sourceStart).toBe(1); // the window follows the cut
+    expect(S().past.length).toBe(1); // ONE entry at the seal
+  });
+
+  it('SLIP tool: dragging the BODY moves the content (the placement stays)', () => {
+    act(() => {
+      useMini.setState({ doc: chainDoc(), trimTool: 'slip' });
+    });
+    render(<Timeline />);
+    const clip = screen.getByTestId('mini-clip-cA');
+    // any body drag: the pointer delta lands on sourceStart (clamped)
+    drag(clip, 100, 172); // +1.5s of pointer travel
+    const a = S().doc.clips.find((c) => c.id === 'cA')!;
+    expect(a.sourceStart).toBe(2); // 0.5 + 1.5, within [0, 5.5-3.5=2]
+    expect(a.start).toBe(0); // FIXED placement
+    expect(a.duration).toBe(3.5);
+  });
+
+  it('SLIDE tool: dragging the BODY moves the clip; the neighbor edges follow', () => {
+    act(() => {
+      useMini.setState({ doc: chainDoc(), trimTool: 'slide' });
+    });
+    render(<Timeline />);
+    const clip = screen.getByTestId('mini-clip-cB');
+    // cB [3.5, 6.5]; slide right to 4.5: cA's end follows (extends to 4.5)
+    drag(clip, 200, 248); // +1s
+    const a = S().doc.clips.find((c) => c.id === 'cA')!;
+    const b = S().doc.clips.find((c) => c.id === 'cB')!;
+    expect(b.start).toBe(4.5);
+    expect(a.duration).toBe(4.5); // the facing edge followed (no gap)
+    expect(a.start).toBe(0);
+  });
+
+  it('gate OFF: the tools NEVER remap — the classic move law holds (the freeze)', () => {
+    /* NOTE: the touching chainDoc has ZERO move slack (back-to-back clips
+     * clamp to place) — the seed doc (0.5s gaps) is the move-law surface. */
+    act(() => {
+      useMini.setState({ doc: seedDoc(), trimTool: 'slip', miniPlus: false });
+    });
+    render(<Timeline />);
+    const clip = screen.getByTestId('mini-clip-c1');
+    drag(clip, 100, 124); // would be a slip (sourceStart) if the gate were on
+    const a = S().doc.clips.find((c) => c.id === 'c1')!;
+    expect(a.start).toBe(0.5); // the R18k MOVE law (c2 at 4.5 — real slack)
+    expect(a.sourceStart).toBeUndefined(); // untouched — no slip happened
   });
 });

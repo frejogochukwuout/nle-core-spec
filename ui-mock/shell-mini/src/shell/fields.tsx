@@ -1,12 +1,14 @@
 /* R24-miniplus (DESIGN-R24 D3): the inspector field primitives — ported
  * from the variants' Inspector (the crown jewels), adapted to the mini's
- * grammar. THE LAWS (test-pinned, port verbatim):
- * - NumberField: live preview behind a 50ms debounce → ONE commit per
- *   settle; Enter and blur settle immediately; invalid input = red
- *   border + inline message + focus retained + NOTHING dispatched
- *   (Enter-invalid keeps the error; blur-invalid reverts the display);
- *   Escape reverts; double-click resets to the default through the SAME
- *   commit path.
+ * grammar. THE LAWS (test-pinned):
+ * - NumberField: ONE commit per settle — settle happens on Enter or blur
+ *   (the variants' 50ms-debounce live-preview is DROPPED for the mini:
+ *   fewer timers, the same one-commit guarantee — registered deviation
+ *   #16 in DESIGN-R24 D13); invalid input = red border + inline message
+ *   + focus retained + NOTHING dispatched (Enter-invalid keeps the
+ *   error; blur-invalid reverts the display); the committed (snapped)
+ *   value rewrites the display; Escape reverts; double-click resets to
+ *   the default through the SAME commit path.
  * - ParamRow (slider): local drag state, ONE commit on release; the
  *   external value resyncs while not focused.
  * - Group: 26px caret header; the body stays in DOM via `hidden` (never
@@ -92,7 +94,16 @@ export function NumberField({
     }
     setError(null);
     if (v !== value) {
-      const snapped = step ? Math.round(v / step) * step : v;
+      /* F13 (wave review): validate + dispatch the SNAPPED value — with an
+       * off-grid max a valid raw can snap past the bound (1.8 -> 2.0 with
+       * max 1.8); the snapped value re-clamps to the field's own range. */
+      let snapped = step ? Math.round(v / step) * step : v;
+      if (min !== undefined) snapped = Math.max(snapped, min);
+      if (max !== undefined) snapped = Math.min(snapped, max);
+      /* F3: the display shows the COMMITTED truth immediately (the doc
+       * holds the snapped value; a stale typed text would disagree with
+       * the doc indefinitely — the resync effect is focus-gated). */
+      setText(format ? format(snapped) : String(snapped));
       onCommit(snapped);
     } else {
       setText(format ? format(value) : String(value));

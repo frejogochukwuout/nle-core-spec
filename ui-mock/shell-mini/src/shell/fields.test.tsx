@@ -1,9 +1,11 @@
 /* R24-miniplus W0 (DESIGN-R24 D3/D11): the field-primitive laws — ported
  * from the variants' Inspector, netted here BEFORE the first consumer
  * (W1's Inspector sections) so the laws are pinned at the source. The
- * NumberField contract is the crown jewel: debounce/Enter/blur/Escape/
- * invalid/double-click semantics, ONE commit per settle, NOTHING
- * dispatched while invalid. */
+ * NumberField contract is the crown jewel: Enter/blur-settle/Escape/
+ * invalid/double-click semantics, ONE commit per settle (the 50ms
+ * debounce is DROPPED for the mini — deviation #16), NOTHING dispatched
+ * while invalid, and the display rewrites to the committed snapped
+ * value (the F3 law). */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -94,6 +96,21 @@ describe('R24 NumberField (the commit law family)', () => {
     fireEvent.change(input(), { target: { value: '3.3' } });
     fireEvent.keyDown(input(), { key: 'Enter' });
     expect(onCommit).toHaveBeenCalledWith(3.5); // snapped to the 0.5 grid
+  });
+
+  it('F3: after a snapped commit the display shows the SNAPPED value (never the typed text)', () => {
+    const onCommit = setup(2);
+    fireEvent.change(input(), { target: { value: '3.3' } });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    expect(onCommit).toHaveBeenCalledWith(3.5);
+    expect(input()).toHaveValue('3.5'); // the committed truth, not "3.3"
+  });
+
+  it('F13: the snapped value re-clamps to the field bounds (an off-grid max)', () => {
+    const onCommit = setup(2, 0, 1.8); // max 1.8, step 0.5
+    fireEvent.change(input(), { target: { value: '1.7' } });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    expect(onCommit).toHaveBeenCalledWith(1.5); // snapped down, not 2.0 past max
   });
 
   it('external value changes resync the display while unfocused', () => {

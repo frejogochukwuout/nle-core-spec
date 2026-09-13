@@ -13,10 +13,11 @@ is the acceptance list those tests are checked against, row by row.
 
 **Corpus state (sealed R23; re-censused R24 — the mini-plus round:
 the audio-clip-box nets + the W0 foundation + the W1 property/effects
-nets + the W2 transition/fade nets):**
-**10 files / 415 tests / 139 law families** — `src/lib/geometry.test.ts` (15 families / 47),
-`src/state/useMini.test.ts` (32 / 117), `src/timeline/Timeline.test.tsx`
-(50 / 108), `src/App.test.tsx` (18 / 60), `src/shell/MediaPool.test.tsx`
+nets + the W2 transition/fade nets + the W2 fix-round + the W3
+trim-mode nets):**
+**10 files / 441 tests / 143 law families** — `src/lib/geometry.test.ts` (15 families / 47),
+`src/state/useMini.test.ts` (35 / 127), `src/timeline/Timeline.test.tsx`
+(51 / 118), `src/App.test.tsx` (18 / 60), `src/shell/MediaPool.test.tsx`
 (5 / 19), `src/lib/timecode.test.ts` (3 / 8), `src/lib/waveform.test.ts`
 (2 / 7), `src/lib/otProject.test.ts` (3 / 12 — the R23 bridge + fix-round nets).
 Lineage: 358 (R21e) → 333 (the R22 drag-machinery retirement, user
@@ -27,15 +28,18 @@ the user's blend report) → 377 (R24-2 W0: the mini-plus foundation —
 the fields-primitives law file + the gate family + the deep-clone/
 no-alias machinery family) → 396 (R24-2 W1: the plus-surface law
 file — the additive gate law, the property-editing routing, the dB
-pair, the effects stack, the F1 nested-undo discriminator) → **415**
-(R24-2 W2: the transition tool + layer + the split disposition table
-— 4 families / 19 tests).
+pair, the effects stack, the F1 nested-undo discriminator) → 415 (R24-2 W2: the transition tool + layer + the split
+disposition table — 4 families / 19 tests) → **428** (the W2 wave-review
+fix round: the F-law nets — the sanitizer, the store-bounds, the wedge
+geometry, the mint refusals, the dB pair, the gate-off per-feature)
+→ **441** (R24-2 W3: the trim modes — roll/slip/slide preview laws +
+the tool-dispatch seam through the real gesture engine, 2 families).
 
 ## 0. Counting + classification rules (read before using the tables)
 
 - **Census unit = the law family** (a `describe` block). The app-side
   authoring scope is reported in BOTH columns — families and tests — and
-  the test column always sums to exactly 415, so the census is auditable
+  the test column always sums to exactly 441, so the census is auditable
   against `npx vitest run` at any time.
 - **Split rule:** no family carries two dispositions. Where a describe
   block mixes wire-semantics tests with app-policy tests (e.g. `history
@@ -76,7 +80,7 @@ pair, the effects stack, the F1 nested-undo discriminator) → **415**
 ## 1. PART A — the timeline-law subset (C1's entry list)
 
 The timeline-side corpus: geometry (15 families / 47 tests) + useMini
-(32 / 117) + Timeline (50 / 108) = **98 families / 280 tests** (the Part A subset is unchanged by W1 — the W1 families are chrome-side). Split-rule
+(35 / 127) + Timeline (51 / 118) = **103 families / 311 tests** (the Part A subset is unchanged by W1 — the W1 families are chrome-side). Split-rule
 sub-rows are indented under their family.
 
 ### 1.1 geometry.test.ts — the pure interaction laws (`src/lib/geometry.ts`)
@@ -141,7 +145,7 @@ sub-rows are indented under their family.
 
 ### 1.3 Timeline.test.tsx — the component/view laws (`src/timeline/Timeline.tsx`)
 
-All 50 families / 108 tests are **GAP-app-C1** (the view port reproduces
+All 51 families / 118 tests are **GAP-app-C1** (the view port reproduces
 them; OT covers none of the component layer). The bullets below are the
 SELECTED families with OT-SEAMS citations for their SEAM half (the
 full 47-family enumeration is the file's own describe map — the census
@@ -163,21 +167,22 @@ counts it exactly):
   cut styles · ripple/filmstrip/audio-lane toggles · waveform sizing ·
   trim-mode edge shade · the R24 audio-clip surrounding-box family ·
   the R24 mini-plus feature-gate family · the R24 transition
-  layer/tool family (the seam-mint + wedge + fade laws) · the R24 transition
+  layer/tool family (the seam-mint + wedge + fade laws) · the R24
+  trim-mode family (roll/slip/slide + the dispatch seam) · the R24 transition
   layer/tool family (the seam-mint + wedge + fade laws) · keyboard [ / ] · the
   clip-is-a-button law
   (C2/C46) · scroll preservation · surface swaps · the R18k review-fix
   hardening family · the R18f collapsed-audio-lane placeholder family
   (distinct from C47's routing family above).
 
-**Part A totals:** 98 describes / 280 tests → **104 census units** (6
+**Part A totals:** 103 describes / 311 tests → **109 census units** (6
 families split per the split rule) = **10 HOLDS units (21 tests)** + **2
-GAP-verify units (3 tests)** + **92 GAP units (256 tests)**. Exact
+GAP-verify units (3 tests)** + **97 GAP units (287 tests)**. Exact
 disposition totals corpus-wide are in §2.3 (the audited arithmetic).
 
 ## 2. PART B — the full corpus (C4's entry list)
 
-### 2.1 The chrome-side files (Part A + these = the whole 415)
+### 2.1 The chrome-side files (Part A + these = the whole 441)
 
 | File | Families | Tests | Disposition summary |
 |---|---:|---:|---|
@@ -186,8 +191,8 @@ disposition totals corpus-wide are in §2.3 (the audited arithmetic).
 | `src/lib/timecode.test.ts` | 3 | 8 | GAP-app — C1/C2: fmtTimecode/fmtRulerLabel = the DECLARED single seam for the no-fps decision (flips to frame-accurate TC when fps lands) + the filmstrip determinism smoke |
 | `src/lib/waveform.test.ts` | 2 | 7 | GAP-C3 — the WDC/engine decode seam (the synth envelope laws pin the RENDER grammar; C3 replaces the data source) |
 | `src/lib/otProject.test.ts` | 3 | 12 | **HOLDS-on-OT** — the registered bridge laws (§3.4 time base + §1.6 element model), the C1(d) fixture-bridge acceptance floor |
-| `src/shell/fields.test.tsx` | 4 | 13 | GAP-app — the R24-miniplus field primitives (the NumberField commit-law family: debounce/Enter/blur/Escape/invalid/double-click; the ParamRow one-commit-on-release; the Group hidden-collapse) |
-| `src/shell/Inspector.test.tsx` | 7 | 24 | GAP-app — the R24-miniplus W1 plus-surface laws (the additive gate law, the Timing command routing, the dB map pair, the effects stack laws, the F1 nested-undo discriminator) | (the NumberField commit-law family: debounce/Enter/blur/Escape/invalid/double-click; the ParamRow one-commit-on-release; the Group hidden-collapse) |
+| `src/shell/fields.test.tsx` | 4 | 15 | GAP-app — the R24-miniplus field primitives (the NumberField commit-law family: debounce/Enter/blur/Escape/invalid/double-click; the ParamRow one-commit-on-release; the Group hidden-collapse) |
+| `src/shell/Inspector.test.tsx` | 8 | 28 | GAP-app — the R24-miniplus W1 plus-surface laws (the additive gate law, the Timing command routing, the dB map pair, the effects stack laws, the F1 nested-undo discriminator) | (the NumberField commit-law family: debounce/Enter/blur/Escape/invalid/double-click; the ParamRow one-commit-on-release; the Group hidden-collapse) |
 
 ### 2.2 The testid census (Part C)
 
@@ -246,25 +251,25 @@ presence — mini-clip-harness is story-surface-only, per the note above):
 ### 2.3 The disposition totals (the audited arithmetic)
 
 Census units = top-level describes, with the 6 split families counting
-their sub-rows (139 describes → 145 units); the test column sums to 415
+their sub-rows (143 describes → 149 units); the test column sums to 441
 (auditable against `npx vitest run`).
 
 | Disposition | Census units | Tests |
 |---|---:|---:|
 | HOLDS-on-OT (projection conformance) | 13 | 33 |
-| GAP-app-C0/C1/C2 (view + policy; authored across the crawl's view phases) | 119 | 342 |
+| GAP-app-C0/C1/C2 (view + policy; authored across the crawl's view phases) | 123 | 368 |
 | GAP-C2/C3 (engine/audio boundary) | 7 | 21 |
 | GAP-W-ops (composed ripple family) | 4 | 16 |
 | GAP-verify-C1 (constant verification) | 2 | 3 |
-| **Total** | **145** | **415** |
+| **Total** | **149** | **441** |
 
 (The four GAP classes are all "GAP-with-owner" in the spec-14 vocabulary —
 the owner is the phase in the class name.)
 
 ### 2.4 The app-side authoring count + the ARCH-R22 reconciliation
 
-**The exact app-side authoring scope: 382 tests across 132 GAP census
-units** (415 − 33 HOLDS tests; 145 − 13 HOLDS units). The crawl app
+**The exact app-side authoring scope: 408 tests across 136 GAP census
+units** (441 − 33 HOLDS tests; 149 − 13 HOLDS units). The crawl app
 re-authors these as app-side tests; the 33 HOLDS tests may be kept
 near-verbatim as projection conformance pins (they will pass over real
 OT for the same reasons the mini's pass over the mock).
@@ -272,13 +277,13 @@ OT for the same reasons the mini's pass over the mock).
 **Reconciliation with ARCH-R22's "~130-180 view/chrome/window/policy
 laws" bound (the C4 gate text):** that estimate counted LAWS, not tests,
 at the 333-test corpus. The exact census at the census-unit level is
-**132 GAP units** (within the estimate's intent — the estimate was honest
-but coarse); at the test unit it is 382. **The C4 gate should consume the
-census-unit count (132) as the scope headline and the test count (382)
+**136 GAP units** (within the estimate's intent — the estimate was honest
+but coarse); at the test unit it is 408. **The C4 gate should consume the
+census-unit count (136) as the scope headline and the test count (408)
 as the corpus total** — this file supersedes the ~130-180 bound (spec 14's
 C4 row is amended to point here; ARCH-R22 line 51 carries the supersession
 note). No scope blowout occurred: the mini's many-cases-per-law test style
-(e.g. 108 component tests over ~50 view laws) was always the corpus shape;
+(e.g. 118 component tests over ~51 view laws) was always the corpus shape;
 the estimate simply predated the census.
 
 ## 3. How the crawl consumes this (the gate wording)
@@ -306,5 +311,5 @@ the estimate simply predated the census.
 > **R23 mapping note (ARCH-R23 D23/D24):** spec 14 is RETIRED — the plan is `IMPLEMENTATION-PLAN.md` and the phases are the D24 verification ladder. This file's C0-C4/spec-14 citations map: C1(b,d,e,f)+C1(c)→K3; C1(a)/C2-frames→w1; C3→K3; C4→K4 (+ the human side-by-side→w1-entry); the 'crawl' below means the K3 corpus authoring, not the R22 C-ladder. The disposition vocabulary (HOLDS-on-OT / GAP-app-C1 / GAP-C2/C3 / GAP-W-ops) maps to K3 / w1 / K3 / K3-compose+r1-graduate respectively.
 **Standing law:** this file is generated from the live corpus — if the
   mini's tests change, THIS FILE MUST BE RE-CENSUSED (the counts are
-  battery-checkable: `npx vitest run` == 415 tests / 10 files; 139
-describes → 145 census units).
+  battery-checkable: `npx vitest run` == 441 tests / 10 files; 143
+describes → 149 census units).

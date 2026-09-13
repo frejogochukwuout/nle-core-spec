@@ -55,6 +55,7 @@ import {
   insertionAt,
   rippleShiftAfter,
 } from '../lib/geometry';
+import { rollDeltaBounds, slipTargetBounds, slideStartBounds, quantizeDelta, touchingRight, touchingLeft } from '../lib/trimModes';
 
 export interface ToastMsg {
   kind: 'info' | 'error';
@@ -319,6 +320,22 @@ export interface MiniState {
    *  transition tool mints at seams/edges. View state, drag-gated. */
   trimTool: 'select' | 'roll' | 'slip' | 'slide' | 'transition';
   setTrimTool: (t: 'select' | 'roll' | 'slip' | 'slide' | 'transition') => void;
+
+  /* ---- R24-miniplus W3 (DESIGN-R24 D6): the trim-mode previews. All
+   *  three follow the R18k shape: previews only exist inside a drag
+   *  session, recompute FROM THE SNAPSHOT each event (idempotent, no
+   *  drift), mutate the live doc, and endDrag seals ONE entry. They are
+   *  called by the tool-dispatch seam (deviation #9) — the select
+   *  branch (previewMove/previewTrim) is byte-identical to the R23
+   *  routing. */
+  /** ROLL: drag a touching junction — a.duration += d; b.start += d;
+   *  b.duration -= d; b.sourceStart += d. Inert on a gap (honest). */
+  previewRoll: (id: string, edge: 'start' | 'end', t: number) => void;
+  /** SLIP: move the CONTENT under a fixed clip (sourceStart only). */
+  previewSlip: (id: string, delta: number) => void;
+  /** SLIDE: move the clip; the neighbors' FACING edges trim to make
+   *  room (capped edges open gaps — deviation #10). */
+  previewSlide: (id: string, t: number) => void;
 }
 
 function clampZoom(step: number): number {
@@ -330,6 +347,32 @@ const findMedia = (doc: Doc, id: string): Media | undefined => doc.media.find((m
 const findClip = (doc: Doc, id: string): Clip | undefined => doc.clips.find((c) => c.id === id);
 
 export const useMini = create<MiniState>((set, get) => {
+  /** F2 (deviation #15): transitionOut lives ONLY on a touching seam.
+   *  Runs inside commit() — every doc path is covered (move, trim,
+   *  delete, split, insert, ripple; the drag seal goes through commit's
+   *  docChanged sibling so endDrag re-seals via the same invariant by
+   *  the preview's own neighbor clamps — the wedge never renders an
+   *  orphan). O(n^2) on clips is fine at mini scale. */
+  const sanitizeTransitions = (doc: Doc): void => {
+    const eps = 1e-9;
+    for (const c of doc.clips) {
+      if (!c.transitionOut) continue;
+      const right = doc.clips.find(
+        (x) => x.trackId === c.trackId && Math.abs(x.start - (c.start + c.duration)) < eps && x.id !== c.id,
+      );
+      if (!right) {
+        delete c.transitionOut; // the seam died with the edit
+        continue;
+      }
+      const bound = Math.min(c.duration, right.duration) - MIN_DUR;
+      if (bound >= MIN_DUR && c.transitionOut.duration > bound) {
+        c.transitionOut.duration = Math.max(MIN_DUR, quantize(bound) || MIN_DUR);
+      } else if (bound < MIN_DUR) {
+        delete c.transitionOut; // too short to hold any transition
+      }
+    }
+  };
+
   /** commit — one history entry per call; returns whether anything changed.
    * R21 (user P0 revert): entries are plain docs again — the binding-aware
    * entry existed for the escape drop law (REVERTED); bindings never
@@ -351,6 +394,14 @@ export const useMini = create<MiniState>((set, get) => {
       clips: state.doc.clips.map(cloneClip),
     };
     const result = mutate(draft) ?? draft;
+    /* R24-miniplus W2 (the wave review's F2 — deviation #15): the
+     * transition-invariant sanitizer. A transitionOut survives ONLY on a
+     * TOUCHING seam: any placement change (move/trim/delete/split/insert)
+     * re-validates here — an orphaned transition (its clip's end no
+     * longer touches a same-track right neighbor) is DELETED (the seam
+     * died), and a duration past the new seam bound re-clamps. One
+     * place, every path; the wedge/render/editor can then trust the doc. */
+    sanitizeTransitions(result);
     const changed = docChanged(state.doc, result);
     if (!changed) return false;
     const past = [...state.past, state.doc].slice(-MAX_HISTORY);
@@ -615,13 +666,23 @@ export const useMini = create<MiniState>((set, get) => {
       const raw = window / r;
       const quantized = Math.max(MIN_DUR, quantize(raw) || MIN_DUR);
       const { nextStart } = neighborBounds(state.doc, clip);
-      const dur = Math.min(quantized, Math.max(MIN_DUR, nextStart - clip.start));
-      if (dur === clip.duration && r === clip.speed) return;
+      /* F8 (wave review): the source-extent invariant — the consumed
+       * window (sourceStart + duration*rate <= extent) must hold; the
+       * extent bound floor-quantizes (never rounds past the media tail).
+       * An impossible rate (extent bound < MIN_DUR) refuses honestly. */
+      const sourceStart = clip.sourceStart ?? 0;
+      const extentBound = Math.floor(((media.duration - sourceStart) / r) / MIN_DUR) * MIN_DUR;
+      if (extentBound < MIN_DUR) return;
+      const dur = Math.min(quantized, Math.max(MIN_DUR, nextStart - clip.start), extentBound);
+      if (dur === clip.duration && r === (clip.speed ?? 1)) return;
       commit((doc) => {
         const c = doc.clips.find((x) => x.id === clipId);
         if (!c) return;
         c.duration = dur;
-        c.speed = r;
+        /* F11: unity deletes the field (the absent-is-default law, the
+         * same as setClipProp's volume/opacity) — the doc stays minimal. */
+        if (r === 1) delete c.speed;
+        else c.speed = r;
       });
     },
 
@@ -723,8 +784,14 @@ export const useMini = create<MiniState>((set, get) => {
       const right = state.doc.clips.find(
         (c) => c.trackId === clip.trackId && Math.abs(c.start - (clip.start + clip.duration)) < eps,
       );
-      const seamMax = Math.max(MIN_DUR, Math.min(clip.duration, right?.duration ?? Infinity) - MIN_DUR);
       const current = clip.transitionOut;
+      /* F17 (wave review): the store REFUSES a mint on a detached tail —
+       * a transition to nothing is a FADE (setFade). The Inspector and
+       * the seam zones already guard; the store is the third door and
+       * now agrees. (Patching an EXISTING transition is still allowed —
+       * the sanitizer owns orphan cleanup.) */
+      if (!right && !current) return;
+      const seamMax = Math.max(MIN_DUR, Math.min(clip.duration, right?.duration ?? Infinity) - MIN_DUR);
       const next = current
         ? { ...current, ...(patch ?? {}) }
         : { ...defaultTransition(), ...(patch ?? {}) };
@@ -760,12 +827,10 @@ export const useMini = create<MiniState>((set, get) => {
       const state = get();
       const clip = findClip(state.doc, clipId);
       if (!clip) return;
-      const v = Math.min(
-        Math.max(quantize(dur ?? 0.5) || MIN_DUR, MIN_DUR),
-        Math.min(clip.duration, 0.5 * 8),
-      );
-      // the mint default never exceeds the clip (0.5 cap by the D5 law)
-      const capped = dur === undefined ? Math.min(v, clip.duration, 0.5) : Math.min(v, clip.duration);
+      /* F10: the invented 4s cap is dropped — the clip's own duration IS
+       * the bound; the mint default caps at 0.5 (the D5 law). */
+      const v = Math.min(Math.max(quantize(dur ?? 0.5) || MIN_DUR, MIN_DUR), clip.duration);
+      const capped = dur === undefined ? Math.min(v, clip.duration, 0.5) : v;
       const current = side === 'in' ? clip.fadeIn : clip.fadeOut;
       if (current === capped) return; // no-op guard
       commit((doc) => {
@@ -787,6 +852,137 @@ export const useMini = create<MiniState>((set, get) => {
         if (!c) return;
         if (side === 'in') delete c.fadeIn;
         else delete c.fadeOut;
+      });
+    },
+
+    /* ---- R24-miniplus W3 (DESIGN-R24 D6): the trim-mode previews ---- */
+
+    previewRoll: (id, edge, t) => {
+      const state = get();
+      if (!state.dragActive || !state.dragSnapshot) return;
+      /* the junction pair, from the SNAPSHOT (idempotent): grabbing the
+       * mover's END edge rolls (mover = a, right neighbor = b); grabbing
+       * the START edge rolls (left neighbor = a, mover = b). */
+      const snapClip = findClip(state.dragSnapshot, id);
+      if (!snapClip) return;
+      const isEnd = edge === 'end';
+      const a = isEnd ? snapClip : touchingLeft(state.dragSnapshot, snapClip);
+      const b = isEnd ? touchingRight(state.dragSnapshot, snapClip) : snapClip;
+      if (!a || !b) return; // no touching junction — roll is inert (honest)
+      const bounds = rollDeltaBounds(state.dragSnapshot, a);
+      if (!bounds) return;
+      const junction = a.start + a.duration;
+      const d = Math.min(Math.max(quantizeDelta(t - junction), bounds.lo), bounds.hi);
+      if (Math.abs(d) < 1e-9) {
+        /* zero delta: restore the snapshot geometry for the pair (the
+         * preview is idempotent — returning to the cut resets exactly) */
+        set({
+          doc: {
+            ...state.doc,
+            clips: state.doc.clips.map((c) => {
+              const sa = c.id === a.id ? a : c.id === b.id ? b : null;
+              return sa ? { ...c, start: sa.start, duration: sa.duration, sourceStart: sa.sourceStart } : c;
+            }),
+          },
+        });
+        return;
+      }
+      set({
+        doc: {
+          ...state.doc,
+          clips: state.doc.clips.map((c) => {
+            if (c.id === a.id) return { ...c, duration: a.duration + d };
+            if (c.id === b.id) {
+              const nb: Clip = { ...c, start: b.start + d, duration: b.duration - d };
+              if (b.sourceStart !== undefined || (c.sourceStart ?? 0) + d > 0) {
+                nb.sourceStart = (b.sourceStart ?? 0) + d;
+              } else if (c.sourceStart !== undefined) {
+                delete nb.sourceStart;
+              }
+              return nb;
+            }
+            return c;
+          }),
+        },
+      });
+    },
+
+    previewSlip: (id, delta) => {
+      const state = get();
+      if (!state.dragActive || !state.dragSnapshot) return;
+      const snapClip = findClip(state.dragSnapshot, id);
+      if (!snapClip) return;
+      const media = findMedia(state.doc, snapClip.mediaId);
+      const bounds = slipTargetBounds(media, snapClip);
+      if (!bounds) return; // image or full-window — slip is inert (honest)
+      const target = Math.min(Math.max((snapClip.sourceStart ?? 0) + delta, bounds.lo), bounds.hi);
+      set({
+        doc: {
+          ...state.doc,
+          clips: state.doc.clips.map((c) =>
+            c.id === id
+              ? { ...c, sourceStart: target === 0 ? undefined : target, start: snapClip.start, duration: snapClip.duration }
+              : c,
+          ),
+        },
+      });
+    },
+
+    previewSlide: (id, t) => {
+      const state = get();
+      if (!state.dragActive || !state.dragSnapshot) return;
+      const snapClip = findClip(state.dragSnapshot, id);
+      if (!snapClip) return;
+      const bounds = slideStartBounds(state.dragSnapshot, snapClip);
+      if (!bounds) return; // alone on the track — slide degenerates (honest)
+      const newStart = Math.min(Math.max(quantizeDelta(t), bounds.lo), bounds.hi);
+      const end = newStart + snapClip.duration;
+      /* The neighbors' FACING edges FOLLOW the mover (the 3-clip roll):
+       * prev's END chases the mover's start; next's START chases the
+       * mover's end. Each edge is capped by its own bounds — the MIN
+       * duration AND the source window (the D2 law; the source cap is
+       * the honest follower limit) — a capped edge opens a GAP
+       * (deviation #10), never an overlap. All from the SNAPSHOT
+       * (idempotent). */
+      const same = state.dragSnapshot.clips
+        .filter((x) => x.trackId === snapClip.trackId && x.id !== id)
+        .sort((x, y) => x.start - y.start);
+      const prev = same.filter((x) => x.start < snapClip.start).at(-1);
+      const next = same.filter((x) => x.start > snapClip.start)[0];
+      const windowMax = (c: Clip): number => {
+        const media = findMedia(state.dragSnapshot!, c.mediaId);
+        if (!media || media.kind === 'image') return Infinity; // a still's extent is an edit decision
+        return (media.duration - (c.sourceStart ?? 0)) / (c.speed ?? 1);
+      };
+      set({
+        doc: {
+          ...state.doc,
+          clips: state.doc.clips.map((c) => {
+            if (c.id === id) return { ...c, start: newStart };
+            if (prev && c.id === prev.id) {
+              // prev's END follows the mover's start, capped [MIN, source]
+              const maxDur = Math.max(MIN_DUR, windowMax(prev));
+              const newDur = Math.min(Math.max(newStart - prev.start, MIN_DUR), maxDur);
+              return { ...c, duration: newDur };
+            }
+            if (next && c.id === next.id) {
+              // next's START follows the mover's end, capped [source tail, MIN]
+              const maxDur = Math.max(MIN_DUR, windowMax(next));
+              const nextEnd = next.start + next.duration;
+              const newNextStart = Math.max(Math.min(end, nextEnd - MIN_DUR), nextEnd - maxDur);
+              const dNext = newNextStart - next.start;
+              const nn: Clip = { ...c, start: newNextStart, duration: nextEnd - newNextStart };
+              // the head trim/extension rides the source window (the roll law)
+              if (dNext !== 0) {
+                const nss = (next.sourceStart ?? 0) + dNext;
+                if (nss > 0) nn.sourceStart = nss;
+                else if (next.sourceStart !== undefined) delete nn.sourceStart;
+              }
+              return nn;
+            }
+            return c;
+          }),
+        },
       });
     },
 

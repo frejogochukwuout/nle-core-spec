@@ -1166,33 +1166,40 @@ describe('R24 W0: the deep-clone + no-alias law (the F1 P0 fix)', () => {
   });
 
   it('a commit CLONES nested effects/transitionOut (no shared refs into history)', () => {
-    /* A doc carrying plus fields; nudge drives a real commit through the
-     * draft. The old shallow {...c} kept the SAME effects array object in
-     * the live doc and every history entry — a nested mutation would
-     * write through (undo corruption). The no-alias assertion is the
-     * discriminator: the committed clip's nested objects are fresh. */
+    /* A touching-seam doc (the F2 sanitizer deletes orphaned transitions —
+     * a gapped doc would lose them); a scalar write drives a real commit
+     * through the draft. The old shallow {...c} kept the SAME effects
+     * array object in the live doc and every history entry — a nested
+     * mutation would write through (undo corruption). The no-alias
+     * assertion is the discriminator: the committed clip's nested
+     * objects are fresh. */
     useMini.setState({
       doc: {
         ...S().doc,
-        clips: S().doc.clips.map((c) =>
-          c.id === 'c1'
-            ? {
-                ...c,
-                effects: [{ id: 'fx_1', name: 'Gaussian Blur', enabled: true, params: { radius: 8 } }],
-                transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 },
-              }
-            : c,
-        ),
+        clips: [
+          { id: 'cA', trackId: 'V1', mediaId: 'm-drone', start: 0, duration: 3.5 },
+          {
+            id: 'cB',
+            trackId: 'V1',
+            mediaId: 'm-beach',
+            start: 3.5,
+            duration: 3.5,
+            effects: [{ id: 'fx_1', name: 'Gaussian Blur', enabled: true, params: { radius: 8 } }],
+            transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 },
+          },
+          { id: 'cC', trackId: 'V1', mediaId: 'm-gopro', start: 7, duration: 3 },
+        ],
       },
     });
     const docBefore = S().doc;
-    const effectsBefore = docBefore.clips[0].effects!;
-    const transitionBefore = docBefore.clips[0].transitionOut!;
+    const before = docBefore.clips.find((c) => c.id === 'cB')!;
+    const effectsBefore = before.effects!;
+    const transitionBefore = before.transitionOut!;
 
-    S().nudge('c1', 0.5); // a real commit through the clone draft
+    S().setClipProp('cB', { volume: 0.5 }); // a real commit through the clone draft
 
-    const committed = S().doc.clips[0];
-    expect(committed.start).toBe(0.5);
+    const committed = S().doc.clips.find((c) => c.id === 'cB')!;
+    expect(committed.volume).toBe(0.5);
     // the no-alias law: history + live doc own SEPARATE nested objects
     expect(committed.effects).not.toBe(effectsBefore);
     expect(committed.effects![0]).not.toBe(effectsBefore[0]);
@@ -1202,7 +1209,7 @@ describe('R24 W0: the deep-clone + no-alias law (the F1 P0 fix)', () => {
     expect(committed.effects).toEqual(effectsBefore);
     expect(committed.transitionOut).toEqual(transitionBefore);
     // and the history entry holds the ORIGINAL objects (still pristine)
-    expect(S().past.at(-1)!.clips[0].effects).toBe(effectsBefore);
+    expect(S().past.at(-1)!.clips.find((c) => c.id === 'cB')!.effects).toBe(effectsBefore);
   });
 
   it('the undo round-trip restores nested plus fields intact', () => {
@@ -1311,7 +1318,7 @@ describe('R24 W2: the split FIELD-DISPOSITION TABLE (the F2 P0 fix)', () => {
             effects: [{ id: 'fx-blur', name: 'Gaussian Blur', enabled: true, params: { radius: 8 } }],
             transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 },
           },
-          { id: 'cY', trackId: 'V1', mediaId: 'm-beach', start: 5, duration: 3 },
+          { id: 'cY', trackId: 'V1', mediaId: 'm-beach', start: 4, duration: 3 },
         ],
       },
       playhead: 2,
@@ -1361,5 +1368,225 @@ describe('R24 W2: the split FIELD-DISPOSITION TABLE (the F2 P0 fix)', () => {
     expect(c.fadeOut).toBe(1.5);
     expect(c.transitionOut!.duration).toBe(0.5);
     expect(c.effects).toHaveLength(1);
+  });
+});
+
+/* ---- R24-miniplus W2 fix-round (the wave review's F8/F9c/F9b nets) ---- */
+
+describe('R24 W2-fix: the store-action bounds (F8/F9c)', () => {
+  beforeEach(() => {
+    S().reset();
+  });
+
+  it('F8: setClipSpeed clamps to the source extent (never references nonexistent media)', () => {
+    useMini.setState({
+      doc: {
+        ...S().doc,
+        clips: [
+          { id: 'cS', trackId: 'V1', mediaId: 'm-gopro', start: 0, duration: 3.5, sourceStart: 1 }, // media 5.5
+        ],
+      },
+    });
+    // window = 3.5, rate 2 -> raw 1.75 -> quantized 2.0 -> consumed 1+2*2=5 <= 5.5 OK
+    S().setClipSpeed('cS', 2);
+    expect(S().doc.clips[0].duration).toBe(2);
+    expect(S().doc.clips[0].speed).toBe(2);
+    // rate 4 -> raw 0.875 -> quantized 1.0 -> extent bound floor(4.5/4=1.125 -> 1.0): dur 1.0 -> consumed 1+4=5 <= 5.5 OK
+    S().setClipSpeed('cS', 4);
+    expect(S().doc.clips[0].duration).toBe(1);
+    // an impossible rate: sourceStart 3, window 2.5, rate 4 -> extent bound 0.5... allowed; rate where bound < 0.5 refuses:
+    S().setClipProp('cS', { volume: 1 }); // no-op shape for the next assert
+    useMini.setState({
+      doc: {
+        ...S().doc,
+        clips: [{ ...S().doc.clips[0], sourceStart: 4, duration: 1, speed: 2.5 }],
+      },
+    });
+    // window = 2.5 consumed from sourceStart 4 — the extent bound caps the
+    // duration at floor((5.5-4)/1) = 1.5 (the honest media tail)
+    S().setClipSpeed('cS', 1);
+    expect(S().doc.clips[0].duration).toBe(1.5); // the extent bound, grid-clean
+    expect(S().doc.clips[0].duration % 0.5).toBe(0);
+  });
+
+  it('F11: setClipSpeed at unity DELETES the field (absent-is-default)', () => {
+    useMini.setState({
+      doc: {
+        ...S().doc,
+        clips: [{ id: 'cS', trackId: 'V1', mediaId: 'm-gopro', start: 0, duration: 2, speed: 2 }],
+      },
+    });
+    S().setClipSpeed('cS', 1);
+    expect(S().doc.clips[0].speed).toBeUndefined();
+  });
+
+  it('F9b: ripple-trim shifts the seam pair TOGETHER (the transition rides the tail)', () => {
+    // touching chain: cA [0,3.5] -transition-> cB [3.5,7]
+    useMini.setState({
+      doc: {
+        ...S().doc,
+        clips: [
+          { id: 'cA', trackId: 'V1', mediaId: 'm-drone', start: 0, duration: 3.5 },
+          { id: 'cB', trackId: 'V1', mediaId: 'm-beach', start: 3.5, duration: 3.5 },
+        ],
+      },
+      rippleOn: true,
+      selectedId: 'cA',
+    });
+    S().setTransition('cA');
+    // ripple END-trim cA by -1s: cutTail-style head region... use trimClip on the end
+    S().trimClip('cA', 'end', 2.5); // cA -> [0, 2.5]; follower cB shifts to 2.5 (ripple)
+    const clips = S().doc.clips;
+    const cA = clips.find((c) => c.id === 'cA')!;
+    const cB = clips.find((c) => c.id === 'cB')!;
+    expect(cA.duration).toBe(2.5);
+    expect(cB.start).toBe(2.5); // the follower followed (the ripple law)
+    // the seam MOVED with the pair — the transition survives on the new cut
+    expect(cA.transitionOut).toBeDefined();
+    expect(cA.transitionOut!.duration).toBe(0.5); // within the new bound (2.5/3.5)
+  });
+});
+
+/* ---- R24-miniplus W3 (DESIGN-R24 D6): the trim-mode previews ---- */
+
+describe('R24 W3: roll/slip/slide preview laws (from-snapshot idempotence)', () => {
+  /** touching chain: cA [0,3.5] | cB [3.5,7] (seam at 3.5); A1 c4. */
+  const chainDoc = () => ({
+    ...seedDoc(),
+    clips: [
+      { id: 'cA', trackId: 'V1', mediaId: 'm-drone', start: 0, duration: 3.5 }, // media 4.5
+      { id: 'cB', trackId: 'V1', mediaId: 'm-beach', start: 3.5, duration: 3.5 }, // media 4.5
+      { id: 'c4', trackId: 'A1', mediaId: 'm-interview', start: 1.5, duration: 7 },
+    ],
+  });
+
+  beforeEach(() => {
+    S().reset();
+    useMini.setState({ doc: chainDoc() });
+  });
+
+  it('ROLL: dragging the junction extends a / trims b (one entry at seal)', () => {
+          S().beginDrag();
+          S().previewRoll('cA', 'end', 4.5); // +1s right
+    const a = S().doc.clips.find((c) => c.id === 'cA')!;
+    const b = S().doc.clips.find((c) => c.id === 'cB')!;
+    expect(a.duration).toBe(4.5);
+    expect(b.start).toBe(4.5);
+    expect(b.duration).toBe(2.5);
+    // no history yet — the preview IS the live doc (the R18k shape)
+    expect(S().past.length).toBe(0);
+          S().endDrag();
+    expect(S().past.length).toBe(1); // ONE entry seals the roll
+  });
+
+  it('ROLL: the bounds clamp — b keeps MIN, a keeps MIN, the source laws cap both sides', () => {
+    /* b (m-beach 4.5) carries sourceStart 1 — its head has slack, so the
+     * junction CAN roll left; a's tail slack is 1 (media 4.5 - window
+     * 3.5). Bounds: lo = max(0.5-3.5, -ss_b) = -1; hi = min(3.5-0.5,
+     * tail 1) = 1 — the SOURCE laws are the tight bounds here. */
+    useMini.setState({
+      doc: {
+        ...chainDoc(),
+        clips: [
+          chainDoc().clips[0],
+          { ...chainDoc().clips[1], sourceStart: 1 },
+          chainDoc().clips[2],
+        ],
+      },
+    });
+          S().beginDrag();
+    // far left: d clamps to lo = -1 (b's source head)
+          S().previewRoll('cA', 'end', -10);
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.duration).toBe(2.5);
+    expect(S().doc.clips.find((c) => c.id === 'cB')!.duration).toBe(4.5);
+    expect(S().doc.clips.find((c) => c.id === 'cB')!.sourceStart).toBe(0);
+    // far right: d clamps to hi = 1 (a's source tail)
+          S().previewRoll('cA', 'end', 99);
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.duration).toBe(4.5); // extent cap, not 6.5
+    expect(S().doc.clips.find((c) => c.id === 'cB')!.duration).toBe(2.5);
+    expect(S().doc.clips.find((c) => c.id === 'cB')!.sourceStart).toBe(2);
+          S().endDrag();
+  });
+
+  it('ROLL: sourceStart advances on b (the window follows the cut)', () => {
+    useMini.setState({
+      doc: {
+        ...chainDoc(),
+        clips: [
+          { ...chainDoc().clips[0], sourceStart: 0.5 },
+          { ...chainDoc().clips[1], sourceStart: 1 },
+          chainDoc().clips[2],
+        ],
+      },
+    });
+          S().beginDrag();
+          S().previewRoll('cA', 'end', 4); // +0.5
+    expect(S().doc.clips.find((c) => c.id === 'cB')!.sourceStart).toBe(1.5);
+          S().endDrag();
+  });
+
+  it('ROLL on a GAP is inert (the honest refusal)', () => {
+    useMini.setState({ doc: { ...seedDoc() } }); // the seed has 0.5s gaps
+          S().beginDrag();
+          S().previewRoll('c1', 'end', 5);
+    expect(S().doc.clips.find((c) => c.id === 'c1')!.duration).toBe(3.5); // unchanged
+          S().endDrag();
+    expect(S().past.length).toBe(0); // nothing changed — no entry
+  });
+
+  it('SLIP: the content moves under a FIXED placement (clamped to the window)', () => {
+    // cA shows 3.5 of a 4.5 media — slack 1.0
+          S().beginDrag();
+          S().previewSlip('cA', 5); // way past the tail
+    const a = S().doc.clips.find((c) => c.id === 'cA')!;
+    expect(a.sourceStart).toBe(1); // clamped: extent 4.5 - window 3.5
+    expect(a.start).toBe(0); // the placement NEVER moves
+    expect(a.duration).toBe(3.5);
+          S().endDrag();
+    expect(S().past.length).toBe(1); // ONE entry seals the slip
+    // a slip back to the media head = the net-zero round trip: absent at 0
+    // (the legacy semantic) AND no-op endDrag (no phantom entry)
+          S().beginDrag();
+          S().previewSlip('cA', -5); // back before the head -> clamps to 0
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.sourceStart).toBeUndefined(); // absent at 0
+          S().endDrag();
+    // the slip-to-head is a REAL edit (ss 1 -> absent): one more entry
+    expect(S().past.length).toBe(2);
+  });
+
+  it('SLIP: images are inert (no source window to move)', () => {
+    useMini.setState({
+      doc: {
+        ...seedDoc(),
+        clips: [{ id: 'cI', trackId: 'V1', mediaId: 'm-title', start: 0, duration: 2 }],
+      },
+    });
+          S().beginDrag();
+          S().previewSlip('cI', 2);
+    expect(S().doc.clips[0].sourceStart).toBeUndefined();
+          S().endDrag();
+    expect(S().past.length).toBe(0);
+  });
+
+  it('SLIDE: the mover moves; the neighbors\u2019 FACING edges trim (gap law)', () => {
+    // chain cA [0,3.5] | cB [3.5,7]; slide cB right by 0.5 -> cA extends to 4
+          S().beginDrag();
+          S().previewSlide('cB', 4);
+    const a = S().doc.clips.find((c) => c.id === 'cA')!;
+    const b = S().doc.clips.find((c) => c.id === 'cB')!;
+    expect(b.start).toBe(4);
+    expect(a.duration).toBe(4); // the facing edge extended (gap closed)
+          S().endDrag();
+    expect(S().past.length).toBe(1);
+    // slide cB LEFT over cA: cA trims to MIN (the cap), a GAP opens
+          S().beginDrag();
+          S().previewSlide('cB', 0.5); // cA floor: cA [0, 0.5]
+    const a2 = S().doc.clips.find((c) => c.id === 'cA')!;
+    const b2 = S().doc.clips.find((c) => c.id === 'cB')!;
+    expect(a2.duration).toBe(0.5); // capped at MIN
+    expect(b2.start).toBe(0.5); // the mover went where it wanted
+    // never an overlap:
+    expect(a2.start + a2.duration).toBeLessThanOrEqual(b2.start + 1e-9);
+          S().endDrag();
   });
 });

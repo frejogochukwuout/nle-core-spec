@@ -437,3 +437,26 @@ Review protocol: every wave reviewed by a fresh-context sub-agent
     state; the program playhead freezes in source mode.
 14. **The pool "open in source" affordance (F7):** hover/focus icon
     button per card (the click-to-append law untouched).
+15. **The transition-invariant sanitizer (W2 review F2):** every commit
+    re-validates transitionOut against the seam — an orphaned transition
+    (the clip's end no longer touches a same-track right neighbor) is
+    DELETED; a duration past the new seam bound re-clamps. One place
+    (inside commit), every path.
+16. **The NumberField debounce drop (W2 review F6):** the variants'
+    50ms-debounce live-preview is NOT ported — settle happens on
+    Enter/blur only (fewer timers, the same ONE-commit-per-settle
+    guarantee; the display rewrites to the committed snapped value —
+    the F3 law).
+17. **The DB pair coherence (W2 review F7):** volToDb clamps to
+    [DB_MIN, DB_MAX] exactly (the DB_FLOOR escape hatch retired — the
+    Volume field never shows a value its own validation rejects).
+18. **The MinLane ruling (W2 review F18):** the minimized strip renders
+    NO wedges/fades/mint zones — the pills-only surface stays (netted).
+19. **The F4 wedge hit-area law:** the wedge box is a visual
+    (pointer-events:none); only the centered X button is interactive —
+    the seam trim zones underneath stay draggable (the R18k surface
+    protected).
+20. **The F16 density ruling:** Timing defaults CLOSED (the facts dl
+    answers the read-only need); the Clip + Effects groups stay open;
+    Transition/Fades open only when present. PlusSections remounts per
+    selection (the key law — fresh defaultOpen per subject).
