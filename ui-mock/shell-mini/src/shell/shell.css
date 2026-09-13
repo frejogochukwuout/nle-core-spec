@@ -916,3 +916,160 @@
   width: 16px;
   height: 16px;
 }
+
+/* ---------- R24-miniplus: the inspector field primitives (fields.tsx) ---- */
+
+.mini-field {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  padding: 2px 0;
+}
+
+.mini-field__label,
+.mini-param .mini-field__label {
+  font-size: 11px;
+  color: var(--mini-text-2, rgba(255, 255, 255, 0.72));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-field__input {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-family: var(--mini-mono, ui-monospace, monospace);
+  color: var(--canvas-editor-text-default);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  box-sizing: border-box;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.mini-field__input:focus {
+  outline: none;
+  border-color: var(--canvas-quick-cut-accent, #38bdf8);
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.mini-field.is-invalid .mini-field__input {
+  border-color: rgba(255, 120, 120, 0.75);
+  background: rgba(255, 120, 120, 0.07);
+}
+
+.mini-field__err {
+  grid-column: 2;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #ff9d9d;
+}
+
+.mini-param {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  padding: 2px 0;
+}
+
+.mini-param__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mini-param__slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 14px;
+  appearance: none;
+  background: transparent;
+  cursor: ew-resize;
+}
+
+.mini-param__slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--canvas-quick-cut-accent, #38bdf8) var(--mini-param-pct, 0%),
+    rgba(255, 255, 255, 0.12) var(--mini-param-pct, 0%)
+  );
+}
+
+.mini-param__slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #e6edf3;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+.mini-param__slider:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.55);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.mini-param__value {
+  flex: 0 0 auto;
+  min-width: 34px;
+  text-align: right;
+  font-size: 10px;
+  font-family: var(--mini-mono, ui-monospace, monospace);
+  color: var(--canvas-editor-text-default);
+}
+
+.mini-group {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mini-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 26px;
+  padding: 0 2px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.mini-group__head:hover {
+  color: var(--canvas-editor-text-default);
+}
+
+.mini-group__caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid rgba(255, 255, 255, 0.5);
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  transition: transform 0.12s;
+}
+
+.mini-group__caret.is-open {
+  transform: rotate(90deg);
+}
+
+.mini-group__body {
+  padding: 2px 2px 8px 10px;
+  display: grid;
+  gap: 4px;
+}

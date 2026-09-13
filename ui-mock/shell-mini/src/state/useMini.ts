@@ -26,6 +26,7 @@ import {
   seedDoc,
   mintClipId,
   laneForMedia,
+  cloneClip,
   TRACK_VIDEO,
   TRACK_AUDIO,
   type Clip,
@@ -142,6 +143,16 @@ export interface MiniState {
   filmstripOn: boolean;
   /** A1 lane visibility (R18e, feedback #8) — view state only */
   audioLaneVisible: boolean;
+  /** R24-miniplus (DESIGN-R24 D1): the feature gate — the user's
+   *  experiment-variant idiom. ONE flag covers the whole mini-plus
+   *  surface (inspector plus-groups, trim-mode radio, source mode,
+   *  mixer, S buttons, wedges/fades). VIEW state: never in a doc
+   *  snapshot, never an undo entry, drag-gated (the view-family law).
+   *  ADDITIVE-BY-CONSTRUCTION: gate-OFF is the R23 surface by design —
+   *  every plus affordance MINTS new DOM with new testids; nothing
+   *  existing is superseded or re-homed. Default ON (the user asked for
+   *  the features); reset() restores ON (a session surface). */
+  miniPlus: boolean;
   /** R18i (thread #12, ruler): the ruler extent — max(contentEnd, min 8s,
    *  viewport coverage) synced from the Timeline component. setPlayhead
    *  clamps HERE, not to contentEnd: an NLE ruler is scrubbable across its
@@ -223,6 +234,8 @@ export interface MiniState {
   toggleRipple: () => void;
   toggleFilmstrip: () => void;
   toggleAudioLane: () => void;
+  /** R24-miniplus (D1): flip the feature gate (drag-gated view family). */
+  toggleMiniPlus: () => void;
   pushToast: (kind: ToastMsg['kind'], text: string) => void;
   dismissToast: () => void;
 
@@ -278,10 +291,18 @@ export const useMini = create<MiniState>((set, get) => {
   const commit = (mutate: (doc: Doc) => Doc | void): boolean => {
     const state = get();
     if (state.dragActive) return false; // interaction lock: no commits mid-drag
+    /* R24-miniplus (DESIGN-R24 D2, the F1 P0 fix): the draft DEEP-CLONES
+     * every clip (cloneClip — nested effects/transitionOut cloned). The
+     * old shallow {...c} shared nested references: a nested mutation
+     * (an effect param, a transition duration) would write through into
+     * the live doc AND every history entry — undo corruption. All nested
+     * edits flow through this draft; preview paths never mutate nested
+     * objects (top-level immutable spreads only), so the invariant holds:
+     * a nested object is never mutated in place anywhere. */
     const draft: Doc = {
       tracks: state.doc.tracks,
       media: state.doc.media,
-      clips: state.doc.clips.map((c) => ({ ...c })),
+      clips: state.doc.clips.map(cloneClip),
     };
     const result = mutate(draft) ?? draft;
     const changed = docChanged(state.doc, result);
@@ -296,20 +317,68 @@ export const useMini = create<MiniState>((set, get) => {
       preview map() re-copies) — shared by commit and endDrag (review #10).
       R20: TRACKS compare too — the mute flag is doc state (thread #29);
       the old clips-only comparison would silently swallow a mute toggle
-      (the same trap class as the media-only docChanged miss). */
+      (the same trap class as the media-only docChanged miss).
+      R24-miniplus (DESIGN-R24 D2, the F1 P0 fix): the FULL superset —
+      sourceStart/speed/volume/opacity/fades/effects (deep: count +
+      per-effect id/enabled/params entries)/transitionOut (deep) on clips;
+      solo on tracks. Without this every plus-edit computed changed=false
+      and silently no-opped (no doc write, no history entry). */
+  const effectChanged = (a: Clip['effects'], b: Clip['effects']): boolean => {
+    if (a === b) return false;
+    if (!a || !b) return true; // one side absent, the other present
+    if (a.length !== b.length) return true;
+    return a.some((e, i) => {
+      const o = b[i];
+      if (e.id !== o.id || e.enabled !== o.enabled || e.name !== o.name) return true;
+      const pa = e.params === undefined;
+      const pb = o.params === undefined;
+      if (pa !== pb) return true;
+      if (pa) return false; // both undefined
+      const keysA = Object.keys(e.params!);
+      const keysB = Object.keys(o.params!);
+      if (keysA.length !== keysB.length) return true;
+      return keysA.some((k) => e.params![k] !== o.params![k]);
+    });
+  };
+  const transitionChanged = (a: Clip['transitionOut'], b: Clip['transitionOut']): boolean => {
+    if (a === b) return false;
+    if (!a || !b) return true;
+    return (
+      a.duration !== b.duration ||
+      a.alignment !== b.alignment ||
+      a.presentation !== b.presentation ||
+      a.type !== b.type
+    );
+  };
   const docChanged = (a: Doc, b: Doc): boolean =>
     a.tracks.length !== b.tracks.length ||
     a.tracks.some(
-      (t, i) => t.id !== b.tracks[i]?.id || t.muted !== b.tracks[i]?.muted,
+      (t, i) =>
+        t.id !== b.tracks[i]?.id ||
+        t.muted !== b.tracks[i]?.muted ||
+        t.solo !== b.tracks[i]?.solo,
     ) ||
     a.clips.length !== b.clips.length ||
     a.clips.some(
-      (c, i) =>
-        c.start !== b.clips[i]?.start ||
-        c.duration !== b.clips[i]?.duration ||
-        c.id !== b.clips[i]?.id ||
-        c.trackId !== b.clips[i]?.trackId ||
-        c.mediaId !== b.clips[i]?.mediaId,
+      (c, i) => {
+        const o = b.clips[i];
+        if (
+          c.start !== o?.start ||
+          c.duration !== o?.duration ||
+          c.id !== o?.id ||
+          c.trackId !== o?.trackId ||
+          c.mediaId !== o?.mediaId ||
+          c.sourceStart !== o.sourceStart ||
+          c.speed !== o.speed ||
+          c.volume !== o.volume ||
+          c.opacity !== o.opacity ||
+          c.fadeIn !== o.fadeIn ||
+          c.fadeOut !== o.fadeOut
+        ) {
+          return true;
+        }
+        return effectChanged(c.effects, o.effects) || transitionChanged(c.transitionOut, o.transitionOut);
+      },
     );
 
   return {
@@ -321,6 +390,7 @@ export const useMini = create<MiniState>((set, get) => {
     rippleOn: false,
     filmstripOn: true,
     audioLaneVisible: true,
+    miniPlus: true, // R24-miniplus (D1): default ON; reset restores ON
     rulerEnd: 8, // R18i: floor = the min runway; Timeline raises it to viewport coverage
     // R18j layout defaults: everything expanded, normal (non-max) viewer
     poolCollapsed: false,
@@ -523,6 +593,12 @@ export const useMini = create<MiniState>((set, get) => {
     toggleAudioLane: () => {
       if (get().dragActive) return; // interaction lock
       set({ audioLaneVisible: !get().audioLaneVisible });
+    },
+    toggleMiniPlus: () => {
+      /* R24-miniplus (D1): the gate joins the drag-gated view family — a
+       *  relayout mid-gesture would invalidate the live pointer math. */
+      if (get().dragActive) return;
+      set({ miniPlus: !get().miniPlus });
     },
 
     /* ---- R18j layout actions (view-only, drag-gated) ---------------- */
@@ -1135,6 +1211,7 @@ export const useMini = create<MiniState>((set, get) => {
         rippleOn: false,
         filmstripOn: true,
         audioLaneVisible: true,
+        miniPlus: true, // R24-miniplus (D1): the gate is a session surface — reset restores ON
         rulerEnd: 8,
         poolCollapsed: false,
         inspectorCollapsed: false,
