@@ -41,6 +41,7 @@ export function Inspector() {
    * MUTE. Doc state (one history entry, undoable); the "etc." beyond
    * mute is deferred to the nle-engine audio seam. */
   const toggleTrackMute = useMini((s) => s.toggleTrackMute);
+  const toggleTrackSolo = useMini((s) => s.toggleTrackSolo);
   /* R24-miniplus (D1): the feature gate — the plus groups render ONLY
    *  when ON (additive-by-construction: gate-OFF is the R23 surface —
    *  the facts dl + nudge + track card above are untouched). */
@@ -203,6 +204,24 @@ export function Inspector() {
               {selTrack.muted ? <VolumeX size={14} strokeWidth={1.75} aria-hidden="true" /> : <Volume2 size={14} strokeWidth={1.75} aria-hidden="true" />}
               <span>{selTrack.muted ? 'Unmute' : 'Mute'}</span>
             </button>
+            {miniPlus && (
+              /* R24-miniplus W5 (D8): the S twin — solo-in-place; the card's
+               *  audibility line reads the ONE selector. */
+              <button
+                type="button"
+                className={`mini-inspector__mute${selTrack.solo ? ' is-solo' : ''}`}
+                onClick={() => toggleTrackSolo(selTrack.id)}
+                aria-pressed={selTrack.solo ?? false}
+                title={
+                  selTrack.solo
+                    ? `Clear solo on ${selTrack.label} — other lanes return to their own mute state`
+                    : `Solo ${selTrack.label} — other lanes go silent while any solo is on (saved with the project)`
+                }
+                data-testid="mini-track-solo"
+              >
+                <span>Solo</span>
+              </button>
+            )}
           </div>
           <p className="mini-inspector__track-hint">
             {selTrack.kind === 'audio'

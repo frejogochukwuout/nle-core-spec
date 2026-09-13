@@ -261,3 +261,15 @@ export function rippleShiftAfter(
     return next === c.start ? c : { ...c, start: next };
   });
 }
+
+/** R24-miniplus W5 (DESIGN-R24 D8): the ONE audibility selector — the
+ *  solo-in-place law: effectiveMute = muted || (anySolo && !solo). Every
+ *  surface (the lane dim, the track card, the future meters) reads THIS,
+ *  never the raw flags. With no solos anywhere it degenerates to the
+ *  R20 muted law (behavior-identical — the existing nets hold). */
+export function isTrackAudible(doc: Doc, trackId: string): boolean {
+  const track = doc.tracks.find((t) => t.id === trackId);
+  if (!track) return true;
+  const anySolo = doc.tracks.some((t) => t.solo === true);
+  return !(track.muted === true || (anySolo && track.solo !== true));
+}

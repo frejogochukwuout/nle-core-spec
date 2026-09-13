@@ -227,7 +227,7 @@ def _mini_scraped():
     if r is None:
         return False, err or "scrape failed"
     passed, total, files = r
-    return (passed == 441 and total == 441 and files == 10), f"scraped {passed}/{total} tests / {files} files (declared 441/10 — the R23 seal 355 + the R24-mini nets: 2 clip-box + 20 W0 + 19 W1 + 19 W2 + 13 W2-fix + 19 W3)"
+    return (passed == 445 and total == 445 and files == 10), f"scraped {passed}/{total} tests / {files} files (declared 445/10 — the R23 seal 355 + the R24-mini nets: 2 clip-box + 20 W0 + 19 W1 + 19 W2 + 13 W2-fix + 13 W3 + 4 W5)"
 check("mini corpus SCRAPED == declared (the count-discipline law, executed)", _mini_scraped, "scrape")
 
 def _inventory_math():
@@ -238,11 +238,11 @@ def _inventory_math():
     total_row = re.search(r"\*\*Total\*\*\s*\|\s*\*\*(\d+)\*\*\s*\|\s*\*\*(\d+)\*\*", inv)
     holds = next((int(t) for n, _, t in rows if n == "HOLDS-on-OT"), 0)
     authored = re.search(r"(\d+) tests across (\d+) GAP census\s*units", inv)
-    ok = (units == 149 and tests == 441
-          and total_row and int(total_row.group(1)) == 149 and int(total_row.group(2)) == 441
-          and authored and int(authored.group(1)) == 441 - holds and int(authored.group(2)) == 149 - 13)
+    ok = (units == 150 and tests == 445
+          and total_row and int(total_row.group(1)) == 150 and int(total_row.group(2)) == 445
+          and authored and int(authored.group(1)) == 445 - holds and int(authored.group(2)) == 150 - 13)
     return ok, f"units={units} tests={tests} holds={holds} authored={authored.groups() if authored else None}"
-check("LAW-NET-INVENTORY arithmetic parses + sums (149 units / 441 / authored=441−33)", _inventory_math, "census math")
+check("LAW-NET-INVENTORY arithmetic parses + sums (150 units / 445 / authored=445−33)", _inventory_math, "census math")
 
 # === J. COUNT CONSISTENCY (the R25 world) ======================================
 check("count consistency: engine 458 in 17+19+00; OT 536 in 17+19+00", lambda: (
@@ -253,8 +253,8 @@ check("OT count split carries 386+150 (the live-run split)", lambda: (
     "386" in specs[17] and "150" in specs[17], "split"))
 check("the app's 6-suite inventory in 17 (GluedShell 70 + audioService 40 + sceneBridge 25 + persistence 17 + deliver 15 + engineSeam 7)", lambda: (
     "GluedShell" in specs[17] and "engineSeam" in specs[17], "app suites"))
-check("mini count current (441) + variants 1521+ live", lambda: (
-    "441" in specs[18] and "1521" in s00, "mocks"))
+check("mini count current (445) + variants 1521+ live", lambda: (
+    "445" in specs[18] and "1521" in s00, "mocks"))
 
 # === K. THE RESIDUE CLASSES (pin spelling + stale sweeps) ==================
 check("no live R23 pin spellings (b8c6f88/222532c/494f6ff/85dcf57/70e99f0) outside lineage", lambda: (
@@ -440,7 +440,7 @@ def _variants_census():
                 s = line.strip()
                 if s.startswith("it(") or s.startswith("it ("):
                     blocks += 1
-    ok = ("1521+" in reg and "441" in reg and len(files) == 64 and blocks == 1773)
+    ok = ("1521+" in reg and "445" in reg and len(files) == 64 and blocks == 1773)
     return ok, f"{blocks} it-blocks / {len(files)} files (register: 1,773/64, canon 1521+)"
 check("the suite-count pins hold (variants 1521+ / mini 355) — the variants it-census re-derived (D35.2)", _variants_census, "suite pins")
 
