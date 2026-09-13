@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { TimelineToolbar } from './TimelineToolbar';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
-import { useUi } from '../../state/useUiStore';
+import { useUi, pageTimelineViewFor } from '../../state/useUiStore';
 
 /* R24-W1: the popover reads the variant context — the toolbar needs the
    provider stack now (renderShell, not renderPlain). */
@@ -28,7 +28,10 @@ const openViewOptions = () => {
   fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
   return screen.getByTestId('shell-menu-tl-view-options');
 };
-const compactItem = () => screen.getByTestId('shell-menu-tl-view-options-compact');
+/* R25-W6-C: the compact item is now a FOUR-OPTION radio group (off / video /
+   audio / all) — one probe per scope */
+const compactRadio = (id: 'off' | 'video' | 'audio' | 'all') =>
+  screen.getByTestId(`shell-menu-tl-view-options-compact-${id}`);
 
 describe('TimelineToolbar', () => {
   it('is a labelled toolbar with an 8-tool radio cluster (spec 18 §4.5 + R23-WA FX tool)', () => {
@@ -62,60 +65,69 @@ describe('TimelineToolbar', () => {
     act(() => { useUi.setState({ page: 'edit', tool: 'select', fxMode: false }); });
   });
 
-  /* R23-WB (D-B3/#94) → R24-W1 (A3-R4; issues #64/#62): the density law is
-     RE-HOMED into the ViewOptionsPopover's "Compact tracks"
-     menuitemcheckbox — the standalone toolbar button is RETIRED (pinned
-     below: the testid is gone + zero SlidersHorizontal/Rows3 in the source).
-     The checkbox state reads the ONE store resolver (honest — it reflects
-     the timeline actually rendered); the click writes the per-session
-     override, so 'auto' only survives until the user speaks. */
-  it('R24-W1: the Compact-tracks checkbox is honest per page (auto: checked on color, unchecked on edit) and writes the override — menu STAYS OPEN across flips', () => {
+  /* R23-WB (D-B3/#94) → R24-W1 (A3-R4) → R25-W6 (DESIGN-R25 §1 R3+R5 / §3
+     W6-A+W6-C; th_mtzp94ms + th_mtzors21 — RE-PINNED): the density law is
+     the ViewOptionsPopover's "Compact tracks" FOUR-OPTION RADIO GROUP now
+     (off / video / audio / all — the reviewer's hybrid scopes). The radio
+     state reads the ONE store resolver (honest — it reflects the timeline
+     actually rendered); the click writes the ACTIVE PAGE's entry (the
+     per-page memory — no global override exists anymore). */
+  it('R25-W6 RE-PIN: the Compact-tracks radio group is honest per page and writes the ACTIVE PAGE\'s entry — menu STAYS OPEN across flips', () => {
     boot({ page: 'edit' });
     openViewOptions();
-    expect(compactItem()).toHaveAttribute('role', 'menuitemcheckbox');
-    expect(compactItem()).toHaveAttribute('aria-checked', 'false');
-    expect(store().timelineCompact).toBe('auto');
-    fireEvent.click(compactItem());
-    expect(store().timelineCompact).toBe('on'); // the user's word overrides 'auto'
-    expect(compactItem()).toHaveAttribute('aria-checked', 'true');
-    // the checkbox KEEPS the menu open — flip/flip-back needs no reopen
-    fireEvent.click(compactItem());
-    expect(store().timelineCompact).toBe('off');
-    expect(compactItem()).toHaveAttribute('aria-checked', 'false');
-    fireEvent.click(compactItem());
-    expect(store().timelineCompact).toBe('on');
-    useUi.setState({ page: 'edit', timelineCompact: 'auto' });
+    for (const id of ['off', 'video', 'audio', 'all'] as const) {
+      expect(compactRadio(id)).toHaveAttribute('role', 'menuitemradio');
+    }
+    // edit's own default: 'off' — the radio honestly reads it
+    expect(compactRadio('off')).toHaveAttribute('aria-checked', 'true');
+    expect(compactRadio('all')).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(compactRadio('video'));
+    expect(store().pageTimelineView.edit.compact).toBe('video');
+    expect(compactRadio('video')).toHaveAttribute('aria-checked', 'true');
+    // the group KEEPS the menu open — flip/flip-back needs no reopen
+    fireEvent.click(compactRadio('audio'));
+    expect(store().pageTimelineView.edit.compact).toBe('audio');
+    fireEvent.click(compactRadio('all'));
+    expect(store().pageTimelineView.edit.compact).toBe('all');
+    fireEvent.click(compactRadio('off'));
+    expect(store().pageTimelineView.edit.compact).toBe('off');
+    expect(compactRadio('off')).toHaveAttribute('aria-checked', 'true');
+    // view state — never a history entry
+    expect(store().past).toHaveLength(0);
   });
 
-  it('R24-W1: the color page auto-resolves compact — the checkbox boots checked and flips the strip ↔ full tracks', () => {
-    boot({ page: 'color' });
+  it('R25-W6 RE-PIN: the audio page boots compact-VIDEO (the reviewer\'s ask) — the radio honestly reads "Video"', () => {
+    boot({ page: 'audio' });
     openViewOptions();
-    expect(compactItem()).toHaveAttribute('aria-checked', 'true'); // auto → compact on color
-    fireEvent.click(compactItem());
-    expect(store().timelineCompact).toBe('off');
-    expect(compactItem()).toHaveAttribute('aria-checked', 'false');
-    useUi.setState({ page: 'edit', timelineCompact: 'auto' });
+    expect(compactRadio('video')).toHaveAttribute('aria-checked', 'true'); // the seeded default
+    expect(compactRadio('off')).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(compactRadio('off'));
+    expect(store().pageTimelineView.audio.compact).toBe('off');
+    expect(compactRadio('off')).toHaveAttribute('aria-checked', 'true');
   });
 
-  /* R23-FIX (review-sweep R-b, R3-P2#3 — RE-PINNED): the Compact-tracks
-     item is DOM-ABSENT on fx (the FX page forces the full Timeline; a
-     checkbox there would advertise a compact strip the page can never
-     render). */
-  it('R24-W1: the Compact-tracks item renders on edit/color/audio/deliver and is DOM-ABSENT on fx', () => {
+  /* R23-FIX (review-sweep R-b, R3-P2#3 — RE-PINNED R25-W6): the Compact-tracks
+     GROUP is DOM-ABSENT on fx (the FX page forces the full Timeline; radios
+     there would advertise a compact the page can never render). */
+  it('R25-W6 RE-PIN: the Compact-tracks group renders on edit/color/audio/deliver and is DOM-ABSENT on fx', () => {
     for (const p of ['edit', 'color', 'audio', 'deliver'] as const) {
       const { unmount } = boot({ page: p });
       openViewOptions();
-      expect(compactItem()).toBeInTheDocument();
+      expect(compactRadio('off')).toBeInTheDocument();
       fireEvent.keyDown(screen.getByTestId('shell-menu-tl-view-options'), { key: 'Escape' });
       unmount();
     }
-    // fx: DOM-absent — the resolver returns false on fx, no control may claim otherwise
+    // fx: DOM-absent — the resolver returns 'off' on fx, no control may claim otherwise
     const { unmount } = boot({ page: 'fx' });
     openViewOptions();
-    expect(screen.queryByTestId('shell-menu-tl-view-options-compact')).toBeNull();
-    expect(screen.queryByRole('menuitemcheckbox', { name: 'Compact tracks' })).toBeNull();
+    for (const id of ['off', 'video', 'audio', 'all'] as const) {
+      expect(screen.queryByTestId(`shell-menu-tl-view-options-compact-${id}`)).toBeNull();
+    }
+    expect(screen.queryByRole('group', { name: 'Compact tracks' })).toBeNull();
+    // the clip-style + waveforms items stay (only the compact group is fx-absent)
+    expect(screen.getByTestId('shell-menu-tl-view-options-clip-filmstrip')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-menu-tl-view-options-waveforms')).toBeInTheDocument();
     unmount();
-    useUi.setState({ page: 'edit', timelineCompact: 'auto' });
   });
 
   /* R24-W1: the RETIREMENT pins — the standalone density button's testid +
@@ -355,8 +367,12 @@ describe('R24-W1 (A3-R4/#64): the ViewOptionsPopover — APG menu grammar', () =
     expect(opener()).toHaveAttribute('aria-expanded', 'true');
     // NO toast — the popover IS the surface now
     expect(store().toasts).toHaveLength(0);
-    // the items are menuitem-family roles, in DOM order
-    expect(compactItem()).toHaveAttribute('role', 'menuitemcheckbox');
+    // the items are menuitem-family roles, in DOM order (R25-W6-C: the
+    // compact group is four menuitemradio items)
+    expect(compactRadio('off')).toHaveAttribute('role', 'menuitemradio');
+    expect(compactRadio('video')).toHaveAttribute('role', 'menuitemradio');
+    expect(compactRadio('audio')).toHaveAttribute('role', 'menuitemradio');
+    expect(compactRadio('all')).toHaveAttribute('role', 'menuitemradio');
     expect(screen.getByTestId('shell-menu-tl-view-options-clip-filmstrip')).toHaveAttribute('role', 'menuitemradio');
     expect(screen.getByTestId('shell-menu-tl-view-options-clip-blocks')).toHaveAttribute('role', 'menuitemradio');
     expect(screen.getByTestId('shell-menu-tl-view-options-waveforms')).toHaveAttribute('role', 'menuitemcheckbox');
@@ -367,12 +383,12 @@ describe('R24-W1 (A3-R4/#64): the ViewOptionsPopover — APG menu grammar', () =
     opener().focus();
     fireEvent.keyDown(opener(), { key: 'F10', shiftKey: true });
     expect(menu()).toBeInTheDocument();
-    expect(compactItem()).toHaveFocus(); // first item, enabled
+    expect(compactRadio('off')).toHaveFocus(); // first item, enabled
     fireEvent.keyDown(menu(), { key: 'Escape' });
     // ArrowDown opens as well (the APG menu-button route)
     fireEvent.keyDown(opener(), { key: 'ArrowDown' });
     expect(menu()).toBeInTheDocument();
-    expect(compactItem()).toHaveFocus();
+    expect(compactRadio('off')).toHaveFocus();
   });
 
   it('Escape closes with focus returning to the opener; the outside click closes too', () => {
@@ -394,103 +410,131 @@ describe('R24-W1 (A3-R4/#64): the ViewOptionsPopover — APG menu grammar', () =
     fireEvent.keyDown(menu(), { key: 'Tab' });
     expect(screen.queryByTestId('shell-menu-tl-view-options')).toBeNull();
     expect(opener()).toHaveFocus();
-    // Enter on the focused (compact) item activates it natively — buttons
-    // activate on Enter/Space; the menu does not intercept those keys
+    // Enter on the focused item activates it natively — buttons activate on
+    // Enter/Space; the menu does not intercept those keys (R25-W6: rove to
+    // the "all" radio first so the activation carries a real write)
     fireEvent.click(opener());
-    fireEvent.keyDown(compactItem(), { key: 'Enter' });
-    expect(store().timelineCompact).toBe('on');
-    useUi.setState({ page: 'edit', timelineCompact: 'auto' });
+    compactRadio('all').focus();
+    fireEvent.keyDown(compactRadio('all'), { key: 'Enter' });
+    expect(store().pageTimelineView.edit.compact).toBe('all');
+    // view state — no history mint on the Enter activation either
+    expect(store().past).toHaveLength(0);
   });
 
-  it('↑/↓ rove with wrap and SKIP aria-disabled items (compact disables waveforms)', () => {
-    boot({ page: 'edit', timelineCompact: 'on' }); // compact → waveforms disabled
+  it('↑/↓ rove with wrap and SKIP aria-disabled items (audio-compacted disables waveforms — the W6-C per-kind law)', () => {
+    // scope 'audio' compacts the AUDIO kind → waveforms disabled (scope 'video'
+    // would keep them enabled — the per-kind re-derivation)
+    boot({ page: 'edit', pageTimelineView: pageTimelineViewFor('edit', { compact: 'audio' }) });
     fireEvent.click(opener());
     const wave = screen.getByTestId('shell-menu-tl-view-options-waveforms');
     expect(wave).toHaveAttribute('aria-disabled', 'true'); // honest disabled
-    expect(wave).toHaveAttribute('data-tip', 'Not available while tracks are compact');
-    // rove: compact → filmstrip → block → (waveforms SKIPPED) → wraps to compact
+    expect(wave).toHaveAttribute('data-tip', 'Not available while audio tracks are compact');
+    // rove: compact-off → video → audio → all → filmstrip → block →
+    // (waveforms SKIPPED) → wraps to compact-off
+    fireEvent.keyDown(menu(), { key: 'ArrowDown' });
+    expect(compactRadio('video')).toHaveFocus();
+    fireEvent.keyDown(menu(), { key: 'ArrowDown' });
+    expect(compactRadio('audio')).toHaveFocus();
+    fireEvent.keyDown(menu(), { key: 'ArrowDown' });
+    expect(compactRadio('all')).toHaveFocus();
     fireEvent.keyDown(menu(), { key: 'ArrowDown' });
     expect(screen.getByTestId('shell-menu-tl-view-options-clip-filmstrip')).toHaveFocus();
     fireEvent.keyDown(menu(), { key: 'ArrowDown' });
     expect(screen.getByTestId('shell-menu-tl-view-options-clip-blocks')).toHaveFocus();
     fireEvent.keyDown(menu(), { key: 'ArrowDown' }); // skips the disabled waveforms, wraps
-    expect(compactItem()).toHaveFocus();
+    expect(compactRadio('off')).toHaveFocus();
     fireEvent.keyDown(menu(), { key: 'ArrowUp' }); // ← wraps back, skipping waveforms
     expect(screen.getByTestId('shell-menu-tl-view-options-clip-blocks')).toHaveFocus();
-    // a disabled item is inert — no store write on click
+    // a disabled item is inert — no gate write, no doc write on click
     fireEvent.click(wave);
     expect(store().past).toHaveLength(0);
-    expect(track('tr-audio-1').waveform).toBeUndefined(); // untouched
-    useUi.setState({ page: 'edit', timelineCompact: 'auto' });
+    expect(store().pageTimelineView.edit.waveforms).toBe(true); // the gate untouched
+    expect(track('tr-audio-1').waveform).toBeUndefined(); // the doc untouched
+  });
+
+  it('R25-W6-C per-kind derivation: scope "video" keeps the waveforms option ENABLED (only the audio kind\'s compaction kills it)', () => {
+    boot({ page: 'edit', pageTimelineView: pageTimelineViewFor('edit', { compact: 'video' }) });
+    fireEvent.click(opener());
+    const wave = screen.getByTestId('shell-menu-tl-view-options-waveforms');
+    expect(wave).not.toHaveAttribute('aria-disabled');
+    expect(wave).toHaveAttribute('data-tip', 'Show waveform lanes on every audio track');
   });
 });
 
-describe('R24-W1 (A3-R4/#62): the ViewOptionsPopover items — clip style + waveforms', () => {
-  it('Clip style: a menuitemradio pair riding the VARIANT context — ONE source with the debug overlay (aria-checked follows clipStyle)', () => {
+describe('R24-W1 (A3-R4/#62) → R25-W6-A (th_mtzp94ms): the ViewOptionsPopover items — clip style + waveforms (per-page)', () => {
+  it('R25-W6-A RE-PIN: Clip style — the pair reads the PAGE entry ?? variant and writes the page\'s own memory (the VARIANT stays the global default)', () => {
     boot({ page: 'edit' });
     fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
     const filmstrip = screen.getByTestId('shell-menu-tl-view-options-clip-filmstrip');
     const block = screen.getByTestId('shell-menu-tl-view-options-clip-blocks');
-    expect(filmstrip).toHaveAttribute('aria-checked', 'true'); // the variant default
+    expect(filmstrip).toHaveAttribute('aria-checked', 'true'); // null entry → the variant default
     expect(block).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(block);
     expect(block).toHaveAttribute('aria-checked', 'true');
     expect(filmstrip).toHaveAttribute('aria-checked', 'false');
-    // the pair rides the VariantProvider's context — the same writer the
-    // debug overlay uses, so the shell root's data-clipstyle follows
-    expect(document.querySelector('[data-clipstyle]')!.getAttribute('data-clipstyle')).toBe('blocks');
+    // the write is the PAGE's memory (edit's entry) — the R24-W1 "ONE source
+    // with the debug overlay" law is RE-DERIVED per-page: the VARIANT is the
+    // global default (null entries inherit it), the entry is this page's
+    // own override, so the shell root's data-clipstyle still follows the
+    // VARIANT (filmstrip — untouched by the page write)
+    expect(store().pageTimelineView.edit.clipStyle).toBe('blocks');
+    expect(document.querySelector('[data-clipstyle]')!.getAttribute('data-clipstyle')).toBe('filmstrip');
     // the radio is a setting: the menu STAYS OPEN
     expect(screen.getByTestId('shell-menu-tl-view-options')).toBeInTheDocument();
     fireEvent.click(filmstrip);
     expect(filmstrip).toHaveAttribute('aria-checked', 'true');
-    // containment: the provider persists to localStorage + the hash — scrub
-    // both so no later render in this file boots with a leaked variant
-    window.localStorage.removeItem('nle-shell-variants:v1');
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    expect(store().pageTimelineView.edit.clipStyle).toBe('filmstrip');
   });
 
-  it('Audio waveforms: the §4.7 convergence — all-on boots, ONE batch write converges every flag, a mixed state converges to true, a converged click mints nothing', () => {
+  it('R25-W6-A RE-PIN: Audio waveforms — the view GATE + the §4.7 doc flags compose; OFF is the gate alone (no history, doc untouched — the per-page isolation), ON converges through the W5d batch', () => {
     boot({ page: 'edit' });
     fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
     const wave = screen.getByTestId('shell-menu-tl-view-options-waveforms');
-    expect(wave).toHaveAttribute('aria-checked', 'true'); // undefined boots as ON (the §4.7 fixture quirk)
-    expect(wave).not.toHaveAttribute('aria-disabled'); // edit auto = full tracks → enabled
+    expect(wave).toHaveAttribute('aria-checked', 'true'); // gate on + undefined flags boot as ON (the §4.7 fixture quirk)
+    expect(wave).not.toHaveAttribute('aria-disabled'); // edit 'off' scope → audio full → enabled
+    // OFF = the page's view gate ONLY (view state — no history mint, the doc
+    // flags NEVER carry a page's off: that was the global-atom leak the
+    // per-page memory replaces)
     fireEvent.click(wave);
-    expect(track('tr-audio-1').waveform).toBe(false); // converged
-    expect(track('tr-audio-2').waveform).toBe(false);
+    expect(store().pageTimelineView.edit.waveforms).toBe(false);
     expect(wave).toHaveAttribute('aria-checked', 'false');
-    // R24-W5d (W1's debt paid): the convergence is ONE withHistory batch
-    // write (setAllTrackWaveforms) — the old per-track flip walk minted 4
-    // entries (2 per undefined track on the undefined→true→false double
-    // walk); undo now fully reverts in ONE step. (The checkbox's target is
-    // always !waveformsOn — a real change by construction, so the popover
-    // itself can never hit the batch's converged no-op arm; THAT arm is
-    // pinned at the store level in useUiStore.test.ts.)
+    expect(store().past).toHaveLength(0);
+    expect(track('tr-audio-1').waveform).toBeUndefined(); // the doc untouched
+    expect(track('tr-audio-2').waveform).toBeUndefined();
+    // ON = the gate + the W5d batch convergence (ONE undoable write — "every
+    // audio track" is true after it; the undefined→true converge mints it)
+    fireEvent.click(wave);
+    expect(store().pageTimelineView.edit.waveforms).toBe(true);
+    expect(track('tr-audio-1').waveform).toBe(true);
+    expect(track('tr-audio-2').waveform).toBe(true);
+    expect(wave).toHaveAttribute('aria-checked', 'true');
     expect(store().past).toHaveLength(1);
-    // mixed state: A2 back on, A1 off → checked=false → one click converges ALL to true
+    // mixed state: A2 off, A1 on → checked=false (the rendered convergence) →
+    // one click converges ALL to true — ONE more batch entry
     act(() => { useUi.getState().toggleTrackCmd('sc-1', 'tr-audio-2', 'waveform'); });
+    expect(wave).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(wave);
     expect(track('tr-audio-1').waveform).toBe(true);
     expect(track('tr-audio-2').waveform).toBe(true);
     expect(wave).toHaveAttribute('aria-checked', 'true');
-    expect(store().past).toHaveLength(3); // batch + the manual A2 flip + the re-converge batch — still ONE per convergence
+    expect(store().past).toHaveLength(3); // the first batch + the manual A2 flip + the re-converge batch — still ONE per convergence
     // a FRESH track (A3) boots with addTrack's OWN law: explicit
-    // waveform=true (the undefined state is a FIXTURE-only quirk — the
-    // §4.7 fixture tracks boot undefined; addTrack never does). With all
-    // three explicit-true, the checkbox reads checked and one click
-    // converges every flag to false — A3 flips once like any explicit
-    // track (no 2-step undefined walk)
+    // waveform=true (the undefined state is a FIXTURE-only quirk). With all
+    // three explicit-true the checkbox reads checked; the OFF click is the
+    // gate alone (A3's flag STAYS true — the per-page isolation law)
     act(() => { useUi.getState().addTrack('audio'); });
     // re-find after every write: withHistory clones the scenes graph, so a
     // captured track object reference would go stale (the clone-on-write law)
     const a3 = () => store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.badge === 'A3')!;
     expect(a3().waveform).toBe(true); // the addTrack seed
     expect(wave).toHaveAttribute('aria-checked', 'true');
-    fireEvent.click(wave); // converge all OFF
-    expect(a3().waveform).toBe(false);
-    expect(track('tr-audio-1').waveform).toBe(false);
-    expect(track('tr-audio-2').waveform).toBe(false);
+    fireEvent.click(wave); // the gate OFF — flags stay
+    expect(store().pageTimelineView.edit.waveforms).toBe(false);
+    expect(a3().waveform).toBe(true);
+    expect(track('tr-audio-1').waveform).toBe(true);
+    expect(track('tr-audio-2').waveform).toBe(true);
     expect(wave).toHaveAttribute('aria-checked', 'false');
+    expect(store().past).toHaveLength(4); // 2 batches + the A2 flip + the addTrack — the gate OFF minted none
   });
 });
 

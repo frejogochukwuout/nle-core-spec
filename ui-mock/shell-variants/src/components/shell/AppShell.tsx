@@ -280,8 +280,13 @@ function AppShellInner() {
 
   const mainBodyUserSet = useUi((s) => s.mainBodyUserSet);
   const inspectorWUserSet = useUi((s) => s.inspectorWUserSet);
-  /* R23-WB (D-B3): the density resolution — ONE store resolver shared with
-     the TimelineToolbar's toggle (the honest aria-pressed law). */
+  /* R23-WB (D-B3) → R25-W6 (W6-A/W6-C): the density resolution — ONE store
+     resolver shared with the ViewOptionsPopover's radio group. W6: 'all'
+     (the frozen strip) is the only scope that compacts the whole timeline
+     area; 'off' and the hybrid 'video'/'audio' scopes mount the FULL
+     Timeline (per-kind heights inside it). The color/deliver auto-strip
+     defaults died with the per-page map (each page's own default = the
+     honest full timeline; the strip is an explicit remembered choice). */
   const compact = useUi((s) => resolveTimelineCompact(s));
 
   /* R23-WC (DESIGN-R23 D-C2, issue #99 + Part IX ruling 10 — the

@@ -13,7 +13,7 @@
    shift/ctrl/meta = live-merge ratchet, buttons-mask cancel). */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useUi, trackHeights, mintTrackIds } from '../../state/useUiStore';
+import { useUi, trackHeights, mintTrackIds, resolveTrackClipStyle } from '../../state/useUiStore';
 import { useVariant } from '../debug/VariantProvider';
 import { sceneDuration, mediaById, findElement, effectiveFade, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { tc, snapToFrame } from '../../lib/timecode';
@@ -720,6 +720,15 @@ export function Timeline() {
   const audioLaneBoost = useUi((s) => s.audioLaneBoost);
   const trackHeightPref = useUi((s) => s.trackHeightPref);
   const trackHeightOverrides = useUi((s) => s.trackHeightOverrides);
+  /* R25-W6-A/W6-C (th_mtzp94ms + th_mtzors21): the per-page view map + page
+     drive the per-KIND clip-style resolution (the ONE store resolver —
+     compacted kinds resolve 'blocks', the others the page's style or the
+     live variant default). Two separate selectors: a merged object would
+     mint a fresh reference per call and loop useSyncExternalStore. */
+  const tlPage = useUi((s) => s.page);
+  const tlView = useUi((s) => s.pageTimelineView);
+  const trackClipStyleOf = (kind: TrackJSON['kind']) =>
+    resolveTrackClipStyle({ page: tlPage, pageTimelineView: tlView }, kind, variant.clipStyle);
   /* R20-W5 (thread #58 / D1.5, gap C57): laneHeight per TRACK. Composition
      (timeline-cluster thread-4 §4b, binding): explicit override REPLACES the
      pref'd auto size for that track, then audioLaneBoost still transforms
@@ -732,8 +741,10 @@ export function Timeline() {
   const laneHeightOf = (trackId: string, kind: TrackJSON['kind']): number => {
     /* R19 caption lane (gap C34): 32px Sub-lane (reference §2.5 — the 24px
        parchment chips + 4px insets); filmstrip/blocks kind heights apply to
-       every other kind. */
-    const base = kind === 'caption' ? 32 : trackHeights(kind, variant.clipStyle);
+       every other kind. R25-W6-C: the kind's style is the per-kind resolver
+       — a kind the compact scope compacts gets the BLOCKS heights (the
+       hybrid compact scopes); the others the page's own style. */
+    const base = kind === 'caption' ? 32 : trackHeights(kind, trackClipStyleOf(kind));
     /* spec 18 §4.9 Height pref (track-header menu): compact = 60% /
        tall = 140% of the kind-based auto height (normal = auto, the
        default), min 24px, rounded to px. B3 registration: the state-home

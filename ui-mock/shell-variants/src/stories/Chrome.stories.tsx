@@ -13,7 +13,7 @@ import { AppDock } from '../components/shell/AppDock';
 import { TimelineToolbar } from '../components/timeline/TimelineToolbar';
 import { SceneTabs } from '../components/timeline/SceneTabs';
 import { TrackHeader } from '../components/timeline/TrackHeader';
-import { trackHeights } from '../state/useUiStore';
+import { trackHeights, pageTimelineViewFor } from '../state/useUiStore';
 import { project, type TrackJSON } from '../lib/mockData';
 import { FullShell, StoreBoot, MeterLevels, type UiPatch } from './decorators';
 
@@ -173,15 +173,15 @@ export const TimelineToolbarMasterMuted: StoryObj = {
   render: () => <TlToolbarStory patch={{ masterMuted: true }} />,
 };
 
-/** R23-WB (D-B3/#94): the DENSITY toggle in its pressed state — compact
- *  strip ↔ full tracks, on every page EXCEPT fx (R23-FIX R-b: the FX page
- *  forces the full Timeline — the toggle is DOM-absent there; this story
- *  boots the EDIT page). Reviews the toggled-state contrast of the new icon
- *  button (the strip it mounts has its own Color stories).
+/** R23-WB (D-B3/#94) → R25-W6 (W6-A/W6-C): the density radio group in its
+ *  ALL state — the compact strip on every page EXCEPT fx (R23-FIX R-b: the
+ *  FX page forces the full Timeline — the group is DOM-absent there; this
+ *  story boots the EDIT page). The per-page map carries the scope (the
+ *  patch helper rebuilds the record whole — UiPatch is shallow).
  */
 export const TimelineToolbarDensityOn: StoryObj = {
-  name: 'Timeline toolbar — density toggle on (compact)',
-  render: () => <TlToolbarStory patch={{ page: 'edit', timelineCompact: 'on' }} />,
+  name: 'Timeline toolbar — density all (the compact strip)',
+  render: () => <TlToolbarStory patch={{ page: 'edit', pageTimelineView: pageTimelineViewFor('edit', { compact: 'all' }) }} />,
 };
 
 /* ---- R15 T1: the zoom cluster against the DYNAMIC minimum (spec-05 §5.2) ---

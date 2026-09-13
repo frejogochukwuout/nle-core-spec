@@ -18,7 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
-import { useVariantClipStyle } from '../../state/variantHooks';
+import { useTrackClipStyle } from '../../state/variantHooks';
 import { mediaById, findElement, EFFECT_DEFS, TRANSITION_PRESENTATIONS, effectiveFade, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc, clamp } from '../../lib/timecode';
 import { DRAG_THRESHOLD_PX } from '../../lib/pixel';
@@ -468,7 +468,15 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
 }
 
 export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, previewSuppressed, insertPreviewShift }: ClipProps) {
-  const clipStyle = useVariantClipStyle();
+  /* R25-W6-A/W6-C: the per-kind clip style — the active page's entry
+     (compacted kinds resolve 'blocks' — the hybrid compact scopes), else
+     the page's memory, else the live variant default. ONE resolver seam
+     (store's resolveTrackClipStyle, via the variantHooks bridge).
+     R25-W6-A: the page's waveform VIEW GATE — the rendered lane = the
+     per-track §4.7 doc flag AND this gate (a page's off never touches the
+     doc; the popover's ON path converges the flags). */
+  const clipStyle = useTrackClipStyle(track.kind);
+  const pageWaveforms = useUi((s) => s.pageTimelineView[s.page].waveforms);
   const tool = useUi((s) => s.tool);
   const selection = useUi((s) => s.selection);
   const selectElement = useUi((s) => s.selectElement);
@@ -1169,7 +1177,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
        write it; `waveform === false` renders the FLAT LANE (gradient + name,
        no strip; undefined/true keep the strip — the fixture's undefined
        boots as ON). */
-    const waveformOn = track.waveform !== false;
+    const waveformOn = track.waveform !== false && pageWaveforms;
     const barCount = Math.max(1, Math.min(600, Math.floor(geo.width / 4)));
     const bars = waveformOn ? getWaveform(el.mediaId ?? el.id, barCount, { ramp: CLIP_WAVEFORM_RAMP }) : [];
     const h = laneHeight - 12;

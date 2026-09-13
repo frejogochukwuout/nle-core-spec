@@ -13,7 +13,7 @@ import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
 import { CheatSheet } from './CheatSheet';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
-import { useUi } from '../../state/useUiStore';
+import { useUi, pageTimelineViewFor } from '../../state/useUiStore';
 import { useDeliverView } from '../../state/deliverViewStore';
 
 /** 1280×800 host (§3.2 minimum) — jsdom ignores geometry, but the size keeps
@@ -201,16 +201,19 @@ describe('mixer dock (design doc v2.2 §4 — side by side with the lanes)', () 
 });
 
 describe('page switching via the AppDock (spec 18 §4.8)', () => {
-  it('Edit → Color: the R23-WB composition — viewer dominant, inspector = color tabs, compact timeline + Stills dock (issues #90–#97)', async () => {
+  it('Edit → Color: the R23-WB composition — viewer dominant, inspector = color tabs, full timeline + Stills dock (issues #90–#97; RE-PINNED R25-W6-A: color owns a NOT-compact default now)', async () => {
     const user = userEvent.setup();
     renderAppShell();
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     await user.click(screen.getByTestId('shell-dock-page-color'));
     expect(store().page).toBe('color');
-    // timeline area = the compact strip under the D-B3 density law (auto → compact on color)
-    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
-    expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
+    /* RE-PIN (R25-W6-A / th_mtzp94ms — the per-page memory law SUPERSEDES the
+       D-B3 auto heuristic): color boots the FULL Timeline (its own default —
+       the W6-A pin "Color shows its own default (not compact)"); the strip
+       is an explicit per-page choice (pinned in the W6 density law below) */
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
     // rail = the ColorInspector (the ONE grading surface, tabs under this panel)
     expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
     expect(screen.getByRole('tablist', { name: 'Color inspector tools' })).toBeInTheDocument();
@@ -242,13 +245,15 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     expect(screen.queryByTestId('mixer-dock-full')).not.toBeInTheDocument();
     /* the console-row TAB STRIP renders on color (26px, the house tab
        grammar): [Timeline | Nodes | Scopes], Timeline the default — the
-       console row is exactly the pre-W3 layout while it is active */
+       console row is exactly the pre-W3 layout while it is active.
+       RE-PIN (R25-W6-A): the Timeline tab carries the FULL Timeline on
+       color's default (the strip is a per-page choice now) */
     const strip = screen.getByTestId('shell-console-tabs');
     expect(strip).toBeInTheDocument();
     expect(screen.getByTestId('shell-console-tab-timeline')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('shell-console-tab-nodes')).toBeInTheDocument();
     expect(screen.getByTestId('shell-console-tab-scopes')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     /* RE-PIN (R25-W3/A2 — the R24-W2 scopes law is DEAD): the old pin
        opened the ~160px pane UNDER THE VIEWER via colorScopesState; the
        under-viewer pane is DELETED (the R24-#68 placement superseded by
@@ -263,7 +268,7 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     // hides (the reviewer's "it takes the same space" ruling)
     expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
     expect(screen.getByTestId('shell-color-scopes-console')).toBeInTheDocument();
-    expect(screen.queryByTestId('shell-timeline-compact')).toBeNull();
+    expect(screen.queryByTestId('shell-timeline')).toBeNull();
     expect(screen.getByTestId('shell-viewer')).toBeInTheDocument(); // region [2] is viewer-led, always
     expect(screen.getByTestId('shell-color-scopes-tab-waveform')).toHaveAttribute('aria-selected', 'true');
     await user.click(screen.getByTestId('shell-color-scopes-tab-vectorscope'));
@@ -274,7 +279,7 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     await user.click(screen.getByTestId('shell-console-tab-timeline'));
     expect(store().past.length).toBe(history);
     // back on the Timeline tab the console row is EXACTLY the pre-W3 layout
-    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-color-scopes')).toBeNull();
     // the nodes console: the toggle mounts the graph as the console row's
     // NODES TAB (A2-R1's "never the viewer swap" carries over) — the header
@@ -288,11 +293,11 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     expect(screen.getByTestId('shell-color-nodegraph')).toBeInTheDocument();
     expect(screen.getByTestId('shell-color-nodeviewer-target')).toHaveTextContent('Marina interview');
     expect(screen.getByTestId('shell-viewer')).toBeInTheDocument(); // #67: the preview stays live while grading
-    expect(screen.queryByTestId('shell-timeline-compact')).toBeNull(); // the tab panel takes the row
+    expect(screen.queryByTestId('shell-timeline')).toBeNull(); // the tab panel takes the row
     await user.click(screen.getByTestId('shell-color-nodeviewer-close'));
     expect(screen.queryByTestId('shell-color-nodeviewer')).toBeNull();
     expect(screen.getByTestId('shell-viewer')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument(); // × returned to the Timeline tab
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument(); // × returned to the Timeline tab
     // leaving color restores the standard timeline + resets the console tab
     await user.click(screen.getByTestId('shell-dock-page-edit'));
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
@@ -328,7 +333,10 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
       fireEvent(window, new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true }));
     }
     expect(document.activeElement?.contains(screen.getByTestId('shell-color-nodeviewer'))).toBe(true);
-    // the Nodes tab hides the timeline (the tab panel takes the row — R25-W3)
+    // the Nodes tab hides the timeline (the tab panel takes the row — R25-W3;
+    // RE-PIN R25-W6-A: the Timeline tab's content is the FULL Timeline on
+    // color's default now — the hiding assertion follows it)
+    expect(screen.queryByTestId('shell-timeline')).toBeNull();
     expect(screen.queryByTestId('shell-timeline-compact')).toBeNull();
   });
 
@@ -356,16 +364,14 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     expect(screen.getByTestId('shell-deliver')).toBeInTheDocument();
     // leaving audio focus by any route resets the lane boost (design §3.3)
     expect(store().audioLaneBoost).toBe(false);
-    // D-B3: 'auto' resolves compact on deliver — R24-W4 (A3-R7, #71)
-    // supersedes R23-WF: the 22px read-only ruler is UNCONDITIONAL and the
-    // 32px RANGE BAND mounts below it (54px head stack) — no-ruler and
-    // no-range-clamp both answered; the mainbody takes deliver's 50%
-    // rebalance
-    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-timeline-compact-ruler')).toBeInTheDocument();
-    expect(document.querySelector('.mainbody')).toHaveStyle({ height: '50%' });
-    expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
+    /* RE-PIN (R25-W6-A — th_mtzp94ms): deliver boots the FULL Timeline now
+       (its own per-page default; the R23-WF D-F1 auto-strip + the 50%
+       rebalance are superseded by the per-page memory law — the strip is an
+       explicit remembered choice, pinned in the W6 density law below); the
+       export range stays readable in the W5 Export console tab */
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
+    expect(document.querySelector('.mainbody')).toHaveStyle({ height: '40%' });
     await user.click(screen.getByTestId('shell-dock-page-edit'));
     expect(store().page).toBe('edit');
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
@@ -373,140 +379,152 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
   });
 });
 
-describe('R23-WB (DESIGN-R23 D-B3, issue #94) → R24-W1: the timeline density law', () => {
+describe('R23-WB (D-B3, #94) → R24-W1 → R25-W6 (DESIGN-R25 §1 R3+R5 / §3 W6-A+W6-C): the per-page timeline density law', () => {
   const mainbody = () => document.querySelector('.mainbody') as HTMLElement;
   const mainbodyH = () => mainbody().style.height;
   /* R24-W1 (A3-R4): the standalone density button is RETIRED — density
-     drives through the ViewOptionsPopover's Compact-tracks
-     menuitemcheckbox now. The checkbox KEEPS the menu open, so repeat
-     flips never re-open. */
-  const openCompactMenu = async (user: ReturnType<typeof userEvent.setup>) => {
+     drives through the ViewOptionsPopover now. R25-W6-C: the binary
+     checkbox became a FOUR-OPTION menuitemradio group (off / video /
+     audio / all — the reviewer's hybrid scopes); the group KEEPS the menu
+     open, so repeat flips never re-open. */
+  const openMenu = async (user: ReturnType<typeof userEvent.setup>) => {
     if (!screen.queryByTestId('shell-menu-tl-view-options')) {
       await user.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
     }
-    return screen.getByTestId('shell-menu-tl-view-options-compact');
+    return screen.getByTestId('shell-menu-tl-view-options');
   };
-  const flipCompact = async (user: ReturnType<typeof userEvent.setup>) => {
-    await user.click(await openCompactMenu(user));
+  const scopeRadio = (id: 'off' | 'video' | 'audio' | 'all') =>
+    screen.getByTestId(`shell-menu-tl-view-options-compact-${id}`);
+  const setScope = async (user: ReturnType<typeof userEvent.setup>, id: 'off' | 'video' | 'audio' | 'all') => {
+    await openMenu(user);
+    await user.click(scopeRadio(id));
   };
 
-  it('color auto: compact strip + the 55% mainbody default (the tall-viewer color composition)', async () => {
+  it('RE-PIN (W6-A): color boots the FULL Timeline at 40% — the D-B3 auto-strip default is superseded; the "All" radio is the explicit strip (+ the 55% law it carries)', async () => {
     const user = userEvent.setup();
     renderAppShell();
     await user.click(screen.getByTestId('shell-dock-page-color'));
-    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
-    expect(mainbodyH()).toBe('55%');
-    // the Compact-tracks checkbox is present on EVERY page and honestly checked
-    expect(await openCompactMenu(user)).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('flipping color to FULL TRACKS drops the default mainbody to 40% (ruling 11 — the filmstrip needs lane room)', async () => {
-    const user = userEvent.setup();
-    renderAppShell();
-    await user.click(screen.getByTestId('shell-dock-page-color'));
-    await flipCompact(user);
-    // the override lands in the store; the FULL Timeline replaces the strip
-    expect(store().timelineCompact).toBe('off');
+    // the W6-A pin: Color's own default is NOT compact
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
-    expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
-    expect(screen.getByTestId('shell-menu-tl-view-options-compact')).toHaveAttribute('aria-checked', 'false');
     expect(mainbodyH()).toBe('40%');
-    // flipping back to compact restores the 55% default (the user never dragged)
-    // — the checkbox keeps the menu open, no re-open needed
-    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
+    await openMenu(user);
+    expect(scopeRadio('off')).toHaveAttribute('aria-checked', 'true');
+    expect(scopeRadio('all')).toHaveAttribute('aria-checked', 'false');
+    // the strip is one radio away: 'all' mounts it + the 55% tall-viewer default
+    await user.click(scopeRadio('all'));
+    expect(store().pageTimelineView.color.compact).toBe('all');
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(mainbodyH()).toBe('55%');
+    // and back: 'off' restores the full tracks + the 40% lane-room default
+    await user.click(scopeRadio('off'));
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(mainbodyH()).toBe('40%');
   });
 
-  it('the user-dragged mainBodyH ALWAYS wins over the density default (the mainBodyUserSet law)', async () => {
+  it('ruling 11 rides the strip either way: the user-dragged mainBodyH ALWAYS wins over the density default (the mainBodyUserSet law)', async () => {
     const user = userEvent.setup();
     renderAppShell({ page: 'color', mainBodyH: 500, mainBodyUserSet: true });
     expect(mainbodyH()).toBe('500px');
-    await flipCompact(user);
+    await setScope(user, 'all');
+    await setScope(user, 'off');
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     expect(mainbodyH()).toBe('500px'); // no density flip may steal the user's height
   });
 
-  it('compact is reachable on EDIT too (#94 — "allow to be used everywhere")', async () => {
+  it('compact is reachable on EDIT too (#94 — "allow to be used everywhere"): the All radio mounts the strip, edit keeps the 40% default', async () => {
     const user = userEvent.setup();
     renderAppShell();
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
-    expect(await openCompactMenu(user)).toHaveAttribute('aria-checked', 'false');
-    await flipCompact(user);
-    expect(store().timelineCompact).toBe('on');
+    await openMenu(user);
+    // edit's own default is 'off' — the radio honestly reads it
+    expect(scopeRadio('off')).toHaveAttribute('aria-checked', 'true');
+    await user.click(scopeRadio('all'));
+    expect(store().pageTimelineView.edit.compact).toBe('all');
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
     // the edit-page mainbody default stays 40% either way (only color carries the 55% compact law)
     expect(mainbodyH()).toBe('40%');
   });
 
-  it("'on'/'off' are per-session overrides: the user's word survives a page flip (auto does not)", async () => {
+  it('RE-PIN (W6-A / th_mtzp94ms — the reviewer\'s exact ask): the compact choice is remembered PER PAGE — edit\'s "All" never leaks into color, and switching back RESTORES it', async () => {
     const user = userEvent.setup();
-    renderAppShell({ page: 'color' });
-    await user.click(screen.getByTestId('shell-dock-page-edit'));
-    expect(store().timelineCompact).toBe('auto');
-    // edit auto → full; now the user forces compact and flips BACK to color:
-    await flipCompact(user);
-    expect(store().timelineCompact).toBe('on');
+    renderAppShell();
+    await setScope(user, 'all');
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    // edit → color: color shows its OWN default (not compact — full tracks)
     await user.click(screen.getByTestId('shell-dock-page-color'));
-    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument(); // the override holds
-    expect(store().timelineCompact).toBe('on');
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
+    expect(store().pageTimelineView.color.compact).toBe('off'); // color's entry untouched
+    // color → edit: the strip is RESTORED (the memory round-trip)
+    await user.click(screen.getByTestId('shell-dock-page-edit'));
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(store().pageTimelineView.edit.compact).toBe('all');
+  });
+
+  it('W6-C (th_mtzors21): the AUDIO page defaults to compact-video — the full Timeline mounts (not the strip) and the radio honestly reads "Video"', async () => {
+    const user = userEvent.setup();
+    renderAppShell();
+    await user.click(screen.getByTestId('shell-dock-page-audio'));
+    expect(store().page).toBe('audio');
+    expect(store().audioLaneBoost).toBe(true); // the dock tab enters focus
+    // audio tracks NOT compacted → the FULL Timeline (the hybrid scope, not the strip)
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
+    await openMenu(user);
+    expect(scopeRadio('video')).toHaveAttribute('aria-checked', 'true');
   });
 });
 
-/* ---------- R23-WF (DESIGN-R23 D-F1, #107) → R24-W4 (A3-R7): the deliver
-   composition ----------
-   The compact strip (auto → on, D-B3) carries the coexistence head stack —
-   the 22px read-only ruler + the 32px RANGE BAND below it (54px; the R23-WF
-   ruler-replacement is dead, #71's "no ruler" half answered on every page) —
-   and the mainbody takes deliver's 50% rebalance (the same while-compact
-   interaction law color's 55% rides, ruling 11's shape). The band's own
-   grammar is pinned in TimelineCompact.test. */
-describe('R23-WF (DESIGN-R23 D-F1, #107): the deliver composition', () => {
+/* ---------- R23-WF (DESIGN-R23 D-F1, #107) → R24-W4 (A3-R7) → R25-W6
+   (W6-A): the deliver composition ----------
+   RE-PINNED (R25-W6-A / th_mtzp94ms): the D-F1 auto-strip default is
+   SUPERSEDED by the per-page memory law — deliver boots the FULL Timeline
+   now; the strip (+ its coexistence head stack: the 22px read-only ruler +
+   the 32px RANGE BAND below it, 54px, #71's A3-R7 law) + the 50% mainbody
+   rebalance are the page's REMEMBERED choice (the "All" radio). The band's
+   own grammar is pinned in TimelineCompact.test. */
+describe('R23-WF (DESIGN-R23 D-F1, #107) → R25-W6: the deliver composition', () => {
   const mainbody = () => document.querySelector('.mainbody') as HTMLElement;
   const mainbodyH = () => mainbody().style.height;
+  const openMenu = async (user: ReturnType<typeof userEvent.setup>) => {
+    if (!screen.queryByTestId('shell-menu-tl-view-options')) {
+      await user.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+    }
+    return screen.getByTestId('shell-menu-tl-view-options-compact-all');
+  };
 
-  it('deliver auto: compact strip + the ruler+BAND coexistence head row + the 50% mainbody default', () => {
+  it('RE-PIN (W6-A): deliver boots the FULL Timeline at 40%; the "All" radio brings the strip + the ruler+BAND coexistence head row + the 50% mainbody default', async () => {
+    const user = userEvent.setup();
     renderAppShell({ page: 'deliver' });
     expect(screen.getByTestId('shell-deliver')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(mainbodyH()).toBe('40%');
+    await user.click(await openMenu(user));
+    expect(store().pageTimelineView.deliver.compact).toBe('all');
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
     // A3-R7 coexistence: the read-only ruler is UNCONDITIONAL (never replaced)
     expect(screen.getByTestId('shell-timeline-compact-ruler')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
     expect(mainbodyH()).toBe('50%');
-  });
-
-  it('flipping deliver to FULL TRACKS drops the default mainbody to 40% — the band goes WITH the strip (ruling 11, deliver-shaped)', async () => {
-    const user = userEvent.setup();
-    renderAppShell({ page: 'deliver' });
-    // R24-W1: density flips ride the ViewOptionsPopover now (the checkbox
-    // keeps the menu open, so the flip-back below needs no re-open)
-    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
-    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
-    expect(store().timelineCompact).toBe('off');
+    // back to 'off': the band goes WITH the strip (ruling 11, deliver-shaped)
+    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact-off'));
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
-    // the band is the compact strip's head row only — full tracks bring the
-    // full Ruler + its brackets back (the loop seam keeps every writer)
     expect(screen.queryByTestId('shell-deliver-range-band')).not.toBeInTheDocument();
     expect(mainbodyH()).toBe('40%');
-    // flipping back restores the band + the 50% default (the user never dragged)
-    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
-    expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
-    expect(mainbodyH()).toBe('50%');
   });
 
   it('the user-dragged mainBodyH ALWAYS wins on deliver too (the mainBodyUserSet law)', async () => {
     const user = userEvent.setup();
     renderAppShell({ page: 'deliver', mainBodyH: 500, mainBodyUserSet: true });
     expect(mainbodyH()).toBe('500px');
-    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
-    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
+    await user.click(await openMenu(user));
     expect(mainbodyH()).toBe('500px'); // no density flip may steal the user's height
   });
 
   it('the band is deliver-only: compact forced ON on edit keeps the ruler (no band leaks to other pages)', () => {
-    renderAppShell({ page: 'edit', timelineCompact: 'on' });
+    renderAppShell({ page: 'edit', pageTimelineView: pageTimelineViewFor('edit', { compact: 'all' }) });
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(screen.getByTestId('shell-timeline-compact-ruler')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-deliver-range-band')).not.toBeInTheDocument();
@@ -531,9 +549,10 @@ describe('R25-W5 (th_mtzp4arw): the deliver console row — the Export tab', () 
     // the deliver pair carries NO color tabs (nodes/scopes are color-only)
     expect(screen.queryByTestId('shell-console-tab-nodes')).toBeNull();
     expect(screen.queryByTestId('shell-console-tab-scopes')).toBeNull();
-    // the default row = the timeline (compact on deliver, D-B3) + the band
-    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
+    // RE-PIN (R25-W6-A): the default row = the FULL timeline (deliver's own
+    // per-page default); the band rides the strip (the "All" radio — pinned
+    // in the deliver composition describe above)
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-deliver-export-console')).toBeNull();
   });
 
@@ -546,6 +565,7 @@ describe('R25-W5 (th_mtzp4arw): the deliver console row — the Export tab', () 
     // the ACTIVE tab's panel takes the row: the export console mounts, the timeline hides
     expect(screen.getByTestId('shell-deliver-export-console')).toBeInTheDocument();
     expect(screen.getByTestId('shell-deliver-export-summary')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline')).toBeNull();
     expect(screen.queryByTestId('shell-timeline-compact')).toBeNull();
     expect(screen.queryByTestId('shell-deliver-range-band')).toBeNull();
     // the mainbody is untouched (the deliver page keeps its three regions)
@@ -567,10 +587,11 @@ describe('R25-W5 (th_mtzp4arw): the deliver console row — the Export tab', () 
     expect(panel.contains(screen.getByTestId('shell-deliver-range'))).toBe(true);
     // the read-only queue status strip (the W5 "what else makes sense")
     expect(screen.getByTestId('shell-deliver-export-queue-state')).toHaveTextContent('idle');
-    // back on the Timeline tab the row is the timeline again
+    // back on the Timeline tab the row is the timeline again (RE-PIN R25-W6-A:
+    // the full timeline — deliver's own default)
     await user.click(screen.getByTestId('shell-console-tab-timeline'));
     expect(screen.queryByTestId('shell-deliver-export-console')).toBeNull();
-    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
   });
 
   it('the strip is DELIVER+COLOR only: edit/audio/fx render no strip (a lone Timeline tab answers nothing)', () => {
@@ -1157,8 +1178,8 @@ describe('R23-FIX R-c: the left-dock slot is table-driven (audio + fx own it)', 
 });
 
 describe('R23-FIX R-b: the FX page forces the full Timeline', () => {
-  it("fx + the user's 'on' override STILL resolves full tracks (the resolver wins over the session word on fx)", () => {
-    renderAppShell({ page: 'fx', fxMode: true, timelineCompact: 'on' });
+  it("fx + a patched 'all' entry STILL resolves full tracks (the resolver wins over the page's entry on fx)", () => {
+    renderAppShell({ page: 'fx', fxMode: true, pageTimelineView: pageTimelineViewFor('fx', { compact: 'all' }) });
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
     // and the density toggle is DOM-absent there (no control claims the override)
