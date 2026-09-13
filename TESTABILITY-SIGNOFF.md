@@ -1,5 +1,9 @@
 # Final Sign-Off: Testability Refinement
 
+> **[2026-09-14 — the R27 re-stamp note.]** This signoff certifies the **R7 refinement process** (2026-08-22) — the scout→audit→revise cycles it describes completed, and its verdicts stand **as of that date**. It is **not the corpus's current seal**: the spec set has since grown to 21 numbered specs + `REFERENCE-REGISTER.md` + `IMPLEMENTATION-PLAN.md` (Decisions D8-D41; the fleet rounds R8-R27 at `audits/`), and the operative acceptance contract is the plan's **K-tier ladder** (K1 LANDED — the module nets green at the R27 pins: engine 748 / OT 632 / WDC 777 / nle-ui 690 / app 252; K2-K4 + w1-r6 pending), enforced by the per-round battery (`scripts/battery_r2N.py`). The R27 final-tightness fleet's per-spec P1 fix-lists (`audits/fleet-r27/spec-*.md`) were pre-implementation corrections this signoff could not see; the W6 amendment wave (~159 amendments) landed them 2026-09-13/14. The mock-surface OPEN decisions live in the register's table. **The re-stamp (the corpus-final seal) lands after the four conditions: (1) the R27 amendment wave W6 — LANDED 2026-09-14; (2) battery_r27 green; (3) the register's OPEN decisions ruled; (4) K4's crawl exit.** Until then: implementation-ready **in architecture**, not yet sealed.
+>
+> **Two stale-number riders (the R7-era figures below):** the "73 EngineCommand types" and "~180 keyboard bindings" counts are R7-era — the live wire census is **31 verbs = 28 routed + 3 exceptions** (D-ARCH-6 @ `970948a`), and the keyboard family is 16 §0's live census (the 10-mode matrix is D30's growth). **15 §4.1A/§13.15 + 16 §0 are the current count authorities.**
+
 **Date:** 2026-08-22
 **Process:** Multi-round scout → audit → revise → integration review
 **Status:** ✅ COMPLETE
