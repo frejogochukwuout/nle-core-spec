@@ -174,3 +174,40 @@ tsc --noEmit clean · full vitest suite green (1740 baseline) · vite build
 green · zero console.log · partition clean (files touched = files declared) ·
 **commit → push → bundle (HEAD main) — SKILL #143, after EVERY wave** ·
 worklog section per wave (SKILL #144: write as if the code will be destroyed).
+
+## §6 — RESEARCH VERDICTS (A1/A2/A3, 2026-09-13 — binding)
+
+**A1 — the source viewer (feeds W1):** Resolve treats STILL sources as
+normal clips (default 5s) with the FULL transport — play "plays" the frozen
+frame; the honest mock is a moving playhead + running TC over the poster.
+I/O marks = bracket flags ON THE SCRUB STRIP + out-of-range dimming ON THE
+STRIP (never on the image); duration readout switches to the range. Transport
+row: left = TC/jog · center = go-to-start / step / play / step / go-to-end /
+loop · right = Mark In / Mark Out. W1-B adopts: 5s-pseudo-duration playhead
+scrub + play, I/O flags + strip dimming, the range-driven readout; the
+SourceRangeBar merges into a real scrub strip (playhead + flags + dimming).
+The 7 edit-mode buttons stay in the row (Premiere's Source-Monitor placement)
+behind a clear divider, as the PRIORITY cluster.
+
+**A2 — the color layout (feeds W3):** scopes react to the PLAYHEAD FRAME
+(always-on analysis, not selection) → the console-row TAB ruling is CONFIRMED
+(beside the node graph; the under-viewer pane RETIRES). Target grammar: a
+3-chip breadcrumb header on the inspector — `[clip name · track] ▸ [Clip
+grade | Timeline grade] ▸ [Node n · label]` — with the node chip clickable to
+focus the graph; the level segmented control mirrors the node-graph header.
+Timeline-grade copy: "applies to every clip in this timeline, after clip
+grades" (never "one track" — Resolve has no track grade). Orange-dot
+affordance on inspector tabs holding adjustments in the current node.
+
+**A3 — the wheels (feeds W3):** disc drags are RELATIVE/ACCUMULATING
+(trackball-style: grab anywhere, `v += Δpointer`, clamp at rim) with LIVE
+preview + live YRGB readouts — our absolute-vector + commit-on-release model
+is WRONG and gets rewritten. Center = neutral; crossing = complementary hue
+(continuous, optional ≤3% dead zone). Master luma = a HORIZONTAL DIAL below
+the wheel (left darker / right lighter, YRGB moves together) + Ctrl/Cmd+drag
+inside the disc = master adjust (Resolve's documented behavior) + Shift+drag
+= absolute jump. Dbl-click disc = color-only reset; per-wheel corner button =
+color+master reset. 4 YRGB numeric fields per wheel, live, editable
+(dbl-click-to-type, ↑/↓ nudge, drag-to-scrub). Hue ring: vectorscope
+orientation (red upper-left, 60° spacing). One undo entry per gesture
+(the live preview commits once).
