@@ -1415,7 +1415,10 @@ function AudioSection({
             {...agg((e) => effectiveFade(e, 'in'))}
             min={0}
             max={Math.min(10, ...els.map((e) => e.duration))}
-            step={0.1}
+            /* R25 exit-gate P3: 0.05 — the 0.1 grid left the fixture's
+               0.50/0.75 fades off-grid, so the slider's thumb + aria read
+               one step above the true value (the textbox stayed exact) */
+            step={0.05}
             unit="s"
             decimals={2}
             timeField
@@ -1427,7 +1430,7 @@ function AudioSection({
             {...agg((e) => effectiveFade(e, 'out'))}
             min={0}
             max={Math.min(10, ...els.map((e) => e.duration))}
-            step={0.1}
+            step={0.05}
             unit="s"
             decimals={2}
             timeField

@@ -119,5 +119,13 @@ its ID; fix waves cite the IDs they close.
 ## Ledger (updated)
 
 - [x] F1 (A1, E1, E2, C2-C5, A2-A4 + X1 recovered) · [x] F2 (24) · [x] F3 (21)
-- [ ] F4 wave: AA1-AA5, SS1-SS2 (the P1/P2 class) + the P3 family (AA6-AA9, SS3-SS8)
+- [x] F4 wave (landed @ 723eeee): AA1-AA9 + SS1-SS8 — all 17 closed
 - VLM sweep: complete pass; P1=24 triaged to the known artifact classes (clipped story captions + isolated-component voids — same corpus classes as R24); 58 rate-limit errors, resumable.
+
+## B5 — THE EXIT-GATE VERIFICATION (2026-09-13, final)
+
+Two fresh-context verification agents over the live F4 state:
+- **VIEWS EXIT GATE: PASS — 0 P1, 0 P2 remaining.** All 10 fix-class probes pass live (the edit bar 7-button law at every width, the source transport + I/O + dimming, the wheels relative-accumulating grammar + color-only reset, the console tabs on color + deliver, the 3-chip breadcrumb + exact timeline-grade copy, all four trim affordance grammars, the mixer ladder + honest tips + the visible fx-popover, the video-domain Fades group, the sticky TC + ruler end, console clean). 2 P3 notes: the fade-slider step quantization (FIXED in-tree: step 0.05) + the stale F4 ledger row (ticked).
+- **CONSOLE GATE: PASS** — 28/28 stories mount-clean (all previously-flagged stories re-verified); the interaction battery (5 pages, source viewer, tabs, mixer, F6, Escape ladders) leaves ZERO errors/warnings. The error-boundary story's console.error is the intentional mock crash (by design).
+
+**THE ROUND'S BAR IS MET: <= P3 remaining.** Deferred (registered): X3 (FxBrowser search), T5 (scrollMax monotonicity), T8 (scroll-continuity seam) — all P3.
