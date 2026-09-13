@@ -111,29 +111,36 @@ describe('Toolbar2 (spec 18 §4.1)', () => {
     expect(screen.getByRole('button', { name: 'Media Pool' })).toBeInTheDocument();
   });
 
-  /* R22-D3 (#73) → R23-WB (D-B1): the console toggles — Scopes off↔open, Nodes
-     (the viewer-region surface), both color-page-only. */
-  it('R23-WB: the color-page console toggles (Scopes/Nodes) live here; absent on edit', () => {
-    useUi.setState({ page: 'color', colorScopesState: 'off' });
+  /* R22-D3 (#73) → R23-WB (D-B1) → R25-W3 (DESIGN-R25 §3 W3 / §6 A2; issues
+     th_mtzokuem/th_mtzoi7vr): the console toggles now ACTIVATE their
+     console-row TAB (the [Timeline | Nodes | Scopes] strip), aria-pressed
+     reflecting the tab-active state — both color-page-only. */
+  it('R25-W3: the color-page console toggles (Scopes/Nodes) activate their console TAB; absent on edit', () => {
+    useUi.setState({ page: 'color', colorScopesState: 'off', consoleTab: 'timeline' });
     const { getByTestId, getByRole, rerender } = renderPlain(<Toolbar2 />);
     const scopes = getByTestId('shell-toolbar-btn-scopes');
     expect(scopes).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(scopes);
-    expect(S().colorScopesState).toBe('open'); // the 4-state machine died — 'open' is the only visual (D-B1)
+    /* RE-PIN (R25-W3/A2): the old pin asserted the colorScopesState write
+       ('open'); the under-viewer pane is retired — the button now routes
+       the console row to the SCOPES TAB. */
+    expect(S().consoleTab).toBe('scopes');
     expect(scopes).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(scopes);
-    expect(S().colorScopesState).toBe('off');
+    expect(S().consoleTab).toBe('timeline'); // the binary router toggles back
     const nodes = getByTestId('shell-toolbar-btn-nodes');
     expect(nodes).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(nodes);
-    expect(S().colorNodesDock).toBe(true);
+    /* RE-PIN (R25-W3/A2): the old pin asserted colorNodesDock true; the
+       side-by-side slot is retired — the button routes to the NODES TAB. */
+    expect(S().consoleTab).toBe('nodes');
     expect(getByRole('button', { name: 'Nodes' })).toHaveAttribute('aria-pressed', 'true');
     // on the EDIT page the color consoles are absent
     useUi.setState({ page: 'edit' });
     rerender(<Toolbar2 />);
     expect(screen.queryByTestId('shell-toolbar-btn-scopes')).toBeNull();
     expect(screen.queryByTestId('shell-toolbar-btn-nodes')).toBeNull();
-    useUi.setState({ colorScopesState: 'off', colorNodesDock: false });
+    useUi.setState({ colorScopesState: 'off', colorNodesDock: false, consoleTab: 'timeline' });
   });
 
   /* R23-WB (D-B5, #92) → R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 —

@@ -1,20 +1,18 @@
 /* ColorPage — spec 18 §4.8 color-focus mode. R22 REWRITE (DESIGN-R22 D1) →
    R23-WB (DESIGN-R23 track B, issues #90–#97) → R24-W2 (DESIGN-R24 §1.2
-   A2-R1..R5, issues #67–#70) — the color composition's CURRENT truth:
+   A2-R1..R5, issues #67–#70) → R25-W3 (DESIGN-R25 §3 W3 / §6 A2; issues
+   th_mtzom4xu/th_mtzonhlu/th_mtzoo09d/th_mtzokuem/th_mtzoi7vr) — the color
+   composition's CURRENT truth:
      - the COLOR INSPECTOR (right rail) — the ONE grading surface, tabs
-       [Primaries|Curves|Qualifier] under this one inspector panel (#78);
-       the Curves tab is the YRGB rebuild (A2-R4: the [Y|R|G|B] radiogroup,
-       per-channel curves + the channel histogram behind the grid);
-     - the SCOPES PANE lives UNDER THE VIEWER (A2-R2/R3 — region [2]'s
-       column, Viewer flex-1 + the ~160px pane below; colorScopesState-
-       gated; the reference-exact Parade/Waveform/Vectorscope/Histogram
-       tabs);
-     - the NODE GRAPH is the TIMELINE-AREA CONSOLE dock (A2-R1 — F6 slot
-       [6], its own 26px nodeviewer header + 38px toolbar + the 706×268
-       scroll-both workspace; the viewer-swap is DELETED, region [2] is
-       always Viewer-led);
-     - TIMELINE COMPACT is the default on color, with the EVERY-PAGE density
-       toggle (#94, D-B3) + the real trackhead select button (#96);
+       [Primaries|Curves|Qualifier] under this one inspector panel (#78)
+       under A2's 3-chip GRADE TARGET breadcrumb; the Curves tab is the
+       YRGB rebuild (A2-R4);
+     - the CONSOLE ROW is the TAB STRIP [Timeline | Nodes | Scopes] — the
+       ACTIVE tab's panel takes the row (the R24 under-viewer scopes pane
+       and the side-by-side nodeviewer slot are retired; ConsoleTabs +
+       the consoleTab atom);
+     - TIMELINE COMPACT is the default on color, with the EVERY-PAGE
+       density toggle (#94, D-B3) + the real trackhead select button (#96);
      - the left dock is the GALLERY (A2-R5 — the stills panel renamed;
        apply = replace-not-merge, the #70 context menu).
    This module is the composition's import line (re-exports) + a thin
