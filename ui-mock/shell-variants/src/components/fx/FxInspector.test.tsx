@@ -16,6 +16,10 @@ import { FxInspector, FxInspectorSection } from './FxInspector';
 import { useUi } from '../../state/useUiStore';
 import { findElement } from '../../lib/mockData';
 import type { UiPatch } from '../../test/helpers';
+/* R24-W3: the parser is imported from Clip.tsx (its owner) — the pins drive
+   the SAME seam the three drop doors route, proving the rail's honesty
+   through a real replace (no fork, no store-only shortcut). */
+import { applyFxRowToSeam } from '../timeline/Clip';
 
 const S = () => useUi.getState();
 const el = (id: string) => findElement(S().scenes, id)!.element;
@@ -133,5 +137,39 @@ describe('FxInspectorSection — the section form (the Edit page embeds this)', 
     act(() => { useUi.setState({ selectedFxObject: { kind: 'fade', elementId: 'el-1', side: 'in' } }); });
     rerender(<FxInspectorSection />);
     expect(screen.getByRole('button', { name: 'Remove fade in' })).toBeInTheDocument();
+  });
+});
+
+/* ---------- R24-W3 (DESIGN-R24 §3 W3 — A1-R1 honesty during replace):
+   the rail's shared TransitionSection reads the element LIVE (FxInspector
+   re-renders through the scenes subscription), and the Edit-page entity
+   chip's fxObjChip branch derives its transition name from the same live
+   transitionOut (Inspector.tsx) — a replace can never leave a stale chip.
+   Pinned HERE (FxInspector.tsx itself gets NO code change — verified sound
+   by code-read): boot the rail, run the shared parser's seam door, assert
+   the new presentation + the retained duration/alignment + the surviving
+   fx-object domain + the W0 no-op twin. ---------- */
+
+describe('R24-W3 (A1-R1): replace honesty — the rail reads the LIVE element through a parser replace', () => {
+  it('applyFxRowToSeam swaps the presentation, retains duration + alignment, keeps the fx-object domain — the rail re-renders the new truth', () => {
+    bootRail({ selection: [], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+    act(() => { applyFxRowToSeam({ name: 'Wipe Left', cat: 'Transition' }, 'el-2'); });
+    // the rail (the shared TransitionSection) reads the element live: the NEW
+    // presentation, the RETAINED tuning (never the R23 default-duration
+    // overwrite)
+    expect(screen.getByTestId('transition-presentation')).toHaveValue('Wipe Left');
+    expect(screen.getByLabelText('Duration value')).toHaveValue('0.75s');
+    expect(el('el-2').transitionOut).toMatchObject({ presentation: 'Wipe Left', duration: 0.75, alignment: 0.5 });
+    expect(S().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' }); // the domain survives
+  });
+
+  it('the W0 no-op twin at this surface: an IDENTICAL presentation = the Already toast, no doc write, no history', () => {
+    bootRail({ selection: [], selectedFxObject: { kind: 'transition', elementId: 'el-2' } });
+    const pastBefore = S().past.length;
+    act(() => { applyFxRowToSeam({ name: 'Cross Dissolve', cat: 'Transition' }, 'el-2'); });
+    expect(S().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Already Cross Dissolve' });
+    expect(el('el-2').transitionOut!.presentation).toBe('Cross Dissolve'); // untouched
+    expect(el('el-2').transitionOut!.duration).toBe(0.75);
+    expect(S().past).toHaveLength(pastBefore); // the short-circuit beat setTransition
   });
 });

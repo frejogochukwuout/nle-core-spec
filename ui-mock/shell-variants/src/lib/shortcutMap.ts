@@ -47,7 +47,7 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
   /* ---- Clips + edit history (spec 16 §3.3/§3.4/§3.10) ---- */
   { action: 'clips-select-neighbor', keys: 'Tab / ⇧Tab', group: 'Clips', desc: 'Select next / previous clip (main track)' },
   { action: 'clips-select-all', keys: '⌘A / ⇧⌘A', group: 'Clips', desc: 'Select focused track / all in timeline (Esc clears)' },
-  { action: 'clips-delete', keys: 'Delete', group: 'Clips', desc: 'Delete selection (leaves gap)' },
+  { action: 'clips-delete', keys: 'Delete', group: 'Clips', desc: 'Delete selection (leaves gap) — on the FX page / in the FX tool, a selected transition or fade object deletes FIRST (ruling 22)' },
   { action: 'clips-ripple-delete', keys: '⇧Delete', group: 'Clips', desc: 'Ripple delete (closes gap)' },
   { action: 'clips-split', keys: '⌘B', group: 'Clips', desc: 'Split clip under playhead, at playhead' },
   { action: 'clips-duplicate', keys: '⌘D', group: 'Clips', desc: 'Duplicate selection' },
@@ -71,13 +71,13 @@ export const SHORTCUT_MAP: ShortcutRow[] = [
 
   /* ---- Selection (spec 16 §3.3 / §5.4) ---- */
   { action: 'selection-track-focus', keys: '↑ / ↓', group: 'Selection', desc: 'Move track focus up / down' },
-  { action: 'selection-escape', keys: 'Esc', group: 'Selection', desc: 'Tool → select; else clear selection' },
+  { action: 'selection-escape', keys: 'Esc', group: 'Selection', desc: 'Tool → select; else clear the marker / FX-object domain, else the clip selection (R24-W5d: the marker + fx-object clears joined the ladder)' },
 
   /* ---- Timeline nav (spec 16 §3.6) ---- */
   { action: 'timeline-home-end', keys: 'Home / End', group: 'Timeline', desc: 'Jump playhead to start / end' },
   { action: 'timeline-edit-points', keys: 'PageUp / PageDn', group: 'Timeline', desc: 'Jump to previous / next edit point' },
   { action: 'timeline-zoom-fit', keys: '⌘\\', group: 'Timeline', desc: 'Zoom timeline to fit' },
-  { action: 'timeline-zoom-step', keys: '+ / −', group: 'Timeline', desc: 'Zoom in / out (1.5× steps)' },
+  { action: 'timeline-zoom-step', keys: '+ / −', group: 'Timeline', desc: 'Zoom in / out (1.7× steps — the R15-1 canonical factor, matching the toolbar ± and ZOOM_BUTTON_FACTOR)' },
   { action: 'timeline-zoom-reset', keys: '⌘0', group: 'Timeline', desc: 'Reset zoom to the default level' },
 
   /* ---- Panels / pages (spec 16 §3.9 + spec 18) ---- */

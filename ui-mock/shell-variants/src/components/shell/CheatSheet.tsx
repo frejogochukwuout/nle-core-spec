@@ -39,10 +39,23 @@ export function CheatSheet() {
 
   /* Esc closes (capture — beats the shell deselect handler) + Tab is
      trapped inside the modal (spec 16 §7.3: "the modal is a focus trap;
-     Tab cycles within"). Same two-stop wrap pattern as ConfirmDialog. */
+     Tab cycles within"). Same two-stop wrap pattern as ConfirmDialog.
+     R24-W5b (DESIGN-R24 §2 F1-P2): F6 is CONSUMED here too — plain F6
+     used to sail through to the AppShell's region cycler (a window
+     BUBBLE listener), so focus landed on a background shell region while
+     the aria-modal dialog stayed open. Capture-at-window beats every
+     bubble listener, so the stop kills the cycle before any region
+     handler can fire — the ConfirmDialog "modal owns the keyboard" law,
+     applied to the one key ConfirmDialog's element-level shield pattern
+     (the dialog onKeyDown below) can only cover when focus is inside. */
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F6') {
+        e.preventDefault(); // F6's browser-default pane hop is not ours to keep under a modal
+        e.stopPropagation(); // no region cycling under an open aria-modal dialog
+        return;
+      }
       if (e.key === 'Escape') { e.stopPropagation(); close(false); }
       if (e.key === 'Tab') {
         const sheet = document.querySelector('[data-testid="shell-cheatsheet"]');
@@ -87,7 +100,12 @@ export function CheatSheet() {
   return (
     <div
       data-testid="shell-cheatsheet"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 backdrop-blur-[2px]"
+      /* R23-FIX (review-sweep R-d, R5-P3#8): z 70 → 86 — above the toast
+         region (85) so an error toast can no longer sit ON the modal the
+         user is trying to close (the toast's own close button overlapped
+         the sheet's search row). Still below menus (93) / confirm (97) /
+         the failure boundary (99). */
+      className="fixed inset-0 z-[86] flex items-center justify-center bg-black/55 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-label="Keyboard cheat sheet"
@@ -96,6 +114,13 @@ export function CheatSheet() {
       <div
         className="max-h-[80vh] w-[640px] max-w-[92vw] overflow-hidden rounded-lg border border-strong bg-panel shadow-2xl"
         onClick={(e) => e.stopPropagation()}
+        /* R24-W5b (F1-P2): the ConfirmDialog pattern — the dialog element
+           stops EVERY keydown from bubbling out (focus is trapped inside,
+           so every key the user presses dies here; no window-level shell
+           listener — the AppShell F6 cycler, the useShortcuts ladder —
+           ever sees a key while the sheet is open). Typing in the search
+           field is unaffected: input events are their own event stream. */
+        onKeyDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-hairline bg-raised px-4 py-2.5">
           <span className="text-[14px] font-semibold text-tprimary">Keyboard cheat sheet</span>

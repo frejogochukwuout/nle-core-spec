@@ -60,6 +60,13 @@ export interface MicroSliderProps {
   /** gradient color-bars (linear-gradient string) */
   trackStyle?: CSSProperties;
   className?: string;
+  /** R24-W5a (DESIGN-R24 §2 F2-P2): the param's documented DEFAULT —
+   *  double-click resets HERE (the NumberField §5A resetTo grammar), NEVER
+   *  to the range midpoint (the old dbl-click wrote min+(max−min)/2 —
+   *  Gamma luma 1 → 2.125 live, a fabricated value). When no default is
+   *  threaded the dbl-click is a NO-OP (same law as NumberField: no
+   *  documented default → nothing honest to write). */
+  resetTo?: number;
 }
 
 export function MicroSlider({
@@ -74,6 +81,7 @@ export function MicroSlider({
   variant = 'mini',
   trackStyle,
   className = '',
+  resetTo,
 }: MicroSliderProps) {
   const ref = useRef<HTMLDivElement>(null);
   const v = VARIANT[variant];
@@ -110,9 +118,20 @@ export function MicroSlider({
       aria-valuemax={max}
       aria-valuenow={Math.round(clamp(shown, min, max) * 1000) / 1000}
       aria-valuetext={valueText}
+      /* R23-FIX (review-sweep R4-P3#5): aria-orientation="horizontal" — the
+         slider's grammar is a horizontal track (the Fader/PanBox twins
+         already declare theirs; the attr is part of the §11.3 contract). */
+      aria-orientation="horizontal"
       className={`relative cursor-ew-resize select-none ${v.hit} ${className}`}
       onPointerDown={(e) => {
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        /* R24-W5c (DESIGN-R24 §2 F4-P3): GUARDED capture — a synthetic or
+           inactive pointer id makes setPointerCapture throw NotFoundError
+           in real browsers (the exact Fader/Knob/PanBox law; the old
+           unguarded call killed the handler in automation). Capture is
+           best-effort: the drag grammar works without it. */
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch { /* inactive pointer id — drag still works, capture best-effort */ }
         onFirstTouch?.();
         setFromClientX(e.clientX);
       }}
@@ -123,7 +142,9 @@ export function MicroSlider({
       onPointerUp={commit}
       onPointerCancel={() => setDrag(null)}
       onLostPointerCapture={commit}
-      onDoubleClick={() => onChange(min + (max - min) / 2)}
+      /* R24-W5a (F2-P2): dbl-click = reset to the param's documented
+         default (resetTo), the §5A gesture — NOT the range midpoint. */
+      onDoubleClick={() => { if (resetTo !== undefined) onChange(resetTo); }}
       onKeyDown={(e) => {
         const s = step * (e.shiftKey ? 5 : 1);
         if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {

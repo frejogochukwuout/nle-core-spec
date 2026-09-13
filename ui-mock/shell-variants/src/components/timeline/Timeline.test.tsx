@@ -5,12 +5,13 @@
    (18 §5A). jsdom has no layout: assertions hit conditional rendering,
    store-driven inline styles, and store wiring — never hit-testing geometry. */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { act, createEvent, fireEvent, screen, within } from '@testing-library/react';
 import { Timeline } from './Timeline';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 import { useShortcuts } from '../../hooks/useShortcuts';
+import { zoomController } from '../../lib/zoomController';
 import { sceneDuration } from '../../lib/mockData';
 import { snapToFrame } from '../../lib/timecode';
 import { isGestureActive } from '../../lib/timelinePlacement';
@@ -34,6 +35,10 @@ describe('Timeline', () => {
   it('renders one lane per track, the in-window clips, and the header column (spec 05 §12 lanes / 18 §4.7)', () => {
     boot({});
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    // R23-FIX (R3-P3#7): SceneTabs' aria-controls="shell-timeline" resolves —
+    // the id exists on the mounted root (was dangling since R19; the compact
+    // strip carries the same id — the two surfaces never coexist)
+    expect(document.getElementById('shell-timeline')).toBe(screen.getByTestId('shell-timeline'));
     // readout-style header zone carries the big TC readout
     expect(screen.getByTestId('shell-timeline-tc')).toHaveTextContent('00:00:16:00');
     const headers = screen.getByTestId('shell-track-headers');
@@ -159,6 +164,10 @@ describe('Timeline', () => {
     expect(laneOf('el-1').style.height).toBe('40px'); // main capped at 40
     expect(laneOf('el-5').style.height).toBe('28px'); // overlay capped at 28
     expect(laneOf('el-6').style.height).toBe('96px'); // audio 60 × 1.6
+    // R23-FIX (review-sweep R5-P3#6): the caption lane is EXEMPT from the 28px
+    // cap — its own law (gap C34) is 32px (24px parchment chips + insets);
+    // capping it to 28 squashed the chips mid-audio-focus
+    expect(laneOf('cap-1').style.height).toBe('32px');
   });
 
   it('the blocks clip-style variant swaps to the compact 40/34/28 lanes (spec 05 §12.2 blocks)', () => {
@@ -228,19 +237,75 @@ describe('Timeline', () => {
     expect(screen.queryByTestId('transition-el-1')).not.toBeInTheDocument(); // only el-2 carries one
   });
 
-  /* fixes th_mto31dyp — Resolve-style transition restyle */
-  it('transition block restyle: full lane height minus 4px inset, clean 1px border, vertical 30→70% gradient (th_mto31dyp)', () => {
+  /* R23-FIX (review-sweep item 1, R3-P1#1): the box is CLICK-THROUGH outside
+     fxMode — it used to eat edit-mode trim/marquee gestures that passed under
+     its 40px-height z-7 rectangle (rendered on EVERY lane, inert but
+     pointer-hungry). elementFromPoint-style hit assertions are jsdom-
+     impossible, so the inline style is the law's observable. Registered loss:
+     the edit-mode title tooltip on the box is click-through-unavailable — the
+     seam zone's data-tip + the fx-mode box carry the info. */
+  it('R23-FIX item 1: pointerEvents "none" outside fxMode, "auto" in fxMode — the box never eats edit gestures', () => {
+    const editTree = boot({});
+    expect(screen.getByTestId('transition-el-2').style.pointerEvents).toBe('none');
+    editTree.unmount();
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    expect(screen.getByTestId('transition-el-2').style.pointerEvents).toBe('auto');
+    // the locked guard: a transition seeded onto LOCKED tr-audio-2 stays inert
+    // even in fxMode (pointerEvents none — the lane's own lock law)
+    act(() => {
+      useUi.setState({
+        scenes: store().scenes.map((sc) => sc.id !== 'sc-1' ? sc : {
+          ...sc,
+          tracks: sc.tracks.map((t) => t.id !== 'tr-audio-2' ? t : {
+            ...t,
+            elements: t.elements.map((e) => e.id !== 'el-7' ? e : {
+              ...e,
+              transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 },
+            }),
+          }),
+        }),
+      });
+    });
+    expect(screen.getByTestId('transition-el-7').style.pointerEvents).toBe('none'); // locked lane — never a gesture target
+  });
+
+  /* R23-FIX (review-sweep item 15, R3-P2#4): the boxes ride the clips'
+     virtualization window (clipVisible) — an offscreen box used to escape
+     virtualization and keep its z-7 pointer surface mounted over lanes the
+     user scrolled to. High zoom + scroll are the two cull paths. */
+  it('R23-FIX item 15: high zoom OR a far scroll culls the offscreen transition box (the clips\' own window law)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    expect(screen.getByTestId('transition-el-2')).toBeInTheDocument(); // el-2 [391,782]px is in the boot window [−200,1100]
+    // high zoom: the cut at 17 s moves to 17·5000 px — far outside the window
+    act(() => { useUi.getState().setZoom(5000); });
+    expect(screen.queryByTestId('transition-el-2')).not.toBeInTheDocument();
+    act(() => { useUi.getState().setZoom(46); });
+    expect(screen.getByTestId('transition-el-2')).toBeInTheDocument(); // back in
+    // far scroll: window [scroll−200, scroll+1100] — scroll 1000 starts past el-2's 782px end
+    act(() => { scrollEl().scrollLeft = 1000; });
+    fireEvent.scroll(scrollEl());
+    expect(screen.queryByTestId('transition-el-2')).not.toBeInTheDocument();
+  });
+
+  /* fixes th_mto31dyp — Resolve-style transition restyle. R24-W3 re-pin:
+     the F3 split moved the paint law onto the VISUAL child — the WRAPPER
+     keeps the box geometry (height + top-[2px]), the visual carries the
+     border/gradient/rounded/glyph grammar byte-identical. */
+  it('transition block restyle (F3 split): the WRAPPER keeps height + top-[2px]; the VISUAL child carries border/gradient/rounded/glyph (th_mto31dyp)', () => {
     boot({});
-    const tr = screen.getByTestId('transition-el-2');
-    expect(tr.style.height).toBe('76px'); // main lane 80 − 4 inset
-    expect(tr.className).toContain('top-[2px]'); // 2px inset top/bottom
-    expect(tr.style.border).toBe('1px solid var(--transition-mark)');
-    expect(tr.style.background).toContain('to bottom'); // VERTICAL gradient
-    expect(tr.style.background).toContain('30%, transparent');
-    expect(tr.style.background).toContain('70%, transparent');
-    expect(tr.className).toContain('rounded-[2px]');
+    const wrap = screen.getByTestId('transition-el-2');
+    expect(wrap.style.height).toBe('76px'); // main lane 80 − 4 inset
+    expect(wrap.className).toContain('top-[2px]'); // 2px inset top/bottom
+    expect(wrap.className).not.toContain('overflow-hidden'); // F3: the wrapper is UN-clipped — handles hang outside
+    const vis = screen.getByTestId('transition-visual-el-2');
+    expect(vis.className).toContain('overflow-hidden'); // the paint child clips
+    expect(vis.style.border).toBe('1px solid var(--transition-mark)');
+    expect(vis.style.background).toContain('to bottom'); // VERTICAL gradient
+    expect(vis.style.background).toContain('30%, transparent');
+    expect(vis.style.background).toContain('70%, transparent');
+    expect(vis.className).toContain('rounded-[2px]');
     // slim crossfade glyph: two overlapping triangles (not the old X)
-    const paths = tr.querySelectorAll('svg path');
+    const paths = vis.querySelectorAll('svg path');
     expect(paths.length).toBe(2);
     for (const p of Array.from(paths)) expect(p.getAttribute('fill')).toBe('white');
   });
@@ -1141,6 +1206,175 @@ describe('R20-W6FIX P2-1: placeOnTop minted-track ghost renders at the INSERT li
   });
 });
 
+/* ---------- R23-WE (DESIGN-R23 D-E2, #102): the preview-visibility law.
+   The W3 preview span could land OFFSCREEN (ruling 20: the "no animated
+   effects" report was the offscreen ghost — the auto-scroll is the fix for
+   both clauses). Pinned here: (a) AUTO-SCROLL — scrollIntoView({inline:
+   'nearest'}) on the ghost span, ONE rAF AFTER PAINT (never synchronous),
+   re-arming as the plan re-mints; (b) ZOOM FLOOR — a ghost < 24px at the
+   current pps bumps zoom ONCE per ARM through the bus (never a creep);
+   (c) the MODE BADGE at the ghost's head (name per mode, chrome laws,
+   absence when no preview — the display:none law); and the REFUSAL path
+   scrolling to the PLAYHEAD instead so the refusal is legible in place. ---------- */
+
+describe('R23-WE D-E2: the insert-preview visibility law (#102)', () => {
+  const arm = (mediaId: string, mode: 'insert' | 'overwrite' | 'placeOnTop' | 'fitToFill') =>
+    act(() => { useUi.getState().setHoverInsertPreview({ mediaId, mode }); });
+  const disarm = () => act(() => { useUi.getState().setHoverInsertPreview(null); });
+  const nextFrame = () => act(async () => { await new Promise((res) => requestAnimationFrame(res)); });
+
+  it('(a) AUTO-SCROLL: an armed ok-preview scrollIntoView({inline:"nearest"})s the GHOST span — one rAF AFTER paint, never synchronously', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      boot({ playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+      const ghost = screen.getByTestId('insert-preview-ghost');
+      expect(spy).not.toHaveBeenCalled(); // rAF AFTER paint — never a sync scroll
+      await nextFrame();
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0]![0]).toEqual({ inline: 'nearest', block: 'nearest' });
+      expect(spy.mock.contexts[0]).toBe(ghost); // the ghost span is the scroll target
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('(a) AUTO-SCROLL re-tracks: the plan re-mints (playhead move) → the ghost scrollIntoViews again — the preview never drifts offscreen', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      boot({ playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+      await nextFrame();
+      expect(spy).toHaveBeenCalledTimes(1);
+      act(() => { useUi.getState().setPlayhead(17); }); // plan identity re-mints on the playhead atom
+      await nextFrame();
+      expect(spy).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('no armed preview: no badge chrome (the display:none law — absence, never an opacity stub) and no scroll', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      boot({});
+      expect(screen.queryByTestId('insert-preview-mode-badge')).toBeNull();
+      await nextFrame();
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('(c) MODE BADGE: the ghost\'s head carries the hovered mode\'s NAME (Insert) — chrome laws + head geometry', () => {
+    boot({ playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+    const badge = screen.getByTestId('insert-preview-mode-badge');
+    expect(badge).toHaveTextContent('Insert'); // the hovered button's own label
+    expect(badge).toHaveAttribute('aria-hidden', 'true'); // the a11y route is the bar's status line
+    expect(badge.className).toContain('pointer-events-none');
+    // head geometry: the ghost\'s left + 4, the lane\'s top + 4 (ghost 736/46 on the overlay lane)
+    expect(badge.style.left).toBe('740px');
+    expect(badge.style.top).toBe('48px');
+  });
+
+  it('(c) MODE BADGE: the name follows the MODE (Place on Top), never a hardcoded pair', () => {
+    boot({ playhead: 2, hoverInsertPreview: { mediaId: 'm-08', mode: 'placeOnTop' } });
+    expect(screen.getByTestId('insert-preview-mode-badge')).toHaveTextContent('Place on Top');
+  });
+
+  it('(b) ZOOM FLOOR: a ghost already ≥ 24px at the current pps never bumps zoom (no creep)', async () => {
+    const spy = vi.spyOn(zoomController, 'setZoomLevel');
+    try {
+      boot({ playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } }); // 4 s × 46 = 184 px
+      await nextFrame();
+      expect(spy).not.toHaveBeenCalled();
+      expect(store().pxPerSec).toBe(46);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('(b) ZOOM FLOOR: a ghost < 24px bumps zoom ONCE through the bus so it renders ≥ 24px', async () => {
+    const spy = vi.spyOn(zoomController, 'setZoomLevel');
+    try {
+      // 4 s ghost at 5 pps = 20 px < 24 → target 24/4 = 6 pps (the dynamic
+      // content-fit min raises the effective to 7.5 — either way ≥ 24 px)
+      boot({ pxPerSec: 5, playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith(6, { duration: 30 });
+      await nextFrame();
+      expect(store().pxPerSec).toBeGreaterThan(5); // the bump landed through the bus
+      const ghost = screen.getByTestId('insert-preview-ghost');
+      expect(parseFloat(ghost.style.width)).toBeGreaterThanOrEqual(24); // the LAW: renders ≥ 24 px
+      expect(spy).toHaveBeenCalledTimes(1); // one bump, not a creep
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('(b) ZOOM FLOOR: ONE bump per ARM — a mid-arm pps drop does NOT re-bump (guard); a cleared + re-armed preview claims a fresh bump', async () => {
+    const spy = vi.spyOn(zoomController, 'setZoomLevel');
+    try {
+      boot({ pxPerSec: 5, playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+      expect(spy).toHaveBeenCalledTimes(1); // the arm\'s one bump
+      // force the ghost back under the floor MID-ARM — the guard holds
+      act(() => { useUi.setState({ pxPerSec: 5 }); });
+      await nextFrame();
+      expect(spy).toHaveBeenCalledTimes(1); // never continuous
+      expect(store().pxPerSec).toBe(5);
+      // clear + re-arm the SAME preview = a NEW arm → a fresh bump
+      disarm();
+      arm('m-08', 'insert');
+      expect(spy).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('the REFUSAL path (ok:false) scrolls to the PLAYHEAD instead — never a ghost scrollIntoView, no geometry, no badge', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      // fitToFill on the duration-less image source refuses; the playhead
+      // (28 s = 1288 px) is offscreen in the mocked 800px viewport → the
+      // playhead-follow-scroll centers it at 888 (house pattern from the
+      // Ruler edge-scroll pin: mocked clientWidth/scrollWidth)
+      boot({ playhead: 28, hoverInsertPreview: { mediaId: 'm-08', mode: 'fitToFill' } });
+      const sc = scrollEl();
+      Object.defineProperty(sc, 'clientWidth', { value: 800, configurable: true });
+      Object.defineProperty(sc, 'scrollWidth', { value: 5000, configurable: true });
+      await nextFrame();
+      expect(sc.scrollLeft).toBe(888); // centered on the playhead — the refusal is legible in place
+      expect(spy).not.toHaveBeenCalled(); // no ghost to scroll — ok:false paints nothing
+      expect(screen.queryByTestId('insert-preview-layer')).toBeNull();
+      expect(screen.queryByTestId('insert-preview-mode-badge')).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  /* R24-W5d (DESIGN-R24 §2 F3-P3, the insert-preview split ghost): the
+     straddler's dashed right half could render OFFSCREEN — the content-x-
+     1855/viewport-1280 class — while the auto-scroll targeted ONLY the main
+     ghost. The split ghost now JOINS the scroll target (both scrollIntoView
+     in the same after-paint rAF; 'nearest' + the split ghost's at/after-the-
+     main-ghost position means the union span lands in view). */
+  it('(a) AUTO-SCROLL covers the STRADDLER: the split ghost joins the scroll target (F3 leftover, R24-W5d)', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      // m-03 video, insert at 12 — el-2 [8.5,17) straddles the playhead: the
+      // plan carries a split tick + the dashed right-half ghost at 30.6 s
+      boot({ playhead: 12, hoverInsertPreview: { mediaId: 'm-03', mode: 'insert' } });
+      const ghost = screen.getByTestId('insert-preview-ghost');
+      const split = screen.getByTestId('insert-preview-split-ghost');
+      expect(parseFloat(split.style.left)).toBeCloseTo(30.6 * 46, 0); // the far-right half
+      await nextFrame();
+      expect(spy).toHaveBeenCalledTimes(2); // the main ghost THEN the straddler's half
+      expect(spy.mock.contexts).toEqual([ghost, split]); // the union span is the scroll target
+      for (const c of spy.mock.calls) expect(c[0]).toEqual({ inline: 'nearest', block: 'nearest' });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
 /* ---------- R23-WA (DESIGN-R23 D-A2): the FX engine — seam/head/tail zones
    + the interactive transition boxes. Rendered ONLY while fxMode (the store's
    single-source flag); zones are BUTTONS with honest labels; the transition
@@ -1159,28 +1393,43 @@ describe('R23-WA: the FX engine gates (fxMode renders the zones; absence otherwi
     expect(screen.queryByTestId('transition-trim-r-el-2')).not.toBeInTheDocument();
   });
 
-  it('fxMode ON (the FX tool): zones render on every unlocked lane — butt-spliced seams + head/tail per track', () => {
+  it('fxMode ON (the FX tool): zones render on every unlocked lane — EMPTY butt-spliced seams + head/tail per track', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
-    // the tr-main seams: el-1|el-2 (8.5s) + el-2|el-3 (17s); el-3|el-4 rides
-    // el-4's virtualization cull (900px jsdom viewport — the zones share the
-    // clips' window law)
+    // the tr-main seams: el-1|el-2 (8.5s) + el-3|el-4 rides el-4's
+    // virtualization cull (900px jsdom viewport — the zones share the
+    // clips' window law). R24-W3 re-pin: el-2|el-3 is OCCUPIED
+    // (el-2.transitionOut) — its zone is ABSENT now (F3 root cause b: the
+    // object owns its edge); the transition BOX answers that seam (the
+    // click-select + the ⇄ drop door).
     expect(screen.getByTestId('fx-seam-el-1-el-2')).toBeInTheDocument();
-    expect(screen.getByTestId('fx-seam-el-2-el-3')).toBeInTheDocument();
+    expect(screen.queryByTestId('fx-seam-el-2-el-3')).not.toBeInTheDocument();
+    expect(screen.getByTestId('transition-el-2')).toBeInTheDocument(); // the box answers
     expect(screen.queryByTestId('fx-seam-el-3-el-4')).not.toBeInTheDocument();
-    // D-A2.3's LETTER: head/tail = the TRACK's first/last element — el-3 is
-    // NOT the last (el-4 is, but it is virtualized off-window at boot → its
-    // tail zone virtualizes with it, the clips' own law)
-    expect(screen.getByTestId('fx-head-el-1')).toBeInTheDocument();
-    expect(screen.queryByTestId('fx-tail-el-3')).not.toBeInTheDocument();
+    // D-A2.3's LETTER: head/tail = the TRACK's first/last element. The
+    // tr-main first/last carry SEEDED demo fades (el-1 fadeIn 0.5 / el-4
+    // fadeOut 1.0 — D-A3's fixture), so per R23-WA-REV P3 #5 their zones do
+    // NOT render: the fade OBJECTS are the surfaces (selection + trim).
+    // The zone law still has a live target: the OVERLAY's un-faded text clip
+    // el-5 owns both its track edges.
+    expect(screen.queryByTestId('fx-head-el-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('fade-object-el-1-in')).toBeInTheDocument();
     expect(screen.queryByTestId('fx-tail-el-4')).not.toBeInTheDocument();
-    // the audio lane's single clip owns BOTH edges (seeded fades → click-select)
-    expect(screen.getByTestId('fx-head-el-6')).toBeInTheDocument();
-    expect(screen.getByTestId('fx-tail-el-6')).toBeInTheDocument();
+    expect(screen.getByTestId('fx-head-el-5')).toBeInTheDocument();
+    expect(screen.getByTestId('fx-tail-el-5')).toBeInTheDocument();
+    // el-3 is mid-track — NEVER a head or tail zone
+    expect(screen.queryByTestId('fx-head-el-3')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fx-tail-el-3')).not.toBeInTheDocument();
+    // the audio lane's single clip owns BOTH edges — seeded audioFadeIn/Out
+    // mean the objects answer, not zones (R23-WA-REV P3 #5)
+    expect(screen.queryByTestId('fx-head-el-6')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fx-tail-el-6')).not.toBeInTheDocument();
+    expect(screen.getByTestId('fade-object-el-6-in')).toBeInTheDocument();
+    expect(screen.getByTestId('fade-object-el-6-out')).toBeInTheDocument();
     // LOCKED lanes are inert (tr-audio-2) — the marquee/trim lock law
     expect(screen.queryByTestId('fx-head-el-7')).not.toBeInTheDocument();
   });
 
-  it('the tail zone follows the TRACK\'s last element through scroll (D-A2.3: never the visible subset\'s)', () => {
+  it("the zones virtualize with the clips' window (scroll-follow) + el-4's fade object mounts on scroll", () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
     const scrollTo = (x: number) => {
       const sc = scrollEl();
@@ -1188,11 +1437,15 @@ describe('R23-WA: the FX engine gates (fxMode renders the zones; absence otherwi
       fireEvent.scroll(sc);
     };
     // scroll the window right so el-4 [24, 30) s = [1104, 1380) px enters:
-    // window [scroll−200, scroll+1100] — el-4's tail zone mounts with it
+    // window [scroll−200, scroll+1100] — el-4's fade-out OBJECT mounts with
+    // it (its tail zone never exists — the seeded fadeOut owns the edge)
     scrollTo(900);
-    expect(screen.getByTestId('fx-tail-el-4')).toBeInTheDocument();
-    // el-1 is culled left — its head zone virtualizes away (the clips' law)
-    expect(screen.queryByTestId('fx-head-el-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('fade-object-el-4-out')).toBeInTheDocument();
+    // el-1 + el-5 are culled left — el-1's fade object and el-5's head/tail
+    // zones virtualize away (the clips' own window law)
+    expect(screen.queryByTestId('fade-object-el-1-in')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fx-head-el-5')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fx-tail-el-5')).not.toBeInTheDocument();
     // and the mid-track el-3 NEVER gains a head or tail zone (its in-edge is
     // not a track head; its out-edge not a track tail)
     expect(screen.queryByTestId('fx-head-el-3')).not.toBeInTheDocument();
@@ -1226,12 +1479,13 @@ describe('R23-WA: seam-zone click law (apply-default / select-existing)', () => 
     expect(screen.getByTestId('transition-el-1')).toHaveAttribute('role', 'slider');
   });
 
-  it('a seam WITH a transition: click SELECTS it — no doc write, no new history entry', () => {
+  it('a seam WITH a transition: the BOX\'s pointerdown SELECTS it — no doc write, no new history entry (R24-W3 re-point: the zone is gone, F3)', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
     const pastBefore = store().past.length;
-    const zone = screen.getByTestId('fx-seam-el-2-el-3');
-    expect(zone.getAttribute('aria-label')).toContain('Select transition');
-    fireEvent.click(zone);
+    // the occupied seam renders NO zone — the transition box owns the edge
+    expect(screen.queryByTestId('fx-seam-el-2-el-3')).not.toBeInTheDocument();
+    const box = screen.getByTestId('transition-el-2');
+    fireEvent.pointerDown(box, { button: 0, pointerId: 21 });
     expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' });
     expect(store().past.length).toBe(pastBefore);
   });
@@ -1263,6 +1517,165 @@ describe('R23-WA: seam-zone click law (apply-default / select-existing)', () => 
   });
 });
 
+/* ---------- R24-W3 (DESIGN-R24 §3 W3 — A1/F3): the FX-row DnD round.
+   ONE shared parser (Clip.tsx's applyFxRowToSeam / applyFxRowToClip) behind
+   THREE doors — the Clip body, the empty SeamZone, the OCCUPIED-seam
+   TransitionBox — plus the dragOver visual grammar (HTML5 drags never fire
+   hover) and the F3 wrapper/visual split that makes short transitions
+   trimmable. dataTransfer stubs follow the file's drop pattern. ---------- */
+
+const fxRow = (name: string, cat: string) => ({
+  types: ['application/x-nle-effect'],
+  getData: () => JSON.stringify({ name, cat }),
+  dropEffect: 'copy',
+});
+const elById = (id: string) => scene1().tracks.flatMap((t) => t.elements).find((e) => e.id === id)!;
+
+describe('R24-W3 (A1-R4): drag-over visuals — the empty-seam zone + the occupied-seam ⇄ surface', () => {
+  it('an fx-row dragOver arms the seam zone: the 24px drop zone (24 wide × 24 tall, centered), the 26% mark fill, 1px border, the + glyph; dragLeave disarms', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const seam = screen.getByTestId('fx-seam-el-1-el-2');
+    expect(seam.style.width).toBe('12px'); // rest grammar unchanged
+    expect(seam.style.height).toBe('80px'); // the full-lane hit strip
+    fireEvent.dragOver(seam, { dataTransfer: fxRow('Dip to Black', 'Transition') });
+    expect(seam.style.width).toBe('24px');
+    expect(seam.style.height).toBe('24px'); // A1-R4: the drop zone renders 24px tall
+    expect(seam.style.top).toBe('28px');    // vertically centered in the 80px main lane
+    expect(seam.style.background).toContain('26%, transparent');
+    expect(seam.style.border).toBe('1px solid var(--transition-mark)');
+    expect(seam.textContent).toBe('+');     // the affordance HTML5 drags cannot hover into
+    fireEvent.dragLeave(seam, { dataTransfer: fxRow('Dip to Black', 'Transition') });
+    expect(seam.style.width).toBe('12px');
+    expect(seam.style.height).toBe('80px');
+    expect(seam.textContent).toBe('');
+  });
+
+  it('a POOL drag never arms the seam affordance (the MIME guard — the zone stays at rest; the lane\'s own pool grammar may answer below it)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const seam = screen.getByTestId('fx-seam-el-1-el-2');
+    fireEvent.dragOver(seam, { dataTransfer: { types: [POOL_DRAG_TYPE], dropEffect: '' } });
+    expect(seam.style.width).toBe('12px'); // the zone never armed
+    expect(seam.style.height).toBe('80px'); // no dragOver state
+    expect(seam.textContent).toBe('');      // no '+' affordance
+  });
+
+  it('the box as the ⇄ drop surface: a compatible dragOver widens the 14px floor box to the 24px drop floor, drops the paint to the 26% fill, swaps the glyph to ⇄; dragLeave restores', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    // shrink el-2's transition to the 0.1s domain floor — the 4.6px box
+    // renders the 14px minimum (the F3 repro geometry)
+    act(() => { useUi.getState().setTransition('el-2', { duration: 0.1 }); });
+    const box = screen.getByTestId('transition-el-2');
+    expect(box.style.width).toBe('14px'); // the sub-0.3s floor box
+    fireEvent.dragOver(box, { dataTransfer: fxRow('Wipe Left', 'Transition') });
+    expect(box.style.width).toBe('24px'); // the 24px drop floor — a real target
+    const vis = screen.getByTestId('transition-visual-el-2');
+    expect(vis.style.background).toContain('26%, transparent'); // paint drops to the fill
+    expect(box.textContent).toContain('⇄');                     // the replace affordance
+    fireEvent.dragLeave(box, { dataTransfer: fxRow('Wipe Left', 'Transition') });
+    expect(box.style.width).toBe('14px');
+    expect(vis.style.background).toContain('to bottom');        // the 30→70% gradient back
+    expect(box.textContent).not.toContain('⇄');
+  });
+
+  it('the clip body keeps its drag ring in fxMode (the fxMode twin of Clip.test\'s ring pin)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const clip = screen.getByTestId('clip-el-1');
+    fireEvent.dragOver(clip, { dataTransfer: fxRow('Vignette', 'Stylize') });
+    expect(clip.className).toContain('ring-accent');
+    fireEvent.dragLeave(clip, { dataTransfer: fxRow('Vignette', 'Stylize') });
+    expect(clip.className).not.toContain('ring-accent');
+  });
+});
+
+describe('R24-W3 (A1-R1): the occupied-seam box — the third door (replace-never-stack)', () => {
+  it('a transition row dropped on the box REPLACES the presentation and RETAINS duration + alignment (the partial patch)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    fireEvent.drop(screen.getByTestId('transition-el-2'), { dataTransfer: fxRow('Wipe Left', 'Transition') });
+    const tr = elById('el-2').transitionOut!;
+    expect(tr.presentation).toBe('Wipe Left');
+    expect(tr.type).toBe('crossfade'); // the presentation/type swap ONLY
+    expect(tr.duration).toBe(0.75);    // the user's tuning rides through
+    expect(tr.alignment).toBe(0.5);
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' }); // the fx-domain select
+    expect(store().past).toHaveLength(1); // ONE replace entry — never a stack
+  });
+
+  it('an IDENTICAL presentation short-circuits BEFORE setTransition: the Already toast + the fx-domain select, no doc write, no history (the W0 no-op twin\'s front door)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const before = JSON.stringify(elById('el-2').transitionOut);
+    fireEvent.drop(screen.getByTestId('transition-el-2'), { dataTransfer: fxRow('Cross Dissolve', 'Transition') });
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Already Cross Dissolve' });
+    expect(JSON.stringify(elById('el-2').transitionOut)).toBe(before); // untouched
+    expect(store().past).toHaveLength(0);
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' }); // the select still lands
+  });
+
+  it('the seam refusal detail splits per row-kind: a fade row names the clip-body route; an effect row names the stack route', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    fireEvent.drop(screen.getByTestId('fx-seam-el-1-el-2'), { dataTransfer: fxRow('Fade In 1s', 'Fade') });
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Seam drops take transitions' });
+    expect(store().toasts.at(-1)!.detail).toContain('fade presets drop on a clip body');
+    fireEvent.drop(screen.getByTestId('transition-el-2'), { dataTransfer: fxRow('Gaussian Blur', 'Blur') });
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Seam drops take transitions' });
+    expect(store().toasts.at(-1)!.detail).toContain('effects stack on a clip body');
+    expect(store().past).toHaveLength(0); // refusals never write
+  });
+});
+
+describe('R24-W3 (A1-R3): routing at the integrated surface', () => {
+  it('a transition row dropped on the CLIP BODY routes to the clip\'s OUTgoing seam (el-1\'s seam with el-2 mints on el-1)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    fireEvent.drop(screen.getByTestId('clip-el-1'), { dataTransfer: fxRow('Dip to Black', 'Transition') });
+    expect(elById('el-1').transitionOut).toMatchObject({ type: 'crossfade', presentation: 'Dip to Black' });
+    expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-1' });
+    expect(store().past).toHaveLength(1); // the mint — one entry
+  });
+
+  it('an fx-row drop on the EMPTY LANE is a pure no-op — no highlight, no toast, no commit (the lane\'s pool-only guard)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const lane = laneOf('el-1');
+    const toastsBefore = store().toasts.length;
+    const ev = createEvent.dragOver(lane, { dataTransfer: fxRow('Gaussian Blur', 'Blur') });
+    fireEvent(lane, ev);
+    expect(ev.defaultPrevented).toBe(false); // never a drop target for fx rows
+    expect(lane.className).not.toContain('pool-lane-ok'); // no highlight
+    fireEvent.drop(lane, { dataTransfer: fxRow('Gaussian Blur', 'Blur') });
+    expect(store().toasts).toHaveLength(toastsBefore); // silence is the law
+    expect(elById('el-1').effects).toHaveLength(1); // the seeded instance only — no stack push
+    expect(store().past).toHaveLength(0);
+  });
+});
+
+describe('R24-W3 (F3): the wrapper/visual split — trim handles reachable on SHORT transitions', () => {
+  it('hit geometry: the WRAPPER is un-clipped (height + top-[2px]); the VISUAL child is the overflow-hidden paint; the handles hang -3px/12px OUTSIDE as the visual\'s siblings, pointer-events INHERIT', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const wrap = screen.getByTestId('transition-el-2');
+    expect(wrap.className).not.toContain('overflow-hidden'); // UN-clipped — nothing eats the handle zones
+    expect(wrap.style.height).toBe('76px');
+    expect(wrap.className).toContain('top-[2px]');
+    expect(wrap.style.pointerEvents).toBe('auto'); // the fxMode gate lives on the wrapper
+    const vis = screen.getByTestId('transition-visual-el-2');
+    expect(vis.className).toContain('overflow-hidden'); // the paint child clips
+    expect(vis.style.pointerEvents).toBe('inherit');    // the visual follows the wrapper's gate
+    for (const side of ['l', 'r'] as const) {
+      const handle = screen.getByTestId(`transition-trim-${side}-el-2`);
+      expect(handle.parentElement).toBe(wrap); // the visual's SIBLINGS, the wrapper's children
+      expect(handle.style.pointerEvents).toBe('inherit'); // the handles follow the gate too
+      expect(side === 'l' ? handle.style.left : handle.style.right).toBe('-3px'); // 3px OUTSIDE the edge
+      expect(handle.style.width).toBe('12px');
+    }
+  });
+
+  it('a seam WITH a transitionOut renders NO SeamZone (the EdgeFadeZone law cloned, F3 root cause b): at the 0.1s floor the box + its handles stand alone', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    act(() => { useUi.getState().setTransition('el-2', { duration: 0.1 }); }); // the F3 repro: the 14px floor box
+    expect(screen.queryByTestId('fx-seam-el-2-el-3')).not.toBeInTheDocument(); // NO z-8 strip over the box
+    expect(screen.getByTestId('transition-el-2')).toBeInTheDocument();
+    expect(screen.getByTestId('transition-trim-l-el-2')).toBeInTheDocument(); // reachable — nothing covers them
+    expect(screen.getByTestId('transition-trim-r-el-2')).toBeInTheDocument();
+  });
+});
+
 describe('R23-WA: head/tail zone click law (half-open fade zones, #104/#105)', () => {
   it('a head zone with NO fade: click applies a 0.5s fade and selects the new object', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
@@ -1272,19 +1685,19 @@ describe('R23-WA: head/tail zone click law (half-open fade zones, #104/#105)', (
     expect(store().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-5', side: 'in' });
   });
 
-  it('a head zone WITH a fade (the fixture demo fades): click SELECTS the object — no doc write', () => {
+  it('R23-WA-REV P3 #5: an element WITH a fade renders NO zone — its fade OBJECT is the select surface (pointerdown selects, no doc write)', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
     const pastBefore = store().past.length;
-    const zone = screen.getByTestId('fx-head-el-1');
-    expect(zone.getAttribute('aria-label')).toContain('Select fade in');
-    fireEvent.click(zone);
+    expect(screen.queryByTestId('fx-head-el-1')).not.toBeInTheDocument(); // the zone is gone
+    const obj = screen.getByTestId('fade-object-el-1-in');
+    fireEvent.pointerDown(obj, { button: 0, pointerId: 5 });
     expect(store().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-1', side: 'in' });
     expect(store().past.length).toBe(pastBefore);
   });
 
-  it('the audio tail zone selects its seeded fade (the audioFade domain)', () => {
+  it('the audio fade object selects its seeded fade on pointerdown (the audioFade domain)', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
-    fireEvent.click(screen.getByTestId('fx-tail-el-6'));
+    fireEvent.pointerDown(screen.getByTestId('fade-object-el-6-out'), { button: 0, pointerId: 5 });
     expect(store().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-6', side: 'out' });
   });
 });
@@ -1295,7 +1708,7 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
     const box = screen.getByTestId('transition-el-2');
     expect(box).toHaveAttribute('role', 'slider');
     expect(box).toHaveAttribute('tabindex', '0');
-    expect(box).toHaveAttribute('aria-valuemin', '0');
+    expect(box).toHaveAttribute('aria-valuemin', '2'); // 0.1 s × 24 fps — the domain floor (R23-WA-REV P3 #8)
     expect(box).toHaveAttribute('aria-valuemax', '48'); // 2 s × 24 fps
     expect(box).toHaveAttribute('aria-valuenow', '18'); // 0.75 s = 18 frames
     expect(box).toHaveAttribute('aria-valuetext', '0.75s');
@@ -1303,7 +1716,7 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
     expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' });
   });
 
-  it('keyboard trim: ±1 frame, ⇧ ×10, Home 0, End the 2s domain max (the fade-object grammar cloned)', () => {
+  it('keyboard trim: ±1 frame, ⇧ ×10, Home the 0.1s floor, End the 2s domain max (the fade-object grammar cloned)', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
     const box = screen.getByTestId('transition-el-2');
     const dur = () => scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration;
@@ -1314,7 +1727,7 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
     fireEvent.keyDown(box, { key: 'ArrowLeft' });
     expect(dur()).toBeCloseTo(28 / 24, 10);
     fireEvent.keyDown(box, { key: 'Home' });
-    expect(dur()).toBe(0); // the floor law
+    expect(dur()).toBe(0.1); // the domain FLOOR — matches the Inspector's Duration row min (R23-WA-REV P3 #8), never a ghost 0s box
     fireEvent.keyDown(box, { key: 'End' });
     expect(dur()).toBe(2); // the domain max
     // each keypress mints its own undo entry (bracket-nudge semantics)
@@ -1326,15 +1739,33 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
     const handle = screen.getByTestId('transition-trim-r-el-2');
     const pastBefore = store().past.length;
     // cut at 17s × 46pps = 782px content x; jsdom's scroll rect collapses to
-    // identity (the fade-object drag tests' own geometry fallback)
+    // identity (the fade-object drag tests' own geometry fallback).
+    // ×2 mapping (R23-WA-REV P1): the cut-CENTERED box puts the right edge at
+    // cut + dur·pps/2, so duration = 2 × (pointer − cut)/pps — the edge then
+    // tracks the cursor 1:1.
     fireEvent.pointerDown(handle, { button: 0, pointerId: 9 });
-    fireEvent.pointerMove(handle, { pointerId: 9, buttons: 1, clientX: 828 }); // 828-782 = 46px = 1s
+    // 23px past the cut → raw = 2·23/46 = 1.0 s
+    fireEvent.pointerMove(handle, { pointerId: 9, buttons: 1, clientX: 805 });
     expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration).toBe(0.75); // NOT committed mid-drag
-    fireEvent.pointerMove(handle, { pointerId: 9, buttons: 1, clientX: 874 }); // 2s raw → clamped by the drag's own max
+    // 92px past the cut → raw = 4 s → clamped by the drag's own 2s max
+    fireEvent.pointerMove(handle, { pointerId: 9, buttons: 1, clientX: 874 });
     fireEvent.pointerUp(handle, { pointerId: 9 });
     expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration).toBe(2);
     expect(store().past.length).toBe(pastBefore + 1); // ONE entry for the whole gesture
     expect(store().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' }); // the drag also selects
+  });
+
+  it('grab-continuity (R23-WA-REV P1): a grab AT the actual edge + a sub-frame move is a frame-snapped NO-OP — the box never collapses to half', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    const handle = screen.getByTestId('transition-trim-r-el-2');
+    // el-2's 0.75 s box: right edge = 782 + 0.75·46/2 = 799.25 px
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 11, clientX: 799.25 });
+    // 0.4 px inward: raw = 2·(799.65−782)/46 = 0.767 s → frame-snaps to 18/24
+    // = 0.75 — the pre-×2 code mapped this to ~0.38 s (the collapse bug)
+    fireEvent.pointerMove(handle, { pointerId: 11, buttons: 1, clientX: 799.65 });
+    fireEvent.pointerUp(handle, { pointerId: 11 });
+    expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration).toBe(0.75);
+    expect(store().past.length).toBe(0); // the commit's no-op guard — no history entry
   });
 
   it('a press-release WITHOUT movement is a no-op (no commit, no history entry)', () => {
@@ -1349,6 +1780,28 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
 });
 
 describe('R23-WA: fxMode recedes the clip-edit surfaces (the context-menu router)', () => {
+  it('R23-WA-REV P2 #2: blade + fxMode — clip clicks SELECT, never split (the recede law beats the tool)', () => {
+    boot({ tool: 'blade', fxMode: true, selection: [] });
+    const clip = screen.getByTestId('clip-el-1');
+    expect(clip.style.cursor).toBe('pointer'); // the recede cursor, not the blade crosshair
+    const pastBefore = store().past.length;
+    fireEvent.click(clip, { clientX: 100 });
+    expect(store().selection).toEqual(['el-1']); // selected — the FX inspector shows the effect stack
+    expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements).toHaveLength(4); // NO split — the doc is untouched
+    expect(store().past.length).toBe(pastBefore);
+  });
+
+  it('R23-WA-REV P3 #4: a transition box on a LOCKED lane stays inert (no slider role, no handles)', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    // lock tr-main AFTER boot (el-2's transition box lives there) — the
+    // header's own command route (toggleTrackCmd, the §4.9 menu's law)
+    act(() => { useUi.getState().toggleTrackCmd('sc-1', 'tr-main', 'locked'); });
+    const box = screen.getByTestId('transition-el-2');
+    expect(box).not.toHaveAttribute('role', 'slider');
+    expect(box).not.toHaveAttribute('tabindex', '0');
+    expect(screen.queryByTestId('transition-trim-r-el-2')).not.toBeInTheDocument();
+  });
+
   it('right-click on a clip in fxMode NEVER opens the clip menu — the surface menu answers (D-A2.1)', () => {
     boot({ tool: 'fx', fxMode: true, selection: [] });
     fireEvent.contextMenu(screen.getByTestId('clip-el-1'), { clientX: 30, clientY: 30 });

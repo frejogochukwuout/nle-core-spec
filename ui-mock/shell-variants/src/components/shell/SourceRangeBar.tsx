@@ -10,8 +10,17 @@
    duration. Drag = slider semantics (ONE clamped write per gesture step,
    committed live — the range is view-state, not doc, so no history
    entries). Keyboard: the handles are role=slider (←/→ ±1 frame, ⇧ ×10,
-   Home/End). The trimmed range rides the insert planner (ctx.sourceRange)
-   so every edit function places the TRIMMED source. */
+   Home/End — R24-W5b: Home/End commit on EITHER handle, the slider
+   grammar; the store clamp keeps in < out). The trimmed range rides the
+   insert planner (ctx.sourceRange) so every edit function places the
+   TRIMMED source.
+
+   R24-W5b (DESIGN-R24 §2 F1-P3, gesture-law drift): the handles carry
+   the B7 pointer-release discipline (pointerup + pointercancel +
+   lostpointercapture clear the drag state; capture set/release guarded —
+   the Fader/Knob/PanBox law) and the B8 aria-orientation="horizontal".
+   Drag positioning is ABSOLUTE (time at the pointer) — no anchor math,
+   which is why DragState carries only the handle identity. */
 
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { useUi } from '../../state/useUiStore';
@@ -22,9 +31,6 @@ const FRAME = 1 / 24;
 
 interface DragState {
   which: 'in' | 'out';
-  startClientX: number;
-  startX: number;
-  duration: number;
 }
 
 export function SourceRangeBar({ mediaId }: { mediaId: string }) {
@@ -68,22 +74,42 @@ export function SourceRangeBar({ mediaId }: { mediaId: string }) {
   const onHandleDown = (which: 'in' | 'out') => (e: ReactPointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = { which, startClientX: e.clientX, startX: which === 'in' ? inT : outT, duration: dur };
+    try {
+      /* R24-W5b: guarded like Fader/Knob/PanBox — an inactive pointer id
+         (the F4 finding's throw class) must not kill the drag; capture is
+         best-effort, the move grammar works without it. */
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch { /* inactive pointer id — drag still works, capture best-effort */ }
+    dragRef.current = { which };
   };
   const onHandleMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const st = dragRef.current;
     if (!st || e.buttons !== 1) return;
-    const t = st.startX + (e.clientX - st.startClientX) * 0; // absolute positioning, not delta
+    /* ABSOLUTE positioning — the handle follows the pointer's time on the
+       bar (timeAt), never a delta off a grab anchor (the old dead `*0`
+       line was the residue of that idea, removed R24-W5b). */
     const abs = timeAt(e.clientX);
-    void t;
     if (st.which === 'in') setIn(mediaId, abs);
     else setOut(mediaId, abs);
   };
-  const onHandleUp = () => { dragRef.current = null; };
+  /* R24-W5b (F1-P3, the B7 law — Fader/Knob/PanBox discipline): a stray
+     pointerup/pointercancel/lostpointercapture must clear the drag state,
+     or the NEXT pointermove could inherit a live drag that ended. The
+     capture release is guarded (browsers/jsdom disagree on double
+     release). */
+  const releaseDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    dragRef.current = null;
+    try {
+      const el = e.currentTarget;
+      if (el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    } catch { /* capture already released */ }
+  };
+  const clearDrag = () => { dragRef.current = null; };
 
   /* keyboard slider law (the scrub row's grammar): ←/→ ±1 frame (⇧ ×10),
-     Home/End to the track ends */
+     Home/End to the track ends — R24-W5b: on EITHER handle (each slider
+     jumps its own edge to the end; the store clamp keeps in < out — the
+     old Home-on-out/End-on-in branches were preventDefault no-ops). */
   const handleKey = (which: 'in' | 'out') => (e: React.KeyboardEvent<HTMLDivElement>) => {
     const step = FRAME * (e.shiftKey ? 10 : 1);
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -94,9 +120,11 @@ export function SourceRangeBar({ mediaId }: { mediaId: string }) {
     } else if (e.key === 'Home') {
       e.preventDefault();
       if (which === 'in') setIn(mediaId, 0);
+      else setOut(mediaId, 0);
     } else if (e.key === 'End') {
       e.preventDefault();
-      if (which === 'out') setOut(mediaId, dur);
+      if (which === 'in') setIn(mediaId, dur);
+      else setOut(mediaId, dur);
     }
   };
 
@@ -122,6 +150,7 @@ export function SourceRangeBar({ mediaId }: { mediaId: string }) {
           role="slider"
           tabIndex={0}
           aria-label="Source in point"
+          aria-orientation="horizontal"
           aria-valuemin={0}
           aria-valuemax={Math.round(dur * 24)}
           aria-valuenow={Math.round(inT * 24)}
@@ -131,7 +160,9 @@ export function SourceRangeBar({ mediaId }: { mediaId: string }) {
           style={{ left: `calc(${pct(inT)} + 8px)` }}
           onPointerDown={onHandleDown('in')}
           onPointerMove={onHandleMove}
-          onPointerUp={onHandleUp}
+          onPointerUp={releaseDrag}
+          onPointerCancel={releaseDrag}
+          onLostPointerCapture={clearDrag}
           onKeyDown={handleKey('in')}
         />
         {/* OUT handle */}
@@ -139,6 +170,7 @@ export function SourceRangeBar({ mediaId }: { mediaId: string }) {
           role="slider"
           tabIndex={0}
           aria-label="Source out point"
+          aria-orientation="horizontal"
           aria-valuemin={0}
           aria-valuemax={Math.round(dur * 24)}
           aria-valuenow={Math.round(outT * 24)}
@@ -148,7 +180,9 @@ export function SourceRangeBar({ mediaId }: { mediaId: string }) {
           style={{ left: `calc(${pct(outT)} + 8px)` }}
           onPointerDown={onHandleDown('out')}
           onPointerMove={onHandleMove}
-          onPointerUp={onHandleUp}
+          onPointerUp={releaseDrag}
+          onPointerCancel={releaseDrag}
+          onLostPointerCapture={clearDrag}
           onKeyDown={handleKey('out')}
         />
       </div>

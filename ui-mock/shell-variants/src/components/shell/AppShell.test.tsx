@@ -173,8 +173,11 @@ describe('mixer dock (design doc v2.2 §4 — side by side with the lanes)', () 
     const dock = screen.getByTestId('mixer-dock-full');
     expect(timeline).toBeInTheDocument();
     expect(dock).toBeInTheDocument();
-    // same flex row: the dock lives inside the timeline block's parent, after it
-    expect(timeline.parentElement).toContainElement(dock);
+    // same flex row: R23-WB (D-B3) wrapped the lanes in their own flex column
+    // (the compact ↔ full swap lives inside it) — the CONSOLE ROW that carries
+    // lanes + dock is two levels up from the timeline surface itself
+    const consoleRow = timeline.parentElement!.parentElement!;
+    expect(consoleRow).toContainElement(dock);
     expect(timeline.compareDocumentPosition(dock)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     // strips: one per audio track (A1, A2) + aux returns + master
     expect(screen.getByTestId('mixer-strip-A1')).toBeInTheDocument();
@@ -197,61 +200,104 @@ describe('mixer dock (design doc v2.2 §4 — side by side with the lanes)', () 
 });
 
 describe('page switching via the AppDock (spec 18 §4.8)', () => {
-  it('Edit → Color: the R22-D1 composition — media pool stays, viewer dominant, inspector = color tabs, compact timeline (issues #77/#78/#79)', async () => {
+  it('Edit → Color: the R23-WB composition — viewer dominant, inspector = color tabs, compact timeline + Stills dock (issues #90–#97)', async () => {
     const user = userEvent.setup();
     renderAppShell();
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     await user.click(screen.getByTestId('shell-dock-page-color'));
     expect(store().page).toBe('color');
-    // timeline area = the compact strip (the full Timeline is GONE on this page)
+    // timeline area = the compact strip under the D-B3 density law (auto → compact on color)
     expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
     // rail = the ColorInspector (the ONE grading surface, tabs under this panel)
     expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
     expect(screen.getByRole('tablist', { name: 'Color inspector tools' })).toBeInTheDocument();
     expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
-    // left dock = the MEDIA POOL (Pool|Stills) — the node graph NEVER docks here (#77)
+    // left dock = the STILLS GALLERY, no tab bar (#91 — the pool tab died there)
     expect(screen.getByTestId('shell-leftdock')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-leftdock-tab-pool')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-leftdock-tab-stills')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Left dock' })).toBeNull();
+    expect(screen.getByTestId('shell-stills')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument();
+    // the node graph NEVER docks here (#77) — it is the viewer-region surface (D-B2)
     expect(screen.queryByTestId('shell-color-nodegraph')).not.toBeInTheDocument();
-    // the scopes console is OFF by default (nothing permanent under the viewer, #77)
+    // the scopes console is OFF by default (nothing permanent in the console row, #77)
     expect(screen.queryByTestId('shell-color-scopes')).not.toBeInTheDocument();
-    // the node-graph console dock is OFF by default (#78)
-    expect(screen.queryByTestId('shell-color-nodedock')).not.toBeInTheDocument();
+    // the node-graph viewer surface is OFF by default (#93)
+    expect(screen.queryByTestId('shell-color-nodeviewer')).not.toBeInTheDocument();
+    // D-B5/#92: the Mixer toggle is DOM-absent on color (Edit+Audio only)
+    expect(screen.queryByTestId('shell-toolbar-btn-mixer')).toBeNull();
     expect(screen.getByRole('button', { name: 'Color' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('the R22 consoles: Scopes + Nodes toggle from the toolbar (#73), the mixer renders on color too', async () => {
+  it('the R24-W2 consoles: the SCOPES PANE under the viewer + the NODE GRAPH in the console row (#67/#68 — A2-R1/R2 supersede R23-WB D-B1/D-B2)', async () => {
     const user = userEvent.setup();
     renderAppShell({ mixerState: 'full' });
     expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument(); // edit page: side by side
     await user.click(screen.getByTestId('shell-dock-page-color'));
-    // the mixer still renders on the color page (issue #73 — the toggle lives in Toolbar2)
-    expect(screen.getByTestId('mixer-dock-full')).toBeInTheDocument();
-    // the scopes console: off → grid via the toolbar toggle, then minimize from the header
+    // D-B5/#92 (the #73 reversal): entering color COLLAPSES the mixer — the
+    // dock does not render there, and its toggle is DOM-absent
+    expect(store().mixerState).toBe('collapsed');
+    expect(screen.queryByTestId('mixer-dock-full')).not.toBeInTheDocument();
+    // the scopes console: off → open via the toolbar toggle; the ~160px pane
+    // rides at the BOTTOM of the viewer's column (A2-R2 — "near the viewer",
+    // immediately visible) — the R22/R23 console-row strip is DEAD
     await user.click(screen.getByTestId('shell-toolbar-btn-scopes'));
+    const pane = screen.getByTestId('shell-color-scopes-pane');
+    expect(pane).toBeInTheDocument();
+    expect(pane).toHaveClass('h-[160px]');
+    expect(pane).toHaveClass('shrink-0');
+    expect(screen.getByTestId('shell-viewer')).toBeInTheDocument(); // the viewer STAYS — the pane only splits the column
     expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-scopes-grid')).toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-scopes-layout-grid')).toHaveAttribute('aria-pressed', 'true');
-    // row layout: the 1×4 band
-    await user.click(screen.getByTestId('shell-color-scopes-layout-row'));
-    expect(screen.getByTestId('shell-color-scopes-layout-row')).toHaveAttribute('aria-pressed', 'true');
-    // minimize: the grid unmounts, the header row survives
-    await user.click(screen.getByTestId('shell-color-scopes-collapse'));
-    expect(screen.queryByTestId('shell-color-scopes-grid')).not.toBeInTheDocument();
-    expect(screen.getByTestId('shell-color-scopes')).toBeInTheDocument();
-    // the nodes console dock: the workspace is scrollable + the dock clips (#74)
+    expect(screen.getByTestId('shell-color-scopes-tab-waveform')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('shell-color-scope-waveform')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-scope-vectorscope')).toBeNull();
+    await user.click(screen.getByTestId('shell-color-scopes-tab-vectorscope'));
+    expect(screen.getByTestId('shell-color-scope-vectorscope')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-scope-waveform')).toBeNull();
+    // the compact strip still owns the timeline lanes (the console row is
+    // empty while the nodes dock is closed — no stray stop)
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-nodeviewer')).toBeNull();
+    // the nodes console: the toggle mounts the graph in the CONSOLE-ROW slot
+    // [6] (A2-R1 — NEVER the viewer swap) — the header names the grade
+    // target, × closes; the VIEWER never leaves region [2]
     await user.click(screen.getByTestId('shell-toolbar-btn-nodes'));
-    expect(screen.getByTestId('shell-color-nodedock')).toBeInTheDocument();
+    const nv = screen.getByTestId('shell-color-nodeviewer');
+    expect(nv).toBeInTheDocument();
+    expect(nv).toHaveClass('min-w-[480px]');
+    expect(nv).toHaveClass('flex-1');
     expect(screen.getByTestId('shell-color-nodegraph')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-nodeviewer-target')).toHaveTextContent('Marina interview');
+    expect(screen.getByTestId('shell-viewer')).toBeInTheDocument(); // #67: the preview stays live while grading
+    await user.click(screen.getByTestId('shell-color-nodeviewer-close'));
+    expect(screen.queryByTestId('shell-color-nodeviewer')).toBeNull();
+    expect(screen.getByTestId('shell-viewer')).toBeInTheDocument();
     // leaving color restores the standard timeline + drops the consoles
     await user.click(screen.getByTestId('shell-dock-page-edit'));
     expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('shell-color-nodedock')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('shell-color-scopes')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-nodeviewer')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-scopes-pane')).not.toBeInTheDocument();
+  });
+
+  it('A2-R1: the node console keeps an F6 stop — now slot [6] in the console row (the center region [2] stays VIEWER-led)', () => {
+    renderAppShell({ page: 'color', colorNodesDock: true });
+    expect(screen.getByTestId('shell-viewer')).toBeInTheDocument(); // the swap is dead — the viewer stays
+    // three F6s walk toolbar → left dock → the CENTER region; the third stop
+    // is region [2] hosting the VIEWER (the graph never takes it — D-B2 died)
+    for (let i = 0; i < 3; i++) {
+      fireEvent(window, new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true }));
+    }
+    expect(document.activeElement?.contains(screen.getByTestId('shell-viewer'))).toBe(true);
+    expect(document.activeElement?.contains(screen.getByTestId('shell-color-nodeviewer'))).toBe(false);
+    // three more walk inspector → timeline → dock; the 7th lands on the node
+    // console's own slot [6] (single-writer, an off dock leaves no stop)
+    for (let i = 0; i < 4; i++) {
+      fireEvent(window, new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true }));
+    }
+    expect(document.activeElement?.contains(screen.getByTestId('shell-color-nodeviewer'))).toBe(true);
+    expect(document.activeElement?.contains(screen.getByTestId('shell-timeline-compact'))).toBe(false);
   });
 
   it('Audio dock button enters audio focus: page + full mixer + lane boost + SoundLibrary/ChannelEditor', async () => {
@@ -278,10 +324,161 @@ describe('page switching via the AppDock (spec 18 §4.8)', () => {
     expect(screen.getByTestId('shell-deliver')).toBeInTheDocument();
     // leaving audio focus by any route resets the lane boost (design §3.3)
     expect(store().audioLaneBoost).toBe(false);
+    // D-B3: 'auto' resolves compact on deliver — R24-W4 (A3-R7, #71)
+    // supersedes R23-WF: the 22px read-only ruler is UNCONDITIONAL and the
+    // 32px RANGE BAND mounts below it (54px head stack) — no-ruler and
+    // no-range-clamp both answered; the mainbody takes deliver's 50%
+    // rebalance
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline-compact-ruler')).toBeInTheDocument();
+    expect(document.querySelector('.mainbody')).toHaveStyle({ height: '50%' });
+    expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('shell-dock-page-edit'));
     expect(store().page).toBe('edit');
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-deliver')).not.toBeInTheDocument();
+  });
+});
+
+describe('R23-WB (DESIGN-R23 D-B3, issue #94) → R24-W1: the timeline density law', () => {
+  const mainbody = () => document.querySelector('.mainbody') as HTMLElement;
+  const mainbodyH = () => mainbody().style.height;
+  /* R24-W1 (A3-R4): the standalone density button is RETIRED — density
+     drives through the ViewOptionsPopover's Compact-tracks
+     menuitemcheckbox now. The checkbox KEEPS the menu open, so repeat
+     flips never re-open. */
+  const openCompactMenu = async (user: ReturnType<typeof userEvent.setup>) => {
+    if (!screen.queryByTestId('shell-menu-tl-view-options')) {
+      await user.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+    }
+    return screen.getByTestId('shell-menu-tl-view-options-compact');
+  };
+  const flipCompact = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await openCompactMenu(user));
+  };
+
+  it('color auto: compact strip + the 55% mainbody default (the tall-viewer color composition)', async () => {
+    const user = userEvent.setup();
+    renderAppShell();
+    await user.click(screen.getByTestId('shell-dock-page-color'));
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(mainbodyH()).toBe('55%');
+    // the Compact-tracks checkbox is present on EVERY page and honestly checked
+    expect(await openCompactMenu(user)).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('flipping color to FULL TRACKS drops the default mainbody to 40% (ruling 11 — the filmstrip needs lane room)', async () => {
+    const user = userEvent.setup();
+    renderAppShell();
+    await user.click(screen.getByTestId('shell-dock-page-color'));
+    await flipCompact(user);
+    // the override lands in the store; the FULL Timeline replaces the strip
+    expect(store().timelineCompact).toBe('off');
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-menu-tl-view-options-compact')).toHaveAttribute('aria-checked', 'false');
+    expect(mainbodyH()).toBe('40%');
+    // flipping back to compact restores the 55% default (the user never dragged)
+    // — the checkbox keeps the menu open, no re-open needed
+    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(mainbodyH()).toBe('55%');
+  });
+
+  it('the user-dragged mainBodyH ALWAYS wins over the density default (the mainBodyUserSet law)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ page: 'color', mainBodyH: 500, mainBodyUserSet: true });
+    expect(mainbodyH()).toBe('500px');
+    await flipCompact(user);
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(mainbodyH()).toBe('500px'); // no density flip may steal the user's height
+  });
+
+  it('compact is reachable on EDIT too (#94 — "allow to be used everywhere")', async () => {
+    const user = userEvent.setup();
+    renderAppShell();
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(await openCompactMenu(user)).toHaveAttribute('aria-checked', 'false');
+    await flipCompact(user);
+    expect(store().timelineCompact).toBe('on');
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
+    // the edit-page mainbody default stays 40% either way (only color carries the 55% compact law)
+    expect(mainbodyH()).toBe('40%');
+  });
+
+  it("'on'/'off' are per-session overrides: the user's word survives a page flip (auto does not)", async () => {
+    const user = userEvent.setup();
+    renderAppShell({ page: 'color' });
+    await user.click(screen.getByTestId('shell-dock-page-edit'));
+    expect(store().timelineCompact).toBe('auto');
+    // edit auto → full; now the user forces compact and flips BACK to color:
+    await flipCompact(user);
+    expect(store().timelineCompact).toBe('on');
+    await user.click(screen.getByTestId('shell-dock-page-color'));
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument(); // the override holds
+    expect(store().timelineCompact).toBe('on');
+  });
+});
+
+/* ---------- R23-WF (DESIGN-R23 D-F1, #107) → R24-W4 (A3-R7): the deliver
+   composition ----------
+   The compact strip (auto → on, D-B3) carries the coexistence head stack —
+   the 22px read-only ruler + the 32px RANGE BAND below it (54px; the R23-WF
+   ruler-replacement is dead, #71's "no ruler" half answered on every page) —
+   and the mainbody takes deliver's 50% rebalance (the same while-compact
+   interaction law color's 55% rides, ruling 11's shape). The band's own
+   grammar is pinned in TimelineCompact.test. */
+describe('R23-WF (DESIGN-R23 D-F1, #107): the deliver composition', () => {
+  const mainbody = () => document.querySelector('.mainbody') as HTMLElement;
+  const mainbodyH = () => mainbody().style.height;
+
+  it('deliver auto: compact strip + the ruler+BAND coexistence head row + the 50% mainbody default', () => {
+    renderAppShell({ page: 'deliver' });
+    expect(screen.getByTestId('shell-deliver')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
+    // A3-R7 coexistence: the read-only ruler is UNCONDITIONAL (never replaced)
+    expect(screen.getByTestId('shell-timeline-compact-ruler')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline')).not.toBeInTheDocument();
+    expect(mainbodyH()).toBe('50%');
+  });
+
+  it('flipping deliver to FULL TRACKS drops the default mainbody to 40% — the band goes WITH the strip (ruling 11, deliver-shaped)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ page: 'deliver' });
+    // R24-W1: density flips ride the ViewOptionsPopover now (the checkbox
+    // keeps the menu open, so the flip-back below needs no re-open)
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
+    expect(store().timelineCompact).toBe('off');
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    // the band is the compact strip's head row only — full tracks bring the
+    // full Ruler + its brackets back (the loop seam keeps every writer)
+    expect(screen.queryByTestId('shell-deliver-range-band')).not.toBeInTheDocument();
+    expect(mainbodyH()).toBe('40%');
+    // flipping back restores the band + the 50% default (the user never dragged)
+    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
+    expect(screen.getByTestId('shell-deliver-range-band')).toBeInTheDocument();
+    expect(mainbodyH()).toBe('50%');
+  });
+
+  it('the user-dragged mainBodyH ALWAYS wins on deliver too (the mainBodyUserSet law)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ page: 'deliver', mainBodyH: 500, mainBodyUserSet: true });
+    expect(mainbodyH()).toBe('500px');
+    await user.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+    await user.click(screen.getByTestId('shell-menu-tl-view-options-compact'));
+    expect(mainbodyH()).toBe('500px'); // no density flip may steal the user's height
+  });
+
+  it('the band is deliver-only: compact forced ON on edit keeps the ruler (no band leaks to other pages)', () => {
+    renderAppShell({ page: 'edit', timelineCompact: 'on' });
+    expect(screen.getByTestId('shell-timeline-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-timeline-compact-ruler')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-deliver-range-band')).not.toBeInTheDocument();
+    expect(mainbodyH()).toBe('40%'); // edit never carries a page default
   });
 });
 
@@ -503,6 +700,34 @@ describe('F6 region cycling (spec 18 §11.5)', () => {
     // to the toolbar instead of oscillating dock ↔ mixer.
     pressF6(); activeRegionHolds('shell-toolbar');
   });
+
+  it("R24-W2 (A2-R2): color + scopes open — the pane adds NO F6 stop (it rides inside the viewer region's column); the nodes console takes slot [6]", () => {
+    renderAppShell({ page: 'color', colorScopesState: 'open' });
+    // 6 stops: toolbar, left dock (the Gallery on color), the viewer region
+    // (its column CONTAINS the scopes pane — no new stop, the cycle count is
+    // unchanged), the color inspector, timeline block, app dock (the mixer
+    // is collapsed on color, D-B5 — never a stop)
+    pressF6(); activeRegionHolds('shell-toolbar');
+    pressF6(); activeRegionHolds('shell-stills');
+    pressF6(); activeRegionHolds('shell-viewer');
+    expect(screen.getByTestId('shell-color-scopes-pane')).toBeInTheDocument(); // the pane is INSIDE this region's column
+    pressF6(); activeRegionHolds('shell-color-inspector');
+    pressF6(); activeRegionHolds('shell-timeline-compact');
+    pressF6(); activeRegionHolds('shell-dock');
+    pressF6(); activeRegionHolds('shell-toolbar'); // wraps at SIX — no scopes stop ever
+    // opening the nodes console adds slot [6] (single-writer — the graph
+    // takes the stop the scopes vacated when it moved under the viewer)
+    act(() => { useUi.setState({ colorNodesDock: true }); });
+    pressF6(); activeRegionHolds('shell-stills');
+    pressF6(); activeRegionHolds('shell-viewer');
+    pressF6(); activeRegionHolds('shell-color-inspector');
+    pressF6(); activeRegionHolds('shell-timeline-compact');
+    pressF6(); activeRegionHolds('shell-dock');
+    pressF6(); // stop 7 — the node graph console (slot [6])
+    activeRegionHolds('shell-color-nodeviewer');
+    expect(document.activeElement).not.toContainElement(screen.getByTestId('shell-timeline-compact'));
+    pressF6(); activeRegionHolds('shell-toolbar'); // wraps
+  });
 });
 
 describe('keyboard multi-delete confirm (spec 18 §6.4 — R13 parity with the clip-menu path)', () => {
@@ -532,6 +757,33 @@ describe('app dock cheat-sheet button (spec 16 §7.3 entry point)', () => {
     expect(screen.getByTestId('shell-cheatsheet')).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Keyboard cheat sheet' })).toBeInTheDocument();
   });
+
+  it('R24-W5b (F1 P2): plain F6 does NOT escape the open cheat sheet — the region cycler never fires under the modal', () => {
+    renderAppShellWithCheatSheet();
+    // open the sheet through the real dock entry
+    fireEvent.click(screen.getByRole('button', { name: 'Keyboard cheat sheet' }));
+    const sheet = screen.getByTestId('shell-cheatsheet');
+    expect(sheet).toHaveAttribute('aria-modal', 'true');
+    // focus a NON-field element inside the sheet — the search input would be
+    // masked by the AppShell F6 handler's text-field guard; the close button
+    // is the honest probe for F1's escape (focus used to land on a
+    // background shell region while the modal stayed open)
+    const close = screen.getByLabelText('Close cheat sheet');
+    close.focus();
+    fireEvent.keyDown(close, { key: 'F6', bubbles: true, cancelable: true });
+    // the sheet owns the keyboard while open: focus stays inside the dialog…
+    expect(document.activeElement).toBe(close);
+    expect(sheet).toContainElement(document.activeElement as HTMLElement);
+    // …the sheet is still open (F6 consumed, not a close)…
+    expect(store().cheatOpen).toBe(true);
+    // …and Esc still closes through the capture listener (the existing law
+    // survives the new all-keys shield)
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    expect(store().cheatOpen).toBe(false);
+    expect(screen.queryByTestId('shell-cheatsheet')).not.toBeInTheDocument();
+  });
 });
 
 describe('splitter keyboard resize (R14 — the keyStep implementation finally pinned)', () => {
@@ -557,6 +809,63 @@ describe('splitter keyboard resize (R14 — the keyStep implementation finally p
   });
 });
 
+/* ---------- R24-W5d (F5-P2, DESIGN-R24 §3 W5d): the splitter keyboard is
+   REACHABLE. role=separator + onKeyDown had NO tabIndex — live tab skipped
+   the seams, a click left focus on <body> and Arrow* hit nothing while
+   AppShell.test's direct keyDown dispatches kept jsdom green (the F1/F2
+   live-vs-jsdom class). jsdom cannot pin the real TAB ORDER; it CAN pin the
+   wiring: the tab stops exist, focus() lands on the seam, and the keydown
+   routed at the FOCUSED element fires the store write. ---------- */
+describe('R24-W5d: splitter tabIndex + focus wiring (the F5-P2 fix)', () => {
+  it('every seam separator is a TAB STOP (tabIndex 0) — the §11 ladder can reach them', () => {
+    renderAppShell();
+    const seps = screen.getAllByRole('separator');
+    expect(seps.length).toBeGreaterThanOrEqual(3); // pool / inspector / timeline H seams
+    for (const sep of seps) expect(sep).toHaveAttribute('tabindex', '0');
+  });
+
+  it('the focused inspector seam answers ArrowRight routed AT FOCUS (not only a direct dispatch)', () => {
+    renderAppShell();
+    const sep = seamBefore('shell-inspector');
+    sep.focus();
+    expect(document.activeElement).toBe(sep); // jsdom CAN pin focus placement
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowRight' });
+    expect(store().inspectorW).toBe(332); // 340 − 8 — the focused seam's handler ran
+    // the focus-ring grammar: the seam line carries the house accent while
+    // focused (the global :focus-visible outline + the group accent class)
+    expect(sep.innerHTML).toContain('group-focus-visible:bg-accent');
+  });
+});
+
+/* ---------- R24-W5d (F5-P3, the setMainBodyH twin law — R23-WB-REV fixed
+   the H seam's reset flag, this V seam's didn't): the inspector dbl-click
+   reset un-pins inspectorWUserSet so the page-aware default honestly
+   resumes. ---------- */
+describe('R24-W5d: the inspector seam dbl-click reset un-pins inspectorWUserSet', () => {
+  it('a drag pins the flag; the dbl-click reset restores the default width AND clears the flag (edit: 340)', () => {
+    renderAppShell();
+    const sep = seamBefore('shell-inspector');
+    fireEvent.pointerDown(sep, { pointerId: 1, button: 0, clientX: 600 });
+    fireEvent.pointerMove(sep, { pointerId: 1, buttons: 1, clientX: 540 });
+    expect(store().inspectorW).toBe(400);
+    expect(store().inspectorWUserSet).toBe(true); // the drag pinned it
+    fireEvent.doubleClick(sep);
+    expect(store().inspectorW).toBe(340); // the edit structural default
+    expect(store().inspectorWUserSet).toBe(false); // THE FIX: the flag no longer pins the width
+  });
+
+  it('on COLOR the reset restores the 420 page default (the flag cleared, not just the width)', () => {
+    renderAppShell({ page: 'color' });
+    act(() => { store().setInspectorW(500); }); // the real writer pins the flag
+    expect(store().inspectorWUserSet).toBe(true);
+    // the color rail is the ColorInspector (shell-color-inspector) — the seam
+    // still precedes the same wrapper
+    fireEvent.doubleClick(seamBefore('shell-color-inspector'));
+    expect(store().inspectorWUserSet).toBe(false);
+    expect(store().inspectorW).toBe(420); // the color page-aware default resumes
+  });
+});
+
 describe('R19 rail routing: marker / caption selection swaps the inspector (AppShell seam)', () => {
   it('a selected marker swaps the rail for the embedded MarkerInspector; Done returns to the clip inspector', async () => {
     const user = userEvent.setup();
@@ -577,5 +886,193 @@ describe('R19 rail routing: marker / caption selection swaps the inspector (AppS
     await user.click(screen.getByTestId('clip-el-1'));
     expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-caption-inspector')).not.toBeInTheDocument();
+  });
+});
+
+/* ---------- R23-WC (DESIGN-R23 D-C2 + Part IX ruling 10, #99): the
+   channel-selected rail law. A focused mixer strip (stripFocus) + NO clip
+   selection routes the right rail to the ChannelEditor on ANY page; the
+   priority is clip selection (the edit domain) > strip focus > page default,
+   and every ACTIVE selection domain (marker / caption / FX object / track)
+   outranks a carried focus. ---------- */
+describe('R23-WC D-C2 (#99): the channel-selected rail law', () => {
+  it('clicking a strip with no clip selected routes the EDIT rail to the ChannelEditor — no "clip not selected" complaint', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ mixerState: 'full', selection: [] });
+    // nothing live yet: the edit page's default rail (Inspector) shows
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
+    await user.click(screen.getByTestId('mixer-strip-A2'));
+    expect(store().stripFocus).toBe('tr-audio-2');
+    expect(screen.getByTestId('shell-channel-editor')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
+    // the #99 death: the editor's CLIP section is HIDDEN (no empty hole), the
+    // focused channel's TRACK section is the content
+    expect(screen.queryByTestId('shell-channel-editor-state-noclip')).toBeNull();
+    expect(screen.getByText('BGM')).toBeInTheDocument(); // A2's role chip
+  });
+
+  it('priority: a clip selection outranks the strip focus (the edit domain wins)', () => {
+    renderAppShell({ mixerState: 'full', selection: ['el-6'], stripFocus: 'tr-audio-2' });
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+    // the clip deselects → the branch takes over (clip selection > focus)
+    act(() => { useUi.setState({ selection: [] }); });
+    expect(screen.getByTestId('shell-channel-editor')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-inspector')).not.toBeInTheDocument();
+  });
+
+  it('R23-FIX R-a RE-PIN — the FX page rail WINS over a carried strip focus (page rails outrank a focus that page owns no toggle for)', () => {
+    /* R-a (review-sweep): the chain is marker/caption → page rails →
+       channelRailLive → Inspector, so a carried stripFocus no longer swaps
+       the FX page's rail (the old ruling-10 test pinned the prior order —
+       the page's own surface now answers; the #99 case still holds on the
+       EDIT page, which has no page rail). */
+    renderAppShell({ page: 'fx', fxMode: true, selection: [], stripFocus: 'tr-audio-1' });
+    expect(screen.getByTestId('shell-fxinspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+    // the focus is still LIVE in the store — returning to EDIT routes it
+    act(() => { useUi.setState({ page: 'edit' }); });
+    expect(screen.getByTestId('shell-channel-editor')).toBeInTheDocument();
+  });
+
+  it('R23-FIX R-a RE-PIN — the COLOR page rail wins over a carried focus too; a clip selection keeps it (priority law)', () => {
+    renderAppShell({ page: 'color', selection: [], stripFocus: 'tr-audio-1' });
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+    // clip selection keeps the page's own rail (unchanged law)
+    act(() => { useUi.setState({ selection: ['el-1'] }); });
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+  });
+
+  it('an ACTIVE marker selection outranks a carried strip focus (the R19 rail law preserved)', () => {
+    renderAppShell({ selection: [], selectedMarkerId: 'mk-2', stripFocus: 'tr-audio-1' });
+    expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+  });
+
+  it('a stale stripFocus id (no audio track in the active scene) never fires the branch', () => {
+    renderAppShell({ selection: [], stripFocus: 'tr-audio-404' });
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-channel-editor')).not.toBeInTheDocument();
+  });
+});
+
+/* ---------- R23-FIX (review-sweep): the R-a rail hoist + the R-c left-dock
+   table mount + the R-b FX density + the scene-switch marker clear —
+   the review round's new shell laws, pinned at the composition level ---------- */
+
+describe('R23-FIX R-a: marker/caption rails hoist above the page rails', () => {
+  it('the marker rail is reachable on the COLOR page (the old chain buried it under the page default)', () => {
+    renderAppShell({ page: 'color', selection: [], selectedMarkerId: 'mk-2' });
+    expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-inspector')).not.toBeInTheDocument();
+    // Done exits the domain → the page default returns
+    fireEvent.click(screen.getByTestId('shell-marker-inspector-done'));
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+  });
+
+  it('the marker rail is reachable on the FX page too (an ACTIVE selection is newer intent than the page default)', () => {
+    renderAppShell({ page: 'fx', fxMode: true, selection: [], selectedMarkerId: 'mk-2' });
+    expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-fxinspector')).not.toBeInTheDocument();
+  });
+
+  it('the caption rail hoists on color: a single caption-track selection swaps the rail there', () => {
+    renderAppShell({ page: 'color', selection: ['cap-3'] });
+    expect(screen.getByTestId('shell-caption-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-color-inspector')).not.toBeInTheDocument();
+  });
+
+  it('the page default still owns the rail when no domain is live (the hoist changes nothing else)', () => {
+    renderAppShell({ page: 'color', selection: [], selectedMarkerId: null });
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+    document.querySelectorAll('body > [data-appshell-host]').forEach((el) => el.remove());
+    renderAppShell({ page: 'fx', fxMode: true, selection: [] });
+    expect(screen.getByTestId('shell-fxinspector')).toBeInTheDocument();
+  });
+});
+
+describe('R23-FIX R-c: the left-dock slot is table-driven (audio + fx own it)', () => {
+  it('the AUDIO slot mounts the SoundLibrary with the pool flag OFF (gatedByPool: false)', () => {
+    renderAppShell({ page: 'audio', panels: { mediaPool: false, effects: false, inspector: true } });
+    expect(screen.getByTestId('shell-soundlibrary')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument();
+  });
+
+  it('the FX slot mounts the FxBrowser with the pool flag OFF', () => {
+    renderAppShell({ page: 'fx', fxMode: true, panels: { mediaPool: false, effects: false, inspector: true } });
+    expect(screen.getByTestId('shell-fxbrowser')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument();
+  });
+
+  it('the Toolbar2 left toggle is DOM-absent on audio + fx (the slot is unconditional — no toggle to lie)', () => {
+    for (const p of ['audio', 'fx', 'deliver'] as const) {
+      renderAppShell({ page: p, ...(p === 'fx' ? { fxMode: true } : {}) });
+      expect(screen.queryByTestId('shell-toolbar-btn-mediapool')).toBeNull();
+      document.querySelectorAll('body > [data-appshell-host]').forEach((el) => el.remove());
+    }
+    // edit keeps the gated toggle (pinned above; the pool flag gates there)
+    renderAppShell({ page: 'edit', panels: { mediaPool: false, effects: false, inspector: true } });
+    expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument(); // gated OFF
+  });
+
+  it('edit + color stay gated by the pool flag exactly as before', () => {
+    for (const p of ['edit', 'color'] as const) {
+      renderAppShell({ page: p, panels: { mediaPool: false, effects: false, inspector: true } });
+      expect(screen.queryByTestId('shell-mediapool')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('shell-stills')).not.toBeInTheDocument();
+      document.querySelectorAll('body > [data-appshell-host]').forEach((el) => el.remove());
+      renderAppShell({ page: p, panels: { mediaPool: true, effects: false, inspector: true } });
+      expect(p === 'edit'
+        ? screen.getByTestId('shell-mediapool')
+        : screen.getByTestId('shell-stills')).toBeInTheDocument();
+      document.querySelectorAll('body > [data-appshell-host]').forEach((el) => el.remove());
+    }
+  });
+});
+
+describe('R23-FIX R-b: the FX page forces the full Timeline', () => {
+  it("fx + the user's 'on' override STILL resolves full tracks (the resolver wins over the session word on fx)", () => {
+    renderAppShell({ page: 'fx', fxMode: true, timelineCompact: 'on' });
+    expect(screen.getByTestId('shell-timeline')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-timeline-compact')).not.toBeInTheDocument();
+    // and the density toggle is DOM-absent there (no control claims the override)
+    expect(screen.queryByTestId('shell-timeline-toolbar-btn-density')).toBeNull();
+  });
+});
+
+describe('R23-FIX item 2: the scene switch clears the marker domain — the rail is never blank', () => {
+  it('selecting a marker, then switching scenes, returns the rail to the page default (no stale blank MarkerInspector)', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ selection: [], selectedMarkerId: 'mk-2' });
+    expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
+    await user.click(screen.getByTestId('shell-scene-tab-sc-2'));
+    expect(store().activeSceneId).toBe('sc-2');
+    expect(store().selectedMarkerId).toBe(null); // the 7th clear-site law
+    expect(screen.queryByTestId('shell-marker-inspector')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shell-inspector')).toBeInTheDocument(); // honest default, never blank
+  });
+});
+
+describe('R23-FIX R5-P3#5: the F6 guard', () => {
+  it('F6 never steals focus from a text field (INPUT/SELECT/TEXTAREA/contentEditable)', () => {
+    renderAppShell();
+    const field = screen.getByLabelText('Search media'); // the pool's search input
+    field.focus();
+    // a real browser dispatches keydown on the FOCUSED element — it bubbles
+    // to the window listener; the guard reads e.target (the field)
+    fireEvent.keyDown(field, { key: 'F6', bubbles: true, cancelable: true });
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('F6 with a modifier passes through (no preventDefault on OS/browser chords)', () => {
+    renderAppShell();
+    const chord = new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true, metaKey: true });
+    fireEvent(window, chord);
+    expect(chord.defaultPrevented).toBe(false);
+    // plain F6 still cycles (the normative rung)
+    fireEvent(window, new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true }));
+    expect(document.activeElement?.className).toContain('shell-region');
   });
 });

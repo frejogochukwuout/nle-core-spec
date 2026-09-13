@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useActiveScene, trackHeights, useUi, mintTrackIds, activeTrackOf } from './useUiStore';
+import { useActiveScene, trackHeights, useUi, mintTrackIds, activeTrackOf, resolveTimelineCompact } from './useUiStore';
 import { resolveGroupMove } from '../lib/timelinePlacement';
 import { project } from '../lib/mockData';
 
@@ -241,6 +241,82 @@ describe('selection semantics', () => {
     expect(S().activeSceneId).toBe('sc-2');
     expect(S().selection).toEqual([]);
   });
+
+  /* ---------- R23-FIX (review-sweep): the domain-clear law closes its gaps ---------- */
+
+  it('R23-FIX item 2 (R2-F1): scene switch clears the marker domain — the 7th clear-site law', () => {
+    act(() => { S().setActiveScene('sc-1'); });
+    act(() => { S().selectMarker('mk-2'); });
+    expect(S().selectedMarkerId).toBe('mk-2');
+    act(() => { S().setActiveScene('sc-2'); });
+    /* marker ids are scene-scoped (scene.markers): a carried id resolved to
+       nothing in the new scene and the AppShell rail swap mounted a BLANK
+       MarkerInspector (the stale-id blank-rail bug, R2-F1/R5-P2-1) */
+    expect(S().selectedMarkerId).toBe(null);
+    act(() => { S().setActiveScene('sc-1'); }); // restore for the siblings below
+  });
+
+  it('R23-FIX item 2: deleting the ACTIVE scene clears the marker domain too (it is a scene switch)', () => {
+    act(() => { S().setActiveScene('sc-1'); });
+    act(() => { S().selectMarker('mk-2'); });
+    act(() => { S().deleteScene('sc-1'); });
+    expect(S().activeSceneId).toBe('sc-2');
+    expect(S().selectedMarkerId).toBe(null); // never a stale blank rail on the successor scene
+    act(() => { S().undo(); }); // restore sc-1 (the undo-history suite's own pattern)
+    expect(S().activeSceneId).toBe('sc-1');
+  });
+
+  /* R24-W5c (DESIGN-R24 §2 F4-P3): the 8th clear-site domain — stripFocus.
+     A focused strip carried across a scene switch resolved to a track id
+     that exists in NO new scene (harmless today — the ChannelEditor's
+     stripLive resolver degrades to the first-track fallback — but the
+     store carried the stale id; the D-C2 class). */
+  it('R24-W5c F4: scene switch clears stripFocus — the 8th clear-site domain (no stale mixer focus)', () => {
+    act(() => { S().setActiveScene('sc-1'); });
+    act(() => { S().setStripFocus('tr-audio-2'); });
+    expect(S().stripFocus).toBe('tr-audio-2');
+    act(() => { S().setActiveScene('sc-2'); });
+    expect(S().stripFocus).toBe(null); // the focus died with the scene
+    act(() => { S().setActiveScene('sc-1'); }); // restore for the siblings below
+  });
+
+  it('R23-FIX item 3 (R5-P2-2): Tab selection clears the marker domain (+ track + project mode)', () => {
+    /* the prior state a Tab walk can hit: marker rail live + a selection
+       cursor + project mode on (booted directly — the domain writers can't
+       co-live through their own APIs, but the neighbor writer must clear
+       them from ANY prior state, the same spread setSelection carries) */
+    act(() => {
+      useUi.setState({ activeSceneId: 'sc-1', selection: ['el-2'], selectedMarkerId: 'mk-2', selectedTrackId: 'tr-audio-1', inspectorProjectMode: true });
+    });
+    act(() => { S().selectNeighbors(1); }); // Tab → el-3
+    expect(S().selection).toEqual(['el-3']);
+    expect(S().selectedMarkerId).toBe(null); // the marker domain died with the fresh clip selection
+    expect(S().selectedTrackId).toBe(null);
+    expect(S().inspectorProjectMode).toBe(false); // a domain change exits project mode
+  });
+
+  it('R23-FIX item 3: ⌘A (selectTrackElements) exits project mode + clears the marker domain', () => {
+    act(() => {
+      useUi.setState({ activeSceneId: 'sc-1', selection: ['el-2'], selectedMarkerId: 'mk-1', inspectorProjectMode: true });
+    });
+    act(() => { S().selectTrackElements('tr-main', false); });
+    expect(S().selection).toEqual(['el-1', 'el-2', 'el-3', 'el-4']);
+    expect(S().inspectorProjectMode).toBe(false); // ⌘A exits project mode — same spread setSelection uses
+    expect(S().selectedMarkerId).toBe(null);
+    expect(S().selectedTrackId).toBe(null);
+  });
+
+  it('R23-FIX item 3: the effect domain rides the Tab survival law (alive while its clip IS the selection, dead when it leaves)', () => {
+    act(() => { useUi.setState({ activeSceneId: 'sc-1', selection: ['el-1'] }); });
+    act(() => { S().selectEffect('el-1', 'fx-1'); });
+    act(() => { S().selectNeighbors(-1); }); // clamps at el-1 (first on main) — the clip survives the write
+    expect(S().selection).toEqual(['el-1']);
+    expect(S().selectedEffectId).toBe('fx-1'); // alive — its clip IS the new selection (D4.2)
+    act(() => { S().selectNeighbors(1); }); // Tab → el-2: the effect's clip left the selection
+    expect(S().selection).toEqual(['el-2']);
+    expect(S().selectedEffectId).toBe(null); // dead — the same law setSelection carries
+    expect(S().selectedEffectClipId).toBe(null);
+  });
 });
 
 /* ---------- media pool selection ---------- */
@@ -383,6 +459,27 @@ describe('track flag commands', () => {
     expect(S().lockAll).toBe(false);
     expect(track('sc-1', 'tr-audio-2').locked).toBe(false); // originally locked, now unlocked
   });
+
+  /* R24-W5d (W1's debt — the converging flip's single-undo seam): ONE
+     withHistory write converges every audio track's §4.7 waveform flag;
+     already-converged calls mint NOTHING (the toggleTrackCmd no-op law). */
+  it('setAllTrackWaveforms converges every audio flag in ONE undoable write; a converged call is a true no-op', () => {
+    const audio = () => S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.filter((t) => t.kind === 'audio');
+    // fixture boots A1/A2 undefined (the §4.7 quirk — reads as ON)
+    act(() => { S().setAllTrackWaveforms(false); });
+    expect(audio().every((t) => t.waveform === false)).toBe(true); // converged in ONE write
+    expect(S().past).toHaveLength(1); // THE FIX: was 4 (undefined→true→false × 2 tracks)
+    expect(S().future).toHaveLength(0);
+    // converged again → no-op, no history
+    act(() => { S().setAllTrackWaveforms(false); });
+    expect(S().past).toHaveLength(1);
+    // back on: ONE entry again, undo lands exactly on the converged state
+    act(() => { S().setAllTrackWaveforms(true); });
+    expect(S().past).toHaveLength(2);
+    expect(audio().every((t) => t.waveform === true)).toBe(true);
+    act(() => { S().undo(); });
+    expect(audio().every((t) => t.waveform === false)).toBe(true); // one undo = full revert
+  });
 });
 
 /* ---------- audio focus state machine (design doc §3) ---------- */
@@ -418,17 +515,38 @@ describe('audio focus', () => {
     expect(S().mixer.tracks[newId].fader).toBe(-6);
   });
 
-  it('cycleMixerState: Edit walks collapsed → meters → full → collapsed; Audio toggles meters ↔ full (R20-W1 D1.4)', () => {
-    act(() => { S().cycleMixerState(); });
-    expect(S().mixerState).toBe('meters');
-    act(() => { S().cycleMixerState(); });
-    expect(S().mixerState).toBe('full');
-    act(() => { S().cycleMixerState(); });
+  /* R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 — cycleMixerState is
+     DELETED; these pins guard the deletion so it can never silently
+     return): the store exposes NO cycle action and NO floor-warn flag. */
+  it('R24-W1 deletion pins: cycleMixerState + mixerFloorWarned are gone from the store (they can never silently return)', () => {
+    const s = S() as unknown as Record<string, unknown>;
+    expect(s.cycleMixerState).toBeUndefined();
+    expect(s.mixerFloorWarned).toBeUndefined();
+    // the cycle's page-aware meters↔full branch died with it — the only
+    // writers left are setMixerState (raw) + toggleMixerOpen (binary)
+    expect(typeof s.setMixerState).toBe('function');
+    expect(typeof s.toggleMixerOpen).toBe('function');
+  });
+
+  it('R24-W1 (A3-R3/#65/#66): toggleMixerOpen is a BINARY toggle with lastVisual memory (full by default)', () => {
     expect(S().mixerState).toBe('collapsed');
-    act(() => { S().setPage('audio'); S().setMixerState('full'); S().cycleMixerState(); });
-    expect(S().mixerState).toBe('meters');
-    act(() => { S().cycleMixerState(); });
-    expect(S().mixerState).toBe('full');
+    expect(S().mixerLastVisual).toBe('full'); // the default re-open target
+    act(() => { S().toggleMixerOpen(); });
+    expect(S().mixerState).toBe('full'); // collapsed → the remembered visual
+    act(() => { S().toggleMixerOpen(); });
+    expect(S().mixerState).toBe('collapsed'); // open → closed, memory kept
+    expect(S().mixerLastVisual).toBe('full');
+    act(() => { S().toggleMixerOpen(); });
+    expect(S().mixerState).toBe('full'); // round-trip returns to the memory
+    // the meters visual is a legit memory (the audio page's mode — the dock
+    // header's mode action writes it, the close remembers it)
+    act(() => { S().setMixerState('meters'); });
+    act(() => { S().toggleMixerOpen(); });
+    expect(S().mixerState).toBe('collapsed');
+    expect(S().mixerLastVisual).toBe('meters');
+    act(() => { S().toggleMixerOpen(); });
+    expect(S().mixerState).toBe('meters'); // re-open returns to the LAST non-collapsed state
+    act(() => { useUi.setState({ mixerState: 'collapsed', mixerLastVisual: 'full' }); });
   });
 
   it('strip display flags (R20-W1 B6): R/I toggle in STORE view-state, defaulting off/on', () => {
@@ -442,7 +560,28 @@ describe('audio focus', () => {
     expect(S().stripInsertsOn['tr-audio-2']).toBe(false); // boots ON (?? true)
     act(() => { S().toggleStripInserts('tr-audio-2'); });
     expect(S().stripInsertsOn['tr-audio-2']).toBe(true);
-    expect(S().mixerFloorWarned).toBe(false); // D1.3 one-toast flag boots clear
+    // R24-W1: mixerFloorWarned is DELETED (the floor is a silent render-level
+    // fallback in MixerDock's container now — deletion-pinned above)
+  });
+
+  /* R23-WC (DESIGN-R23 D-C3; issue #70): the full dock's master/bus bank
+     meters-only collapse — view state in the stripArm precedent's law, never
+     inside a withHistory snapshot (the undo round-trip is the pin). */
+  it('masterBusCollapsed (D-C3/#70): boots expanded, toggles, and never rides a snapshot', () => {
+    expect(S().masterBusCollapsed).toBe(false); // the bank boots FULL strips
+    act(() => { S().toggleMasterBus(); });
+    expect(S().masterBusCollapsed).toBe(true);
+    // a doc mutation mints a history entry; undoing it must NOT revert the
+    // flag (the snapshot slice stays scenes/activeSceneId/lockAll/selection/
+    // mockGrades — view state rides no snapshot)
+    const pastBefore = S().past.length;
+    act(() => { S().toggleTrackCmd('sc-1', 'tr-audio-1', 'solo'); });
+    expect(S().past.length).toBe(pastBefore + 1);
+    act(() => { S().undo(); });
+    expect(S().past.length).toBe(pastBefore);
+    expect(S().masterBusCollapsed).toBe(true); // survived the undo round-trip
+    act(() => { S().toggleMasterBus(); });
+    expect(S().masterBusCollapsed).toBe(false);
   });
 });
 
@@ -640,6 +779,17 @@ describe('effects commands', () => {
     expect(el('el-1').effects![0].params).toEqual({ radius: 42 });
     act(() => { S().removeEffect('el-1', 'fx-1'); });
     expect(el('el-1').effects).toEqual([]);
+  });
+
+  it('R24-W5d (F5-P3 — the canonical no-op law): unknown ids / missing fxIds mint NO history entry', () => {
+    const past0 = S().past.length;
+    act(() => { S().toggleEffect('nope', 'fx-1'); });   // unknown elementId
+    act(() => { S().toggleEffect('el-2', 'fx-none'); }); // known element, missing fxId
+    act(() => { S().removeEffect('nope', 'fx-1'); });   // unknown elementId
+    act(() => { S().removeEffect('el-2', 'fx-none'); }); // known element, missing fxId
+    expect(S().past.length).toBe(past0); // THE FIX: unchanged doc → no history mint
+    expect(el('el-1').effects![0].enabled).toBe(false); // untouched
+    expect(el('el-2').effects).toBeUndefined(); // no stack was conjured
   });
 
   it('REGRESSION (deep clone): undo/redo round-trips NESTED mutations — effects + transitionOut', () => {
@@ -865,6 +1015,29 @@ describe('setMainBodyH (0 = auto sentinel)', () => {
   });
 });
 
+/* R24-W5d (F5-P3, DESIGN-R24 §3 W5d — the mainBody twin law): the §3.2
+   dbl-click seam reset clears inspectorWUserSet so the page-aware default
+   honestly resumes (a pinned flag kept the color 420 after flipping to
+   edit — the width families' reset law). */
+describe('resetInspectorW (R24-W5d — the un-pinning seam reset)', () => {
+  it('restores the 340 edit default and CLEARS the user flag; the page default follows the page', () => {
+    act(() => { S().setInspectorW(500); });
+    expect(S().inspectorWUserSet).toBe(true);
+    act(() => { S().resetInspectorW(); });
+    expect(S().inspectorW).toBe(340);
+    expect(S().inspectorWUserSet).toBe(false);
+    // color: the page-aware default is 420 (R22-D2)
+    act(() => { S().setPage('color'); S().setInspectorW(460); });
+    expect(S().inspectorWUserSet).toBe(true);
+    act(() => { S().resetInspectorW(); });
+    expect(S().inspectorW).toBe(420);
+    expect(S().inspectorWUserSet).toBe(false);
+    // a later drag re-pins the flag through the ONE writer
+    act(() => { S().setInspectorW(500); });
+    expect(S().inspectorWUserSet).toBe(true);
+  });
+});
+
 /* ---------- R13 review-fix regressions ---------- */
 
 describe('R13 review fixes', () => {
@@ -1037,6 +1210,27 @@ describe('R14: loop ordering law (markIn/markOut can never invert)', () => {
     act(() => { S().setPlayhead(1); S().markOut(); });
     expect(S().loop.end).toBe(1);
     expect(S().loop.start).toBeLessThanOrEqual(1); // was 2 — dragged down
+  });
+  /* R23-WF (D-F1, #107): s.loop now has THREE writers — markIn/markOut
+     here, the full Ruler's bracket applyBracket, and the deliver range
+     band's commitBand (TimelineCompact's head row). The honest
+     triple-source risk is pinned AT STORE LEVEL: the ordering law
+     (start <= end) must hold from EVERY writer, so the store's own two
+     writers are swept across the whole playhead domain below (the two
+     component writers' verbatim-formula clones are pinned in their own
+     files: Ruler.test 'ordering law' + TimelineCompact.test's R23-WF
+     band pins). */
+  it('R23-WF: the ordering law holds from the store writers across the whole playhead domain (the triple-source sweep)', () => {
+    for (const t of [0, 0.4, 2, 15.999, 28, 29.9, 30]) {
+      act(() => { S().setPlayhead(t); S().markIn(); });
+      expect(S().loop.start).toBeLessThanOrEqual(S().loop.end);
+      act(() => { S().setPlayhead(t); S().markOut(); });
+      expect(S().loop.start).toBeLessThanOrEqual(S().loop.end);
+    }
+    // the sweep ends at the degenerate full-tail window {30,30}; marking out
+    // at 0 then pulls start down WITH it — the invariant survives every edge
+    act(() => { S().setPlayhead(0); S().markOut(); });
+    expect(S().loop).toEqual({ start: 0, end: 0 });
   });
 });
 
@@ -2187,6 +2381,74 @@ describe('R23-WA: selectedFxObject — the seventh selection domain', () => {
   });
 });
 
+describe('R24-W0: the store prep — fx-domain exit laws + the transition no-op twin + split clears the pointing rail', () => {
+  it('W0.1: leaving the FX page clears selectedFxObject (the page-transition leak — F5-P2)', () => {
+    act(() => { S().setPage('fx'); });
+    act(() => { S().setSelection(['el-1']); });
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'in' }); });
+    expect(S().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-1', side: 'in' });
+    act(() => { S().setPage('edit'); }); // ⌘1 — the leak route Delete abused
+    expect(S().selectedFxObject).toBe(null);
+    // the survival law still holds WITHIN the page (selection changes only)
+    act(() => { S().setPage('fx'); });
+    act(() => { S().selectFxObject({ kind: 'transition', elementId: 'el-2' }); });
+    expect(S().selectedFxObject).toEqual({ kind: 'transition', elementId: 'el-2' });
+    act(() => { S().setPage('color'); });
+    expect(S().selectedFxObject).toBe(null);
+  });
+
+  it('W0.1 raw-writer twin: enterAudioFocus from the FX page clears the domain (the fxMode coupling pattern)', () => {
+    act(() => { S().setPage('fx'); });
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'out' }); });
+    act(() => { S().enterAudioFocus('shortcut'); });
+    expect(S().page).toBe('audio');
+    expect(S().selectedFxObject).toBe(null);
+  });
+
+  it('W0.2: an IDENTICAL patch on an existing transition mints NO history entry (A1 no-op twin)', () => {
+    // el-2's fixture transition: crossfade / Cross Dissolve / 0.75s / alignment 0.5
+    const pastBefore = S().past.length;
+    act(() => { S().setTransition('el-2', { duration: 0.75, presentation: 'Cross Dissolve' }); });
+    expect(S().past.length).toBe(pastBefore); // true no-op
+    expect(el('el-2').transitionOut?.duration).toBe(0.75);
+    // a REAL patch still mints exactly one entry
+    act(() => { S().setTransition('el-2', { duration: 1.25 }); });
+    expect(S().past.length).toBe(pastBefore + 1);
+    expect(el('el-2').transitionOut?.duration).toBe(1.25);
+    act(() => { S().undo(); });
+    expect(el('el-2').transitionOut?.duration).toBe(0.75); // round-trips
+  });
+
+  it('W0.2 fresh-mint guard: the no-op guard NEVER fires when no transition exists (the R24 first-cut bug)', () => {
+    expect(el('el-4').transitionOut).toBeUndefined(); // virgin seam
+    const pastBefore = S().past.length;
+    act(() => { S().setTransition('el-4', { duration: 0.5, presentation: 'Cross Dissolve', alignment: 0.5 }); });
+    expect(S().past.length).toBe(pastBefore + 1); // fresh-mint IS a change
+    expect(el('el-4').transitionOut?.presentation).toBe('Cross Dissolve');
+    // and a second identical patch on the NOW-existing transition is the no-op
+    act(() => { S().setTransition('el-4', { duration: 0.5 }); });
+    expect(S().past.length).toBe(pastBefore + 1);
+  });
+
+  it('W0.3: split clears a selectedFxObject pointing at the split element (the lying rail — F5)', () => {
+    act(() => { S().setPage('fx'); });
+    act(() => { S().setSelection(['el-2']); });
+    // point at el-2's transition BEFORE the split — after ⌘B the transition
+    // moves to the new right-half id (el-2-b…), the rail would lie
+    act(() => { S().selectFxObject({ kind: 'transition', elementId: 'el-2' }); });
+    act(() => { S().splitElement('el-2', 12.75); });
+    expect(S().selectedFxObject).toBe(null);
+    // and the transition itself moved to the right half (the pre-existing law)
+    expect(el('el-2').transitionOut).toBeUndefined();
+    expect(mainEls().some((id) => id.startsWith('el-2-b'))).toBe(true);
+    // a domain pointing ELSEWHERE survives a REAL split of a different
+    // element (no over-clearing — el-3 spans 17→24, split at 20 is valid)
+    act(() => { S().selectFxObject({ kind: 'fade', elementId: 'el-1', side: 'in' }); });
+    act(() => { S().splitElement('el-3', 20); });
+    expect(S().selectedFxObject).toEqual({ kind: 'fade', elementId: 'el-1', side: 'in' });
+  });
+});
+
 describe('R23-WA: setFade — the ONE effective-fade writer (D-A3)', () => {
   it('routes video/text to fadeIn/fadeOut, audio to audioFadeIn/audioFadeOut (fieldOfFade, single owner)', () => {
     act(() => { S().setFade('el-1', 'in', 1.25); });
@@ -2268,5 +2530,121 @@ describe('R23-WA: removeFade / removeTransition — delete-aware removal (R23-B 
     expect(el('el-2').transitionOut).toBeUndefined();
     act(() => { S().removeTransition('el-2'); }); // truly absent now
     expect(S().past.length).toBe(after + 1); // exactly ONE entry for the real removal
+  });
+});
+
+/* ---------- R23-WB (DESIGN-R23 track B): the color-view store law ---------- */
+
+describe('R23-WB D-B1: the scopes console state (the 4-state machine dies)', () => {
+  it("boots 'off' (nothing permanent in the console row, #77) and toggles off ↔ open", () => {
+    expect(S().colorScopesState).toBe('off');
+    act(() => { S().setColorScopesState('open'); });
+    expect(S().colorScopesState).toBe('open');
+    act(() => { S().setColorScopesState('off'); });
+    expect(S().colorScopesState).toBe('off');
+  });
+});
+
+describe('R23-WB D-B5/#92 → R24-W1 A3-R3: entering any page ≠ audio collapses the mixer (the exit law)', () => {
+  it('an open mixer carried into ANY non-audio page collapses — edit included (audio-only surfaces)', () => {
+    act(() => { S().setMixerState('full'); });
+    act(() => { S().setPage('color'); });
+    expect(S().page).toBe('color');
+    expect(S().mixerState).toBe('collapsed'); // #92 supersedes #73 for the color page
+    // R24-W1 (A3-R3 — supersedes R23-WB's edit+audio): EDIT carries no mixer
+    // toggle either (audio-only), so an open mixer carried there would strand
+    // unclosable — the exit law collapses it too
+    act(() => { S().setMixerState('meters'); });
+    act(() => { S().setPage('edit'); });
+    expect(S().mixerState).toBe('collapsed');
+    // entering AUDIO leaves the mixer state alone (audio seeds its own via
+    // enterAudioFocus; setPage('audio') itself never fights an external write)
+    act(() => { S().setMixerState('meters'); });
+    act(() => { S().setPage('audio'); });
+    expect(S().mixerState).toBe('meters');
+  });
+
+  it('staying on color does not fight an external write (the exit law fires on ENTRY only)', () => {
+    act(() => { S().setPage('color'); });
+    expect(S().mixerState).toBe('collapsed');
+    act(() => { S().setPage('color'); }); // a no-op page write must not clobber
+    expect(S().mixerState).toBe('collapsed');
+  });
+
+  it('R24-W1: exitAudioFocus carries the exit law too (the raw-writer twin) — the dock never survives onto the edit page', () => {
+    act(() => { S().enterAudioFocus('dock'); });
+    expect(S().mixerState).toBe('full');
+    act(() => { S().exitAudioFocus(); });
+    expect(S().page).toBe('edit');
+    expect(S().mixerState).toBe('collapsed'); // no stranded unclosable dock on edit
+  });
+});
+
+describe('R23-WB D-B3: the timeline density law (timelineCompact + the ONE resolver)', () => {
+  it("boots 'auto' and resolves per page: compact on color + deliver, full elsewhere", () => {
+    expect(S().timelineCompact).toBe('auto');
+    act(() => { S().setPage('edit'); });
+    expect(resolveTimelineCompact(S())).toBe(false);
+    act(() => { S().setPage('color'); });
+    expect(resolveTimelineCompact(S())).toBe(true);
+    act(() => { S().setPage('deliver'); });
+    expect(resolveTimelineCompact(S())).toBe(true); // deliver per D-F1 (Wave F fills the range band)
+    act(() => { S().setPage('audio'); });
+    expect(resolveTimelineCompact(S())).toBe(false);
+    act(() => { S().setPage('fx'); });
+    expect(resolveTimelineCompact(S())).toBe(false);
+  });
+
+  it("the user's 'on'/'off' override wins on every page EXCEPT fx (per-session, not a pref)", () => {
+    act(() => { S().setTimelineCompact('on'); });
+    act(() => { S().setPage('edit'); });
+    expect(resolveTimelineCompact(S())).toBe(true); // compact on edit — #94 "everywhere"
+    act(() => { S().setTimelineCompact('off'); });
+    act(() => { S().setPage('color'); });
+    expect(resolveTimelineCompact(S())).toBe(false); // full tracks on color — the #94 ask
+    act(() => { S().setTimelineCompact('auto'); });
+    expect(S().timelineCompact).toBe('auto');
+  });
+
+  /* R23-FIX (review-sweep R-b, R3-P2#3 — RE-PINNED): the FX page forces the
+     FULL Timeline — even the user's 'on' override yields there (D-A1/ruling 8:
+     seam hit-zones + transition boxes need real lane pixel geometry). The old
+     "wins on EVERY page" law above was the D-D2 matrix's density row; ruling 8
+     supersedes it for fx (the matrix + the toolbar's DOM-absence are updated
+     to match — see TimelineToolbar.test). */
+  it("R23-FIX R-b: fx + the user's 'on' override STILL resolves the full Timeline (the resolver is the single writer of the truth)", () => {
+    act(() => { S().setTimelineCompact('on'); });
+    act(() => { S().setPage('fx'); });
+    expect(resolveTimelineCompact(S())).toBe(false); // the page beats the session word on fx
+    act(() => { S().setPage('edit'); });
+    expect(resolveTimelineCompact(S())).toBe(true); // the override still works everywhere else
+    act(() => { S().setTimelineCompact('auto'); });
+    act(() => { S().setPage('edit'); });
+  });
+});
+
+describe('R23-WB D-B4: the Stills Gallery store home (colorStills — view state)', () => {
+  it('boots the four seed stills (the R22-D7 fixtures, re-homed to the store)', () => {
+    expect(S().colorStills.map((st) => st.id)).toEqual(['still-01', 'still-02', 'still-03', 'still-04']);
+    expect(S().colorStills[0]).toMatchObject({ name: 'Marina cool', mediaId: 'm-01' });
+  });
+
+  it('addColorStill mints a monotonic id + name; removeColorStill drops by id', () => {
+    act(() => { S().removeColorStill('still-02'); });
+    const still = S().addColorStill({ ...S().colorStills[0].grade, exposure: 0.3 });
+    // monotonic over the LIVE list: still-02's slot is free but the mint is still-05 — no collision
+    expect(still.id).toBe('still-05');
+    expect(still.name).toBe('Still 5');
+    expect(S().colorStills.at(-1)?.id).toBe('still-05');
+    expect(S().colorStills).toHaveLength(4);
+    expect(S().addColorStill(S().colorStills[0].grade, { name: 'Named' }).name).toBe('Named');
+  });
+
+  it('the Gallery writes NEVER mint history (the sourceRanges precedent — view state)', () => {
+    const before = S().past.length;
+    act(() => { S().addColorStill(S().colorStills[0].grade); });
+    act(() => { S().removeColorStill('still-01'); });
+    expect(S().past.length).toBe(before);
+    expect(S().colorStills.some((st) => st.id === 'still-01')).toBe(false);
   });
 });

@@ -110,7 +110,16 @@ body {
   white-space: nowrap;
 }
 .toolbtn:hover { background: var(--hover-overlay); color: var(--text-primary); }
-.toolbtn.active { color: var(--text-primary); background: var(--active-overlay); }
+/* th_mtr0qmax (#56, R23 wrap): the ON state must be PERCEIVABLE — the old
+   --active-overlay swap measured only ~3% per channel against the resting
+   bg (rgb(52,52,58) vs rgb(44,44,46) live) and read as "no visual change".
+   The ON treatment is now the accent tint + hairline ring (the same
+   accent-selection family the dock tabs carry). */
+.toolbtn.active {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-selection) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-selection) 48%, transparent);
+}
 
 .icon-btn {
   display: flex; align-items: center; justify-content: center;
@@ -238,34 +247,46 @@ body {
 }
 [data-tip-top]::after { top: auto; bottom: calc(100% + 7px); transform: translateX(-50%) translateY(2px); }
 
-/* range inputs — mock grammar */
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  height: 14px;
-  flex-shrink: 0;
-  cursor: pointer;
+/* range inputs — mock grammar.
+   R24-W5a (DESIGN-R24 §2 F2-P1, THE cascade landmine): this block used to
+   sit UNLAYERED, and unlayered author CSS outranks Tailwind's @layer
+   utilities — the reset's `height: 14px` silently killed EVERY range height
+   utility in the tree (the Inspector EQ's vertical h-[88px] band sliders
+   collapsed to 14×11 stubs live; every ChannelEditor h-[10px]/h-[9px] range
+   row was dead). Control resets MUST live in @layer base — the same tier
+   and the same law as the button/input resets at the top of this file
+   (R2 design review, cascade finding) and the [data-tip] position rule
+   (R20-W0). Layered = utilities win (h-[88px] etc. override the reset),
+   while the track/thumb skin survives untouched below them. */
+@layer base {
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    height: 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 3px;
+    background: var(--border-soft);
+    border-radius: 2px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px; height: 11px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: #d8d8d8;
+    box-shadow: 0 0 2px rgba(0,0,0,.6);
+    border: none;
+  }
+  input[type="range"].green-fill::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, var(--type-audio) 0%, var(--type-audio) var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
+  }
+  [data-theme="light"] input[type="range"]::-webkit-slider-thumb { background: #4a4a52; }
 }
-input[type="range"]::-webkit-slider-runnable-track {
-  height: 3px;
-  background: var(--border-soft);
-  border-radius: 2px;
-}
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 11px; height: 11px;
-  margin-top: -4px;
-  border-radius: 50%;
-  background: #d8d8d8;
-  box-shadow: 0 0 2px rgba(0,0,0,.6);
-  border: none;
-}
-input[type="range"].green-fill::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, var(--type-audio) 0%, var(--type-audio) var(--fill, 55%), var(--border-soft) var(--fill, 55%), var(--border-soft) 100%);
-}
-[data-theme="light"] input[type="range"]::-webkit-slider-thumb { background: #4a4a52; }
 
 /* text inputs */
 .field {
@@ -420,7 +441,11 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
     border-radius: var(--radius);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
     padding: 3px 0;
-    z-index: 93;
+    /* th_mtr0rlq7 (#57, R23 wrap): 105 — ABOVE the timeline's root-level
+       z-100 playhead (the marker-color menu opened from the viewer's
+       palette extended over the timeline block and the red line painted
+       across it). Modal order preserved: confirm 106 > menu 105. */
+    z-index: 105;
     animation: menu-in var(--motion-base) ease;
   }
   .menu-item {
@@ -512,21 +537,29 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 18px;
-    width: 18px;
+    /* R23-FIX (R1-P3): 24px hit floor (was 18px — under the house target
+       law; the 11px glyph is unchanged — hit target ≠ visual size). */
+    height: 24px;
+    width: 24px;
     flex-shrink: 0;
-    margin: -2px -2px 0 0;
+    margin: -4px -4px 0 0;
     border-radius: var(--radius-sm);
     color: var(--text-muted);
     transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
   }
   .toast-close:hover { color: var(--text-primary); background: var(--hover-overlay); }
 
-  /* ---- destructive confirm (§6.4): focus-trapped alertdialog ---- */
+  /* ---- destructive confirm (§6.4): focus-trapped alertdialog ----
+     R23-FIX (review-sweep R-d, R5-P3#8 + the wrap-round #57 follow-up):
+     the backdrop climbs 94 → 106 — above the window-too-small overlay
+     (z 95) AND above the context menus (105, th_mtr0rlq7) so a confirm
+     opened from a menu action stays the top modal — above the timeline's
+     root-level playhead band (z 100) too, which is correct for a
+     full-app modal. */
   .confirm-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 94;
+    z-index: 106;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -557,7 +590,15 @@ input[type="range"].green-fill::-webkit-slider-runnable-track {
     transition: opacity var(--motion-fast) ease, background-color var(--motion-fast) ease;
   }
   .confirm-btn:hover { opacity: 0.88; }
-  .confirm-btn.danger { background: var(--danger); color: #fff; }
+  .confirm-btn.danger {
+    /* R23-FIX (review-sweep item 12, R1-P2-4): darker danger bg for the
+       WHITE 12px label — #cf2f37 measures ~5:1 vs white (the old
+       var(--danger) #e5484d was ~3.9:1, under WCAG AA). Registered as a
+       deliberate pair deviation: the BUTTON fill diverges from the
+       --danger token so its white text passes. */
+    background: #cf2f37;
+    color: #fff;
+  }
   .confirm-btn.primary { background: var(--accent-selection); color: var(--accent-contrast); }
   .confirm-btn.ghost {
     color: var(--text-primary);

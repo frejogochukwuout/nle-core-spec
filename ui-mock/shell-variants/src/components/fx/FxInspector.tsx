@@ -41,7 +41,7 @@ function FadeSection({ el, side }: { el: ElementJSON; side: 'in' | 'out' }) {
         label="Duration"
         value={effectiveFade(el, side)}
         min={0}
-        max={10}
+        max={el.duration}
         step={0.1}
         unit="s"
         decimals={2}

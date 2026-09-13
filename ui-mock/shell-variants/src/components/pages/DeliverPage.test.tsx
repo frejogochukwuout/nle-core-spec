@@ -6,22 +6,51 @@
    range block + select options, the render-settings block, the job queue
    (done rows + one running row with progress + retry, §6.4 error UX), and
    the honest-mock export behavior (R13: CTA + Reveal/Retry push info
-   toasts — no encode ever runs — and the CTA appends a static queued job
-   row). */
+   toasts — no encode ever runs — and the CTA queues a job row the store
+   timer completes).
+   R24-W4 (deliverViewStore): jobs + showQueue are MODULE state now — every
+   test here starts from the pristine fixture via the act-wrapped
+   file-level reset below, and the store's own laws are pinned in
+   deliverViewStore.test. */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DeliverPage } from './DeliverPage';
+import { TimelineCompact } from '../timeline/TimelineCompact';
 import { useUi } from '../../state/useUiStore';
+import { useDeliverView, __mockTimerActive } from '../../state/deliverViewStore';
 
 const S = () => useUi.getState();
 
-/** R22 W5: the queue lives in the CENTER only while queued/running (or the
- *  toggle is on) — the default center is the video preview (#88). */
+/* R24-W4 act() HYGIENE (the original wave's act()-warning storm): RTL's
+ * cleanup registers its global afterEach at MODULE IMPORT time — BEFORE
+ * this file's own hooks register — and vitest runs same-scope afterEach
+ * hooks in REVERSE registration order, so RTL cleanup runs AFTER the
+ * file-level afterEach below: during it, the previous test's tree is STILL
+ * MOUNTED. A bare resetDeliverView() (a useDeliverView.setState) would
+ * update that tree outside act() — one warning per test. Both resets are
+ * act-wrapped (setup.ts dodges the same trap by calling cleanup() BEFORE
+ * its useUi reset; the file-level hooks run earlier than that). */
+const resetDeliverView = () => useDeliverView.getState().resetDeliverView();
+
+beforeEach(() => {
+  act(() => { resetDeliverView(); });
+});
+
+afterEach(() => {
+  act(() => { resetDeliverView(); });
+});
+
+/** R22 W5 → R24-W4: the queue view is showQueue's alone (the single
+ *  writer — queueing auto-shows it; the toggle reviews past/active renders
+ *  whenever it wants, mid-render included). The default center is the
+ *  video preview (#88). */
 const openQueue = async (user?: ReturnType<typeof userEvent.setup>) => {
   const toggle = screen.getByTestId('shell-deliver-queue-toggle');
-  if (user) await user.click(toggle); else toggle.click();
+  /* the no-user branch uses fireEvent (act-wrapped) — a raw el.click() fires
+   * the React onClick outside act() and warns (the R24-W4 hygiene sweep) */
+  if (user) await user.click(toggle); else fireEvent.click(toggle);
 };
 
 describe('DeliverPage (spec 18 §4.8 export rail)', () => {
@@ -84,12 +113,50 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     const rangeBlock = screen.getByTestId('shell-deliver-range');
     expect(rangeBlock).toHaveTextContent('00:00:02:00 → 00:00:28:00'); // boot loop {2, 28}
     expect(screen.getByText('In → Out range selection')).toBeInTheDocument();
-    expect(screen.getByText(/set I\/O on the timeline/)).toBeInTheDocument();
+    expect(screen.getByText(/set I\/O at the playhead/)).toBeInTheDocument();
     // moving the timeline I/O moves the deliver readout + the select option
     act(() => { useUi.setState({ loop: { start: 5, end: 20 } }); });
     expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:05:00 → 00:00:20:00');
     const select = screen.getByLabelText('Export range') as HTMLSelectElement;
     expect(within(select).getByRole('option', { name: /00:00:05:00 – 00:00:20:00/ })).toBeInTheDocument();
+  });
+
+  /* R23-WF (DESIGN-R23 D-F1, #107): the export range stays STORE-driven —
+   * the 32px range band (TimelineCompact's deliver head row, mounted in the
+   * shell's timeline area) writes the SAME s.loop seam markIn/markOut and the
+   * Ruler brackets write, so this page's readout follows the band's edits
+   * with no prop/threading of its own. Both surfaces render in one tree to
+   * pin the seam (the shell mounts them; here the co-mount stands in). */
+  it('R23-WF: the readout follows the range band’s drag commit — one seam, every readout moves', () => {
+    render(
+      <>
+        <DeliverPage />
+        <TimelineCompact rangeBand />
+      </>,
+    );
+    expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:02:00 → 00:00:28:00');
+    // a full band gesture: down → local preview (store untouched) → ONE commit
+    fireEvent.pointerDown(screen.getByTestId('shell-deliver-range-band-in'), { pointerId: 2, button: 0 });
+    fireEvent.pointerMove(screen.getByTestId('shell-deliver-range-band-in'), { pointerId: 2, buttons: 1, clientX: 138 }); // 3 s
+    expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:02:00 → 00:00:28:00'); // mid-gesture: still the old range
+    fireEvent.pointerUp(screen.getByTestId('shell-deliver-range-band-in'), { pointerId: 2 });
+    expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:03:00 → 00:00:28:00');
+    // the In→Out select option carries the same seam (no second source)
+    const select = screen.getByLabelText('Export range') as HTMLSelectElement;
+    expect(within(select).getByRole('option', { name: /00:00:03:00 – 00:00:28:00/ })).toBeInTheDocument();
+  });
+
+  it('R23-WF: the band’s keyboard commits move the readout too (the band is a first-class loop writer)', () => {
+    render(
+      <>
+        <DeliverPage />
+        <TimelineCompact rangeBand />
+      </>,
+    );
+    fireEvent.keyDown(screen.getByTestId('shell-deliver-range-band-out'), { key: 'ArrowLeft' });
+    // 28 s − 1 frame = frame 671 → 00:00:27:23 (the readout follows the commit)
+    expect(screen.getByTestId('shell-deliver-range')).toHaveTextContent('00:00:02:00 → 00:00:27:23');
+    expect(useUi.getState().loop).toEqual({ start: 2, end: 671 / 24 });
   });
 
   it('center summary shows the active timeline name and the right region owns the settings selects', async () => {
@@ -239,5 +306,139 @@ describe('DeliverPage (spec 18 §4.8 export rail)', () => {
     await user.click(screen.getAllByRole('button', { name: 'Retry job' })[0]);
     expect(S().toasts[1]).toMatchObject({ kind: 'info', title: 'Retry Beach Doc — v2 master.mp4' });
     expect(S().toasts[1].detail).toBe('render queue is mock — no encode runs');
+  });
+
+  /* R23-FIX (review-sweep item 8, R2-F6/R5-P2-3): the three-region row keeps
+     its minimums (280+flex+340 ≥ ~900px), so a narrow shell CLIPPED the row
+     with no scroll reachable. The row now carries overflow-x-auto + min-w-0 —
+     jsdom has no layout engine, so the pin is class-level (the CSS law itself
+     is the observable; Pages.stories' narrow-container story claims the same
+     behavior and now tells the truth). */
+  it('R23-FIX item 8: the region row scrolls horizontally instead of clipping (overflow-x-auto + min-w-0 on the row)', () => {
+    render(<DeliverPage />);
+    const row = screen.getByTestId('shell-deliver-queue').parentElement as HTMLElement;
+    expect(row).toHaveClass('overflow-x-auto');
+    expect(row).toHaveClass('min-w-0');
+    // the three regions still keep their minimums — scrollable, not squashed
+    expect(screen.getByTestId('shell-deliver-queue')).toHaveClass('min-w-[260px]');
+    expect(screen.getByTestId('shell-deliver-settings')).toHaveClass('min-w-[300px]');
+    // the row is the DIRECT parent of all three regions (the scroll surface owns them)
+    expect(screen.getByTestId('shell-deliver-preview').parentElement).toBe(row);
+    expect(screen.getByTestId('shell-deliver-settings').parentElement).toBe(row);
+  });
+
+  /* R23-FIX (review-sweep item 9, R2-F7): the queue header's spinner +
+     'rendering' label ride renderActive — the queue view is reachable while
+     IDLE (the header toggle / past-renders review), and an idle queue
+     claiming 'rendering' was a lying header. */
+  it('R23-FIX item 9: the idle queue header is the honest "Render queue" (no spinner); queueing flips it to rendering', async () => {
+    const user = userEvent.setup();
+    render(<DeliverPage />);
+    await openQueue(user);
+    const center = screen.getByTestId('shell-deliver-summary');
+    expect(within(center).getByText('Render queue')).toBeInTheDocument(); // idle header — the honest label
+    expect(center.querySelector('.animate-spin')).toBeNull(); // no spinner while idle
+    // queueing an export appends a queued job → renderActive → the label + spinner flip ON
+    await user.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+    expect(within(center).getByText('Render queue — rendering')).toBeInTheDocument();
+    expect(center.querySelector('.animate-spin')).not.toBeNull();
+  });
+
+  /* R23-FIX (review-sweep R4-P3#9): the preset tiles are honest pressed-state
+     buttons — aria-pressed + a label-in-name that carries the preset name. */
+  it('R23-FIX R4-P3#9: preset tiles carry aria-pressed + label-in-name (the active tile is the pressed one)', async () => {
+    const user = userEvent.setup();
+    render(<DeliverPage />);
+    const master = screen.getByTestId('shell-deliver-preset-master');
+    expect(master).toHaveAttribute('aria-pressed', 'false');
+    expect(master).toHaveAttribute('aria-label', 'Master · H.264 export preset');
+    await user.click(master);
+    expect(master).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('shell-deliver-preset-fcpxml')).toHaveAttribute('aria-pressed', 'false'); // one at a time
+  });
+
+  /* ---------- R24-W4 (deliverViewStore, F5's P2 + the P3 toggle) ---------- */
+
+  it('R24-W4: the queue SURVIVES page switches — export → page away → back keeps the queued job + the rendering state', async () => {
+    const user = userEvent.setup();
+    const first = render(<DeliverPage />);
+    await user.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+    expect(screen.getAllByTestId('shell-deliver-job')).toHaveLength(5); // queued row appended + auto-shown
+    first.unmount(); // "page away" — the shell unmounts DeliverPage
+    // the STORE keeps the queue while unmounted (the unmount-survival law)
+    expect(useDeliverView.getState().jobs).toHaveLength(5);
+    expect(useDeliverView.getState().jobs.at(-1)).toMatchObject({ state: 'queued', progress: 0 });
+    expect(useDeliverView.getState().showQueue).toBe(true);
+    render(<DeliverPage />); // "back" — the queued job + the rendering state persist
+    expect(screen.getAllByTestId('shell-deliver-job')).toHaveLength(5);
+    expect(screen.getByText('Beach Doc — Rough Cut — 1080p · In–Out.fcpxml')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-queue-toggle')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Render queue — rendering')).toBeInTheDocument(); // the rendering state survived too
+  });
+
+  it('R24-W4: the queue toggle is HONEST mid-render — allow-collapse (showQueue the single writer, no silent no-op)', async () => {
+    const user = userEvent.setup();
+    render(<DeliverPage />);
+    await user.click(screen.getByTestId('shell-deliver-btn-export-fcpxml')); // auto-show + rendering
+    expect(screen.getByTestId('shell-deliver-summary')).toBeInTheDocument();
+    // collapse WHILE RENDERING — the toggle works (the old renderActive-locked
+    // view made this a silent no-op: aria-pressed flipped, the view stayed)
+    await user.click(screen.getByTestId('shell-deliver-queue-toggle'));
+    expect(screen.getByTestId('shell-deliver-preview')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-deliver-queue-toggle')).toHaveAttribute('aria-pressed', 'false');
+    // the render keeps walking in the store — the header badge still says rendering
+    expect(screen.getByTestId('shell-deliver-queue-toggle').textContent).toContain('rendering');
+    expect(useDeliverView.getState().jobs.at(-1)).toMatchObject({ state: 'queued' });
+    // re-expand: the queued job is still there
+    await user.click(screen.getByTestId('shell-deliver-queue-toggle'));
+    expect(screen.getAllByTestId('shell-deliver-job')).toHaveLength(5);
+  });
+
+  it('R24-W4: the mock render COMPLETES on the store-owned timer — 4 × 500ms: queued → running +25%/tick → done "just now"', () => {
+    vi.useFakeTimers();
+    try {
+      render(<DeliverPage />);
+      fireEvent.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+      expect(useDeliverView.getState().jobs.at(-1)).toMatchObject({ state: 'queued', progress: 0 });
+      expect(__mockTimerActive()).toBe(true);
+      act(() => { vi.advanceTimersByTime(500); }); // tick 1: queued → running 25%
+      expect(useDeliverView.getState().jobs.at(-1)).toMatchObject({ state: 'running', progress: 25 });
+      expect(screen.getByText('25%')).toBeInTheDocument(); // the row's live progress readout
+      act(() => { vi.advanceTimersByTime(500); }); // tick 2
+      expect(useDeliverView.getState().jobs.at(-1)!.progress).toBe(50);
+      act(() => { vi.advanceTimersByTime(500); }); // tick 3
+      expect(useDeliverView.getState().jobs.at(-1)!.progress).toBe(75);
+      act(() => { vi.advanceTimersByTime(500); }); // tick 4: done + self-stop
+      expect(useDeliverView.getState().jobs.at(-1)).toMatchObject({ state: 'done', progress: 100, time: 'just now' });
+      expect(__mockTimerActive()).toBe(false);
+      expect(screen.getByText('just now')).toBeInTheDocument();
+      // completion is honest: the header drops the rendering label
+      expect(screen.getByText('Render queue')).toBeInTheDocument();
+      expect(screen.queryByText('Render queue — rendering')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('R24-W4: FIFO — two queued jobs render ONE AT A TIME in queue order', () => {
+    vi.useFakeTimers();
+    try {
+      render(<DeliverPage />);
+      fireEvent.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+      fireEvent.click(screen.getByTestId('shell-deliver-btn-export-fcpxml'));
+      const jobs = () => useDeliverView.getState().jobs;
+      expect(jobs().at(-2)).toMatchObject({ state: 'queued' });
+      expect(jobs().at(-1)).toMatchObject({ state: 'queued' });
+      act(() => { vi.advanceTimersByTime(500); }); // the FIRST row runs; the second waits
+      expect(jobs().at(-2)).toMatchObject({ state: 'running', progress: 25 });
+      expect(jobs().at(-1)).toMatchObject({ state: 'queued', progress: 0 });
+      act(() => { vi.advanceTimersByTime(1500); }); // the first row → done 'just now'
+      expect(jobs().at(-2)).toMatchObject({ state: 'done', time: 'just now' });
+      expect(jobs().at(-1)).toMatchObject({ state: 'queued' }); // still waiting its turn
+      act(() => { vi.advanceTimersByTime(500); }); // now the second starts
+      expect(jobs().at(-1)).toMatchObject({ state: 'running', progress: 25 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

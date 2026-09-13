@@ -39,7 +39,7 @@ import {
   type GradeParams,
   type QualifierParams,
 } from '../../../lib/color';
-import { evaluateCurve, isIdentityCurve, type CurvePoint, type CurveSet } from './curveMath';
+import { evaluateCurve, isIdentityCurve, splitChannels, type Curve, type CurveSet } from './curveMath';
 import type { MockGrade } from '../../../state/useUiStore';
 
 /* ------------------------------------------------------------------ *
@@ -58,38 +58,80 @@ export function workingResolution(naturalWidth: number, naturalHeight: number): 
 
 /* ------------------------------------------------------------------ *
  * Curve LUT composition (spec 08 §5.2 — the W4c seam W4b reserved)   *
+ * R24-W2 (A2-R4): the per-channel YRGB bake.                        *
  * ------------------------------------------------------------------ */
 
+/** The four 256-entry per-channel LUTs (y + r/g/b). */
+export interface CurveLuts {
+  /** The raw Y (luma) curve — y∘identity; consumers wanting a luma-only
+   *  hop index it directly. */
+  y: Float32Array;
+  /** The COMPOSED r-channel LUT: y∘r (the Y curve applies to all three
+   *  rgb channels, composed with each channel's own curve). */
+  r: Float32Array;
+  /** The composed g-channel LUT: y∘g. */
+  g: Float32Array;
+  /** The composed b-channel LUT: y∘b. */
+  b: Float32Array;
+}
+
 /**
- * `bakeLinearCurveLut(curves)` — the spec 08 §5.2 bake in LINEAR domain:
- * control points live in display code-value space (W4b's CurveSet), so the
- * 256-entry LUT maps an ENCODED code value in → LINEAR value out,
- * `lut[i] = srgbDecode(spline(i/255))` (color-layout §3.4). In the pixel
- * loop the caller indexes it with `srgbEncodeLut(linear)` — the display
- * round-trip is exactly the composition color-layout prescribes. Null when
- * the set is absent/identity (no LUT hop, byte-identical to W4a's pipeline).
+ * `bakeLinearCurveLuts(curves)` — the spec 08 §5.2 bake in LINEAR domain,
+ * PER CHANNEL (R24-W2 A2-R4, issue #69): control points live in display
+ * code-value space (curveMath's CurveSet), so each 256-entry LUT maps an
+ * ENCODED code value in → LINEAR value out. THE COMPOSITION ORDER: the Y
+ * curve applies to ALL THREE rgb channels composed with each channel's
+ * own curve — `lut.r[i] = srgbDecode(y(r(i/255)))` (y∘r; y∘g; y∘b — the
+ * channel curve first, then the luma curve on top, Resolve's Custom
+ * Curves order). The `y` entry is the raw luma curve alone. Null when the
+ * whole set is absent/identity (no LUT hop, byte-identical to W4a — a
+ * y-only set keeps the old master-only numbers verbatim: y∘identity).
  */
-export function bakeLinearCurveLut(curves: CurveSet | undefined): Float32Array | null {
+export function bakeLinearCurveLuts(curves: CurveSet | undefined): CurveLuts | null {
   if (isIdentityCurve(curves)) return null;
-  const pts: CurvePoint[] = curves?.master ?? [];
-  const lut = new Float32Array(256);
-  for (let i = 0; i < 256; i++) {
-    const out = evaluateCurve(pts, i / 255); // display-domain spline (W4b's evaluator — reused, not duplicated)
-    const code = Math.min(255, Math.max(0, Math.round(out * 255)));
-    lut[i] = SRGB_DECODE_LUT[code];
-  }
-  return lut;
+  const channels = splitChannels(curves);
+  /* a stored channel always carries its 2+ points; a degenerate <2-point
+     list falls back to the identity pair (defensive — single points never
+     mint from the editor's move/insert/remove ops) */
+  const ptsOf = (pts: Curve): Curve => (pts.length >= 2 ? pts : [{ x: 0, y: 0 }, { x: 1, y: 1 }]);
+  const yPts = ptsOf(channels.y);
+  /* display-domain composed value at input code i for channel pts:
+     pts first, then the y curve (y∘pts) */
+  const composedLut = (pts: Curve): Float32Array => {
+    const lut = new Float32Array(256);
+    for (let i = 0; i < 256; i++) {
+      const out = evaluateCurve(yPts, evaluateCurve(ptsOf(pts), i / 255));
+      const code = Math.min(255, Math.max(0, Math.round(out * 255)));
+      lut[i] = SRGB_DECODE_LUT[code];
+    }
+    return lut;
+  };
+  const rawLut = (pts: Curve): Float32Array => {
+    const lut = new Float32Array(256);
+    for (let i = 0; i < 256; i++) {
+      const out = evaluateCurve(ptsOf(pts), i / 255);
+      const code = Math.min(255, Math.max(0, Math.round(out * 255)));
+      lut[i] = SRGB_DECODE_LUT[code];
+    }
+    return lut;
+  };
+  return {
+    y: rawLut(channels.y),
+    r: composedLut(channels.r),
+    g: composedLut(channels.g),
+    b: composedLut(channels.b),
+  };
 }
 
 /* ------------------------------------------------------------------ *
  * The grade stack                                                    *
  * ------------------------------------------------------------------ */
 
-/** One full GradeParams application + its optional curve LUT. */
+/** One full GradeParams application + its optional per-channel curve LUTs. */
 export interface GradePass {
   params: GradeParams;
-  /** 256-entry encoded-code → linear LUT (null = no curve hop). */
-  curveLut: Float32Array | null;
+  /** The four 256-entry encoded-code → linear LUTs (null = no curve hop). */
+  curveLuts: CurveLuts | null;
 }
 
 /**
@@ -105,9 +147,9 @@ export function buildGradeStack(clipGrade: MockGrade | null, timelineGrade: Mock
   const passes: GradePass[] = [];
   const push = (g: MockGrade | null) => {
     if (!g) return;
-    const curveLut = bakeLinearCurveLut(g.curves);
-    if (!curveLut && isIdentityGrade(g)) return; // §12.1 no-op skip
-    passes.push({ params: g, curveLut });
+    const curveLuts = bakeLinearCurveLuts(g.curves);
+    if (!curveLuts && isIdentityGrade(g)) return; // §12.1 no-op skip
+    passes.push({ params: g, curveLuts });
   };
   push(clipGrade);
   push(timelineGrade);
@@ -153,13 +195,15 @@ export function gradeLinearFrame(linear: LinearImage, passes: GradePass[]): Imag
         gradeInto(px, params, work);
         r = work[0]; g = work[1]; b = work[2];
       }
-      // curve LUT right after the §4.2 pass (color-layout §3.4) — indexed by
-      // the encoded code value of the current linear value
-      const lut = pass.curveLut;
-      if (lut) {
-        r = lut[srgbEncodeLut(r)];
-        g = lut[srgbEncodeLut(g)];
-        b = lut[srgbEncodeLut(b)];
+      // curve LUTs right after the §4.2 pass (color-layout §3.4) — indexed
+      // by the encoded code value of the current linear value, PER CHANNEL
+      // (R24-W2 A2-R4: r indexes luts.r, g luts.g, b luts.b — each already
+      // composed y∘ch at bake time)
+      const luts = pass.curveLuts;
+      if (luts) {
+        r = luts.r[srgbEncodeLut(r)];
+        g = luts.g[srgbEncodeLut(g)];
+        b = luts.b[srgbEncodeLut(b)];
       }
       const qual = params.qualifier;
       if (qual) {
@@ -198,7 +242,7 @@ export function gradeImageDataStack(img: ImageData, passes: GradePass[]): ImageD
  * elementId|stack-hash|src-hash)                                     *
  * ------------------------------------------------------------------ */
 
-/** FNV-1a over the baked curve LUT (rounded to 1/2¹²) — any control-point
+/** FNV-1a over one baked curve LUT (rounded to 1/2¹²) — any control-point
  * change that moves ANY of the 256 entries changes the stack hash. */
 function fnvCurveLut(lut: Float32Array): string {
   let h = 0x811c9dc5;
@@ -209,13 +253,19 @@ function fnvCurveLut(lut: Float32Array): string {
   return (h >>> 0).toString(16);
 }
 
+/** The four per-channel LUTs joined into one stable key half. */
+function fnvCurveLuts(luts: CurveLuts): string {
+  return `${fnvCurveLut(luts.y)}|${fnvCurveLut(luts.r)}|${fnvCurveLut(luts.g)}|${fnvCurveLut(luts.b)}`;
+}
+
 /**
  * Stable stack hash — W4a's `hashGradeParams` per pass (curves are NOT
- * GradeParams fields, so the baked curve joins the key via its full LUT).
+ * GradeParams fields, so the baked curve joins the key via its full LUTs —
+ * all four channels, so a channel-curve-only edit changes the hash).
  */
 export function hashGradeStack(passes: GradePass[]): string {
   return passes
-    .map((p) => `${hashGradeParams(p.params)}|${p.curveLut ? fnvCurveLut(p.curveLut) : 'nc'}`)
+    .map((p) => `${hashGradeParams(p.params)}|${p.curveLuts ? fnvCurveLuts(p.curveLuts) : 'nc'}`)
     .join('=>');
 }
 

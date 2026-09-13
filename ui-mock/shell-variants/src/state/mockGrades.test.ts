@@ -4,13 +4,25 @@
    mockMixer precedent); setGrade/resetGrade are withHistory-able; the
    snapshot EXTENSION round-trips grades through undo/redo without breaking
    the doc-slice snapshot contract; console view-state (tab/target/preview/
-   node) never mints history. */
+   node) never mints history.
+   R24-W2 (A2-R4, issue #69): the per-channel YRGB curve pins — the
+   sidecar's seam shape. [recon] the contract's `mockGrades.ts` fixture
+   module does not exist as a file (the sidecar + its seeds live in the
+   FROZEN useUiStore), so the per-channel fixtures (a non-identity Y curve
+   + an R channel curve in the seeds) live HERE, exercised through the
+   same setGrade/undo seams the app writes. */
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import { act } from '@testing-library/react';
 import { useUi, TIMELINE_GRADE_KEY, resolveGradeTargetId, gradeOf } from './useUiStore';
 import { DEFAULT_GRADE, DEFAULT_QUALIFIER } from '../lib/color';
-import { DEFAULT_CURVE } from '../components/pages/color/curveMath';
+import {
+  DEFAULT_CURVE,
+  channelCurve,
+  isIdentityCurve,
+  withChannelCurve,
+  type CurveSet,
+} from '../components/pages/color/curveMath';
 
 const S = () => useUi.getState();
 
@@ -78,6 +90,50 @@ describe('setGrade — partial merge + history mechanics', () => {
     const pts = [{ x: 0, y: 0 }, { x: 0.5, y: 0.7 }, { x: 1, y: 1 }];
     act(() => { S().setGrade('el-2', { curves: { master: pts } }); });
     expect(S().mockGrades['el-2'].curves).toEqual({ master: pts });
+  });
+
+  it('R24-W2 (A2-R4): a per-channel YRGB set round-trips through setGrade verbatim (y + r in the seeds)', () => {
+    /* the per-channel fixture: a non-identity Y curve + an R channel curve —
+     the tagged storage seam (curveMath's header: master carries all four
+     channels' points, ch-tagged; untagged = y) */
+    const set: CurveSet = {
+      master: [
+        { x: 0, y: 0 }, { x: 0.5, y: 0.25 }, { x: 1, y: 1 },                        // the Y curve (untagged)
+        { x: 0, y: 0, ch: 'r' }, { x: 0.5, y: 0.75, ch: 'r' }, { x: 1, y: 1, ch: 'r' }, // the R channel curve
+      ],
+    };
+    act(() => { S().setGrade('el-2', { curves: set }); });
+    const stored = S().mockGrades['el-2'].curves!;
+    // the deep copy kept the tags — both channels survive the store's seam
+    expect(stored.master.filter((p) => (p.ch ?? 'y') === 'y')).toHaveLength(3);
+    expect(stored.master.filter((p) => p.ch === 'r')).toHaveLength(3);
+    expect(isIdentityCurve(stored)).toBe(false);
+    // the per-channel read model (the editor's view)
+    expect(channelCurve(stored, 'y')).toEqual([{ x: 0, y: 0 }, { x: 0.5, y: 0.25 }, { x: 1, y: 1 }]);
+    expect(channelCurve(stored, 'r')).toEqual([{ x: 0, y: 0, ch: 'r' }, { x: 0.5, y: 0.75, ch: 'r' }, { x: 1, y: 1, ch: 'r' }]);
+    expect(channelCurve(stored, 'g')).toEqual(DEFAULT_CURVE.master); // absent = identity pair
+    expect(S().past).toHaveLength(1);
+  });
+
+  it('R24-W2 (A2-R4): undo/redo round-trip the per-channel set (the tagged points survive cloneGrades)', () => {
+    act(() => { S().setGrade('el-2', { curves: { master: [{ x: 0, y: 0.25 }, { x: 1, y: 1 }, { x: 0.5, y: 0.8, ch: 'b' }] } }); });
+    act(() => { S().undo(); });
+    expect(S().mockGrades).toEqual({});
+    act(() => { S().redo(); });
+    const g = S().mockGrades['el-2'].curves!;
+    expect(g.master.find((p) => p.ch === 'b')).toEqual({ x: 0.5, y: 0.8, ch: 'b' });
+    expect(g.master.find((p) => p.x === 0)).toEqual({ x: 0, y: 0.25 });
+  });
+
+  it('R24-W2 (A2-R4): withChannelCurve edits ONE channel through the same seam (the y curve survives an r edit)', () => {
+    const yCurve = [{ x: 0, y: 0 }, { x: 0.5, y: 0.25 }, { x: 1, y: 1 }];
+    act(() => { S().setGrade('el-2', { curves: { master: yCurve } }); });
+    // the editor's r edit rebuilds the storage keeping y
+    const next = withChannelCurve(S().mockGrades['el-2'].curves, 'r', [{ x: 0, y: 0, ch: 'r' }, { x: 1, y: 0.9, ch: 'r' }]);
+    act(() => { S().setGrade('el-2', { curves: next }); });
+    const stored = S().mockGrades['el-2'].curves!;
+    expect(channelCurve(stored, 'y')).toEqual(yCurve); // y untouched
+    expect(channelCurve(stored, 'r')).toEqual([{ x: 0, y: 0, ch: 'r' }, { x: 1, y: 0.9, ch: 'r' }]);
   });
 
   it('a no-op patch (same values) mints NO history entry', () => {

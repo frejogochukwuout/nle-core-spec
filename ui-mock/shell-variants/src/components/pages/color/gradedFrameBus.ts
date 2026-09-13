@@ -1,9 +1,10 @@
 /* gradedFrameBus.ts — R20-W4c. THE graded-frame seam (C53): a tiny
    module-level observable carrying the CURRENT working-res graded display
    buffer. GradedViewerCanvas publishes after every coalesced re-grade; the
-   ColorScopeStrip subscribes and draws its traces at the 10fps throttle.
+   ScopesDock (R23-WB: moved from the deleted ColorScopeStrip, D-B1)
+   subscribes and draws its traces at the 10fps throttle.
    This replaces prop-drilling through AppShell/Viewer (the viewer and the
-   strip are siblings of the same center column — the bus is the meterEngine
+   dock are siblings of separate regions — the bus is the meterEngine
    singleton precedent) and keeps W4b's useScopeSource as the STORE half of
    the seam (target/grades/preview flag) while this is the BUFFER half.
 

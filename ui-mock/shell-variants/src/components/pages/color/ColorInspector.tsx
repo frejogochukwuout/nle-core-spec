@@ -18,7 +18,8 @@
 
    Every panel is STORE-DRIVEN through useGradeRecord (the mockGrades
    sidecar) — one undoable setGrade per committed gesture (the D3 commit
-   law). Node selection in the NodeGraphDock routes this inspector's tab. */
+   law). Node selection in the node graph (the R23-WB viewer-region
+   surface, D-B2) routes this inspector's tab. */
 
 import { type KeyboardEvent } from 'react';
 import { Film } from 'lucide-react';

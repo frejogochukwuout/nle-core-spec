@@ -1,26 +1,32 @@
-/* ColorPage — spec 18 §4.8 color-focus mode. R22 REWRITE (DESIGN-R22 D1):
-   the grading surface composition the user directed (issues #77/#78/#79):
+/* ColorPage — spec 18 §4.8 color-focus mode. R22 REWRITE (DESIGN-R22 D1) →
+   R23-WB (DESIGN-R23 track B, issues #90–#97) → R24-W2 (DESIGN-R24 §1.2
+   A2-R1..R5, issues #67–#70) — the color composition's CURRENT truth:
      - the COLOR INSPECTOR (right rail) — the ONE grading surface, tabs
        [Primaries|Curves|Qualifier] under this one inspector panel (#78);
-     - the SCOPES DOCK (ColorScopeStrip, store-driven off/collapsed/row/grid)
-       — a minimized + toggled console under the viewer, never permanent
-       (#77); REAL traces from the graded frame bus (W4c, #76);
-     - the NODE GRAPH DOCK (NodeGraphDock) — the global/separate-view console
-       beside the compact timeline, toggled like the mixer (#78);
-     - TIMELINE COMPACT — the #75 generalized frozen strip (V/A/T coded);
-     - the AppShell composes them (the color page swaps Timeline for
-       TimelineCompact + the docks; the viewer is the dominant center).
+       the Curves tab is the YRGB rebuild (A2-R4: the [Y|R|G|B] radiogroup,
+       per-channel curves + the channel histogram behind the grid);
+     - the SCOPES PANE lives UNDER THE VIEWER (A2-R2/R3 — region [2]'s
+       column, Viewer flex-1 + the ~160px pane below; colorScopesState-
+       gated; the reference-exact Parade/Waveform/Vectorscope/Histogram
+       tabs);
+     - the NODE GRAPH is the TIMELINE-AREA CONSOLE dock (A2-R1 — F6 slot
+       [6], its own 26px nodeviewer header + 38px toolbar + the 706×268
+       scroll-both workspace; the viewer-swap is DELETED, region [2] is
+       always Viewer-led);
+     - TIMELINE COMPACT is the default on color, with the EVERY-PAGE density
+       toggle (#94, D-B3) + the real trackhead select button (#96);
+     - the left dock is the GALLERY (A2-R5 — the stills panel renamed;
+       apply = replace-not-merge, the #70 context menu).
    This module is the composition's import line (re-exports) + a thin
    standalone wrapper for stories.
 
    Gap ledger: C50 (grade sidecar) real; C52 superseded by this layout;
    C52/C53/C54/C55/C56 from R20-W4 all survive (the panels are unchanged);
-   C59 (stills are clip-level presets, not node snapshots) — D7. */
+   C59 (stills are clip-level presets, not node snapshots) — D7 → D-B4. */
 
 export { ColorInspector } from './color/ColorInspector';
 export { ColorNodeGraph } from './color/ColorNodeGraph';
-export { NodeGraphDock } from './color/NodeGraphDock';
-export { ColorScopeStrip, useScopeSource } from './color/ColorScopeStrip';
+export { ScopesDock, useScopeSource } from './color/ScopesDock';
 export { WheelsPanel } from './color/WheelsPanel';
 export { CurvesPanel } from './color/CurvesPanel';
 export { QualifierPanel } from './color/QualifierPanel';

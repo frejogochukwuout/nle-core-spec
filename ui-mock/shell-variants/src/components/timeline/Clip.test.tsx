@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { act, fireEvent, screen } from '@testing-library/react';
-import { Clip, EFFECT_DRAG_TYPE, CLIP_WAVEFORM_RAMP, textBarHeight } from './Clip';
+import { Clip, buildClipMenuItems, EFFECT_DRAG_TYPE, CLIP_WAVEFORM_RAMP, textBarHeight, buttSplicedFollower } from './Clip';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 import { snapToFrame } from '../../lib/timecode';
@@ -367,6 +367,21 @@ describe('Clip', () => {
     expect(el('el-2').startTime).toBe(9.5);
     expect(el('el-2').duration).toBe(7.5);
     expect(el('el-2').sourceStart).toBeCloseTo(4.0, 5); // 3.0 + 1.0
+  });
+
+  /* R23-FIX (review-sweep item 13, R3-P2#2): both trim handles carry z-[4] —
+     above the fade objects (z-[3]), level with the affordance below — so a
+     selected clip's corner trim gesture wins the shared hit zone. The old
+     DOM order + z-3 let a fade object eat the handle's pointer events; the
+     comment at Clip.tsx ~:1252 falsely claimed the zones were disjoint.
+     Style-level pin (jsdom has no hit-testing). */
+  it('R23-FIX item 13: both trim handles carry z-[4] — above the fade objects, level with the affordance', () => {
+    boot({}); // selection ['el-2'] — the seeded fadeIn makes the head-zone competition live
+    expect(screen.getByTestId('clip-trim-l-el-2')).toHaveClass('z-[4]');
+    expect(screen.getByTestId('clip-trim-r-el-2')).toHaveClass('z-[4]');
+    // the fade object sits BELOW: its z-[3] loses the shared corner to the handle
+    const fadeObj = screen.getByTestId('fade-object-el-2-in');
+    expect(fadeObj).toHaveClass('z-[3]');
   });
 
   /* ---- R15 T4: trim laws at the gesture level ---- */
@@ -799,6 +814,41 @@ describe('R19 waveform v2 (th_mto2xtgc + th_mto2y86w)', () => {
   });
 });
 
+/* ---------- R24-W5d (W1's flag→render gap, DESIGN-R24 §3 W5d): the audio
+   body READS the §4.7 per-track waveform flag — the ViewOptionsPopover /
+   TrackHeader write it; false renders the flat lane (no strip), the name
+   stays. ---------- */
+describe('R24-W5d: the audio body reads the per-track waveform flag', () => {
+  /** shallow-cloned sc-1 with A1's waveform flag set explicitly (the §4.7
+     undefined state boots as ON — hiding needs an explicit false). */
+  const scenesWithWave = (waveform: boolean | undefined) => store().scenes.map((sc) => sc.id === 'sc-1'
+    ? { ...sc, tracks: sc.tracks.map((t) => (t.id === 'tr-audio-1' ? { ...t, waveform } : t)) }
+    : sc);
+
+  it('default (undefined) + explicit true keep the strip — the flag only ever HIDES', () => {
+    const first = boot({});
+    expect(screen.getByTestId('clip-el-6').querySelector('[data-testid="clip-waveform-el-6"]')).not.toBeNull();
+    first.unmount();
+    const second = boot({ scenes: scenesWithWave(true) });
+    expect(screen.getByTestId('clip-el-6').querySelector('[data-testid="clip-waveform-el-6"]')).not.toBeNull();
+    second.unmount();
+  });
+
+  it('waveform false → the strip is DOM-ABSENT; the flat lane + the NAME stay', () => {
+    boot({ scenes: scenesWithWave(false) });
+    const clip = screen.getByTestId('clip-el-6');
+    const content = clip.querySelector('[data-testid="clip-content-el-6"]')!;
+    expect(clip.querySelector('[data-testid="clip-waveform-el-6"]')).toBeNull(); // THE GAP closed
+    expect(content.querySelector('svg')).toBeNull(); // no strip in the BODY (the fade objects outside it are unaffected)
+    // the lane body + label survive (the flat lane, not a dead box)
+    expect(clip.textContent).toContain('ocean_ambience');
+    expect(content).not.toBeNull();
+    // the OTHER audio track (A2, undefined flag) keeps its strip — per-track, not global
+    expect(screen.getByTestId('clip-el-7').querySelector('[data-testid="clip-waveform-el-7"]')).not.toBeNull();
+  });
+});
+
+
 /* R20-W5 (thread #62 / timeline-cluster thread-5): fades render as SELECTABLE,
    width-draggable TRANSITION OBJECTS (crossfade-block grammar, half-width at
    the clip head/tail). The fake curve-handle dots are REMOVED — they promised
@@ -1054,6 +1104,39 @@ describe('R19 clip menu "Open in viewer" (th_mto3504c part — spec 18 §4.3 v1.
   });
 });
 
+/* ---------- R24-W5d (W5a's flagged hand-off): the clip-menu "Add
+   Transition…" no-op mint — setTransition(id, {}) assigns NOTHING onto an
+   existing transition and the W0 identical-patch guard never fires on an
+   EMPTY patch, so the old fan-out minted one no-op history entry per
+   already-transitioned clip. The mixed fan-out now writes only the hard-cut
+   targets; an all-transitioned selection renders the row honestly disabled
+   (the F2 TransitionSection fix's context-menu twin). ---------- */
+describe('R24-W5d: the clip-menu Add Transition no-op mint (W5a hand-off)', () => {
+  it('a MIXED selection: only the hard-cut targets mint — ONE history entry, el-2 untouched', () => {
+    boot({ selection: ['el-1', 'el-2'] }); // el-2 already carries the 0.75 crossfade
+    fireEvent.keyDown(screen.getByTestId('clip-el-1'), { key: 'F10', shiftKey: true });
+    const row = screen.getByTestId('shell-menu-clip-add-transition');
+    expect(row).not.toHaveAttribute('aria-disabled'); // mixed → the row is live
+    fireEvent.click(row);
+    expect(el('el-1').transitionOut).toBeDefined(); // the hard-cut clip gained the spec 09 default
+    expect(el('el-1').transitionOut!.duration).toBe(0.5);
+    expect(el('el-2').transitionOut!.duration).toBe(0.75); // untouched — no second mint one seam over
+    expect(store().past).toHaveLength(1); // ONE write (the old fan-out minted 2: one real + one no-op)
+  });
+
+  it('an ALL-transitioned selection: the row is honestly disabled + tipped — a click mints NOTHING', () => {
+    boot({ selection: ['el-2'] });
+    fireEvent.keyDown(screen.getByTestId('clip-el-2'), { key: 'F10', shiftKey: true });
+    const row = screen.getByTestId('shell-menu-clip-add-transition');
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    expect(row).toHaveAttribute('data-tip', 'every selected clip already has a transition');
+    const past0 = store().past.length;
+    fireEvent.click(row);
+    expect(store().past.length).toBe(past0); // §4.9: disabled = no onSelect, nothing can mint
+    expect(el('el-2').transitionOut!.duration).toBe(0.75);
+  });
+});
+
 describe('R19 caption chips (gap C34 — the tr-caption lane)', () => {
   it('caption elements render as parchment chips with the caption body text (not generic text clips)', () => {
     boot({});
@@ -1185,5 +1268,39 @@ describe('R23-WA: the Fades browser-row drop parser (D-A5 — setFade, never add
     expect(store().toasts.at(-1)!.title).toBe('Unknown fade preset');
     expect(el('el-3').fadeIn).toBe(0.5); // untouched
     expect(store().past).toHaveLength(0);
+  });
+});
+
+/* ---------- R24-W3 (DESIGN-R24 §3 W3 — A1): the shared FX-row parser.
+   The Clip body drop is DOOR 1 — the routing table lands here at the
+   component surface: the butt-spliced-follower adjacency law, the honest
+   refusal when a transition row has no cut behind it, and the effect STACK
+   with the ×N toast (duplicates legal — the Resolve/Premiere OFX law). ---------- */
+
+describe('R24-W3 (A1-R3): the parser\'s routing at the body door', () => {
+  it('buttSplicedFollower: exact butt-splices resolve (el-1→el-2, el-2→el-3); gaps + lane-last clips do not (s2-1, el-4) — the seams builder\'s 1ms tolerance', () => {
+    expect(buttSplicedFollower('el-1')?.id).toBe('el-2');
+    expect(buttSplicedFollower('el-2')?.id).toBe('el-3');
+    expect(buttSplicedFollower('el-4')).toBeNull(); // tr-main's LAST clip — no out seam
+    expect(buttSplicedFollower('s2-1')).toBeNull(); // sc-2's 0.25 s gap — not a butt-splice
+  });
+
+  it('a transition row on a clip body with NO butt-spliced follower refuses honestly — no mint, no history (the adjacency guard)', () => {
+    boot({});
+    fireEvent.drop(screen.getByTestId('clip-el-4'), { dataTransfer: fxPayload('Dip to Black', 'Transition') });
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Transitions need a cut' });
+    expect(store().toasts.at(-1)!.detail).toContain('no clip after this one — transitions need a cut');
+    expect(el('el-4').transitionOut).toBeUndefined(); // nothing minted — no cut, no transition
+    expect(store().past).toHaveLength(0);
+  });
+
+  it('effect rows STACK: a duplicate Gaussian Blur on el-1 (seeded) reaches ×2 with the honest count toast', () => {
+    boot({});
+    fireEvent.drop(screen.getByTestId('clip-el-1'), { dataTransfer: fxPayload('Gaussian Blur', 'Blur') });
+    const fx = el('el-1').effects!;
+    expect(fx).toHaveLength(2); // the seeded instance + the pushed one — duplicates are legal
+    expect(fx.every((f) => f.name === 'Gaussian Blur')).toBe(true);
+    expect(store().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Gaussian Blur × 2' });
+    expect(store().past).toHaveLength(1); // one addEffectToElement entry
   });
 });

@@ -187,6 +187,20 @@ describe('Ruler in/out brackets (R14 draggable edges)', () => {
     expect(store().loop.start).toBe(1); // pulled along — same markOut formula
     fireEvent.pointerUp(outB(), { pointerId: 3 });
   });
+
+  /* R23-FIX (review-sweep R3-P3#9): applyBracket's UPPER clamp — bracket
+     writes now cap at the scene duration (a page-beyond clientX used to push
+     loop.end past the timeline; the deliver range band's twin ALWAYS clamped
+     to [0, duration], so the Ruler was the loose writer of the three-writer
+     loop seam — markIn/markOut/bracket/band). */
+  it('R23-FIX R3-P3#9: a bracket drag beyond the timeline CAPS at the duration (the three-writer seam agrees)', () => {
+    boot({});
+    fireEvent.pointerDown(outB(), { pointerId: 3, button: 0 });
+    fireEvent.pointerMove(outB(), { pointerId: 3, buttons: 1, clientX: 1500 }); // 32.6 s — past the 30 s tail
+    expect(store().loop.end).toBe(30); // capped at the content tail, never past it
+    expect(store().loop.start).toBe(2); // the ordering law is untouched
+    fireEvent.pointerUp(outB(), { pointerId: 3 });
+  });
 });
 
 /* ---------- R15 T8 (R15-F1 FIX 4c/4d/4e): ruler-scrub laws ---------- */
@@ -310,6 +324,19 @@ describe('R19 markers v2 — marker band + point pins (th_mto2ytyo)', () => {
     const pin = screen.getByTestId('ruler-marker-mk-3');
     expect(pin.style.outline).toContain('var(--accent-selection)');
     expect(screen.getByTestId('ruler-marker-mk-1').style.outline).toBe('');
+  });
+
+  /* R24-W5d (DESIGN-R24 §2 F3-P3): a marker at t≈0 pinned HALF-CLIPPED at
+     the start edge — the center anchor (x − pinW/2) went negative. The x
+     clamps to ≥ 0 now: the start-edge pin is fully visible. */
+  it('a t=0 marker pin clamps to the start edge (full visibility — F3 P3-4, R24-W5d)', () => {
+    boot({});
+    const pin = screen.getByTestId('ruler-marker-mk-1'); // mk-1 = 'Hook' @ 0 s
+    expect(pin.style.left).toBe('0px'); // was −5px (pinW 10 / 2) — half the shield clipped
+    expect(parseFloat(pin.style.left)).toBeGreaterThanOrEqual(0);
+    expect(pin.style.width).toBe('10px'); // the full readout-scale shield
+    // an INTERIOR pin keeps the honest center anchor (mk-2 @ 8.5 s = 391 − 5)
+    expect(screen.getByTestId('ruler-marker-mk-2').style.left).toBe('386px');
   });
 });
 
@@ -456,6 +483,51 @@ describe('R20-W5 — full-band in/out bracket handles (th_mtp5tlgu / thread-3)',
       expect(top + h).toBeLessThanOrEqual(30); // clear of the y 30–44 marker band
       expect(handle.className).toContain('cursor-ew-resize'); // the whole 12×27 box is the grab target
       expect(handle.className).toContain('pointer-events-auto');
+    }
+  });
+});
+
+/* ---------- R23-WE (DESIGN-R23 D-E1, #101): the trim brackets drop VISUAL
+   weight — 1px stems + a 40%-lighter stroke (color-mix toward transparent)
+   — while the 12px full-band HANDLE hit zones are UNCHANGED. The house law
+   under the whole change: hit target ≠ visual size — the art thins, the
+   grab zone never does (readable at 1280×800 without shouting). ---------- */
+
+describe('R23-WE D-E1 — bracket visual weight (#101: thinner strokes, same hit zones)', () => {
+  const pathOf = (side: 'in' | 'out') =>
+    screen.getByTestId(`shell-ruler-bracket-${side}`).querySelector('svg path')!;
+
+  it('the glyphs drop to 1px stems + a 40%-lighter stroke (color-mix toward transparent, same accent hue)', () => {
+    boot({});
+    for (const side of ['in', 'out'] as const) {
+      const p = pathOf(side);
+      expect(p.getAttribute('stroke-width')).toBe('1'); // was 1.6 — the visual-weight law
+      // 40% lighter = the SAME accent at 60% mixed toward transparent (never a different hue)
+      expect(p.getAttribute('stroke')).toBe('color-mix(in srgb, var(--accent-selection) 60%, transparent)');
+    }
+  });
+
+  it('the 12px full-band HANDLE hit zones are UNCHANGED (hit target ≠ visual size)', () => {
+    boot({});
+    for (const side of ['in', 'out'] as const) {
+      const handle = screen.getByTestId(`shell-ruler-bracket-${side}`);
+      expect(handle.style.width).toBe('12px'); // the target did not shrink with the art
+      expect(handle.style.height).toBe('27px'); // full band (bandTop 30 − 3)
+      expect(handle.style.top).toBe('2px');
+      expect(handle.className).toContain('pointer-events-auto'); // the whole box still grabs
+      expect(handle.className).toContain('cursor-ew-resize');
+      // the VISUAL glyph rides well inside the hit box (8px svg < 12px target)
+      const glyph = handle.querySelector('svg')!;
+      expect(parseFloat(glyph.getAttribute('width')!)).toBeLessThan(12);
+    }
+  });
+
+  it('the thin glyph is still a real bracket (⌐¬ cap + 3 grip ticks) — weight down, shape intact', () => {
+    boot({});
+    for (const side of ['in', 'out'] as const) {
+      const d = pathOf(side).getAttribute('d')!;
+      expect(Array.from(d.matchAll(/M\d+/g)).length).toBe(4); // cap outline + 3 ticks
+      expect(d).toMatch(/L\d+\s1\b/); // the top arm of the bracket cap
     }
   });
 });

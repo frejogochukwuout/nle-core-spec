@@ -50,3 +50,62 @@ describe('app.css cascade-layer discipline (R20-W0)', () => {
     expect(/(^|\})\s*button\s*\{[^}]*background\s*:\s*none/.test(unlayered)).toBe(false);
   });
 });
+
+/* ---------- R24-W5a (DESIGN-R24 §2 F2-P1 — THE P1): the unlayered range
+ * reset. The whole input[type="range"] grammar block (reset + track + thumb
+ * + green-fill) used to sit OUTSIDE any @layer, so its `height: 14px`
+ * outranked EVERY Tailwind range height utility (unlayered author CSS beats
+ * @layer utilities regardless of specificity): the Inspector EQ's vertical
+ * h-[88px] band sliders collapsed to 14×11 px stubs live, and every
+ * ChannelEditor h-[10px]/h-[9px] range row was dead. The block moved into
+ * @layer base — utilities win again, the skin survives below them. The
+ * RENDER-side half of the pin (the EQ slider still carries h-[88px]) lives
+ * in Inspector.test.tsx. ---------- */
+describe('R24-W5a F2-P1: the range-input reset lives in @layer base (utilities can override it)', () => {
+  it('the input[type=range] reset (height 14px) is INSIDE an @layer base block', () => {
+    const layered = /@layer\s+base\s*\{[\s\S]*?input\[type="range"\]\s*\{[^}]*height:\s*14px[^}]*\}/;
+    expect(layered.test(css)).toBe(true);
+    // the pseudo-element skin (track/thumb/green-fill) rides the same layer
+    expect(/@layer\s+base\s*\{[\s\S]*?input\[type="range"\]\.green-fill::/.test(css)).toBe(true);
+  });
+
+  it('NO UNLAYERED input[type=range] rule remains — the height reset no longer outranks h-[88px]/h-[10px] utilities', () => {
+    const unlayered = withoutLayerBlocks(css);
+    // the reset itself…
+    expect(/input\[type="range"\]\s*\{/.test(unlayered)).toBe(false);
+    // …and the pseudo-element / green-fill / light-theme twins
+    expect(/input\[type="range"\]::/.test(unlayered)).toBe(false);
+    expect(/input\[type="range"\]\.green-fill/.test(unlayered)).toBe(false);
+    expect(/\[data-theme="light"\]\s*input\[type="range"\]/.test(unlayered)).toBe(false);
+  });
+});
+
+/* ---------- R23-FIX (review-sweep R-d + item 12): the z-ladder bumps + the
+   --danger contrast pairs. jsdom runs css:false, so these laws pin at the
+   source-text level (this file's own precedent — file reads are the only
+   reliable channel into the cascade). ---------- */
+const tokens = readFileSync(resolve(process.cwd(), 'src/styles/tokens.css'), 'utf8');
+
+describe('R23-FIX R-d + item 12 + the wrap-round #57: the z-ladder + the danger contrast pairs', () => {
+  it('R-d + th_mtr0rlq7 (#57): .confirm-backdrop 106 > .menu-pop 105 > the window-too-small overlay (95) > toasts — the modal order holds over the root-level timeline band', () => {
+    expect(/\.confirm-backdrop\s*\{[^}]*z-index:\s*106\s*;/.test(css)).toBe(true);
+    expect(/\.menu-pop\s*\{[^}]*z-index:\s*105\s*;/.test(css)).toBe(true);
+    expect(/z-index:\s*94\s*;/.test(css)).toBe(false); // the old rung is gone everywhere
+    expect(/z-index:\s*93\s*;/.test(css)).toBe(false); // the menu's old rung is gone too
+  });
+
+  it('R-d: the toast-close button reaches the 24px hit floor (was 18px; the glyph is unchanged)', () => {
+    expect(/\.toast-close\s*\{[^}]*height:\s*24px\s*;/.test(css)).toBe(true);
+    expect(/\.toast-close\s*\{[^}]*width:\s*24px\s*;/.test(css)).toBe(true);
+    expect(/\.toast-close\s*\{[^}]*height:\s*18px\s*;/.test(css)).toBe(false);
+  });
+
+  it('item 12 (R1-P2-3): the --danger-text tint (#ec5d62) exists beside the base --danger token', () => {
+    expect(/--danger:\s*#e5484d\s*;/.test(tokens)).toBe(true); // the base token stays the semantic source
+    expect(/--danger-text:\s*#ec5d62\s*;/.test(tokens)).toBe(true); // the lighter AA text fork
+  });
+
+  it('item 12 (R1-P2-4): .confirm-btn.danger darkens to #cf2f37 — ~5:1 with its white 12px label', () => {
+    expect(/\.confirm-btn\.danger\s*\{[^}]*background:\s*#cf2f37\s*;/.test(css)).toBe(true);
+  });
+});

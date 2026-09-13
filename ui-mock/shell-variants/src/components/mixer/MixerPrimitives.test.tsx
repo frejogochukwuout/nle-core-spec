@@ -124,16 +124,35 @@ describe('Fader', () => {
     fireEvent.pointerDown(f, { pointerId: 1, button: 0, clientY: 24 });
     expect(onChange).toHaveBeenLastCalledWith(posToDb(0.25));
     expect(onChange.mock.calls.at(-1)![0]).toBeCloseTo(-3.846, 2);
-    // drag 24px up → pos 0.5 → segment [−10@42% .. −15@55%] → −13.077 dB
+    // th_mtr0prj5 (#55): drag 24px UP → pos 0.25 → 0 → +6 dB (MODEL_MAX) —
+    // the thumb FOLLOWS the pointer (the old sign ran it away; re-pinned)
     fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: 0 });
-    expect(onChange.mock.calls.at(-1)![0]).toBeCloseTo(-13.077, 2);
-    // shift = fine: 72px down from the GRAB at ×0.25 sensitivity → pos 0.0625
-    // → +5.83 dB (deltas are relative to the grab, like the old grammar)
+    expect(onChange).toHaveBeenLastCalledWith(6);
+    // shift = fine: 72px DOWN from the GRAB at ×0.25 → pos 0.25+0.1875 =
+    // 0.4375 → segment [−10@42% .. −15@55%] → −10.673 dB
     fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: 96, shiftKey: true });
-    expect(onChange.mock.calls.at(-1)![0]).toBeCloseTo(5.833, 2);
-    // drag far beyond the top → pos clamps to 1 → model floor −60
-    fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: -964 });
+    expect(onChange.mock.calls.at(-1)![0]).toBeCloseTo(-10.673, 2);
+    // drag far beyond the BOTTOM → pos clamps to 1 → model floor −60
+    fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: 1064 });
     expect(onChange).toHaveBeenLastCalledWith(-60);
+  });
+
+  /* th_mtr0prj5 (#55) — the physical law the reviewer pinned: dragging UP
+   * makes the fader LOUDER, dragging DOWN makes it QUIETER, and the thumb
+   * tracks the cursor 1:1 (pos from the top). */
+  it('#55: the thumb FOLLOWS the pointer — up = louder, down = quieter (the reversal is dead)', () => {
+    const onChange = vi.fn();
+    render(<Fader db={-6} onChange={onChange} ariaLabel="Follow fader" height={96} />);
+    const f = screen.getByRole('slider', { name: 'Follow fader' });
+    f.getBoundingClientRect = () => fakeRect(96);
+    // grab at pos 0.25 (−3.846 dB), drag UP 24px → pos 0 → +6
+    fireEvent.pointerDown(f, { pointerId: 1, button: 0, clientY: 24 });
+    fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: 0 });
+    expect(onChange.mock.calls.at(-1)![0]).toBe(6); // UP = the model MAX
+    // drag DOWN 96px from the same grab → pos 0.25 + 1 = 1.25 → clamped 1 → −60
+    fireEvent.pointerMove(f, { pointerId: 1, buttons: 1, clientY: 120 });
+    expect(onChange).toHaveBeenLastCalledWith(-60); // DOWN = the model floor
+    fireEvent.pointerUp(f, { pointerId: 1 });
   });
 
   it('B7: pointerup / pointercancel / lostpointercapture clear the drag anchor — no stale startPos', () => {

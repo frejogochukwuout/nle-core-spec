@@ -12,7 +12,9 @@ import { DeliverPage } from '../components/pages/DeliverPage';
 import { ChannelEditor } from '../components/mixer/ChannelEditor';
 import { FxBrowser } from '../components/fx/FxBrowser';
 import { FxInspector } from '../components/fx/FxInspector';
+import { ToastRegion } from '../components/shell/ToastRegion';
 import { Timeline } from '../components/timeline/Timeline';
+import { TimelineCompact } from '../components/timeline/TimelineCompact';
 import { StoreBoot, PanelBox } from './decorators';
 
 const meta: Meta = {
@@ -23,10 +25,11 @@ export default meta;
 
 /* ---- color page (spec 18 §4.8) --------------------------------------------- */
 
-/** R20-W4b: the color page's RAIL = the clip-level color sections (W3
- *  grammar, store-bound to the grade target); the wheels/curves/qualifier
- *  live in the TIMELINE-AREA console (see Color stories) and the scope
- *  strip sits under the viewer. */
+/** R20-W4b → R23-WB: the color page's RAIL = the ONE grading surface (the
+ *  W3 grammar, store-bound to the grade target — wheels/curves/qualifier as
+ *  tabs under this one inspector panel); the tabbed ScopesDock console row
+ *  and the node-graph viewer surface live in the timeline area / viewer
+ *  region of the shell (see Color stories for their solo geometry). */
 export const ColorPageStory: StoryObj = {
   name: 'Color page — inspector rail',
   parameters: { layout: 'padded' },
@@ -42,12 +45,14 @@ export const ColorPageStory: StoryObj = {
 
 /* ---- deliver page (spec 18 §4.8 / specs 10-11) — R19 full-view surface --- */
 
-/** The full-view export surface at whole-mainbody geometry: LEFT = presets
- *  (2-col breathing-room tiles, th_mto38qzp) + the render queue; CENTER =
- *  export summary with the store-loop-driven In → Out range; RIGHT = render
- *  settings (the th_mto35hrm wrap/truncate overflow fix). One job running at
- *  38% with spinner + progress bar + retry, two done rows with reveal, one
- *  failed row. */
+/** The whole-mainbody export surface at its own geometry (R22 W5, #88/#89
+ *  — captions re-truthed R24-W4): LEFT = presets ONLY (2-col
+ *  breathing-room tiles, th_mto38qzp — the queue is NOT here); CENTER = the
+ *  video preview (the queue replaces it while rendering / whenever the
+ *  header toggle asks); RIGHT = the deliver INSPECTOR — the export summary
+ *  (incl. the store-loop-driven In → Out range) + the render settings. The
+ *  fixture boots IDLE: one failed row + three done rows, no running row
+ *  (§4.2's error state rides the failed row's Retry). */
 export const DeliverPageStory: StoryObj = {
   name: 'Deliver page — full export view',
   parameters: { layout: 'padded' },
@@ -63,7 +68,8 @@ export const DeliverPageStory: StoryObj = {
 
 /** Cloud-master preset selected + a custom loop range (the play step clicks
  *  the card; the loop patch is what timeline I/O marks would write): accent
- *  tile ring, re-labeled CTA, the summary range block follows, queue below. */
+ *  tile ring, re-labeled CTA, the summary range block follows — the queue
+ *  stays the CENTER view's swap (never the presets rail). */
 export const DeliverMasterPreset: StoryObj = {
   name: 'Deliver page — cloud master + custom range',
   parameters: { layout: 'padded' },
@@ -83,8 +89,11 @@ export const DeliverMasterPreset: StoryObj = {
 };
 
 /** Narrow-container fallback (the pre-Wave-III 340px rail mount): the three
- *  regions keep their minimums and the row scrolls instead of clipping — the
- *  honest transition state until the shell routes the whole mainbody. */
+ *  regions keep their minimums and the row scrolls instead of clipping.
+ *  R23-FIX (review-sweep item 8, R2-F6): this claim is TRUE since the fix —
+ *  the region row carries overflow-x-auto + min-w-0 (the three minimums sum
+ *  ≥ ~900px; before the fix the row clipped with no scroll reachable, and
+ *  this comment described an aspirational state). */
 export const DeliverPageRail: StoryObj = {
   name: 'Deliver page — narrow container (rail fallback)',
   parameters: { layout: 'padded' },
@@ -93,6 +102,28 @@ export const DeliverPageRail: StoryObj = {
       <StoreBoot patch={{ page: 'deliver' }} />
       <PanelBox width={340} height={700}>
         <DeliverPage />
+      </PanelBox>
+    </>
+  ),
+};
+
+/** R24-W4 (A3-R7, #71): the deliver STRIP — the coexistence head stack at
+ *  860×200 strip geometry: the 22px READ-ONLY ruler (rulerTiers ticks + TC
+ *  labels + the in/out bracket FLAGS at the loop edges) with the 32px
+ *  interactive in/out RANGE BAND below it (54px total). The band carries the
+ *  full A3-R7 grammar: the solid 30% accent-tint fill with 1px 65%-accent
+ *  edges, the ~40% dark mask outside in→out, the live TC readout, and the
+ *  12px hover-brighten bracket handles (drag them — the export range IS the
+ *  loop seam; the release commits the preview exactly). The frozen lanes
+ *  ride below (click-to-select). */
+export const DeliverStrip: StoryObj = {
+  name: 'Deliver page — compact strip (ruler + range band)',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ page: 'deliver', loop: { start: 2, end: 28 } }} />
+      <PanelBox width={860} height={200}>
+        <TimelineCompact rangeBand clipClick="select" />
       </PanelBox>
     </>
   ),
@@ -122,7 +153,11 @@ export const ChannelEditorEmpty: StoryObj = {
  *  FxBrowser (left, 280px — the dock width law) beside the FxInspector rail
  *  (340px) with the el-2 transition selected (the parametric state).
  *  The full shell composes them via AppShell — see Shell/AppShell's
- *  “Full Shell — FX”. */
+ *  “Full Shell — FX”.
+ *  R24-W5d (F5-P3, DESIGN-R24 §3 W5d): the story mounts the ToastRegion —
+ *  the browser's click-fallback toast was INVISIBLE here (live
+ *  toastRegion=false), while the full-shell story showed it fine; the
+ *  notification surface is part of the page's honest composition. */
 export const FxPageStory: StoryObj = {
   name: 'FX page — browser & inspector',
   parameters: { layout: 'padded' },
@@ -137,6 +172,7 @@ export const FxPageStory: StoryObj = {
           <FxInspector />
         </PanelBox>
       </div>
+      <ToastRegion />
     </>
   ),
 };

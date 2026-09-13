@@ -86,15 +86,27 @@ export const withVariantProvider: Decorator = (Story) => (
 /* ---- per-story boots ------------------------------------------------------- */
 
 /** Partial view-state patch for StoreBoot (UiState isn't exported from the
-    shared store file — derived from the hook instead of redeclaring it). */
-export type UiPatch = Partial<ReturnType<typeof useUi.getState>>;
+    shared store file — derived from the hook instead of redeclaring it).
+    R23-FIX (review-sweep R1-P3 effects-patch cleanup): `panels` accepts a
+    PARTIAL too — stories can patch only the flags they mean (the dead
+    panels.effects flag no longer has to be spelled out just to satisfy the
+    total type); StoreBoot MERGES onto the boot panels. */
+export type UiPatch = Partial<Omit<ReturnType<typeof useUi.getState>, 'panels'>> & {
+  panels?: Partial<ReturnType<typeof useUi.getState>['panels']>;
+};
 
 /** Applies a store patch before first paint (layout effect) so the story
  *  renders its target state with no default-state flash. Mount-only: the
  *  withStoreReset decorator guarantees a fresh store per story. */
 export function StoreBoot({ patch }: { patch?: UiPatch }) {
   useLayoutEffect(() => {
-    if (patch) useUi.setState(patch);
+    if (patch) {
+      const { panels, ...rest } = patch;
+      useUi.setState({
+        ...rest,
+        ...(panels ? { panels: { ...useUi.getState().panels, ...panels } } : {}),
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
   }, []);
   return null;

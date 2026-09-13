@@ -160,7 +160,7 @@ export function ContextMenu({ x, y, items, name, onClose }: ContextMenuProps) {
       {/* transparent overlay — click / scroll / right-click closes; no dark
           backdrop (§4.9: menus float over the unobstructed app) */}
       <div
-        className="fixed inset-0 z-[92]"
+        className="fixed inset-0 z-[104]"
         aria-hidden="true"
         onPointerDown={() => onClose()}
         onWheel={() => onClose()}

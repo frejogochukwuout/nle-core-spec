@@ -15,7 +15,11 @@
    R20-W5 (th_mtp5tlgu / timeline-cluster thread-3): the in/out brackets are
    FULL-BAND 12×(bandTop−3) handles anchored INSIDE the loop region, with
    real bracket glyphs derived from the handle height (never crops); the R19
-   clamp+mirror is gone (anchoring inside makes it dead). */
+   clamp+mirror is gone (anchoring inside makes it dead).
+   R23-WE (DESIGN-R23 D-E1, #101): the bracket GLYPHS drop visual weight —
+   1px stems + a 40%-lighter stroke (color-mix toward transparent) — while
+   the 12px full-band handles are untouched (house law: hit target ≠ visual
+   size; the art thins, the grab zone never does). */
 
 import { useEffect, useRef, useState } from 'react';
 import { useUi } from '../../state/useUiStore';
@@ -200,7 +204,12 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
      loop pegs the playback tick; the R13 hang). */
   const bracketDrag = useRef<'in' | 'out' | null>(null);
   const applyBracket = (side: 'in' | 'out', t: number) => {
-    const v = Math.max(0, snapToFrame(t));
+    /* R23-FIX (review-sweep R3-P3#9): the upper clamp — bracket writes now
+       cap at the scene duration (a drag or a page-beyond clientX used to
+       push loop.end past the timeline; the deliver range band's twin has
+       ALWAYS clamped, so the Ruler was the loose writer of the three-
+       writer seam). */
+    const v = Math.max(0, Math.min(snapToFrame(t), duration));
     useUi.setState((s) =>
       side === 'in'
         ? { loop: { ...s.loop, start: v, end: Math.max(s.loop.end, v) } }
@@ -441,7 +450,11 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
           "[" glyph, bracketH-derived coordinates — no clamp, no mirror). The
           12px-wide strip may briefly pass under an 11px TC label; z 7 wins
           and loop edges usually sit between labels (contract's accepted
-          trade for the bigger grab target). */}
+          trade for the bigger grab target).
+          R23-WE D-E1 (#101): the glyph is 1px-stroked at 60% of the accent
+          (color-mix toward transparent — 40% lighter) so the ruler reads
+          calm at 1280×800; the HANDLE box below is the unchanged 12×27
+          hit target (hit target ≠ visual size). */}
       <div
         {...bracketHandlers('in')}
         role="slider"
@@ -461,14 +474,16 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
               25/50/75% — ALL Y coords derive from this svg's own height */}
           <path
             d={`M7 1 L2 1 L2 ${handleH - 3} L7 ${handleH - 3} M4 ${(handleH - 2) * 0.25 + 1} L7 ${(handleH - 2) * 0.25 + 1} M4 ${(handleH - 2) * 0.5 + 1} L7 ${(handleH - 2) * 0.5 + 1} M4 ${(handleH - 2) * 0.75 + 1} L7 ${(handleH - 2) * 0.75 + 1}`}
-            stroke="var(--accent-selection)"
-            strokeWidth="1.6"
+            stroke="color-mix(in srgb, var(--accent-selection) 60%, transparent)" /* R23-WE D-E1: 40% lighter */
+            strokeWidth="1"
             fill="none"
           />
         </svg>
       </div>
       {/* out bracket — the mirrored "]" at the loop region's right edge,
-          same full-band geometry (R20-W5 thread-3: clamp+mirror deleted) */}
+          same full-band geometry (R20-W5 thread-3: clamp+mirror deleted);
+          same R23-WE D-E1 thin-glyph law: 1px stroke, 60% accent, 12×27
+          hit target unchanged */}
       <div
         {...bracketHandlers('out')}
         role="slider"
@@ -486,8 +501,8 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
         <svg className="pointer-events-none" width="8" height={handleH - 2} aria-hidden="true" style={{ position: 'absolute', right: 0 }}>
           <path
             d={`M1 1 L6 1 L6 ${handleH - 3} L1 ${handleH - 3} M1 ${(handleH - 2) * 0.25 + 1} L4 ${(handleH - 2) * 0.25 + 1} M1 ${(handleH - 2) * 0.5 + 1} L4 ${(handleH - 2) * 0.5 + 1} M1 ${(handleH - 2) * 0.75 + 1} L4 ${(handleH - 2) * 0.75 + 1}`}
-            stroke="var(--accent-selection)"
-            strokeWidth="1.6"
+            stroke="color-mix(in srgb, var(--accent-selection) 60%, transparent)" /* R23-WE D-E1: 40% lighter */
+            strokeWidth="1"
             fill="none"
           />
         </svg>
@@ -508,7 +523,10 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
           aria-label={`Marker ${m.label}`}
           className="absolute z-[6] block cursor-pointer border-0 bg-transparent p-0"
           style={{
-            left: snapPxToDeviceGrid(m.time * pxPerSec) - pinW / 2,
+            /* R24-W5d (DESIGN-R24 §2 F3-P3): the center anchor (x − pinW/2)
+               clipped HALF the pin at t≈0 (left −5px at the start edge) — the
+               x clamps to 0 so a start-edge pin is fully visible. */
+            left: Math.max(0, snapPxToDeviceGrid(m.time * pxPerSec) - pinW / 2),
             top: bandTop + (bandH - pinH) / 2,
             width: pinW,
             height: pinH,

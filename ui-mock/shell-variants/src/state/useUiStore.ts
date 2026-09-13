@@ -115,6 +115,29 @@ export const TIMELINE_GRADE_KEY = 'timeline';
 /** GradeParams (spec 08 §4.2, W4a) + the mock curves extension (spec 08 §5). */
 export type MockGrade = GradeParams & { curves?: CurveSet };
 
+/* R23-WB (DESIGN-R23 D-B4; issues #97/#91): a Gallery still — a captured
+ * graded frame of a timeline clip, carried as its grade record (the
+ * gradient thumbnail the panel paints is the honest mock of the decoded
+ * frame). View state — the seeds below are the panel's old fixtures, moved
+ * to the store so stills survive page/tab unmounts (the sourceRanges
+ * precedent); NEVER inside a withHistory snapshot. */
+export interface Still {
+  id: string;
+  name: string;
+  /** The captured clip's source media (thumbnail provenance; null = timeline-level). */
+  mediaId: string | null;
+  grade: MockGrade;
+}
+
+/** R23-WB (D-B4): the seed gallery — the R22-D7 fixtures, re-homed to the
+ *  store (the panel's local useState died with it). */
+const SEED_STILLS: Still[] = [
+  { id: 'still-01', name: 'Marina cool', mediaId: 'm-01', grade: { ...DEFAULT_GRADE, temperature: -18, contrast: 1.08, saturation: 8 } },
+  { id: 'still-02', name: 'Golden hour', mediaId: 'm-01', grade: { ...DEFAULT_GRADE, temperature: 26, tint: 6, saturation: 18, highlights: -6 } },
+  { id: 'still-03', name: 'Bleach lift', mediaId: 'm-04', grade: { ...DEFAULT_GRADE, lift: 0.04, saturation: -32, contrast: 1.22 } },
+  { id: 'still-04', name: 'Night teal', mediaId: 'm-01', grade: { ...DEFAULT_GRADE, temperature: -30, tint: -10, midHue: 190, midAmount: 0.12, pivot: 0.38 } },
+];
+
 /** Partial patch: qualifier merges deeply, curves replaces the set. */
 export type GradePatch = Partial<Omit<MockGrade, 'qualifier' | 'curves'>> & {
   qualifier?: Partial<QualifierParams> | null;
@@ -169,6 +192,25 @@ export function resolveGradeTargetId(s: Pick<UiState, 'colorGradeTarget' | 'sele
 /** Record lookup with the identity default (absent key = DEFAULT_GRADE). */
 export function gradeOf(s: Pick<UiState, 'mockGrades'>, id: string): MockGrade {
   return s.mockGrades[id] ?? DEFAULT_MOCK_GRADE;
+}
+
+/* R23-WB (DESIGN-R23 D-B3; issue #94): the ONE density resolver — 'auto'
+ * means COMPACT on color + deliver (deliver per D-F1's ruling that Wave F
+ * mounts the strip), full tracks elsewhere; 'on'/'off' are the user's
+ * per-session overrides. Both consumers (the AppShell mount decision + the
+ * TimelineToolbar toggle's honest aria-pressed) read THIS so they can never
+ * disagree about what is rendered.
+ * R23-FIX (review-sweep R-b, R3-P2#3 — supersedes the D-D2 matrix's density
+ * row for FX): the FX page FORCES the full Timeline — even the user's 'on'
+ * override yields there (D-A1/ruling 8: seam hit-zones and transition boxes
+ * need real lane pixel geometry; the compact strip is frozen by law). The
+ * density toggle is DOM-absent on the FX page, so no control can claim the
+ * override there; the resolver is the single writer of the truth.) */
+export function resolveTimelineCompact(s: Pick<UiState, 'timelineCompact' | 'page'>): boolean {
+  if (s.page === 'fx') return false; // R-b: the FX timeline is the FULL Timeline
+  if (s.timelineCompact === 'on') return true;
+  if (s.timelineCompact === 'off') return false;
+  return s.page === 'color' || s.page === 'deliver';
 }
 
 const findEl = (scenes: SceneJSON[], id: string): { el: ElementJSON; track: TrackJSON; scene: SceneJSON } | null => {
@@ -499,6 +541,11 @@ interface UiState {
   // ---- audio focus mode (design doc docs/DESIGN-audio-mode.md v2.1) ----
   mixer: MockMixerScene;      // mock G-slice (spec 20 §4.2 shape)
   mixerState: MixerDockState;
+  /* R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66): the binary toggle's
+     lastVisual memory — the visual state ('full' | 'meters') the dock
+     re-opens to after a close ('full' by default; on the audio page it may
+     be 'meters'). View state, never snapshotted. */
+  mixerLastVisual: Exclude<MixerDockState, 'collapsed'>;
   audioLaneBoost: boolean;
   stripFocus: string | null;
   stripFlash: number;
@@ -508,9 +555,22 @@ interface UiState {
      unchanged and there is no doc-slice field (gap C40 honesty toasts stay). */
   stripArm: Record<string, boolean>;       // record-arm display state per trackId
   stripInsertsOn: Record<string, boolean>;  // inserts-power display state per trackId
-  /* R20-W1 D1.3: ONE honest floor-fallback toast per session — the dock
-     auto-falls back to the meters state below MIXER_TIER.FLOOR. */
-  mixerFloorWarned: boolean;
+  /* R24-W1 (DESIGN-R24 §1.3 A3-R2; issue #60 — the floor-fallback toast +
+     this flag are DELETED, deletion-pinned in useUiStore.test): below the
+     280px strip floor the dock PURE-RENDERS the meters surface at the
+     container level (MixerDock's own height measurement) while mixerState
+     stays untouched — no store write, no toast, no session flag. */
+  /* R23-WC (DESIGN-R23 D-C3; issue #70 — the R20-era carry-over "probably
+     should have separate collapse / minimize for the master / bus"): the full
+     dock's master + aux-bus bank has its OWN meters-only collapse, INDEPENDENT
+     of the channel strips and of the dock-level open/mode state — collapsing
+     the bank never touches the channel strips' tier/anatomy, and toggling the
+     dock open/closed never resets the bank. View state in the stripArm
+     precedent's law (B6): survives dock unmounts / state cycles / scene
+     switches (stale ids are harmless — the dock resolves per the active
+     scene), NEVER inside a withHistory snapshot (the snapshot slice stays
+     scenes/activeSceneId/lockAll/selection/mockGrades). */
+  masterBusCollapsed: boolean;
   /* spec 18 §4.9 track-header Height rows (Compact/Normal/Tall): GLOBAL lane-
      height pref (null = auto: kind-based trackHeights()). B3 registration: the
      state-home question (per-track vs global) is a seal item — the mock answers
@@ -547,18 +607,35 @@ interface UiState {
    *  grading surface moved from the scrapped ColorConsole into the right
    *  rail's ColorInspector per DESIGN-R22 D2). */
   colorInspectorTab: 'primaries' | 'curves' | 'qualifier';
-  /** R22-D3: the scopes console state under the viewer — 'off' = NOT rendered
-   *  (the mixer's collapsed law, the default per issue #77 "shouldn't always
-   *  be there"); 'collapsed' = the 26px header row; 'row' = one 130px band;
-   *  'grid' = the reference's 2×2 quadrant. View state, never snapshotted. */
-  colorScopesState: 'off' | 'collapsed' | 'row' | 'grid';
-  /** R22-D3: the last VISUAL mode the scopes dock showed (row/grid) — the
-   *  Toolbar2 toggle restores it when re-opening from 'off'. */
-  colorScopesLastVisual: 'row' | 'grid';
-  /** R22-D4: the node-graph console dock in the timeline area (the
-   *  mixer-console mechanism; default OFF — "require a separate view ...
-   *  toggled just like mixer console", issue #78). */
+  /** R22-D3 → R23-WB (DESIGN-R23 D-B1; issues #90/#95): the scopes console
+   *  state — 'off' = the dock is NOT rendered at all (the mixer's collapsed
+   *  law, the default per issue #77); 'open' = the tabbed ScopesDock in the
+   *  TIMELINE-AREA console row. The R22 4-state machine (collapsed/row/grid)
+   *  died with the squeeze it defended — the W4c simultaneity law is
+   *  REVERSED by #90/#95 (registered in the README deviation ledger). The
+   *  state is never persisted, so the ruling-13 migration (any legacy
+   *  non-'off' value → 'open') is enforced at the type + every StoreBoot/
+   *  test patch site; colorScopesLastVisual is REMOVED (Part IX ruling 13).
+   *  View state, never snapshotted. */
+  colorScopesState: 'off' | 'open';
+  /** R22-D4 → R23-WB (DESIGN-R23 D-B2; issue #93): the node-graph flag now
+   *  points at the VIEWER-REGION surface — true = ColorNodeGraph replaces
+   *  the Viewer in the mainbody center ("fit better on the preview window …
+   *  we can cross it out just like a normal asset preview"); the timeline-
+   *  area dock died ("stacking next to multi-track is perhaps not a great
+   *  place as we need more space for it"). Toggled from Toolbar2 on color;
+   *  the surface's × restores the viewer. View state, never snapshotted. */
   colorNodesDock: boolean;
+  /** R23-WB (DESIGN-R23 D-B3; issue #94): timeline density — 'auto' resolves
+   *  per page (COMPACT on color + deliver per D-F1, full elsewhere);
+   *  'on'/'off' are the per-session user overrides from the TimelineToolbar's
+   *  density toggle (available on EVERY page — "this super compact mode we
+   *  should allow to be used everywhere"). View state, not a pref (resets on
+   *  reload); never snapshotted. */
+  timelineCompact: 'auto' | 'on' | 'off';
+  /** R23-WB (D-B4; #97/#91): the color page's Gallery — view state, never
+   *  snapshotted (stills survive unmounts; grades are NOT doc data). */
+  colorStills: Still[];
   /** Clip ⇄ Timeline grade-target toggle (C51); 'clip' resolves to selection[0]. */
   colorGradeTarget: 'clip' | 'timeline';
   /** Qualifier matte-preview overlay switch (C54 preview half — W4c renders
@@ -651,7 +728,7 @@ interface UiState {
    * clip-children, one at a time) but KEEPS the clip selection (the
    * fade-object pointerdown selects the clip first, exactly the
    * selectEffect mirror). */
-  selectFxObject: (sel: SelectedFxObject) => void;
+  selectFxObject: (sel: SelectedFxObject | null) => void;
   setZoom: (px: number) => void;
   setZoomMin: (pps: number) => void;
   zoomStep: (factor: number) => void;
@@ -669,6 +746,11 @@ interface UiState {
   setMasterVolume: (v: number) => void;
   setMediaW: (w: number) => void;
   setInspectorW: (w: number) => void;
+  /** R24-W5d (F5-P3, DESIGN-R24 §3 W5d — the setMainBodyH twin): the §3.2
+   *  dbl-click seam reset — restores the page-aware default (420 on color,
+   *  340 elsewhere) AND un-sets inspectorWUserSet so the default honestly
+   *  resumes. View state: no history entry. */
+  resetInspectorW: () => void;
   setMainBodyH: (h: number) => void;
   setCheatOpen: (v: boolean) => void;
   setMediaSelection: (ids: string[]) => void;
@@ -683,12 +765,27 @@ interface UiState {
   saveNow: () => void;
   removeMarkersAt: (time: number) => void;
   toggleTrackCmd: (sceneId: string, trackId: string, field: 'muted' | 'solo' | 'locked' | 'visible' | 'waveform') => void;
+  /** R24-W5d (W1's debt, DESIGN-R24 §3 W5d — the single-undo convergence):
+   *  ONE withHistory write sets every audio track's §4.7 waveform flag to
+   *  the target (the ViewOptionsPopover's converge seam — the per-track
+   *  toggleTrackCmd flip loop minted 2 entries per undefined track on the
+   *  undefined→true→false double walk). Doc state like toggleTrackCmd
+   *  (undoable, one entry); a converged no-change call mints NOTHING (the
+   *  canonical no-op law). */
+  setAllTrackWaveforms: (target: boolean) => void;
   enterAudioFocus: (trigger: 'dock' | 'shortcut' | 'escalation', trackId?: string) => void;
   exitAudioFocus: () => void;
   setMixerState: (m: MixerDockState) => void;
-  cycleMixerState: () => void;
+  /** R24-W1 (DESIGN-R24 §1.3 A3-R3; #65/#66): the BINARY open/close toggle —
+   *  cycleMixerState (and its page-aware meters↔full branch) is DELETED
+   *  (deletion-pinned). Closing remembers the visual state; re-opening
+   *  returns to it (mixerLastVisual, 'full' by default). */
+  toggleMixerOpen: () => void;
   toggleStripArm: (trackId: string) => void;
   toggleStripInserts: (trackId: string) => void;
+  /** R23-WC (D-C3/#70): flips masterBusCollapsed — the full dock's master +
+   *  bus bank meters-only collapse (view state, the stripArm precedent). */
+  toggleMasterBus: () => void;
   setAudioLaneBoost: (v: boolean) => void;
   setTrackHeightPref: (p: UiState['trackHeightPref']) => void;
   /** R20-W5 (thread #58): per-track height write. `px` is clamped by the
@@ -705,11 +802,19 @@ interface UiState {
   setGrade: (id: string, patch: GradePatch) => void;
   resetGrade: (id: string) => void;
   setColorInspectorTab: (tab: UiState['colorInspectorTab']) => void;
-  /** R22-D3: sets the scopes console state (dedicated setter — togglePanel is
-   *  boolean-keyed and cannot carry the tri-state). */
+  /** R22-D3 → R23-WB: sets the scopes console state (dedicated setter —
+   *  togglePanel is boolean-keyed; the 'open' state is the only visual now). */
   setColorScopesState: (state: UiState['colorScopesState']) => void;
-  /** R22-D4: toggles the node-graph console dock. */
+  /** R22-D4 → R23-WB: toggles the node-graph viewer-region surface (D-B2). */
   toggleColorNodesDock: () => void;
+  /** R23-WB (D-B3): the density override write ('auto' | 'on' | 'off'). */
+  setTimelineCompact: (v: UiState['timelineCompact']) => void;
+  /** R23-WB (D-B4): saves a Gallery still from a grade record (the id is
+   *  minted HERE, monotonic over the existing ids — a delete can never cause
+   *  a collision). View-state write, no history entry. */
+  addColorStill: (grade: MockGrade, opts?: { name?: string; mediaId?: string | null }) => Still;
+  /** R23-WB (D-B4): deletes a Gallery still by id. View-state write. */
+  removeColorStill: (id: string) => void;
   setColorGradeTarget: (t: UiState['colorGradeTarget']) => void;
   setQualifierPreviewOn: (v: boolean) => void;
   setQualifierPickerOn: (v: boolean) => void;
@@ -904,12 +1009,13 @@ export const useUi = create<UiState>((set, get) => ({
   future: [] as HistoryEntry[],
   mixer: createMixerScene(project.scenes.flatMap((sc) => sc.tracks.filter((t) => t.kind === 'audio').map((t) => t.id))),
   mixerState: 'collapsed',
+  mixerLastVisual: 'full', // R24-W1 (#65/#66): re-open target after a close
   audioLaneBoost: false,
   stripFocus: null,
   stripFlash: 0,
   stripArm: {},
   stripInsertsOn: {},
-  mixerFloorWarned: false,
+  masterBusCollapsed: false, // R23-WC (D-C3/#70): the bank boots FULL strips
   trackHeightPref: null,
   trackHeightOverrides: {}, // R20-W5: per-track view state, absent = auto
   poolModeFilter: true, // R20-W5: default ON — the audio page boots filtered
@@ -918,9 +1024,10 @@ export const useUi = create<UiState>((set, get) => ({
      preview, Primary node selected (C56 default binding). */
   mockGrades: {},
   colorInspectorTab: 'primaries',
-  colorScopesState: 'off', // R22-D3: default OFF (#77 "shouldn't always be there")
-  colorScopesLastVisual: 'grid',
-  colorNodesDock: false,
+  colorScopesState: 'off', // R22-D3/R23-WB: default OFF (#77 "shouldn't always be there")
+  colorNodesDock: false, // R23-WB (D-B2): the viewer-region surface, default OFF
+  timelineCompact: 'auto', // R23-WB (D-B3): per-page resolution until the user toggles
+  colorStills: SEED_STILLS, // R23-WB (D-B4): the Gallery's seed stills (view state)
   colorGradeTarget: 'clip',
   qualifierPreviewOn: false,
   qualifierPickerOn: false,
@@ -939,6 +1046,24 @@ export const useUi = create<UiState>((set, get) => ({
        the radio never claims fxMode that no longer holds). */
     fxMode: p === 'fx',
     ...(s.page === 'fx' && p !== 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
+    /* R24-W0 (DESIGN-R24 §3 W0.1 — F5's page-transition leak): the FX domain
+       dies with the page too. A selectedFxObject carried into edit/color/
+       deliver rendered a lying FxInspector rail AND armed Delete (the
+       ruling-22 rung reads the domain before the clip selection) — the exit
+       law now covers all seven selection domains the way the scene switch
+       does. The fx-page entry is always fresh (the domain can only be set
+       while on fx — selectFxObject is fx-page-driven). */
+    ...(s.page === 'fx' && p !== 'fx' ? { selectedFxObject: null } : {}),
+    /* R23-WB (D-B5/#92) → R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 —
+       AUDIO-ONLY mixer surfaces, registered in the README deviation ledger):
+       entering a page whose toolbar carries NO mixer toggle collapses the
+       console (the audioLaneBoost exit-law pattern). The Toolbar2 toggle is
+       AUDIO-only now (R23-WB's edit+audio row is superseded — Resolve's Edit
+       page shows a mixer only via Workspace, and the user's ruling wins), so
+       an open mixer carried into ANY other page — edit included — would be
+       unclosable from that page's toolbar: the exit law keeps every console
+       closable on the page that owns it (audio). */
+    ...(p !== 'audio' && s.mixerState !== 'collapsed' ? { mixerState: 'collapsed' as MixerDockState } : {}),
   })),
   setActiveScene: (id) => set((s) => {
     // lockAll is scene-derived view state — re-derive on switch so the toolbar
@@ -962,6 +1087,19 @@ export const useUi = create<UiState>((set, get) => ({
       /* R23-WA: the FX domain dies with the scene switch (stale element ids —
          the same law as the effect/track domains). */
       selectedFxObject: null,
+      /* R23-FIX (review-sweep item 2, R2-F1/R5-P2-1 — the 7th clear-site
+         law): the MARKER domain dies with the scene switch too. Marker ids
+         are scene-scoped (scene.markers), so a carried selectedMarkerId
+         resolved to nothing in the new scene and the AppShell rail swap
+         mounted a BLANK MarkerInspector (the stale-id blank-rail bug). */
+      selectedMarkerId: null,
+      /* R24-W5c (DESIGN-R24 §2 F4-P3 — the 8th clear-site domain): the mixer
+         strip FOCUS dies with the scene switch (stale track id — the same
+         law as the effect/track/marker domains; the ChannelEditor's
+         stripLive resolver already degrades gracefully, this makes the
+         store stop carrying the stale id at all). W5c's ONLY useUiStore
+         change — the wave's partition exception, documented. */
+      stripFocus: null,
       ...(sc ? { lockAll: sc.tracks.every((t) => t.locked) } : {}),
     };
   }),
@@ -987,7 +1125,10 @@ export const useUi = create<UiState>((set, get) => ({
     if (idx === -1 || scenes.length <= 1) return;
     scenes.splice(idx, 1);
     const s = get();
-    if (s.activeSceneId === id) set({ activeSceneId: scenes[Math.max(0, idx - 1)].id, selection: [] });
+    /* R23-FIX (item 2): deleting the ACTIVE scene is a scene switch — the
+       marker domain clears with it (the 7th clear-site law; a stale id
+       would otherwise blank the rail on the newly active scene). */
+    if (s.activeSceneId === id) set({ activeSceneId: scenes[Math.max(0, idx - 1)].id, selection: [], selectedMarkerId: null });
     return scenes;
   }),
   /* R23-WA (Part IX ruling 2 — fxMode single source): setTool is the writer
@@ -1033,6 +1174,12 @@ export const useUi = create<UiState>((set, get) => ({
     // ordering law (R14): start <= end ALWAYS — an inverted window pegs the
     // playback tick (t >= end resets to start) and the playhead never advances
     // (R13 review found the hang). Setting in past out drags out along.
+    // R23-WF (D-F1, #107): s.loop now has THREE writers — these marks, the
+    // full Ruler's bracket applyBracket, and the deliver range band's
+    // commitBand (TimelineCompact's head row). Every writer carries this
+    // same max/min formula — the honest triple-source risk is pinned at
+    // store level (the R14 ordering-law sweep below, in useUiStore.test)
+    // and per writer in their own component tests.
     const start = snapToFrame(s.playhead);
     return { loop: { ...s.loop, start, end: Math.max(s.loop.end, start) } };
   }),
@@ -1309,13 +1456,32 @@ export const useUi = create<UiState>((set, get) => ({
     const grown = [...s.selection.filter((x) => !group.includes(x)), ...group];
     return { selection: grown, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...domainClear(grown) };
   }),
+  /* R23-FIX (review-sweep item 3, R5-P2-2): selectTrackElements (⇧⌘A / the
+     trackhead select-all) and selectNeighbors (Tab/⇧Tab) now route through
+     the SAME domain-clear spread setSelection/selectElement use — a fresh
+     clip selection is a DOMAIN CHANGE, so the marker/track domains must die
+     and project mode must exit (a Tab walk away from a marker left the rail
+     showing the marker inspector with a clip selected — the bypass bug). */
   selectTrackElements: (trackId, additive) => set((s) => {
     const sc = s.scenes.find((x) => x.id === s.activeSceneId);
     const track = sc?.tracks.find((t) => t.id === trackId);
     const ids = (track?.elements ?? []).map((e) => e.id);
-    if (!additive) return { selection: ids };
-    const merged = new Set([...s.selection, ...ids]);
-    return { selection: [...merged] };
+    /* the shared survival laws, cloned from selectElement :1386-1394 — the
+       effect + FX-object domains survive ONLY while their clip stays in the
+       new selection (D4.2 / D-A3). */
+    const fxClear = (next: string[]): Partial<UiState> =>
+      s.selectedEffectClipId !== null && !next.includes(s.selectedEffectClipId)
+        ? { selectedEffectId: null, selectedEffectClipId: null } : {};
+    const fxObjClear = (next: string[]): Partial<UiState> =>
+      s.selectedFxObject !== null && !next.includes(s.selectedFxObject.elementId)
+        ? { selectedFxObject: null } : {};
+    const domainClear = (next: string[]): Partial<UiState> => ({ ...fxClear(next), ...fxObjClear(next) });
+    if (!additive) return { selection: ids, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...domainClear(ids) };
+    const merged = [...new Set([...s.selection, ...ids])];
+    /* additive-grow = selectElement's own law (line ~1417): the marker/track
+       domains die with ANY fresh clip selection; the effect/fx-object domains
+       ride the survival law above. */
+    return { selection: merged, selectedMarkerId: null, selectedTrackId: null, inspectorProjectMode: false, ...domainClear(merged) };
   }),
   selectNeighbors: (dir) => set((s) => {
     const sc = s.scenes.find((x) => x.id === s.activeSceneId);
@@ -1324,7 +1490,19 @@ export const useUi = create<UiState>((set, get) => ({
     if (els.length === 0) return {};
     const cur = s.selection[0] ? els.findIndex((e) => e.id === s.selection[0]) : -1;
     const next = cur === -1 ? (dir === 1 ? 0 : els.length - 1) : clamp(cur + dir, 0, els.length - 1);
-    return { selection: [els[next].id] };
+    const group = [els[next]!.id];
+    /* item 3: the domain-clear spread (see selectTrackElements above) — the
+       effect domain survives iff its clip IS the new neighbor selection. */
+    return {
+      selection: group,
+      selectedMarkerId: null,
+      selectedTrackId: null,
+      inspectorProjectMode: false,
+      ...(s.selectedEffectClipId !== null && !group.includes(s.selectedEffectClipId)
+        ? { selectedEffectId: null, selectedEffectClipId: null } : {}),
+      ...(s.selectedFxObject !== null && !group.includes(s.selectedFxObject.elementId)
+        ? { selectedFxObject: null } : {}),
+    };
   }),
   setZoom: (px) => set((s) => ({ pxPerSec: clamp(px, Math.max(MIN_PPS, s.zoomMinPps), MAX_PPS) })),
   // dynamic min (spec-05 §5.2): view state write from the Timeline's live
@@ -1393,7 +1571,13 @@ export const useUi = create<UiState>((set, get) => ({
   setMasterVolume: (v) => set({ masterVolume: clamp(v, 0, 1) }),
   setMediaW: (w) => set({ mediaW: clamp(w, 200, 480) }),
   setInspectorW: (w) => set({ inspectorW: clamp(w, 280, 560), inspectorWUserSet: true }),
-  setMainBodyH: (h) => set({ mainBodyH: h <= 0 ? 0 : clamp(h, 320, 900), mainBodyUserSet: true }), // 0 = auto (page-aware default, R22-D8; spec 18 §3.2)
+  /* R24-W5d (F5-P3 — the mainBodyH twin): the seam reset restores the
+     page-aware default AND clears the user flag, so "inspectorWUserSet"
+     never pins a stale default across a page flip (the color reset → edit
+     showed 420, not 340). No dx-0 overload on setInspectorW itself — the
+     reset is a distinct seam, the width families stay explicit. */
+  resetInspectorW: () => set((s) => ({ inspectorW: s.page === 'color' ? 420 : 340, inspectorWUserSet: false })),
+  setMainBodyH: (h) => set({ mainBodyH: h <= 0 ? 0 : clamp(h, 320, 900), mainBodyUserSet: h > 0 ? true : false }), // 0 = auto (page-aware default, R22-D8; spec 18 §3.2) — a reset (h≤0, the double-click) CLEARS the user flag so 'auto' honestly resumes (R23-WB-REV P3 #3: the flag stuck and locked the 40% landing)
   setCheatOpen: (v) => set({ cheatOpen: v }),
   setMediaSelection: (ids) => set({ mediaSelection: ids }),
   toggleMediaSelection: (id, additive) => set((s) => {
@@ -1442,6 +1626,23 @@ export const useUi = create<UiState>((set, get) => ({
     (t as any)[field] = !(t as any)[field];
     return scenes;
   }),
+  /* R24-W5d (W1's debt — the converging flip's single-undo seam): one
+     withHistory write, every audio track's flag set to the target (audio
+     only — the TrackHeader Waveform view toggle carries the same kind gate;
+     the popover's §4.7 converging checkbox is the consumer). Already
+     converged → true no-op, no history. */
+  setAllTrackWaveforms: (target) => withHistory(set, get, (scenes) => {
+    const s = get();
+    const sc = scenes.find((x) => x.id === s.activeSceneId);
+    if (!sc) return;
+    let changed = false;
+    for (const t of sc.tracks) {
+      if (t.kind !== 'audio') continue;
+      if (t.waveform !== target) { t.waveform = target; changed = true; }
+    }
+    if (!changed) return; // converged — no-op, no history entry
+    return scenes;
+  }),
 
   // ---- audio focus (design doc §3) ----
   enterAudioFocus: (trigger, trackId) => set((s) => {
@@ -1460,6 +1661,10 @@ export const useUi = create<UiState>((set, get) => ({
          the FX engine's seam zones on a page that never asked for them. */
       fxMode: false,
       ...(s.page === 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
+      /* R24-W0 (W0.1's belt-and-braces — the RAW page writer twin): this
+         action writes `page` directly, so it carries the fx-domain exit
+         itself (the fxMode coupling above is the pattern). */
+      ...(s.page === 'fx' ? { selectedFxObject: null } : {}),
       mixer,
       mixerState: 'full',
       audioLaneBoost: true,
@@ -1475,17 +1680,33 @@ export const useUi = create<UiState>((set, get) => ({
     audioLaneBoost: false,
     fxMode: false,
     ...(s.page === 'fx' && s.tool === 'fx' ? { tool: 'select' as ToolId } : {}),
+    /* R24-W0 (W0.1 belt-and-braces): exit is only reachable from the audio
+       page (where the domain is already dead per the entry clear above),
+       but the raw writer keeps the full exit law like its fxMode twin. */
+    ...(s.page === 'fx' ? { selectedFxObject: null } : {}),
+    /* R24-W1 (A3-R3, the raw-writer twin of setPage's exit law): exit writes
+       `page` directly, so it carries the audio-only mixer collapse itself —
+       the dock must not survive the exit onto an Edit page that carries no
+       mixer toggle (the stranded-unclosable law). */
+    ...(s.mixerState !== 'collapsed' ? { mixerState: 'collapsed' as MixerDockState } : {}),
   })),
   setMixerState: (m) => set({ mixerState: m }),
-  cycleMixerState: () => set((s) => {
-    // R20-W1 (DESIGN-R20 D1.4, thread #61): Edit — collapsed → meters →
-    // full → collapsed; Audio — meters ↔ full (the page-aware branch is
-    // PRESERVED from the v2.2 revision — pinned by useUiStore.test).
-    if (s.page === 'audio') return { mixerState: s.mixerState === 'full' ? 'meters' : 'full' };
-    return { mixerState: s.mixerState === 'collapsed' ? 'meters' : s.mixerState === 'meters' ? 'full' : 'collapsed' };
-  }),
+  /* R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 — cycleMixerState is
+     DELETED, deletion-pinned in useUiStore.test): the BINARY open/close
+     toggle WITH lastVisual memory. Open = any visual state; close =
+     'collapsed' + remember; re-open = the remembered visual ('full' by
+     default; 'meters' if that was the last non-collapsed state — the audio
+     page's meters mode is a legit memory). */
+  toggleMixerOpen: () => set((s) => (
+    s.mixerState !== 'collapsed'
+      ? { mixerState: 'collapsed' as MixerDockState, mixerLastVisual: s.mixerState }
+      : { mixerState: s.mixerLastVisual }
+  )),
   toggleStripArm: (trackId) => set((s) => ({ stripArm: { ...s.stripArm, [trackId]: !(s.stripArm[trackId] ?? false) } })),
   toggleStripInserts: (trackId) => set((s) => ({ stripInsertsOn: { ...s.stripInsertsOn, [trackId]: !(s.stripInsertsOn[trackId] ?? true) } })),
+  /* R23-WC (D-C3/#70): the master/bus bank's meters-only collapse — plain
+     view-state set (the stripArm law: no withHistory entry, no doc clone). */
+  toggleMasterBus: () => set((s) => ({ masterBusCollapsed: !s.masterBusCollapsed })),
   setAudioLaneBoost: (v) => set({ audioLaneBoost: v }),
   setTrackHeightPref: (p) => set({ trackHeightPref: p }), /* §4.9 Height pref — view state, no history */
   setTrackHeight: (trackId, px) => set((s) => {
@@ -1547,11 +1768,36 @@ export const useUi = create<UiState>((set, get) => ({
     return scenes;
   }),
   setColorInspectorTab: (tab) => set({ colorInspectorTab: tab }),
-  setColorScopesState: (state) => set((s) => ({
-    colorScopesState: state,
-    ...(state === 'row' || state === 'grid' ? { colorScopesLastVisual: state } : {}),
-  })),
+  setColorScopesState: (state) => set({ colorScopesState: state }),
   toggleColorNodesDock: () => set((s) => ({ colorNodesDock: !s.colorNodesDock })),
+  setTimelineCompact: (v) => set({ timelineCompact: v }),
+  /* R23-WB (D-B4): the Gallery writes — plain view-state `set`, never a
+   *  withHistory entry (the sourceRanges law: stills are captured working
+   *  state, not doc edits; the APPLY path is the one that mints history via
+   *  rec.setGrade). The id counter is monotonic over the live list so a
+   *  delete-then-save can never mint a colliding id. */
+  addColorStill: (grade, opts) => {
+    const s = get();
+    const n = s.colorStills.reduce((m, st) => {
+      const v = Number(st.id.replace(/^still-/, ''));
+      return Number.isFinite(v) ? Math.max(m, v) : m;
+    }, 0) + 1;
+    const still: Still = {
+      id: `still-${String(n).padStart(2, '0')}`,
+      name: opts?.name ?? `Still ${n}`,
+      mediaId: opts?.mediaId ?? null,
+      /* deep copy the record (qualifier + curves are objects — the capture
+         must not alias the live grade the user keeps editing) */
+      grade: {
+        ...grade,
+        ...(grade.qualifier ? { qualifier: { ...grade.qualifier } } : {}),
+        ...(grade.curves ? { curves: { master: grade.curves.master.map((pt) => ({ ...pt })) } } : {}),
+      },
+    };
+    set({ colorStills: [...s.colorStills, still] });
+    return still;
+  },
+  removeColorStill: (id) => set((s) => ({ colorStills: s.colorStills.filter((st) => st.id !== id) })),
   setColorGradeTarget: (t) => set({ colorGradeTarget: t }),
   setQualifierPreviewOn: (v) => set({ qualifierPreviewOn: v }),
   setQualifierPickerOn: (v) => set({ qualifierPickerOn: v }),
@@ -1887,15 +2133,29 @@ export const useUi = create<UiState>((set, get) => ({
       delete right.linkedTo;
       t.elements.splice(idx, 1, left, right);
     }
+    /* R24-W0 (DESIGN-R24 §3 W0.3 — F5's lying rail): the transition moves to
+       the NEW right-half id (left.transitionOut is deleted above), so a
+       selectedFxObject pointing at the ORIGINAL (now left-half) id renders
+       a lying rail after the split — and Add would mint a second transition
+       one seam over. The pointing domain dies with the element it
+       referenced (the removeFade/removeEffect belt-and-braces pattern: the
+       set() runs BEFORE withHistory's own set, one React commit). */
+    const st = get();
+    if (st.selectedFxObject !== null && st.selectedFxObject.elementId === id) {
+      set({ selectedFxObject: null });
+    }
     return scenes;
   }),
+  /* R24-W5d (F5-P3, the canonical no-op law — the removeMarkersAt/
+     setEffectParam twins): an unknown elementId OR a fxId the element does
+     not carry returns BEFORE any history mint. The old shape fell through
+     to `return scenes` — an unchanged doc that still pushed a past entry. */
   toggleEffect: (elementId, fxId) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, elementId);
-    if (hit?.track.locked) return;
-    if (hit?.el.effects) {
-      const fx = hit.el.effects.find((f) => f.id === fxId);
-      if (fx) fx.enabled = !fx.enabled;
-    }
+    if (!hit || hit.track.locked) return;
+    const fx = hit.el.effects?.find((f) => f.id === fxId);
+    if (!fx) return; // missing fxId — no-op, no history entry
+    fx.enabled = !fx.enabled;
     return scenes;
   }),
   addEffectToElement: (elementId, fx) => withHistory(set, get, (scenes) => {
@@ -1908,7 +2168,11 @@ export const useUi = create<UiState>((set, get) => ({
   removeEffect: (elementId, fxId) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, elementId);
     if (!hit || hit.track.locked) return;
-    if (hit.el.effects) hit.el.effects = hit.el.effects.filter((f) => f.id !== fxId);
+    /* R24-W5d (the canonical no-op law): unknown element OR unknown fxId
+       mints NO history entry (the toggleEffect twin). */
+    const fxList = hit.el.effects;
+    if (!fxList || !fxList.some((f) => f.id === fxId)) return;
+    hit.el.effects = fxList.filter((f) => f.id !== fxId);
     // R20-W3: the effect domain dies with its effect
     const s = get();
     if (s.selectedEffectId === fxId) set({ selectedEffectId: null, selectedEffectClipId: null });
@@ -2079,6 +2343,17 @@ export const useUi = create<UiState>((set, get) => ({
   setTransition: (id, patch) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, id);
     if (!hit || hit.track.locked) return;
+    /* R24-W0 (DESIGN-R24 §3 W0.2 — A1's no-op twin): an IDENTICAL patch on
+       an EXISTING transition mints NO history entry (the drag-replace
+       gesture short-circuits earlier with its 'Already X' toast; this is
+       the belt-and-braces store twin). The guard fires ONLY when a
+       transition already exists — the fresh-mint path (no transitionOut)
+       is a real change and must keep minting. */
+    if (hit.el.transitionOut) {
+      const cur = hit.el.transitionOut as unknown as Record<string, unknown>;
+      const nxt = patch as unknown as Record<string, unknown>;
+      if (Object.keys(nxt).length > 0 && Object.keys(nxt).every((k) => cur[k] === nxt[k])) return;
+    }
     if (!hit.el.transitionOut) hit.el.transitionOut = { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 };
     Object.assign(hit.el.transitionOut, patch);
     return scenes;

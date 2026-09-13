@@ -79,6 +79,76 @@ describe('SourceRangeBar (R22 #84/#85)', () => {
   });
 });
 
+/* ---- R24-W5b (DESIGN-R24 §2 F1-P3): the gesture laws — B8
+   aria-orientation, the B7 pointer-release discipline (Fader/Knob/PanBox),
+   the ABSOLUTE drag positioning (the dead `*0; void t` line removed), and
+   Home/End committing on EITHER handle. ---- */
+describe('SourceRangeBar gesture laws (R24-W5b F1-P3)', () => {
+  const fakeBar = () =>
+    ({ top: 0, left: 0, right: 300, bottom: 16, width: 300, height: 16, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+
+  it('B8: both handles carry aria-orientation="horizontal"', () => {
+    render(<SourceRangeBar mediaId={MID} />);
+    expect(screen.getByTestId('shell-source-range-in')).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(screen.getByTestId('shell-source-range-out')).toHaveAttribute('aria-orientation', 'horizontal');
+  });
+
+  it('pointer drag commits the ABSOLUTE pointer time (the dead delta line is gone) through the store seam', () => {
+    render(<SourceRangeBar mediaId={MID} />);
+    // stub a real bar rect (jsdom geometry is flat): 300px wide, 8px pad law
+    screen.getByTestId('shell-viewer-scrub').getBoundingClientRect = fakeBar;
+    const inH = screen.getByTestId('shell-source-range-in');
+    fireEvent.pointerDown(inH, { pointerId: 1, button: 0, clientX: 10 });
+    fireEvent.pointerMove(inH, { pointerId: 1, buttons: 1, clientX: 150 });
+    // the handle follows the pointer's OWN time: (150−8)/(300−16) of 62.4 s
+    expect(useUi.getState().sourceRanges[MID]?.in).toBeCloseTo(((150 - 8) / (300 - 16)) * 62.4, 5);
+  });
+
+  it('B7: pointerup / pointercancel / lostpointercapture clear the drag anchor — no stale-move writes', () => {
+    render(<SourceRangeBar mediaId={MID} />);
+    screen.getByTestId('shell-viewer-scrub').getBoundingClientRect = fakeBar;
+    const inH = screen.getByTestId('shell-source-range-in');
+    fireEvent.pointerDown(inH, { pointerId: 1, button: 0, clientX: 10 });
+    fireEvent.pointerMove(inH, { pointerId: 1, buttons: 1, clientX: 100 });
+    const after = useUi.getState().sourceRanges[MID]!.in;
+    // released drag: a stray pointermove (buttons held elsewhere) is ignored
+    fireEvent.pointerUp(inH, { pointerId: 1, buttons: 0, clientX: 0 });
+    fireEvent.pointerMove(inH, { pointerId: 1, buttons: 1, clientX: 250 });
+    expect(useUi.getState().sourceRanges[MID]!.in).toBe(after);
+    // same discipline on pointercancel (the B7 law Fader/Knob/PanBox carry)
+    fireEvent.pointerDown(inH, { pointerId: 2, button: 0, clientX: 10 });
+    fireEvent.pointerCancel(inH, { pointerId: 2, buttons: 1, clientX: 0 });
+    fireEvent.pointerMove(inH, { pointerId: 2, buttons: 1, clientX: 250 });
+    expect(useUi.getState().sourceRanges[MID]!.in).toBe(after);
+    // …and on lostpointercapture
+    fireEvent.pointerDown(inH, { pointerId: 3, button: 0, clientX: 10 });
+    fireEvent(inH, new Event('lostpointercapture', { bubbles: true }));
+    fireEvent.pointerMove(inH, { pointerId: 3, buttons: 1, clientX: 250 });
+    expect(useUi.getState().sourceRanges[MID]!.in).toBe(after);
+  });
+
+  it('Home/End commit on EITHER handle (the old Home-on-out / End-on-in preventDefault no-ops are dead)', () => {
+    render(<SourceRangeBar mediaId={MID} />);
+    act(() => { useUi.getState().setSourceRangeIn(MID, 10); });
+    act(() => { useUi.getState().setSourceRangeOut(MID, 50); });
+    const outH = screen.getByTestId('shell-source-range-out');
+    outH.focus();
+    // Home on the OUT handle: the edge jumps to 0, clamped just above in
+    fireEvent.keyDown(outH, { key: 'Home' });
+    expect(useUi.getState().sourceRanges[MID]!.out).toBeCloseTo(10 + 1 / 24, 5);
+    // End on the IN handle: the edge jumps to dur, clamped just below out
+    act(() => { useUi.getState().setSourceRangeOut(MID, 50); });
+    const inH = screen.getByTestId('shell-source-range-in');
+    fireEvent.keyDown(inH, { key: 'End' });
+    expect(useUi.getState().sourceRanges[MID]!.in).toBeCloseTo(50 - 1 / 24, 5);
+    // the classic ends survive: Home on IN → 0; End on OUT → dur
+    fireEvent.keyDown(inH, { key: 'Home' });
+    expect(useUi.getState().sourceRanges[MID]!.in).toBe(0);
+    fireEvent.keyDown(outH, { key: 'End' });
+    expect(useUi.getState().sourceRanges[MID]!.out).toBeCloseTo(62.4, 5);
+  });
+});
+
 describe('the W4 seam — the trimmed range rides the insert planner (#84/#85)', () => {
   let idCounter = 0;
   const idFactory: InsertIdFactory = (prefix: string) => `${prefix}test-${++idCounter}`;

@@ -91,6 +91,12 @@
   --solo: #e8c331;
   --mute-warn: #d9913a;
   --danger: #e5484d;
+  /* R23-FIX (review-sweep item 12, R1-P2-3): the danger TEXT tint —
+     #e5484d on the shell backgrounds measures ~4.0:1, under WCAG AA for
+     11px status text; #ec5d62 clears 4.5:1. Deviation-registered (a
+     text-tint fork of the danger token, used ONLY for danger TEXT on
+     shell/panel backgrounds — fills/borders keep --danger). */
+  --danger-text: #ec5d62;
 
   /* marker palette — spec 16 §3.7 FCP cycle order */
   --mk-red: #e5484d;

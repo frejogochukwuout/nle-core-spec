@@ -15,7 +15,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useUi, trackHeights, mintTrackIds } from '../../state/useUiStore';
 import { useVariant } from '../debug/VariantProvider';
-import { sceneDuration, mediaById, findElement, effectiveFade, TRANSITION_PRESENTATIONS, type ElementJSON, type TrackJSON } from '../../lib/mockData';
+import { sceneDuration, mediaById, findElement, effectiveFade, type ElementJSON, type TrackJSON } from '../../lib/mockData';
 import { tc, snapToFrame } from '../../lib/timecode';
 import { dynamicContentWidth, snapPxToDeviceGrid, zoomMinPps, PLAYHEAD_LINE_PX, HORIZONTAL_WHEEL_STEP_PX, DRAG_THRESHOLD_PX } from '../../lib/pixel';
 import {
@@ -28,15 +28,18 @@ import {
   type PlannedTrack,
 } from '../../lib/timelinePlacement';
 import { createEdgeAutoScroll } from '../../lib/edgeScroll';
-import { zoomController, createWheelZoomAccumulator } from '../../lib/zoomController';
+import { zoomController, zoomBus, createWheelZoomAccumulator } from '../../lib/zoomController';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
-import { Clip, buildClipMenuItems, CAPTION_PARCHMENT, EFFECT_DRAG_TYPE, type ClipDragEvent, type ClipDragHost } from './Clip';
+import { Clip, buildClipMenuItems, CAPTION_PARCHMENT, EFFECT_DRAG_TYPE, applyFxRowToSeam, type ClipDragEvent, type ClipDragHost } from './Clip';
 import { SpeedGaugeIcon } from './editModeIcons';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
 import { POOL_DRAG_TYPE, isDroppable } from '../shell/MediaPool';
 import { useConfirm } from '../shell/ConfirmDialog';
 import { useInsertPreview } from '../../hooks/useInsertPreview';
+/* R23-WE D-E2 (#102): the preview MODE BADGE's name source — the hovered
+   mode button's own label, exported by the bar (single source). */
+import { MODE_LABELS } from '../shell/SourceEditBar';
 
 /* R15 T3 — the drop-target PREVIEW the Timeline renders while a cross-track
    drag is engaged. `ghosts` are content-space boxes at the RESOLVED target
@@ -86,20 +89,43 @@ interface DragPreview {
 
 const SEAM_W = 12;
 const SEAM_HOVER_W = 24;
+/* R24-W3 (A1-R4): the drag-over drop zone's height — the empty-seam zone
+ * renders 24px tall while a compatible fx-row drag is over it (the house
+ * hit floor in both dimensions; HTML5 drags never fire mouseenter/leave,
+ * so the dragOver state carries the affordance the hover state cannot). */
+const SEAM_DROP_H = 24;
 /** R23-WA ruling: the duration domain a transition object can be trimmed to —
- *  [0, 2 s] (the Inspector Transition row's own max; Home=0 mirrors the fade
- *  object's floor law, Delete owns removal). Frame-snapped at 24 fps. */
+ *  [0.1, 2 s] (the Inspector Transition row's own min/max — Home lands the
+ *  0.1 floor, never 0; Delete owns removal). Frame-snapped at 24 fps. */
 const TRANSITION_DUR_MAX = 2;
+/* the domain FLOOR — matches the Inspector's TransitionSection Duration
+ *  row min (0.1 s): keyboard Home / drag floor land here, never 0 (a 0 s
+ *  transition would render a ghost 14 px box the Inspector cannot
+ *  reproduce — R23-WA-REV P3 #8) */
+const TRANSITION_DUR_MIN = 0.1;
+/* R24-W3 (A1-R4): the occupied box's WIDTH floor — 14px at rest (the
+ *  sub-0.3s minimum box), 24px while a compatible drag is over it, so the
+ *  floor box becomes a real drop target (the ⇄ surface). */
+const TRANSITION_MIN_BOX_W = 14;
+const TRANSITION_DROP_FLOOR_W = 24;
 
 /** mid-seam zone (D-A2.2): centered on the cut, 12px → 24px on hover; click
  *  applies the DEFAULT transition (setTransition's verified {} = Cross
- *  Dissolve 0.5 s centered) or SELECTS an existing one; accepts a 'Transition'
- *  browser row drop (that presentation via setTransition). */
+ *  Dissolve 0.5 s centered). R24-W3: the zone renders ONLY on EMPTY seams
+ *  (the builder below skips occupied ones — the transition box owns its
+ *  edge, the EdgeFadeZone law cloned, F3), and the drop is DOOR 2 of the
+ *  shared parser (Clip.tsx's applyFxRowToSeam — mint / replace-never-stack
+ *  + the per-row-kind refusal toasts). */
 function SeamZone({ a, b, h, pxPerSec }: { a: ElementJSON; b: ElementJSON; h: number; pxPerSec: number }) {
   const [hover, setHover] = useState(false);
+  /* A1-R4: HTML5 drags never fire mouseenter/leave — the dragOver state is
+     the drag-time twin of the hover affordance (the 24px drop zone + the
+     26% mark fill + 1px border + the '+' glyph). */
+  const [dragOver, setDragOver] = useState(false);
   const cut = a.startTime + a.duration;
-  const existing = a.transitionOut;
-  const w = hover ? SEAM_HOVER_W : SEAM_W;
+  const existing = a.transitionOut; // unreachable from the builder (empty seams only) — kept honest
+  const armed = hover || dragOver;
+  const w = armed ? SEAM_HOVER_W : SEAM_W;
   const applyOrSelect = () => {
     if (existing) {
       useUi.getState().selectFxObject({ kind: 'transition', elementId: a.id });
@@ -118,14 +144,17 @@ function SeamZone({ a, b, h, pxPerSec }: { a: ElementJSON; b: ElementJSON; h: nu
       aria-label={existing
         ? `Select transition at the ${a.name} to ${b.name} cut`
         : `Add Cross Dissolve at the ${a.name} to ${b.name} cut`}
-      className="absolute top-0 flex items-center justify-center rounded-[2px]"
+      className="absolute flex items-center justify-center rounded-[2px]"
       style={{
         left: cut * pxPerSec - w / 2,
         width: w,
-        height: h,
+        /* the drag-over drop zone renders 24px tall, centered in the lane
+           (the rest state keeps the full-lane hit strip) */
+        top: dragOver ? Math.max(0, (h - SEAM_DROP_H) / 2) : 0,
+        height: dragOver ? SEAM_DROP_H : h,
         zIndex: 8,
-        background: hover ? 'color-mix(in srgb, var(--transition-mark) 26%, transparent)' : 'transparent',
-        border: hover ? '1px solid var(--transition-mark)' : '1px solid transparent',
+        background: armed ? 'color-mix(in srgb, var(--transition-mark) 26%, transparent)' : 'transparent',
+        border: armed ? '1px solid var(--transition-mark)' : '1px solid transparent',
         cursor: 'pointer',
       }}
       onMouseEnter={() => setHover(true)}
@@ -135,27 +164,26 @@ function SeamZone({ a, b, h, pxPerSec }: { a: ElementJSON; b: ElementJSON; h: nu
         if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
+        setDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setDragOver(false);
       }}
       onDrop={(e) => {
         if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
         e.preventDefault();
+        setDragOver(false);
         let payload: { name: string; cat: string } | null = null;
         try { payload = JSON.parse(e.dataTransfer.getData(EFFECT_DRAG_TYPE) || 'null'); } catch { payload = null; }
         if (!payload || typeof payload.name !== 'string' || typeof payload.cat !== 'string') return;
-        if (payload.cat === 'Transition') {
-          const pres = TRANSITION_PRESENTATIONS.find((p) => p === payload!.name);
-          if (!pres) {
-            useUi.getState().pushToast({ kind: 'info', title: 'Unknown transition', detail: `'${payload.name}' is not in the mock's transition vocabulary (spec 09 §3.4 presentations)` });
-            return;
-          }
-          useUi.getState().setTransition(a.id, { presentation: pres });
-          useUi.getState().selectFxObject({ kind: 'transition', elementId: a.id });
-        } else {
-          useUi.getState().pushToast({ kind: 'info', title: 'Seam drops take transitions', detail: 'fade presets drop on a clip body — the seam applies a transition (DESIGN-R23 D-A5)' });
-        }
+        /* DOOR 2 — the shared parser (mint on the empty seam; effect/fade
+           rows get the per-row-kind refusal toast). */
+        applyFxRowToSeam(payload, a.id);
       }}
     >
-      {hover && !existing && (
+      {armed && !existing && (
         <span aria-hidden="true" className="pointer-events-none text-[13px] font-bold leading-none" style={{ color: 'var(--transition-mark)' }}>+</span>
       )}
     </button>
@@ -165,18 +193,22 @@ function SeamZone({ a, b, h, pxPerSec }: { a: ElementJSON; b: ElementJSON; h: nu
 /** head/tail half-open zone (D-A2.3, issues #104/#105): one-sided 12px at the
  *  FIRST element's in-edge / LAST element's out-edge per track; click applies
  *  a 0.5 s fade (R23-WA ruling: the browser's default preset — the design
- *  names no number) or selects the existing fade object. */
+ *  names no number). When a fade already exists the zone does NOT render —
+ *  the fade object is its own selection+trim surface (see the in-body note). */
 function EdgeFadeZone({ el, side, h, pxPerSec }: { el: ElementJSON; side: 'in' | 'out'; h: number; pxPerSec: number }) {
   const [hover, setHover] = useState(false);
   const has = effectiveFade(el, side) > 0;
+  /* R23-WA-REV P3 #5: when the element already HAS a fade on this side the
+   * zone does NOT render — the fade object itself is the surface (its own
+   * fx-select on pointerdown + its edge-drag grab handles). A 12 px zone
+   * above the object (z 6 vs the object's z 3 inside the clip's stacking
+   * context) would make short fades un-grabbable in the one mode dedicated
+   * to them — clicks/tests target the fade object directly instead. */
+  if (has) return null;
   const left = side === 'in'
     ? el.startTime * pxPerSec
     : (el.startTime + el.duration) * pxPerSec - SEAM_W;
   const onClick = () => {
-    if (has) {
-      useUi.getState().selectFxObject({ kind: 'fade', elementId: el.id, side });
-      return;
-    }
     useUi.getState().setFade(el.id, side, 0.5);
     useUi.getState().selectFxObject({ kind: 'fade', elementId: el.id, side });
   };
@@ -184,12 +216,8 @@ function EdgeFadeZone({ el, side, h, pxPerSec }: { el: ElementJSON; side: 'in' |
     <button
       type="button"
       data-testid={`fx-${side === 'in' ? 'head' : 'tail'}-${el.id}`}
-      data-tip={has
-        ? `Fade ${side} · ${effectiveFade(el, side)}s — click to select`
-        : `Click to add a 0.5 s fade ${side}`}
-      aria-label={has
-        ? `Select fade ${side} at ${el.name} ${side === 'in' ? 'start' : 'end'}`
-        : `Add fade ${side} at ${el.name} ${side === 'in' ? 'start' : 'end'}`}
+      data-tip={`Click to add a 0.5 s fade ${side}`}
+      aria-label={`Add fade ${side} at ${el.name} ${side === 'in' ? 'start' : 'end'}`}
       className="absolute top-0 flex items-center justify-center rounded-[2px]"
       style={{
         left,
@@ -205,7 +233,7 @@ function EdgeFadeZone({ el, side, h, pxPerSec }: { el: ElementJSON; side: 'in' |
       onMouseLeave={() => setHover(false)}
       onClick={onClick}
     >
-      {hover && !has && (
+      {hover && (
         <span aria-hidden="true" className="pointer-events-none text-[12px] font-bold leading-none" style={{ color: 'var(--fade-line)' }}>+</span>
       )}
     </button>
@@ -223,57 +251,98 @@ const clientToContentX = (clientX: number): number => {
   return clientX - box.left + sc.scrollLeft;
 };
 
-/** the transition box (th_mto31dyp visual, kept verbatim) — INTERACTIVE only
- *  in fxMode (D-A2.4): click selects into the FX domain; edge-drag trims the
- *  duration under the fade-object clamp-commit grammar; keyboard ±1 frame
- *  (⇧ ×10) / Home 0 / End the domain max; Delete is the useShortcuts rung
- *  (selectedFxObject FIRST). In edit mode the box stays today's inert
- *  title/aria-only marker. */
+/** the transition box (th_mto31dyp visual, kept byte-identical in the
+ *  VISUAL child) — INTERACTIVE only in fxMode (D-A2.4): click selects into
+ *  the FX domain; edge-drag trims the duration under the fade-object
+ *  clamp-commit grammar; keyboard ±1 frame (⇧ ×10) / Home 0.1 / End the
+ *  domain max; Delete is the useShortcuts rung (selectedFxObject FIRST).
+ *  In edit mode the box stays today's inert title/aria-only marker.
+ *  R24-W3 — TWO structural laws on top:
+ *  (F3-a) the box is SPLIT into an UN-clipped WRAPPER (this element: testid,
+ *      role=slider, focus, keyboard, pointerdown-select, and the DnD drop
+ *      target — pointer-events carries the fxMode gate) + an overflow-hidden
+ *      VISUAL child that owns the paint; the 12px trim handles hang 3px
+ *      OUTSIDE the wrapper's edges as the visual's SIBLINGS, so nothing
+ *      clips their hit zones (the old overflow-hidden box ate them — the F3
+ *      root cause: mouse trim of a 0.1s floor box was impossible).
+ *  (A1-R1/A1-R4) the wrapper is DOOR 3 of the shared parser (the occupied
+ *      seam's drop = REPLACE), and while a compatible fx-row drag is over
+ *      it the box becomes the ⇄ surface: the width floor rises 14→24px (the
+ *      drop floor), the paint drops to the 26% mark fill, and the glyph
+ *      swaps to ⇄. */
 const capturePointer = (el: HTMLElement, pointerId: number) => {
   try { el.setPointerCapture(pointerId); } catch { /* inactive pointer id */ }
 };
 
-function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON; h: number; pxPerSec: number; fxMode: boolean; selected: boolean }) {
+function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: ElementJSON; h: number; pxPerSec: number; fxMode: boolean; selected: boolean; locked?: boolean }) {
   const tr = el.transitionOut!;
   const cut = (el.startTime + el.duration) * pxPerSec;
   /* clamp-commit drag (Part IX ruling 21): LOCAL preview only, ONE
-   * setTransition commit on release. The grabbed edge tracks the pointer —
-   * the box is cut-centered (the shipped visual), so the duration changes at
-   * 2× the edge dx (alignment stays Inspector-owned). */
+   * setTransition commit on release. The grabbed edge tracks the pointer
+   * 1:1 — the box is cut-centered (left = cut − w/2, the shipped visual),
+   * so the new duration = 2 × the edge's distance from the cut; WITHOUT
+   * the ×2 the first pointermove would collapse the preview to half (the
+   * R23-WA-REV P1 — a grab-at-actual-edge must be a no-op, pinned). */
   const [trDrag, setTrDrag] = useState<{ side: 'l' | 'r'; t: number } | null>(null);
+  /* R24-W3 (A1-R4): the occupied-seam ⇄ surface state — the drag-time twin
+   * of the SeamZone's affordance (HTML5 drags never fire hover). */
+  const [dragOver, setDragOver] = useState(false);
   const dur = trDrag ? trDrag.t : tr.duration;
   const w = dur * pxPerSec;
   const commit = (t: number) => {
     if (t === tr.duration) return; // no-op — no history entry
     useUi.getState().setTransition(el.id, { duration: t });
   };
+
   const trimTo = (e: React.PointerEvent, side: 'l' | 'r') => {
     const x = clientToContentX(e.clientX);
-    const raw = side === 'l' ? (cut - x) / pxPerSec : (x - cut) / pxPerSec;
-    const t = Math.max(0, Math.min(snapToFrame(raw), TRANSITION_DUR_MAX));
+    /* ×2: the cut-centered box puts the edge at dur/2 from the cut — the
+     * pointer-relative mapping must double the distance so the edge tracks
+     * the cursor 1:1 (see the header comment; the R23-WA-REV P1) */
+    const raw = side === 'l' ? (2 * (cut - x)) / pxPerSec : (2 * (x - cut)) / pxPerSec;
+    const t = Math.max(TRANSITION_DUR_MIN, Math.min(snapToFrame(raw), TRANSITION_DUR_MAX));
     setTrDrag({ side, t });
   };
+  /* the rendered width: the sub-0.3s floor (14px) normally — 24px (the
+     drop floor) while a compatible drag is over, so the floor box is a
+     real target. The left edge centers on the RENDERED width (R23-FIX
+     R3-P3#5) — see the visual child below. */
+  const boxW = Math.max(w, dragOver ? TRANSITION_DROP_FLOOR_W : TRANSITION_MIN_BOX_W);
   return (
+    /* the F3-a WRAPPER — UN-clipped (no overflow-hidden): the hit/legal
+       surface that owns testid/role/focus/keyboard/pointerdown-select/the
+       DnD target, and the pointer-events gate the children INHERIT. */
     <div
-      className="absolute top-[2px] flex items-center justify-center overflow-hidden rounded-[2px]"
+      className="absolute top-[2px]"
       style={{
-        left: cut - w / 2,
-        width: Math.max(w, 14),
+        /* R23-FIX (review-sweep R3-P3#5) still law: the left edge centers
+           on the RENDERED width (now boxW) so the minimum box never sits
+           off-center by (floor − w)/2 px. */
+        left: cut - boxW / 2,
+        width: boxW,
         height: h - 4,
         zIndex: 7,
-        background: 'linear-gradient(to bottom, color-mix(in srgb, var(--transition-mark) 30%, transparent), color-mix(in srgb, var(--transition-mark) 70%, transparent))',
-        border: '1px solid var(--transition-mark)',
-        boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
         ...(fxMode && selected ? { outline: '1.5px solid var(--accent-selection)', outlineOffset: 0 } : {}),
         ...(fxMode ? { cursor: 'pointer' } : {}),
+        /* R23-FIX (review-sweep item 1, R3-P1#1): the box is CLICK-THROUGH
+           outside fxMode — it used to eat edit-mode trim/marquee gestures
+           that passed under its 40px-height z-7 rectangle (the box rendered
+           on EVERY lane, inert but pointer-hungry). Registered loss: the
+           edit-mode title tooltip on the box is now click-through-
+           unavailable — the seam zone's data-tip + the fx-mode box carry
+           the info (elementFromPoint-style hit assertions are jsdom-
+           impossible; the style-level pin carries the law).
+           The visual child + handles INHERIT this value (pointer-events is
+           an inherited property) — the F3 law, pinned at the style level. */
+        pointerEvents: fxMode && !locked ? 'auto' : 'none',
       }}
       title={`Crossfade · ${tr.presentation} · ${tr.duration}s`}
       aria-label={`Crossfade transition, ${tr.duration} seconds`}
       data-testid={`transition-${el.id}`}
-      {...(fxMode ? {
+      {...(fxMode && !locked ? {
         role: 'slider',
         tabIndex: 0,
-        'aria-valuemin': 0,
+        'aria-valuemin': Math.round(TRANSITION_DUR_MIN * 24),
         'aria-valuemax': Math.round(TRANSITION_DUR_MAX * 24),
         'aria-valuenow': Math.round(dur * 24),
         'aria-valuetext': `${dur.toFixed(2)}s`,
@@ -281,6 +350,9 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON;
           if (e.button !== 0) return;
           e.stopPropagation(); // never a clip gesture / marquee
           (e.currentTarget as HTMLElement).focus();
+          /* click-on-occupied-seam = SELECT (A1-R1) — no doc write, no
+             history; the seam zone no longer renders here (F3-b), so the
+             box is the seam's whole answer. */
           useUi.getState().selectFxObject({ kind: 'transition', elementId: el.id });
         },
         onKeyDown: (e: React.KeyboardEvent) => {
@@ -288,31 +360,96 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON;
           e.preventDefault();
           e.stopPropagation(); // beat the window playhead-nudge rungs
           let next: number;
-          if (e.key === 'Home') next = 0;
+          /* Home = the domain FLOOR (0.1 s, matching the Inspector's Duration
+             row min — R23-WA-REV P3 #8: a 0 s transition would render a ghost
+             14 px box the Inspector cannot reproduce; End = the domain max) */
+          if (e.key === 'Home') next = TRANSITION_DUR_MIN;
           else if (e.key === 'End') next = TRANSITION_DUR_MAX;
           else {
             const frames = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1);
-            next = Math.max(0, Math.min(snapToFrame(tr.duration + frames / 24), TRANSITION_DUR_MAX));
+            next = Math.max(TRANSITION_DUR_MIN, Math.min(snapToFrame(tr.duration + frames / 24), TRANSITION_DUR_MAX));
           }
           commit(next);
         },
+        /* R24-W3 (A1-R4): DOOR 3 — the occupied seam's ⇄ drop surface. */
+        onDragOver: (e: React.DragEvent) => {
+          if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          setDragOver(true);
+        },
+        onDragLeave: (e: React.DragEvent) => {
+          if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+          setDragOver(false);
+        },
+        onDrop: (e: React.DragEvent) => {
+          if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
+          e.preventDefault();
+          setDragOver(false);
+          let payload: { name: string; cat: string } | null = null;
+          try { payload = JSON.parse(e.dataTransfer.getData(EFFECT_DRAG_TYPE) || 'null'); } catch { payload = null; }
+          if (!payload || typeof payload.name !== 'string' || typeof payload.cat !== 'string') return;
+          /* the shared parser — REPLACE (retained duration/alignment) or
+             the 'Already X' short-circuit; effect/fade rows refuse. */
+          applyFxRowToSeam(payload, el.id);
+        },
       } : {})}
     >
-      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-        {/* slim crossfade glyph: two overlapping triangles */}
-        <path d="M3 3 L8.5 7 L3 11 Z" fill="white" opacity="0.92" />
-        <path d="M11 3 L5.5 7 L11 11 Z" fill="white" opacity="0.92" />
-      </svg>
-      {fxMode && (
+      {/* the F3-a VISUAL — the overflow-hidden paint child: the 30→70% mark
+          gradient, 1px border, 2px radius and the glyph grammar kept
+          byte-identical; while a compatible drag is over, the paint drops
+          to the 26% mark fill and the glyph swaps to ⇄. pointer-events
+          INHERITS the wrapper's gate. */}
+      <div
+        data-testid={`transition-visual-${el.id}`}
+        aria-hidden="true"
+        className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-[2px]"
+        style={{
+          pointerEvents: 'inherit',
+          background: dragOver
+            ? 'color-mix(in srgb, var(--transition-mark) 26%, transparent)'
+            : 'linear-gradient(to bottom, color-mix(in srgb, var(--transition-mark) 30%, transparent), color-mix(in srgb, var(--transition-mark) 70%, transparent))',
+          border: '1px solid var(--transition-mark)',
+          boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
+        }}
+      >
+        {dragOver ? (
+          /* the ⇄ replace affordance (A1-R4) */
+          <span className="text-[13px] font-bold leading-none text-white">⇄</span>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            {/* slim crossfade glyph: two overlapping triangles */}
+            <path d="M3 3 L8.5 7 L3 11 Z" fill="white" opacity="0.92" />
+            <path d="M11 3 L5.5 7 L11 11 Z" fill="white" opacity="0.92" />
+          </svg>
+        )}
+      </div>
+      {/* handles + interactive props gate on fxMode && !locked (the wave's
+          own locked-lane ruling — R23-WA-REV P3 #4: a locked lane's box must
+          not select/drag/keyboard-trim while its store writes no-op).
+          F3-a: the 12px zones hang 3px OUTSIDE the WRAPPER's edges as the
+          visual's siblings — the wrapper is un-clipped, so their full hit
+          zones survive (R23-FIX R3-P3#6 keeps the 12px/−3px geometry). */}
+      {fxMode && !locked && (
         <>
           <div
             data-testid={`transition-trim-l-${el.id}`}
-            className="absolute inset-y-0 left-0"
-            style={{ width: 6, cursor: 'ew-resize' }}
+            /* R23-FIX (review-sweep R3-P3#6): 12px hit zones (was 6px inside
+               the edge) offset 3px OUTSIDE the box edge — hit target ≠
+               visual; the 0.1s floor box is 14px wide so the two 12px zones
+               meet at its middle (the right zone wins the 4px overlap,
+               last-in-DOM). */
+            className="absolute inset-y-0"
+            style={{ left: -3, width: 12, cursor: 'ew-resize', pointerEvents: 'inherit' }}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
               e.stopPropagation();
-              (e.currentTarget as HTMLElement).focus();
+              /* focus the BOX (the focusable slider that owns the keyboard
+                 grammar) — the bare handle div is not focusable, so a plain
+                 .focus() here was a no-op and arrows fell through to the
+                 window playhead rung (R23-WA-REV register nit) */
+              (e.currentTarget.parentElement as HTMLElement | null)?.focus();
               useUi.getState().selectFxObject({ kind: 'transition', elementId: el.id });
               capturePointer(e.currentTarget as HTMLElement, e.pointerId);
               setTrDrag({ side: 'l', t: tr.duration });
@@ -332,12 +469,13 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON;
           />
           <div
             data-testid={`transition-trim-r-${el.id}`}
-            className="absolute inset-y-0 right-0"
-            style={{ width: 6, cursor: 'ew-resize' }}
+            className="absolute inset-y-0" /* R23-FIX R3-P3#6 — see the left handle */
+            style={{ right: -3, width: 12, cursor: 'ew-resize', pointerEvents: 'inherit' }}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
               e.stopPropagation();
-              (e.currentTarget as HTMLElement).focus();
+              /* focus the BOX — see the left handle's note */
+              (e.currentTarget.parentElement as HTMLElement | null)?.focus();
               useUi.getState().selectFxObject({ kind: 'transition', elementId: el.id });
               capturePointer(e.currentTarget as HTMLElement, e.pointerId);
               setTrDrag({ side: 'r', t: tr.duration });
@@ -360,6 +498,12 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected }: { el: ElementJSON;
     </div>
   );
 }
+
+
+/* R23-WE (DESIGN-R23 D-E2, #102): the preview-visibility floor — an armed
+   preview's ghost span must render at least this wide; below it the zoom
+   floor bumps (once per arm) so the preview is actually legible. */
+const PREVIEW_MIN_SPAN_PX = 24;
 
 
 export function Timeline() {
@@ -602,8 +746,16 @@ export function Timeline() {
         : base;
     const sized = trackHeightOverrides[trackId] ?? auto;
     // audio focus: audio lanes ×1.6, video/overlay compress (design doc §3.2)
-    // — applied on the OVERRIDE-then-PREF'D height so the axes compose
-    if (audioLaneBoost) return kind === 'audio' ? Math.round(sized * 1.6) : kind === 'main' ? Math.min(sized, 40) : Math.min(sized, 28);
+    // — applied on the OVERRIDE-then-PREF'D height so the axes compose.
+    // R23-FIX (review-sweep R5-P3#6): the CAPTION lane is exempt from the
+    // 28px cap — its own law (gap C34, line ~622) is 32px (24px parchment
+    // chips + insets); capping it to 28 squashed the chips mid-audio-focus.
+    if (audioLaneBoost) {
+      if (kind === 'audio') return Math.round(sized * 1.6);
+      if (kind === 'caption') return Math.max(sized, 32);
+      if (kind === 'main') return Math.min(sized, 40);
+      return Math.min(sized, 28);
+    }
     return sized;
   };
   const laneHeight = (track: TrackJSON): number => laneHeightOf(track.id, track.kind);
@@ -1031,8 +1183,80 @@ export function Timeline() {
     return left + el.duration * pxPerSec >= scrollLeft - 200 && left <= scrollLeft + (viewportW || 900) + 200;
   };
 
+  /* ---- R23-WE (DESIGN-R23 D-E2, #102): the preview-visibility law. The
+     W3 preview span could land OFFSCREEN — ruling 20: the "no animated
+     effects" report was the offscreen ghost, and the auto-scroll fixes
+     both clauses. While an armed preview plan holds:
+     (a) AUTO-SCROLL — one rAF AFTER PAINT, scrollIntoView({inline:'nearest'})
+         the ghost span into #timeline-scroll's view (the ghost ref below;
+         the layer's own anim stays W3's fade+slide). R24-W5d (F3's
+         leftover, DESIGN-R24 §2 F3-P3): the straddler's SPLIT ghost
+         (dashed right half, potentially far past the main ghost — the
+         content-x-1855/viewport-1280 class) JOINS the scroll target: the
+         split ghost is always at/after the main ghost's end by
+         construction, so a 'nearest' scroll after the main ghost's only
+         ever moves RIGHT — the union span becomes visible, never a
+         back-slide.
+     (b) ZOOM FLOOR — a ghost narrower than PREVIEW_MIN_SPAN_PX at the
+         current pps bumps zoom through the bus (targetPps = 24/dur) so it
+         renders ≥ 24 px. ONE bump per ARM (arm key = mediaId+mode): the
+         plan's identity re-mints on every playhead/loop/selection change,
+         and a re-mint must never become a continuous zoom creep.
+     (c) the MODE BADGE renders in the layer below (the ghost's head).
+     The REFUSAL path (ok:false — NO geometry ever paints) scrolls to the
+     PLAYHEAD instead, the exact playhead-follow-scroll law from the
+     playing case below, so the refusal is legible in place (the bar's
+     tip/status carry the why; the scroll shows the where). */
+  const previewGhostRef = useRef<HTMLDivElement | null>(null);
+  /* R24-W5d (F3): the straddler's split-ghost scroll target (see (a)) */
+  const previewSplitGhostRef = useRef<HTMLDivElement | null>(null);
+  const previewBumpedArmRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!insertPreview) {
+      previewBumpedArmRef.current = null; // cleared arm — a fresh one may claim its bump again
+      return;
+    }
+    const ghost = insertPreview.ok ? insertPreview.geometry.ghost : undefined;
+    if (ghost && ghost.dur > 0) {
+      const armKey = `${insertPreview.mediaId}:${insertPreview.mode}`;
+      if (ghost.dur * pxPerSec < PREVIEW_MIN_SPAN_PX && previewBumpedArmRef.current !== armKey) {
+        previewBumpedArmRef.current = armKey;
+        zoomBus(PREVIEW_MIN_SPAN_PX / ghost.dur, { duration }); // one bump per arm
+      }
+    }
+    const raf = requestAnimationFrame(() => {
+      if (ghost) {
+        previewGhostRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        // F3's leftover: the straddler's split ghost joins the scroll target
+        // (comment above — the union span, not just the head). It scrolls
+        // only when it EXISTS; a no-split preview (fresh lanes, place-on-top)
+        // keeps exactly the one ghost scroll.
+        previewSplitGhostRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+      } else {
+        const sc = scrollRef.current;
+        if (!sc) return;
+        const px = playhead * pxPerSec;
+        const viewW = sc.clientWidth;
+        if (px < sc.scrollLeft || px > sc.scrollLeft + viewW) {
+          sc.scrollLeft = Math.max(0, Math.min(px - viewW / 2, sc.scrollWidth - viewW));
+          setScrollLeft(sc.scrollLeft); // keep the ruler's virtualization window live
+        }
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+    // pxPerSec re-runs the leg AFTER a zoom-floor bump so the scroll tracks
+    // the re-rendered geometry; playhead/duration reach this via the plan's
+    // identity (useInsertPreview re-mints on every atom it reads).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insertPreview, pxPerSec]);
+
   return (
-    <div data-testid="shell-timeline" className="flex min-h-0 flex-1 overflow-hidden">
+    /* R23-FIX (review-sweep R3-P3#7): id="shell-timeline" — SceneTabs'
+       aria-controls="shell-timeline" referenced an id that existed on NO
+       element (a dangling reference since R19). TimelineCompact carries the
+       same id — the two surfaces never coexist, so the reference always
+       resolves to whichever timeline is mounted. */
+    <div id="shell-timeline" data-testid="shell-timeline" className="flex min-h-0 flex-1 overflow-hidden">
       {/* ---- track headers column ---- */}
       <div
         id="track-headers"
@@ -1232,6 +1456,10 @@ export function Timeline() {
                   // currentTarget ⇒ not a clip / transition marker). Clip drags
                   // stop propagation concerns aside: clips are children, so a
                   // pointerdown on them never reaches this branch.
+                  // R23-WA-REV P3 #6 (registered): the marquee is deliberately
+                  // NOT fxMode-gated — D-A2.1's recede letter names trim/drag/
+                  // context-menu only, and a band select of clips in the FX view
+                  // legally flips the inspector to the aggregate-effects branch.
                   if (e.target !== e.currentTarget || e.button !== 0 || track.locked) return;
                   startMarquee(e);
                 }}
@@ -1285,6 +1513,15 @@ export function Timeline() {
                   for (let i = 0; i + 1 < sorted.length; i++) {
                     const a = sorted[i]!;
                     const b = sorted[i + 1]!;
+                    /* R24-W3 (F3 root cause b — the EdgeFadeZone law
+                       cloned): a seam WITH a transitionOut renders NO zone
+                       at all — the object owns its edge. The z-8 full-height
+                       strip used to sit over the box's 14px floor box and
+                       ate its pointer, which (stacked with the old
+                       overflow-hidden box) made short transitions
+                       un-trimmable; the transition BOX answers the seam now
+                       (click-select + the ⇄ drop door). */
+                    if (a.transitionOut) continue;
                     if (Math.abs(a.startTime + a.duration - b.startTime) < 0.001) seams.push({ a, b });
                   }
                   /* the TRACK's first/last element (min start / max end) —
@@ -1315,14 +1552,20 @@ export function Timeline() {
                     R23-WA (D-A2.4): the box is INTERACTIVE in fxMode (the
                     fade-object grammar cloned — click selects into the FX
                     domain, edge-drag/keyboard trim the duration); inert
-                    title/aria-only otherwise (today's behavior). */}
-                {track.elements.filter((e) => e.transitionOut).map((e) => (
+                    title/aria-only otherwise (today's behavior).
+                    R23-FIX (review-sweep item 15, R3-P2#4): the boxes ride
+                    the clips' virtualization window (clipVisible) — an
+                    offscreen box used to escape virtualization and keep its
+                    z-7 pointer surface mounted over lanes the user scrolled
+                    to (pinned: high zoom + scroll → offscreen box absent). */}
+                {track.elements.filter((e) => e.transitionOut && clipVisible(e)).map((e) => (
                   <TransitionBox
                     key={`tr-${e.id}`}
                     el={e}
                     h={h}
                     pxPerSec={pxPerSec}
                     fxMode={fxMode}
+                    locked={track.locked}
                     selected={selectedFxObject?.kind === 'transition' && selectedFxObject.elementId === e.id}
                   />
                 ))}
@@ -1375,7 +1618,10 @@ export function Timeline() {
                ok:false renders NOTHING here — the refusal lives in the
                source bar's tip + status line (never paint geometry the op
                won't perform). All pieces aria-hidden: the a11y route is the
-               toolbar's role=status description, not this layer. ---- */}
+               toolbar's role=status description, not this layer.
+               R23-WE D-E2 (#102): the layer also owns the visibility law —
+               the ghost ref (auto-scroll target) + the MODE BADGE at the
+               ghost's head (the effects live above, by the seam). ---- */}
           {insertPreview?.ok && insertPreview.geometry.ghost && (() => {
             const g = insertPreview.geometry.ghost;
             /* R20-W6FIX (P2-1): a plan that MINTS a track (placeOnTop with
@@ -1401,8 +1647,10 @@ export function Timeline() {
                     honored by the override in app.css. */}
                 {/* ghost clip — the reference .clip-ghost law: 2px dashed
                     border (≈#646464 → --border-strong token), radius 4,
-                    ghostBg(type) fill (contract §3.2) */}
+                    ghostBg(type) fill (contract §3.2). The ref is the D-E2
+                    auto-scroll target (scrollIntoView rAF after paint). */}
                 <div
+                  ref={previewGhostRef}
                   data-testid="insert-preview-ghost"
                   data-track-id={g.trackId}
                   data-start={g.start}
@@ -1415,6 +1663,28 @@ export function Timeline() {
                     opacity: 0.9,
                   }}
                 />
+                {/* R23-WE D-E2 (#102): the MODE BADGE — the hovered mode's
+                    name at the ghost's HEAD, the same dark-pill grammar as
+                    the speed badge (reference §1.3). Chrome laws: pointer-
+                    events none + aria-hidden (the a11y route is the bar's
+                    role=status line); it mounts ONLY with the preview layer
+                    — no preview, no badge (the display:none law for hidden
+                    chrome: absence, never an opacity stub). With a speed
+                    pill (fitToFill) it drops a row below it at the head. */}
+                <div
+                  data-testid="insert-preview-mode-badge"
+                  aria-hidden="true"
+                  className="absolute pointer-events-none whitespace-nowrap rounded-[10px]"
+                  style={{
+                    left: gLeft + 4,
+                    top: g.speed !== undefined ? laneTop + 24 : laneTop + 4,
+                    padding: '1px 8px',
+                    background: 'rgba(17,17,17,.62)', border: '1px solid rgba(255,255,255,.28)',
+                    color: '#fff', fontSize: 10, fontWeight: 700,
+                  }}
+                >
+                  {MODE_LABELS[insertPreview.mode]}
+                </div>
                 {/* fit-to-fill speed badge — reference gauge SVG (verbatim)
                     + the computed rate on the ghost (§1.3 badge styles) */}
                 {g.speed !== undefined && (
@@ -1461,6 +1731,7 @@ export function Timeline() {
                 )}
                 {insertPreview.geometry.splitGhost && (
                   <div
+                    ref={previewSplitGhostRef}
                     data-testid="insert-preview-split-ghost"
                     data-track-id={insertPreview.geometry.splitGhost.trackId}
                     className="clip-drag-ghost absolute rounded-[4px]"

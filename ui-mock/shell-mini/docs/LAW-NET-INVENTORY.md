@@ -1,4 +1,5 @@
 # LAW-NET-INVENTORY — the mini's law corpus as the crawl's acceptance lists
+> **R24 mapping note (ARCH-R24 D26.5/D29):** the census targets are the REAL vocabularies three-way — timeline units map to OT's frozen `data-test=` convention (68 sites at `c15a629`), chrome units to nle-ui's `shell-*` testids, no-counterpart units are the D25.3b structural-gap worklist; the app's `timeline-port/` is now the census-governed converging mirror (register-equality = the mirror-integrity instrument). The K3 re-expression reads this census through that mapping.
 
 **What this is:** the pre-C1 / pre-C4 deliverable registered in spec 14 §3.1
 (the "inventory, spec-side — REQUIRED BEFORE C1 entry") and spec 17 line 3:
@@ -288,7 +289,9 @@ the estimate simply predated the census.
   — the app's re-expressed corpus satisfies every law; the arithmetic in
   §2.3/§2.4 is the authoring-count audit; the demo (import → cut → play
   → export) rides on top.
-- **Standing law:** this file is generated from the live corpus — if the
+- 
+> **R23 mapping note (ARCH-R23 D23/D24):** spec 14 is RETIRED — the plan is `IMPLEMENTATION-PLAN.md` and the phases are the D24 verification ladder. This file's C0-C4/spec-14 citations map: C1(b,d,e,f)+C1(c)→K3; C1(a)/C2-frames→w1; C3→K3; C4→K4 (+ the human side-by-side→w1-entry); the 'crawl' below means the K3 corpus authoring, not the R22 C-ladder. The disposition vocabulary (HOLDS-on-OT / GAP-app-C1 / GAP-C2/C3 / GAP-W-ops) maps to K3 / w1 / K3 / K3-compose+r1-graduate respectively.
+**Standing law:** this file is generated from the live corpus — if the
   mini's tests change, THIS FILE MUST BE RE-CENSUSED (the counts are
   battery-checkable: `npx vitest run` == 357 tests / 8 files; 123
 describes → 129 census units).

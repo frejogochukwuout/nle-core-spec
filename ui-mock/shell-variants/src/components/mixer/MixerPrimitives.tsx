@@ -187,7 +187,11 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, scale = f
   const setFromEvent = useCallback((clientY: number, fine: boolean) => {
     const box = trackRef.current?.getBoundingClientRect();
     if (!box || !drag.current) return;
-    const dPos = ((drag.current.startY - clientY) / box.height) * (fine ? 0.25 : 1);
+    /* th_mtr0prj5 (#55, R23 wrap): the thumb must FOLLOW the pointer —
+     * pos is 0..1 FROM THE TOP, so dragging UP (clientY decreasing) must
+     * DECREASE pos (toward the top = louder). The old (startY − clientY)
+     * sign had the thumb run AWAY from the cursor — physically reversed. */
+    const dPos = ((clientY - drag.current.startY) / box.height) * (fine ? 0.25 : 1);
     onChange(clamp(posToDb(drag.current.startPos + dPos), MODEL_MIN, MODEL_MAX));
   }, [onChange]);
 
@@ -255,7 +259,10 @@ export function Fader({ db, onChange, height = 96, fillHeight = false, scale = f
           aria-valuemax={6}
           aria-valuenow={Math.round(db)}
           aria-valuetext={dbLabel(db)}
-          className="relative flex w-[46px] shrink-0 cursor-ns-resize select-none items-stretch justify-center self-stretch"
+          /* R23-FIX (review-sweep R1-P3): touch-none — a touch drag on the
+             fader column used to scroll the page before the pointermove
+             grammar engaged (the Knob/PanBox twins already carried it). */
+          className="relative flex w-[46px] shrink-0 cursor-ns-resize touch-none select-none items-stretch justify-center self-stretch"
           onPointerDown={(e) => {
             try {
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -451,12 +458,20 @@ export function Knob({ value, onChange, min, max, size = 22, ariaLabel, format, 
         }}
         onKeyDown={(e) => {
           const s = e.shiftKey ? kbFine : kbStep;
-          if (e.key === 'ArrowRight') { e.preventDefault(); onChange(clamp(value + s, min, max)); }
-          else if (e.key === 'ArrowLeft') { e.preventDefault(); onChange(clamp(value - s, min, max)); }
+          /* R23-FIX (review-sweep R1-P3): ArrowUp/Down join Left/Right — the
+             dial's drag grammar is VERTICAL (cursor-ns-resize), so the
+             natural key pair was missing; Up = +, Down = − (clamped). */
+          if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); onChange(clamp(value + s, min, max)); }
+          else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); onChange(clamp(value - s, min, max)); }
         }}
         onPointerEnter={() => setHover(true)}
         onPointerLeave={() => setHover(false)}
       >
+        {/* R23-FIX (review-sweep R1-P3): the 24px hit floor — a pointer-affordance
+            child extends the interactive surface past the visual dial when
+            size < 24 (the 22px dial keeps its geometry; events on the layer
+            bubble to THIS element's handlers). Hit target ≠ visual size. */}
+        {size < 24 && <span aria-hidden="true" className="absolute" style={{ inset: -(24 - size) / 2 }} />}
         {/* dial face — SVG viewBox 0 0 100 100, absolutely inset, inert.
             Round caps read as endpoints — NO endpoint ticks (sub-pixel at
             22/24px, C2). Indicator line sits ABOVE center (y 35→20, the C2
@@ -563,6 +578,14 @@ export function PanBox({ pan, onChange, ariaLabel, size = 48 }: {
         if (e.buttons !== 1 || !drag.current) return;
         setFromEvent(e.clientX);
       }}
+      /* R23-FIX (review-sweep R1-P3 — PanBox release discipline): the B7
+         law the Fader/Knob already carry — pointerup / pointercancel /
+         lostpointercapture all CLEAR the drag state (the drag ref used to
+         outlive the gesture; a stray buttons=1 move re-entered a stale
+         session). */
+      onPointerUp={() => { drag.current = null; }}
+      onPointerCancel={() => { drag.current = null; }}
+      onLostPointerCapture={() => { drag.current = null; }}
       onDoubleClick={() => onChange(0)}
       onKeyDown={(e) => {
         const step = e.shiftKey ? 1 : 5;

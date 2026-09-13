@@ -34,6 +34,7 @@ import { MicroSlider, NumCell, ReadCell } from './controls';
 import { useGradeRecord, type GradeRecord } from './useGradeTarget';
 import { useGradingToast, useHonestToast } from './useHonestToast';
 import { DEFAULT_GRADE, hsv2rgb, yrgbReadout, type WheelId, type YrgbReadout } from '../../../lib/color';
+import { clamp } from '../../../lib/timecode';
 import type { GradePatch } from '../../../state/useUiStore';
 
 /** one-field store write helper (typed patch — computed keys stay strict). */
@@ -173,7 +174,13 @@ function WheelControl({
   };
   const onPointer = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.type === 'pointerdown') {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      /* R24-W5c (DESIGN-R24 §2 F4-P3): GUARDED capture — a synthetic/
+         inactive pointer id throws NotFoundError in real browsers (the
+         Fader/Knob/PanBox law; the old unguarded call died before the
+         puck math ran in automation). Best-effort capture only. */
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch { /* inactive pointer id — drag still works, capture best-effort */ }
       tell();
       applyPuck(e.clientX, e.clientY);
     } else if (e.type === 'pointermove' && e.buttons === 1 && drag) {
@@ -273,7 +280,9 @@ function WheelControl({
       </div>
 
       {/* luma thumbwheel — the wheel's SCALAR (lift/gamma/gain/offset),
-          spec bounds per color-layout §3.5; ONE commit per drag */}
+          spec bounds per color-layout §3.5; ONE commit per drag.
+          R24-W5a: resetTo threads the spec 08 default so dbl-click resets
+          (Gamma luma → 1.0, NOT the 0.25–4 midpoint 2.125 — F2-P2). */}
       <div className="mt-2 w-full">
         <MicroSlider
           ariaLabel={`${meta.label} luma`}
@@ -284,6 +293,7 @@ function WheelControl({
           valueText={`${scalar.toFixed(3)}${meta.key === 'offset' ? ' ·' : ''}`}
           variant="mini"
           className="w-full"
+          resetTo={DEFAULT_GRADE[meta.key]}
           trackStyle={{
             height: 12,
             borderRadius: 6,
@@ -363,23 +373,33 @@ export function WheelsPanel() {
               className="shrink-0 text-center"
               format={c.fmt}
               onFirstTouch={tell}
-              onCommit={(v) => setGrade(fieldPatch(c.key, v))}
+              /* R23-FIX (review-sweep R4-P3#7): NumCell is free-text and
+                 clamps NOWHERE — the typed value used to reach setGrade raw
+                 (typing 999 into Contrast wrote 999). The seam clamps to the
+                 row's own min/max (the MicroSlider twins' domain), so the
+                 typed path and the drag path agree. */
+              onCommit={(v) => setGrade(fieldPatch(c.key, clamp(v, c.min, c.max)))}
             />
-            {c.bar ? (
-              <div aria-hidden className="h-[2px] min-w-0 flex-1 rounded-[1px]" style={{ background: c.bar }} />
-            ) : (
-              <MicroSlider
-                ariaLabel={c.label}
-                value={grade[c.key]}
-                min={c.min}
-                max={c.max}
-                step={c.step}
-                valueText={c.fmt(grade[c.key])}
-                className="min-w-0 flex-1"
-                onFirstTouch={tell}
-                onChange={(v) => setGrade(fieldPatch(c.key, v))}
-              />
-            )}
+            {/* R24-W5a (DESIGN-R24 §2 F2-P2 — the affordance lie): Temp/Tint
+                used to render a DECORATIVE 2px gradient bar (aria-hidden div,
+                no role, no keyboard, no pointer) next to the typed field —
+                they are REAL bar-sliders now, the master-row grammar below
+                (variant="bar" + the gradient as trackStyle, the same
+                MicroSlider keyboard/drag/commit law as every other row). */}
+            <MicroSlider
+              ariaLabel={c.label}
+              value={grade[c.key]}
+              min={c.min}
+              max={c.max}
+              step={c.step}
+              valueText={c.fmt(grade[c.key])}
+              variant={c.bar ? 'bar' : 'mini'}
+              trackStyle={c.bar ? { background: c.bar } : undefined}
+              resetTo={DEFAULT_GRADE[c.key]}
+              className="min-w-0 flex-1"
+              onFirstTouch={tell}
+              onChange={(v) => setGrade(fieldPatch(c.key, v))}
+            />
           </div>
         ))}
       </div>
@@ -411,7 +431,7 @@ export function WheelsPanel() {
               className="shrink-0 text-center"
               format={c.fmt}
               onFirstTouch={tell}
-              onCommit={(v) => setGrade(fieldPatch(c.key, v))}
+              onCommit={(v) => setGrade(fieldPatch(c.key, clamp(v, c.min, c.max)))} /* R23-FIX R4-P3#7 — the master-row twin of the clamp above */
             />
             <MicroSlider
               ariaLabel={c.label}
@@ -422,6 +442,7 @@ export function WheelsPanel() {
               valueText={c.fmt(grade[c.key])}
               variant={c.bar ? 'bar' : 'mini'}
               trackStyle={c.bar ? { background: c.bar } : undefined}
+              resetTo={DEFAULT_GRADE[c.key]}
               className="min-w-0 flex-1"
               onFirstTouch={tell}
               onChange={(v) => setGrade(fieldPatch(c.key, v))}

@@ -13,7 +13,17 @@
    one SHARED 24px headroom readout (fader dB signed 1dp no unit + live
    peak) above meter/fader columns sharing one height var. The aux
    pre/post tap point moved here from the strip (the reference strip has
-   no sends surface — R19-B1 report note). */
+   no sends surface — R19-B1 report note).
+
+   R23-WC (DESIGN-R23 Part III, #98 + #99): D-C1 — every CLIP param row
+   (Gain / Fade in / Fade out) now carries the UNIFORM row grammar (label +
+   control + live readout — the W2 insert-row grammar extended with the
+   typed field), killing #98's "only gain has a dialer and the other two
+   are empty" strangeness. D-C2 — the no-clip state DIES as a complaint:
+   with a strip focus live the CLIP section hides entirely (no empty hole
+   — the focused channel IS the content), and only when NEITHER a clip
+   nor a channel focus is live does the honest onboarding line appear
+   ("Select a clip or focus a channel"). */
 
 import { useState } from 'react';
 import { Volume2, Music2, Waves, AudioLines, Trash2 } from 'lucide-react';
@@ -22,6 +32,11 @@ import { mediaById, type ElementJSON } from '../../lib/mockData';
 import { ROLE_LABEL, dbLabel, type Role } from '../../state/mockMixer';
 import { useMeter } from '../../lib/meterEngine';
 import { Fader, PanKnob, StripMeter, HeadroomReadout, FaderGridlines } from './MixerPrimitives';
+/* R23-FIX (review-sweep item 6, R2-F4): the SHARED dB↔linear map + domain
+   bounds from the Inspector (the one map for ElementJSON.volume — the old
+   local linear mapping ((v·20)−20 / (db+20)/20) contradicted the
+   Inspector's log law on the SAME field). */
+import { volToDb, dbToVol, VOL_DB_MIN, VOL_DB_MAX } from '../shell/Inspector';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -33,8 +48,17 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 /* R22 #81: per-insert param rows — honest view-state mocks (gap C60). One
-   state per trackId+kind so switching slots keeps the edits. */
-const INSERT_PARAM_DEFAULTS: Record<string, { key: string; label: string; min: number; max: number; step: number; fmt: (v: number) => string; init: number }[]> = {
+   state per trackId+kind so switching slots keeps the edits.
+   R24-W5c (DESIGN-R24 §2 F4-P3): a param may declare `log` — a LOG-DOMAIN
+   control (the De-esser's 2–9 kHz frequency row: its 4 kHz region is the
+   GEOMETRIC midpoint √(2k·9k) ≈ 4.24 kHz, not the arithmetic 5.5k the old
+   linear track parked mid-screen, useless). The slider then operates in a
+   0..100 POSITION domain through the family's zoom-slider grammar
+   (value = min·(max/min)^(pos/100), the lib/pixel.ts sliderToZoom law);
+   keyboard + drag ride the ONE map (each arrow = a constant ~1.5% ratio,
+   Home/End = the bounds). `step` stays the value step for linear rows and
+   the POSITION step for log rows. */
+const INSERT_PARAM_DEFAULTS: Record<string, { key: string; label: string; min: number; max: number; step: number; fmt: (v: number) => string; init: number; log?: boolean }[]> = {
   EQ: [
     { key: 'low', label: 'Low', min: -12, max: 12, step: 0.5, fmt: (v) => v.toFixed(1) + ' dB', init: 0 },
     { key: 'mid', label: 'Mid', min: -12, max: 12, step: 0.5, fmt: (v) => v.toFixed(1) + ' dB', init: 0 },
@@ -51,9 +75,12 @@ const INSERT_PARAM_DEFAULTS: Record<string, { key: string; label: string; min: n
   ],
   'De-esser': [
     { key: 'amount', label: 'Amount', min: 0, max: 100, step: 1, fmt: (v) => v + '%', init: 35 },
-    { key: 'freq', label: 'Freq', min: 2000, max: 9000, step: 100, fmt: (v) => (v / 1000).toFixed(1) + ' kHz', init: 5500 },
+    { key: 'freq', label: 'Freq', min: 2000, max: 9000, step: 1, fmt: (v) => (v / 1000).toFixed(1) + ' kHz', init: 5500, log: true },
   ],
 };
+
+/** the log-row position domain width (the zoom-slider grammar's 0..100). */
+const LOG_POS_MAX = 100;
 
 const insertParamsStore: Record<string, Record<string, number>> = {};
 
@@ -70,28 +97,42 @@ function InsertParams({ trackId, kind, badge }: { trackId: string; kind: string;
   };
   return (
     <div className="mb-1 flex flex-col gap-[2px] pl-1" data-testid={`channel-insert-params-${badge}-${kind}`}>
-      {defs.map((d) => (
-        <div key={d.key} className="flex items-center gap-2">
-          <span className="w-[52px] shrink-0 pl-2 text-[10px] text-tfaint">{d.label}</span>
-          <input
-            type="range"
-            min={d.min}
-            max={d.max}
-            step={d.step}
-            value={params[d.key]}
-            onChange={(e) => set(d.key, +(e.target as HTMLInputElement).value)}
-            aria-label={`${kind} ${d.label} for ${badge}`}
-            className="h-[9px] min-w-0 flex-1"
-          />
-          <span className="mono w-[52px] shrink-0 text-right text-[10px] text-tmuted">{d.fmt(params[d.key])}</span>
-        </div>
-      ))}
+      {defs.map((d) => {
+        /* R24-W5c (F4-P3): `log` params ride the zoom-slider grammar — the
+           DOM range is a 0..100 POSITION domain, the param keeps its value
+           in Hz (value = min·(max/min)^(pos/100); pos 50 = the geometric
+           mean, NOT the arithmetic midpoint). */
+        const domMin = d.log ? 0 : d.min;
+        const domMax = d.log ? LOG_POS_MAX : d.max;
+        const domStep = d.log ? 1 : d.step;
+        const domValue = d.log
+          ? (Math.log(params[d.key] / d.min) / Math.log(d.max / d.min)) * LOG_POS_MAX
+          : params[d.key];
+        const onDom = (raw: number) =>
+          set(d.key, d.log ? d.min * Math.pow(d.max / d.min, raw / LOG_POS_MAX) : raw);
+        return (
+          <div key={d.key} className="flex items-center gap-2">
+            <span className="w-[52px] shrink-0 pl-2 text-[10px] text-tfaint">{d.label}</span>
+            <input
+              type="range"
+              min={domMin}
+              max={domMax}
+              step={domStep}
+              value={domValue}
+              onChange={(e) => onDom(+(e.target as HTMLInputElement).value)}
+              aria-label={`${kind} ${d.label} for ${badge}`}
+              className="h-[9px] min-w-0 flex-1"
+            />
+            <span className="mono w-[52px] shrink-0 text-right text-[10px] text-tmuted">{d.fmt(params[d.key])}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function NumField({ value, min, max, step = 0.1, unit, onCommit, ariaLabel }: {
-  value: number; min: number; max: number; step?: number; unit?: string; onCommit: (v: number) => void; ariaLabel: string;
+function NumField({ value, min, max, step = 0.1, onCommit, ariaLabel }: {
+  value: number; min: number; max: number; step?: number; onCommit: (v: number) => void; ariaLabel: string;
 }) {
   /* uncontrolled by design (§4.4-style commit-on-blur); callers MUST key the
      usage on the element id — React reuses the instance across selection
@@ -107,6 +148,57 @@ function NumField({ value, min, max, step = 0.1, unit, onCommit, ariaLabel }: {
       onBlur={(e) => { const v = +e.target.value; if (!Number.isNaN(v) && v >= min && v <= max) onCommit(v); else e.target.value = String(value); }}
       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
     />
+  );
+}
+
+/* R23-WC (D-C1, #98 — the uniform row grammar): every CLIP param row =
+   [label 52px] [NumField] [slider flex-1] [readout 52px] — one anatomy for
+   Gain / Fade in / Fade out (the Inspector ParamRow's label + slider +
+   typed-field law, plus the W2 insert-row readout; the old gain-only dialer
+   + empty fade slots were #98's "strange layout"). The READOUT follows the
+   slider drag live via local preview state; the store commits once per
+   gesture (release/keyup/blur — the §4.4 single-write law, same as the old
+   inline slider). The NumField stays keyed on the element id (the R13
+   stale-defaultValue fix).
+   R24-W5a (DESIGN-R24 §2 F2-P2 — the focus drop): the slider used to
+   re-key on the VALUE (key={`${keyId}-${label}-${value}`}) so external
+   writes would resync its uncontrolled defaultValue — but a single
+   ArrowRight commit changed the value → React UNMOUNTED the focused
+   slider and remounted a fresh one → document.activeElement fell to
+   <body>. The key is now STABLE (param identity, like the row's own
+   testid) and the slider is CONTROLLED (value={shown}, the Inspector
+   ParamRow's exact grammar): external writes (undo, NumField commit)
+   resync through the value prop — no remount, focus survives the commit. */
+function ClipParamRow({ label, value, min, max, step, fmt, keyId, numAria, sliderAria, onCommit }: {
+  label: string; value: number; min: number; max: number; step: number;
+  fmt: (v: number) => string; keyId: string; numAria: string; sliderAria: string;
+  onCommit: (v: number) => void;
+}) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const shown = drag ?? value;
+  const commitDrag = (e: React.PointerEvent<HTMLInputElement> | React.KeyboardEvent<HTMLInputElement>) => {
+    const raw = +(e.target as HTMLInputElement).value;
+    setDrag(null);
+    onCommit(raw);
+  };
+  return (
+    <div className="flex items-center gap-2 py-[3px]" data-testid={`channel-clip-row-${keyId}-${label}`}>
+      <span className="w-[52px] shrink-0 text-[11px] text-tmuted">{label}</span>
+      <NumField key={keyId} value={value} min={min} max={max} step={step} ariaLabel={numAria} onCommit={onCommit} />
+      <input
+        type="range"
+        min={min} max={max} step={step}
+        value={shown}
+        key={`${keyId}-${label}`}
+        className="h-[10px] min-w-0 flex-1"
+        onChange={(e) => setDrag(+(e.target as HTMLInputElement).value)}
+        onPointerUp={commitDrag}
+        onPointerCancel={() => setDrag(null)}
+        onKeyUp={commitDrag}
+        aria-label={sliderAria}
+      />
+      <span data-testid={`channel-clip-readout-${label}`} className="mono w-[52px] shrink-0 text-right text-[10px] text-tmuted">{fmt(shown)}</span>
+    </div>
   );
 }
 
@@ -128,6 +220,12 @@ export function ChannelEditor() {
   // TRACK section: focused strip (or the first audio track)
   const audioTracks = scene.tracks.filter((t) => t.kind === 'audio');
   const track = audioTracks.find((t) => t.id === stripFocus) ?? audioTracks[0];
+  /* R23-WC (D-C2, #99): the focus is LIVE only when stripFocus actually
+     resolves to an audio track in this scene — the first-track fallback
+     below is display, not focus (so the CLIP section's onboarding line can
+     distinguish "focused channel owns the editor" from "nothing live"). A
+     stale id (scene switch, deleted track) resolves to nothing here. */
+  const stripLive = stripFocus != null && audioTracks.some((t) => t.id === stripFocus);
   const strip = track ? mixer.tracks[track.id] : undefined;
   const role = track ? (mixer.roles[track.id] as Role | undefined) : undefined;
   const duck = track ? mixer.ducking[track.id] : undefined;
@@ -145,46 +243,66 @@ export function ChannelEditor() {
         <span className="ml-auto text-[10px] text-tfaint">S + G layers</span>
       </div>
 
-      {/* ---------- CLIP section (S-layer element fields) ---------- */}
-      <div className="border-b border-hairline px-2.5 py-2">
-        <div className="mb-1 flex items-center gap-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-tfaint">Clip</span>
-          <span className="text-[10px] text-tfaint">· structure layer</span>
-        </div>
-        {el ? (
-          <div className="flex flex-col">
-            <div className="mb-1 flex items-center gap-1.5">
-              {el.type === 'audio' ? <Waves size={11} className="text-[var(--type-audio)]" /> : <Music2 size={11} className="text-[var(--type-video)]" />}
-              <span className="min-w-0 flex-1 truncate text-[11px] text-tprimary">{el.name}</span>
-            </div>
-            <Row label="Gain dB">
-              <NumField key={el.id} value={((el.volume ?? 1) * 20 - 20)} min={-48} max={12} step={0.5} ariaLabel="Clip gain"
-                onCommit={(dbv) => setElementField(el.id, { volume: Math.max(0.001, (dbv + 20) / 20) })} />
-              <input type="range" min={-48} max={12} step={0.5} defaultValue={((el.volume ?? 1) * 20 - 20)}
-                key={`${el.id}-${el.volume}`}
-                className="h-[10px] min-w-0 flex-1"
-                onPointerUp={(e) => setElementField(el.id, { volume: Math.max(0.001, (+ (e.target as HTMLInputElement).value + 20) / 20) })}
-                onKeyUp={(e) => setElementField(el.id, { volume: Math.max(0.001, (+ (e.target as HTMLInputElement).value + 20) / 20) })}
-                aria-label="Clip gain slider (commit on release)" />
-            </Row>
-            <Row label="Fade in">
-              <NumField key={el.id} value={el.audioFadeIn ?? 0} min={0} max={10} step={0.1} unit="s" ariaLabel="Audio fade in"
-                onCommit={(v) => setElementField(el.id, { audioFadeIn: v })} />
-            </Row>
-            <Row label="Fade out">
-              <NumField key={el.id} value={el.audioFadeOut ?? 0} min={0} max={10} step={0.1} unit="s" ariaLabel="Audio fade out"
-                onCommit={(v) => setElementField(el.id, { audioFadeOut: v })} />
-            </Row>
-            <p className="mt-1 text-[10px] leading-[1.4] text-tfaint">
-              Same fields and commands as the inspector Audio tab (spec 17 §6.1 parity). Strip fader ≠ clip gain — different layers.
-            </p>
+      {/* ---------- CLIP section (S-layer element fields) ----------
+          R23-WC (D-C1 zero-param law + D-C2, #98/#99): the section HIDES
+          entirely when no clip is selected AND a channel focus is live (the
+          focused channel IS the editor's content — no empty hole, no
+          "clip not selected" complaint); the honest onboarding line renders
+          only when NEITHER a clip nor a focus is live. */}
+      {el || !stripLive ? (
+        <div className="border-b border-hairline px-2.5 py-2">
+          <div className="mb-1 flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-tfaint">Clip</span>
+            <span className="text-[10px] text-tfaint">· structure layer</span>
           </div>
-        ) : (
-          <p className="py-2 text-center text-[11px] text-tfaint" data-testid="shell-channel-editor-state-noclip">
-            Select an audio clip to edit its level
-          </p>
-        )}
-      </div>
+          {el ? (
+            <div className="flex flex-col">
+              <div className="mb-1 flex items-center gap-1.5">
+                {el.type === 'audio' ? <Waves size={11} className="text-[var(--type-audio)]" /> : <Music2 size={11} className="text-[var(--type-video)]" />}
+                <span className="min-w-0 flex-1 truncate text-[11px] text-tprimary">{el.name}</span>
+              </div>
+              {/* R23-FIX (item 6, R2-F4): the gain row rides the SHARED log
+                  map + the Inspector's −24..+12 domain (was a linear
+                  (v·20)−20 map over −48..+12 — the contradictory-law bug).
+                  dbToVol(−24) ≈ 0.063 so the floor never writes ~0. */}
+              <ClipParamRow
+                label="Gain dB"
+                keyId={el.id}
+                value={volToDb(el.volume ?? 1)}
+                min={VOL_DB_MIN} max={VOL_DB_MAX} step={0.5}
+                fmt={(dbv) => dbv.toFixed(1) + ' dB'}
+                numAria="Clip gain"
+                sliderAria="Clip gain slider (commit on release)"
+                onCommit={(dbv) => setElementField(el.id, { volume: dbToVol(dbv) })} />
+              <ClipParamRow
+                label="Fade in"
+                keyId={el.id}
+                value={el.audioFadeIn ?? 0}
+                min={0} max={10} step={0.1}
+                fmt={(v) => v.toFixed(1) + ' s'}
+                numAria="Audio fade in"
+                sliderAria="Audio fade in slider (commit on release)"
+                onCommit={(v) => setElementField(el.id, { audioFadeIn: v })} />
+              <ClipParamRow
+                label="Fade out"
+                keyId={el.id}
+                value={el.audioFadeOut ?? 0}
+                min={0} max={10} step={0.1}
+                fmt={(v) => v.toFixed(1) + ' s'}
+                numAria="Audio fade out"
+                sliderAria="Audio fade out slider (commit on release)"
+                onCommit={(v) => setElementField(el.id, { audioFadeOut: v })} />
+              <p className="mt-1 text-[10px] leading-[1.4] text-tfaint">
+                Same fields and commands as the inspector Audio tab (spec 17 §6.1 parity). Strip fader ≠ clip gain — different layers.
+              </p>
+            </div>
+          ) : (
+            <p className="py-2 text-center text-[11px] text-tfaint" data-testid="shell-channel-editor-state-noclip">
+              Select a clip or focus a channel
+            </p>
+          )}
+        </div>
+      ) : null}
 
       {/* ---------- TRACK section (G-layer strip params) ----------
           R19-B1: terminal flex-1 — the detail stack scrolls, the fader block
@@ -303,15 +421,20 @@ export function ChannelEditor() {
                   </div>
                 )}
 
-                {/* aux returns read-out */}
+                {/* aux returns — BOTH buses (R24-W5c, DESIGN-R24 §2 F4-P3:
+                    the block used to edit A1 only — A2's return was reachable
+                    only through the dock strip; the editor now covers the
+                    full bus pair, one row each, same grammar) */}
                 <div className="mt-1 border-t border-hairline pt-2">
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-tfaint">Aux returns</span>
-                  <Row label="A1">
-                    <span className="mono text-[10px] text-tmuted">{mixer.buses.a1.name}</span>
-                    <input type="range" min={-60} max={6} step={1} value={mixer.buses.a1.returnGain} className="h-[10px] min-w-0 flex-1"
-                      onChange={(e) => setAuxBus('a1', { returnGain: +e.target.value })} aria-label="Aux 1 return gain" />
-                    <span className="mono text-[10px] text-tmuted">{dbLabel(mixer.buses.a1.returnGain)}</span>
-                  </Row>
+                  {(['a1', 'a2'] as const).map((bus) => (
+                    <Row key={bus} label={bus === 'a1' ? 'A1' : 'A2'}>
+                      <span className="mono text-[10px] text-tmuted">{mixer.buses[bus].name}</span>
+                      <input type="range" min={-60} max={6} step={1} value={mixer.buses[bus].returnGain} className="h-[10px] min-w-0 flex-1"
+                        onChange={(e) => setAuxBus(bus, { returnGain: +e.target.value })} aria-label={`Aux ${bus === 'a1' ? 1 : 2} return gain`} />
+                      <span className="mono text-[10px] text-tmuted">{dbLabel(mixer.buses[bus].returnGain)}</span>
+                    </Row>
+                  ))}
                 </div>
 
                 {/* automation non-goal placeholder (design doc §8) */}

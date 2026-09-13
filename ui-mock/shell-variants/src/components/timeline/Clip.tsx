@@ -186,6 +186,153 @@ const defaultsFor = (def: (typeof EFFECT_DEFS)[number]): Record<string, number> 
   return out;
 };
 
+/* ---------- R24-W3 (DESIGN-R24 §3 W3 — A1): the ONE shared FX-row parser.
+   The frozen application/x-nle-effect payload {name, cat} has THREE drop
+   doors — the Clip body, the empty SeamZone, and the OCCUPIED-seam
+   TransitionBox — and every one routes HERE (one law, three doors; the
+   browser's double-click route rides the same clip door, so no door can
+   fork the semantics). Routing table (§1.1, Resolve-style):
+   - transition row + SEAM        → mint / replace-never-stack;
+   - transition row + CLIP BODY   → the clip's OUTgoing seam, adjacency-guarded;
+   - effect row    + CLIP BODY    → the effect STACK (duplicates legal, ×N toast);
+   - fade row      + CLIP BODY    → setFade (a fade is a model field, R23-B n21);
+   - effect/fade row + SEAM       → refused, detail split per row-kind.
+   Replace law (A1-R1): a transition row retains the existing transition's
+   duration + alignment — the patch carries the presentation ONLY; an
+   IDENTICAL presentation short-circuits BEFORE setTransition with the
+   'Already X' toast + the fx-domain select (W0's store no-op guard is the
+   belt-and-braces twin that never fires from here). */
+
+/** the frozen drag payload's shape (spec 15 §5.4 — keys unchanged). */
+export interface FxRow {
+  name: string;
+  cat: string;
+}
+
+/** the butt-splice tolerance — the Timeline's seams builder mints fx-seam
+ *  zones with the SAME 1 ms epsilon, so the parser's adjacency guard and the
+ *  zone geometry can never disagree about what a "cut" is. */
+export const SEAM_EPSILON = 0.001;
+
+/** the clip AFTER `elementId` on its own track when the two are EXACTLY
+ *  butt-spliced (|a.end − b.start| < SEAM_EPSILON). Null when the clip is
+ *  the lane's last, gapped off its neighbor, or a stale id. Transitions own
+ *  SEAMS — no butt-spliced follower, no transition (the A1-R3 adjacency
+ *  guard; Resolve's "insufficient handles" refusal is the real-world twin). */
+export function buttSplicedFollower(elementId: string): ElementJSON | null {
+  const hit = findElement(useUi.getState().scenes, elementId);
+  if (!hit) return null;
+  const sorted = [...hit.track.elements].sort((a, b) => a.startTime - b.startTime);
+  const i = sorted.findIndex((e) => e.id === elementId);
+  if (i < 0 || i + 1 >= sorted.length) return null;
+  const b = sorted[i + 1]!;
+  return Math.abs(hit.element.startTime + hit.element.duration - b.startTime) < SEAM_EPSILON ? b : null;
+}
+
+/* the seam-door refusal, detail split per row-kind (A1-R3): both honest
+ * about WHERE the row kind actually lands. */
+const SEAM_REFUSAL_DETAIL = {
+  fade: 'fade presets drop on a clip body — the seam applies a transition (DESIGN-R23 D-A5)',
+  effect: 'effects stack on a clip body — the seam applies a transition (A1-R3 routing)',
+} as const;
+
+/** the SEAM door — `targetClipId` owns the seam's OUT edge (its
+ *  transitionOut field is the transition object at that cut). */
+export function applyFxRowToSeam(row: FxRow, targetClipId: string): void {
+  const hit = findElement(useUi.getState().scenes, targetClipId);
+  if (!hit) return; // stale id — nothing to write
+  const s = useUi.getState();
+  if (row.cat === 'Transition') {
+    const pres = TRANSITION_PRESENTATIONS.find((p) => p === row.name);
+    if (!pres) {
+      s.pushToast({ kind: 'info', title: 'Unknown transition', detail: `'${row.name}' is not in the mock's transition vocabulary (spec 09 §3.4 presentations)` });
+      return;
+    }
+    const existing = hit.element.transitionOut;
+    if (existing) {
+      if (existing.presentation === pres) {
+        /* A1-R1: the identical presentation short-circuits BEFORE
+           setTransition — no doc write, no history entry; the fx-domain
+           select still lands so the rail shows the object. */
+        s.pushToast({ kind: 'info', title: `Already ${pres}`, detail: 'this seam already carries that presentation — drag a different one to replace it (duration + alignment stay)' });
+        s.selectFxObject({ kind: 'transition', elementId: targetClipId });
+        return;
+      }
+      /* REPLACE, never stack (#58): the patch carries the presentation
+         ONLY — duration + alignment are the user's tuning and ride through
+         the partial merge untouched (the R23 default-duration overwrite
+         dies). The mock's TransitionJSON has one type ('crossfade', spec 09
+         §3.4), so a presentation swap IS the whole type-level change. */
+      s.setTransition(targetClipId, { presentation: pres });
+      s.pushToast({ kind: 'info', title: `Replaced with ${pres}`, detail: `${existing.presentation} → ${pres} · duration + alignment retained (A1-R1 replace-never-stack)` });
+      s.selectFxObject({ kind: 'transition', elementId: targetClipId });
+      return;
+    }
+    /* fresh mint — the store's {} default (Cross Dissolve 0.5 s centered)
+       plus the picked presentation; the fx-domain select keeps the rail
+       live on the new object. */
+    s.setTransition(targetClipId, { presentation: pres });
+    s.selectFxObject({ kind: 'transition', elementId: targetClipId });
+    return;
+  }
+  if (row.cat === 'Fade') {
+    s.pushToast({ kind: 'info', title: 'Seam drops take transitions', detail: SEAM_REFUSAL_DETAIL.fade });
+    return;
+  }
+  /* the effect cats ('Blur' | 'Stylize' — anything not Transition/Fade) */
+  s.pushToast({ kind: 'info', title: 'Seam drops take transitions', detail: SEAM_REFUSAL_DETAIL.effect });
+}
+
+/** the CLIP BODY door (the FxBrowser's double-click route rides the same
+ *  law — no fork). */
+export function applyFxRowToClip(row: FxRow, clipId: string): void {
+  const hit = findElement(useUi.getState().scenes, clipId);
+  if (!hit) return; // stale id — nothing to write
+  const s = useUi.getState();
+  if (row.cat === 'Fade') {
+    /* R23-WA (D-A5): the row NAME carries the side + preset duration
+       ("Fade In 1s"); setFade routes to the element's own fade domain
+       (audio→audioFadeIn/Out, else fadeIn/Out). NOT addEffectToElement
+       (R23-B note 21 — a fade is a model field, not a stack entry). */
+    const m = /^Fade\s+(In|Out)(?:\s+([\d.]+)\s*s?)?$/i.exec(row.name);
+    if (!m) {
+      s.pushToast({ kind: 'info', title: 'Unknown fade preset', detail: `'${row.name}' is not a Fade row the drop parser knows (expected “Fade In 1s” style names)` });
+      return;
+    }
+    const side = (m[1]!.toLowerCase() === 'in' ? 'in' : 'out') as 'in' | 'out';
+    const seconds = m[2] !== undefined ? parseFloat(m[2]!) : 0.5;
+    s.setFade(clipId, side, seconds);
+    return;
+  }
+  if (row.cat === 'Transition') {
+    /* A1-R3: the clip's OUTgoing seam — a transition is a seam object, so a
+       body drop resolves to the seam THIS clip owns (the seam at its out
+       edge). The adjacency guard refuses honestly when no butt-spliced
+       follower exists: a transition without a cut is a lie the model
+       cannot represent. */
+    if (!buttSplicedFollower(clipId)) {
+      s.pushToast({ kind: 'info', title: 'Transitions need a cut', detail: 'no clip after this one — transitions need a cut (drop it on the seam itself, or on the clip BEHIND the cut)' });
+      return;
+    }
+    applyFxRowToSeam(row, clipId);
+    return;
+  }
+  const def = EFFECT_DEFS.find((d) => d.name === row.name);
+  if (!def) {
+    s.pushToast({ kind: 'info', title: 'Unknown effect', detail: `'${row.name}' is not in EFFECT_DEFS (the mock's effect registry)` });
+    return;
+  }
+  /* A1-R3: effects STACK — duplicate instances are legal (the Resolve/
+     Premiere OFX law; #58's answer keeps transition seams exclusive but
+     the clip effect list a stack). The ×N toast is the honest count AFTER
+     the push. */
+  const count = (hit.element.effects ?? []).filter((f) => f.name === def.name).length + 1;
+  s.addEffectToElement(clipId, { name: def.name, enabled: true, params: defaultsFor(def) });
+  if (count > 1) {
+    s.pushToast({ kind: 'info', title: `${def.name} × ${count}`, detail: 'duplicates stack — each instance is its own editable node (A1-R3, the Resolve/Premiere OFX law)' });
+  }
+}
+
 /* ---------- §4.9 clip menu builder (shared surface).
    R15 T2 context-menu routing: the clip no longer owns an onContextMenu
    handler (that pattern stopPropagation'd, breaking the canonical
@@ -202,6 +349,12 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
   const targets = useUi.getState().selection.includes(el.id)
     ? useUi.getState().selection
     : [el.id];
+  /* R24-W5d (W5a's hand-off): the Add Transition fan-out's no-op guard —
+     every target already carries a transitionOut (setTransition(id, {})
+     assigns nothing onto an existing record and the W0 identical-patch
+     guard never fires on an EMPTY patch, so an unguarded fan-out minted one
+     no-op history entry per transitioned clip on a mixed selection). */
+  const allTransitioned = targets.every((id) => findElement(useUi.getState().scenes, id)?.element.transitionOut);
   const deleteSelected = (ripple: boolean) => {
     const run = () => {
       useUi.getState().deleteElements(targets, ripple);
@@ -265,9 +418,15 @@ export function buildClipMenuItems(el: ElementJSON, track: TrackJSON, confirm: C
     { id: 'remove-effects', label: 'Remove Effects', disabled: targets.length === 0 || !targets.some((id) => (findElement(useUi.getState().scenes, id)?.element.effects?.length ?? 0) > 0), tip: 'clears the effect stack of every selected clip', sep: true, onSelect: () => {
       targets.forEach((id) => useUi.getState().setElementField(id, { effects: [] }));
     } },
-    { id: 'add-transition', label: 'Add Transition…', onSelect: () => {
-      // default crossfade (spec 09 TransitionJSON) per selected clip
-      targets.forEach((id) => useUi.getState().setTransition(id, {}));
+    { id: 'add-transition', label: 'Add Transition…', disabled: allTransitioned, tip: allTransitioned ? 'every selected clip already has a transition' : undefined, onSelect: () => {
+      /* default crossfade (spec 09 TransitionJSON) per selected clip —
+         already-transitioned targets are SKIPPED (see allTransitioned above:
+         the honest row goes disabled when NOTHING can mint; a mixed fan-out
+         writes only the hard-cut targets — the F2 TransitionSection bug's
+         context-menu twin, W5a's flagged debt). */
+      targets
+        .filter((id) => !findElement(useUi.getState().scenes, id)?.element.transitionOut)
+        .forEach((id) => useUi.getState().setTransition(id, {}));
     } },
     /* R19 clip markers (gap C33): add-at-playhead (clamped into the clip by
        the store; outside the clip span the clip's mid stands in) + one
@@ -783,7 +942,15 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       return;
     }
     if (locked) return;
-    if (tool === 'blade') {
+    /* R23-WA-REV P2 #2: the blade tool's click-split is fxMode-GATED — in
+       the FX view clip clicks select the clip (the FX inspector shows its
+       effect stack, D-A2.1); a split is an edit-domain mutation the recede
+       law forbids. (fxMode + blade is reachable: the tool radio renders on
+       the EDIT page — R23-WD's D-D2 matrix — and the fx page keeps fxMode
+       across tool changes while the radio stays armed from a prior Edit
+       visit; R23-FIX R3-P3#11 fixed the stale "renders on every page"
+       claim.) */
+    if (tool === 'blade' && !fxMode) {
       const rect = ref.current?.getBoundingClientRect();
       if (!rect) return;
       const local = e.clientX - rect.left;
@@ -796,7 +963,9 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
 
   const cursor = locked
     ? 'not-allowed'
-    : tool === 'blade'
+    : fxMode
+      ? 'pointer' // recede law: fxMode clicks select, never trim/split/drag
+      : tool === 'blade'
       ? 'crosshair'
       : dragActive && (drag?.mode === 'move' || drag?.mode === 'slip' || drag?.mode === 'slide')
         ? 'grabbing'
@@ -812,55 +981,22 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
      not-allowed cursor, ring feedback while an effect drag hovers. The
      clip's own move/trim gestures are POINTER events, so HTML5 DnD and the
      pointer grammar never collide; the lane's pool handlers ignore this
-     drag type entirely. */
+     drag type entirely.
+     R24-W3 (A1-R1): the body drop is now DOOR 1 of the shared parser —
+     transition rows resolve to this clip's OUTgoing seam (adjacency-guarded),
+     effect rows stack, fade rows write setFade. */
   const onEffectDrop = (e: React.DragEvent) => {
     if (!e.dataTransfer.types.includes(EFFECT_DRAG_TYPE)) return;
     e.preventDefault();
     setFxHover(false);
     if (locked) return; // locked-track guard: not-allowed, nothing commits
-    let payload: { name: string; cat: string } | null = null;
+    let payload: FxRow | null = null;
     try { payload = JSON.parse(e.dataTransfer.getData(EFFECT_DRAG_TYPE) || 'null'); } catch { payload = null; }
     if (!payload || typeof payload.name !== 'string' || typeof payload.cat !== 'string') {
       pushToast({ kind: 'error', title: 'Effect drop failed', detail: 'unreadable drag payload from the effects rail (mock dataTransfer)' });
       return;
     }
-    const { name, cat } = payload;
-    if (cat === 'Fade') {
-      /* R23-WA (D-A5): the Fades browser rows — the row NAME carries the side
-         + preset duration ("Fade In 1s"); setFade routes to the element's own
-         fade domain (audio→audioFadeIn/Out, else fadeIn/Out). NOT
-         addEffectToElement (R23-B note 21 — a fade is a model field, not a
-         stack entry). */
-      const m = /^Fade\s+(In|Out)(?:\s+([\d.]+)\s*s?)?$/i.exec(name);
-      if (!m) {
-        pushToast({ kind: 'info', title: 'Unknown fade preset', detail: `'${name}' is not a Fade row the drop parser knows (expected “Fade In 1s” style names)` });
-        return;
-      }
-      const side = (m[1]!.toLowerCase() === 'in' ? 'in' : 'out') as 'in' | 'out';
-      const seconds = m[2] !== undefined ? parseFloat(m[2]!) : 0.5;
-      useUi.getState().setFade(el.id, side, seconds);
-      return;
-    }
-    if (cat === 'Transition') {
-      const pres = TRANSITION_PRESENTATIONS.find((p) => p === name);
-      if (!pres) {
-        pushToast({ kind: 'info', title: 'Unknown transition', detail: `'${name}' is not in the mock's transition vocabulary (spec 09 §3.4 presentations)` });
-        return;
-      }
-      /* Honest type mapping: the mock's TransitionJSON has ONE type —
-         'crossfade' (spec 09 §3.4 mock slice). Every presentation (Dip to
-         Black, Wipe Left, …) rides on it; the timeline's transition marker
-         displays the presentation. No dip/wipe types exist to map to, so
-         none are invented. */
-      useUi.getState().setTransition(el.id, { presentation: pres });
-      return;
-    }
-    const def = EFFECT_DEFS.find((d) => d.name === name);
-    if (!def) {
-      pushToast({ kind: 'info', title: 'Unknown effect', detail: `'${name}' is not in EFFECT_DEFS (the mock's effect registry)` });
-      return;
-    }
-    useUi.getState().addEffectToElement(el.id, { name: def.name, enabled: true, params: defaultsFor(def) });
+    applyFxRowToClip(payload, el.id);
   };
 
   /* R23-WA (D-A3): the effective fade — audio elements read audioFadeIn/Out
@@ -937,32 +1073,40 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
        bar width `100/bars.length − 0.4` goes NEGATIVE once bars.length > 250
        (el-6 at default zoom = 345 bars → every rect had a negative width →
        SVG renders nothing). Bars are now laid out in user-space px with
-       Math.max(1, …) so every audio clip renders ≥1 visible bar. */
+       Math.max(1, …) so every audio clip renders ≥1 visible bar.
+       R24-W5d (W1's flag→render gap, DESIGN-R24 §3 W5d): the body READS the
+       §4.7 per-track view flag now — the ViewOptionsPopover / TrackHeader
+       write it; `waveform === false` renders the FLAT LANE (gradient + name,
+       no strip; undefined/true keep the strip — the fixture's undefined
+       boots as ON). */
+    const waveformOn = track.waveform !== false;
     const barCount = Math.max(1, Math.min(600, Math.floor(geo.width / 4)));
-    const bars = getWaveform(el.mediaId ?? el.id, barCount, { ramp: CLIP_WAVEFORM_RAMP });
+    const bars = waveformOn ? getWaveform(el.mediaId ?? el.id, barCount, { ramp: CLIP_WAVEFORM_RAMP }) : [];
     const h = laneHeight - 12;
     const mid = h / 2;
-    const cell = geo.width / bars.length;
+    const cell = geo.width / Math.max(1, bars.length);
     body = (
       <div className="relative h-full w-full" style={{ background: 'linear-gradient(to bottom, var(--clip-audio-a), var(--clip-audio-b))' }}>
-        <svg className="absolute inset-x-0 bottom-[2px]" width="100%" height={h} preserveAspectRatio="none" aria-hidden="true" data-testid={`clip-waveform-${el.id}`}>
-          {/* visible centerline — the envelope is symmetric around it */}
-          <line x1="0" y1={mid} x2="100%" y2={mid} stroke="var(--waveform)" strokeWidth="0.75" opacity={0.55} />
-          {bars.map((b, i) => {
-            const half = Math.max(0.5, ((b.max + b.min) / 2) * (h / 2));
-            return (
-              <rect
-                key={i}
-                x={i * cell}
-                y={mid - half}
-                width={Math.max(1, cell - 0.6)}
-                height={Math.max(1, half * 2)}
-                fill="var(--waveform)"
-                opacity={0.9}
-              />
-            );
-          })}
-        </svg>
+        {waveformOn && (
+          <svg className="absolute inset-x-0 bottom-[2px]" width="100%" height={h} preserveAspectRatio="none" aria-hidden="true" data-testid={`clip-waveform-${el.id}`}>
+            {/* visible centerline — the envelope is symmetric around it */}
+            <line x1="0" y1={mid} x2="100%" y2={mid} stroke="var(--waveform)" strokeWidth="0.75" opacity={0.55} />
+            {bars.map((b, i) => {
+              const half = Math.max(0.5, ((b.max + b.min) / 2) * (h / 2));
+              return (
+                <rect
+                  key={i}
+                  x={i * cell}
+                  y={mid - half}
+                  width={Math.max(1, cell - 0.6)}
+                  height={Math.max(1, half * 2)}
+                  fill="var(--waveform)"
+                  opacity={0.9}
+                />
+              );
+            })}
+          </svg>
+        )}
         {/* R20-W5 (thread #62): the fade overlays LEFT this body — they are
             now the SELECTABLE transition objects rendered at the clip-box
             level (see fade-object-${el.id}-in/-out below, z-[3]); the fake
@@ -1244,8 +1388,12 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
            commit per gesture.
            Below 6px the object unmounts (a 0-width fade renders no object;
            the Inspector "Fade in" field creates one). Trim handles sit OUTSIDE
-           the clip edges (±4px) so the head object never fights them — the
-           narrow-clip crowding is visual only, hit zones stay disjoint.
+           the clip edges (±4px) — same HEAD ZONE, so the two ARE in pointer
+           competition: the handles carry z-[4] (above the fade objects'
+           z-[3], level with the affordance below) so a selected clip's trim
+           gesture wins the shared corner — the R3-P2#2 finding (the old
+           comment claimed the hit zones were disjoint; they never were,
+           DOM order + z-3 let the fade object eat the handle's events).
            R23-WA (D-A3): the objects joined the FX domain — the selection
            ring (accent outline, the clip-selected grammar's accent) renders
            while selectedFxObject points at THIS side. ---- */}
@@ -1355,7 +1503,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
         <>
           <div
             data-testid={`clip-trim-l-${el.id}`}
-            className="absolute inset-y-0"
+            /* R23-FIX (review-sweep item 13, R3-P2#2): z-[4] — above the fade
+               objects (z-[3]), level with the trim affordance; the handle
+               owns the clip-corner hit zone again (pinned at style level). */
+            className="absolute inset-y-0 z-[4]"
             style={{ left: -4, width: 8, cursor: 'w-resize' }}
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -1372,7 +1523,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
           />
           <div
             data-testid={`clip-trim-r-${el.id}`}
-            className="absolute inset-y-0"
+            className="absolute inset-y-0 z-[4]" /* R23-FIX item 13 — see the left handle */
             style={{ right: -4, width: 8, cursor: 'e-resize' }}
             onPointerDown={(e) => {
               e.stopPropagation();

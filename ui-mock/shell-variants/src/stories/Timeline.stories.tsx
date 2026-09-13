@@ -62,13 +62,21 @@ export const BlocksStyle: StoryObj = {
   ),
 };
 
-/** R23-WA (DESIGN-R23 D-A2): the FX ENGINE — the full Timeline with the fx
- *  tool booted: clips receded to 45% (trim/drag/context-menu off), seam
- *  zones on every butt-spliced cut (el-1|el-2, el-2|el-3 with the transition
- *  box, el-3|el-4), head/tail half zones on the first/last element per
- *  track, fade objects on every main-track clip (the demo fades), and the
- *  el-2 transition box selectable + trimmable. Hover a seam to see the 12→
- *  24px zone + the '+' affordance. */
+/** R23-WA (DESIGN-R23 D-A2) + R24-W3 (A1/F3): the FX ENGINE — the full
+ *  Timeline with the fx tool booted: clips receded to 45% (trim/drag/
+ *  context-menu off), seam zones ONLY on EMPTY butt-spliced cuts (el-1|el-2,
+ *  el-3|el-4 — an occupied seam renders no zone; the transition box owns
+ *  its edge, F3), head/tail half zones on the first/last element per track,
+ *  fade objects on every main-track clip (the demo fades), and the el-2
+ *  transition box selectable + trimmable (the un-clipped wrapper's 12px
+ *  handles hang 3px OUTSIDE the box — reachable even on short transitions).
+ *  Drag an FX Browser row onto it: a seam zone grows to the 24px drop zone
+ *  with the '+' affordance (a transition row MINTS there), the occupied box
+ *  widens to the 24px drop floor and swaps its glyph to ⇄ (a transition row
+ *  REPLACES — presentation-only, duration + alignment retained; the same
+ *  row again = the 'Already X' toast), and a clip body takes effect rows
+ *  (they stack — 'Gaussian Blur × 2'), fade rows, or the clip's outgoing
+ *  seam for transition rows. Hover a seam to see the 12→24px zone. */
 export const FxMode: StoryObj = {
   name: 'Timeline — FX mode (seam zones & objects)',
   parameters: { layout: 'fullscreen' },

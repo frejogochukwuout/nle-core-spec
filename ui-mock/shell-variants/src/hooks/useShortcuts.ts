@@ -146,12 +146,25 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           /* R23-WA (Part IX ruling 22): the FX rung FIRST — a selected FX
              object deletes its transition/fade (delete-aware + domain-clear
              in-store), then the selection branch keeps today's clip law.
-             The isGestureActive guard above already swallowed mid-drag hits. */
+             The isGestureActive guard above already swallowed mid-drag hits.
+             R24-W5d (F5-P2, DESIGN-R24 §3 W5d — the scope): shortcutMap's
+             clips-delete row has ALWAYS documented "on the FX page / in the
+             FX tool"; the rung now checks it (page === 'fx' || fxMode —
+             W0's setPage exit clears the domain, so live states can't reach
+             the unscoped branch; it guards direct store writes). Out of
+             scope the pointing domain + the selection CLEAR (the W0 exit-law
+             belt-and-braces twin) — nothing doc-destructive fires. */
           if (s.selectedFxObject) {
+            if (s.page === 'fx' || s.fxMode) {
+              e.preventDefault();
+              const o = s.selectedFxObject;
+              if (o.kind === 'transition') s.removeTransition(o.elementId);
+              else s.removeFade(o.elementId, o.side ?? 'in');
+              return;
+            }
             e.preventDefault();
-            const o = s.selectedFxObject;
-            if (o.kind === 'transition') s.removeTransition(o.elementId);
-            else s.removeFade(o.elementId, o.side ?? 'in');
+            s.selectFxObject(null); // the stale pointing domain dies, nothing deletes
+            if (s.selection.length > 0) s.setSelection([]);
             return;
           }
           if (s.selection.length === 0) return;
@@ -178,8 +191,15 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           return;
         }
         case 'Escape':
+          /* R24-W5d (F5-P3 — Escape was a dead key with marker/fx-object
+             domains held): the shell-level domain clears join the ladder
+             (tool → marker → FX object → clip selection; the page exit and
+             modal-close layers own theirs — cheatOpen returns early above,
+             ConfirmDialog traps Escape at its own layer). */
           if (s.page === 'audio') s.exitAudioFocus();
           else if (s.tool !== 'select') s.setTool('select');
+          else if (s.selectedMarkerId) s.selectMarker(null);
+          else if (s.selectedFxObject) s.selectFxObject(null);
           else if (s.selection.length > 0) s.setSelection([]);
           return;
       }

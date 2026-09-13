@@ -7,18 +7,25 @@
    Deliver → export panel) — all at the same resizable inspectorW.
 
    R22 (DESIGN-R22 D1) — the color page composition REWRITTEN (issues
-   #74/#77/#78/#79): the MEDIA POOL stays in the left dock (the node graph
-   no longer steals its slot); the VIEWER is the dominant center surface
-   with the scopes console beneath it only while toggled on (never
-   permanently); the COLOR INSPECTOR (Primaries/Curves/Qualifier tabs) is
-   the one grading surface in the right rail; the timeline area carries the
-   TimelineCompact strip (issue #75) with the NodeGraphDock console beside
-   it (toggleable, the mixer mechanism). Page-aware defaults (D2/D8): the
-   color page's mainbody = 55% and inspector = 420px until the user drags
-   (mainBodyUserSet / inspectorWUserSet — the user's drag always wins). */
+   #74/#77/#78/#79) → R23-WB (DESIGN-R23 track B — #90–#97) → R24-W2
+   (DESIGN-R24 §1.2 A2-R1/R2/R3; issues #67/#64/#68 — SUPERSEDES the
+   R23-WB D-B1/D-B2 composition): the timeline density is the D-B3 store
+   law (compact default on color, the EVERY-PAGE toggle overrides; the
+   mainbody default is 55% ONLY while compact, 40% when full tracks are
+   asked for — the filmstrip needs lane room); the left dock on color is
+   the Stills GALLERY (D-B4/#91 → W2 renames it Gallery, A2-R5). THE W2
+   COMPOSITION: region [2] is ALWAYS Viewer-led (the ColorNodeGraph ⇄
+   Viewer swap is DELETED — #67 "NOT here blocking the preview"); the
+   graph re-homes to the console-row slot [6] with its own 26px
+   nodeviewer header + 38px toolbar + the 706×268 scroll-both workspace;
+   the ScopesDock re-homes to the ~160px pane at the BOTTOM of region
+   [2]'s column (colorScopesState-gated, never a new F6 stop). Page-aware
+   defaults (D2/D8): the color page's inspector = 420px until the user
+   drags (inspectorWUserSet). */
 
 import { useEffect, useRef, type ReactNode } from 'react';
-import { useUi } from '../../state/useUiStore';
+import { useUi, resolveTimelineCompact } from '../../state/useUiStore';
+import { leftDockContent } from './leftDockContent';
 import { Toolbar2 } from './Toolbar2';
 import { MixerDock } from '../mixer/MixerDock';
 import { LeftDock } from './LeftDock';
@@ -29,7 +36,7 @@ import { AppDock } from './AppDock';
 import { TimelineToolbar } from '../timeline/TimelineToolbar';
 import { SceneTabs } from '../timeline/SceneTabs';
 import { Timeline } from '../timeline/Timeline';
-import { ColorInspector, ColorScopeStrip, NodeGraphDock } from '../pages/ColorPage';
+import { ColorInspector, ColorNodeGraph, ScopesDock } from '../pages/ColorPage';
 import { TimelineCompact } from '../timeline/TimelineCompact';
 import { DeliverPage } from '../pages/DeliverPage';
 import { ChannelEditor } from '../mixer/ChannelEditor';
@@ -47,12 +54,20 @@ const SPLIT_HIT = 12; // §3.2: 12px interactive hit; visual line is the 6px --s
 function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
   const start = useRef(0);
   /* §11 a11y floor: separator is keyboard-operable — ←/→ = 8px steps,
-     ⇧ ×4 = 32px (the R13 reviewer's ladder; R14 adds the shift multiplier) */
+     ⇧ ×4 = 32px (the R13 reviewer's ladder; R14 adds the shift multiplier).
+     R24-W5d (F5-P2, DESIGN-R24 §2/§3 W5d — the live-vs-jsdom class): the
+     rung was UNREACHABLE — role=separator + onKeyDown but NO tabIndex, so
+     live tab skipped the splitter, a click left focus on <body> and Arrow*
+     hit nothing (AppShell.test fires keyDown directly, so jsdom stayed
+     green while the §11 ladder never reached it). tabIndex=0 joins the
+     natural tab order; the house :focus-visible outline (app.css) + the
+     seam line's group-focus-visible accent make the focus legible. */
   const keyStep = (dir: 1 | -1, shift: boolean) => onDrag(dir * 8 * (shift ? 4 : 1));
   return (
     <div
       className="group relative z-10 flex shrink-0 cursor-col-resize items-center justify-center bg-app"
       style={{ width: SPLIT_HIT }}
+      tabIndex={0}
       onDoubleClick={() => onDrag(0)}
       onKeyDown={(e) => {
         if (e.key === 'ArrowLeft') { e.preventDefault(); keyStep(-1, e.shiftKey); }
@@ -72,7 +87,7 @@ function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
       aria-label="Resize panel"
     >
       <div className="h-full w-[var(--split-visual)] flex items-center justify-center">
-        <div className="h-[96%] w-px bg-hairline transition-colors group-hover:bg-accent" />
+        <div className="h-[96%] w-px bg-hairline transition-colors group-hover:bg-accent group-focus-visible:bg-accent" />
       </div>
     </div>
   );
@@ -80,12 +95,14 @@ function VSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
 
 function HSplitter({ onDrag }: { onDrag: (dy: number) => void }) {
   const start = useRef(0);
-  /* ↑/↓ = 8px steps, ⇧ ×4 = 32px (same ladder as VSplitter) */
+  /* ↑/↓ = 8px steps, ⇧ ×4 = 32px (same ladder as VSplitter; tabIndex per
+     the R24-W5d fix above — the H seam joins the tab order too) */
   const keyStep = (dir: 1 | -1, shift: boolean) => onDrag(dir * 8 * (shift ? 4 : 1));
   return (
     <div
       className="group relative z-10 flex shrink-0 cursor-row-resize items-center justify-center bg-app"
       style={{ height: SPLIT_HIT }}
+      tabIndex={0}
       onDoubleClick={() => onDrag(0)}
       onKeyDown={(e) => {
         if (e.key === 'ArrowUp') { e.preventDefault(); keyStep(-1, e.shiftKey); }
@@ -105,7 +122,7 @@ function HSplitter({ onDrag }: { onDrag: (dy: number) => void }) {
       aria-label="Resize timeline"
     >
       <div className="flex h-[var(--split-visual)] w-full items-center justify-center">
-        <div className="h-px w-[96%] bg-hairline transition-colors group-hover:bg-accent" />
+        <div className="h-px w-[96%] bg-hairline transition-colors group-hover:bg-accent group-focus-visible:bg-accent" />
       </div>
     </div>
   );
@@ -155,6 +172,9 @@ function AppShellInner() {
   const mainBodyH = useUi((s) => s.mainBodyH);
   const setMediaW = useUi((s) => s.setMediaW);
   const setInspectorW = useUi((s) => s.setInspectorW);
+  /* R24-W5d (F5-P3): the §3.2 dbl-click reset seam — un-pins the user flag
+     (see the VSplitter site below; the setMainBodyH twin law). */
+  const resetInspectorW = useUi((s) => s.resetInspectorW);
   const setMainBodyH = useUi((s) => s.setMainBodyH);
   const scenes = useUi((s) => s.scenes);
   const activeSceneId = useUi((s) => s.activeSceneId);
@@ -199,11 +219,19 @@ function AppShellInner() {
   /* spec 18 §6.4: "unsaved changes" browser prompt while edits are pending */
   useBeforeUnloadGuard();
 
-  /* F6 panel-focus cycling — spec 18 §11.5 (normative) */
+  /* F6 panel-focus cycling — spec 18 §11.5 (normative).
+     R23-FIX (review-sweep R5-P3#5): the F6 rung gets the §8.5 text-input
+     guard + a modifier guard — pressing F6 while TYPING in a field
+     (INPUT/SELECT/TEXTAREA/contentEditable) used to rip focus out from
+     under the user, and browser/OS F6 chords (⌘F6 etc.) were swallowed by
+     preventDefault. Plain F6 on a non-field target keeps cycling. */
   const regionsRef = useRef<(HTMLElement | null)[]>([]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'F6') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return; // OS/browser chords pass through
+      const tgt = e.target as HTMLElement | null;
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'SELECT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return;
       e.preventDefault();
       const regions = regionsRef.current.filter(Boolean) as HTMLElement[];
       if (regions.length === 0) return;
@@ -231,36 +259,86 @@ function AppShellInner() {
      grade target the console edits). */
   const captionSelected = selection.length === 1
     && findElement(scenes, selection[0])?.track.kind === 'caption';
-  /* R22: the console dock view-states (scopes under the viewer; node graph
-     beside the compact timeline) + the user-drag flags for the page-aware
-     defaults below. */
+  /* R22 → R23-WB → R24-W2: the console dock view-states + the user-drag
+     flags for the page-aware defaults below. colorNodesDock gates the
+     CONSOLE-ROW slot [6] (the graph mounts beside/above the compact strip,
+     never blocking the viewer — A2-R1); colorScopesState is 'off' | 'open'
+     and gates the viewer-column pane (A2-R2). */
   const colorScopesState = useUi((s) => s.colorScopesState);
   const colorNodesDock = useUi((s) => s.colorNodesDock);
+
   const mainBodyUserSet = useUi((s) => s.mainBodyUserSet);
   const inspectorWUserSet = useUi((s) => s.inspectorWUserSet);
+  /* R23-WB (D-B3): the density resolution — ONE store resolver shared with
+     the TimelineToolbar's toggle (the honest aria-pressed law). */
+  const compact = useUi((s) => resolveTimelineCompact(s));
 
-  /* R22-D8/D2: page-aware defaults — the color page wants a TALL mainbody
-     (the timeline area only carries the compact strip) and the reference's
-     420px inspector; the user's drag (mainBodyUserSet / inspectorWUserSet)
-     always wins and persists. R23-WA (Part IX ruling 1): the FX page stays
-     at the 40% EDIT default — NEVER the color-style 55% (the timeline row
-     carries the FULL Timeline at normal lane heights; seam hit-zones need
-     real pixel geometry — the same honest 16px scroll tolerance Edit
-     carries at the 1280×800 floor). */
+  /* R23-WC (DESIGN-R23 D-C2, issue #99 + Part IX ruling 10 — the
+     channel-selected law): a focused mixer strip (stripFocus — the mixer's
+     own domain, not selectedTrackId) + NO live selection routes the right
+     rail to the ChannelEditor ("if we are selecting channel then you
+     should just show channel editor"). The branch yields to every live
+     selection domain — marker, caption, FX-object, track — because an
+     ACTIVE selection is newer intent than a carried focus; a stale
+     stripFocus id (scene switch, deleted track) resolves to no audio track
+     and never fires. R23-FIX (R-a): on the color/fx/audio pages the PAGE
+     RAIL now outranks a carried focus too (see the rightPanel chain) —
+     only the EDIT page (no page rail of its own) routes a carried
+     stripFocus here. */
+  const stripFocus = useUi((s) => s.stripFocus);
+  const selectedFxObject = useUi((s) => s.selectedFxObject);
+  const selectedTrackId = useUi((s) => s.selectedTrackId);
+  const channelRailLive =
+    stripFocus != null
+      && selection.length === 0
+      && !selectedMarkerId
+      && !captionSelected
+      && !selectedFxObject
+      && !selectedTrackId
+      && scene.tracks.some((t) => t.id === stripFocus && t.kind === 'audio');
+
+  /* R22-D8/D2 → R23-WB (Part IX ruling 11 — the mainbody interaction law):
+     the color page wants a TALL mainbody (55%) ONLY while the compact strip
+     carries the timeline area; flipping to FULL TRACKS on color drops the
+     default to 40% (336px of lanes vs a ~200px row at 55% would clip 60% —
+     the filmstrip needs the lane room). The user's drag (mainBodyUserSet)
+     always wins and persists. The FX page stays at the 40% EDIT default
+     (ruling 1). R23-WF (D-F1, #107): deliver rebalances the same way —
+     50% while the compact strip (with its range band head row) carries the
+     timeline area ("the shorter timeline area can leave more room for
+     export settings too"), 40% when full tracks are asked for (the same
+     filmstrip lane-room law, deliver-shaped). R24-W4 (A3-R7, #71): the
+     strip's head stack is the 22px ruler + the 32px range band (54px) on
+     deliver — the same compact-timeline-area rebalance carries it. */
   const mainBodyHeight = mainBodyH !== 0
     ? mainBodyH
-    : page === 'color' && !mainBodyUserSet ? '55%' : '40%';
+    : page === 'color' && !mainBodyUserSet ? (compact ? '55%' : '40%')
+    : page === 'deliver' && !mainBodyUserSet ? (compact ? '50%' : '40%')
+    : '40%';
   const effectiveInspectorW = page === 'color' && !inspectorWUserSet ? 420 : inspectorW;
   /* R23-WA (D-A1): the FX page's right rail = the FxInspector (the param
      surface for the selected transition / fade / clip-effect-stack); the
      rail swap rides the SAME panels.inspector gate + inspectorW splitter
-     as every other page. */
+     as every other page. R23-WC: the D-C2 branch rides FIRST on edit (no
+     page rail there), then the page rails — see the R-a chain below. */
+  /* R23-FIX (review-sweep R-a, items 5/R2-F3/R5-P3-4 — the rail priority
+     hoist): marker/caption branches hoist ABOVE the page branches. An
+     ACTIVE selection domain is NEWER intent than the page default — the
+     D-C2 philosophy applied to its own edge (the old chain buried the
+     marker rail under the color/fx/audio page rails, so selecting a marker
+     on those pages left the rail showing the page default while the marker
+     domain held — a lying rail). New chain: selectedMarkerId →
+     captionSelected → page rails (color/fx/audio) → channelRailLive →
+     Inspector. channelRailLive therefore no longer yields to a carried
+     stripFocus on the audio/fx/color pages (their page rails win; the audio
+     page rail IS the ChannelEditor, so #99's own case is unchanged). */
   const rightPanel: ReactNode =
-    page === 'color' ? <ColorInspector />
+    selectedMarkerId ? <MarkerInspector />
+    : captionSelected ? <CaptionInspector />
+    : page === 'color' ? <ColorInspector />
     : page === 'fx' ? <FxInspector />
     : page === 'audio' ? <ChannelEditor />
-    : selectedMarkerId ? <MarkerInspector />
-    : captionSelected ? <CaptionInspector />
+    : channelRailLive ? <ChannelEditor />
     : <Inspector />;
 
   return (
@@ -288,37 +366,67 @@ function AppShellInner() {
           </div>
         ) : (
           <>
-            {/* R19: one LeftDock surface (th_mtoyt5fv "use the same area as
-                bin") — Pool|Effects tabs in the mediaW slot. R22-D1: the
-                COLOR page keeps the media pool here (Pool|Stills tabs) — the
-                node graph no longer steals this slot (issue #77). */}
-            {(panels.mediaPool || panels.effects) && (
-              <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
-                <LeftDock />
-              </div>
-            )}
-            {(panels.mediaPool || panels.effects) && (
-              <VSplitter onDrag={(dx) => setMediaW(dx === 0 ? 280 : useUi.getState().mediaW + dx)} />
-            )}
+            {/* R23-FIX (review-sweep R-c, items 11/R1-P2-2/R2-F13): the
+                left-dock mount is TABLE-DRIVEN — `const dock =
+                leftDockContent(page); show = !!dock && (!dock.gatedByPool
+                || panels.mediaPool)`. Audio + FX OWN the slot (gatedByPool:
+                false → always mounted — the Fairlight law); Edit + Color
+                stay gated by the mediaPool flag; Deliver hides (null entry —
+                DeliverPage owns the mainbody). The old `panels.mediaPool ||
+                panels.effects` read was a dead-flag gate: with the pool off,
+                the AUDIO page lost its Sound Library (a frozen surface) and
+                the FX page its browser — the flag never governed those
+                slots. panels.effects is now unread here (dead view state,
+                README row). */}
+            {(() => {
+              const dock = leftDockContent(page);
+              const showLeftDock = !!dock && (!dock.gatedByPool || panels.mediaPool);
+              if (!showLeftDock) return null;
+              return (
+                <>
+                  <div ref={(el) => { regionsRef.current[1] = el; }} tabIndex={-1} className="shell-region panel-shadow flex h-full min-h-0 shrink-0" style={{ width: mediaW }}>
+                    <LeftDock />
+                  </div>
+                  <VSplitter onDrag={(dx) => setMediaW(dx === 0 ? 280 : useUi.getState().mediaW + dx)} />
+                </>
+              );
+            })()}
 
             <div ref={(el) => { regionsRef.current[2] = el; }} tabIndex={-1} className="shell-region panel-shadow flex min-h-0 min-w-0 flex-1 flex-col">
-              {/* R22-D1: the viewer is the DOMINANT surface — nothing renders
-                  beneath it on the color page unless the scopes console is
-                  toggled ON (issue #77's thin-line starvation dies here). */}
+              {/* R24-W2 (A2-R1, issues #67/#64 — SUPERSEDES R23-WB D-B2):
+                  region [2] is ALWAYS Viewer-led — the ColorNodeGraph ⇄
+                  Viewer swap is DELETED (the reviewer's "NOT here blocking
+                  the preview" ruling; the graph re-homes to the console-row
+                  slot [6] below and the viewer keeps publishing graded
+                  frames while every console is open). A2-R2/R3: the ~160px
+                  SCOPES PANE rides at the BOTTOM of this column (Viewer
+                  flex-1 + the pane below), colorScopesState-gated — the
+                  pane is INSIDE region [2]'s column and NEVER a new F6
+                  stop (no regionsRef entry; the cycle count is unchanged). */}
               <div className="min-h-0 flex-1">
                 <Viewer duration={duration} />
               </div>
-              {/* R22-D3: the scopes console under the viewer — store-driven
-                  (off | collapsed | row | grid); REAL traces from the graded
-                  frame the viewer publishes on the bus (W4c kept, #76). */}
-              {page === 'color' && colorScopesState !== 'off' && <ColorScopeStrip />}
+              {page === 'color' && colorScopesState === 'open' && (
+                <div
+                  data-testid="shell-color-scopes-pane"
+                  aria-label="Scopes pane"
+                  className="flex h-[160px] shrink-0 border-t border-hairline"
+                >
+                  <ScopesDock />
+                </div>
+              )}
             </div>
 
             {/* right-docked panel: dragging the seam LEFT (dx<0) widens it.
                 R22-D2: the color page defaults to the reference's 420px
-                until the user drags (inspectorWUserSet). */}
+                until the user drags (inspectorWUserSet). R24-W5d (F5-P3,
+                the mainBody twin law — R23-WB-REV fixed setMainBodyH's reset
+                but not this seam): the dbl-click reset runs the store's
+                resetInspectorW, which UN-SETS the user flag so the page-aware
+                default honestly resumes (the color reset → edit showed 420,
+                not 340, while the flag stayed pinned). */}
             {panels.inspector && (
-              <VSplitter onDrag={(dx) => setInspectorW(dx === 0 ? (page === 'color' ? 420 : 340) : useUi.getState().inspectorW - dx)} />
+              <VSplitter onDrag={(dx) => (dx === 0 ? resetInspectorW() : setInspectorW(useUi.getState().inspectorW - dx))} />
             )}
             {panels.inspector && (
               <div ref={(el) => { regionsRef.current[3] = el; }} tabIndex={-1} className="shell-region panel-shadow z-10 flex h-full min-h-0 shrink-0" style={{ width: effectiveInspectorW }}>
@@ -334,37 +442,52 @@ function AppShellInner() {
       {/* ---- timeline block + console docks (design doc v2.2 §4 — the
           mixer sits SIDE BY SIDE with the multi-track lanes, not under them;
           F6 region slots [6]/[7], single-writer per index) ----
-          R22-D1 (DESIGN-R22): on the COLOR page the timeline lanes are
-          REPLACED by TimelineCompact (the #75 generalized compact strip —
-          frozen, click = grade target) and the NodeGraphDock console sits
-          beside it (toggleable, the mixer mechanism, issue #78). The mixer
-          renders on ALL pages now (issue #73 — Toolbar2 carries the toggle);
-          on the color page at the 55% mainbody its FLOOR auto-degrade is the
-          honest behavior (registered).
-          R23-WA (D-A1): the FX page's timeline area is the FULL Timeline
-          (fxMode via the store's page coupling — NOT TimelineCompact, whose
-          seamMode stub retires this wave; seam hit-zones need real lane
-          geometry). The mixer keeps its side-by-side slot (ruling 15's
-          Edit+Audio-only toggle matrix is Wave D's seam). */}
+          R23-WB (D-B3): the timeline lanes resolve through the DENSITY law
+          (compact → TimelineCompact, full → Timeline — compact DEFAULTS on
+          color+deliver, the every-page TimelineToolbar toggle overrides per
+          session, #94). R24-W2 (A2-R1): the NODE GRAPH console takes the F6
+          slot [6] the ScopesDock vacated (the scopes moved UNDER the viewer,
+          A2-R2) — the graph carries its own 26px nodeviewer header + 38px
+          toolbar + the natural-size 706×268 scroll-both workspace; this
+          wrapper takes the row's flex share (min 480px) and fills the row's
+          height via flex/min-h-0 (NEVER a % height). The mixer renders only
+          where its page leaves it open — entering color collapses it
+          (D-B5/#92, the setPage exit law). */}
       <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />
         <div className="flex min-h-0 flex-1">
-          {page === 'color' ? (
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <TimelineCompact />
-            </div>
-          ) : (
-            <Timeline />
-          )}
-          {/* F6 region slots [6]/[7] (spec 18 §11.5 amendment): the VISIBLE
-              timeline-area consoles get focus stops in dock order — the
-              nodes dock first on color, the mixer next; a collapsed/off dock
-              must not leave an invisible zero-width stop in the cycle
-              (single-writer per index, deepest-match law). */}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {compact ? (
+              /* R23-FIX (R3-P3#8): the compact strip's clip click is
+                 page-aware — 'grade' retargeting is the COLOR page's law;
+                 every other page gets honest selection-only with a
+                 'select clip' label (the old copy claimed "set grade
+                 target" on pages that have no grade surface — a lying
+                 label). R24-W4 (A3-R7, #71): rangeBand rides the DELIVER
+                 branch only — the strip's 22px read-only ruler is
+                 unconditional on every page; the 32px RangeBand mounts
+                 BELOW it (the 54px coexistence head stack) exactly here. */
+              <TimelineCompact rangeBand={page === 'deliver'} clipClick={page === 'color' ? 'grade' : 'select'} />
+            ) : (
+              <Timeline />
+            )}
+          </div>
+          {/* F6 region slot [6] on color = the NODE GRAPH CONSOLE (R24-W2
+              A2-R1 — the slot the ScopesDock vacated when it moved under
+              the viewer; single-writer per index, an off dock never leaves
+              an invisible stop). The graph fills the wrapper by
+              flex/min-h-0 (NEVER a % height) and takes the row's flex share
+              (min 480px, owned here). */}
           {page === 'color' && colorNodesDock && (
-            <div ref={(el) => { regionsRef.current[6] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0" style={{ width: '48%', minWidth: 420 }}>
-              <NodeGraphDock />
+            <div
+              ref={(el) => { regionsRef.current[6] = el; }}
+              tabIndex={-1}
+              data-testid="shell-color-nodeviewer"
+              aria-label="Node graph console"
+              className="shell-region flex min-h-0 min-w-[480px] flex-1"
+            >
+              <ColorNodeGraph />
             </div>
           )}
           {mixerVisible && (

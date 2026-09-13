@@ -27,13 +27,22 @@ owner + phase + acceptance are stated (the posture law, spec 00 D20).
 
 ---
 
+> **R24 mapping note (ARCH-R24 D26/D29, fleet R24):** the wire census re-based — the
+> 30-name count is now **24 routed verbs + 6 documented exceptions** (`WIRE_COMMAND_TYPES`
+> @ OT `c15a629`, M49C machine-checked); this file's "30-command wire surface" citations
+> read accordingly. The D25-bridge citations (port-local-props upstreaming; the S1/S7 swap
+> paths) are superseded by D26's **census/carrier discipline** — the app's timeline-port is
+> a converging mirror (39 mirrors + host), and the structural-half instrument is OT's frozen
+> `data-test=` convention (68 sites), not a new testid emission. The R23 note (below) still
+> governs the phase mapping.
+
 ## 1. The seam inventory
 
-### A. Timeline-domain seams (target: opencut-timeline @ `05584d8`)
+### A. Timeline-domain seams (target: opencut-timeline @ `c15a629` (re-based R24 from `05584d8`))
 
 | # | Seam | Current interface (mini) | Target (core) | State | Swap path |
 |---|---|---|---|---|---|
-| S1 | **Doc ops → wire commands** | `useMini` doc actions: `moveClip` `trimClip` `splitAtPlayhead` `deleteSelected` `cutHead/cutTailAtPlayhead` `addClipFromMedia` `insertMediaAt` `nudge` `toggleTrackMute` (`src/state/useMini.ts`) | OT `src/lib/timeline/headless/api.ts` — the 24-command wire surface, `{ok, code}` contract (OT-SEAMS §1 rows 4-9) | **CLEAN** (the 14-row op map + validation-outcome parity: reject/conflict, media-bounded trims, split windowing) | OT-SEAMS §3.1 — renames + param shapes only; `toggleTrackMute` maps to OT's TRACK-level command (prefixed today, C7 rename pending — spec 15 §4.1A Track row, implemented; the ELEMENT-level `toggleElementMuted/Visibility` pair is the separate A2/W-ops wire addition) |
+| S1 | **Doc ops → wire commands** | `useMini` doc actions: `moveClip` `trimClip` `splitAtPlayhead` `deleteSelected` `cutHead/cutTailAtPlayhead` `addClipFromMedia` `insertMediaAt` `nudge` `toggleTrackMute` (`src/state/useMini.ts`) | OT `src/lib/timeline/headless/api.ts` — the 30-command wire surface (the R23 census — was 24 at the R22 pin), `{ok, code}` contract (OT-SEAMS §1 rows 4-9) | **CLEAN** (the 14-row op map + validation-outcome parity: reject/conflict, media-bounded trims, split windowing) | OT-SEAMS §3.1 — renames + param shapes only; `toggleTrackMute` maps to OT's TRACK-level command (prefixed today, C7 rename pending — spec 15 §4.1A Track row, implemented; the ELEMENT-level `toggleElementMuted/Visibility` pair is the separate A2/W-ops wire addition) |
 | S2 | **Interaction laws** | `geometry.ts` (pure, 47-test net): `clampMove` `wouldOverlap` `neighborBounds` `clampTrimStart/End` `splitPoint` `insertionAt` `rippleShiftAfter` `magnetTarget`/`resolveSnap` | OT `ops/group-move.ts` + `placement/index.ts` + `snapping/` | **CLEAN** (every law carries its OT-SEAMS row; the law net is the acceptance list — `LAW-NET-INVENTORY.md` Part A) | the app re-implements over the OT snapshot it holds (gap-fit = the registered app affordance, row 5) |
 | S3 | **Gesture session discipline** | `ClipItem` pointer session in `Timeline.tsx`: 5px threshold, guarded capture, live previews, clip edge auto-scroll (R18i), C9 unmount lock-release | OT `controllers/element-interaction-controller.ts` (idle→pending→dragging; doc never mutated during drag) | **REGISTERED-DELTA** (the R18k preview-mutates-the-live-mover — view ≡ doc under the neighbor clamp; the frozen law, D22) | OT-SEAMS §3.2 — the gesture engine is the VIEW layer OT's controllers occupy; the seams resolve to S1 commands |
 | S4 | **Time base** | float seconds on the 0.5 grid (`geometry.ts` GRID/quantize; `toTicks` in `otProject.ts`) | OT ticks (×120000 — registered §3.4); fps frame-snap when real media lands | **CLEAN** (executable: `src/lib/otProject.ts` — the nearest-tick policy, unit-pinned) | `otProject.toTicks/fromTicks` — the C1 bridge copies it verbatim |
@@ -44,7 +53,7 @@ owner + phase + acceptance are stated (the posture law, spec 00 D20).
 | S9 | **Keyboard surface** | `useKeys.ts` (Space/S/[/]/Del/±/0/Home/Esc + the form-control skip + C1/C16 laws) | — (the app's own surface; MiniShell OWNS the editing keys incl. undo per spec 14 C1(f)) | **REGISTERED-DELTA** (the shell-vs-port ownership gap closes at C1) | port with the MiniShell keymap; the C53 pending-window branches are retired (D22) |
 | S10 | **Error/feedback rendering** | `ToastMsg {kind,text,seq}` + TTLs (2.6s/8s) + role=alert/status laws + every `pushToast('error'|'info', …)` site | OT wire error codes (`{ok:false, code}`) → user-facing copy | **REGISTERED-DELTA** — the COPY hardcodes what spec 15 §6.3's error-envelope refinement (W-ops) will type; the code→message mapping is the seam | C1 maps OT codes to the toast surface; W-ops types the envelope |
 
-### B. Engine-domain seams (target: nle-engine @ `f68ab8c`)
+### B. Engine-domain seams (target: nle-engine @ `5036387` (re-based R24 from `f68ab8c`))
 
 | # | Seam | Current interface (mini) | Target (core) | State | Swap path |
 |---|---|---|---|---|---|
@@ -54,7 +63,7 @@ owner + phase + acceptance are stated (the posture law, spec 00 D20).
 | S14 | **Clip bodies / thumbnails** | `filmstripFor` (SVG data-URI strips) + `thumbGradientFor` (CSS gradient frames) (`src/lib/filmstrip.ts`) + MediaCard hover preview (gradient-pan + ticking timecode) | the engine's decoded frame-cache thumbnails; a real `<video>` scrub preview | **GAP-with-owner — C2** (the RENDER grammar — discrete strips, hover autoplay — is the transportable law; the DATA is mock) | C2: same components, real data source; the determinism smoke tests port as generator-contract tests |
 | S15 | **Export** | the honest stub CTA (`mini-btn-export` → toast; `src/shell/Topbar.tsx`) | the engine's real A/V export (app-side wiring is C4) | **GAP-with-owner — C4** | the topbar is the documented downstream customization point (README §topbar); the host owns the real flow |
 
-### C. Audio-domain seams (target: web-daw-core @ `fe05d85` + engine)
+### C. Audio-domain seams (target: web-daw-core @ `85b81b0` (re-based R24 from `fe05d85`) + engine)
 
 | # | Seam | Current interface (mini) | Target (core) | State | Swap path |
 |---|---|---|---|---|---|
@@ -151,6 +160,8 @@ enumerating the absences):
 | Export wiring (S15) | app+engine | C4 | the CTA → engine export call; the demo's export leg |
 | The C4 corpus re-expression (S25) | app | C4 | 324 tests / 116 census units authored app-side; the row-by-row check |
 
+
+> **R23 mapping note (ARCH-R23 D23/D24):** spec 14 is RETIRED — the plan is `IMPLEMENTATION-PLAN.md` and the phases are the D24 verification ladder. This file's C0-C4/spec-14 citations map: C1(b,d,e,f)+C1(c)→K3; C1(a)/C2-frames→w1; C3→K3; C4→K4 (+ the human side-by-side→w1-entry); the 'crawl' below means the K3 corpus authoring, not the R22 C-ladder. The disposition vocabulary (HOLDS-on-OT / GAP-app-C1 / GAP-C2/C3 / GAP-W-ops) maps to K3 / w1 / K3 / K3-compose+r1-graduate respectively.
 **Standing cross-refs:** the timeline-op reasoning lives in
 `docs/OT-SEAMS.md`; the law corpus + testid census in
 `docs/LAW-NET-INVENTORY.md`; the deviation register in `README.md` §"What's
