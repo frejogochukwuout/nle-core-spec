@@ -139,7 +139,7 @@ function SeamZone({ a, b, h, pxPerSec }: { a: ElementJSON; b: ElementJSON; h: nu
       type="button"
       data-testid={`fx-seam-${a.id}-${b.id}`}
       data-tip={existing
-        ? `Transition · ${existing.presentation} · ${existing.duration}s — click to select`
+        ? `Transition · ${existing.presentation} · ${existing.duration.toFixed(2)}s — click to select`
         : 'Click to add Cross Dissolve · drag a transition here'}
       aria-label={existing
         ? `Select transition at the ${a.name} to ${b.name} cut`
@@ -274,7 +274,7 @@ const capturePointer = (el: HTMLElement, pointerId: number) => {
   try { el.setPointerCapture(pointerId); } catch { /* inactive pointer id */ }
 };
 
-function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: ElementJSON; h: number; pxPerSec: number; fxMode: boolean; selected: boolean; locked?: boolean }) {
+function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked, orphaned }: { el: ElementJSON; h: number; pxPerSec: number; fxMode: boolean; selected: boolean; locked?: boolean; orphaned?: boolean }) {
   const tr = el.transitionOut!;
   const cut = (el.startTime + el.duration) * pxPerSec;
   /* clamp-commit drag (Part IX ruling 21): LOCAL preview only, ONE
@@ -336,9 +336,20 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
            an inherited property) — the F3 law, pinned at the style level. */
         pointerEvents: fxMode && !locked ? 'auto' : 'none',
       }}
-      title={`Crossfade · ${tr.presentation} · ${tr.duration}s`}
-      aria-label={`Crossfade transition, ${tr.duration} seconds`}
+      title={orphaned
+        /* X2 (R25-F2): an orphaned record RENDERS its truth — the clips no
+           longer butt-splice (an out-trim opened a gap), so this box claims
+           NO live seam. The record is NEVER auto-deleted mid-render (a doc
+           mutation in the paint path); the flag + tip are the honest
+           presentation, and the FX inspector / removeTransition still own
+           the delete. */
+        ? `Crossfade · ${tr.presentation} · ${tr.duration.toFixed(2)}s — NO CUT: the clips no longer butt-splice (a trim opened a gap); remove it or close the seam`
+        : `Crossfade · ${tr.presentation} · ${tr.duration.toFixed(2)}s`}
+      aria-label={orphaned
+        ? `Crossfade transition, ${tr.duration.toFixed(2)} seconds — orphaned, no cut at this seam`
+        : `Crossfade transition, ${tr.duration.toFixed(2)} seconds`}
       data-testid={`transition-${el.id}`}
+      data-orphaned={orphaned || undefined}
       {...(fxMode && !locked ? {
         role: 'slider',
         tabIndex: 0,
@@ -400,7 +411,9 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
           gradient, 1px border, 2px radius and the glyph grammar kept
           byte-identical; while a compatible drag is over, the paint drops
           to the 26% mark fill and the glyph swaps to ⇄. pointer-events
-          INHERITS the wrapper's gate. */}
+          INHERITS the wrapper's gate. X2 (R25-F2): an ORPHANED record
+          renders DEGRADED — 45% opacity + the dashed border — the box
+          visibly does not claim a live seam. */}
       <div
         data-testid={`transition-visual-${el.id}`}
         aria-hidden="true"
@@ -410,8 +423,9 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked }: { el: Elem
           background: dragOver
             ? 'color-mix(in srgb, var(--transition-mark) 26%, transparent)'
             : 'linear-gradient(to bottom, color-mix(in srgb, var(--transition-mark) 30%, transparent), color-mix(in srgb, var(--transition-mark) 70%, transparent))',
-          border: '1px solid var(--transition-mark)',
+          border: orphaned ? '1px dashed var(--transition-mark)' : '1px solid var(--transition-mark)',
           boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
+          opacity: orphaned ? 0.45 : undefined,
         }}
       >
         {dragOver ? (
@@ -1569,17 +1583,35 @@ export function Timeline() {
                     offscreen box used to escape virtualization and keep its
                     z-7 pointer surface mounted over lanes the user scrolled
                     to (pinned: high zoom + scroll → offscreen box absent). */}
-                {track.elements.filter((e) => e.transitionOut && clipVisible(e)).map((e) => (
-                  <TransitionBox
-                    key={`tr-${e.id}`}
-                    el={e}
-                    h={h}
-                    pxPerSec={pxPerSec}
-                    fxMode={fxMode}
-                    locked={track.locked}
-                    selected={selectedFxObject?.kind === 'transition' && selectedFxObject.elementId === e.id}
-                  />
-                ))}
+                {track.elements.filter((e) => e.transitionOut && clipVisible(e)).map((e) => {
+                  /* X2 (R25-F2 — the orphan law): a transitionOut can OUTLIVE
+                     its cut (an out-trim opens a gap while the record holds).
+                     The render path now checks ADJACENCY — the next element
+                     in time-order must butt-splice the transition's owner
+                     (the same 0.001s tolerance the seam builder uses). An
+                     orphaned box renders DEGRADED/flagged (opacity + the
+                     "no cut" tip) rather than claiming a live seam; the
+                     record is NEVER auto-deleted here — a render path must
+                     not mutate the doc (removeTransition/the FX inspector
+                     own the delete; the seam builder refuses to re-mint on
+                     non-seams). */
+                  const next = track.elements
+                    .filter((x) => x.id !== e.id && x.startTime >= e.startTime)
+                    .sort((a, b) => a.startTime - b.startTime)[0] ?? null;
+                  const orphaned = !next || Math.abs(e.startTime + e.duration - next.startTime) >= 0.001;
+                  return (
+                    <TransitionBox
+                      key={`tr-${e.id}`}
+                      el={e}
+                      h={h}
+                      pxPerSec={pxPerSec}
+                      fxMode={fxMode}
+                      locked={track.locked}
+                      selected={selectedFxObject?.kind === 'transition' && selectedFxObject.elementId === e.id}
+                      orphaned={orphaned}
+                    />
+                  );
+                })}
               </div>
             );
           })}

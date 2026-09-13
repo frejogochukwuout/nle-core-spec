@@ -314,14 +314,19 @@ export function GradedViewerCanvas({ mediaId, elementId, mode, srcOverride }: Gr
           raw source — no grade (color-layout §3.6)
         </span>
       )}
-      {mode === 'program' && qualifierPickerOn && (
+      {qualifierPickerOn && (
         /* R23-FIX (review-sweep item 17, R4-P2#2): the hint moves to
            bottom-2 right-2 — it used to sit at right-2 top-2, exactly where
            the Viewer's res/fps badge overlay (1920×1080 · 24p) renders over
            the canvas, so the two chips collided over the picker's frame.
            bottom-right is badge-free (the raw-source chip rides the source
            mode's bottom-LEFT). Pinned at class-position level (jsdom has no
-           overlap geometry). */
+           overlap geometry).
+           R25-F2 (C10): the hint now renders in BOTH modes — the cursor
+           flips to crosshair in both (the style above is mode-agnostic) and
+           the click-through SAMPLES in both (source mode samples the raw
+           ungraded frame — Resolve's source-viewer eyedropper grammar), so a
+           program-only hint was the dishonest half. */
         <span
           data-testid="shell-viewer-canvas-picker-hint"
           className="mono pointer-events-none absolute bottom-2 right-2 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white/85"

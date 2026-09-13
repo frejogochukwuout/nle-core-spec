@@ -803,9 +803,17 @@ export function EffectsSection({ el, selectedFxId }: { el: ElementJSON; selected
   const addEffectToElement = useUi((s) => s.addEffectToElement);
   const selectEffect = useUi((s) => s.selectEffect);
   const setElementField = useUi((s) => s.setElementField);
+  const pushToast = useUi((s) => s.pushToast);
   const list = el.effects ?? [];
+  /* R25-F2 (X7) — ONE duplicate policy everywhere: the picker RE-OFFERS
+     applied effects (stacking — the Resolve/Premiere OFX law, exactly what
+     the browser rows + the shared parser do). The old onClip filter hid
+     applied names here while the browser stacked them — two policies for
+     one action. Duplicate picks push a second instance through the same
+     addEffectToElement and answer with the ×N count toast (the family the
+     browser route carries). */
   const onClip = new Set(list.map((f) => f.name));
-  const available = EFFECT_DEFS.filter((d) => !onClip.has(d.name));
+  const available = EFFECT_DEFS;
 
   const move = (fxId: string, dir: -1 | 1) => {
     const idx = list.findIndex((f) => f.id === fxId);
@@ -908,29 +916,37 @@ export function EffectsSection({ el, selectedFxId }: { el: ElementJSON; selected
 
       {pickerOpen ? (
         <div className="flex flex-col gap-0.5 rounded-[var(--radius)] border border-soft bg-inset p-1" role="menu" aria-label="Add effect">
-          {available.length === 0 ? (
-            <span className="px-2 py-1 text-[11px] text-tmuted">
-              All {EFFECT_DEFS.length} registry effects applied
-            </span>
-          ) : (
-            available.map((d) => (
-              <button
-                key={d.name}
-                type="button"
-                role="menuitem"
-                className="flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-left text-[11px] text-tmuted hover:bg-[var(--hover-overlay)] hover:text-tprimary"
-                onClick={() => {
-                  /* params seeded with nominal defaults (mockData's EFFECT_DEFS
-                     has no default column — spec 07's registry does) */
-                  addEffectToElement(el.id, { name: d.name, enabled: true, params: defaultsFor(d) });
-                  setPickerOpen(false);
-                }}
-              >
-                <Plus size={12} strokeWidth={1.6} />
-                {d.name}
-              </button>
-            ))
-          )}
+          {/* X7: the picker re-offers EVERY registry row — applied names
+              included (stacking; the "all applied" empty branch died with
+              the hiding filter). */}
+          {available.map((d) => (
+            <button
+              key={d.name}
+              type="button"
+              role="menuitem"
+              className="flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-left text-[11px] text-tmuted hover:bg-[var(--hover-overlay)] hover:text-tprimary"
+              data-tip={onClip.has(d.name) ? `already on this clip — picks stack another instance (×${list.filter((f) => f.name === d.name).length + 1})` : undefined}
+              onClick={() => {
+                /* params seeded with nominal defaults (mockData's EFFECT_DEFS
+                   has no default column — spec 07's registry does). X7: a
+                   re-pick STACKS — the ×N count toast answers it (the browser
+                   route's own family, never a silent duplicate). */
+                const count = list.filter((f) => f.name === d.name).length;
+                addEffectToElement(el.id, { name: d.name, enabled: true, params: defaultsFor(d) });
+                if (count > 0) {
+                  pushToast({
+                    kind: 'info',
+                    title: `${d.name} × ${count + 1}`,
+                    detail: 'duplicates stack — each instance is its own editable node (A1-R3, the Resolve/Premiere OFX law)',
+                  });
+                }
+                setPickerOpen(false);
+              }}
+            >
+              <Plus size={12} strokeWidth={1.6} />
+              {d.name}
+            </button>
+          ))}
           <button
             type="button"
             className="mt-0.5 flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-hairline px-2 py-1 text-left text-[11px] text-tmuted hover:text-tprimary"

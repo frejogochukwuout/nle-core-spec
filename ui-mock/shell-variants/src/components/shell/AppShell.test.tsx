@@ -1311,10 +1311,16 @@ describe('W1 (R1+R2): the full shell, source mode, narrow width — all 7 mode b
       // the trim cluster keeps its 3 icons (degrades SECOND = it stays)
       expect(within(screen.getByTestId('shell-source-trim-controls')).getAllByRole('button')).toHaveLength(3);
       // the readouts degrade FIRST — the duration readout hides below its
-      // floor (620 < 720) with the full text preserved in data-tip
+      // floor (620 < 720). RE-PIN (R25-F2/E11): the DEAD data-tip is dropped
+      // (display:none can't be hovered); the full text survives in the SCRUB
+      // STRIP's aria-label (playhead + in/out + of-duration)
       const readout = screen.getByTestId('shell-viewer-source-duration');
       expect(readout).toHaveAttribute('hidden');
-      expect(readout.getAttribute('data-tip')).toContain('Source duration 00:01:35:05');
+      expect(readout.getAttribute('data-tip')).toBeNull(); // E11: the dead fallback is gone
+      expect(screen.getByTestId('shell-viewer-scrub')).toHaveAttribute(
+        'aria-label',
+        expect.stringContaining('of 00:01:35:05'), // the strip's label carries the duration
+      );
       // the strip is the real scrub strip (playhead + handles + dim law)
       expect(screen.getByTestId('shell-source-playhead')).toHaveAttribute('role', 'slider');
       expect(screen.getByTestId('shell-source-range-in')).toBeInTheDocument();

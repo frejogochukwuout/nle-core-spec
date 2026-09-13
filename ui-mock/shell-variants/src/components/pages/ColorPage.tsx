@@ -11,8 +11,11 @@
        ACTIVE tab's panel takes the row (the R24 under-viewer scopes pane
        and the side-by-side nodeviewer slot are retired; ConsoleTabs +
        the consoleTab atom);
-     - TIMELINE COMPACT is the default on color, with the EVERY-PAGE
-       density toggle (#94, D-B3) + the real trackhead select button (#96);
+     - the FULL timeline is the default on color (R25-F2/C11 re-truth:
+       R25-W6's per-page compact memory boots 'off' on every page — the old
+       "TIMELINE COMPACT is the default" claim died with it; compact is a
+       view-option scope the user opts into) with the EVERY-PAGE density
+       toggle (#94, D-B3) + the real trackhead select button (#96);
      - the left dock is the GALLERY (A2-R5 — the stills panel renamed;
        apply = replace-not-merge, the #70 context menu).
    This module is the composition's import line (re-exports) + a thin

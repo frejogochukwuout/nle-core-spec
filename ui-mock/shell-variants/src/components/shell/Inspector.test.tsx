@@ -431,6 +431,28 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument(); // picker closed after add
   });
 
+  /* R25-F2 (X7) — ONE duplicate policy: the picker RE-OFFERS applied names
+   * (stacking — the Resolve/Premiere OFX law; the browser rows' own policy).
+   * A re-pick pushes a second instance through addEffectToElement and
+   * answers with the ×N count toast; the hiding filter + the "all applied"
+   * dead branch are gone. */
+  it('R25-F2 (X7): the picker re-offers APPLIED effects — a re-pick STACKS + answers with the ×2 toast (the browser rows\' law)', () => {
+    boot({ selection: ['el-1'] }); // el-1 seeds Gaussian Blur (fx-1)
+    fireEvent.click(screen.getByRole('button', { name: 'Add effect' }));
+    const menu = screen.getByRole('menu', { name: 'Add effect' });
+    // the applied name is still offered (the old filter hid it)
+    const reoffer = within(menu).getByRole('menuitem', { name: 'Gaussian Blur' });
+    expect(reoffer.getAttribute('data-tip')).toContain('already on this clip');
+    fireEvent.click(reoffer);
+    const fx = el('el-1').effects!;
+    expect(fx).toHaveLength(2); // stacked — each instance its own node
+    expect(fx.every((f) => f.name === 'Gaussian Blur')).toBe(true);
+    expect(fx[1].id).not.toBe(fx[0].id); // fresh id — a REAL second instance
+    expect(S().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Gaussian Blur × 2' });
+    expect(S().toasts.at(-1)!.detail).toContain('duplicates stack');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument(); // closed after add
+  });
+
   it('effects stack: reorder (first pinned), remove deletes; multi-select shows the aggregate', () => {
     useUi.setState({ selection: ['el-1'] });
     act(() => {

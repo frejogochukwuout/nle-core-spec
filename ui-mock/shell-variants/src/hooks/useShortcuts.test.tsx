@@ -378,6 +378,18 @@ describe('page and audio-focus keys', () => {
     expect(toast.detail).toContain('Media Pool');
   });
 
+  /* R25-F2 (A9): the ⌘I copy is PAGE-AWARE — the audio page mounts the
+   * Sound Library, not the Media Pool (the toast must name the drop
+   * surface actually on screen). */
+  it('R25-F2 (A9): ⌘I on the AUDIO page points at the Sound Library (the mounted drop surface), not the absent Media Pool', () => {
+    useUi.setState({ page: 'audio' });
+    press({ key: 'i', metaKey: true });
+    const toast = S().toasts.find((t) => t.title === 'Import media')!;
+    expect(toast).toBeDefined();
+    expect(toast.detail).toContain('Sound Library');
+    expect(toast.detail).not.toContain('Media Pool');
+  });
+
   it('⌘M mutes the focused audio track; falls back to master mute when unfocused', () => {
     useUi.setState({ focusedTrackId: 'tr-audio-1' });
     press({ key: 'm', metaKey: true });
@@ -711,5 +723,27 @@ describe('W1-B: source-mode transport keys (gated on viewerMode)', () => {
     press({ key: 'k' });
     expect(S().sourcePlaying).toBe(false);
     expect(S().sourcePlayRate).toBe(1);
+  });
+
+  /* R25-F2 (E6): I/O keys are VIEWER-MODE-GATED — in source mode they write
+   * the SOURCE strip's own trim range (the handles' setters at the current
+   * playhead), never the program loop; program mode keeps the spec 16 §3.1
+   * loop path (pinned in the plain-key describe above). */
+  it('R25-F2 (E6): I / O in SOURCE mode write the source trim range at the playhead — the program loop never moves', () => {
+    enterSource(); // m-03, 18.6 s
+    act(() => { S().seekSource('m-03', 5); });
+    press({ key: 'i' });
+    expect(S().sourceRanges['m-03']).toEqual({ in: 5, out: 18.6 });
+    act(() => { S().seekSource('m-03', 12); });
+    press({ key: 'o' });
+    expect(S().sourceRanges['m-03']).toEqual({ in: 5, out: 12 });
+    // the program loop is untouched under the open source monitor (boot pair)
+    expect(S().loop).toEqual({ start: 2, end: 28 });
+    expect(S().playhead).toBe(16);
+    // exiting back to program mode restores the loop path
+    act(() => { S().exitSourcePreview(); });
+    press({ key: 'i' });
+    expect(S().loop.start).toBe(16);
+    expect(S().sourceRanges['m-03']).toEqual({ in: 5, out: 12 }); // the range survives
   });
 });

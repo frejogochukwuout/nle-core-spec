@@ -38,6 +38,7 @@ import { ErrorBoundary } from '../components/shell/ErrorBoundary';
 import { DebugOverlay } from '../components/debug/DebugOverlay';
 import { CheatSheet } from '../components/shell/CheatSheet';
 import { AppShell } from '../components/shell/AppShell';
+import { TooSmall } from '../App';
 
 /* ---- store snapshot + reset ------------------------------------------------ */
 
@@ -150,9 +151,13 @@ export function MeterLevels({ levels }: { levels: { key: string; db: number; cha
 /* ---- story scaffolding ----------------------------------------------------- */
 
 /** A full-shell story: VariantProvider comes from the global decorator; this
- *  composes the App.tsx arrangement minus the window-too-small overlay (that
- *  one is a CSS media-query gate — not meaningfully previewable as a story)
- *  plus the per-story store/variant boots. */
+ *  composes the App.tsx arrangement INCLUDING the window-too-small guard
+ *  (R25-F2/E8: the overlay used to be deliberately omitted — "not
+ *  meaningfully previewable" — which left reviewers a starved shell below
+ *  1280px instead of the honest ≤1279px overlay; the guard is a CSS
+ *  media-query gate, so the story at full size is unchanged while a narrow
+ *  preview viewport now shows exactly what the app shows) plus the per-story
+ *  store/variant boots. */
 export function FullShell({ variant = DEFAULT_VARIANT, patch }: { variant?: Variant; patch?: UiPatch }) {
   return (
     <>
@@ -166,6 +171,7 @@ export function FullShell({ variant = DEFAULT_VARIANT, patch }: { variant?: Vari
       </ErrorBoundary>
       <DebugOverlay />
       <CheatSheet />
+      <TooSmall />
     </>
   );
 }

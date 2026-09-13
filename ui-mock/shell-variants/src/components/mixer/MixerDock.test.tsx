@@ -686,4 +686,66 @@ describe('R25-W4-A: the dock header strip-element toggle group (th_mtzou0op)', (
     expect(screen.queryByTestId('mixer-element-fx')).toBeNull();
     expect(screen.queryByRole('group', { name: 'Strip elements' })).toBeNull();
   });
+
+  /* R25-F2 (A8): the element-toggle tips are composed with the DENSITY
+   * ladder — the flag is the preference, the ladder is what's on screen.
+   * The old "shown (view state)" tip at lean density lied (the ladder hides
+   * the element while the flag is on). */
+  it('R25-F2 (A8): at LEAN density the tips say "hidden by the density ladder" while the pressed flag stays the honest preference', () => {
+    withRecordingRO((fire) => {
+      boot({ mixerState: 'full' });
+      const wrapper = screen.getByTestId('mixer-dock');
+      Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 300 }); // lean [280,340)
+      fire();
+      expect(wrapper).toHaveAttribute('data-density', 'lean');
+      const fx = screen.getByTestId('mixer-element-fx');
+      expect(fx).toHaveAttribute('aria-pressed', 'true'); // the preference is untouched
+      expect(fx.getAttribute('data-tip')).toContain('FX sends grid — hidden by the density ladder');
+      // the ladder ALSO hid the blocks themselves (the W4-E law, unchanged)
+      expect(within(screen.getByTestId('mixer-strip-A1')).queryByTestId('fx-rack')).toBeNull();
+      // at FULL density the classic honest "shown" tip survives
+      Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 600 });
+      fire();
+      expect(screen.getByTestId('mixer-element-fx').getAttribute('data-tip')).toContain('shown');
+    });
+  });
+});
+
+/* ---------- R25-F2 (A5/A6): the meters dock's alignment + the honest floor ---------- */
+describe('R25-F2: meters-state alignment + the expand floor (A5/A6)', () => {
+  it('R25-F2 (A5): the pinned master column carries the SAME p-1 padding as the track-columns scroll region (the 4px misalignment is dead)', () => {
+    boot({ mixerState: 'meters' });
+    const scroll = screen.getByTestId('meters-scroll');
+    const master = screen.getByTestId('meter-col-master');
+    // class-level pin (jsdom applies no Tailwind geometry): both p-1
+    expect(scroll.className).toContain('p-1');
+    expect(scroll.className).not.toContain('py-1');
+    expect(master.className).toContain('p-1');
+    expect(master.className).not.toContain('py-1');
+  });
+
+  it('R25-F2 (A6): below the 200px core floor the expand control is HONESTLY disabled — aria-disabled, the height-floor reason in the tip, NO store write', () => {
+    withRecordingRO((fire) => {
+      boot({ mixerState: 'meters' });
+      const wrapper = screen.getByTestId('mixer-dock');
+      Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 150 }); // mini < 200
+      fire();
+      expect(wrapper).toHaveAttribute('data-density', 'mini');
+      const btn = screen.getByRole('button', { name: /Expand to full strips/ });
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn.getAttribute('data-tip')).toContain('below the 200px core floor');
+      expect(btn.getAttribute('aria-label')).toContain('disabled');
+      // the honest-control law: clicking can mint NOTHING (no onClick)
+      fireEvent.click(btn);
+      expect(store().mixerState).toBe('meters'); // untouched — the silent no-op is dead
+      expect(store().toasts).toHaveLength(0);
+      // growing the height re-arms the control (the ladder is reversible)
+      Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 600 });
+      fire();
+      const live = screen.getByRole('button', { name: 'Expand to full strips' });
+      expect(live).not.toHaveAttribute('aria-disabled');
+      fireEvent.click(live);
+      expect(store().mixerState).toBe('full');
+    });
+  });
 });

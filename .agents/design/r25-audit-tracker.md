@@ -57,6 +57,8 @@ its ID; fix waves cite the IDs they close.
 
 ## Ledger
 
-- [ ] F1 wave: closes A1, E1, E2, C2, C3, C4, C5, A2, A3, A4, X1 (+ the P2s from later batches)
-- [ ] F2 wave: the P3 family
+- [x] F1 wave: closes A1, E1, E2, C2, C3, C4, C5, A2, A3, A4, X1 (+ the P2s from later batches)
+- [x] F2 wave (R25-F2, landed): closes E3, E4, E5, E6, E7, E8, E9, E10, E11, C6, C7, C8, C9, C10, C11, A5, A6, A7, A8, A9, X2, X4, X6, X7. Suite 1901/1901 (baseline 1881 + 20 pins; re-pins: the C7 hue wrap law — ColorPage.test's dual-handle + F4 pins; the E11 hidden-readout channel — Viewer.test's rung-2 + AppShell.test's ladder pin now assert the strip aria-label; the A7 scale test name).
+  - **X3 DEFERRED to next round** (FxBrowser browse/filter affordance — search/filter over the 38 rows; deliberately out of this wave's scope per the wave contract).
+  - Notable law changes this wave: the hue bar is wrap-aware (two-segment matte, arc clamped [7.2°, 180°] — the mask's 0.5-turn cap); I/O keys are viewer-mode-gated (source mode writes the source range); the exit-source reset covers sourcePlayRate; the orphaned TransitionBox renders DEGRADED (flag + dashed 45% paint, never auto-deleted mid-render); the effects picker re-offers applied names (stacking, ×N toast — ONE duplicate policy with the browser rows).
 - Re-dispatch: timeline-gestures audit (agent hit max-turns without returning — tighter scope next time); deliver+inspector audit (pending/TBD)

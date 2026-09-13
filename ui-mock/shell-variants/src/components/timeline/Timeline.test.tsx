@@ -1902,6 +1902,59 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
     expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut!.duration).toBe(0.75);
     expect(store().past.length).toBe(pastBefore);
   });
+
+  /* R25-F2 (X2): a transitionOut can OUTLIVE its cut — an out-trim opens a
+   * gap while the record holds. The render path now checks adjacency and
+   * flags the orphan DEGRADED (data-orphaned + the "NO CUT" tip + dashed
+   * 45%-opacity paint) instead of claiming a live seam; the record is NEVER
+   * auto-deleted mid-render (a paint path must not mutate the doc). */
+  it('R25-F2 (X2): an ORPHANED transition (a trim opened a gap at its seam) renders DEGRADED + flagged — never auto-deleted', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    // the live seam first: el-2 [8.5,17) → el-3 butt-spliced at 17
+    expect(screen.getByTestId('transition-el-2')).not.toHaveAttribute('data-orphaned');
+    // open the gap: shrink el-2 to [8.5,15) — el-3 still starts at 17
+    const scenes = store().scenes.map((sc) => sc.id === 'sc-1' ? {
+      ...sc,
+      tracks: sc.tracks.map((t) => t.id === 'tr-main' ? {
+        ...t,
+        elements: t.elements.map((e) => e.id === 'el-2' ? { ...e, duration: 6.5 } : e),
+      } : t),
+    } : sc);
+    act(() => { useUi.setState({ scenes }); });
+    const box = screen.getByTestId('transition-el-2');
+    expect(box).toHaveAttribute('data-orphaned', 'true');
+    expect(box.getAttribute('title')).toContain('NO CUT');
+    expect(box.getAttribute('title')).toContain('0.75s');
+    expect(box.getAttribute('aria-label')).toContain('orphaned, no cut at this seam');
+    const vis = screen.getByTestId('transition-visual-el-2');
+    expect(vis.style.opacity).toBe('0.45'); // the DEGRADED paint
+    expect(vis.style.border).toContain('dashed');
+    // the record SURVIVES the render (the delete belongs to the inspector /
+    // removeTransition — never the paint path)
+    expect(scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!.transitionOut).toBeDefined();
+    // closing the seam again UN-flags the box (the state is derived, not stored)
+    const healed = store().scenes.map((sc) => sc.id === 'sc-1' ? {
+      ...sc,
+      tracks: sc.tracks.map((t) => t.id === 'tr-main' ? {
+        ...t,
+        elements: t.elements.map((e) => e.id === 'el-2' ? { ...e, duration: 8.5 } : e),
+      } : t),
+    } : sc);
+    act(() => { useUi.setState({ scenes: healed }); });
+    expect(screen.getByTestId('transition-el-2')).not.toHaveAttribute('data-orphaned');
+    expect(screen.getByTestId('transition-visual-el-2').style.opacity).toBe('');
+  });
+
+  /* R25-F2 (X6): the transition box's title/aria render toFixed(2) — the raw
+   * float ("1.2916666666666667s") never leaks into a tooltip. */
+  it('R25-F2 (X6): the transition title/aria render toFixed(2) — no raw float durations', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    // 31 frames = 1.2916666666666667 s — a frame-clean raw float
+    act(() => { useUi.getState().setTransition('el-2', { duration: 31 / 24 }); });
+    const box = screen.getByTestId('transition-el-2');
+    expect(box.getAttribute('title')).toBe('Crossfade · Cross Dissolve · 1.29s');
+    expect(box.getAttribute('aria-label')).toBe('Crossfade transition, 1.29 seconds');
+  });
 });
 
 describe('R23-WA: fxMode recedes the clip-edit surfaces (the context-menu router)', () => {

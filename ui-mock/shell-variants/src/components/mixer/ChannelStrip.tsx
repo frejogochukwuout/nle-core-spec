@@ -668,7 +668,10 @@ export function AuxStrip({ bus, tier = 0, density = 'full', narrow = false }: { 
   const faderBlock = (
     <FaderSection id={`aux-${bus}`} db={settings.returnGain} peakDb={peak}>
       <FaderCol col="fader">
-        <Fader db={settings.returnGain} onChange={(db) => setAuxBus(bus, { returnGain: db })} fillHeight headroom={false} ariaLabel={`Aux ${bus} return`} />
+        {/* R25-F2 (A7): the aux/master strips carry the dB SCALE column too
+            (the channels' own law — 3 of 5 strips lacked it, the #72
+            alignment family's read side). */}
+        <Fader db={settings.returnGain} onChange={(db) => setAuxBus(bus, { returnGain: db })} fillHeight scale headroom={false} ariaLabel={`Aux ${bus} return`} />
       </FaderCol>
       {!narrow && (
         <FaderCol col="meter">
@@ -852,7 +855,9 @@ export function MasterStrip({ tier = 0, density = 'full', narrow = false }: { ti
   const faderBlock = (
     <FaderSection id="master" db={db} peakDb={peak}>
       <FaderCol col="fader">
-        <Fader db={db} onChange={(ndb) => setMasterVolume(Math.max(0, Math.min(1, (ndb + 60) / 66)))} fillHeight accent headroom={false} ariaLabel="Master fader" />
+        {/* R25-F2 (A7): the master carries the dB SCALE column (the
+            channels' law — the #72 alignment family's read side). */}
+        <Fader db={db} onChange={(ndb) => setMasterVolume(Math.max(0, Math.min(1, (ndb + 60) / 66)))} fillHeight scale accent headroom={false} ariaLabel="Master fader" />
       </FaderCol>
       {!narrow && (
         <FaderCol col="meter">

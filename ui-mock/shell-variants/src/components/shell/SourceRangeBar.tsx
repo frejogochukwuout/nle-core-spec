@@ -35,7 +35,7 @@
    edit function places the TRIMMED source. The range is view-state, not
    doc — ONE clamped write per gesture step, no history entries. */
 
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useUi, sourcePlayheadOf, sourceDomainOf, SOURCE_STILL_PSEUDO_DUR } from '../../state/useUiStore';
 import { mediaById } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
@@ -73,6 +73,14 @@ export function SourceRangeBar({ mediaId }: { mediaId: string }) {
     return Math.max(0, Math.min(dur, ((clientX - r.left - 8) / Math.max(1, r.width - 16)) * dur));
   };
 
+  /* ---- W1-B + R25-F2 (E5): the hover-TC tooltip — the program strip's
+     floating SMPTE grammar, ported to the source strip. The shown TC is
+     CLAMPED TO THE DOMAIN ([in,out] when a range is set — the honest
+     preview of where a click lands: the store's seekSource clamps the
+     scrub identically, so hovering the dimmed out-of-range span reads
+     range.in / range.out, never a time a click can't reach). ---- */
+  const [hoverX, setHoverX] = useState<number | null>(null);
+
   /* ---- the PLAYHEAD scrub (track pointerdown seeks + drags; the handles'
      own pointerdown stops propagation so a handle grab never starts a
      scrub) ---- */
@@ -87,6 +95,10 @@ export function SourceRangeBar({ mediaId }: { mediaId: string }) {
     seek(mediaId, timeAt(e.clientX));
   };
   const onTrackMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    /* E5: EVERY move (hover or drag) feeds the floating tooltip's x —
+       the program strip's grammar. */
+    const box = barRef.current?.getBoundingClientRect();
+    if (box) setHoverX(e.clientX - box.left);
     /* only OUR scrub — a handle drag bubbling through the container is
        ignored (the drag state carries the identity). */
     if (dragRef.current?.which !== 'playhead' || e.buttons !== 1) return;
@@ -196,6 +208,7 @@ export function SourceRangeBar({ mediaId }: { mediaId: string }) {
       onPointerMove={onTrackMove}
       onPointerUp={onTrackUp}
       onPointerCancel={onTrackUp}
+      onPointerLeave={() => setHoverX(null)}
     >
       <div className="relative h-full w-full">
         {/* the full-duration track */}
@@ -218,17 +231,40 @@ export function SourceRangeBar({ mediaId }: { mediaId: string }) {
             <div data-testid="shell-source-dim-right" className="absolute inset-y-0 right-0 bg-black/50" style={{ width: `calc(100% - ${pct(outT)})` }} />
           </div>
         )}
+        {/* E5 (R25-F2): the floating hover-TC tooltip — the program strip's
+            grammar (Viewer's scrub row), with the TC CLAMPED to the live
+            domain: hovering the dimmed spans reads range.in/range.out —
+            exactly what a click there would seek (the store's clamp law).
+            pointer-events-none, floats above the row. */}
+        {hoverX !== null && (() => {
+          const box = barRef.current?.getBoundingClientRect();
+          const inner = box ? Math.max(1, box.width - 16) : 1; // the 8px pad law
+          const raw = Math.max(0, Math.min(dur, ((hoverX - 8) / inner) * dur));
+          const t = range && !still ? Math.max(inT, Math.min(outT, raw)) : raw;
+          return (
+            <span
+              data-testid="shell-source-hover-tc"
+              className="mono pointer-events-none absolute -top-[14px] -translate-x-1/2 rounded-sm border border-strong bg-inset px-1 text-[11px] text-tmuted"
+              style={{ left: hoverX }}
+            >
+              {tc(t)}
+            </span>
+          );
+        })()}
         {/* W1-B: the source PLAYHEAD marker — the same 8px pad law as the
             handles; no pointer handlers of its own (a pointerdown on the
             marker bubbles to the track's scrub). Keyboard: the slider
-            grammar above. */}
+            grammar above. R25-F2 (E3): the slider's aria domain IS the live
+            [in,out] domain (the documented playhead-domain ruling) — the
+            old 0..dur min/max told assistive tech a domain the playhead
+            can't occupy once a range is set. */}
         <div
           role="slider"
           tabIndex={0}
           aria-label="Source playhead"
           aria-orientation="horizontal"
-          aria-valuemin={0}
-          aria-valuemax={Math.round(dur * 24)}
+          aria-valuemin={Math.round((range && !still ? inT : 0) * 24)}
+          aria-valuemax={Math.round((range && !still ? outT : dur) * 24)}
           aria-valuenow={Math.round(ph * 24)}
           aria-valuetext={tc(ph)}
           data-testid="shell-source-playhead"

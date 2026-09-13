@@ -64,7 +64,17 @@ function HandleB() {
 
 /* ---------- the dual-handle range widget (store-bound) ----------
    `toPct`/`fromPct` map the store's 0..1 (or 0..360) span to bar percents.
-   Drag = transient (both handles preview), pointer-up = ONE commit. */
+   Drag = transient (both handles preview), pointer-up = ONE commit.
+   R25-F2 (C7) — the WRAP mode (hue only): the qualifier's mask math is
+   CIRCULAR (circularHueDistance — spec 08 §17.E L1520), so the hue bar
+   renders the arc, not a linear span. `lo`/`hi` are the arc ENDPOINTS on
+   the wheel (mod 360); when the arc crosses 0/360 the bar shows the TRUE
+   matte as TWO segments ([lo,360] ∪ [0,hi]) with the out-of-range mask
+   in the middle — the old linear clamping (lo pinned at 0) hid HALF the
+   default mask (center 0, width 35 → [342.5,360)∪[0,17.5]). The arc's
+   length clamps to [2% of the wheel, 180°] — 180° is the mask's own
+   0.5-turn cap (computeQualifierMask), so the bar never claims a matte
+   wider than the shader keys. */
 
 function RangeWidget({
   testid,
@@ -77,6 +87,7 @@ function RangeWidget({
   hiPct,
   min,
   max,
+  wrap,
   onCommit,
   onFirstTouch,
 }: {
@@ -86,11 +97,14 @@ function RangeWidget({
   big: boolean;
   leftType: 'A' | 'B';
   rightType: 'A' | 'B';
-  /** handle positions in STORE units (already lo ≤ hi). */
+  /** handle positions in STORE units (linear: already lo ≤ hi; wrap: the
+     arc endpoints mod the wheel — lo MAY sit right of hi when wrapping). */
   loPct: number;
   hiPct: number;
   min: number;
   max: number;
+  /** C7: circular-arc grammar (the hue bar). */
+  wrap?: boolean;
   /** commit the final (lo, hi) in STORE units. */
   onCommit: (lo: number, hi: number) => void;
   onFirstTouch: () => void;
@@ -99,6 +113,21 @@ function RangeWidget({
   const height = big ? 24 : 16;
   const handleW = big ? 12 : 10;
   const span = max - min;
+  const MIN_SEP = 2 * (span / 100); // the 2% separation law
+  /* C7: the arc-length domain — [MIN_SEP, 180°] in wrap mode (the mask's
+     0.5-turn cap), [MIN_SEP, span] linear. */
+  const MAX_W = wrap ? 180 : span;
+  const mod = (v: number) => ((v % span) + span) % span;
+  /* the wrapped arc length from a to b (a → b clockwise). */
+  const arcW = (a: number, b: number) => mod(b - a);
+  /* C7: clamp a MOVING endpoint v against its anchor — the arc length
+     (anchor → v) stays inside [MIN_SEP, MAX_W]; returns the clamped
+     endpoint position. dir +1: v is the arc's HEAD (anchor + w);
+     dir −1: v is the arc's TAIL (anchor − w). */
+  const clampArc = (anchor: number, v: number, dir: 1 | -1) => {
+    const w = Math.min(MAX_W, Math.max(MIN_SEP, dir === 1 ? arcW(anchor, v) : arcW(v, anchor)));
+    return mod(dir === 1 ? anchor + w : anchor - w);
+  };
 
   const [drag, setDrag] = useState<{ which: 'lo' | 'hi'; lo: number; hi: number } | null>(null);
   const lo = drag ? drag.lo : loPct;
@@ -109,6 +138,13 @@ function RangeWidget({
     if (!box) return;
     const t = Math.min(100, Math.max(0, ((clientX - box.left) / box.width) * 100));
     const v = min + (t / 100) * span;
+    if (wrap) {
+      /* C7: the moving endpoint takes the pointer's position; the arc
+         length (vs the anchored far endpoint) clamps to the domain. */
+      if (which === 'lo') setDrag({ which, lo: clampArc(hi, v, -1), hi: drag?.hi ?? hiPct });
+      else setDrag({ which, lo: drag?.lo ?? loPct, hi: clampArc(lo, v, 1) });
+      return;
+    }
     if (which === 'lo') setDrag({ which, lo: Math.min(v, hi - 2 * (span / 100)), hi: drag?.hi ?? hiPct });
     else setDrag({ which, lo: drag?.lo ?? loPct, hi: Math.max(v, lo + 2 * (span / 100)) });
   };
@@ -154,6 +190,37 @@ function RangeWidget({
         onLostPointerCapture={commit}
         onKeyDown={(e) => {
           const s = (span / 100) * (e.shiftKey ? 5 : 1);
+          if (wrap) {
+            /* C7: the wrap grammar — arrow keys step the endpoint's POSITION;
+               Home/End jump to the bar's 0/max position; the arc clamp folds
+               any violation back into the domain before the commit. */
+            const clampV = (which: 'lo' | 'hi', v: number) =>
+              which === 'lo' ? clampArc(hi, v, -1) : clampArc(lo, v, 1);
+            if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+              e.preventDefault();
+              onFirstTouch();
+              const v = (which === 'lo' ? lo : hi) + s;
+              if (which === 'lo') onCommit(clampV('lo', v), hi);
+              else onCommit(lo, clampV('hi', v));
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+              e.preventDefault();
+              onFirstTouch();
+              const v = (which === 'lo' ? lo : hi) - s;
+              if (which === 'lo') onCommit(clampV('lo', v), hi);
+              else onCommit(lo, clampV('hi', v));
+            } else if (e.key === 'Home') {
+              e.preventDefault();
+              onFirstTouch();
+              if (which === 'lo') onCommit(clampV('lo', min), hi);
+              else onCommit(lo, clampV('hi', min));
+            } else if (e.key === 'End') {
+              e.preventDefault();
+              onFirstTouch();
+              if (which === 'lo') onCommit(clampV('lo', max), hi);
+              else onCommit(lo, clampV('hi', max));
+            }
+            return;
+          }
           if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
             e.preventDefault();
             onFirstTouch();
@@ -188,6 +255,13 @@ function RangeWidget({
 
   const loP = ((lo - min) / span) * 100;
   const hiP = ((hi - min) / span) * 100;
+  /* C7: the wrap case — lo sits RIGHT of hi when the arc crosses 0/360.
+     The matte is TWO segments ([lo,max] ∪ [min,hi]); the out-of-range
+     mask is the MIDDLE span [hi,lo]. The arc midpoint rides the arc
+     (lo + arcLen/2, mod the wheel) — never the linear (lo+hi)/2. */
+  const wrapping = !!wrap && lo > hi;
+  const arcLen = wrap ? arcW(lo, hi) : hi - lo;
+  const midPct = wrap ? ((mod(lo + arcLen / 2) - min) / span) * 100 : (loP + hiP) / 2;
 
   return (
     <div
@@ -197,11 +271,20 @@ function RangeWidget({
       style={{ height }}
     >
       <div aria-hidden className="absolute inset-0 rounded-[3px]" style={{ background: gradient }} />
-      {/* softness zones — out-of-range masks, 65% black (ref §2.4) */}
-      <div aria-hidden className="absolute inset-y-0 left-0 bg-black/65" style={{ width: `${loP}%` }} />
-      <div aria-hidden className="absolute inset-y-0 bg-black/65" style={{ left: `${hiP}%`, right: 0 }} />
-      {/* center line — range midpoint marker */}
-      <div aria-hidden className="absolute inset-y-0 w-px bg-white/25" style={{ left: `${(loP + hiP) / 2}%` }} />
+      {/* softness zones — out-of-range masks, 65% black (ref §2.4). C7:
+          wrap mode renders the TRUE two-segment matte — ONE middle mask
+          ([hi,lo]); the left/right edges stay live matte to the seam. */}
+      {wrapping ? (
+        <div aria-hidden data-testid={`${testid}-outmask`} className="absolute inset-y-0 bg-black/65" style={{ left: `${hiP}%`, width: `calc(${loP}% - ${hiP}%)` }} />
+      ) : (
+        <>
+          <div aria-hidden className="absolute inset-y-0 left-0 bg-black/65" style={{ width: `${loP}%` }} />
+          <div aria-hidden className="absolute inset-y-0 bg-black/65" style={{ left: `${hiP}%`, right: 0 }} />
+        </>
+      )}
+      {/* center line — the ARC's midpoint marker (C7: rides the arc, mod the
+          wheel — sits at the hue CENTER the mask keys around) */}
+      <div aria-hidden className="absolute inset-y-0 w-px bg-white/25" style={{ left: `${midPct}%` }} />
       {handle('lo', leftType)}
       {handle('hi', rightType)}
     </div>
@@ -223,6 +306,7 @@ function Section({
   tell,
   fields,
   range,
+  wrap,
 }: {
   title: string;
   testid: string;
@@ -243,6 +327,8 @@ function Section({
     get: (q: QualifierParams) => { lo: number; hi: number };
     set: (lo: number, hi: number) => Partial<QualifierParams>;
   };
+  /** C7: the hue bar's circular-arc grammar. */
+  wrap?: boolean;
 }) {
   const q = qualifier;
   const bar = range.get(q);
@@ -271,6 +357,7 @@ function Section({
         hiPct={bar.hi}
         min={range.min}
         max={range.max}
+        wrap={wrap}
         onFirstTouch={tell}
         onCommit={(lo, hi) => setQualifier(range.set(lo, hi))}
       />
@@ -308,7 +395,7 @@ export function QualifierPanel() {
     return (
       <div data-testid="shell-color-qualifier" className="flex h-full min-h-0 items-center justify-center bg-panel p-6 text-center">
         <p className="text-[12px] text-tmuted">
-          No clip selected — click a clip in the lane strip (or switch the target to Timeline) to qualify.
+          No clip selected — select a clip in the timeline (or switch the grade target to Timeline) to qualify.
         </p>
       </div>
     );
@@ -397,15 +484,26 @@ export function QualifierPanel() {
           setQualifier={setQualifier}
           onReset={() => setQualifier({ hueCenter: DEFAULT_QUALIFIER.hueCenter, hueWidth: DEFAULT_QUALIFIER.hueWidth, hueSoftness: DEFAULT_QUALIFIER.hueSoftness })}
           tell={tell}
+          /* R25-F2 (C7): the hue bar is WRAP-AWARE — the arc endpoints are
+             the store's center±width/2 mod 360 (width rendered through the
+             mask's own 0.5-turn cap: half = min(width/2, 90°)); the two
+             handles may straddle the 0/360 seam and the bar masks the true
+             two-segment matte. The commit folds the dragged endpoints back
+             into center/width (arc length clamped [7.2°, 180°]). */
+          wrap
           range={{
             min: 0,
             max: 360,
             get: (qq) => {
-              const lo = qq.hueCenter - qq.hueWidth / 2;
-              const hi = qq.hueCenter + qq.hueWidth / 2;
-              return { lo: Math.max(0, lo), hi: Math.min(360, hi) };
+              const half = Math.min(qq.hueWidth / 2, 90);
+              const mod360 = (v: number) => ((v % 360) + 360) % 360;
+              return { lo: mod360(qq.hueCenter - half), hi: mod360(qq.hueCenter + half) };
             },
-            set: (lo, hi) => ({ hueCenter: (lo + hi) / 2, hueWidth: hi - lo }),
+            set: (lo, hi) => {
+              const mod360 = (v: number) => ((v % 360) + 360) % 360;
+              const w = Math.min(180, Math.max(7.2, mod360(hi - lo)));
+              return { hueCenter: mod360(lo + w / 2), hueWidth: w };
+            },
           }}
           fields={[
             { label: 'Center', get: (qq) => qq.hueCenter, set: (_qq, n) => ({ hueCenter: Math.min(360, Math.max(0, n)) }), fmt: (v) => v.toFixed(1) },

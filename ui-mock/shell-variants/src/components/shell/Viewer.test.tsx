@@ -100,6 +100,77 @@ describe('Viewer (spec 18 §4.3)', () => {
     expect((img.parentElement as HTMLElement).style.width).toBe('400%');
   });
 
+  /* R25-F2 (E10): the SOURCE-mode toolbar carries the zoom select too — the
+     same state + the same zoomStyle frame wrapper (the poster is letterboxed
+     object-contain, so the magnification ladder is meaningful there). */
+  it('R25-F2 (E10): source mode carries its OWN zoom select on the same ladder + frame wrapper', () => {
+    useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-02' });
+    const { container } = render(<Viewer duration={DUR} />);
+    const img = container.querySelector('img')!;
+    expect(img).toHaveAttribute('alt', 'Source preview: interview_marina.mp4');
+    expect((img.parentElement as HTMLElement).style.width).toBe('100%'); // Fit
+    const select = screen.getByLabelText('Source viewer zoom') as HTMLSelectElement;
+    expect(select.options).toHaveLength(5);
+    expect(within(select).getByRole('option', { name: '2×' })).toBeInTheDocument();
+    fireEvent.change(select, { target: { value: '2×' } });
+    expect((img.parentElement as HTMLElement).style.width).toBe('200%'); // the SAME zoomStyle
+  });
+
+  /* R25-F2 (E4): the scrub boundary ticks span ALL main tracks — the old
+     `.find` grabbed only the FIRST (the at-time probe walks every one). */
+  it('R25-F2 (E4): the scrub boundary ticks cover elements on EVERY main track (not just the first)', () => {
+    const scenes = S().scenes.map((sc) => sc.id === 'sc-1' ? {
+      ...sc,
+      tracks: [...sc.tracks, {
+        id: 'tr-main-2', kind: 'main' as const, name: 'V2', badge: 'V2',
+        muted: false, solo: false, locked: false, visible: true,
+        elements: [{
+          id: 'el-v2-1', type: 'video' as const, trackId: 'tr-main-2', name: 'Stacked cut',
+          startTime: 20, duration: 3, mediaId: 'm-02',
+        }],
+      }],
+    } : sc);
+    useUi.setState({ scenes });
+    render(<Viewer duration={DUR} />);
+    const ticks = screen.getByTestId('shell-viewer-scrub').querySelectorAll('[data-testid="shell-viewer-scrub-tick"]');
+    // 4 elements on tr-main + the stacked V2 element's start
+    expect(ticks).toHaveLength(5);
+  });
+
+  /* R25-F2 (C6 — the F4-P3 guarded-capture law, the Viewer twin): a
+     synthetic/inactive pointer id throws NotFoundError in real browsers
+     (the live repro the audit caught); the capture is best-effort so the
+     scrub's seek still runs. */
+  it('R25-F2 (C6): a bogus pointer id on the program scrub row never throws — the seek survives the capture throw', () => {
+    render(<Viewer duration={DUR} />);
+    const scrub = screen.getByTestId('shell-viewer-scrub');
+    scrub.getBoundingClientRect = () => ({ width: 300, height: 12, left: 0, right: 300, top: 0, bottom: 12, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    const real = Element.prototype.setPointerCapture;
+    Element.prototype.setPointerCapture = () => {
+      throw new DOMException('Invalid pointer id', 'NotFoundError');
+    };
+    try {
+      expect(() => fireEvent.pointerDown(scrub, { pointerId: 9999, button: 0, clientX: 150 })).not.toThrow();
+    } finally {
+      Element.prototype.setPointerCapture = real;
+    }
+    // the seek still ran through the store seam
+    expect(S().playhead).toBeCloseTo(snapToFrame((150 / 300) * DUR), 5);
+  });
+
+  /* R25-F2 (E9): the marker-color chevron's hit zone is 24px wide — the old
+     16px pebble sat under the house ≥24px-wide floor. Class-level pin
+     (jsdom applies no Tailwind geometry). */
+  it('R25-F2 (E9): the marker-color chevron widens to the 24px hit floor (was 16px)', () => {
+    render(<Viewer duration={DUR} />);
+    const chevron = screen.getByRole('button', { name: 'Marker color' });
+    expect(chevron.className).toContain('!w-[24px]');
+    expect(chevron.className).not.toContain('!w-[16px]');
+    // the palette still opens through it (the R13 keyboard path is intact)
+    fireEvent.click(chevron);
+    expect(screen.getByRole('menu', { name: 'Marker color' })).toBeInTheDocument();
+  });
+
   it('Eye toggle hides the in-canvas overlays (store pref, §4.3 viewer-toolbar)', () => {
     render(<Viewer duration={DUR} />);
     expect(screen.getByText(/Marina interview · 00:00:03:00/)).toBeInTheDocument(); // source chip
@@ -580,10 +651,15 @@ describe('W1-B (A1): the source transport + poster feedback', () => {
   it('exiting source preview PAUSES the source transport (no ghost rAF survives the monitor it belongs to)', () => {
     useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-03' });
     render(<Viewer duration={DUR} />);
-    act(() => { useUi.getState().playSource(); });
+    act(() => { useUi.getState().playSource(-1); }); // J: reverse shuttle
+    expect(useUi.getState().sourcePlayRate).toBe(-1);
     fireEvent.click(screen.getByRole('button', { name: 'Back to program' }));
     expect(useUi.getState().viewerMode).toBe('program');
     expect(useUi.getState().sourcePlaying).toBe(false);
+    /* R25-F2 (E7): the exit ALSO resets the shuttle rate — a carried −1×
+       made the NEXT session's first Space run backwards (toward range.in)
+       and look dead. One owner, one reset. */
+    expect(useUi.getState().sourcePlayRate).toBe(1);
   });
 });
 
@@ -610,12 +686,18 @@ describe('W1-A (R1): the source transport row priority ladder', () => {
     expect(readout).not.toHaveAttribute('hidden');
     expect(tc).not.toHaveAttribute('hidden');
     buttonsNeverHide();
-    // rung 2 — 700px: the duration readout hides (data-tip keeps the full
-    // text); the TC stays
+    // rung 2 — 700px: the duration readout hides. RE-PIN (R25-F2/E11): the
+    // DEAD data-tip is dropped (display:none can't be hovered) — the honest
+    // surviving channel is the SCRUB STRIP's aria-label (playhead + in/out +
+    // of-duration); the TC stays
     row.getBoundingClientRect = () => fakeRect(700);
     act(() => fire());
     expect(readout).toHaveAttribute('hidden');
-    expect(readout.getAttribute('data-tip')).toContain('Source duration 00:01:35:05');
+    expect(readout.getAttribute('data-tip')).toBeNull(); // E11: the dead fallback is gone
+    expect(screen.getByTestId('shell-viewer-scrub')).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('of 00:01:35:05'), // m-02's duration rides the strip's label
+    );
     expect(tc).not.toHaveAttribute('hidden');
     buttonsNeverHide();
     // rung 3 — 400px: the TC hides too; the buttons STILL never hide

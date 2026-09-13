@@ -305,6 +305,10 @@ export function ColorNodeGraph() {
      deferral — non-bound node kinds are display state. */
   const tell = useHonestToast('Node graph', 'node graph controls are display state — drag / pan / zoom land in the interaction round (R19-TODO)');
   const tellUnbound = useHonestToast('Node graph', 'node graphs land with C56 — only the Primaries and Qualifier nodes bind today');
+  /* R25-F2 (C9): the clip-selector chip's OWN one-shot copy — it used to
+     ride the generic pan/zoom gesture-round toast (an off-topic answer for
+     a clip picker). The honest answer names the real targeting routes. */
+  const tellClip = useHonestToast('Node graph', 'the clip selector is display state — the grade target follows the timeline selection (or the Clip/Timeline level control on the header)');
   const selected = useUi((s) => s.selectedColorNodeId);
   const setColorNode = useUi((s) => s.setColorNode);
   const setColorInspectorTab = useUi((s) => s.setColorInspectorTab);
@@ -465,13 +469,16 @@ export function ColorNodeGraph() {
           ))}
         </div>
         <div className="flex items-center gap-4">
-          {/* Clip chip — dropdown-ish (display state, honest toast) */}
+          {/* Clip chip — dropdown-ish (display state, honest toast).
+              R25-F2 (C9): its OWN copy — not the generic pan/zoom
+              gesture-round deferral the other toolbar controls carry. */}
           <button
             type="button"
             aria-label="Clip selector"
             data-testid="shell-color-nodegraph-clip"
+            data-tip="Clip selector — display state; the grade target follows the timeline selection"
             className="flex items-center gap-1 text-[12px] font-medium transition-colors hover:text-white"
-            onClick={tell}
+            onClick={tellClip}
           >
             Clip
             <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden>

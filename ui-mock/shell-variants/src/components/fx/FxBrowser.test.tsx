@@ -170,5 +170,9 @@ describe('R24-W3 (A1-R7): double-click apply — the same shared parser, no fork
     const t = store().toasts.at(-1)!;
     expect(t.detail).toContain('drag the row onto a timeline clip'); // verbatim, R14
     expect(t.detail).toContain('double-click');                       // the A1-R7 route
+    /* R25-F2 (X4): the "(mock drag-to-clip…)" clause is GONE — the route is
+       live (the shared parser owns the drop door); the deflationary stale
+       copy never returns. */
+    expect(t.detail).not.toContain('mock drag-to-clip');
   });
 });

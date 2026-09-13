@@ -304,6 +304,24 @@ describe('GradedViewerCanvas — the qualifier (C54)', () => {
     expect(S().qualifierPickerOn).toBe(true);
     expect(screen.getByTestId('shell-viewer-canvas')).toBeInTheDocument();
   });
+
+  /* R25-F2 (C10): the cursor flips to crosshair in BOTH modes and the
+   * click-through SAMPLES in both (source mode samples the raw ungraded
+   * frame — Resolve's source-viewer eyedropper grammar), so the hint chip
+   * renders in BOTH modes — a program-only hint was the dishonest half. */
+  it('R25-F2 (C10): the armed picker hint renders in SOURCE mode too (the cursor + the click-through both live there)', async () => {
+    boot({ qualifierPickerOn: true, selection: [] });
+    render(<GradedViewerCanvas mediaId="m-02" elementId={null} mode="source" />);
+    await flushGrade();
+    const hint = screen.getByTestId('shell-viewer-canvas-picker-hint');
+    expect(hint).toHaveTextContent('click a pixel to sample the qualifier center');
+    // the cursor flips in source mode as well (the mode-agnostic style law)
+    expect(screen.getByTestId('shell-viewer-canvas').style.cursor).toBe('crosshair');
+    // the raw-source chip owns the bottom-LEFT — the hint stays bottom-right
+    expect(screen.getByTestId('shell-viewer-canvas-raw-chip').className).toContain('bottom-2');
+    expect(screen.getByTestId('shell-viewer-canvas-raw-chip').className).toContain('left-2');
+    expect(hint.className).toContain('right-2');
+  });
 });
 
 describe('GradedViewerCanvas — the scope-bus seam', () => {
