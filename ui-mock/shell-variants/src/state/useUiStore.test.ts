@@ -2648,3 +2648,134 @@ describe('R23-WB D-B4: the Stills Gallery store home (colorStills — view state
     expect(S().colorStills.some((st) => st.id === 'still-01')).toBe(false);
   });
 });
+
+/* ---- W1-B (DESIGN-R25 §3 / §6 A1, R2 "no play control"): the SOURCE
+   transport — view-state fields + the domain law + the tick seam. Every
+   writer here is view state (the hoverInsertPreview/sourceRanges family):
+   plain set, never a withHistory snapshot, never an undo entry. ---- */
+describe('W1-B (A1): the source transport (view state + the domain law)', () => {
+  it('boots empty/paused: sourcePlayhead {}, sourcePlaying false, rate +1', () => {
+    expect(S().sourcePlayhead).toEqual({});
+    expect(S().sourcePlaying).toBe(false);
+    expect(S().sourcePlayRate).toBe(1);
+  });
+
+  it('seekSource frame-snaps + clamps to the media duration; positions round-trip per mediaId', () => {
+    act(() => { S().seekSource('m-03', 999); }); // 18.6 s source
+    expect(S().sourcePlayhead['m-03']).toBe(18.6);
+    act(() => { S().seekSource('m-03', -5); });
+    expect(S().sourcePlayhead['m-03']).toBe(0);
+    // frame-grid discipline: 5.01 s → 120.24 frames → snapped to 120/24 = 5
+    act(() => { S().seekSource('m-02', 5.01); });
+    expect(S().sourcePlayhead['m-02']).toBe(5);
+    // per-media: switching sources keeps each position
+    expect(S().sourcePlayhead['m-03']).toBe(0);
+  });
+
+  it('the domain ruling: with a range set, the playhead clamps to [in,out] — an absent key previews from range.in', () => {
+    act(() => { S().setSourceRangeIn('m-01', 10); });
+    act(() => { S().setSourceRangeOut('m-01', 50); });
+    // scrub below the range → clamps UP to in (the previewed span = the
+    // span an insert commits — the documented simpler-honest-law ruling)
+    act(() => { S().seekSource('m-01', 2); });
+    expect(S().sourcePlayhead['m-01']).toBe(10);
+    act(() => { S().seekSource('m-01', 60); });
+    expect(S().sourcePlayhead['m-01']).toBe(50);
+    // nudge clamps the same way (and steps inside the domain) — frames,
+    // the transport's grammar: −2400 frames = −100 s → clamps to in
+    act(() => { S().nudgeSource('m-01', -2400); });
+    expect(S().sourcePlayhead['m-01']).toBe(10);
+    act(() => { S().nudgeSource('m-01', 24); }); // +1 s
+    expect(S().sourcePlayhead['m-01']).toBe(11);
+  });
+
+  it('stills ride the A1 5s pseudo-duration (a still = a normal 5s clip)', () => {
+    act(() => { S().seekSource('m-08', 999); }); // title_card.png: duration null
+    expect(S().sourcePlayhead['m-08']).toBe(5);
+    act(() => { S().nudgeSource('m-08', -24); }); // −1 s
+    expect(S().sourcePlayhead['m-08']).toBe(4);
+  });
+
+  it('unknown media ids are true no-ops (no phantom keys)', () => {
+    act(() => { S().seekSource('m-99', 5); });
+    act(() => { S().nudgeSource('m-99', 5); });
+    expect(S().sourcePlayhead['m-99']).toBeUndefined();
+  });
+
+  it('the loop law via the STORE seam (tickSourcePlayback — the rAF loop calls this; tests never need rAF): play stops at the OUT point', () => {
+    act(() => { useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-01' }); });
+    act(() => { S().setSourceRangeIn('m-01', 10); });
+    act(() => { S().setSourceRangeOut('m-01', 12); });
+    act(() => { S().seekSource('m-01', 11); });
+    act(() => { S().playSource(); });
+    act(() => { S().tickSourcePlayback(0.5); });
+    expect(S().sourcePlayhead['m-01']).toBeCloseTo(11.5, 5);
+    act(() => { S().tickSourcePlayback(1.0); }); // 12.5 ≥ out → STOP at 12
+    expect(S().sourcePlaying).toBe(false);
+    expect(S().sourcePlayhead['m-01']).toBe(12);
+    // a late frame after the stop writes NOTHING (the flag is the guard)
+    const parked = S().sourcePlayhead['m-01'];
+    act(() => { S().tickSourcePlayback(0.5); });
+    expect(S().sourcePlayhead['m-01']).toBe(parked);
+    expect(S().sourcePlaying).toBe(false);
+  });
+
+  it('no range: play stops at the SOURCE END; reverse play (J) stops at the domain start', () => {
+    act(() => { useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-03' }); }); // 18.6 s
+    act(() => { S().seekSource('m-03', 18); });
+    act(() => { S().playSource(); });
+    act(() => { S().tickSourcePlayback(1.0); }); // 19 ≥ 18.6 → stop at the end
+    expect(S().sourcePlaying).toBe(false);
+    expect(S().sourcePlayhead['m-03']).toBe(18.6);
+    // J = reverse: from near the head, stops at the domain start (0)
+    act(() => { S().seekSource('m-03', 0.5); });
+    act(() => { S().playSource(-1); });
+    expect(S().sourcePlayRate).toBe(-1);
+    act(() => { S().tickSourcePlayback(1.0); }); // 0.5 − 1 ≤ 0 → stop at 0
+    expect(S().sourcePlaying).toBe(false);
+    expect(S().sourcePlayhead['m-03']).toBe(0);
+    // the rate resets to forward on every stop
+    expect(S().sourcePlayRate).toBe(1);
+  });
+
+  it('toggle/play/pause flags; with NO source open the play writers are inert (the flag never lies)', () => {
+    act(() => { useUi.setState({ viewerMode: 'source', sourceMediaId: null }); });
+    act(() => { S().toggleSourcePlay(); });
+    act(() => { S().playSource(); });
+    expect(S().sourcePlaying).toBe(false);
+    // with a source: the full flag machine
+    act(() => { useUi.setState({ sourceMediaId: 'm-03' }); });
+    act(() => { S().toggleSourcePlay(); });
+    expect(S().sourcePlaying).toBe(true);
+    act(() => { S().pauseSource(); });
+    expect(S().sourcePlaying).toBe(false);
+    act(() => { S().playSource(-1); });
+    expect(S().sourcePlaying).toBe(true);
+    expect(S().sourcePlayRate).toBe(-1);
+    act(() => { S().toggleSourcePlay(); }); // toggling off resets the rate
+    expect(S().sourcePlaying).toBe(false);
+    expect(S().sourcePlayRate).toBe(1);
+  });
+
+  it('every transport writer is VIEW STATE — never an undo entry (the hoverInsertPreview law)', () => {
+    const before = S().past.length;
+    act(() => { S().seekSource('m-03', 5); });
+    act(() => { S().nudgeSource('m-03', 24); });
+    act(() => { useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-03' }); });
+    act(() => { S().playSource(); });
+    act(() => { S().tickSourcePlayback(0.5); });
+    act(() => { S().pauseSource(); });
+    expect(S().past.length).toBe(before);
+    // and undo/redo never disturb the transport state (5 seek + 1 s nudge
+    // + 0.5 s tick — all view state)
+    expect(S().sourcePlayhead['m-03']).toBeCloseTo(6.5, 5);
+  });
+
+  it('exitSourcePreview PAUSES the source transport (no ghost loop survives the monitor)', () => {
+    act(() => { useUi.setState({ viewerMode: 'source', sourceMediaId: 'm-03' }); });
+    act(() => { S().playSource(); });
+    act(() => { S().exitSourcePreview(); });
+    expect(S().viewerMode).toBe('program');
+    expect(S().sourcePlaying).toBe(false);
+  });
+});

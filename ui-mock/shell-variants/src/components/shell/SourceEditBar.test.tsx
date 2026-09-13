@@ -21,6 +21,25 @@ import { Timeline } from '../timeline/Timeline';
 import { renderShell, store, type UiPatch } from '../../test/helpers';
 import { useUi } from '../../state/useUiStore';
 
+/** Recording ResizeObserver — captures callbacks so the ladder tests can
+ *  fire them with a mocked bar rect (the MixerDock pattern; jsdom's default
+ *  stub never fires). */
+function withRecordingRO<T>(fn: (fire: () => void) => T): T {
+  const cbs: ResizeObserverCallback[] = [];
+  const Orig = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class {
+    constructor(cb: ResizeObserverCallback) { cbs.push(cb); }
+    observe() { /* no-op */ }
+    unobserve() { /* no-op */ }
+    disconnect() { /* no-op */ }
+  } as unknown as typeof ResizeObserver;
+  try {
+    return fn(() => { act(() => { cbs.forEach((cb) => cb([], {} as ResizeObserver)); }); });
+  } finally {
+    globalThis.ResizeObserver = Orig;
+  }
+}
+
 const S = () => useUi.getState();
 const countEls = () => store().scenes.find((s) => s.id === 'sc-1')!.tracks.reduce((m, t) => m + t.elements.length, 0);
 const overlayEls = () => store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-overlay-1')!.elements;
@@ -286,26 +305,54 @@ describe('SourceEditBar — the mode-button set (#83: always inline, no overflow
     expect(screen.queryByTestId('shell-source-edit-overflow-menu')).toBeNull();
   });
 
-  it('R24-W5b (F1 P1): the bar is ONE ROW — h-8, NO flex-wrap, h-scroll escape, 24px hit floor (the 46px wrap is dead)', () => {
+  /* RE-PIN (W1-A, DESIGN-R25 §3 R1 supersedes the W5b overflow-as-primary
+     law): the one-row law SURVIVES (h-8, no flex-wrap) but the narrow-width
+     grammar is now the PRIORITY LADDER — icon+label buttons while the bar's
+     measured width can hold them (data-labels="full"), icon-only below the
+     floor (data-labels="icons"; the names live in aria-label + data-tip);
+     overflow-x-auto is the LAST resort below the icon-only floor. jsdom's
+     silent RO = un-measured = FULL (the deterministic default). */
+  it('RE-PIN W1-A: ONE ROW (h-8, no flex-wrap) + the 24px hit FLOOR; default (un-measured) = data-labels="full" with visible names', () => {
     boot();
     const bar = screen.getByTestId('shell-source-edit-bar');
-    /* jsdom measures no layout — the CLASS grammar is the pin: h-8 is one
-       32px row == the transport row's own height (a second row cannot fit
-       inside the FIXED 32px row); flex-wrap is GONE (F1 measured the bar
-       46px tall / 2 rows, the 7th button occluded by the HSplitter z-10);
-       overflow-x-auto is the narrow-width escape — buttons scroll, every
-       button stays reachable, nothing is occluded. */
+    expect(bar).toHaveAttribute('data-labels', 'full'); // un-measured → full
     expect(bar.className).toContain('flex');
     expect(bar.className).toContain('h-8');
     expect(bar.className).not.toContain('flex-wrap');
+    // the LAST-resort escape survives (below the icon-only floor only)
     expect(bar.className).toContain('overflow-x-auto');
-    // the house 24px hit floor on every mode button (was 22px — the F1
-    // hit-floor sweep)
+    // the house 24px hit floor on every mode button (the F1 sweep law) +
+    // the W1-A full mode: icon + visible label per button
     for (const slug of SLUGS) {
       const b = screen.getByTestId(`shell-source-edit-${slug}`);
       expect(b.className).toContain('!h-[24px]');
-      expect(b.className).toContain('!w-[24px]');
+      expect(b.textContent).not.toBe(''); // the visible name (full mode)
     }
+  });
+
+  it('W1-A: the measured ladder — a narrow bar (400px) drops to data-labels="icons" (icon-only, names in aria-label + data-tip, 7 buttons ALL present)', () => {
+    let fire = () => { /* assigned below */ };
+    withRecordingRO((f) => { fire = f; boot(); });
+    const bar = screen.getByTestId('shell-source-edit-bar');
+    // a 400px bar (the reviewer's 700–1100px-canvas band): icon-only
+    bar.getBoundingClientRect = () =>
+      ({ top: 0, left: 0, right: 400, bottom: 32, width: 400, height: 32, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    act(() => fire());
+    expect(bar).toHaveAttribute('data-labels', 'icons');
+    const btns = bar.querySelectorAll('button');
+    expect(btns).toHaveLength(7); // ALL SEVEN visible — never a hidden mode
+    for (const b of btns) {
+      expect(b.className).toContain('!h-[24px]');
+      expect(b.className).toContain('!w-[24px]');
+      expect(b.getAttribute('aria-label')).toBeTruthy(); // the name survives
+      expect(b.textContent).toBe(''); // no visible label in icons mode
+    }
+    // a wide bar (800px) returns to full labels
+    bar.getBoundingClientRect = () =>
+      ({ top: 0, left: 0, right: 800, bottom: 32, width: 800, height: 32, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    act(() => fire());
+    expect(bar).toHaveAttribute('data-labels', 'full');
+    expect(screen.getByTestId('shell-source-edit-insert').textContent).toBe('Insert');
   });
 
   it('R22 #83: the 7-button arrow cycle covers every mode in DOM order (no hidden stops)', () => {
