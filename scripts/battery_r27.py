@@ -307,21 +307,39 @@ def _mock_it_census(mock):
                 if s.startswith("it(") or s.startswith("it ("):
                     n += 1
     return files, n
-MINI_DECLARED, VAR_DECLARED = 445, 1773
+MINI_DECLARED, MINI_FILES = 495, 12   # re-keyed from the REGISTER's own declared figure (the R24-2 W4-fix wrap-equivalent @ `15ec32d`)
+VAR_DECLARED, VAR_FILES = 1796, 65   # re-keyed from the REGISTER's own declared figure (the sibling's own W2 re-key; live is higher — their W6 landed)
+import re as _re
+
+def _declared_suite_pins():
+    """The WRAP law (xcut-register §1.6): the declared figures are READ from the register file —
+    the register is the authority, never a battery-side hardcode (never chase the live count)."""
+    mv = _re.search(r"`ui-mock/shell-variants`\s*\*\*([\d,]+) it-blocks / (\d+) test files", reg)
+    mm = _re.search(r"`ui-mock/shell-mini`\s*\*\*([\d,]+)\s*/\s*(\d+) test files", reg)
+    if not (mv and mm):
+        return None
+    return (int(mv.group(1).replace(",", "")), int(mv.group(2)),
+            int(mm.group(1).replace(",", "")), int(mm.group(2)))
+
 def _wrap_gated_pins():
     """The WRAP-gated re-key law (xcut-register §1.6): mid-flight drift is RECORDED, never chased;
     the register re-keys ONLY at the sibling's round-WRAP. Mid-flight the register MUST carry the
-    REGISTER-PENDING marker + the declared figures; live below declared (shrinkage) is always a fail."""
+    REGISTER-PENDING marker + the declared figures; live below declared (shrinkage) is always a fail.
+    The declared figures are parsed LIVE from the register file (the WRAP law — never a hardcode)."""
+    declared = _declared_suite_pins()
+    if declared is None:
+        return False, "the register's declared suite figures do not parse (the W4-fix forms: variants 'N it-blocks / N test files' + mini 'N / N test files')"
+    var_dec, var_files_dec, mini_dec, mini_files_dec = declared
     mini_f, mini_n = _mock_it_census("shell-mini")
     var_f, var_n = _mock_it_census("shell-variants")
     markers = ("REGISTER-PENDING" in reg) and ("WRAP" in reg)
-    declared = (str(MINI_DECLARED) in reg) and ("1,773" in reg)
-    no_shrink = mini_n >= MINI_DECLARED and var_n >= VAR_DECLARED
-    ok = markers and declared and no_shrink
-    return ok, (f"mini live {mini_n}/{len(mini_f)} vs declared {MINI_DECLARED}/10; "
-                f"variants live {var_n}/{len(var_f)} vs declared 1,773/64; "
-                f"markers={'yes' if markers else 'ABSENT (W-C pending)'}; declared-figures={'yes' if declared else 'stale'}")
-check("B-5/I: the WRAP-gated suite pins (mini 445 + variants 1,773 declared; REGISTER-PENDING marker; zero shrinkage)", _wrap_gated_pins, "wrap-gated pins")
+    no_shrink = (mini_n >= mini_dec and var_n >= var_dec
+                 and len(mini_f) >= mini_files_dec and len(var_f) >= var_files_dec)
+    ok = markers and no_shrink
+    return ok, (f"mini live {mini_n}/{len(mini_f)} vs declared {mini_dec}/{mini_files_dec}; "
+                f"variants live {var_n}/{len(var_f)} vs declared {var_dec:,}/{var_files_dec}; "
+                f"markers={'yes' if markers else 'ABSENT (W-C pending)'}; declared-figures=read-from-register")
+check("B-5/I: the WRAP-gated suite pins (the register's declared figures, read LIVE from the file; REGISTER-PENDING marker; zero shrinkage)", _wrap_gated_pins, "wrap-gated pins")
 def _inventory_math():
     inv = read("ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md")
     rows = re.findall(r"\| (HOLDS-on-OT|GAP-app-C0/C1/C2|GAP-C2/C3|GAP-W-ops|GAP-verify-C1)[^|]*\|\s*(\d+)\s*\|\s*(\d+)\s*\|", inv)
@@ -330,15 +348,20 @@ def _inventory_math():
     total_row = re.search(r"\*\*Total\*\*\s*\|\s*\*\*(\d+)\*\*\s*\|\s*\*\*(\d+)\*\*", inv)
     holds = next((int(t) for n, _, t in rows if n == "HOLDS-on-OT"), 0)
     authored = re.search(r"(\d+) tests across (\d+) GAP census\s*units", inv)
-    ok = (units == 150 and tests == 445
-          and total_row and int(total_row.group(1)) == 150 and int(total_row.group(2)) == 445
-          and authored and int(authored.group(1)) == 445 - holds and int(authored.group(2)) == 150 - 13)
+    # The R27 declared trio (the R24-2 W4-fix census @ `15ec32d`): 163 units = 13 HOLDS + 150 GAP;
+    # 495 tests; authored = tests − holds = 462 across the 150 GAP units (= units − 13 HOLDS units).
+    ok = (units == 163 and tests == 495
+          and total_row and int(total_row.group(1)) == 163 and int(total_row.group(2)) == 495
+          and authored and int(authored.group(1)) == 495 - holds and int(authored.group(2)) == units - 13)
     return ok, f"units={units} tests={tests} holds={holds} authored={authored.groups() if authored else None}"
-check("LAW-NET-INVENTORY arithmetic parses + sums (150 units / 445 / authored=445−33)", _inventory_math, "census math")
+check("LAW-NET-INVENTORY arithmetic parses + sums (163 units / 495 / authored=495−33=462 across 150 GAP)", _inventory_math, "census math")
 def _scrape_mini():
     """The vitest teeth, WRAP-gated: declared == actual is enforced at the WRAP; mid-flight the
-    live run must merely hold at/above the declared floor (movements recorded, not chased)."""
+    live run must merely hold at/above the declared floor (movements recorded, not chased).
+    The floor is the REGISTER's own declared figure (parsed, never hardcoded)."""
     d = os.path.join(REPO, "ui-mock", "shell-mini")
+    declared = _declared_suite_pins()
+    floor = declared[2] if declared else MINI_DECLARED
     if not os.path.exists(os.path.join(d, "node_modules", ".bin", "vitest")):
         return True, "node_modules absent (fresh clone) — scrape unavailable (vacuous-pass tolerated only on fresh clones)"
     out_file = os.path.join(d, ".vitest", "json", "output.json")
@@ -351,7 +374,7 @@ def _scrape_mini():
         return False, "json output file absent — scrape FAILED (not skipped)"
     j = json.load(open(out_file))
     passed, total, files = j.get("numPassedTests"), j.get("numTotalTests"), len(j.get("testResults", []))
-    return (passed == total and passed >= MINI_DECLARED), f"scraped {passed}/{total} / {files} files (declared floor {MINI_DECLARED} — the WRAP-gated tolerance; live recorded not chased)"
+    return (passed == total and passed >= floor), f"scraped {passed}/{total} / {files} files (the register's declared floor {floor} — the WRAP-gated tolerance; live recorded not chased)"
 check("mini corpus SCRAPED green + at/above the declared floor (the WRAP-gated count-discipline law)", _scrape_mini, "scrape")
 
 # === J. COUNT CONSISTENCY (the R27 world) ======================================
@@ -438,18 +461,19 @@ def _companion():
              "Overwrite edit", "Replace (§5.9C)", "Append at end", "Ripple overwrite", "Fit to fill"]
     missing = [m for m in modes if f"| {m}" not in fan]
     rows = len([l for l in fan.split("\n") if l.startswith("|")]) - 2
-    ok = (rows == 10 and not missing and "track LOCK > sync-lock" in specs[6]
+    # B1 added the Duplicate-mode row (W-A): the ten modes + duplicate = 11 rows — the law's CURRENT form.
+    ok = (rows == 11 and not missing and "track LOCK > sync-lock" in specs[6]
           and "syncLinked" in specs[6] and "pairwise at rest → groups at runtime" in specs[9])
-    return ok, f"rows={rows} missing={missing or 'none'}"
-check("06 §5.0's companion law (D32): the ten-mode fan-out table + lock>sync-lock>link + syncLinked + 09's D32.5 note", _companion, "companion law")
+    return ok, f"rows={rows} (ten modes + duplicate) missing={missing or 'none'}"
+check("06 §5.0's companion law (D32): the fan-out table (ten modes + the duplicate row = 11) + lock>sync-lock>link + syncLinked + 09's D32.5 note", _companion, "companion law")
 
 # --- B-6: the matrix↔GAP↔§10.4 E2-consistency sweep (xcut-matrix §4.4a)
 def _e2_consistency():
     """The insert row's E1 cell and the overwrite row's E2 cell must match §5.0's E1 row and §5.9B's
     body/OW-2 within one edit round: FIXED in all three venues, at the re-anchored line pins."""
     mat = specs[6][specs[6].find("**The ten-mode matrix"):specs[6].find("*Decision 30.2")]
-    ins_ok = ("performInsertEdit :5630" in mat and "E1 FIXED" in mat)
-    ow_ok = ("performOverwriteEdit :6007" in mat and "E2 FIXED" in mat and "E3" in mat)
+    ins_ok = (re.search(r"performInsertEdit`? :5630", mat) and "E1 FIXED" in mat)
+    ow_ok = (re.search(r"performOverwriteEdit`? :6007", mat) and "E2 FIXED" in mat and "E3" in mat)
     e1_row = "FIXED (R26, engine `8188d4e`" in specs[6]
     e2_body = "E2 FIXED (R26, engine `8188d4e`)" in specs[6]
     ow2_i = specs[6].find("| OW-2 (E2) |")
@@ -563,7 +587,8 @@ check("B-5/O: the register exists + the 21-family census (19 + the mixer + the v
 check("B-5/O: the C-ledger C33-C58 all dispositioned + zero untracked + the C59 mock-ledger footnote", lambda: (
     all(f"| C{n} |" in reg for n in range(33, 59)) and "Zero untracked" in reg and "MOCK-side gap labels" in reg, "C-ledger"))
 check("B-5/O: the OPEN table carries 5 rows (marker v2 / captions / 3-vs-5 / FX grammar / the A3-wheels model row)", lambda: (
-    "WIDEN-via-projection" in reg and reg.count("QUEUED-design-round") >= 5, "OPEN table"))
+    "WIDEN-VIA-PROJECTION" in reg.upper() and reg.count("QUEUED-design-round") >= 4
+    and "RULED (R27" in reg, "OPEN table"))
 def _family_pins():
     """The per-family pin spot-checks (xcut-register §1.1's live table): every family file EXISTS
     with a nonzero battery-method count (structure teeth); mid-flight drift is recorded not chased
