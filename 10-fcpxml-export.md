@@ -398,16 +398,24 @@ private buildAssetClip(ctx: ExportContext, el: ElementJSON, lane: number): strin
   //     </timeMap>
   // Variable speed: 3+ timept entries with interp="linear" or "smooth2".
   const speedChildren = el.speed !== 1
-    ? this.buildTimeMap(el.speed, el.duration, el.sourceDuration, ctx.project.settings.fps)
+    ? this.buildTimeMap(el.speed, el.duration, el.sourceDuration, ctx.project.settings.fps, el.preservePitch)
     : '';
 
-  // Volume (refined — see §13 Correction #2).
+  // Volume (refined — see §13 Correction #2; the D38.2 volume-domain law, R27 fold).
   // FCPXML 1.10 has NO 'volume' attribute on asset-clip.
-  // Volume is a child <adjust-volume amount="<dB>dB"/> element.
+  // Volume is a child <adjust-volume amount="<dB>dB"/> element — ABSENT ≡ unity:
+  //   el.volume == null → OMIT <adjust-volume> entirely (FCP's default "0dB" — the
+  //     absent≡unity law, 09 §3.1A B2, D38.2; el.volume is the persisted LINEAR
+  //     form, absent ≡ 1);
+  //   else amount = clamp(20·log10(el.volume), −60, +20) dB — the fleet [−60,+20]
+  //     authoring domain, ONE home opencut core/audio-params; NaN → unity at that
+  //     clamp (never the −96 floor).
   let audioChildren = '';
   if (el.type === 'audio' || el.type === 'video') {
-    const volumeDb = this.gainToDb(el.volume);
-    audioChildren += `<adjust-volume amount="${volumeDb}dB"/>`;
+    if (el.volume != null) {
+      const volumeDb = this.gainToDb(el.volume);
+      audioChildren += `<adjust-volume amount="${volumeDb}dB"/>`;
+    }
     if (el.muted) {
       // Mute is a child <mute start=".." duration=".."/> element covering the full clip.
       audioChildren += `<mute start="0s" duration="${duration}"/>`;
@@ -451,9 +459,11 @@ private buildAssetClip(ctx: ExportContext, el: ElementJSON, lane: number): strin
   return `<asset-clip ${attrs}/>`;
 }
 
+// D38.2 (09 §3.1A B2): the fleet [−60,+20] dB domain — the `gain <= 0 → -96`
+// floor is DELETED (the linear unity floor 0.001 ≡ −60 dB replaces it); NaN →
+// unity at the one-home clamp (opencut core/audio-params — the deep-import leaf).
 private gainToDb(gain: number): number {
-  if (gain <= 0) return -96;  // effectively silent
-  return 20 * Math.log10(gain);
+  return clampVolumeDb(20 * Math.log10(gain));
 }
 ```
 
@@ -1338,6 +1348,8 @@ Frame durations by fps (from FCP.cafe + Apple docs):
   ```xml
   <conform-rate srcFrameRate="25" frameSampling="frame-blending"/>
   ```
+
+- Pitch (`preservePitch`, D38.1): rides the same `<timeMap>` via the `preservesPitch` attribute — **emit `preservesPitch="0"` only when `el.preservePitch === false`** (absent≡true ⇔ the DTD default `"1"`; explicit false = pitch-affected varispeed — 09 §3.1A B2, D38.1; §4.4's `buildTimeMap` passes the flag through).
 
 ### 11.7 Marker, rating, keyword elements (DTD lines 655-680)
 

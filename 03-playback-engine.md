@@ -912,6 +912,12 @@ for (let index = 0; index < target.length; index += 1) {
 }
 ```
 
+### 8.5 The composed transport×element rate law (W3/S3-C4, LANDED)
+
+During transport-rate playback (JKL), every schedule term composes the transport rate `tr` with the element's own retime rate `segRate`: **`varispeedRate = segRate × tr`** (content per wall second); future anchors `(S−P)/tr`; played spans `remaining/tr`; **fades are timeline-authored but the envelope sweeps wall seconds — ÷ tr** (the R3-3 clamp computed in the timeline domain first); the mid-entry content offset is ELEMENT-domain (`offsetSec = trim + into × segRate` — the transport rate moves how fast you traverse, not WHERE in the clip you are); **one reschedule per rate change** (the `lastScheduledTr` idempotence key — the mirror's playRate echo must not re-fire); **`tr ≤ 0` is the honest silent-reverse degradation** (WebAudio cannot play backward; the clock runs backward in silence); the composed domain stays in `[1/32, 32]` by construction (element clamp [0.01,5] × ladder {1,2,4}) with the adapter's domain guard the safety net. Reference implementation: `nle-test-app/src/audioService.ts:498-606` + `docs/design-jkl-audio-follow.md` §1; engine halves: scene-mixer.ts:365 (element) + realtime-bridge.ts:328 (transport).
+
+**The pitch half (R9-b — D38.1):** `el.preservePitch` is ElementJSON law (absent≡true — 09 §3.1A B2, D38.1) → the bridge projects `retime.maintainPitch` (scene-to-segments.ts:596/:623) → `seg.maintainPitch` → the adapter's WSOLA pre-retime branch (segment-strip-adapter.ts:526-547; the [1/32,32] guard + the >2ch fallback); preservePitch=false leaves the legacy pitch-affected path. The SoundTouch VENUE is WDC's W2 (soundtouch.ts + varispeed.ts `retimeChannels`) — see §13E. The op-side companion law is 06 §5.12; the composed rate's pair-law consumers are 06:1670's linked-pair law + D31.7's fit-to-fill audio half.
+
 ---
 
 ## 9. Audio Pipeline — REFINED

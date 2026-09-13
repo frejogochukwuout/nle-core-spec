@@ -424,8 +424,9 @@ export interface TimelineElement {
 | Append at end (§5.9D) | the linked-append law: the A/V pair lands at the SAME startTime = the video track's append point; an audio-track conflict refuses the whole append atomically (never a partial pair) | n/a (the end is free) | n/a |
 | Ripple overwrite (§5.9E) | the removed set's companions cascade (the `removeItems` law); the move set applies to BOTH tracks' linked sets at the same delta (the A/V pair moves together); the incoming clip enters UNLINKED (the replacement severs — 31.4's law) | the target's transitions drop (the replacement breaks both edges) | both halves: removed-interval on pull, inserted-gap on push (§6) |
 | Fit to fill (§5.9F) | the pair takes the SAME computed rate and the SAME target duration — one rate law both streams, ONE commit (the engine `rateStretchItem` :3202-3211 precedent) | overwrite-style (§5.9B's covered-clip law) | n/a (no downstream movement) |
+| Duplicate (§5.10) | SEVERED on the copy; the original keeps its pair (F4) | n/a (new track) | n/a |
 
-The base verbs inherit the same law per their own sections: split (§5.1's relink bookkeeping), trim (§5.2's `applySynchronizedTrim` tightest-δ discipline), delete/range-removal (§5.14's linked expansion), move (the offset-preserving pair move — the partner's target = the element's target + the pair's start offset, never collapsed, `av-link.ts:160-201`), rate-stretch (§5.11 step 3 — the same stretch to all synchronized linked items).
+The base verbs inherit the same law per their own sections: split (§5.1's relink bookkeeping), trim (§5.2's `applySynchronizedTrim` tightest-δ discipline), delete/range-removal (§5.14's linked expansion), move (the offset-preserving pair move — the partner's target = the element's target + the pair's start offset, never collapsed, `av-link.ts:160-201`), rate-stretch (§5.11 step 3 — the same stretch to all synchronized linked items), duplicate (§5.10's sever law — the copy severs `linkedTo`, the original keeps its pair).
 
 **The split-link ruling (Decision 32.4 — the conflict stated, then decided).** §5.1's quoted FreeCut `relinkSplitSegments` SEVERS the link on a single-side split (one linked split → both `linkedGroupId`s stay `undefined` — both halves lose the group); the engine relinks both halves (`relinkSplitSegments`, timeline.ts:668-690 — a single linked split preserves the original group id on BOTH halves). **Relink-both-halves is the law** — Resolve-faithful: a split clip's halves both stay linked to the companion; representable in 09's pairwise `linkedTo` as both halves carrying the link. The §5.1 quote is REFERENCE-CENSUS (the R15-era FreeCut reference), not law; the nle-ui/shell-variants R14 right-half-sever is a registered divergence (the D26 carrier-reduction program's reconciliation row, not an immediate change).
 
@@ -1691,6 +1692,8 @@ For each source track containing selected elements:
 4. Apply placement via `applyPlacement`.
 5. Track duplicated `{trackId, elementId}` pairs for selection restore.
 
+**The link law (F4 — the D32.1 fan-out family's duplicate twin):** duplicate SEVERS — the copy carries no `linkedTo`; the original keeps its pair (a verbatim copy would form a one-way pair and the next companion edit would fan out to a clip the user never linked). Mock: `useUiStore.ts:937-945` (`delete copy.linkedTo` — the splitElement R14 law's twin); routed: sever-by-construction — new ids carry no sidecar meta. The model home is 09 §3.1A B1's duplicate-severs clause (R27 fold — one law, two homes).
+
 ### 5.11 Rate Stretch
 
 **Description:** Change an element's playback speed by stretching its duration (keeping source content).
@@ -1910,6 +1913,8 @@ export async function renderRetimedBuffer({
 - Path B does **two-pass offline rendering**: (1) resample native → targetSampleRate via `OfflineAudioContext.startRendering()`, (2) stretch via SoundTouch `PitchShifter` with `tempo=rate`, `pitch=1`.
 - `RATE_EPSILON = 1e-6` skips pitch preservation for rates very close to 1.0 (no-op).
 - Pitch preservation requires `rate > 0` (reverse not supported, `canMaintainPitch`).
+
+**The companion-field law (R9-b, registered R27 — D38.1):** the doc model's pitch flag is `ElementJSON.preservePitch` (09 §3.1A B2) — **absent ≡ TRUE** (the NLE default: a speed change keeps pitch); explicit `false` = pitch-affected varispeed. The engine's `RetimeConfig.maintainPitch` is the runtime **projection**, and its absent-≡-false convention is the *classic* one (`shouldMaintainPitch` requires `=== true`) — the consumer bridge converts: `maintainPitch: el.preservePitch !== false` on load (app `sceneBridge.ts:262`); back-projection writes only an explicit `false` (:435-447); a dormant `false` at rate 1 does not survive reload — that drop is the APP load-bridge identity law, not engine law (the engine stores a committed `{rate:1}` retime verbatim; `scene-to-segments.ts:596/:623` read the explicit-true projection). A preservePitch-only patch keeps the current rate (read-merge-write, `engineService.ts:510-513`); writing the default onto an absent field is identity (no history entry — the absent-≡-default class). The UI home is 18 §4.4's Video-tab Speed row (the honest mixed-selection tri-state); the playback-side chain is 03 §8.5 (the projection + the composed-rate law).
 
 **Algorithm:**
 ```
