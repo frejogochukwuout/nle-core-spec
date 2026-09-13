@@ -2,10 +2,14 @@
    marker-transcript-withDialog.html §2.4) converted to an EMBEDDED right-rail
    panel. Two halves, exactly like the reference:
    (a) EDITOR — the selected caption's textarea (el.text via setElementField,
-       live 50ms settle), In/Out TC fields (REAL startTime/duration writes,
-       frame-snapped by typing TC — the shared parseTc grammar), the live
-       char-count chip, the Use-Track-Style row (display state + honest toast
-       — track styling is gap C34), and Add New / Prev / Next.
+       live 50ms settle), In/Out TC fields routed through the REAL moveElement
+       / trimElement commands (R25-F3 I5 — the overlap + neighbor laws every
+       timeline edit rides; the old raw setElementField startTime/duration
+       writes let captions overlap their neighbors silently. A REJECTED move
+       reverts on the next external resync — the Inspector Timing section's
+       own documented seam), the live char-count chip, the Use-Track-Style row
+       (display state + honest toast — track styling is gap C34), and Add New /
+       Prev / Next.
    (b) LIST TABLE — every caption on the track in time order: # / Time In/Out
        / Caption / CPS. CPS is COMPUTED (round(chars / duration)) — the
        reference's values were partly decorative (row 3 shows 12 vs computed
@@ -28,7 +32,8 @@ export function CaptionInspector() {
   const activeSceneId = useUi((s) => s.activeSceneId);
   const selection = useUi((s) => s.selection);
   const setSelection = useUi((s) => s.setSelection);
-  const setElementField = useUi((s) => s.setElementField);
+  const moveElement = useUi((s) => s.moveElement);
+  const trimElement = useUi((s) => s.trimElement);
   const addCaption = useUi((s) => s.addCaption);
   const setPlayhead = useUi((s) => s.setPlayhead);
   const pushToast = useUi((s) => s.pushToast);
@@ -77,7 +82,11 @@ export function CaptionInspector() {
       {current ? (
         <div key={current.id} className="flex flex-col gap-2 border-b border-hairline px-3 py-2.5" data-testid="shell-caption-inspector-editor">
           {/* time row: In / Out TC + live char-count chip (the reference's
-              "25 Characters" — exact length, the mock's 25 was off-by-one) */}
+              "25 Characters" — exact length, the mock's 25 was off-by-one).
+              R25-F3 (I5): both fields ride the REAL commands — In through
+              moveElement (an overlapping move is REJECTED by the overlap
+              law, no doc change), Out through trimElement's right edge (the
+              neighbor-bound clamp: the caption can never cover the next one). */}
           <div className="flex items-center gap-2">
             <span className="w-[22px] shrink-0 text-[11px] text-tmuted">In</span>
             <NumberField
@@ -88,7 +97,7 @@ export function CaptionInspector() {
               tcDisplay
               ariaLabel="Caption in timecode"
               testId="shell-caption-inspector-in"
-              onCommit={(v) => setElementField(current.id, { startTime: snapToFrame(Math.max(0, v)) })}
+              onCommit={(v) => moveElement(current.id, snapToFrame(Math.max(0, v)))}
             />
             <span className="w-[26px] shrink-0 text-[11px] text-tmuted">Out</span>
             <NumberField
@@ -99,7 +108,7 @@ export function CaptionInspector() {
               tcDisplay
               ariaLabel="Caption out timecode"
               testId="shell-caption-inspector-out"
-              onCommit={(v) => setElementField(current.id, { duration: snapToFrame(v - current.startTime) })}
+              onCommit={(v) => trimElement(current.id, 'r', current.startTime, snapToFrame(v - current.startTime))}
             />
             <span className="mono ml-auto shrink-0 text-[10px] text-tmuted" data-testid="shell-caption-inspector-charcount">
               {(current.text ?? '').length} Characters
@@ -114,7 +123,7 @@ export function CaptionInspector() {
             ariaLabel="Caption text"
             testId="shell-caption-inspector-textarea"
             placeholder="Caption text…"
-            onCommit={(v) => setElementField(current.id, { text: v })}
+            onCommit={(v) => useUi.getState().setElementField(current.id, { text: v })}
           />
 
           {/* track-style row: display state + honest toast (per-caption style

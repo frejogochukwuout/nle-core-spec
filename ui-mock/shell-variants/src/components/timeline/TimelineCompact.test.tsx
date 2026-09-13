@@ -80,6 +80,26 @@ describe('TimelineCompact — the frozen anatomy (C51 set, kept)', () => {
     expect(clip.tagName).toBe('BUTTON');
     expect(container.querySelectorAll('[data-testid*="trim"], [data-testid*="fade-object"], [data-testid*="resize"]')).toHaveLength(0);
   });
+
+  /* R25-F3 (T7): the compact ruler rides the SAME virtualization window as
+   * the full Ruler (getRulerWindow — one lib call). At 5000 pps the tick
+   * interval is 1/24 s → the old full-domain loop minted 30·24 = 720 tick
+   * nodes; the window bounds the DOM to the viewport + buffer. The tick
+   * DOMAIN still stops at duration (the compact's own law — the 32px tail
+   * is margin, not time). */
+  it('R25-F3 T7: the ruler ticks are virtualized — the viewport window bounds the DOM (the 720-node full-domain loop is dead)', () => {
+    const { container } = mount({ pxPerSec: 5000 });
+    void container;
+    const ruler = screen.getByTestId('shell-timeline-compact-ruler');
+    const tickNodes = ruler.querySelectorAll('div.absolute');
+    expect(tickNodes.length).toBeGreaterThan(0); // the window renders its head
+    expect(tickNodes.length).toBeLessThan(30);   // …not the 720-node domain
+    // the window's LAST tick never passes the sequence end (duration·pps is
+    // the dynamicWidth the lib call receives)
+    const pps = S().pxPerSec;
+    const last = Array.from(tickNodes).reduce((max, n) => Math.max(max, Number((n as HTMLElement).style.left.replace('px', ''))), 0);
+    expect(last / pps).toBeLessThanOrEqual(30 + 1e-6);
+  });
 });
 
 describe('TimelineCompact — the V/A/T color coding (#75)', () => {

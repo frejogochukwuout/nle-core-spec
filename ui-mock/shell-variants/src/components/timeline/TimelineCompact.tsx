@@ -51,8 +51,9 @@
    asked for only by the deliver mount (AppShell passes rangeBand on the
    deliver branch); every other page keeps the ruler alone. */
 
+import { useEffect, useRef, useState } from 'react';
 import { useUi, useActiveScene } from '../../state/useUiStore';
-import { getRulerConfig, formatRulerLabel, shouldShowLabel } from '../../lib/rulerTiers';
+import { getRulerConfig, formatRulerLabel, shouldShowLabel, getRulerWindow, tickTimes } from '../../lib/rulerTiers';
 import { snapPxToDeviceGrid } from '../../lib/pixel';
 import { snapToFrame } from '../../lib/timecode';
 import { RangeBand } from './RangeBand';
@@ -97,6 +98,27 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
   const scene = useActiveScene();
   const pps = useUi((s) => s.pxPerSec);
   const playhead = useUi((s) => s.playhead);
+  /* R25-F3 (T7): the compact ruler rides the SAME virtualization window as
+     the full Ruler (getRulerWindow — one lib call): the strip's scrollLeft +
+     viewport bound the rendered ticks (the old full-domain loop minted ~720
+     tick nodes at 5kpps — DOM linear in duration × zoom). The compact's
+     tick domain STOPS at duration (its own law — the 32px tail is margin,
+     not time), so dynamicWidth passes duration·pps and the window can never
+     mint past-the-end ticks. */
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const [viewportW, setViewportW] = useState(900);
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc || typeof ResizeObserver === 'undefined') {
+      setViewportW(900); // jsdom / no-RO fallback (the full Timeline's own law)
+      return;
+    }
+    const ro = new ResizeObserver(() => setViewportW(sc.clientWidth || 900));
+    ro.observe(sc);
+    setViewportW(sc.clientWidth || 900);
+    return () => ro.disconnect();
+  }, []);
   /* A3-R7: the read-only in/out FLAGS ride the (unconditional) ruler — the
      loop seam's edges marked at the ruler's own scale (the interactive
      writers are the band below on deliver, the Ruler brackets / I-O keys
@@ -121,8 +143,7 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
   const duration = Math.max(1, ...scene.tracks.flatMap((t) => t.elements.map((e) => e.startTime + e.duration)), 1);
   const contentW = Math.max(320, Math.ceil(duration * pps) + 32);
   const { labelInterval, tickInterval } = getRulerConfig(pps);
-  const ticks: number[] = [];
-  for (let t = 0; t <= duration; t += tickInterval) ticks.push(Math.round(t * 1000) / 1000);
+  const ticks = tickTimes(getRulerWindow(scrollLeft, viewportW || 900, pps, tickInterval, duration, duration * pps), tickInterval);
 
   const clickClip = (el: { id: string; startTime: number }) => {
     setSelection([el.id]);
@@ -155,7 +176,12 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
           ? 'Compact timeline (frozen — click a clip to target it)'
           : 'Compact timeline (frozen — click a clip to select it)'}
     >
-      <div className="scroll-x flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-hidden" style={{ background: '#191a1d' }}>
+      <div
+        ref={scrollRef}
+        className="scroll-x flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-hidden"
+        style={{ background: '#191a1d' }}
+        onScroll={() => setScrollLeft(scrollRef.current?.scrollLeft ?? 0)}
+      >
         <div className="relative" style={{ width: contentW }}>
           {/* head stack — A3-R7 (#71) COEXISTENCE: the 22px READ-ONLY ruler
               is UNCONDITIONAL on every page (rulerTiers ticks + TC labels —
@@ -171,7 +197,7 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
               {ticks.map((t) => {
                 const show = shouldShowLabel(t, labelInterval);
                 return (
-                  <div key={t} className="absolute bottom-0 top-0" style={{ left: t * pps }}>
+                  <div key={t} className="absolute bottom-0 top-0" style={{ left: snapPxToDeviceGrid(t * pps) }}>
                     <span aria-hidden className="absolute bottom-[1px] block h-[4px] w-px" style={{ background: '#555' }} />
                     {show && (
                       <span className="mono absolute left-[4px] top-[1px] whitespace-nowrap text-[9px] leading-[9px] text-tmuted">

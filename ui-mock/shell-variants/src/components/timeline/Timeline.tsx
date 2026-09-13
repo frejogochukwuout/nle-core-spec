@@ -1089,12 +1089,19 @@ export function Timeline() {
     const onWheelNative = (e: WheelEvent) => {
       if (wheelZoom.handleWheel(e)) return;
       e.preventDefault();
-      const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      /* R25-F3 (T4): the plain-wheel path shares the zoom path's deltaMode
+         normalization (line-mode ×16, the createWheelZoomAccumulator's own
+         law) — a line-mode wheel (Firefox / some trackpads) used to scroll
+         16× less than the same gesture on the zoom path. */
+      const norm = (d: number) => (e.deltaMode === 1 ? d * 16 : d);
+      const dX = norm(e.deltaX);
+      const dY = norm(e.deltaY);
+      const horizontal = e.shiftKey || Math.abs(dX) > Math.abs(dY);
       if (horizontal) {
-        const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+        const raw = Math.abs(dX) > Math.abs(dY) ? dX : dY;
         sc.scrollLeft += Math.sign(raw) * Math.min(Math.abs(raw), HORIZONTAL_WHEEL_STEP_PX);
       } else {
-        sc.scrollTop += e.deltaY;
+        sc.scrollTop += dY;
       }
     };
     sc.addEventListener('wheel', onWheelNative, { passive: false, capture: true });
@@ -1292,13 +1299,18 @@ export function Timeline() {
         onScroll={onHeaderScrollSync}
       >
         {variant.headerStyle === 'readout' ? (
-          <div className="flex shrink-0 items-center border-b border-hairline bg-shell px-3" style={{ height: zoneH }}>
+          /* R25-F3 (T1): the TC readout row pins with the ruler — `sticky
+             top-0 z-30`, the Ruler's own pin mirrored inside the headers
+             column (the lanes' ruler stays put while the lanes scroll; the
+             readout used to scroll away with the track headers, leaving a
+             bare ruler over a header column with no TC). */
+          <div className="sticky top-0 z-30 flex shrink-0 items-center border-b border-hairline bg-shell px-3" style={{ height: zoneH }}>
             <span className="mono text-[19px] font-semibold tracking-[-0.3px] text-tprimary" data-testid="shell-timeline-tc">
               {tc(playhead)}
             </span>
           </div>
         ) : (
-          <div className="flex shrink-0 items-center justify-center border-b border-hairline bg-shell px-2" style={{ height: zoneH }}>
+          <div className="sticky top-0 z-30 flex shrink-0 items-center justify-center border-b border-hairline bg-shell px-2" style={{ height: zoneH }}>
             <span className="mono text-[11px] text-tprimary">{tc(playhead)}</span>
           </div>
         )}
@@ -1383,7 +1395,15 @@ export function Timeline() {
         onPointerUp={finishMarquee}
         onPointerCancel={() => setMarquee(null)}
       >
-        <div id="timeline-content" className="relative" style={{ width: contentW, minHeight: '100%' }}>
+        {/* R25-F3 (T2): the +track row's 26px tail mirror — the headers
+            column's scroll flow carries the 26px add-track affordance below
+            the track headers, so its scrollHeight out-ran the lanes by
+            exactly that row (a 26px dead zone at the bottom of the two-way
+            sync). The bottom padding makes the lanes' scroll domain agree BY
+            CONSTRUCTION in every case: when everything fits, minHeight 100%
+            (border-box) absorbs the tail and neither column scrolls; when it
+            overflows, both scroll by the same amount. */}
+        <div id="timeline-content" className="relative" style={{ width: contentW, minHeight: '100%', paddingBottom: 26 }}>
           <Ruler scene={scene} duration={duration} pxPerSec={pxPerSec} playhead={playhead} contentW={contentW} view={{ scrollLeft, viewportW: viewportW || 900 }} />
 
           {scene.tracks.map((track, trackIdx) => {

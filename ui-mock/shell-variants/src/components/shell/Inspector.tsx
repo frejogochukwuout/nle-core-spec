@@ -51,7 +51,7 @@
      TransitionSection are exported too — the FX inspector (components/fx/)
      reuses them (one component, two frames — the anti-duplication law). */
 
-import { useEffect, useId, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
 import {
   AudioWaveform, ChevronDown, ChevronRight, ChevronUp, Diamond, FlipHorizontal, FlipVertical,
   FolderCog, History, Image as ImageIcon, Layers, MoreHorizontal, Plus, RotateCcw, Sparkles, Type, Video, X,
@@ -804,6 +804,64 @@ export function EffectsSection({ el, selectedFxId }: { el: ElementJSON; selected
   const selectEffect = useUi((s) => s.selectEffect);
   const setElementField = useUi((s) => s.setElementField);
   const pushToast = useUi((s) => s.pushToast);
+  /* R25-F3 (I8): the picker is a REAL APG menu now (the ViewOptionsPopover /
+     ContextMenu house §4.9 grammar): aria-haspopup + aria-expanded on the
+     trigger, ArrowDown opens, Escape/Tab close with focus returning to the
+     trigger, ↑/↓ rove the items, the FIRST item takes focus on open. The old
+     role=menu markup had none of the keyboard law — a menu that could only
+     be pointered. */
+  const pickerTriggerRef = useRef<HTMLButtonElement>(null);
+  const pickerMenuRef = useRef<HTMLDivElement>(null);
+  const closePicker = () => {
+    setPickerOpen(false);
+    pickerTriggerRef.current?.focus(); // §4.9: focus returns to the opener
+  };
+  const onPickerKeydown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closePicker();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      const dir: 1 | -1 = e.key === 'ArrowDown' ? 1 : -1;
+      const menu = pickerMenuRef.current;
+      if (!menu) return;
+      const items = Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+      if (items.length === 0) return;
+      const cur = items.findIndex((m) => m === document.activeElement);
+      const next = cur === -1
+        ? (dir === 1 ? 0 : items.length - 1)
+        : (dir === 1 ? (cur + 1) % items.length : (cur - 1 + items.length) % items.length);
+      items[next]!.focus();
+      return;
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault(); // menus are not tab stops; Tab dismisses
+      closePicker();
+      return;
+    }
+    if (e.key === 'Enter') {
+      /* Enter activates the focused item (jsdom has no native button
+         keydown-activation; preventDefault here also suppresses the
+         browser's own — exactly one activation either way). Space stays
+         native (keyup activation in browsers). */
+      e.preventDefault();
+      const a = document.activeElement as HTMLElement | null;
+      if (a && pickerMenuRef.current?.contains(a)) a.click();
+    }
+  };
+  /* focus the FIRST item on open (the APG menu law — the ViewOptionsPopover
+     layout-effect pattern) */
+  useLayoutEffect(() => {
+    if (!pickerOpen) return;
+    const menu = pickerMenuRef.current;
+    if (!menu) return;
+    const first = menu.querySelector<HTMLElement>('[role="menuitem"]');
+    (first ?? menu).focus();
+  }, [pickerOpen]);
   const list = el.effects ?? [];
   /* R25-F2 (X7) — ONE duplicate policy everywhere: the picker RE-OFFERS
      applied effects (stacking — the Resolve/Premiere OFX law, exactly what
@@ -914,11 +972,23 @@ export function EffectsSection({ el, selectedFxId }: { el: ElementJSON; selected
         );
       })}
 
-      {pickerOpen ? (
-        <div className="flex flex-col gap-0.5 rounded-[var(--radius)] border border-soft bg-inset p-1" role="menu" aria-label="Add effect">
+      {/* R25-F3 I8 (APG menu-button law): the trigger ALWAYS mounts — the
+          old ternary unmounted it while the menu was open, so aria-expanded
+          lived on a DETACHED node (the live trigger read false forever).
+          The menu is now the trigger's conditional PREDECESSOR. */}
+      {pickerOpen && (
+        <div
+          ref={pickerMenuRef}
+          className="flex flex-col gap-0.5 rounded-[var(--radius)] border border-soft bg-inset p-1"
+          role="menu"
+          aria-label="Add effect"
+          tabIndex={-1}
+          onKeyDown={onPickerKeydown}
+        >
           {/* X7: the picker re-offers EVERY registry row — applied names
               included (stacking; the "all applied" empty branch died with
-              the hiding filter). */}
+              the hiding filter). I8: activation CLOSES with focus returning
+              to the trigger (a command menu, not a settings menu). */}
           {available.map((d) => (
             <button
               key={d.name}
@@ -940,7 +1010,7 @@ export function EffectsSection({ el, selectedFxId }: { el: ElementJSON; selected
                     detail: 'duplicates stack — each instance is its own editable node (A1-R3, the Resolve/Premiere OFX law)',
                   });
                 }
-                setPickerOpen(false);
+                closePicker();
               }}
             >
               <Plus size={12} strokeWidth={1.6} />
@@ -949,22 +1019,29 @@ export function EffectsSection({ el, selectedFxId }: { el: ElementJSON; selected
           ))}
           <button
             type="button"
+            role="menuitem"
             className="mt-0.5 flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-hairline px-2 py-1 text-left text-[11px] text-tmuted hover:text-tprimary"
-            onClick={() => setPickerOpen(false)}
+            onClick={closePicker}
           >
             <X size={12} strokeWidth={1.6} />
             Cancel
           </button>
         </div>
-      ) : (
-        <button
+      )}
+      <button
+          ref={pickerTriggerRef}
           type="button"
           className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-[var(--radius)] border border-dashed border-strong py-1.5 text-[11px] text-tmuted hover:border-accent hover:text-tprimary"
+          aria-haspopup="menu"
+          aria-expanded={pickerOpen}
           onClick={() => setPickerOpen(true)}
+          onKeyDown={(e) => {
+            /* APG menu-button: ArrowDown opens (the closed state's own key) */
+            if (e.key === 'ArrowDown') { e.preventDefault(); setPickerOpen(true); }
+          }}
         >
           <Plus size={12} strokeWidth={1.6} /> Add effect
         </button>
-      )}
     </Group>
   );
 }
@@ -977,7 +1054,27 @@ export function EffectsSection({ el, selectedFxId }: { el: ElementJSON; selected
 export function TransitionSection({ els, nextEl }: { els: ElementJSON[]; nextEl: ElementJSON | null }) {
   const setTransition = useUi((s) => s.setTransition);
   const removeTransition = useUi((s) => s.removeTransition);
+  const scenes = useUi((s) => s.scenes);
   const trs = els.map((e) => e.transitionOut).filter((t): t is TransitionJSON => t != null);
+
+  /* R25-F3 (I7): the ADJACENCY law — a cut exists only where the next clip
+     BUTT-SPLICES this one (starts within EPS of its end). nextOnTrack
+     returns the next-STARTING element regardless of gap, so the raw
+     nextEl used to claim "Hard cut to X" over a gap and the Add minted a
+     crossfade at a non-seam. This is the FxBrowser drop door's own
+     buttSplicedFollower law (Clip.tsx) — one adjacency rule, both doors. */
+  const EPS = 1e-6;
+  const hasAdjacentFollower = (e: ElementJSON): boolean => {
+    const end = e.startTime + e.duration;
+    const hit = findElement(scenes, e.id);
+    return !!hit && hit.track.elements.some((o) => o.id !== e.id && Math.abs(o.startTime - end) <= EPS);
+  };
+  /* any selected hard-cut clip whose follower is NOT butt-spliced blocks
+     the Add (the fan-out would mint orphaned transitions over gaps — the
+     X2 degraded-paint family) */
+  const addBlocked = els.some((e) => !hasAdjacentFollower(e));
+  const endOf = (e: ElementJSON) => e.startTime + e.duration;
+  const adjacentNext = nextEl && nextEl.startTime <= endOf(els[0]) + EPS ? nextEl : null;
 
   /* R24-W5a (DESIGN-R24 §2 F2-P2): the honest MIXED branch. The old code
      fell into the els[0] "Hard cut / Add crossfade" shape whenever ANY
@@ -1034,14 +1131,20 @@ export function TransitionSection({ els, nextEl }: { els: ElementJSON[]; nextEl:
     return (
       <Group title="Transition">
         <p className="text-[11px] leading-relaxed text-tmuted">
+          {/* I7: the single-clip claim names the follower only when it
+              butt-splices; a gap renders the honest "no clip follows" copy */}
           {els.length > 1
             ? `Hard cuts — ${els.length} clips selected, none carry a transition.`
-            : `Hard cut${nextEl ? ` to “${nextEl.name}”` : ''} at ${tc(el.startTime + el.duration)}.`}
+            : adjacentNext
+              ? `Hard cut to “${adjacentNext.name}” at ${tc(endOf(el))}.`
+              : `Hard cut at ${tc(endOf(el))} — no clip follows (a crossfade needs a butt-spliced cut).`}
         </p>
         <button
           type="button"
           className="mini-btn self-start"
-          onClick={() => els.forEach((e) => setTransition(e.id, {}))}
+          aria-disabled={addBlocked || undefined}
+          data-tip={addBlocked ? 'no clip butt-spliced after a selected cut — a crossfade needs a real seam (drag a transition row from the FX browser for the per-clip law)' : undefined}
+          onClick={addBlocked ? undefined : () => els.forEach((e) => setTransition(e.id, {}))}
         >
           <Plus size={12} strokeWidth={1.6} /> Add crossfade
         </button>
@@ -1115,7 +1218,12 @@ export function TransitionSection({ els, nextEl }: { els: ElementJSON[]; nextEl:
       </div>
       {nextEl && (
         <p className="mono rounded border border-soft bg-inset px-2 py-1 text-[11px] text-tmuted">
-          boundary {tc(boundary.startTime + boundary.duration)} · cut to {nextEl.name}
+          {/* I7: the boundary line is adjacency-honest too — a transition
+              whose follower gapped away is ORPHANED (the X2 degraded-paint
+              law's render twin), never "cut to X" */}
+          {adjacentNext
+            ? `boundary ${tc(endOf(boundary))} · cut to ${nextEl.name}`
+            : `boundary ${tc(endOf(boundary))} · no clip at the cut (orphaned — the next clip starts at ${tc(nextEl.startTime)})`}
         </p>
       )}
     </Group>
@@ -1409,13 +1517,18 @@ function TimingSection({ el, scene }: { el: ElementJSON; scene: SceneJSON }) {
     >
       <div className="flex items-center gap-2">
         <span className="w-[96px] shrink-0 text-right text-[11px] text-tmuted">In</span>
+        {/* R25-F3 (I6): NO resetTo — a clip's start/duration is CONTENT, not
+            a spec-09 default (the old resetTo = the CURRENT value made the
+            §5A double-click reset a no-op lie: it dispatched a write that
+            changed nothing). The honest absence: no reset affordance on
+            content fields (resetTo undefined = double-click inert, the
+            NumberField's own guard). */}
         <NumberField
           value={el.startTime}
           min={0}
           max={durMax}
           timeField
           tcDisplay
-          resetTo={el.startTime}
           ariaLabel="Clip start"
           testId="shell-inspector-timing-in"
           onCommit={(v) => moveElement(el.id, v)}
@@ -1430,7 +1543,6 @@ function TimingSection({ el, scene }: { el: ElementJSON; scene: SceneJSON }) {
           max={durMax}
           timeField
           tcDisplay
-          resetTo={el.duration}
           ariaLabel="Clip duration"
           testId="shell-inspector-timing-duration"
           onCommit={(v) => trimElement(el.id, 'r', el.startTime, v)}
@@ -1696,7 +1808,15 @@ export function Inspector() {
   const showTiming = showText && !!single && !!scene;
   const showTransition = els.length > 0 && (
     multi
-      ? els.every((e) => e.transitionOut != null) // common-subset rule
+      /* R25-F3 (I2): the multi gate is SOME-have — a 2-clip selection where
+         one clip carries a transition NOW REACHES the honest mixed branch
+         (the R24-W5a summary + aria-disabled rows, previously dead code:
+         the old every-have gate meant the mixed summary could never render
+         from either shipped frame). The uniform all-have multi keeps its
+         editor rows; the none-have multi stays HIDDEN — its own honest
+         state (no transitions, and no single-cut adjacency to report:
+         nextEl is single-selection-only). */
+      ? els.some((e) => e.transitionOut != null)
       : !!(single?.transitionOut || nextEl)
   );
   const showBlend = showTransform; // composite section rides the spatial law

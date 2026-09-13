@@ -619,6 +619,39 @@ describe('Timeline', () => {
     fireEvent.wheel(el, { shiftKey: true, deltaY: 300 });
     expect(el.scrollLeft).toBe(before + 40); // clamped to HORIZONTAL_WHEEL_STEP_PX
   });
+
+  /* ---- R25-F3 (T4): the plain-wheel path's deltaMode normalization ---- */
+  it('R25-F3 T4: the plain-wheel path normalizes line-mode deltas (×16) — the zoom path\'s own law, both branches', () => {
+    boot({});
+    const el = scrollEl();
+    const before = el.scrollTop;
+    // pixel-mode (deltaMode 0): the raw delta scrolls
+    fireEvent.wheel(el, { deltaY: 40, deltaMode: 0 });
+    expect(el.scrollTop).toBe(before + 40);
+    // line-mode (deltaMode 1): ×16 BEFORE the branch (the old raw path
+    // scrolled 16× less than the same gesture on the zoom path)
+    fireEvent.wheel(el, { deltaY: 3, deltaMode: 1 });
+    expect(el.scrollTop).toBe(before + 40 + 48);
+  });
+
+  /* ---- R25-F3 (T1): the TC readout pins with the ruler ---- */
+  it('R25-F3 T1: the headers column\'s TC zone row is STICKY (top-0 z-30) — the ruler\'s own pin mirrored', () => {
+    boot({});
+    const zoneRow = screen.getByTestId('shell-timeline-tc').parentElement as HTMLElement;
+    expect(zoneRow.className).toContain('sticky');
+    expect(zoneRow.className).toContain('top-0');
+    expect(zoneRow.className).toContain('z-30');
+    expect(zoneRow.className).toContain('bg-shell'); // opaque — track headers scroll under it
+  });
+
+  /* ---- R25-F3 (T2): the +track row's 26px tail mirror ---- */
+  it('R25-F3 T2: the lanes content pads the +track row\'s 26px — the two synced scrollers agree by construction', () => {
+    boot({});
+    const content = document.getElementById('timeline-content')!;
+    expect(content.style.paddingBottom).toBe('26px');
+    // the row the padding mirrors (the headers column's scroll-flow tail)
+    expect(screen.getByRole('button', { name: 'Add audio track' }).className).toContain('h-[26px]');
+  });
 });
 
 /* R13-D2 addition (R13-W1c gap #4): the lane dragover handler computes

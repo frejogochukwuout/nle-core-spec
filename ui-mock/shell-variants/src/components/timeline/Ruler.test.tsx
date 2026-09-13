@@ -80,6 +80,19 @@ describe('Ruler', () => {
     expect(far.fromTick).toBeGreaterThan(100); // early ticks culled
   });
 
+  /* R25-F3 (T3): the LABEL domain stops at the sequence end — a label is a
+   * time claim, and the mock's time domain is [0, duration] (the
+   * playhead/seek clamp's own law); the trailing runway keeps its ticks
+   * (the canonical fill-the-viewport window) but claims NO time. */
+  it('R25-F3 T3: TC labels STOP at the sequence end — the runway keeps ticks but claims no time', () => {
+    boot({}); // contentW = (30+4)·46 → effectiveDuration 34 s: labels used to run to 00:33
+    expect(screen.getByText('00:30')).toBeInTheDocument();        // the sequence end itself labels
+    expect(screen.queryByText('00:33')).not.toBeInTheDocument(); // the phantom runway label is dead
+    // ticks still paint the runway (the bounded-runway law's documented
+    // full-contentW tick paint — the tick DOM is NOT clamped)
+    expect(screen.getAllByTestId('ruler-tick-minor').length + screen.getAllByTestId('ruler-tick-major').length).toBeGreaterThan(31);
+  });
+
   it('the §4.9 ruler menu: add-marker inserts at the playhead; loop is a checkbox (spec 18 §4.9)', () => {
     boot({ playhead: 16 });
     fireEvent.contextMenu(ruler(), { clientX: 30, clientY: 30 });
@@ -277,6 +290,33 @@ describe('R15 T8 (R15-F1): ruler scrub — element snap after the first move, cl
     const after = sc.scrollLeft;
     await act(async () => { await new Promise((res) => requestAnimationFrame(res)); });
     expect(sc.scrollLeft).toBe(after); // the loop stopped with the scrub
+  });
+
+  /* R25-F3 (T6): the BRACKET DRAG gets the scrub path's own edge
+   * auto-scroll (a separate createEdgeAutoScroll instance, isActive:
+   * bracketDrag holds a side) — the in/out drag used to dead-end at the
+   * viewport edge. */
+  it('R25-F3 T6: dragging a bracket past the ruler\'s right edge AUTO-SCROLLS the timeline scroller (the scrub law, bracket twin), and stops on release', async () => {
+    renderShell(
+      <div id="timeline-scroll">
+        <RulerHarness />
+      </div>,
+    );
+    const sc = document.getElementById('timeline-scroll')!;
+    sc.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 400, right: 800, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    Object.defineProperty(sc, 'scrollWidth', { value: 5000, configurable: true });
+    Object.defineProperty(sc, 'clientWidth', { value: 800, configurable: true });
+    const out = screen.getByTestId('shell-ruler-bracket-out');
+    fireEvent.pointerDown(out, { pointerId: 2, button: 0, clientX: 300 });
+    // park the pointer 5px from the right edge → the same ramp
+    fireEvent.pointerMove(out, { pointerId: 2, buttons: 1, clientX: 795 });
+    await act(async () => { await new Promise((res) => requestAnimationFrame(res)); });
+    expect(sc.scrollLeft).toBeCloseTo(15 * (1 - 5 / 100), 3); // 14.25 — one frame
+    expect(store().loop.end).toBeGreaterThan(2);              // the drag ALSO moved the loop edge (the gesture is live)
+    fireEvent.pointerUp(out, { pointerId: 2, clientX: 795 });
+    const after = sc.scrollLeft;
+    await act(async () => { await new Promise((res) => requestAnimationFrame(res)); });
+    expect(sc.scrollLeft).toBe(after); // the loop stopped with the bracket drag
   });
 });
 

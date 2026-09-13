@@ -927,6 +927,24 @@ describe('setElementField / setTransition', () => {
     expect(e.audioFadeOut).toBe(3);
   });
 
+  /* R25-F3 (I3 store twin): the W0 identical-patch guard — every key ===
+   * the current value mints NO history entry (a bare slider click / Tab
+   * keyup on the ChannelEditor rows can never mint an undo step; the
+   * commitDrag drag-null guard is the component twin). Object-valued
+   * patches compare by identity — a fresh array is always a real change. */
+  it('R25-F3 I3: an IDENTICAL patch mints NO history entry (the W0 no-op law, setTransition\'s twin)', () => {
+    expect(el('el-6').volume).toBe(0.35);
+    act(() => { S().setElementField('el-6', { volume: 0.35 }); }); // already 0.35
+    expect(S().past).toHaveLength(0); // no-op — nothing set, nothing minted
+    act(() => { S().setElementField('el-6', { volume: 0.5 }); });  // a real change
+    expect(S().past).toHaveLength(1);
+    expect(el('el-6').volume).toBe(0.5);
+    // a fresh array patch is a real change even when its CONTENT matches
+    // (identity comparison — the setTransition twin's semantics)
+    act(() => { S().setElementField('el-6', { eq: [...el('el-6').eq!] }); });
+    expect(S().past).toHaveLength(2);
+  });
+
   it('setTransition creates a default crossfade then patches when none exists', () => {
     act(() => { S().setTransition('el-3', { duration: 1.25, presentation: 'Dip to Black' }); });
     const t = el('el-3').transitionOut!;

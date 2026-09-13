@@ -175,24 +175,41 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
      (the ruler lives inside its scroll content; standalone mounts find none
      and the loop parks). Writing scrollLeft programmatically fires no scroll
      EVENT — dispatch one so the Timeline's reactive scrollLeft (ruler tick
-     virtualization + clip culling) follows the frame. */
+     virtualization + clip culling) follows the frame.
+     R25-F3 (T6): the BRACKET DRAG gets its own instance of the same law
+     (isActive: bracketDrag holds a side; the pointer X feeds the same ramp)
+     — the in/out drag used to dead-end at the viewport edge while the
+     scrub path auto-scrolled. One rAF loop per gesture, separate instances. */
   const scrubPointerX = useRef(0);
   const edgeScrollRef = useRef<ReturnType<typeof createEdgeAutoScroll> | null>(null);
+  const bracketPointerX = useRef(0);
+  const bracketEdgeScrollRef = useRef<ReturnType<typeof createEdgeAutoScroll> | null>(null);
+  const makeEdgeScroll = (getPointerX: () => number, isActive: () => boolean) => {
+    const onScroll = () => {
+      const sc = ref.current?.closest('#timeline-scroll') as HTMLElement | null;
+      sc?.dispatchEvent(new Event('scroll'));
+    };
+    return createEdgeAutoScroll({
+      getScroller: () => (ref.current?.closest('#timeline-scroll') as HTMLElement | null) ?? null,
+      getPointerX,
+      isActive,
+      onScroll,
+    });
+  };
   const getEdgeScroll = () => {
     if (!edgeScrollRef.current) {
-      edgeScrollRef.current = createEdgeAutoScroll({
-        getScroller: () => (ref.current?.closest('#timeline-scroll') as HTMLElement | null) ?? null,
-        getPointerX: () => scrubPointerX.current,
-        isActive: () => seeking.current,
-        onScroll: () => {
-          const sc = ref.current?.closest('#timeline-scroll') as HTMLElement | null;
-          sc?.dispatchEvent(new Event('scroll'));
-        },
-      });
+      edgeScrollRef.current = makeEdgeScroll(() => scrubPointerX.current, () => seeking.current);
     }
     return edgeScrollRef.current;
   };
-  useEffect(() => () => { edgeScrollRef.current?.stop(); }, []); // unmount safety — never leak the rAF
+  const getBracketEdgeScroll = () => {
+    if (!bracketEdgeScrollRef.current) {
+      bracketEdgeScrollRef.current = makeEdgeScroll(() => bracketPointerX.current, () => bracketDrag.current !== null);
+    }
+    return bracketEdgeScrollRef.current;
+  };
+  /* unmount safety — never leak either rAF loop */
+  useEffect(() => () => { edgeScrollRef.current?.stop(); bracketEdgeScrollRef.current?.stop(); }, []);
 
   /* ---------- in/out brackets: draggable loop edges (R14 no-op sweep —
      the bracket art LOOKED draggable but was pointer-events-none). Drag =
@@ -223,16 +240,19 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
       (e.currentTarget as HTMLElement).focus();
       try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* inactive pointer id (R15-V2 P3 guard) */ }
       bracketDrag.current = side;
+      bracketPointerX.current = e.clientX;
+      getBracketEdgeScroll().start(); // T6: the bracket drag's own edge auto-scroll
     },
     onPointerMove: (e: React.PointerEvent) => {
       if (bracketDrag.current !== side || e.buttons !== 1) return;
       const box = ref.current?.getBoundingClientRect();
       if (!box) return;
+      bracketPointerX.current = e.clientX;
       applyBracket(side, (e.clientX - box.left) / pxPerSec);
     },
-    onPointerUp: () => { bracketDrag.current = null; },
-    onPointerCancel: () => { bracketDrag.current = null; },
-    onLostPointerCapture: () => { bracketDrag.current = null; },
+    onPointerUp: () => { bracketDrag.current = null; bracketEdgeScrollRef.current?.stop(); },
+    onPointerCancel: () => { bracketDrag.current = null; bracketEdgeScrollRef.current?.stop(); },
+    onLostPointerCapture: () => { bracketDrag.current = null; bracketEdgeScrollRef.current?.stop(); },
     onKeyDown: (e: React.KeyboardEvent) => {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
@@ -428,8 +448,15 @@ export function Ruler({ scene, duration, pxPerSec, playhead, contentW, view }: {
       })}
 
       {/* labels — canonical format: MM:SS at second boundaries (H:MM:SS at
-          hours), `Xf` (frames within the second) between */}
-      {ticks.filter((t) => shouldShowLabel(t, labelInterval)).map((t) => (
+          hours), `Xf` (frames within the second) between.
+          R25-F3 (T3): the LABEL domain STOPS AT THE SEQUENCE END — a label
+          is a time claim, and the mock's time domain is [0, duration] (the
+          playhead/seek clamp's own law); the trailing scroll runway keeps
+          its ticks + lane paint (the canonical fill-the-viewport window,
+          the bounded-runway law's documented full-contentW tick paint) but
+          claims NO time past the sequence. The old window minted phantom
+          labels through the runway (effectiveDuration included it). */}
+      {ticks.filter((t) => shouldShowLabel(t, labelInterval) && t <= duration + 1e-6).map((t) => (
         <span
           key={`l${t}`}
           className="mono absolute select-none text-[11px] text-tmuted"

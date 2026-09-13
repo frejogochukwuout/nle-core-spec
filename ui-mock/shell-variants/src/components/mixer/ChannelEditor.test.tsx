@@ -36,9 +36,12 @@ describe('ChannelEditor', () => {
   it('CLIP section shows the selected audio element with its S-layer fields (design doc §3.2)', () => {
     boot({ selection: ['el-7'], stripFocus: 'tr-audio-2', page: 'audio' });
     expect(screen.getByText('interview_marina')).toBeInTheDocument();
-    expect(screen.getByLabelText('Clip gain')).toHaveValue(20 * Math.log10(0.8)); // R23-FIX item 6: the SHARED log map — 0.8 → −1.94 dB
-    expect(screen.getByLabelText('Audio fade in')).toHaveValue(0);
-    expect(screen.getByLabelText('Audio fade out')).toHaveValue(0);
+    /* R25-F3 (I4 re-pin): the typed field is the SHARED CONTROLLED
+       NumberField now (the §4.4 text grammar — unit + decimals display),
+       not the old local type=number fork. 0.8 → 20·log10(0.8) = −1.9 dB. */
+    expect(screen.getByLabelText('Clip gain')).toHaveValue('-1.9 dB');
+    expect(screen.getByLabelText('Audio fade in')).toHaveValue('0.0 s');
+    expect(screen.getByLabelText('Audio fade out')).toHaveValue('0.0 s');
     expect(screen.getByTestId('channel-automation-placeholder')).toBeInTheDocument(); // M2 non-goal note
   });
 
@@ -119,19 +122,49 @@ describe('ChannelEditor', () => {
 
   it('NumFields resync on selection change — no stale display, no stale write (R13 CodeRabbit fix)', () => {
     boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
-    expect(screen.getByLabelText('Clip gain')).toHaveValue(20 * Math.log10(0.8));   // el-7 volume 0.8 → −1.94 dB (log map)
-    expect(screen.getByLabelText('Audio fade in')).toHaveValue(0);
+    expect(screen.getByLabelText('Clip gain')).toHaveValue('-1.9 dB');   // el-7 volume 0.8 → −1.9 dB (log map)
+    expect(screen.getByLabelText('Audio fade in')).toHaveValue('0.0 s');
     // switch the CLIP section to el-6 (volume 0.35 → −9.1 dB, fades 1.0 / 2.0)
     act(() => { useUi.setState({ selection: ['el-6'] }); });
     expect(screen.getByText('ocean_ambience')).toBeInTheDocument();
-    expect(screen.getByLabelText('Clip gain')).toHaveValue(20 * Math.log10(0.35));  // remounted, not the stale −1.94
-    expect(screen.getByLabelText('Audio fade in')).toHaveValue(1);
-    expect(screen.getByLabelText('Audio fade out')).toHaveValue(2);
-    // blur without editing: the uncontrolled field must NOT write el-7's −1.94
-    // into el-6 (the original bug) — it re-commits el-6's own −9.1 dB
+    expect(screen.getByLabelText('Clip gain')).toHaveValue('-9.1 dB');  // resynced (the controlled value prop), not the stale −1.9
+    expect(screen.getByLabelText('Audio fade in')).toHaveValue('1.0 s');
+    expect(screen.getByLabelText('Audio fade out')).toHaveValue('2.0 s');
+    /* R25-F3 (I4 re-pin): an UNTOUCHED blur commits NOTHING now — the shared
+       field's no-op guard (r.v === value) skips the write entirely; the old
+       uncontrolled field re-committed el-6's own −9.1 dB through the
+       dB→linear round-trip (a float-drift write). The doc value stays EXACT. */
     fireEvent.blur(screen.getByLabelText('Clip gain'));
-    expect(el('el-6').volume).toBeCloseTo(0.35, 6);
-    expect(el('el-7').volume).toBe(0.8); // untouched
+    expect(el('el-6').volume).toBe(0.35); // exact — no round-trip residue
+    expect(el('el-7').volume).toBe(0.8);  // untouched
+    expect(store().past).toHaveLength(0);  // and no history entry for the no-op blur
+  });
+
+  /* ---------- R25-F3 (I4): the typed field resyncs on EXTERNAL writes ---------- */
+  it('R25-F3 I4: an external store write (undo / the Inspector Volume row / the mixer) resyncs the Gain field + slider', () => {
+    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' });
+    expect(screen.getByLabelText('Clip gain')).toHaveValue('-9.1 dB'); // 0.35 → −9.1 dB
+    // the store moves underneath the editor (the Inspector's own write path)
+    act(() => { useUi.getState().setElementField('el-6', { volume: 0.5 }); });
+    expect(screen.getByLabelText('Clip gain')).toHaveValue('-6.0 dB'); // 0.5 → −6.0 dB
+    const slider = screen.getByLabelText('Clip gain slider (commit on release)') as HTMLInputElement;
+    expect(Number(slider.value)).toBeCloseTo(volToDb(0.5), 5);          // the slider follows too
+    expect(screen.getByTestId('channel-clip-readout-Gain dB')).toHaveTextContent('-6.0 dB');
+  });
+
+  /* ---------- R25-F3 (I3): the drag-null release guard ---------- */
+  it('R25-F3 I3: a bare click (pointerup with NO drag) + a Tab keyup mint NOTHING — the no-op history entry is dead', () => {
+    boot({ selection: ['el-6'], stripFocus: 'tr-audio-1' });
+    const slider = screen.getByLabelText('Clip gain slider (commit on release)');
+    fireEvent.pointerUp(slider);                       // a click that never dragged
+    fireEvent.keyUp(slider, { key: 'Tab' });           // a keyup with no drag in flight
+    expect(store().past).toHaveLength(0);              // NO no-op undo step (the old unconditional onCommit minted one)
+    expect(el('el-6').volume).toBe(0.35);              // the doc is untouched
+    // a REAL drag still commits exactly once (the §4.4 single-write law)
+    fireEvent.change(slider, { target: { value: '-6' } });
+    fireEvent.pointerUp(slider);
+    expect(store().past).toHaveLength(1);
+    expect(el('el-6').volume).toBeCloseTo(dbToVol(-6), 6);
   });
 
   /* ---------- R23-WC D-C1 (#98): the uniform clip-row grammar ---------- */
@@ -147,7 +180,12 @@ describe('ChannelEditor', () => {
       const kids = Array.from(row.children);
       expect(kids).toHaveLength(4);
       expect((kids[0] as HTMLElement).textContent).toBe(label);
-      expect(kids[1]).toHaveAttribute('type', 'number');
+      /* R25-F3 (I4 re-pin): the typed field is the SHARED NumberField — a
+         §4.4 text field (inputMode=decimal), not the old type=number fork.
+         kids[1] is the NumberField's <span> wrapper — the input lives inside */
+      const typed = kids[1].querySelector('input');
+      expect(typed).toHaveAttribute('type', 'text');
+      expect(typed).toHaveAttribute('inputmode', 'decimal');
       expect(kids[2]).toHaveAttribute('type', 'range');
       // R24-W5a F2-P1: the range height utility SURVIVES the cascade now —
       // the app.css range reset lives in @layer base (the unlayered reset's
@@ -198,7 +236,7 @@ describe('ChannelEditor', () => {
      to pin contradictory laws (linear here, log there). */
   it('R23-FIX item 6: the gain row rides the SHARED map — ChannelEditor and the Inspector agree on 0.8 → 20·log10(0.8) dB', () => {
     boot({ selection: ['el-7'], stripFocus: 'tr-audio-2' });
-    expect(screen.getByLabelText('Clip gain')).toHaveValue(volToDb(0.8));
+    expect(screen.getByLabelText('Clip gain')).toHaveValue(`${volToDb(0.8).toFixed(1)} dB`);
     // the write side inverts through the same dbToVol the Inspector uses
     expect(dbToVol(volToDb(0.35))).toBeCloseTo(0.35, 10);
   });

@@ -573,11 +573,14 @@ describe('R25-W5 (th_mtzp4arw): the deliver console row — the Export tab', () 
     expect(screen.getByTestId('shell-deliver-preview')).toBeInTheDocument();
     /* th_mtzp4arw's ruling pinned at the DOM: the summary card is NOT in the
        right column anymore — the settings panel holds inspection-family
-       content only (no summary heading, no scene-name row, no range block) */
+       content only (no summary heading, no range block). RE-PIN (R25-F3 D2):
+       the scene name legitimately returns to the settings column via the
+       metadata card's DERIVED title (project — scene, exportJsonFileName's
+       pair) — the old "no scene name" exclusion died with the derivation;
+       the summary-CONTENT exclusion (heading + range block) is the law. */
     const settings = screen.getByTestId('shell-deliver-settings');
     expect(settings.contains(screen.getByTestId('shell-deliver-export-summary'))).toBe(false);
     expect(settings.textContent).not.toContain('Export summary');
-    expect(settings.textContent).not.toContain('Rough Cut v3');
     expect(settings.contains(screen.getByTestId('shell-deliver-range'))).toBe(false);
     expect(settings.textContent).toContain('Render settings'); // the inspector half stays
     // the console panel DOES carry the moved content (verbatim rows + range)

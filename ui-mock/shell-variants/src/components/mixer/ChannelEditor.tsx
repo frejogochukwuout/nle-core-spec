@@ -35,8 +35,12 @@ import { Fader, PanKnob, StripMeter, HeadroomReadout, FaderGridlines } from './M
 /* R23-FIX (review-sweep item 6, R2-F4): the SHARED dB↔linear map + domain
    bounds from the Inspector (the one map for ElementJSON.volume — the old
    local linear mapping ((v·20)−20 / (db+20)/20) contradicted the
-   Inspector's log law on the SAME field). */
-import { volToDb, dbToVol, VOL_DB_MIN, VOL_DB_MAX } from '../shell/Inspector';
+   Inspector's log law on the SAME field).
+   R25-F3 (I4): the SHARED NumberField joins too — the old local NumField
+   (uncontrolled type=number) forked the §4.4 field contract AND never
+   resynced on external writes (undo, the Inspector's Volume row, the
+   mixer left the typed field stale). One field component, every frame. */
+import { volToDb, dbToVol, VOL_DB_MIN, VOL_DB_MAX, NumberField } from '../shell/Inspector';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -131,35 +135,16 @@ function InsertParams({ trackId, kind, badge }: { trackId: string; kind: string;
   );
 }
 
-function NumField({ value, min, max, step = 0.1, onCommit, ariaLabel }: {
-  value: number; min: number; max: number; step?: number; onCommit: (v: number) => void; ariaLabel: string;
-}) {
-  /* uncontrolled by design (§4.4-style commit-on-blur); callers MUST key the
-     usage on the element id — React reuses the instance across selection
-     changes otherwise, and the stale defaultValue of the PREVIOUS clip would
-     both display and commit to the newly selected clip (R13 CodeRabbit fix). */
-  return (
-    <input
-      type="number"
-      className="field mono w-[64px] text-[11px]"
-      defaultValue={value}
-      min={min} max={max} step={step}
-      aria-label={ariaLabel}
-      onBlur={(e) => { const v = +e.target.value; if (!Number.isNaN(v) && v >= min && v <= max) onCommit(v); else e.target.value = String(value); }}
-      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-    />
-  );
-}
-
 /* R23-WC (D-C1, #98 — the uniform row grammar): every CLIP param row =
-   [label 52px] [NumField] [slider flex-1] [readout 52px] — one anatomy for
+   [label 52px] [NumberField] [slider flex-1] [readout 52px] — one anatomy for
    Gain / Fade in / Fade out (the Inspector ParamRow's label + slider +
    typed-field law, plus the W2 insert-row readout; the old gain-only dialer
    + empty fade slots were #98's "strange layout"). The READOUT follows the
    slider drag live via local preview state; the store commits once per
    gesture (release/keyup/blur — the §4.4 single-write law, same as the old
-   inline slider). The NumField stays keyed on the element id (the R13
-   stale-defaultValue fix).
+   inline slider). The typed field is the SHARED CONTROLLED NumberField
+   (I4): external writes resync through the value prop while the user isn't
+   mid-edit — no re-key, selection switches resync like every Inspector row.
    R24-W5a (DESIGN-R24 §2 F2-P2 — the focus drop): the slider used to
    re-key on the VALUE (key={`${keyId}-${label}-${value}`}) so external
    writes would resync its uncontrolled defaultValue — but a single
@@ -169,14 +154,21 @@ function NumField({ value, min, max, step = 0.1, onCommit, ariaLabel }: {
    testid) and the slider is CONTROLLED (value={shown}, the Inspector
    ParamRow's exact grammar): external writes (undo, NumField commit)
    resync through the value prop — no remount, focus survives the commit. */
-function ClipParamRow({ label, value, min, max, step, fmt, keyId, numAria, sliderAria, onCommit }: {
+function ClipParamRow({ label, value, min, max, step, unit, decimals, timeField = false, keyId, numAria, sliderAria, onCommit }: {
   label: string; value: number; min: number; max: number; step: number;
-  fmt: (v: number) => string; keyId: string; numAria: string; sliderAria: string;
+  unit: string; decimals: number; timeField?: boolean;
+  keyId: string; numAria: string; sliderAria: string;
   onCommit: (v: number) => void;
 }) {
   const [drag, setDrag] = useState<number | null>(null);
   const shown = drag ?? value;
+  /* R25-F3 (I3): the Inspector ParamRow's release guard — pointerup/keyup
+     with NO drag in flight commits NOTHING (a mere click on the slider or
+     any Tab keyup used to mint a no-op history entry through the
+     unconditional onCommit; the store's W0 identical-patch guard is the
+     belt-and-braces twin). */
   const commitDrag = (e: React.PointerEvent<HTMLInputElement> | React.KeyboardEvent<HTMLInputElement>) => {
+    if (drag === null) return;
     const raw = +(e.target as HTMLInputElement).value;
     setDrag(null);
     onCommit(raw);
@@ -184,7 +176,14 @@ function ClipParamRow({ label, value, min, max, step, fmt, keyId, numAria, slide
   return (
     <div className="flex items-center gap-2 py-[3px]" data-testid={`channel-clip-row-${keyId}-${label}`}>
       <span className="w-[52px] shrink-0 text-[11px] text-tmuted">{label}</span>
-      <NumField key={keyId} value={value} min={min} max={max} step={step} ariaLabel={numAria} onCommit={onCommit} />
+      <NumberField
+        value={shown}
+        min={min} max={max}
+        unit={unit} decimals={decimals}
+        timeField={timeField}
+        ariaLabel={numAria}
+        onCommit={onCommit}
+      />
       <input
         type="range"
         min={min} max={max} step={step}
@@ -197,7 +196,7 @@ function ClipParamRow({ label, value, min, max, step, fmt, keyId, numAria, slide
         onKeyUp={commitDrag}
         aria-label={sliderAria}
       />
-      <span data-testid={`channel-clip-readout-${label}`} className="mono w-[52px] shrink-0 text-right text-[10px] text-tmuted">{fmt(shown)}</span>
+      <span data-testid={`channel-clip-readout-${label}`} className="mono w-[52px] shrink-0 text-right text-[10px] text-tmuted">{shown.toFixed(decimals)}{unit}</span>
     </div>
   );
 }
@@ -270,7 +269,7 @@ export function ChannelEditor() {
                 keyId={el.id}
                 value={volToDb(el.volume ?? 1)}
                 min={VOL_DB_MIN} max={VOL_DB_MAX} step={0.5}
-                fmt={(dbv) => dbv.toFixed(1) + ' dB'}
+                unit=" dB" decimals={1}
                 numAria="Clip gain"
                 sliderAria="Clip gain slider (commit on release)"
                 onCommit={(dbv) => setElementField(el.id, { volume: dbToVol(dbv) })} />
@@ -280,7 +279,7 @@ export function ChannelEditor() {
                 keyId={el.id}
                 value={effectiveFade(el, 'in')}
                 min={0} max={Math.min(10, el.duration)} step={0.1}
-                fmt={(v) => v.toFixed(1) + ' s'}
+                unit=" s" decimals={1} timeField
                 numAria="Audio fade in"
                 sliderAria="Audio fade in slider (commit on release)"
                 onCommit={(v) => useUi.getState().setFade(el.id, 'in', v)} />
@@ -289,7 +288,7 @@ export function ChannelEditor() {
                 keyId={el.id}
                 value={effectiveFade(el, 'out')}
                 min={0} max={Math.min(10, el.duration)} step={0.1}
-                fmt={(v) => v.toFixed(1) + ' s'}
+                unit=" s" decimals={1} timeField
                 numAria="Audio fade out"
                 sliderAria="Audio fade out slider (commit on release)"
                 onCommit={(v) => useUi.getState().setFade(el.id, 'out', v)} />

@@ -2684,6 +2684,17 @@ export const useUi = create<UiState>((set, get) => ({
   setElementField: (id, patch) => withHistory(set, get, (scenes) => {
     const hit = findEl(scenes, id);
     if (!hit || hit.track.locked) return;
+    /* R25-F3 (I3's store twin — the W0 no-op law, setTransition's pattern):
+       an IDENTICAL patch (every key === the element's current value) mints
+       NO history entry. The component-level guards (the ChannelEditor
+       commitDrag drag-null guard) are the first belt; this is the
+       store-level belt-and-braces so a bare slider click / Tab keyup can
+       never mint an undo step. Object-valued patches (effects/eq arrays)
+       compare by identity — a fresh array is always a real change, exactly
+       the setTransition twin's semantics. */
+    const cur = hit.el as unknown as Record<string, unknown>;
+    const nxt = patch as unknown as Record<string, unknown>;
+    if (Object.keys(nxt).length > 0 && Object.keys(nxt).every((k) => cur[k] === nxt[k])) return;
     Object.assign(hit.el, patch);
     return scenes;
   }),

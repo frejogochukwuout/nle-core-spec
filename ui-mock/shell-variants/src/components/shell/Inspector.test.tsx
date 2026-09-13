@@ -411,6 +411,16 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expect(el('el-5').duration).toBe(2);
   });
 
+  /* ---- R25-F3 (I6): the Timing rows' honest reset absence ---- */
+  it('R25-F3 I6: the Timing rows carry NO reset affordance — double-click is inert (start/duration are CONTENT, not spec defaults)', () => {
+    boot({ selection: ['el-5'] });
+    fireEvent.doubleClick(screen.getByTestId('shell-inspector-timing-in'));
+    fireEvent.doubleClick(screen.getByTestId('shell-inspector-timing-duration'));
+    expect(el('el-5').startTime).toBe(8.75); // the §5A reset dispatched NOTHING
+    expect(el('el-5').duration).toBe(3.25);  // (the old resetTo = CURRENT value was a no-op lie)
+    expect(S().past).toHaveLength(0);
+  });
+
   /* ---- Effects section (accordion + param rows + stack ops) ---- */
 
   it('effects: the row click selects the effect; enable checkbox + slider commit through the store', () => {
@@ -467,6 +477,50 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expect(S().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Gaussian Blur × 2' });
     expect(S().toasts.at(-1)!.detail).toContain('duplicates stack');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument(); // closed after add
+  });
+
+  /* ---- R25-F3 (I8): the Add-effect picker's APG menu grammar (the
+     ViewOptionsPopover/ContextMenu house §4.9 law — the old role=menu
+     markup had no keyboard path at all) ---- */
+  it('R25-F3 I8: the picker is a REAL menu — aria-haspopup/aria-expanded on the trigger, ArrowDown opens, arrows rove, Escape closes + returns focus', async () => {
+    const user = userEvent.setup();
+    boot({ selection: ['el-1'] });
+    const trigger = screen.getByRole('button', { name: 'Add effect' });
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    // APG menu-button: ArrowDown opens + the FIRST item takes focus
+    trigger.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    const menu = screen.getByRole('menu', { name: 'Add effect' });
+    const items = within(menu).getAllByRole('menuitem');
+    expect(items.length).toBeGreaterThan(1);
+    expect(document.activeElement).toBe(items[0]);
+    // ↑/↓ rove the items
+    await user.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(items[1]);
+    await user.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(items[0]);
+    // Escape closes + focus RETURNS to the opener
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('R25-F3 I8: Enter on the focused menuitem ACTIVATES it (one guaranteed activation — the jsdom-native gap)', async () => {
+    const user = userEvent.setup();
+    boot({ selection: ['el-1'] }); // seeds Gaussian Blur (fx-1)
+    const trigger = screen.getByRole('button', { name: 'Add effect' });
+    trigger.focus();
+    await user.keyboard('{ArrowDown}'); // open + first item focused (Gaussian Blur)
+    await user.keyboard('{Enter}');
+    // the Enter activation STACKED the first registry row (×2 — el-1 seeds one)
+    expect(el('el-1').effects).toHaveLength(2);
+    expect(el('el-1').effects!.every((f) => f.name === 'Gaussian Blur')).toBe(true);
+    expect(S().toasts.at(-1)).toMatchObject({ title: 'Gaussian Blur × 2' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument(); // closed after activation
+    expect(document.activeElement).toBe(trigger); // activation returns focus to the opener
   });
 
   it('effects stack: reorder (first pinned), remove deletes; multi-select shows the aggregate', () => {
@@ -810,12 +864,50 @@ describe('R25-W6-B (th_mtzp5tvg): the inspector refresh after view / editor mode
 
 /* ---------- R24-W5a (DESIGN-R24 §2 F2-P2): TransitionSection's honest ----------
    mixed state. The section is EXPORTED (the FX inspector reuses it), so the
-   mixed els[] contract pins at the component level: the Inspector frame's
-   showTransition common-subset gate hides mixed multis (its own documented
-   law), and both shipped frames currently pass single-element arrays — the
-   pin guards the exported contract every future frame inherits. */
-describe('R24-W5a: TransitionSection — the honest mixed state (F2-P2)', () => {
-  it('mixed multi-select: the count summary, NOT the els[0] "Hard cut / Add crossfade" lie', () => {
+   mixed els[] contract pins at the component level. R25-F3 (I2) RE-PIN: the
+   Inspector frame's showTransition gate is SOME-have now — a 2-clip
+   selection where one clip carries a transition REACHES the mixed branch
+   from the REAL frame (the R24-W5a mixed branch was dead code before: the
+   every-have gate meant only uniform all-have multis ever rendered, and
+   both shipped frames pass single-element arrays). The component-level
+   contract pins stay (every future frame inherits them). */
+describe('R24-W5a + R25-F3 I2: TransitionSection — the honest mixed state (F2-P2, now REACHABLE)', () => {
+  it('I2 RE-PIN: a 2-clip selection where 1 has a transition renders the mixed summary FROM THE REAL FRAME', () => {
+    // el-2 carries the fixture transitionOut; el-3 is a hard cut
+    expect(el('el-2').transitionOut).toBeDefined();
+    expect(el('el-3').transitionOut).toBeUndefined();
+    boot({ selection: ['el-2', 'el-3'] });
+    expect(screen.getByTestId('transition-mixed-summary'))
+      .toHaveTextContent('Mixed — 1 of 2 clips have transitions.');
+    // the old lie is dead: no els[0] Hard cut summary, no editor rows
+    expect(screen.queryByText(/Hard cut/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('transition-presentation')).not.toBeInTheDocument();
+    // the controls render honest-disabled with their reason tips (§4.9:
+    // aria-disabled keeps the data-tip hoverable)
+    const add = screen.getByTestId('transition-mixed-add');
+    expect(add).toHaveAttribute('aria-disabled', 'true');
+    expect(add).toHaveAttribute('data-tip', expect.stringContaining('Mixed cut state'));
+    expect(screen.getByTestId('transition-mixed-remove')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('I2: the mixed rows mint NOTHING from the real frame — no history entry, no doc change', () => {
+    boot({ selection: ['el-2', 'el-3'] });
+    const before = S().past.length;
+    const trBefore = { ...el('el-2').transitionOut! };
+    fireEvent.click(screen.getByTestId('transition-mixed-add'));
+    fireEvent.click(screen.getByTestId('transition-mixed-remove'));
+    expect(S().past.length).toBe(before); // NO no-op history entry
+    expect(el('el-2').transitionOut).toEqual(trBefore); // untouched
+    expect(el('el-3').transitionOut).toBeUndefined(); // no default minted either
+  });
+
+  it('I2: the none-have multi stays HIDDEN — its own honest state (no transitions, no single-cut adjacency)', () => {
+    boot({ selection: ['el-1', 'el-4'] }); // both hard cuts, no transitions
+    expect(screen.queryByTestId('transition-mixed-summary')).not.toBeInTheDocument();
+    expect(hasSection('transition')).toBe(false);
+  });
+
+  it('mixed multi-select: the count summary, NOT the els[0] "Hard cut / Add crossfade" lie (the exported contract)', () => {
     // el-2 carries the fixture transitionOut; el-3 is a hard cut
     expect(el('el-2').transitionOut).toBeDefined();
     expect(el('el-3').transitionOut).toBeUndefined();
@@ -846,17 +938,53 @@ describe('R24-W5a: TransitionSection — the honest mixed state (F2-P2)', () => 
 
   it('the honest branches survive: all-hard-cuts still offers Add (fan-out); all-transitioned still edits', () => {
     // uniform hard cuts (both lack one) → the Add offer fans out to BOTH
-    // (the §4.4 sets-all law — the old els[0]-only write was a partial write)
-    const { unmount } = render(<TransitionSection els={[el('el-3'), el('el-6')]} nextEl={null} />);
+    // (the §4.4 sets-all law — the old els[0]-only write was a partial write).
+    // R25-F3 I7: the picks must carry BUTT-SPLICED followers (el-1→el-2 at
+    // 8.5, el-3→el-4 at 24.0) — the adjacency guard honestly blocks followerless
+    // clips (el-6 ends at the audio track's tail; the old [el-3, el-6] pick).
+    const { unmount } = render(<TransitionSection els={[el('el-1'), el('el-3')]} nextEl={null} />);
     expect(screen.getByText(/Hard cuts — 2 clips/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add crossfade' }));
     const spec09 = { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 };
+    expect(el('el-1').transitionOut).toEqual(spec09);
     expect(el('el-3').transitionOut).toEqual(spec09);
-    expect(el('el-6').transitionOut).toEqual(spec09);
     unmount();
     // uniform transitioned (both carry one) → the editor rows, no mixed summary
-    render(<TransitionSection els={[el('el-3'), el('el-6')]} nextEl={null} />);
+    // (el-2 carries the fixture's transition; el-3 gained one from the fan-out
+    // above — the old [el-3, el-6] pick is now MIXED because el-6 can never
+    // carry one under the I7 adjacency law, no follower on its track's tail)
+    render(<TransitionSection els={[el('el-2'), el('el-3')]} nextEl={null} />);
     expect(screen.getByTestId('transition-presentation')).toBeInTheDocument();
     expect(screen.queryByTestId('transition-mixed-summary')).not.toBeInTheDocument();
+  });
+});
+
+/* ---------- R25-F3 (I7): the "Hard cut to X" adjacency law ---------- */
+describe('R25-F3 I7: the hard-cut claim is adjacency-honest (a gap is not a cut)', () => {
+  it('I7: a GAP follower renders the honest "no clip follows" copy + the Add honestly disabled — no mint over the gap', () => {
+    // sc-2's s2-1 ends at 6.25; s2-2 starts at 6.5 — a 0.25 s gap (no seam)
+    boot({ selection: ['s2-1'], activeSceneId: 'sc-2' });
+    expect(screen.getByText(/Hard cut at 00:00:06:06 — no clip follows/)).toBeInTheDocument();
+    const add = screen.getByRole('button', { name: 'Add crossfade' });
+    expect(add).toHaveAttribute('aria-disabled', 'true');
+    expect(add).toHaveAttribute('data-tip', expect.stringContaining('butt-spliced'));
+    fireEvent.click(add); // aria-disabled + no onClick: the click is inert
+    expect(el('s2-1').transitionOut).toBeUndefined(); // nothing minted over the gap
+    expect(S().past).toHaveLength(0);
+  });
+
+  it('I7: an ADJACENT follower keeps the named claim + the live Add (el-3 → el-4 butt-splice)', () => {
+    boot({ selection: ['el-3'] });
+    expect(screen.getByText(/Hard cut to “sunset_timelapse” at 00:00:24:00\./)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add crossfade' })).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('I7: an ORPHANED transition (follower gapped away) reads honestly on the boundary line — never "cut to X"', () => {
+    // el-2 carries the fixture transition at 17 s; trim el-3's head in to
+    // open a gap at the seam (el-3 [18,24] still butt-splices el-4 at 24)
+    act(() => { S().trimElement('el-3', 'l', 18, 6); });
+    boot({ selection: ['el-2'] });
+    expect(screen.getByText(/boundary 00:00:17:00 · no clip at the cut/)).toBeInTheDocument();
+    expect(screen.queryByText(/cut to drone_launch/)).not.toBeInTheDocument();
   });
 });

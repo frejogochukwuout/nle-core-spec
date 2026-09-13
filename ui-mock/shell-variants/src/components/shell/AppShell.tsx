@@ -3,8 +3,12 @@
    app dock. Splitters: 6px visual line / 12px interactive hit target,
    double-click resets (§3.2). Splitters OWN the seam lines — adjacent panels
    carry no borders (single-source seams, no double hairlines). Page dock
-   swaps the right rail (Edit → Inspector, Color → ColorInspector tabs,
-   Deliver → export panel) — all at the same resizable inspectorW.
+   swaps the right rail (Edit → Inspector, Color → ColorInspector, FX →
+   FxInspector, Audio → ChannelEditor) — all at the same resizable
+   inspectorW. R25-F3 (D7, re-truthed): DELIVER does NOT swap the right
+   rail — it takes the WHOLE mainbody (DeliverPage's own 3-region surface);
+   the export summary lives on the console row's Export tab below (R25-W5),
+   never in the rail.
 
    R22 (DESIGN-R22 D1) — the color page composition REWRITTEN (issues
    #74/#77/#78/#79) → R23-WB (DESIGN-R23 track B — #90–#97) → R24-W2
@@ -320,12 +324,14 @@ function AppShellInner() {
      the filmstrip needs the lane room). The user's drag (mainBodyUserSet)
      always wins and persists. The FX page stays at the 40% EDIT default
      (ruling 1). R23-WF (D-F1, #107): deliver rebalances the same way —
-     50% while the compact strip (with its range band head row) carries the
-     timeline area ("the shorter timeline area can leave more room for
-     export settings too"), 40% when full tracks are asked for (the same
-     filmstrip lane-room law, deliver-shaped). R24-W4 (A3-R7, #71): the
-     strip's head stack is the 22px ruler + the 32px range band (54px) on
-     deliver — the same compact-timeline-area rebalance carries it. */
+     50% while the compact strip carries the timeline area, 40% when full
+     tracks are asked for (the same filmstrip lane-room law, deliver-shaped).
+     R24-W4 (A3-R7, #71): the strip's head stack is the 22px ruler + the 32px
+     range band (54px) on deliver. R25-W6 (re-truthed): the per-page density
+     map boots every page 'off' EXCEPT audio='video' — the compact strip (and
+     its deliver-only range band) mounts only when the page's scope is 'all',
+     so the 50% arm is the user's explicit-compact case, not a page default;
+     the W6-A/W6-C map's own resolver law owns the mount decision. */
   const mainBodyHeight = mainBodyH !== 0
     ? mainBodyH
     : page === 'color' && !mainBodyUserSet ? (compact ? '55%' : '40%')
@@ -378,10 +384,13 @@ function AppShellInner() {
       </div>
 
       {/* ---- main body ----
-          R19: the Deliver page repurposes the WHOLE mainbody as the export
-          surface (th_mto37ba3): left queue / center summary+range / right
-          settings live inside DeliverPage's own 3-region layout; the timeline
-          stays live below with the loop in/out as the export range. */}
+          R19 → R25-W5 (D7, re-truthed): the Deliver page repurposes the WHOLE
+          mainbody (th_mto37ba3) as its own 3-region export surface — PRESETS
+          left / VIDEO PREVIEW-or-QUEUE center / the deliver INSPECTOR right
+          (R22 W5 #88/#89); the export summary + range block live on the
+          CONSOLE ROW's Export tab (R25-W5, th_mtzp4arw — a sibling tree), not
+          here. The timeline stays live below with the loop in/out as the
+          export range. */}
       <div
         className="mainbody flex shrink-0 overflow-hidden"
         style={{ height: mainBodyHeight, minHeight: 320 }}

@@ -87,17 +87,37 @@ describe('CaptionInspector (R19 captions)', () => {
     expect(screen.getByTestId('shell-caption-inspector-next')).toBeEnabled();
   });
 
-  it('In/Out TC fields write startTime/duration frame-snapped (typing TC)', () => {
+  /* RE-PIN (R25-F3 I5): In/Out ride the REAL commands — In through
+   * moveElement (the overlap law REJECTS a move onto a neighbor), Out
+   * through trimElement's right edge (the neighbor-bound CLAMP: the caption
+   * can never grow past the next caption's start). The old raw
+   * setElementField writes let captions overlap silently. */
+  it('I5: In edits route through moveElement — a LEGAL move lands frame-snapped; an OVERLAPPING move is rejected (no doc change)', () => {
     boot({ selection: ['cap-1'], selectedMarkerId: null });
     const inField = screen.getByTestId('shell-caption-inspector-in');
+    // legal: cap-1 [4.17, 5.63] → 4.0 keeps it clear of cap-2 [5.63, 7.67]
+    fireEvent.change(inField, { target: { value: '00:00:04:00' } });
+    fireEvent.keyDown(inField, { key: 'Enter' });
+    expect(cap('cap-1').startTime).toBe(4); // frame-snapped, landed
+    // illegal: 8.0 overlaps cap-3 [8.04, 9.88] → the overlap law rejects, the caption stays
     fireEvent.change(inField, { target: { value: '00:00:08:00' } });
     fireEvent.keyDown(inField, { key: 'Enter' });
-    expect(cap('cap-1').startTime).toBe(8); // frame-snapped
-    // Out edits the DURATION (out − in), min one frame past In
+    expect(cap('cap-1').startTime).toBe(4); // unchanged — no silent overlap
+    expect(S().past).toHaveLength(1);        // only the legal move minted history
+  });
+
+  it('I5: Out edits route through trimElement — the right edge CLAMPS at the next caption\'s start (the neighbor law)', () => {
+    boot({ selection: ['cap-1'], selectedMarkerId: null });
+    // cap-1 [4.17, 5.63]: growing past cap-2's 5.625 start is impossible
     const outField = screen.getByTestId('shell-caption-inspector-out');
-    fireEvent.change(outField, { target: { value: '00:00:10:12' } });
+    fireEvent.change(outField, { target: { value: '00:00:10:12' } }); // asks for 10.5 s — far past
     fireEvent.keyDown(outField, { key: 'Enter' });
-    expect(cap('cap-1').duration).toBeCloseTo(10.5 - 8, 6);
+    expect(cap('cap-1').duration).toBeCloseTo(135 / 24 - 100 / 24, 6); // end clamped AT cap-2's start
+    expect(cap('cap-1').startTime).toBe(100 / 24);                     // untouched by the right-edge trim
+    // shrinking is unbounded below the 1-frame floor: Out 5.0 → duration 0.833
+    fireEvent.change(outField, { target: { value: '00:00:05:00' } });
+    fireEvent.keyDown(outField, { key: 'Enter' });
+    expect(cap('cap-1').duration).toBeCloseTo(5 - 100 / 24, 6);
   });
 
   it('Use Track Style: display state + honest toast (gap C34), never a silent toggle', () => {

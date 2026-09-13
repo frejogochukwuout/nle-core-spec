@@ -49,7 +49,7 @@
    the CTA + the queue's empty row. */
 
 import { FileVideo, FileCode2, FileJson, Camera, Download, RefreshCw, CheckCircle2, LoaderCircle, Clock, TriangleAlert, MonitorPlay } from 'lucide-react';
-import { useUi } from '../../state/useUiStore';
+import { useUi, resolveTimelineCompactScope } from '../../state/useUiStore';
 import { useDeliverView, type DeliverPresetId } from '../../state/deliverViewStore';
 import { Viewer } from '../shell/Viewer';
 import { project, sceneDuration } from '../../lib/mockData';
@@ -111,6 +111,12 @@ export function DeliverPage() {
      timeline's I/O marks ARE the deliver range selection), not a hardcoded
      string; moving the loop brackets on the timeline moves this readout */
   const loop = useUi((s) => s.loop);
+  /* R25-F3 (D1): the Export console's range copy is DENSITY-AWARE — the
+     range BAND mounts only on the compact strip (the 'all' scope); every
+     other density is the FULL Timeline where the ruler brackets are the
+     drag affordance. Resolved through the ONE store resolver family so the
+     copy can never disagree with the mounted surface. */
+  const compactStrip = useUi((s) => resolveTimelineCompactScope(s) === 'all');
 
   const rangeLabel = range === 'inout' ? 'In–Out' : 'Full';
   const resLabel = resolution === '2160' ? '2160p' : '1080p';
@@ -142,8 +148,12 @@ export function DeliverPage() {
       return;
     }
     pushToast({ kind: 'info', title: `Export queued: ${p.name}`, detail: MOCK_RENDER_DETAIL });
+    /* R25-F3 (D2): the queued row's name DERIVES from the active scene +
+       project (exportJsonFileName's own pair — `${projectName} — ${sceneName}`)
+       instead of the hardcoded "Beach Doc — Rough Cut": a scene switch or a
+       project rename is honestly reflected in every minted row. */
     queueExport({
-      name: `Beach Doc — Rough Cut — ${resLabel} · ${rangeLabel}.${EXPORT_EXT[preset]}`,
+      name: `${project.metadata.name} — ${scene.name} — ${resLabel} · ${rangeLabel}.${EXPORT_EXT[preset]}`,
       bundle: bundleMedia,
     });
     /* the store's queueExport auto-shows the queue (the center flips — #89) */
@@ -186,7 +196,7 @@ export function DeliverPage() {
       <div className="flex min-h-0 min-w-0 flex-1 overflow-x-auto">
 
         {/* ---- LEFT: PRESETS ONLY (min 260px) — #89 ----------------------- */}
-        <div data-testid="shell-deliver-queue" className="flex w-[280px] min-w-[260px] shrink-0 flex-col border-r border-hairline">
+        <div data-testid="shell-deliver-presets" className="flex w-[280px] min-w-[260px] shrink-0 flex-col border-r border-hairline">
           <div className="scroll-y min-h-0 flex-1 px-3 py-3">
             {/* preset picker — th_mto38qzp grammar: 2-col wrapping grid,
                 taller tiles, icon + title + subtitle breathing room.
@@ -292,7 +302,13 @@ export function DeliverPage() {
                         >
                           <Download size={12} />
                         </button>
-                      ) : (
+                      ) : j.state === 'failed' ? (
+                        /* R25-F3 (D3): Retry is gated to FAILED jobs — an
+                           active row carries NO action (Resolve offers Stop
+                           for active, Retry for failed; the mock's render
+                           walks on the store timer and cannot be stopped —
+                           the honest absence, never a lying Retry on a
+                           running row). */
                         <button
                           className="icon-btn !h-[22px]"
                           data-tip="Retry"
@@ -301,7 +317,7 @@ export function DeliverPage() {
                         >
                           <RefreshCw size={12} />
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -324,16 +340,20 @@ export function DeliverPage() {
               rendered by the AppShell under the [Timeline | Export] strip). */}
         <div data-testid="shell-deliver-settings" className="scroll-y flex w-[340px] min-w-[300px] shrink-0 flex-col border-l border-hairline">
           <div className="min-h-0 flex-1 px-3 py-3">
-            {/* project metadata section (spec 18 §4.1: project title deep-links here) */}
+            {/* project metadata section (spec 18 §4.1: project title deep-links here).
+                R25-F3 (D2): the title DERIVES from the project record + the
+                ACTIVE scene (exportJsonFileName's own pair — the export target
+                follows the scene switch; the stats row already derives its
+                duration from the same scene). */}
             <div className="mb-4 flex items-center justify-between rounded-[var(--radius)] border border-soft bg-inset px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
                 <MonitorPlay size={18} strokeWidth={1.6} className="shrink-0 text-accent" aria-hidden="true" />
                 <div className="min-w-0">
-                  <div className="truncate text-[12px] font-semibold text-tprimary">Beach Doc — Rough Cut</div>
+                  <div className="truncate text-[12px] font-semibold text-tprimary">{project.metadata.name} — {scene.name}</div>
                   <div className="mono text-[11px] text-tfaint">{tc(duration)} · {project.settings.fps} fps · {project.settings.width}×{project.settings.height}</div>
                 </div>
               </div>
-              <span className="shrink-0 rounded-full border border-soft px-2 py-0.5 text-[11px] text-tmuted">Edited</span>
+              <span className="shrink-0 rounded-full border border-soft px-2 py-0.5 text-[11px] text-tmuted">{project.metadata.status}</span>
             </div>
 
             {/* ---- the deliver inspector's render settings half (#88) ----- */}
@@ -372,21 +392,49 @@ export function DeliverPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="w-[84px] shrink-0 grow basis-[84px] text-[11px] text-tmuted">Range</span>
-                <select className="field min-w-0 grow cursor-pointer truncate" aria-label="Export range" value={range} onChange={(e) => setExportSettings({ range: e.target.value as 'inout' | 'full' })}>
+                {/* R25-F3 (D5): per-preset applicability (the Codec row's own
+                    honest-disabled grammar): a single-frame export has NO
+                    in/out span — the frame preset pins the playhead frame. */}
+                <select
+                  className="field min-w-0 grow cursor-pointer truncate"
+                  aria-label="Export range"
+                  value={range}
+                  disabled={preset === 'frame'}
+                  title={preset === 'frame' ? 'a single-frame export has no in/out range' : 'Export range'}
+                  onChange={(e) => setExportSettings({ range: e.target.value as 'inout' | 'full' })}
+                >
                   <option value="inout">In → Out ({tc(loop.start)} – {tc(loop.end)})</option>
                   <option value="full">Full timeline ({tc(duration)})</option>
                 </select>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="w-[84px] shrink-0 grow basis-[84px] text-[11px] text-tmuted">Resolution</span>
-                <select className="field min-w-0 grow cursor-pointer truncate" aria-label="Export resolution" value={resolution} onChange={(e) => setExportSettings({ resolution: e.target.value as '1080' | '2160' })}>
+                {/* R25-F3 (D5): FCPXML is a handoff format (the resolution
+                    follows the project's own geometry); the JSON interchange
+                    has no raster (the summary's honest em-dash agrees). */}
+                <select
+                  className="field min-w-0 grow cursor-pointer truncate"
+                  aria-label="Export resolution"
+                  value={resolution}
+                  disabled={preset === 'fcpxml' || preset === 'json'}
+                  title={preset === 'fcpxml'
+                    ? 'FCPXML carries the project’s own resolution — the handoff format has no render size'
+                    : preset === 'json'
+                      ? 'the JSON interchange has no raster output — resolution does not apply'
+                      : 'Export resolution'}
+                  onChange={(e) => setExportSettings({ resolution: e.target.value as '1080' | '2160' })}
+                >
                   <option value="1080">1920 × 1080 (project)</option>
                   <option value="2160">3840 × 2160</option>
                 </select>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="w-[84px] shrink-0 grow basis-[84px] text-[11px] text-tmuted">Destination</span>
-                <span className="field min-w-0 grow truncate">~/Downloads/beach-doc/</span>
+                {/* R25-F3 (D4): READ-ONLY mirror — the `field` styling claimed
+                    editability the row never had (no click, no picker); the
+                    mono muted readout + the fixed-destination tip tell the
+                    truth instead. */}
+                <span className="mono min-w-0 grow cursor-default truncate text-[11px] text-tmuted" data-tip="fixed destination in this mock — no folder picker is built" data-testid="shell-deliver-destination">~/Downloads/beach-doc/</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="w-[84px] shrink-0 grow basis-[84px] text-[11px] text-tmuted">Bundle media</span>
@@ -402,7 +450,7 @@ export function DeliverPage() {
                 state: honest-disabled (aria-disabled + reason in the tip).
                 R25-W5: the json preset's CTA is the REAL download (runExport). */}
             <button
-              data-testid="shell-deliver-btn-export-fcpxml"
+              data-testid="shell-deliver-btn-export"
               aria-disabled={emptyTimeline || undefined}
               data-tip={emptyTimeline ? 'nothing to export — the timeline is empty' : undefined}
               className="mb-2 flex w-full items-center justify-center gap-2 rounded-[var(--radius)] px-3 py-2.5 text-[12px] font-semibold transition-opacity hover:opacity-90"
@@ -448,73 +496,88 @@ export function DeliverExportConsole() {
   const scenes = useUi((s) => s.scenes);
   const activeSceneId = useUi((s) => s.activeSceneId);
   const loop = useUi((s) => s.loop);
+  /* R25-F3 (D1): density-aware range copy — the range BAND mounts only on
+     the compact strip (the 'all' scope); every other density is the FULL
+     Timeline where the ruler BRACKETS are the real drag affordance. The
+     copy swaps with the per-page view state (the W6 map's resolver) so it
+     can never point at a surface that isn't mounted. */
+  const compactStrip = useUi((s) => resolveTimelineCompactScope(s) === 'all');
 
   const scene = scenes.find((s) => s.id === activeSceneId) ?? scenes[0];
   const duration = sceneDuration(scene);
   const p = PRESETS.find((x) => x.id === preset)!;
   const isJson = preset === 'json';
   const renderActive = jobs.some((j) => j.state === 'queued' || j.state === 'running');
+  const rangeHint = compactStrip
+    ? 'set I/O at the playhead (I / O keys, the viewer transport marks) or drag the in/out range band on the Timeline tab'
+    : 'set I/O at the playhead (I / O keys, the viewer transport marks) or drag the in/out brackets on the timeline ruler';
 
   return (
     <div
       data-testid="shell-deliver-export-console"
       aria-label="Export console panel"
-      className="scroll-y flex min-h-0 flex-1 flex-col bg-panel"
+      className="flex min-h-0 flex-1 flex-col bg-panel"
     >
+      {/* R25-W3 (D6): the status strip PINS ABOVE the scrollable card
+          content — at an ~800px viewport the summary card pushed it below
+          the fold (the console row's height budget); the strip stays
+          visible while the card scrolls. */}
+      {/* R25-W5 "what else makes sense": the read-only render-queue status
+          strip — the queue's DETAIL rows stay in the center view (the
+          header toggle owns them); this mirror writes nothing (the
+          single-writer law) */}
+      <div data-testid="shell-deliver-export-queue" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-hairline px-5 py-2 text-[11px] text-tmuted">
+        {renderActive ? (
+          <LoaderCircle size={13} className="animate-spin text-accent" aria-hidden="true" />
+        ) : (
+          <Clock size={13} className="text-tmuted" aria-hidden="true" />
+        )}
+        <span className="font-semibold">Render queue</span>
+        <span className="mono rounded border border-soft px-1.5 py-0.5 text-[10px]">{jobs.length} jobs</span>
+        <span className="mono rounded border border-soft px-1.5 py-0.5 text-[10px]" data-testid="shell-deliver-export-queue-state">
+          {renderActive ? 'rendering' : 'idle'}
+        </span>
+        <span className="text-[10px] text-tfaint">review past + active renders from the deliver header's queue toggle</span>
+      </div>
       {/* the summary column keeps a reading width — a full-row card would
           stretch its rows across the console row's whole width */}
-      <div className="mx-auto flex w-full max-w-[560px] flex-col px-5 py-4">
-        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Export summary</div>
-        <div data-testid="shell-deliver-export-summary" className="flex flex-col gap-2.5 rounded-[var(--radius)] border border-soft px-4 py-3">
-          <SummaryRow label="Timeline" value={scene.name} />
-          <SummaryRow label="Format" value={p.name} />
-          {/* the codec row is the master preset's; the json preset gets its
-              honest interchange fields instead (th_mtzp4xeb) */}
-          {preset === 'master' && (
-            <SummaryRow label="Codec" value={CODECS.find((c) => c.id === codec)?.label ?? ''} />
-          )}
-          {isJson && <SummaryRow label="Schema" value="nle-interchange/1" mono />}
-          {isJson && <SummaryRow label="Pretty-printed" value="on" />}
-          {/* resolution does not apply to a JSON interchange — the honest em-dash */}
-          <SummaryRow
-            label="Resolution"
-            value={isJson ? '—' : resolution === '2160' ? '3840 × 2160' : '1920 × 1080'}
-            mono
-          />
-          {/* R25-W5's "what else makes sense": the timeline's duration readout */}
-          <SummaryRow label="Duration" value={`${tc(duration)} · ${project.settings.fps} fps`} mono />
-          <SummaryRow label="Destination" value="~/Downloads/beach-doc/" mono />
+      <div className="scroll-y min-h-0 flex-1">
+        <div className="mx-auto flex w-full max-w-[560px] flex-col px-5 py-4">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-tmuted">Export summary</div>
+          <div data-testid="shell-deliver-export-summary" className="flex flex-col gap-2.5 rounded-[var(--radius)] border border-soft px-4 py-3">
+            <SummaryRow label="Timeline" value={scene.name} />
+            <SummaryRow label="Format" value={p.name} />
+            {/* the codec row is the master preset's; the json preset gets its
+                honest interchange fields instead (th_mtzp4xeb) */}
+            {preset === 'master' && (
+              <SummaryRow label="Codec" value={CODECS.find((c) => c.id === codec)?.label ?? ''} />
+            )}
+            {isJson && <SummaryRow label="Schema" value="nle-interchange/1" mono />}
+            {isJson && <SummaryRow label="Pretty-printed" value="on" />}
+            {/* resolution does not apply to a JSON interchange — the honest em-dash */}
+            <SummaryRow
+              label="Resolution"
+              value={isJson ? '—' : resolution === '2160' ? '3840 × 2160' : '1920 × 1080'}
+              mono
+            />
+            {/* R25-W5's "what else makes sense": the timeline's duration readout */}
+            <SummaryRow label="Duration" value={`${tc(duration)} · ${project.settings.fps} fps`} mono />
+            <SummaryRow label="Destination" value="~/Downloads/beach-doc/" mono />
 
-          {/* the RANGE — th_mto37ba3 (moved verbatim from the right column,
-              R25-W5): live loop in/out TCs from the store. The timeline's
-              I/O marks ARE the deliver range selection (spec 16 §3.4); the
-              hint points where to change it — on the Export tab the range
-              band lives on the TIMELINE TAB (the copy says so honestly) */}
-          <div className="mt-1 rounded-[var(--radius)] border border-soft bg-inset px-3 py-2.5">
-            <div className="text-[11px] font-semibold text-tprimary">In → Out range selection</div>
-            <div className="mono mt-1 text-[12px] text-accent" data-testid="shell-deliver-range">
-              {tc(loop.start)} → {tc(loop.end)}
+            {/* the RANGE — th_mto37ba3 (moved verbatim from the right column,
+                R25-W5): live loop in/out TCs from the store. The timeline's
+                I/O marks ARE the deliver range selection (spec 16 §3.4); the
+                hint (D1) names the affordance the CURRENT density mounts —
+                the band on the compact strip, the ruler brackets on the
+                full Timeline. */}
+            <div className="mt-1 rounded-[var(--radius)] border border-soft bg-inset px-3 py-2.5">
+              <div className="text-[11px] font-semibold text-tprimary">In → Out range selection</div>
+              <div className="mono mt-1 text-[12px] text-accent" data-testid="shell-deliver-range">
+                {tc(loop.start)} → {tc(loop.end)}
+              </div>
+              <div className="mt-1 text-[11px] text-tmuted">{rangeHint}</div>
             </div>
-            <div className="mt-1 text-[11px] text-tmuted">set I/O at the playhead (I / O keys, the viewer transport marks) or drag the in/out range band on the Timeline tab</div>
           </div>
-        </div>
-
-        {/* R25-W5 "what else makes sense": the read-only render-queue status
-            strip — the queue's DETAIL rows stay in the center view (the
-            header toggle owns them); this mirror writes nothing (the
-            single-writer law) */}
-        <div data-testid="shell-deliver-export-queue" className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-tmuted">
-          {renderActive ? (
-            <LoaderCircle size={13} className="animate-spin text-accent" aria-hidden="true" />
-          ) : (
-            <Clock size={13} className="text-tmuted" aria-hidden="true" />
-          )}
-          <span className="font-semibold">Render queue</span>
-          <span className="mono rounded border border-soft px-1.5 py-0.5 text-[10px]">{jobs.length} jobs</span>
-          <span className="mono rounded border border-soft px-1.5 py-0.5 text-[10px]" data-testid="shell-deliver-export-queue-state">
-            {renderActive ? 'rendering' : 'idle'}
-          </span>
-          <span className="text-[10px] text-tfaint">review past + active renders from the deliver header's queue toggle</span>
         </div>
       </div>
     </div>
