@@ -158,7 +158,7 @@ enumerating the absences):
 | The sceneBridge copy + OT field-name binding (S6/S19) | app | C1-entry | `otProject.ts` copied; the main/overlay/audio mapping decided + pinned against the vendored OT types |
 | The MiniShell store-slots architecture (S22) | nle-ui | C0 | MiniShell renders with package-owned state; zero engine imports (boundary script) |
 | Export wiring (S15) | app+engine | C4 | the CTA → engine export call; the demo's export leg |
-| The C4 corpus re-expression (S25) | app | C4 | 344 tests / 122 census units authored app-side; the row-by-row check |
+| The C4 corpus re-expression (S25) | app | C4 | 363 tests / 128 census units authored app-side; the row-by-row check |
 
 
 > **R23 mapping note (ARCH-R23 D23/D24):** spec 14 is RETIRED — the plan is `IMPLEMENTATION-PLAN.md` and the phases are the D24 verification ladder. This file's C0-C4/spec-14 citations map: C1(b,d,e,f)+C1(c)→K3; C1(a)/C2-frames→w1; C3→K3; C4→K4 (+ the human side-by-side→w1-entry); the 'crawl' below means the K3 corpus authoring, not the R22 C-ladder. The disposition vocabulary (HOLDS-on-OT / GAP-app-C1 / GAP-C2/C3 / GAP-W-ops) maps to K3 / w1 / K3 / K3-compose+r1-graduate respectively.

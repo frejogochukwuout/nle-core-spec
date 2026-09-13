@@ -6,10 +6,14 @@
    (thread #18 — a still has no source length; its extent on the
    timeline is an edit decision, shown as Duration). */
 
-import { ChevronLeft, ChevronRight, MousePointerClick, PanelRightClose, PanelRightOpen, Volume2, VolumeX } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, MousePointerClick, PanelRightClose, PanelRightOpen, Plus, Volume2, VolumeX, X } from 'lucide-react';
 import { useMini } from '../state/useMini';
 import { fmtTimecode } from '../lib/timecode';
-import { neighborBounds } from '../lib/geometry';
+import { neighborBounds, MIN_DUR } from '../lib/geometry';
+import { EFFECT_DEFS, type EffectDef, type EffectJSON } from '../lib/mockData';
+import { volToDb, dbToVol, DB_MIN, DB_MAX } from '../lib/audioDb';
+import { NumberField, ParamRow, Group } from './fields';
 
 export function Inspector() {
   const doc = useMini((s) => s.doc);
@@ -37,6 +41,10 @@ export function Inspector() {
    * MUTE. Doc state (one history entry, undoable); the "etc." beyond
    * mute is deferred to the nle-engine audio seam. */
   const toggleTrackMute = useMini((s) => s.toggleTrackMute);
+  /* R24-miniplus (D1): the feature gate — the plus groups render ONLY
+   *  when ON (additive-by-construction: gate-OFF is the R23 surface —
+   *  the facts dl + nudge + track card above are untouched). */
+  const miniPlus = useMini((s) => s.miniPlus);
   const canNudge = (delta: number): boolean => {
     if (!clip) return false;
     const { prevEnd, nextStart } = neighborBounds(doc, clip);
@@ -144,6 +152,7 @@ export function Inspector() {
               </button>
             </div>
           </div>
+          {miniPlus && <PlusSections clipId={clip.id} />}
         </div>
       ) : selTrack ? (
         /* R19 (thread #47): the TRACK card — track-specific facts. R20
@@ -209,5 +218,261 @@ export function Inspector() {
         </div>
       )}
     </aside>
+  );
+}
+
+/* ---------- R24-miniplus W1 (DESIGN-R24 D3/D4): the plus groups ---------- */
+
+/** The Timing group: Start/Duration NumberFields routed through the REAL
+ *  commands (moveClip REJECTS on conflict with a toast — the OT seam law;
+ *  trimClip('end') applies the neighbor + source clamps). The field
+ *  re-syncs from the doc's truth after every commit attempt (the epoch
+ *  key remount: a rejected command honestly reverts the display). */
+function TimingGroup({ clipId }: { clipId: string }) {
+  const clip = useMini((s) => s.doc.clips.find((c) => c.id === clipId));
+  const moveClip = useMini((s) => s.moveClip);
+  const trimClip = useMini((s) => s.trimClip);
+  const [epoch, setEpoch] = useState(0);
+  if (!clip) return null;
+  return (
+    <Group title="Timing" testid="mini-group-timing" defaultOpen>
+      <NumberField
+        key={`start-${epoch}`}
+        label="Start"
+        value={clip.start}
+        min={0}
+        step={0.5}
+        testid="mini-field-start"
+        onCommit={(v) => {
+          moveClip(clip.id, v);
+          setEpoch((e) => e + 1);
+        }}
+      />
+      <NumberField
+        key={`dur-${epoch}`}
+        label="Duration"
+        value={clip.duration}
+        min={MIN_DUR}
+        step={0.5}
+        testid="mini-field-duration"
+        onCommit={(v) => {
+          trimClip(clip.id, 'end', clip.start + v);
+          setEpoch((e) => e + 1);
+        }}
+      />
+    </Group>
+  );
+}
+
+/** The Clip group: Volume (audio, dB), Opacity (visual, %), Speed (%),
+ *  In-point (only when the media window exceeds the clip). */
+function ClipPropsGroup({ clipId }: { clipId: string }) {
+  const clip = useMini((s) => s.doc.clips.find((c) => c.id === clipId));
+  const media = useMini((s) => s.doc.media.find((m) => clipId && s.doc.clips.find((c) => c.id === clipId)?.mediaId === m.id));
+  const setClipProp = useMini((s) => s.setClipProp);
+  const setClipSpeed = useMini((s) => s.setClipSpeed);
+  const setClipSourceStart = useMini((s) => s.setClipSourceStart);
+  const [epoch, setEpoch] = useState(0);
+  if (!clip || !media) return null;
+  const isAudio = media.kind === 'audio';
+  const rate = clip.speed ?? 1;
+  const window = clip.duration * rate;
+  const hasWindowSlack = media.kind !== 'image' && media.duration - window > 0.01;
+  return (
+    <Group title={isAudio ? 'Audio' : 'Video'} testid="mini-group-clip" defaultOpen>
+      {isAudio && (
+        <NumberField
+          key={`vol-${epoch}`}
+          label="Volume"
+          value={Number(volToDb(clip.volume ?? 1).toFixed(1))}
+          min={DB_MIN}
+          max={DB_MAX}
+          step={0.5}
+          resetTo={0}
+          testid="mini-field-volume"
+          onCommit={(db) => {
+            setClipProp(clip.id, { volume: dbToVol(db) });
+            setEpoch((e) => e + 1);
+          }}
+        />
+      )}
+      {!isAudio && (
+        <NumberField
+          key={`opa-${epoch}`}
+          label="Opacity"
+          value={Math.round((clip.opacity ?? 1) * 100)}
+          min={0}
+          max={100}
+          step={5}
+          resetTo={100}
+          testid="mini-field-opacity"
+          onCommit={(v) => {
+            setClipProp(clip.id, { opacity: v / 100 });
+            setEpoch((e) => e + 1);
+          }}
+        />
+      )}
+      {media.kind !== 'image' && (
+        <NumberField
+          key={`spd-${epoch}`}
+          label="Speed"
+          value={Math.round(rate * 100)}
+          min={10}
+          max={400}
+          step={5}
+          resetTo={100}
+          testid="mini-field-speed"
+          onCommit={(v) => {
+            setClipSpeed(clip.id, v / 100);
+            setEpoch((e) => e + 1);
+          }}
+        />
+      )}
+      {hasWindowSlack && (
+        <NumberField
+          key={`in-${epoch}`}
+          label="In-point"
+          value={clip.sourceStart ?? 0}
+          min={0}
+          max={media.duration - window}
+          step={0.5}
+          resetTo={0}
+          testid="mini-field-inpoint"
+          onCommit={(v) => {
+            setClipSourceStart(clip.id, v);
+            setEpoch((e) => e + 1);
+          }}
+        />
+      )}
+    </Group>
+  );
+}
+
+/** The Effects group (D4): the stack as accordion rows (LOCAL expanded
+ *  state — no store selection domain; the S7 XOR law untouched), the
+ *  add-picker filtered to defs not already on the clip, per-param rows
+ *  seeded from the def registry. */
+function EffectsGroup({ clipId }: { clipId: string }) {
+  const clip = useMini((s) => s.doc.clips.find((c) => c.id === clipId));
+  const addEffect = useMini((s) => s.addEffect);
+  const removeEffect = useMini((s) => s.removeEffect);
+  const toggleEffect = useMini((s) => s.toggleEffect);
+  const setEffectParam = useMini((s) => s.setEffectParam);
+  const reorderEffect = useMini((s) => s.reorderEffect);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  if (!clip) return null;
+  const stack = clip.effects ?? [];
+  const available = EFFECT_DEFS.filter((d) => !stack.some((e) => e.id === d.id));
+  return (
+    <Group title={`Effects${stack.length ? ` (${stack.length})` : ''}`} testid="mini-group-effects" defaultOpen>
+      {stack.map((fx, i) => {
+        const def: EffectDef | undefined = EFFECT_DEFS.find((d) => d.id === fx.id);
+        const isOpen = expanded === fx.id;
+        return (
+          <div key={fx.id} className="mini-fx-row" data-testid={`mini-fx-row-${fx.id}`}>
+            <div className="mini-fx-row__head">
+              <input
+                type="checkbox"
+                checked={fx.enabled}
+                onChange={() => toggleEffect(clip.id, fx.id)}
+                aria-label={`${fx.name} enabled`}
+                data-testid={`mini-fx-enabled-${fx.id}`}
+              />
+              <button
+                type="button"
+                className="mini-fx-row__name"
+                aria-expanded={isOpen}
+                onClick={() => setExpanded(isOpen ? null : fx.id)}
+                data-testid={`mini-fx-toggle-${fx.id}`}
+              >
+                {fx.name}
+              </button>
+              <button
+                type="button"
+                className="mini-iconbtn mini-fx-row__btn"
+                aria-label={`Move ${fx.name} up`}
+                disabled={i === 0}
+                onClick={() => reorderEffect(clip.id, fx.id, -1)}
+                data-testid={`mini-fx-up-${fx.id}`}
+              >
+                <ChevronUp size={12} strokeWidth={1.75} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="mini-iconbtn mini-fx-row__btn"
+                aria-label={`Move ${fx.name} down`}
+                disabled={i === stack.length - 1}
+                onClick={() => reorderEffect(clip.id, fx.id, 1)}
+                data-testid={`mini-fx-down-${fx.id}`}
+              >
+                <ChevronDown size={12} strokeWidth={1.75} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="mini-iconbtn mini-fx-row__btn"
+                aria-label={`Remove ${fx.name}`}
+                onClick={() => removeEffect(clip.id, fx.id)}
+                data-testid={`mini-fx-remove-${fx.id}`}
+              >
+                <X size={12} strokeWidth={1.75} aria-hidden="true" />
+              </button>
+            </div>
+            {isOpen && def && (
+              <div className="mini-fx-row__params">
+                {def.params.map((p) => (
+                  <ParamRow
+                    key={p.key}
+                    label={p.label}
+                    value={fx.params?.[p.key] ?? p.default}
+                    min={p.min}
+                    max={p.max}
+                    step={p.step}
+                    resetTo={p.default}
+                    testid={`mini-fx-param-${fx.id}-${p.key}`}
+                    onCommit={(v) => setEffectParam(clip.id, fx.id, p.key, v)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {stack.length === 0 && <p className="mini-inspector__hint">No effects on this clip.</p>}
+      {available.length > 0 && (
+        <label className="mini-fx-add">
+          <span className="mini-field__label">Add effect</span>
+          <select
+            className="mini-fx-add__select"
+            aria-label="Add effect"
+            data-testid="mini-fx-add"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) addEffect(clip.id, e.target.value);
+            }}
+          >
+            <option value="">Choose…</option>
+            {available.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+          <Plus size={12} strokeWidth={1.75} aria-hidden="true" />
+        </label>
+      )}
+    </Group>
+  );
+}
+
+/** The plus sections mount (gate ON only — the additive-by-construction
+ *  law: these groups mint NEW testids; the R23 facts surface above never
+ *  changes). */
+function PlusSections({ clipId }: { clipId: string }) {
+  return (
+    <>
+      <TimingGroup clipId={clipId} />
+      <ClipPropsGroup clipId={clipId} />
+      <EffectsGroup clipId={clipId} />
+    </>
   );
 }

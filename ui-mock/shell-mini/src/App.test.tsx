@@ -384,7 +384,10 @@ describe('R18j panel collapse + viewer max + aspect (threads #13/#14/#19)', () =
   it('image clips drop "Source length" from the inspector (thread #18)', () => {
     renderApp();
     setStore(() => S().select('c3')); // title_card.png — image
-    expect(screen.getByText('Duration')).toBeInTheDocument(); // edit decision stays
+    // R24-miniplus note: the Timing group added a "Duration" FIELD label —
+    // the facts-dl row is pinned by its dt selector (the net's law is the
+    // dl row, unchanged; the field label is new DOM under a new testid)
+    expect(screen.getByText('Duration', { selector: 'dt' })).toBeInTheDocument(); // edit decision stays
     expect(screen.queryByText('Source length')).not.toBeInTheDocument();
     setStore(() => S().select('c1')); // drone video — source length back
     expect(screen.getByText('Source length')).toBeInTheDocument();
