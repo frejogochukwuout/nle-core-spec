@@ -247,6 +247,30 @@ body {
 }
 [data-tip-top]::after { top: auto; bottom: calc(100% + 7px); transform: translateX(-50%) translateY(2px); }
 
+/* R25-W4 (thread th_mtzovsvz — "hover cause the dailer area to jump a bit",
+   diagnosed live in headed Chromium): STRIP-scope tooltips carry BOTH
+   data-tip and data-tip-in — the variant CLAMPS the tooltip inside the
+   strip box. The live repro: the RSM row's nowrap tooltip (~180px, centered
+   on a 20px button in an 86px strip) extends the channel scroll region's
+   scrollable overflow when the LAST strip is hovered (scrollWidth 172 → 230,
+   measured) → a horizontal scrollbar appears INSIDE the overflow-x-auto
+   region → the classic scrollbar consumes 9px of the region's content height
+   (measured) → the items-stretch strips re-layout and the fader/meters
+   column JUMPS. Wrapping + clamping to 72px (the narrow strip width — the
+   smallest strip box, so the clamp holds at every strip width) keeps the
+   hover state layout-invariant: the tooltip never enters the scrollable
+   overflow, so no scrollbar can ever appear on hover. Same class of bug as
+   R22 #71 (an absolutely-positioned box extending the ancestor scroll
+   region) — #71 killed the steady-state case (display:none default); this
+   kills the hover case. */
+[data-tip-in]::after {
+  max-width: 72px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
 /* range inputs — mock grammar.
    R24-W5a (DESIGN-R24 §2 F2-P1, THE cascade landmine): this block used to
    sit UNLAYERED, and unlayered author CSS outranks Tailwind's @layer

@@ -56,6 +56,7 @@ import {
   rippleShiftAfter,
 } from '../lib/geometry';
 import { rollDeltaBounds, slipTargetBounds, slideStartBounds, quantizeDelta, touchingRight, touchingLeft } from '../lib/trimModes';
+import { planInsert, type InsertMode } from '../lib/insertPlan';
 
 export interface ToastMsg {
   kind: 'info' | 'error';
@@ -340,6 +341,40 @@ export interface MiniState {
   /** SLIDE: move the clip; the neighbors' FACING edges trim to make
    *  room (capped edges open gaps — deviation #10). */
   previewSlide: (id: string, t: number) => void;
+
+  /* ---- R24-miniplus W4 (DESIGN-R24 D7): source mode + insert modes ----
+   * The viewer's dual monitor: 'source' previews a POOL asset (mark
+   * in/out, drive the insert modes); 'program' is the R23 law verbatim.
+   * ALL of it is VIEW state — never a doc snapshot, never an undo entry,
+   * drag-gated (the view-family law: a mode swap mid-gesture would move
+   * the surfaces under the pointer). The program playhead is FROZEN in
+   * source mode (F9 — the source stage owns sourcePlayhead). The marked
+   * ranges are PER-MEDIA (a round trip to the program monitor never
+   * forgets an edit decision); the full-window default is COMPUTED at
+   * read time, never stored (the absent-is-default law, view edition). */
+  viewerMode: 'program' | 'source';
+  sourceMediaId: string | null;
+  /** per-media marked windows: {in, out} in media seconds, 0.5-grid. */
+  sourceRanges: Record<string, { in: number; out: number } | undefined>;
+  /** the source stage's own position (F9 — frozen program playhead). */
+  sourcePlayhead: number;
+  /** open a pool asset in the source viewer (drag-gated view family). */
+  enterSourcePreview: (mediaId: string) => void;
+  /** back to the program monitor (Esc's source branch; ranges survive). */
+  exitSourcePreview: () => void;
+  /** mark the IN edge (quantized to the 0.5 grid; in<out ALWAYS — an
+   *  inverted/equal attempt REFUSES, keeping the previous edge). */
+  setSourceRangeIn: (mediaId: string, t: number) => void;
+  /** mark the OUT edge (same laws, mirrored). */
+  setSourceRangeOut: (mediaId: string, t: number) => void;
+  /** drop the media's mark (absent = the full window again). */
+  clearSourceRange: (mediaId: string) => void;
+  /** scrub the source stage (clamped [0, media.duration]). */
+  setSourcePlayhead: (t: number) => void;
+  /** run an insert-mode edit from the source viewer: planInsert computes
+   *  the patch, commit seals it as ONE history entry, a refusal toasts
+   *  honestly (a dead button is the anti-pattern). */
+  insertFromSource: (mode: InsertMode) => void;
 }
 
 function clampZoom(step: number): number {
@@ -493,6 +528,10 @@ export const useMini = create<MiniState>((set, get) => {
     audioLaneVisible: true,
     miniPlus: true, // R24-miniplus (D1): default ON; reset restores ON
     trimTool: 'select', // R24-miniplus (D5/D6): the R18k law is the default tool
+    viewerMode: 'program', // R24-miniplus W4 (D7): the program monitor is the default
+    sourceMediaId: null,
+    sourceRanges: {},
+    sourcePlayhead: 0,
     rulerEnd: 8, // R18i: floor = the min runway; Timeline raises it to viewport coverage
     // R18j layout defaults: everything expanded, normal (non-max) viewer
     poolCollapsed: false,
@@ -996,6 +1035,118 @@ export const useMini = create<MiniState>((set, get) => {
       set({ trimTool: t });
     },
 
+    /* ---- R24-miniplus W4 (DESIGN-R24 D7): the source-mode view family ---- */
+
+    enterSourcePreview: (mediaId) => {
+      if (get().dragActive) return; // the view-family law
+      const media = findMedia(get().doc, mediaId);
+      if (!media) return;
+      /* F9: the source stage owns its playhead — entering a media starts
+       * at its head (a stale position from a longer source would render
+       * past the new bar; 0 is the honest reset). The marked ranges
+       * survive (per-media view state). */
+      set({ viewerMode: 'source', sourceMediaId: mediaId, sourcePlayhead: 0, playing: false });
+    },
+
+    exitSourcePreview: () => {
+      if (get().dragActive) return; // the view-family law
+      if (get().viewerMode !== 'source') return; // no-op churn guard
+      set({ viewerMode: 'program', sourceMediaId: null });
+    },
+
+    setSourceRangeIn: (mediaId, t) => {
+      if (get().dragActive) return; // the view-family law
+      const state = get();
+      const media = findMedia(state.doc, mediaId);
+      if (!media) return;
+      const cur = state.sourceRanges[mediaId];
+      const curOut = cur?.out ?? media.duration; // the full-window default, computed
+      /* the 0.5 grid: in/out are the insert window's edges — the setters
+       * quantize (Math.round(v/0.5)*0.5, the placement-adjacent rule). */
+      const v = Math.max(0, quantize(t));
+      /* the in<out refusal law: an inverted/equal attempt REFUSES, keeping
+       * the PREVIOUS edge — never a silently snapped degenerate window.
+       * (With both edges on the 0.5 grid, v < curOut implies
+       * v <= curOut - MIN_DUR, so the min-separation clamp is automatic.) */
+      if (v >= curOut) return;
+      if (cur && cur.in === v) return; // no-op churn guard
+      set({ sourceRanges: { ...state.sourceRanges, [mediaId]: { in: v, out: curOut } } });
+    },
+
+    setSourceRangeOut: (mediaId, t) => {
+      if (get().dragActive) return; // the view-family law
+      const state = get();
+      const media = findMedia(state.doc, mediaId);
+      if (!media) return;
+      const cur = state.sourceRanges[mediaId];
+      const curIn = cur?.in ?? 0;
+      const v = Math.min(media.duration, quantize(t)); // out <= the source extent
+      if (v <= curIn) return; // the mirrored in<out refusal law
+      if (cur && cur.out === v) return; // no-op churn guard
+      set({ sourceRanges: { ...state.sourceRanges, [mediaId]: { in: curIn, out: v } } });
+    },
+
+    clearSourceRange: (mediaId) => {
+      if (get().dragActive) return; // the view-family law
+      const state = get();
+      if (!(mediaId in state.sourceRanges)) return; // unmarked = the full window already
+      const next = { ...state.sourceRanges };
+      delete next[mediaId];
+      set({ sourceRanges: next });
+    },
+
+    setSourcePlayhead: (t) => {
+      /* the scrub gate family (setPlayhead's law — the pointer scrub never
+       * writes through the clip interaction lock; the F9 freeze: this is
+       * the SOURCE position, the program playhead never moves here). */
+      if (get().dragActive) return;
+      const state = get();
+      const mediaId = state.sourceMediaId;
+      if (!mediaId || state.viewerMode !== 'source') return;
+      const media = findMedia(state.doc, mediaId);
+      if (!media) return;
+      set({ sourcePlayhead: Math.min(Math.max(t, 0), media.duration) });
+    },
+
+    insertFromSource: (mode) => {
+      const state = get();
+      if (state.dragActive) return; // interaction lock — no commits mid-gesture
+      const mediaId = state.sourceMediaId;
+      if (!mediaId || state.viewerMode !== 'source') return;
+      const media = findMedia(state.doc, mediaId);
+      if (!media) return;
+      /* the binding window picks the lane (the addClipFromMedia law — the
+       * mini is a window onto the project, inserts edit in the BOUND
+       * pair); video-only mode keeps its strict-video surface (the pool
+       * never offers audio/stills there, the store re-validates like the
+       * drop zones do). */
+      if (state.trackMode === 'video' && media.kind !== 'video') {
+        state.pushToast('info', 'Video-only mode — audio and stills live in the full editor.');
+        return;
+      }
+      const bound = boundTrackOfKind(
+        state.doc,
+        laneForMedia(media.kind),
+        state.boundVideoTrack,
+        state.boundAudioTrack,
+      );
+      const plan = planInsert(state.doc, media, mode, {
+        playhead: state.playhead,
+        targetTrackId: bound?.id,
+        sourceRange: state.sourceRanges[mediaId],
+        selectedClipId: state.selectedId ?? undefined,
+      });
+      if (!plan.ok) {
+        state.pushToast('info', plan.reason); // honest — never a dead button
+        return;
+      }
+      /* ONE commit = ONE history entry; the patch mutates the draft (the
+       * deep clone is commit's job — the F1 law), the sanitizer re-joins
+       * the seams. The no-op guard rides commit's docChanged. */
+      const ok = commit((doc) => plan.patch(doc));
+      if (ok && plan.toast) state.pushToast('info', plan.toast);
+    },
+
     toggleTrackMute: (trackId) => {
       /* R20 (thread #29 — "the most basic controls like mute/unmute"):
        * the named control, implemented as DOC state (saved with the
@@ -1056,6 +1207,15 @@ export const useMini = create<MiniState>((set, get) => {
     togglePlay: () => {
       const state = get();
       if (state.dragActive) return; // interaction lock
+      /* R24-miniplus W4 (D7, F9 — the freeze): playback is the PROGRAM
+       * monitor's concept; the program playhead never moves while the
+       * viewer is the source stage (enterSourcePreview already paused).
+       * The honest toast — a silent dead Space key is the dead-button
+       * anti-pattern. */
+      if (state.viewerMode === 'source') {
+        state.pushToast('info', 'Playback is paused in source mode — back to the program monitor to play.');
+        return;
+      }
       // R18k: "empty" means the BOUND world is empty (video-only mode with
       // only audio clips bound-elsewhere is still nothing to play here)
       const world = boundClips(state.doc, state.trackMode, state.boundVideoTrack, state.boundAudioTrack);
@@ -1752,6 +1912,10 @@ export const useMini = create<MiniState>((set, get) => {
         audioLaneVisible: true,
         miniPlus: true, // R24-miniplus (D1): the gate is a session surface — reset restores ON
         trimTool: 'select',
+        viewerMode: 'program', // R24-miniplus W4 (D7/F15): reset clears the source view state
+        sourceMediaId: null,
+        sourceRanges: {},
+        sourcePlayhead: 0,
         rulerEnd: 8,
         poolCollapsed: false,
         inspectorCollapsed: false,

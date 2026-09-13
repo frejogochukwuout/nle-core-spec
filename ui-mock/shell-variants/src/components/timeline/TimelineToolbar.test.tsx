@@ -129,7 +129,16 @@ describe('TimelineToolbar', () => {
     // this toolbar carries no Inspector — the SlidersHorizontal collision
     // glyph must be GONE entirely (the mixer toggle now uses SlidersVertical)
     expect(src).not.toContain(['Sliders', 'Horizontal'].join(''));
-    expect(src).toContain('SlidersVertical');
+    /* RE-PINNED (R25-W4-D): the old pin required SlidersVertical to be
+       present because the timeline-toolbar MIXER toggle used it — that
+       button is deleted (th_mtzoy9f9; the glyph law died with it —
+       Toolbar2's twin carries the glyphs now). The new law: the mixer
+       toggle's glyphs + testid + store seam are gone from this file
+       entirely (concatenated so this file never matches its own needles). */
+    expect(src).not.toContain(['Sliders', 'Vertical'].join(''));
+    expect(src).not.toContain(['Audio', 'Lines'].join(''));
+    expect(src).not.toContain(['btn', '-mixer-state'].join(''));
+    expect(src).not.toContain(['toggle', 'MixerOpen'].join(''));
   });
 
   it('clicking a tool switches the store tool and the radio state (spec 16 B/V keys)', () => {
@@ -180,46 +189,29 @@ describe('TimelineToolbar', () => {
     expect(store().pxPerSec).toBeCloseTo(store().zoomMinPps, 1);
   });
 
-  it('R24-W1 (A3-R3/#65/#66): the mixer button is DOM-ABSENT on the EDIT page — the binary toggle lives on audio only', () => {
-    boot({});
-    expect(screen.queryByTestId('btn-mixer-state')).toBeNull(); // edit loses the cluster
-    expect(screen.queryByRole('button', { name: /audio mixer/i })).toBeNull();
-    useUi.setState({ page: 'edit' });
-  });
-
-  it('R24-W1 (A3-R3/#65/#66): on the AUDIO page the mixer button is the BINARY toggle (collapsed ↔ the remembered visual)', () => {
-    boot({ page: 'audio' });
-    const btn = screen.getByTestId('btn-mixer-state');
-    expect(btn).toHaveAttribute('aria-pressed', 'false'); // collapsed
-    expect(btn).toHaveAccessibleName('Show audio mixer'); // binary wording
-    fireEvent.click(btn);
-    expect(store().mixerState).toBe('full'); // the default lastVisual memory
-    expect(btn).toHaveAttribute('aria-pressed', 'true');
-    expect(btn).toHaveAccessibleName('Hide audio mixer');
-    fireEvent.click(btn);
-    expect(store().mixerState).toBe('collapsed'); // TOGGLE OFF — #65's fix
-    expect(btn).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(btn);
-    expect(store().mixerState).toBe('full'); // re-open returns to the memory
-    // the dock header's mode action writes 'meters'; a close REMEMBERS it
-    act(() => { useUi.getState().setMixerState('meters'); });
-    fireEvent.click(btn);
+  /* RE-PINNED (R25-W4-D, th_mtzoy9f9 "redundant we already have a Mixer
+     button at top"): the timeline-toolbar mixer button is DELETED — these
+     three pins were (1) the button is DOM-absent on edit, (2) the audio-page
+     BINARY toggle round-trip with lastVisual memory, (3) the glyph law
+     (AudioLines closed / SlidersVertical open). The toggle's behavior is
+     Toolbar2's pin now (shell-toolbar-btn-mixer — its existing pins stay
+     green); the store seam toggleMixerOpen is unchanged. */
+  it('R25-W4-D deletion pin: btn-mixer-state is DOM-ABSENT on EVERY page (the timeline-toolbar mixer toggle is dead — Toolbar2 owns the one toggle)', () => {
+    for (const p of ['edit', 'color', 'audio', 'fx', 'deliver'] as const) {
+      const { unmount } = boot({ page: p });
+      expect(screen.queryByTestId('btn-mixer-state')).toBeNull();
+      expect(screen.queryByRole('button', { name: /audio mixer/i })).toBeNull();
+      unmount();
+    }
+    // the store seam is untouched: the binary toggle (with lastVisual
+    // memory) still works — Toolbar2's button calls it (its own pins hold)
+    act(() => { useUi.getState().toggleMixerOpen(); });
+    expect(store().mixerState).toBe('full');
+    act(() => { useUi.getState().toggleMixerOpen(); });
     expect(store().mixerState).toBe('collapsed');
-    fireEvent.click(btn);
-    expect(store().mixerState).toBe('meters');
-    useUi.setState({ page: 'edit', mixerState: 'collapsed' });
-  });
-
-  it('R24-W1: the toolbar mixer glyph law — AudioLines closed / SlidersVertical open (never SlidersHorizontal)', () => {
-    boot({ page: 'audio' });
-    const icons = () => screen.getByTestId('btn-mixer-state').querySelector('svg')!.getAttribute('class') ?? '';
-    expect(icons()).toContain('lucide-audio-lines'); // closed → AudioLines (opening shows strips)
-    expect(icons()).not.toContain('lucide-sliders-horizontal');
-    fireEvent.click(screen.getByTestId('btn-mixer-state'));
-    expect(icons()).toContain('lucide-sliders-vertical'); // open → SlidersVertical
-    expect(icons()).not.toContain('lucide-sliders-horizontal');
-    expect(icons()).not.toContain('lucide-audio-lines');
-    useUi.setState({ page: 'edit', mixerState: 'collapsed' });
+    act(() => { useUi.getState().toggleMixerOpen(); });
+    expect(store().mixerState).toBe('full');
+    act(() => { useUi.setState({ mixerState: 'collapsed' }); });
   });
 
   it('master mute + volume drive the shared store values (spec 18 §4.5 master bus)', () => {
@@ -506,11 +498,14 @@ describe('R24-W1 (A3-R4/#62): the ViewOptionsPopover items — clip style + wave
    (DESIGN-R24 §1.3 A3-R3/R4): the PER-PAGE cluster matrix, pinned at DOM
    level. Every hidden cluster is DOM-ABSENT (queryByTestId/queryByRole →
    null — never display:none, so the F6/rover dense laws hold). Matrix:
-   Edit = full; Color = zoom; Audio = snap + zoom + mixer + master;
+   Edit = full; Color = zoom; Audio = snap + zoom + master;
    FX = zoom (the Compact-tracks ITEM is DOM-absent — the page forces the
    full Timeline); Deliver = zoom (read-mostly). The view-options opener
    is a pre-matrix house button on EVERY page (pinned separately below);
-   the density cluster died with the standalone button (A3-R4). */
+   the density cluster died with the standalone button (A3-R4). R25-W4-D
+   (th_mtzoy9f9): the mixer cluster died with the timeline-toolbar
+   toggle — the mixer probe below is the DELETION probe (null on every
+   page; the toggle lives in Toolbar2). */
 describe('R23-WD (D-D2/#108): the per-page TimelineToolbar cluster matrix', () => {
   /** every cluster's DOM probes — null probe = the cluster is DOM-absent */
   const probes = {
@@ -523,6 +518,9 @@ describe('R23-WD (D-D2/#108): the per-page TimelineToolbar cluster matrix', () =
     viewOptions: () => screen.getByTestId('shell-timeline-toolbar-btn-view-options'),
     zoom: () => screen.getByRole('slider', { name: 'Timeline zoom' }),
     zoomFit: () => screen.getByTestId('shell-timeline-toolbar-btn-zoom-fit'),
+    /** R25-W4-D: the mixer probe is the DELETION probe — the cluster is
+     *  DOM-absent on every page (null); it stays in the probe set so every
+     *  matrix row keeps asserting the deletion. */
     mixer: () => screen.queryByTestId('btn-mixer-state'),
     master: () => screen.queryByRole('button', { name: 'Mute master' }),
     masterVolume: () => screen.queryByRole('slider', { name: 'Master volume' }),
@@ -533,7 +531,7 @@ describe('R23-WD (D-D2/#108): the per-page TimelineToolbar cluster matrix', () =
    *  between two PRESENT clusters; an absent cluster never dangles a bar) */
   const vseps = (c: HTMLElement) => c.querySelectorAll('.vsep').length;
 
-  it('EDIT = full: tools radio + snap/link/lock + markers + zoom + master — the mixer button is AUDIO-ONLY now (A3-R3)', () => {
+  it('EDIT = full: tools radio + snap/link/lock + markers + zoom + master — the mixer cluster is DELETED now (R25-W4-D: every page)', () => {
     const { container } = boot({ page: 'edit' });
     expect(within(probes.tools()!).getAllByRole('radio')).toHaveLength(8); // the 8-tool radio is untouched
     expect(probes.snap()).toBeInTheDocument();
@@ -544,7 +542,7 @@ describe('R23-WD (D-D2/#108): the per-page TimelineToolbar cluster matrix', () =
     expect(probes.viewOptions()).toBeInTheDocument(); // the pre-matrix house button
     expect(probes.zoom()).toBeInTheDocument();
     expect(probes.zoomFit()).toBeInTheDocument();
-    expect(probes.mixer()).toBeNull(); // R24-W1: audio only (the master row keeps its edit+audio law)
+    expect(probes.mixer()).toBeNull(); // R25-W4-D: the cluster is deleted on EVERY page (Toolbar2 owns the toggle)
     expect(probes.master()).toBeInTheDocument();
     expect(probes.masterVolume()).toBeInTheDocument();
     expect(probes.masterMeter()).toBeInTheDocument();
@@ -572,12 +570,12 @@ describe('R23-WD (D-D2/#108): the per-page TimelineToolbar cluster matrix', () =
     expect(vseps(container)).toBe(0); // zoom alone — no separators to draw
   });
 
-  it('AUDIO = snap + zoom + mixer + master — NO tools radio, NO link/lock, NO markers', () => {
+  it('AUDIO = snap + zoom + master — NO tools radio, NO link/lock, NO markers, NO mixer cluster (R25-W4-D deleted)', () => {
     const { container } = boot({ page: 'audio' });
     expect(probes.snap()).toBeInTheDocument();
     expect(probes.viewOptions()).toBeInTheDocument();
     expect(probes.zoom()).toBeInTheDocument();
-    expect(probes.mixer()).toBeInTheDocument();
+    expect(probes.mixer()).toBeNull(); // the DELETION probe (was the cluster's only home)
     expect(probes.master()).toBeInTheDocument();
     expect(probes.masterVolume()).toBeInTheDocument();
     expect(probes.dim()).toBeInTheDocument();
@@ -586,7 +584,7 @@ describe('R23-WD (D-D2/#108): the per-page TimelineToolbar cluster matrix', () =
     expect(probes.lock()).toBeNull();
     expect(probes.markers()).toBeNull();
     expect(probes.markerColor()).toBeNull();
-    expect(vseps(container)).toBe(3); // snap|zoom, zoom|mixer, mixer|master
+    expect(vseps(container)).toBe(2); // RE-PINNED (was 3): snap|zoom, zoom|master — the zoom|mixer + mixer|master pair died with the cluster
   });
 
   it('FX = zoom ONLY (the Compact-tracks ITEM is DOM-absent in the popover — the page forces the full Timeline) — no mixer, no master (ruling 15)', () => {
