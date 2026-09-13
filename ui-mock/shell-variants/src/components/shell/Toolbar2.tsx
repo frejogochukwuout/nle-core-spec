@@ -14,6 +14,10 @@
             show other panels"): Media Pool on Edit, Sound Library on
             Audio, Effects on FX, Stills on Color.
      right: [Scopes ·color] [Nodes ·color] [Mixer ·audio] [Inspector].
+   R25-W3 (DESIGN-R25 §3 W3 / §6 A2; issues th_mtzokuem/th_mtzoi7vr):
+   the Scopes/Nodes buttons now ACTIVATE their console-row TAB (the color
+   console row is the [Timeline | Nodes | Scopes] strip — one space, thin
+   tabs); aria-pressed reflects the tab-active state.
    R23-WB (D-B5, #92) → R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 —
    SUPERSEDES the edit+audio row, registered in the README deviation
    ledger): the Mixer toggle is a BINARY open/close toggle (toggleMixerOpen,
@@ -45,10 +49,15 @@ export function Toolbar2() {
   const panels = useUi((s) => s.panels);
   const togglePanel = useUi((s) => s.togglePanel);
   const page = useUi((s) => s.page);
-  const colorScopesState = useUi((s) => s.colorScopesState);
-  const setColorScopesState = useUi((s) => s.setColorScopesState);
-  const colorNodesDock = useUi((s) => s.colorNodesDock);
-  const toggleColorNodesDock = useUi((s) => s.toggleColorNodesDock);
+  /* R25-W3 (DESIGN-R25 §3 W3 / §6 A2; issues th_mtzokuem/th_mtzoi7vr —
+     SUPERSEDES the R22-D5/R24-W2 console-toggle wiring): the Scopes/Nodes
+     buttons now ACTIVATE THEIR CONSOLE TAB (setConsoleTab), aria-pressed
+     reflecting the tab-active state — the under-viewer pane + the
+     side-by-side nodeviewer slot are retired, so the buttons' old
+     colorScopesState/colorNodesDock writes are dead for rendering (the
+     atoms stay as the ScopesDock's solo-mount law / legacy boot state). */
+  const consoleTab = useUi((s) => s.consoleTab);
+  const setConsoleTab = useUi((s) => s.setConsoleTab);
   const mixerState = useUi((s) => s.mixerState);
   const toggleMixerOpen = useUi((s) => s.toggleMixerOpen);
 
@@ -92,12 +101,17 @@ export function Toolbar2() {
   const leftIcon = dock ? <dock.icon size={14} strokeWidth={1.7} /> : null; // audio/fx/deliver: never rendered
   const leftLabel = dock?.label ?? '';
 
-  /* the Scopes toggle: off ↔ open — the R22 4-state machine and its
-     lastVisual memory died with the squeeze (D-B1; the TABS are the
-     layout now). */
-  const scopesOpen = colorScopesState === 'open';
+  /* R25-W3 (A2): the Scopes toggle ACTIVATES the console-row Scopes tab
+     (toggle back to Timeline when the tab is already active — the button
+     is a binary tab router now, not a pane gate). */
+  const scopesOpen = consoleTab === 'scopes';
   const toggleScopes = () => {
-    setColorScopesState(scopesOpen ? 'off' : 'open');
+    setConsoleTab(scopesOpen ? 'timeline' : 'scopes');
+  };
+  /* R25-W3 (A2): the Nodes toggle — same law, the Nodes tab. */
+  const nodesOpen = consoleTab === 'nodes';
+  const toggleNodes = () => {
+    setConsoleTab(nodesOpen ? 'timeline' : 'nodes');
   };
 
   /* R24-W1 (A3-R3; issues #65/#66): the Mixer toggle is AUDIO ONLY —
@@ -182,14 +196,15 @@ export function Toolbar2() {
       </div>
 
       {/* R22-D5 (#73): the console toggles — right side, exactly like the
-          left-side asset toggles. Scopes + Nodes are color-page consoles
-          (the Nodes toggle now opens the VIEWER-REGION surface, D-B2). */}
+          left-side asset toggles. R25-W3 (A2): Scopes + Nodes are the
+          console-row TABS' activators (color page only). */}
       {page === 'color' && (
         <button
           {...roverProps(iScopes)}
           className={`toolbtn ${scopesOpen ? 'active' : ''}`}
           data-testid="shell-toolbar-btn-scopes"
           aria-pressed={scopesOpen}
+          title={scopesOpen ? 'Back to the Timeline console tab' : 'Show the Scopes console tab'}
           onClick={toggleScopes}
         >
           <Activity size={14} strokeWidth={1.7} />
@@ -199,10 +214,11 @@ export function Toolbar2() {
       {page === 'color' && (
         <button
           {...roverProps(iNodes)}
-          className={`toolbtn ${colorNodesDock ? 'active' : ''}`}
+          className={`toolbtn ${nodesOpen ? 'active' : ''}`}
           data-testid="shell-toolbar-btn-nodes"
-          aria-pressed={colorNodesDock}
-          onClick={toggleColorNodesDock}
+          aria-pressed={nodesOpen}
+          title={nodesOpen ? 'Back to the Timeline console tab' : 'Show the Nodes console tab'}
+          onClick={toggleNodes}
         >
           <Layers size={14} strokeWidth={1.7} />
           <span>Nodes</span>

@@ -55,6 +55,7 @@ import {
   insertionAt,
   rippleShiftAfter,
 } from '../lib/geometry';
+import { rollDeltaBounds, slipTargetBounds, slideStartBounds, quantizeDelta, touchingRight, touchingLeft } from '../lib/trimModes';
 
 export interface ToastMsg {
   kind: 'info' | 'error';
@@ -319,6 +320,22 @@ export interface MiniState {
    *  transition tool mints at seams/edges. View state, drag-gated. */
   trimTool: 'select' | 'roll' | 'slip' | 'slide' | 'transition';
   setTrimTool: (t: 'select' | 'roll' | 'slip' | 'slide' | 'transition') => void;
+
+  /* ---- R24-miniplus W3 (DESIGN-R24 D6): the trim-mode previews. All
+   *  three follow the R18k shape: previews only exist inside a drag
+   *  session, recompute FROM THE SNAPSHOT each event (idempotent, no
+   *  drift), mutate the live doc, and endDrag seals ONE entry. They are
+   *  called by the tool-dispatch seam (deviation #9) — the select
+   *  branch (previewMove/previewTrim) is byte-identical to the R23
+   *  routing. */
+  /** ROLL: drag a touching junction — a.duration += d; b.start += d;
+   *  b.duration -= d; b.sourceStart += d. Inert on a gap (honest). */
+  previewRoll: (id: string, edge: 'start' | 'end', t: number) => void;
+  /** SLIP: move the CONTENT under a fixed clip (sourceStart only). */
+  previewSlip: (id: string, delta: number) => void;
+  /** SLIDE: move the clip; the neighbors' FACING edges trim to make
+   *  room (capped edges open gaps — deviation #10). */
+  previewSlide: (id: string, t: number) => void;
 }
 
 function clampZoom(step: number): number {
@@ -835,6 +852,137 @@ export const useMini = create<MiniState>((set, get) => {
         if (!c) return;
         if (side === 'in') delete c.fadeIn;
         else delete c.fadeOut;
+      });
+    },
+
+    /* ---- R24-miniplus W3 (DESIGN-R24 D6): the trim-mode previews ---- */
+
+    previewRoll: (id, edge, t) => {
+      const state = get();
+      if (!state.dragActive || !state.dragSnapshot) return;
+      /* the junction pair, from the SNAPSHOT (idempotent): grabbing the
+       * mover's END edge rolls (mover = a, right neighbor = b); grabbing
+       * the START edge rolls (left neighbor = a, mover = b). */
+      const snapClip = findClip(state.dragSnapshot, id);
+      if (!snapClip) return;
+      const isEnd = edge === 'end';
+      const a = isEnd ? snapClip : touchingLeft(state.dragSnapshot, snapClip);
+      const b = isEnd ? touchingRight(state.dragSnapshot, snapClip) : snapClip;
+      if (!a || !b) return; // no touching junction — roll is inert (honest)
+      const bounds = rollDeltaBounds(state.dragSnapshot, a);
+      if (!bounds) return;
+      const junction = a.start + a.duration;
+      const d = Math.min(Math.max(quantizeDelta(t - junction), bounds.lo), bounds.hi);
+      if (Math.abs(d) < 1e-9) {
+        /* zero delta: restore the snapshot geometry for the pair (the
+         * preview is idempotent — returning to the cut resets exactly) */
+        set({
+          doc: {
+            ...state.doc,
+            clips: state.doc.clips.map((c) => {
+              const sa = c.id === a.id ? a : c.id === b.id ? b : null;
+              return sa ? { ...c, start: sa.start, duration: sa.duration, sourceStart: sa.sourceStart } : c;
+            }),
+          },
+        });
+        return;
+      }
+      set({
+        doc: {
+          ...state.doc,
+          clips: state.doc.clips.map((c) => {
+            if (c.id === a.id) return { ...c, duration: a.duration + d };
+            if (c.id === b.id) {
+              const nb: Clip = { ...c, start: b.start + d, duration: b.duration - d };
+              if (b.sourceStart !== undefined || (c.sourceStart ?? 0) + d > 0) {
+                nb.sourceStart = (b.sourceStart ?? 0) + d;
+              } else if (c.sourceStart !== undefined) {
+                delete nb.sourceStart;
+              }
+              return nb;
+            }
+            return c;
+          }),
+        },
+      });
+    },
+
+    previewSlip: (id, delta) => {
+      const state = get();
+      if (!state.dragActive || !state.dragSnapshot) return;
+      const snapClip = findClip(state.dragSnapshot, id);
+      if (!snapClip) return;
+      const media = findMedia(state.doc, snapClip.mediaId);
+      const bounds = slipTargetBounds(media, snapClip);
+      if (!bounds) return; // image or full-window — slip is inert (honest)
+      const target = Math.min(Math.max((snapClip.sourceStart ?? 0) + delta, bounds.lo), bounds.hi);
+      set({
+        doc: {
+          ...state.doc,
+          clips: state.doc.clips.map((c) =>
+            c.id === id
+              ? { ...c, sourceStart: target === 0 ? undefined : target, start: snapClip.start, duration: snapClip.duration }
+              : c,
+          ),
+        },
+      });
+    },
+
+    previewSlide: (id, t) => {
+      const state = get();
+      if (!state.dragActive || !state.dragSnapshot) return;
+      const snapClip = findClip(state.dragSnapshot, id);
+      if (!snapClip) return;
+      const bounds = slideStartBounds(state.dragSnapshot, snapClip);
+      if (!bounds) return; // alone on the track — slide degenerates (honest)
+      const newStart = Math.min(Math.max(quantizeDelta(t), bounds.lo), bounds.hi);
+      const end = newStart + snapClip.duration;
+      /* The neighbors' FACING edges FOLLOW the mover (the 3-clip roll):
+       * prev's END chases the mover's start; next's START chases the
+       * mover's end. Each edge is capped by its own bounds — the MIN
+       * duration AND the source window (the D2 law; the source cap is
+       * the honest follower limit) — a capped edge opens a GAP
+       * (deviation #10), never an overlap. All from the SNAPSHOT
+       * (idempotent). */
+      const same = state.dragSnapshot.clips
+        .filter((x) => x.trackId === snapClip.trackId && x.id !== id)
+        .sort((x, y) => x.start - y.start);
+      const prev = same.filter((x) => x.start < snapClip.start).at(-1);
+      const next = same.filter((x) => x.start > snapClip.start)[0];
+      const windowMax = (c: Clip): number => {
+        const media = findMedia(state.dragSnapshot!, c.mediaId);
+        if (!media || media.kind === 'image') return Infinity; // a still's extent is an edit decision
+        return (media.duration - (c.sourceStart ?? 0)) / (c.speed ?? 1);
+      };
+      set({
+        doc: {
+          ...state.doc,
+          clips: state.doc.clips.map((c) => {
+            if (c.id === id) return { ...c, start: newStart };
+            if (prev && c.id === prev.id) {
+              // prev's END follows the mover's start, capped [MIN, source]
+              const maxDur = Math.max(MIN_DUR, windowMax(prev));
+              const newDur = Math.min(Math.max(newStart - prev.start, MIN_DUR), maxDur);
+              return { ...c, duration: newDur };
+            }
+            if (next && c.id === next.id) {
+              // next's START follows the mover's end, capped [source tail, MIN]
+              const maxDur = Math.max(MIN_DUR, windowMax(next));
+              const nextEnd = next.start + next.duration;
+              const newNextStart = Math.max(Math.min(end, nextEnd - MIN_DUR), nextEnd - maxDur);
+              const dNext = newNextStart - next.start;
+              const nn: Clip = { ...c, start: newNextStart, duration: nextEnd - newNextStart };
+              // the head trim/extension rides the source window (the roll law)
+              if (dNext !== 0) {
+                const nss = (next.sourceStart ?? 0) + dNext;
+                if (nss > 0) nn.sourceStart = nss;
+                else if (next.sourceStart !== undefined) delete nn.sourceStart;
+              }
+              return nn;
+            }
+            return c;
+          }),
+        },
       });
     },
 

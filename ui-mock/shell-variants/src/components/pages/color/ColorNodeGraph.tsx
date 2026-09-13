@@ -23,13 +23,25 @@
    component now CARRIES ITS OWN 26px nodeviewer header (Layers glyph +
    label, the grade-target chip, × → toggleColorNodesDock) above its 38px
    toolbar + the natural-size 706×268 scroll-both workspace; the AppShell
-   wrapper owns the min-w-[480px] flex-1 console-row share. */
+   wrapper owns the min-w-[480px] flex-1 console-row share.
+   R25-W3 (DESIGN-R25 §3 W3 / §6 A2; issues th_mtzoi7vr + th_mtzonhlu):
+   the graph re-homes AGAIN — it is now the NODES TAB of the console-row
+   tab strip [Timeline | Nodes | Scopes] (the consoleTab 'nodes' panel;
+   the side-by-side slot is retired). The header's plain grade-target
+   label is joined by the LEVEL SEGMENTED CONTROL (GradeTargetSegmented —
+   the same colorGradeTarget atom the inspector's breadcrumb chip 2
+   writes; one source of truth), and × returns the console row to the
+   Timeline tab (setConsoleTab('timeline') — the toggleColorNodesDock
+   flag is dead for rendering). The selected node's highlight is the
+   ACCENT border (A2's chip-focus law; the old danger-red selection ring
+   was the R19 grammar). */
 
 import { useState } from 'react';
 import { Hand, Layers, MousePointer2, X } from 'lucide-react';
 import { useHonestToast } from './useHonestToast';
 import { useUi, resolveGradeTargetId } from '../../../state/useUiStore';
 import { gradeTargetLabel } from './useGradeTarget';
+import { GradeTargetSegmented } from './GradeTargetSegmented';
 
 /* ---------- geometry (color-cluster.md §3.4) ---------- */
 
@@ -219,9 +231,12 @@ function FooterIcons({ kind }: { kind: FooterIcons }) {
 /* ---------- node card by kind ---------- */
 
 function NodeCard({ n, selected }: { n: NodeDef; selected: boolean }) {
-  const border = selected ? 'var(--danger)' : n.highlight && !selected ? '#777' : 'var(--node-border)';
+  /* R25-W3 (A2): the selected node's highlight is the ACCENT border + ring
+     (the chip-focus law — the inspector's node chip click lands on this
+     same highlight; the pre-W3 danger-red selection was the R19 grammar). */
+  const border = selected ? 'var(--accent-selection)' : n.highlight && !selected ? '#777' : 'var(--node-border)';
   const shadow = selected
-    ? '0 0 0 1px var(--danger), 0 4px 12px rgba(0,0,0,0.4)'
+    ? '0 0 0 1px var(--accent-selection), 0 4px 12px rgba(0,0,0,0.4)'
     : '0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)';
 
   if (n.kind === 'master') {
@@ -273,6 +288,14 @@ const NODE_BINDINGS: Record<string, 'primaries' | 'qualifier'> = {
   primary: 'primaries',
   secondary: 'qualifier',
 };
+
+/** R25-W3 (A2): the node chip labels — `Node n · label` for every node the
+ *  graph renders (the inspector's breadcrumb chip 3 reads the SAME map, so
+ *  the chip and the graph can never disagree about a node's name; the
+ *  master/mixer minis carry no number and go by title alone). */
+export const COLOR_NODE_LABELS: Record<string, string> = Object.fromEntries(
+  NODES.map((n) => [n.id, n.num ? `Node ${n.num} · ${n.title}` : n.title]),
+);
 
 /* ---------- the graph ---------- */
 
@@ -358,28 +381,31 @@ export function ColorNodeGraph() {
     </div>
   );
 
-  /* R23-WB (D-B2) → R24-W2 (A2-R1): the graph renders the SAME console
-     anatomy everywhere — its own 26px nodeviewer header (Layers + the
-     grade-target chip + × → toggleColorNodesDock) above the 38px toolbar
-     + the scrollable workspace; the console-row slot + the surface swap
-     are the AppShell's job, not a prop. */
+  /* R23-WB (D-B2) → R24-W2 (A2-R1) → R25-W3 (A2): the graph renders the
+     SAME console anatomy everywhere — its own 26px nodeviewer header (Layers
+     + the label, the LEVEL SEGMENTED CONTROL, the grade-target chip, × →
+     back to the Timeline console tab) above the 38px toolbar + the
+     scrollable workspace; the console-row tab + the surface swap are the
+     AppShell's job, not a prop. */
   return (
     <div data-testid="shell-color-nodegraph" className="flex h-full min-h-0 w-full flex-col" style={{ background: 'var(--nodegraph-bg)' }}>
-      {/* the 26px nodeviewer header (A2-R1) — Layers + label, the target
-          chip, × closes the console (toggleColorNodesDock) */}
+      {/* the 26px nodeviewer header (A2-R1 + R25-W3) — Layers + label, the
+          level segmented control (ONE source with the inspector's
+          breadcrumb), the target chip, × returns to the Timeline tab */}
       <div className="flex h-[26px] shrink-0 items-center gap-2 border-b border-hairline bg-shell px-2">
         <Layers size={12} aria-hidden className="text-tmuted" />
         <span className="text-[11px] font-medium text-tprimary">Nodes</span>
-        <span data-testid="shell-color-nodeviewer-target" className="truncate text-[11px] text-tmuted">
+        <GradeTargetSegmented idPrefix="shell-color-nodegraph-" />
+        <span data-testid="shell-color-nodeviewer-target" className="ml-auto max-w-[180px] truncate text-[11px] text-tmuted">
           {nodeGraphTarget}
         </span>
         <button
           type="button"
-          className="icon-btn ml-auto"
+          className="icon-btn"
           data-testid="shell-color-nodeviewer-close"
           aria-label="Close node graph console"
-          data-tip="Close the node graph console"
-          onClick={() => useUi.getState().toggleColorNodesDock()}
+          data-tip="Back to the Timeline console tab"
+          onClick={() => useUi.getState().setConsoleTab('timeline')}
         >
           <X size={13} strokeWidth={1.8} />
         </button>

@@ -9,19 +9,20 @@
    R22 (DESIGN-R22 D1) — the color page composition REWRITTEN (issues
    #74/#77/#78/#79) → R23-WB (DESIGN-R23 track B — #90–#97) → R24-W2
    (DESIGN-R24 §1.2 A2-R1/R2/R3; issues #67/#64/#68 — SUPERSEDES the
-   R23-WB D-B1/D-B2 composition): the timeline density is the D-B3 store
-   law (compact default on color, the EVERY-PAGE toggle overrides; the
-   mainbody default is 55% ONLY while compact, 40% when full tracks are
-   asked for — the filmstrip needs lane room); the left dock on color is
-   the Stills GALLERY (D-B4/#91 → W2 renames it Gallery, A2-R5). THE W2
-   COMPOSITION: region [2] is ALWAYS Viewer-led (the ColorNodeGraph ⇄
-   Viewer swap is DELETED — #67 "NOT here blocking the preview"); the
-   graph re-homes to the console-row slot [6] with its own 26px
-   nodeviewer header + 38px toolbar + the 706×268 scroll-both workspace;
-   the ScopesDock re-homes to the ~160px pane at the BOTTOM of region
-   [2]'s column (colorScopesState-gated, never a new F6 stop). Page-aware
-   defaults (D2/D8): the color page's inspector = 420px until the user
-   drags (inspectorWUserSet). */
+   R23-WB D-B1/D-B2 composition) → R25-W3 (DESIGN-R25 §3 W3 / §6 A2;
+   issues th_mtzokuem/th_mtzoi7vr — SUPERSEDES R24-#68/R24-W2's console
+   wiring): the timeline density is the D-B3 store law (compact default on
+   color, the EVERY-PAGE toggle overrides; the mainbody default is 55% ONLY
+   while compact, 40% when full tracks are asked for — the filmstrip needs
+   lane room); the left dock on color is the Stills GALLERY (D-B4/#91 → W2
+   renames it Gallery, A2-R5). THE W3 COMPOSITION: region [2] is ALWAYS
+   Viewer-led (the ColorNodeGraph ⇄ Viewer swap is DELETED — #67; the
+   R24-#68 under-viewer scopes pane is DELETED with it — A2's scopes ruling
+   re-homes them to the console row); the console row carries the thin
+   [Timeline | Nodes | Scopes] TAB STRIP whose ACTIVE panel takes the row
+   (Timeline = the pre-W3 layout exactly; ConsoleTabs + the consoleTab
+   atom). Page-aware defaults (D2/D8): the color page's inspector = 420px
+   until the user drags (inspectorWUserSet). */
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useUi, resolveTimelineCompact } from '../../state/useUiStore';
@@ -47,6 +48,7 @@ import { sceneDuration, findElement } from '../../lib/mockData';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import { ToastRegion } from './ToastRegion';
 import { ConfirmProvider, useConfirm } from './ConfirmDialog';
+import { ConsoleTabs } from '../pages/color/ConsoleTabs';
 
 /* ---------- splitters (§3.2: 6px visual line, 12px hit target, dbl-click resets) ---------- */
 const SPLIT_HIT = 12; // §3.2: 12px interactive hit; visual line is the 6px --split-visual token
@@ -259,13 +261,15 @@ function AppShellInner() {
      grade target the console edits). */
   const captionSelected = selection.length === 1
     && findElement(scenes, selection[0])?.track.kind === 'caption';
-  /* R22 → R23-WB → R24-W2: the console dock view-states + the user-drag
-     flags for the page-aware defaults below. colorNodesDock gates the
-     CONSOLE-ROW slot [6] (the graph mounts beside/above the compact strip,
-     never blocking the viewer — A2-R1); colorScopesState is 'off' | 'open'
-     and gates the viewer-column pane (A2-R2). */
-  const colorScopesState = useUi((s) => s.colorScopesState);
-  const colorNodesDock = useUi((s) => s.colorNodesDock);
+  /* R22 → R23-WB → R24-W2 → R25-W3 (DESIGN-R25 §3 W3 / §6 A2; issues
+     th_mtzokuem/th_mtzoi7vr — SUPERSEDES the R24-W2 console wiring): the
+     console row is now the TAB strip's [Timeline | Nodes | Scopes] — the
+     ACTIVE tab's panel takes the row (Timeline = exactly the pre-W3 row).
+     colorScopesState/colorNodesDock are DEAD for rendering here (kept as
+     store view-state for the dock's solo mounts + legacy boot patches —
+     the panels.effects law); the Toolbar2 buttons + this row write
+     consoleTab. */
+  const consoleTab = useUi((s) => s.consoleTab);
 
   const mainBodyUserSet = useUi((s) => s.mainBodyUserSet);
   const inspectorWUserSet = useUi((s) => s.inspectorWUserSet);
@@ -396,25 +400,16 @@ function AppShellInner() {
               {/* R24-W2 (A2-R1, issues #67/#64 — SUPERSEDES R23-WB D-B2):
                   region [2] is ALWAYS Viewer-led — the ColorNodeGraph ⇄
                   Viewer swap is DELETED (the reviewer's "NOT here blocking
-                  the preview" ruling; the graph re-homes to the console-row
-                  slot [6] below and the viewer keeps publishing graded
-                  frames while every console is open). A2-R2/R3: the ~160px
-                  SCOPES PANE rides at the BOTTOM of this column (Viewer
-                  flex-1 + the pane below), colorScopesState-gated — the
-                  pane is INSIDE region [2]'s column and NEVER a new F6
-                  stop (no regionsRef entry; the cycle count is unchanged). */}
+                  the preview" ruling). R25-W3 (A2 — issues th_mtzokuem /
+                  th_mtzoi7vr, SUPERSEDES R24-#68): the ~160px SCOPES PANE
+                  that rode at the bottom of this column is DELETED too —
+                  the scopes re-home to the CONSOLE-ROW TAB below (one
+                  space, thin tabs: [Timeline | Nodes | Scopes]); region [2]
+                  is the viewer alone again, and no new F6 stop exists
+                  either way (the pane never carried one). */}
               <div className="min-h-0 flex-1">
                 <Viewer duration={duration} />
               </div>
-              {page === 'color' && colorScopesState === 'open' && (
-                <div
-                  data-testid="shell-color-scopes-pane"
-                  aria-label="Scopes pane"
-                  className="flex h-[160px] shrink-0 border-t border-hairline"
-                >
-                  <ScopesDock />
-                </div>
-              )}
             </div>
 
             {/* right-docked panel: dragging the seam LEFT (dx<0) widens it.
@@ -445,41 +440,25 @@ function AppShellInner() {
           R23-WB (D-B3): the timeline lanes resolve through the DENSITY law
           (compact → TimelineCompact, full → Timeline — compact DEFAULTS on
           color+deliver, the every-page TimelineToolbar toggle overrides per
-          session, #94). R24-W2 (A2-R1): the NODE GRAPH console takes the F6
-          slot [6] the ScopesDock vacated (the scopes moved UNDER the viewer,
-          A2-R2) — the graph carries its own 26px nodeviewer header + 38px
-          toolbar + the natural-size 706×268 scroll-both workspace; this
-          wrapper takes the row's flex share (min 480px) and fills the row's
-          height via flex/min-h-0 (NEVER a % height). The mixer renders only
-          where its page leaves it open — entering color collapses it
-          (D-B5/#92, the setPage exit law). */}
+          session, #94). R25-W3 (DESIGN-R25 §3 W3 / §6 A2 — issues
+          th_mtzokuem/th_mtzoi7vr, SUPERSEDES R24-W2's console wiring): the
+          COLOR page's console row gets the thin 26px TAB STRIP
+          [Timeline | Nodes | Scopes] at its top edge; the ACTIVE tab's
+          panel takes the row (Timeline = exactly the pre-W3 layout —
+          lanes + the mixer slot; Nodes/Scopes = the full row; the
+          side-by-side nodeviewer slot is RETIRED). Other pages render no
+          strip (their row is timeline-only — a lone tab answers nothing).
+          The mixer renders only where its page leaves it open — entering
+          color collapses it (D-B5/#92, the setPage exit law). */}
       <div ref={(el) => { regionsRef.current[4] = el; }} tabIndex={-1} className="shell-region flex min-h-0 flex-1 flex-col">
         <TimelineToolbar />
         <SceneTabs />
+        {page === 'color' && <ConsoleTabs />}
         <div className="flex min-h-0 flex-1">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {compact ? (
-              /* R23-FIX (R3-P3#8): the compact strip's clip click is
-                 page-aware — 'grade' retargeting is the COLOR page's law;
-                 every other page gets honest selection-only with a
-                 'select clip' label (the old copy claimed "set grade
-                 target" on pages that have no grade surface — a lying
-                 label). R24-W4 (A3-R7, #71): rangeBand rides the DELIVER
-                 branch only — the strip's 22px read-only ruler is
-                 unconditional on every page; the 32px RangeBand mounts
-                 BELOW it (the 54px coexistence head stack) exactly here. */
-              <TimelineCompact rangeBand={page === 'deliver'} clipClick={page === 'color' ? 'grade' : 'select'} />
-            ) : (
-              <Timeline />
-            )}
-          </div>
-          {/* F6 region slot [6] on color = the NODE GRAPH CONSOLE (R24-W2
-              A2-R1 — the slot the ScopesDock vacated when it moved under
-              the viewer; single-writer per index, an off dock never leaves
-              an invisible stop). The graph fills the wrapper by
-              flex/min-h-0 (NEVER a % height) and takes the row's flex share
-              (min 480px, owned here). */}
-          {page === 'color' && colorNodesDock && (
+          {page === 'color' && consoleTab === 'nodes' ? (
+            /* the NODES tab — the graph takes the whole row (its own 26px
+               header + 38px toolbar + the 706×268 scroll-both workspace);
+               F6 slot [6] stays single-writer on this wrapper. */
             <div
               ref={(el) => { regionsRef.current[6] = el; }}
               tabIndex={-1}
@@ -489,11 +468,42 @@ function AppShellInner() {
             >
               <ColorNodeGraph />
             </div>
-          )}
-          {mixerVisible && (
-            <div ref={(el) => { regionsRef.current[7] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0">
-              <MixerDock />
+          ) : page === 'color' && consoleTab === 'scopes' ? (
+            /* the SCOPES tab — the dock takes the whole row (scopes are
+               wide surfaces; the dock's own header + scope tabs ride inside
+               the panel). NO F6 stop of its own (region [4] covers it —
+               the R24 "no scopes stop" law carries over). */
+            <div
+              data-testid="shell-color-scopes-console"
+              aria-label="Scopes console panel"
+              className="flex min-h-0 flex-1"
+            >
+              <ScopesDock />
             </div>
+          ) : (
+            <>
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                {compact ? (
+                  /* R23-FIX (R3-P3#8): the compact strip's clip click is
+                     page-aware — 'grade' retargeting is the COLOR page's law;
+                     every other page gets honest selection-only with a
+                     'select clip' label (the old copy claimed "set grade
+                     target" on pages that have no grade surface — a lying
+                     label). R24-W4 (A3-R7, #71): rangeBand rides the DELIVER
+                     branch only — the strip's 22px read-only ruler is
+                     unconditional on every page; the 32px RangeBand mounts
+                     BELOW it (the 54px coexistence head stack) exactly here. */
+                  <TimelineCompact rangeBand={page === 'deliver'} clipClick={page === 'color' ? 'grade' : 'select'} />
+                ) : (
+                  <Timeline />
+                )}
+              </div>
+              {mixerVisible && (
+                <div ref={(el) => { regionsRef.current[7] = el; }} tabIndex={-1} className="shell-region flex min-h-0 shrink-0">
+                  <MixerDock />
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
