@@ -29,12 +29,16 @@ import {
   adjacentBefore,
   adjacentAfter,
   batchTrimBounds,
+  neighborBefore,
+  neighborAfter,
   rollDeltaBounds,
   rippleDeltaBounds,
   slipTargetBounds,
   slideStartBounds,
+  sourceExtentOf,
   stretchDeltaBounds,
 } from '../../lib/trimLaws';
+import { RollTrimAffordance, RippleTrimAffordance, SlipTrimAffordance, SlideTrimAffordance, TRIM_EDGE_PX, TRIM_ARROW_W, type RippleTrimGeometry, type SlipTrimGeometry, type SlideTrimGeometry } from './TrimAffordances';
 import { getWaveform } from '../../lib/waveform';
 import { MARKER_COLORS } from './Ruler';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/ContextMenu';
@@ -633,6 +637,87 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
   const isLeftEdgeMode = drag != null && (drag.mode === 'l' || drag.mode === 'roll-l' || drag.mode === 'ripple-l' || drag.mode === 'stretch-l');
   const slipActive = dragActive && drag?.mode === 'slip';
   const slipOffsetPx = slipActive ? drag!.cur * pxPerSec : 0;
+  const slideActive = dragActive && drag?.mode === 'slide';
+
+  /* ---- R25 W2 (DESIGN-R25 §2.1 / §3 W2): trim-mode affordance geometry —
+     DRAG-ONLY previews (no store writes; the release path is untouched).
+     Every position is LANE-relative px = time × pxPerSec (the drag-ghost /
+     insert-preview layering law); the painting lives in
+     TrimAffordances.tsx with the reference choices documented there. ---- */
+  /* ROLL: the junction's CURRENT preview position — both seam sides get the
+     green edge + the two-way arrow at the seam (the neighbor's own box never
+     moves during the preview; the seam grammar marks the shared edit). */
+  const rollSeamPx = dragActive && (drag!.mode === 'roll-l' || drag!.mode === 'roll-r') ? drag!.cur * pxPerSec : null;
+
+  /* RIPPLE: the active edge + the LATER same-track clips at their preview
+     positions. The shift mirrors the store's rippleTrim interval law
+     (preview end − original end; ripple-l keeps the end when extending the
+     head out, pulls it in when trimming the head — same math the optimistic
+     geo above uses), and the displaced set is the store's own predicate
+     (same track, startTime ≥ the original end). */
+  const rippleGeo: RippleTrimGeometry | null = dragActive && (drag!.mode === 'ripple-l' || drag!.mode === 'ripple-r')
+    ? (() => {
+        const origEnd = drag!.origStart + drag!.origDur;
+        const previewEnd = drag!.mode === 'ripple-r' ? drag!.cur : origEnd - Math.max(0, drag!.cur - drag!.origStart);
+        const previewLeft = drag!.mode === 'ripple-r' ? drag!.origStart : Math.min(drag!.origStart, drag!.cur);
+        const shift = previewEnd - origEnd;
+        const displaced = shift !== 0
+          ? track.elements
+              .filter((e) => e !== el && e.startTime >= origEnd - 1e-6)
+              .map((e) => ({ id: e.id, left: (e.startTime + shift) * pxPerSec, width: e.duration * pxPerSec }))
+          : [];
+        const lastBoundary = displaced.length ? Math.max(...displaced.map((d) => d.left + d.width)) : null;
+        return {
+          edgeLeft: drag!.mode === 'ripple-r' ? previewEnd * pxPerSec - TRIM_EDGE_PX : previewLeft * pxPerSec,
+          edgeSide: drag!.mode === 'ripple-r' ? ('r' as const) : ('l' as const),
+          displaced,
+          arrow: lastBoundary != null
+            ? { left: shift > 0 ? lastBoundary : lastBoundary - TRIM_ARROW_W, dir: shift > 0 ? ('r' as const) : ('l' as const) }
+            : null,
+        };
+      })()
+    : null;
+
+  /* SLIP: the full-source-extent outline PINNED to the committed sourceStart
+     (the source frame never moves — the window slides inside it), + the
+     bright in-point preview at the CURRENT window head. Rate-1 mapping
+     (source-seconds × pxPerSec — every fixture carrier is speed 1; at other
+     rates the outline is the honest room gauge scaled 1:1, the law math is
+     trimLaws.sourceExtentOf). Text/synthetic clips (∞ extent) render no
+     outline — there is no bounded room to frame. */
+  const slipGeo: SlipTrimGeometry | null = slipActive && el.sourceStart !== undefined
+    ? (() => {
+        const extent = sourceExtentOf(el);
+        if (!isFinite(extent)) return null;
+        const clipLeft = el.startTime * pxPerSec;
+        return {
+          outline: { left: clipLeft - el.sourceStart * pxPerSec, width: extent * pxPerSec },
+          inPreview: { left: clipLeft - drag!.cur * pxPerSec, width: el.duration * pxPerSec },
+          ...(media?.thumbnail ? { thumbnail: media.thumbnail } : {}),
+        };
+      })()
+    : null;
+
+  /* SLIDE: the neighbors' POST-slide shrink spans — the left neighbor's
+     right edge rides the mover's preview left, the right neighbor's left
+     edge rides the mover's preview end (slideStartBounds clamped, so both
+     spans stay ≥ the 1-frame minimum by construction). */
+  const slideGeo: SlideTrimGeometry | null = slideActive
+    ? (() => {
+        const prev = neighborBefore(track, el);
+        const next = neighborAfter(track, el);
+        const moverEnd = drag!.cur + el.duration;
+        return {
+          shrinkL: prev ? { left: prev.startTime * pxPerSec, width: Math.max(0, drag!.cur - prev.startTime) * pxPerSec } : null,
+          shrinkR: next ? { left: moverEnd * pxPerSec, width: Math.max(0, next.startTime + next.duration - moverEnd) * pxPerSec } : null,
+        };
+      })()
+    : null;
+
+  /* the slip/slide mover carries the reference's red border (the clip-box
+     grammar lives here, not in the lane overlays): house --danger for the
+     reference's #e2403c — see TrimAffordances.tsx for the documented map. */
+  const moverRed = slipActive || slideActive;
   const stretchPreviewDur = dragActive && (drag?.mode === 'stretch-l' || drag?.mode === 'stretch-r')
     ? drag!.mode === 'stretch-l'
       ? drag!.origStart + drag!.origDur - drag!.cur
@@ -741,7 +826,12 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
 
   /* R15 T4: handle routing — plain trim (select), roll (roll tool, or
      ⌥-drag an edge in select — needs an adjacent neighbor: a gap has no
-     junction), ripple, stretch. Slip/slide/blade render no handles. */
+     junction), ripple, stretch. Slip/slide/blade render no handles.
+     R25 W2: the handle ZONE advertises the mode's cursor BEFORE the drag —
+     the roll junction is two-way (ew-resize; the reference's double-
+     bracket roll cursor), ripple/stretch/select keep the directional
+     w/e-resize (the closest stock grammar for the single-bracket push). */
+  const handleCursor = (edge: 'l' | 'r'): string => (tool === 'roll' ? 'ew-resize' : edge === 'l' ? 'w-resize' : 'e-resize');
   const handleModeFor = (edge: 'l' | 'r', alt: boolean): DragMode | null => {
     if (tool === 'roll' || (tool === 'select' && alt)) {
       const neighbor = edge === 'l' ? adjacentBefore(track, el) : adjacentAfter(track, el);
@@ -1338,7 +1428,11 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
           : {}),
         cursor,
         pointerEvents: locked ? 'none' : 'auto',
-        outline: selected ? '1.5px solid var(--accent-selection)' : hover ? '1px solid var(--border-strong)' : 'none',
+        /* R25 W2: the slip/slide mover's red border outranks the selection /
+           hover outlines for the gesture's duration (reference .red-border). */
+        outline: moverRed
+          ? '2px solid var(--danger)'
+          : selected ? '1.5px solid var(--accent-selection)' : hover ? '1px solid var(--border-strong)' : 'none',
         outlineOffset: 0,
         boxShadow: selected
           ? 'inset 0 0 0 999px color-mix(in srgb, var(--accent-selection) 12%, transparent)'
@@ -1462,6 +1556,28 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       {/* locked overlay — stripes ON TOP of the body (legible, R2) */}
       {locked && <div className="locked-stripes pointer-events-none absolute inset-0 z-[2]" aria-hidden="true" />}
 
+      {/* R25 W2 slip gesture: the soft GREEN edge glows at the FIXED clip's
+          in/out edges (reference .glow-l/.glow-r — bright AT the edge,
+          blurred 3px, fading inward). Slip only: the slide mover carries
+          the red border alone. z-[5]: above the fade objects (3) and the
+          content, below the lane overlays; pointer-dead. */}
+      {slipActive && (
+        <>
+          <div
+            data-testid="trim-slip-glow-l"
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 z-[5]"
+            style={{ width: 15, background: 'linear-gradient(to left, transparent, color-mix(in srgb, var(--mk-green) 80%, transparent))', filter: 'blur(3px)' }}
+          />
+          <div
+            data-testid="trim-slip-glow-r"
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 z-[5]"
+            style={{ width: 15, background: 'linear-gradient(to right, transparent, color-mix(in srgb, var(--mk-green) 80%, transparent))', filter: 'blur(3px)' }}
+          />
+        </>
+      )}
+
       {/* live trim/move TC bubble (spec 06 §8 overlay pattern) — active
           gestures only (the 5px threshold gates the optimistic preview).
           R15 T4: per-mode readout — the moving edge for edge gestures, the
@@ -1507,7 +1623,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
                objects (z-[3]), level with the trim affordance; the handle
                owns the clip-corner hit zone again (pinned at style level). */
             className="absolute inset-y-0 z-[4]"
-            style={{ left: -4, width: 8, cursor: 'w-resize' }}
+            style={{ left: -4, width: 8, cursor: handleCursor('l') }}
             onPointerDown={(e) => {
               e.stopPropagation();
               if (e.button !== 0) return;
@@ -1524,7 +1640,7 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
           <div
             data-testid={`clip-trim-r-${el.id}`}
             className="absolute inset-y-0 z-[4]" /* R23-FIX item 13 — see the left handle */
-            style={{ right: -4, width: 8, cursor: 'e-resize' }}
+            style={{ right: -4, width: 8, cursor: handleCursor('r') }}
             onPointerDown={(e) => {
               e.stopPropagation();
               if (e.button !== 0) return;
@@ -1598,6 +1714,19 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
         </span>
       ))}
     </div>
+
+    {/* ---- R25 W2 (DESIGN-R25 §2.1/§3 W2): the trim-mode affordance
+         overlays — LANE-level siblings of the clip box (the same layer the
+         alt-drag ghost renders in), painted only while the gesture is
+         ACTIVE (the 5px threshold gates every optimistic preview),
+         pointer-dead, z 10 — below the snap indicator (40) and the
+         playhead (100), above clip content (1/5). fxMode can never see
+         these: the recede law disarms the gestures themselves. ---- */}
+    {rollSeamPx != null && <RollTrimAffordance seamPx={rollSeamPx} laneHeight={laneHeight} />}
+    {rippleGeo && <RippleTrimAffordance geo={rippleGeo} laneHeight={laneHeight} />}
+    {slipGeo && <SlipTrimAffordance geo={slipGeo} laneHeight={laneHeight} />}
+    {slideGeo && <SlideTrimAffordance geo={slideGeo} laneHeight={laneHeight} />}
+
     {menu.state && <ContextMenu {...menu.state} onClose={menu.close} />}
     </>
   );

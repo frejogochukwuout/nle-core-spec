@@ -49,6 +49,15 @@ const el = (id: string) => {
   }
   throw new Error(`element ${id} not found`);
 };
+
+/* R25 W2: px-number pins for the affordance geometry — inline styles carry
+   float products (95.2 × 46), so the pins parse and compare with precision
+   instead of string-matching. */
+const px = (node: HTMLElement, prop: 'left' | 'width' | 'top' | 'height'): number => {
+  const v = parseFloat(node.style[prop]);
+  if (!Number.isFinite(v)) throw new Error(`style.${prop} of ${node.dataset.testid ?? 'node'} is not a px number`);
+  return v;
+};
 const mainIds = () => store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.id === 'tr-main')!.elements.map((e) => e.id);
 
 describe('Clip', () => {
@@ -597,6 +606,173 @@ describe('Clip', () => {
     // lands on the raw frame grid, NOT on the 24 target it just came from)
     expect(el('el-6').duration).toBeCloseTo(snapToFrame(24 - 6.152173913043478), 5); // 428/24, NOT 24
     expect(store().past).toHaveLength(2); // two committed trims
+  });
+
+  /* ---- R25 W2 (DESIGN-R25 §2.1 / §3 W2): trim-mode affordance grammar —
+     each mode's reference affordances (ui-mock/trim_edit_modes.html) pin at
+     the DOM + geometry level: arm the tool, run the gesture past the 5px
+     threshold, assert the overlay nodes + their LANE-space geometry
+     (time × 46 pps), then assert they unmount on release (drag-only
+     previews — the release path is the untouched R15 T4 commit). ---- */
+
+  it('R25 W2 ROLL affordance: green edges on BOTH seam sides + the two-way arrow at the junction (geometry = seam × pps)', () => {
+    boot({ tool: 'roll' });
+    const leftHandle = screen.getByTestId('clip-trim-l-el-2');
+    // the el-1/el-2 junction 8.5 → 9.5 s (+1 s drag; exact adjacency)
+    fireEvent.pointerDown(leftHandle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(leftHandle, { pointerId: 1, buttons: 1, clientX: 437 });
+    const seam = 9.5 * 46; // 437
+    const edgeL = screen.getByTestId('trim-roll-edge-l');
+    expect(px(edgeL, 'left')).toBeCloseTo(seam - 18, 6); // the LEFT clip's right-edge ramp
+    expect(px(edgeL, 'width')).toBeCloseTo(18, 6);
+    expect(edgeL.style.background).toContain('to right'); // bright AT the seam
+    const edgeR = screen.getByTestId('trim-roll-edge-r');
+    expect(px(edgeR, 'left')).toBeCloseTo(seam, 6);
+    expect(edgeR.style.background).toContain('to left'); // bright AT the seam
+    const arrow = screen.getByTestId('trim-roll-arrow');
+    expect(px(arrow, 'left')).toBeCloseTo(seam - 22, 6); // 44px arrow, seam-centered
+    expect(arrow.getAttribute('width')).toBe('44');
+    expect(arrow.getAttribute('class')).toContain('pointer-events-none'); // the gesture owns the pointer
+    fireEvent.pointerUp(leftHandle, { pointerId: 1 });
+    // drag-only: the whole grammar unmounts on release; the roll still commits
+    expect(screen.queryByTestId('trim-roll-arrow')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('trim-roll-edge-l')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('trim-roll-edge-r')).not.toBeInTheDocument();
+    expect(el('el-1').duration).toBe(9.5);
+    expect(el('el-2').startTime).toBe(9.5);
+  });
+
+  it('R25 W2 ROLL affordance (right junction): the same grammar rides the el-2/el-3 seam', () => {
+    boot({ tool: 'roll' });
+    const rightHandle = screen.getByTestId('clip-trim-r-el-2');
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 782 }); // 17 s
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 828 }); // +1 s → 18
+    expect(px(screen.getByTestId('trim-roll-arrow'), 'left')).toBeCloseTo(18 * 46 - 22, 6);
+    expect(px(screen.getByTestId('trim-roll-edge-l'), 'left')).toBeCloseTo(18 * 46 - 18, 6);
+    expect(px(screen.getByTestId('trim-roll-edge-r'), 'left')).toBeCloseTo(18 * 46, 6);
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    expect(el('el-2').duration).toBe(9.5); // rolled into el-3's head
+    expect(el('el-3').startTime).toBe(18);
+  });
+
+  it('R25 W2 RIPPLE affordance: green active edge + DIM displaced ghosts at their preview positions + the boundary arrow (−2 s pull)', () => {
+    boot({ tool: 'ripple' });
+    const rightHandle = screen.getByTestId('clip-trim-r-el-2');
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 782 }); // 17 s
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 690 }); // −2 s → 15
+    const edge = screen.getByTestId('trim-ripple-edge');
+    expect(px(edge, 'left')).toBeCloseTo(15 * 46 - 18, 6); // bright at the pulled-in end
+    expect(edge.style.background).toContain('to right');
+    const d3 = screen.getByTestId('trim-ripple-displaced-el-3');
+    expect(px(d3, 'left')).toBeCloseTo((17 - 2) * 46, 6); // glued to the new end
+    expect(px(d3, 'width')).toBeCloseTo(7 * 46, 6);
+    expect(Number(d3.style.opacity)).toBeLessThan(1); // the dim treatment
+    const d4 = screen.getByTestId('trim-ripple-displaced-el-4');
+    expect(px(d4, 'left')).toBeCloseTo(22 * 46, 6); // shifted by the same delta
+    expect(px(d4, 'width')).toBeCloseTo(6 * 46, 6);
+    // cross-track clips never follow (el-6 is the A1 bed) — no ghost mints
+    expect(screen.queryByTestId('trim-ripple-displaced-el-6')).not.toBeInTheDocument();
+    // ONE arrow at the LAST-moved boundary (28 s), pointing LEFT (pull-in)
+    const arrow = screen.getByTestId('trim-ripple-arrow');
+    expect(px(arrow, 'left')).toBeCloseTo(28 * 46 - 28, 6);
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    expect(screen.queryByTestId('trim-ripple-displaced-el-3')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('trim-ripple-arrow')).not.toBeInTheDocument();
+    expect(el('el-3').startTime).toBe(15); // the ripple itself still commits
+    expect(el('el-4').startTime).toBe(22);
+  });
+
+  it('R25 W2 RIPPLE push direction: extending the tail (+1 s) flips the arrow to push-RIGHT at the new last boundary', () => {
+    boot({ tool: 'ripple' });
+    const rightHandle = screen.getByTestId('clip-trim-r-el-2');
+    fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 782 });
+    fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 828 }); // +1 s → 18
+    expect(px(screen.getByTestId('trim-ripple-displaced-el-4'), 'left')).toBeCloseTo(25 * 46, 6);
+    const arrow = screen.getByTestId('trim-ripple-arrow');
+    expect(px(arrow, 'left')).toBeCloseTo(31 * 46, 6); // AT the boundary (25 + 6), head right
+    fireEvent.pointerUp(rightHandle, { pointerId: 1 });
+    expect(el('el-4').startTime).toBe(25);
+  });
+
+  it('R25 W2 SLIP affordance: full-source outline + bright in-preview + red border + edge glows + direction arrows (el-4, m-05 = 12.8 s)', () => {
+    boot({ tool: 'slip' });
+    const clip = screen.getByTestId('clip-el-4');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 345 }); // −1 s: window slides to ss 1
+    const outline = screen.getByTestId('trim-slip-outline');
+    expect(px(outline, 'left')).toBeCloseTo(24 * 46, 6); // pinned to the committed ss 0 — the source never moves
+    expect(px(outline, 'width')).toBeCloseTo(12.8 * 46, 6); // the FULL source extent (sourceExtentOf)
+    const inPrev = screen.getByTestId('trim-slip-in-preview');
+    expect(px(inPrev, 'left')).toBeCloseTo(25 * 46, 6); // 24 − (−1): the CURRENT window head
+    expect(px(inPrev, 'width')).toBeCloseTo(6 * 46, 6); // clip-width
+    expect(inPrev.style.filter).toContain('brightness'); // the lit frame
+    // the clip itself: the reference's red border + the two soft edge glows
+    expect(clip.style.outline).toContain('var(--danger)');
+    expect(screen.getByTestId('trim-slip-glow-l')).toBeInTheDocument();
+    expect(screen.getByTestId('trim-slip-glow-r')).toBeInTheDocument();
+    // in/out direction arrows inside the outline
+    expect(px(screen.getByTestId('trim-slip-arrow-l'), 'left')).toBeCloseTo(24 * 46 + 8, 6);
+    expect(px(screen.getByTestId('trim-slip-arrow-r'), 'left')).toBeCloseTo(24 * 46 + 12.8 * 46 - 36, 6);
+    fireEvent.pointerUp(clip, { pointerId: 1 });
+    expect(screen.queryByTestId('trim-slip-outline')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('trim-slip-glow-l')).not.toBeInTheDocument();
+    expect(el('el-4').sourceStart).toBeCloseTo(1, 5); // the slip still commits
+  });
+
+  it('R25 W2 SLIP outline mapping (el-2, ss 3): the window slides inside the FIXED source frame — in-preview moves OPPOSITE the content drag', () => {
+    boot({ tool: 'slip' });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 437 }); // +1 s → ss 2
+    const outline = screen.getByTestId('trim-slip-outline');
+    expect(px(outline, 'left')).toBeCloseTo((8.5 - 3) * 46, 6); // 253 — source pos 0 in lane space
+    expect(px(outline, 'width')).toBeCloseTo(95.2 * 46, 6); // m-02's extent
+    expect(px(screen.getByTestId('trim-slip-in-preview'), 'left')).toBeCloseTo(7.5 * 46, 6); // moved −1 s vs the fixed clip
+    fireEvent.pointerUp(clip, { pointerId: 1 });
+    expect(el('el-2').sourceStart).toBeCloseTo(2, 5);
+  });
+
+  it('R25 W2 SLIP outline guard: an unbounded source (text clip) frames NO outline — nothing honest to bound', () => {
+    boot({ tool: 'slip' });
+    const clip = screen.getByTestId('clip-el-5');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 402 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 448 });
+    expect(screen.queryByTestId('trim-slip-outline')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('trim-slip-in-preview')).not.toBeInTheDocument();
+    fireEvent.pointerUp(clip, { pointerId: 1 });
+    expect(store().past).toHaveLength(0); // slip is inert without a source window
+  });
+
+  it('R25 W2 SLIDE affordance: red mover + neighbor SHRINK BOXES at POST-slide lengths + direction arrows (glows are slip-only)', () => {
+    boot({ tool: 'slide' });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 437 }); // → 9.5 s
+    expect(clip.style.outline).toContain('var(--danger)'); // the mover's red border
+    expect(screen.queryByTestId('trim-slip-glow-l')).not.toBeInTheDocument(); // no glows on a slide
+    const shl = screen.getByTestId('trim-slide-shrinkbox-l');
+    expect(px(shl, 'left')).toBeCloseTo(0, 6); // el-1 [0, 9.5) — its right edge follows the mover
+    expect(px(shl, 'width')).toBeCloseTo(9.5 * 46, 6);
+    const shr = screen.getByTestId('trim-slide-shrinkbox-r');
+    expect(px(shr, 'left')).toBeCloseTo(18 * 46, 6); // el-3 [18, 24) — its left edge follows
+    expect(px(shr, 'width')).toBeCloseTo(6 * 46, 6);
+    expect(px(screen.getByTestId('trim-slide-arrow-l'), 'left')).toBeCloseTo(8, 6);
+    expect(px(screen.getByTestId('trim-slide-arrow-r'), 'left')).toBeCloseTo(18 * 46 + 6 * 46 - 36, 6);
+    fireEvent.pointerUp(clip, { pointerId: 1 });
+    expect(screen.queryByTestId('trim-slide-shrinkbox-l')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('trim-slide-shrinkbox-r')).not.toBeInTheDocument();
+    expect(el('el-2').startTime).toBe(9.5); // the slide still commits
+    expect(el('el-1').duration).toBe(9.5);
+    expect(el('el-3').startTime).toBe(18);
+  });
+
+  it('R25 W2 handle cursors: the roll zone advertises the TWO-WAY junction before the drag (ew-resize); ripple stays directional', () => {
+    boot({ tool: 'roll' });
+    expect(screen.getByTestId('clip-trim-l-el-2').style.cursor).toBe('ew-resize');
+    expect(screen.getByTestId('clip-trim-r-el-2').style.cursor).toBe('ew-resize');
+    act(() => { useUi.setState({ tool: 'ripple' }); });
+    expect(screen.getByTestId('clip-trim-l-el-2').style.cursor).toBe('w-resize');
+    expect(screen.getByTestId('clip-trim-r-el-2').style.cursor).toBe('e-resize');
   });
 
   it('clips on a locked track are inert: no pointer events, stripes overlay, click does nothing (18 §4.5)', () => {
