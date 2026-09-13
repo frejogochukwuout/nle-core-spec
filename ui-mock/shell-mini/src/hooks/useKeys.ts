@@ -1,4 +1,5 @@
-/* Keyboard surface (D3.8, audit m4): Space, S, [ ], Del, ⌘Z/⌘⇧Z, ±, 0, Esc.
+/* Keyboard surface (D3.8, audit m4): Space, S, [ ], Del, ⌘Z/⌘⇧Z, ±, 0, Esc
+   + R24-miniplus (gate ON): V/X = the tool radio's select/transition.
    Esc priority: cancel active drag FIRST, else deselect.
    While dragActive, ONLY Esc is honored (audit M2 interaction lock) —
    every other key returns early. Form-control targets (typing in a
@@ -50,6 +51,23 @@ export function useKeys() {
         return;
       }
       if (s.dragActive) return; // interaction lock: nothing else mid-drag (M2)
+
+      /* R24-miniplus W2 (DESIGN-R24 D5/D10, the review's F5): V/X set the
+       * tool radio (gate ON only — gated OFF the keys are inert, the
+       * classic surface keeps its map). The form-control skip above
+       * already covers typing in fields; no repeat (the C16 gate). */
+      if (s.miniPlus) {
+        if (e.key.toLowerCase() === 'v') {
+          e.preventDefault();
+          s.setTrimTool('select');
+          return;
+        }
+        if (e.key.toLowerCase() === 'x') {
+          e.preventDefault();
+          s.setTrimTool('transition');
+          return;
+        }
+      }
 
       const meta = e.metaKey || e.ctrlKey;
 

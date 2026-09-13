@@ -152,7 +152,7 @@ export function Inspector() {
               </button>
             </div>
           </div>
-          {miniPlus && <PlusSections clipId={clip.id} />}
+          {miniPlus && <PlusSections key={clip.id} clipId={clip.id} />}
         </div>
       ) : selTrack ? (
         /* R19 (thread #47): the TRACK card — track-specific facts. R20
@@ -232,33 +232,28 @@ function TimingGroup({ clipId }: { clipId: string }) {
   const clip = useMini((s) => s.doc.clips.find((c) => c.id === clipId));
   const moveClip = useMini((s) => s.moveClip);
   const trimClip = useMini((s) => s.trimClip);
-  const [epoch, setEpoch] = useState(0);
   if (!clip) return null;
+  /* F15 (wave review): the epoch-remount pattern is RETIRED — the
+   * NumberField's settle() now rewrites its own display to the committed
+   * truth (the F3 fix), so a rejected command honestly reverts via the
+   * focus-gated resync effect and focus is never dropped. */
   return (
-    <Group title="Timing" testid="mini-group-timing" defaultOpen>
+    <Group title="Timing" testid="mini-group-timing" defaultOpen={false}>
       <NumberField
-        key={`start-${epoch}`}
         label="Start"
         value={clip.start}
         min={0}
         step={0.5}
         testid="mini-field-start"
-        onCommit={(v) => {
-          moveClip(clip.id, v);
-          setEpoch((e) => e + 1);
-        }}
+        onCommit={(v) => moveClip(clip.id, v)}
       />
       <NumberField
-        key={`dur-${epoch}`}
         label="Duration"
         value={clip.duration}
         min={MIN_DUR}
         step={0.5}
         testid="mini-field-duration"
-        onCommit={(v) => {
-          trimClip(clip.id, 'end', clip.start + v);
-          setEpoch((e) => e + 1);
-        }}
+        onCommit={(v) => trimClip(clip.id, 'end', clip.start + v)}
       />
     </Group>
   );
@@ -272,7 +267,6 @@ function ClipPropsGroup({ clipId }: { clipId: string }) {
   const setClipProp = useMini((s) => s.setClipProp);
   const setClipSpeed = useMini((s) => s.setClipSpeed);
   const setClipSourceStart = useMini((s) => s.setClipSourceStart);
-  const [epoch, setEpoch] = useState(0);
   if (!clip || !media) return null;
   const isAudio = media.kind === 'audio';
   const rate = clip.speed ?? 1;
@@ -282,7 +276,6 @@ function ClipPropsGroup({ clipId }: { clipId: string }) {
     <Group title={isAudio ? 'Audio' : 'Video'} testid="mini-group-clip" defaultOpen>
       {isAudio && (
         <NumberField
-          key={`vol-${epoch}`}
           label="Volume"
           value={Number(volToDb(clip.volume ?? 1).toFixed(1))}
           min={DB_MIN}
@@ -292,13 +285,11 @@ function ClipPropsGroup({ clipId }: { clipId: string }) {
           testid="mini-field-volume"
           onCommit={(db) => {
             setClipProp(clip.id, { volume: dbToVol(db) });
-            setEpoch((e) => e + 1);
           }}
         />
       )}
       {!isAudio && (
         <NumberField
-          key={`opa-${epoch}`}
           label="Opacity"
           value={Math.round((clip.opacity ?? 1) * 100)}
           min={0}
@@ -308,13 +299,11 @@ function ClipPropsGroup({ clipId }: { clipId: string }) {
           testid="mini-field-opacity"
           onCommit={(v) => {
             setClipProp(clip.id, { opacity: v / 100 });
-            setEpoch((e) => e + 1);
           }}
         />
       )}
       {media.kind !== 'image' && (
         <NumberField
-          key={`spd-${epoch}`}
           label="Speed"
           value={Math.round(rate * 100)}
           min={10}
@@ -324,13 +313,11 @@ function ClipPropsGroup({ clipId }: { clipId: string }) {
           testid="mini-field-speed"
           onCommit={(v) => {
             setClipSpeed(clip.id, v / 100);
-            setEpoch((e) => e + 1);
           }}
         />
       )}
       {hasWindowSlack && (
         <NumberField
-          key={`in-${epoch}`}
           label="In-point"
           value={clip.sourceStart ?? 0}
           min={0}
@@ -340,7 +327,6 @@ function ClipPropsGroup({ clipId }: { clipId: string }) {
           testid="mini-field-inpoint"
           onCommit={(v) => {
             setClipSourceStart(clip.id, v);
-            setEpoch((e) => e + 1);
           }}
         />
       )}
@@ -497,8 +483,13 @@ function TransitionGroup({ clipId }: { clipId: string }) {
   );
   const touching = right !== undefined;
   const t = clip.transitionOut;
-  const seamMax = Math.max(0.5, Math.min(clip.duration, right?.duration ?? Infinity) - 0.5);
-  const canMint = touching && seamMax >= 0.5;
+  /* F1 (wave review): the honest bound — min(l.d, r.d) − MIN >= MIN
+   * (both clips >= 1s). The old Math.max(0.5, ...) floor made canMint a
+   * tautology (canMint === touching) and minted on 0.5/0.5 seams. */
+  const seamMax = right
+    ? Math.min(clip.duration, right.duration) - 0.5
+    : Math.min(clip.duration, 0) /* detached: no mint — a fade, not a transition */;
+  const canMint = touching && right !== undefined && seamMax >= 0.5;
   return (
     <Group title="Transition" testid="mini-group-transition" defaultOpen={!!t}>
       {t ? (
@@ -523,7 +514,7 @@ function TransitionGroup({ clipId }: { clipId: string }) {
             label="Duration"
             value={t.duration}
             min={0.5}
-            max={seamMax}
+            max={Math.max(0.5, seamMax)}
             step={0.5}
             testid="mini-field-transition-dur"
             onCommit={(v) => setTransition(clip.id, { duration: v })}
@@ -580,7 +571,7 @@ function FadeGroup({ clipId }: { clipId: string }) {
   const setFade = useMini((s) => s.setFade);
   const removeFade = useMini((s) => s.removeFade);
   if (!clip) return null;
-  const maxDur = Math.min(clip.duration, 4);
+  const maxDur = clip.duration; // F10: the invented 4s cap is dropped — the duration IS the bound
   return (
     <Group title="Fades" testid="mini-group-fades" defaultOpen={!!(clip.fadeIn || clip.fadeOut)}>
       {(clip.fadeIn === undefined && clip.fadeOut === undefined) && (

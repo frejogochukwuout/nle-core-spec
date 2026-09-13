@@ -378,3 +378,77 @@ describe('R24 W2: the Inspector transition + fade groups', () => {
     expect(S().doc.clips.find((c) => c.id === 'cA')!.fadeOut).toBe(0.5);
   });
 });
+
+/* ---- R24-miniplus W2 fix-round (F1/F7/F9d/F9f nets) ---- */
+
+describe('R24 W2-fix: the mint-bound + gate-off + dB-pair laws', () => {
+  beforeEach(() => {
+    setStore(() => {
+      S().reset();
+    });
+  });
+
+  it('F1: the Inspector REFUSES the mint on a too-short seam (both clips need 1s)', () => {
+    // cA/cB at 0.5/0.5 touching — the seam cannot hold a transition
+    setStore(() => {
+      useMini.setState({
+        doc: {
+          ...seedDoc(),
+          clips: [
+            { id: 'cA', trackId: 'V1', mediaId: 'm-drone', start: 0, duration: 0.5 },
+            { id: 'cB', trackId: 'V1', mediaId: 'm-beach', start: 0.5, duration: 0.5 },
+          ],
+        },
+      });
+      S().select('cA');
+    });
+    renderApp();
+    expect(screen.queryByTestId('mini-btn-transition-add')).toBeNull(); // no dead button
+    expect(screen.getByTestId('mini-group-transition').textContent).toMatch(/too short|1s/i);
+  });
+
+  it('F17: the store refuses setTransition on a DETACHED tail (a fade, not a transition)', () => {
+    setStore(() => {
+      useMini.setState({
+        doc: {
+          ...seedDoc(),
+          clips: [{ id: 'cA', trackId: 'V1', mediaId: 'm-drone', start: 0, duration: 3.5 }],
+        },
+      });
+    });
+    act(() => {
+      S().setTransition('cA'); // no touching right neighbor
+    });
+    expect(S().doc.clips[0].transitionOut).toBeUndefined();
+    expect(S().past.length).toBe(0); // no phantom entry
+  });
+
+  it('F9f: gate OFF unmounts the Transition + Fades groups too (per-feature, D11)', () => {
+    setStore(() => {
+      useMini.setState({
+        doc: {
+          ...seedDoc(),
+          clips: [
+            { id: 'cA', trackId: 'V1', mediaId: 'm-drone', start: 0, duration: 3.5, fadeIn: 0.5 },
+            { id: 'cB', trackId: 'V1', mediaId: 'm-beach', start: 3.5, duration: 3.5 },
+          ],
+        },
+      });
+      S().setTransition('cA');
+      S().select('cA');
+      useMini.setState({ miniPlus: false });
+    });
+    renderApp();
+    expect(screen.queryByTestId('mini-group-transition')).toBeNull();
+    expect(screen.queryByTestId('mini-group-fades')).toBeNull();
+    // the R23 facts surface stays
+    expect(screen.getByTestId('mini-inspector-start')).toBeInTheDocument();
+  });
+
+  it('F7: the ONE pair clamps below unity to DB_MIN (the field never rejects its own value)', async () => {
+    const { volToDb } = await import('../lib/audioDb');
+    expect(volToDb(0.1)).toBe(-18); // -20 clamps to the pair
+    expect(volToDb(0.01)).toBe(-18);
+    expect(volToDb(0)).toBe(-18);
+  });
+});

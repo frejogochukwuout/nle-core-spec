@@ -1052,23 +1052,34 @@ function TransitionLayer({
       const w = t.duration * pps;
       const leftPx = (cut - t.duration * (1 - t.alignment)) * pps;
       items.push(
-        <button
+        <span
           key={`wedge-${c.id}`}
-          type="button"
           className="qc-transition-wedge"
-          aria-label={`Transition ${t.presentation} on the cut after this clip (${t.duration}s)`}
-          title={`${t.presentation} — ${t.duration}s (click to select the clip and edit)`}
+          aria-hidden="true"
           style={{ left: leftPx, width: Math.max(w, 6) }}
-          onClick={(e) => {
-            e.stopPropagation();
-            select(c.id); // the owner + the Inspector's Transition group
-          }}
           data-testid={`mini-wedge-${c.id}`}
         >
-          <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false">
-            <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.4" />
-          </svg>
-        </button>,
+          {/* F4 (wave review): ONLY the X glyph is interactive (a 16x16
+           * button centered on the cut) — the box itself is
+           * pointer-events:none so the seam trim zones underneath stay
+           * draggable (a wide wedge stole the R18k trim surface). */}
+          <button
+            type="button"
+            className="qc-transition-wedge__hit"
+            aria-label={`Transition ${t.presentation} on the cut after this clip (${t.duration}s)`}
+            title={`${t.presentation} — ${t.duration}s (click to select the clip and edit)`}
+            onClick={(e) => {
+              e.stopPropagation();
+              select(c.id); // the owner + the Inspector's Transition group
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            data-testid={`mini-wedge-hit-${c.id}`}
+          >
+            <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+              <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.4" />
+            </svg>
+          </button>
+        </span>,
       );
     }
     /* the fade triangles: head (fadeIn) + tail (fadeOut) */
@@ -1114,6 +1125,7 @@ function TransitionLayer({
             }
             setTransition(c.id);
           }}
+          onPointerDown={(e) => e.stopPropagation()}
           data-testid={`mini-seam-${c.id}`}
         />,
       );
@@ -1135,6 +1147,7 @@ function TransitionLayer({
               e.stopPropagation();
               setFade(c.id, 'in');
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             data-testid={`mini-edge-in-${c.id}`}
           />,
         );
@@ -1152,6 +1165,7 @@ function TransitionLayer({
               e.stopPropagation();
               setFade(c.id, 'out');
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             data-testid={`mini-edge-out-${c.id}`}
           />,
         );

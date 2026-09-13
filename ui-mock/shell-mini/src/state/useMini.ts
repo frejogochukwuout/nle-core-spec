@@ -330,6 +330,32 @@ const findMedia = (doc: Doc, id: string): Media | undefined => doc.media.find((m
 const findClip = (doc: Doc, id: string): Clip | undefined => doc.clips.find((c) => c.id === id);
 
 export const useMini = create<MiniState>((set, get) => {
+  /** F2 (deviation #15): transitionOut lives ONLY on a touching seam.
+   *  Runs inside commit() — every doc path is covered (move, trim,
+   *  delete, split, insert, ripple; the drag seal goes through commit's
+   *  docChanged sibling so endDrag re-seals via the same invariant by
+   *  the preview's own neighbor clamps — the wedge never renders an
+   *  orphan). O(n^2) on clips is fine at mini scale. */
+  const sanitizeTransitions = (doc: Doc): void => {
+    const eps = 1e-9;
+    for (const c of doc.clips) {
+      if (!c.transitionOut) continue;
+      const right = doc.clips.find(
+        (x) => x.trackId === c.trackId && Math.abs(x.start - (c.start + c.duration)) < eps && x.id !== c.id,
+      );
+      if (!right) {
+        delete c.transitionOut; // the seam died with the edit
+        continue;
+      }
+      const bound = Math.min(c.duration, right.duration) - MIN_DUR;
+      if (bound >= MIN_DUR && c.transitionOut.duration > bound) {
+        c.transitionOut.duration = Math.max(MIN_DUR, quantize(bound) || MIN_DUR);
+      } else if (bound < MIN_DUR) {
+        delete c.transitionOut; // too short to hold any transition
+      }
+    }
+  };
+
   /** commit — one history entry per call; returns whether anything changed.
    * R21 (user P0 revert): entries are plain docs again — the binding-aware
    * entry existed for the escape drop law (REVERTED); bindings never
@@ -351,6 +377,14 @@ export const useMini = create<MiniState>((set, get) => {
       clips: state.doc.clips.map(cloneClip),
     };
     const result = mutate(draft) ?? draft;
+    /* R24-miniplus W2 (the wave review's F2 — deviation #15): the
+     * transition-invariant sanitizer. A transitionOut survives ONLY on a
+     * TOUCHING seam: any placement change (move/trim/delete/split/insert)
+     * re-validates here — an orphaned transition (its clip's end no
+     * longer touches a same-track right neighbor) is DELETED (the seam
+     * died), and a duration past the new seam bound re-clamps. One
+     * place, every path; the wedge/render/editor can then trust the doc. */
+    sanitizeTransitions(result);
     const changed = docChanged(state.doc, result);
     if (!changed) return false;
     const past = [...state.past, state.doc].slice(-MAX_HISTORY);
@@ -615,13 +649,23 @@ export const useMini = create<MiniState>((set, get) => {
       const raw = window / r;
       const quantized = Math.max(MIN_DUR, quantize(raw) || MIN_DUR);
       const { nextStart } = neighborBounds(state.doc, clip);
-      const dur = Math.min(quantized, Math.max(MIN_DUR, nextStart - clip.start));
-      if (dur === clip.duration && r === clip.speed) return;
+      /* F8 (wave review): the source-extent invariant — the consumed
+       * window (sourceStart + duration*rate <= extent) must hold; the
+       * extent bound floor-quantizes (never rounds past the media tail).
+       * An impossible rate (extent bound < MIN_DUR) refuses honestly. */
+      const sourceStart = clip.sourceStart ?? 0;
+      const extentBound = Math.floor(((media.duration - sourceStart) / r) / MIN_DUR) * MIN_DUR;
+      if (extentBound < MIN_DUR) return;
+      const dur = Math.min(quantized, Math.max(MIN_DUR, nextStart - clip.start), extentBound);
+      if (dur === clip.duration && r === (clip.speed ?? 1)) return;
       commit((doc) => {
         const c = doc.clips.find((x) => x.id === clipId);
         if (!c) return;
         c.duration = dur;
-        c.speed = r;
+        /* F11: unity deletes the field (the absent-is-default law, the
+         * same as setClipProp's volume/opacity) — the doc stays minimal. */
+        if (r === 1) delete c.speed;
+        else c.speed = r;
       });
     },
 
@@ -723,8 +767,14 @@ export const useMini = create<MiniState>((set, get) => {
       const right = state.doc.clips.find(
         (c) => c.trackId === clip.trackId && Math.abs(c.start - (clip.start + clip.duration)) < eps,
       );
-      const seamMax = Math.max(MIN_DUR, Math.min(clip.duration, right?.duration ?? Infinity) - MIN_DUR);
       const current = clip.transitionOut;
+      /* F17 (wave review): the store REFUSES a mint on a detached tail —
+       * a transition to nothing is a FADE (setFade). The Inspector and
+       * the seam zones already guard; the store is the third door and
+       * now agrees. (Patching an EXISTING transition is still allowed —
+       * the sanitizer owns orphan cleanup.) */
+      if (!right && !current) return;
+      const seamMax = Math.max(MIN_DUR, Math.min(clip.duration, right?.duration ?? Infinity) - MIN_DUR);
       const next = current
         ? { ...current, ...(patch ?? {}) }
         : { ...defaultTransition(), ...(patch ?? {}) };
@@ -760,12 +810,10 @@ export const useMini = create<MiniState>((set, get) => {
       const state = get();
       const clip = findClip(state.doc, clipId);
       if (!clip) return;
-      const v = Math.min(
-        Math.max(quantize(dur ?? 0.5) || MIN_DUR, MIN_DUR),
-        Math.min(clip.duration, 0.5 * 8),
-      );
-      // the mint default never exceeds the clip (0.5 cap by the D5 law)
-      const capped = dur === undefined ? Math.min(v, clip.duration, 0.5) : Math.min(v, clip.duration);
+      /* F10: the invented 4s cap is dropped — the clip's own duration IS
+       * the bound; the mint default caps at 0.5 (the D5 law). */
+      const v = Math.min(Math.max(quantize(dur ?? 0.5) || MIN_DUR, MIN_DUR), clip.duration);
+      const capped = dur === undefined ? Math.min(v, clip.duration, 0.5) : v;
       const current = side === 'in' ? clip.fadeIn : clip.fadeOut;
       if (current === capped) return; // no-op guard
       commit((doc) => {

@@ -1127,6 +1127,9 @@
 }
 
 /* the wedge: the X-crossed box on the cut */
+/* F4 (wave review): the wedge BOX is a visual (pointer-events:none —
+ * the seam trim zones underneath stay draggable); only the centered X
+ * button is interactive. */
 .qc-transition-wedge {
   position: absolute;
   top: 2px;
@@ -1140,20 +1143,33 @@
     linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(56, 189, 248, 0.05));
   color: rgba(186, 230, 253, 0.95);
   padding: 0;
-  cursor: pointer;
+  pointer-events: none;
 }
 
-.qc-transition-wedge svg {
+.qc-transition-wedge__hit {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 3px;
+}
+
+.qc-transition-wedge__hit svg {
   width: 10px;
   height: 10px;
 }
 
-.qc-transition-wedge:hover {
-  border-color: rgba(56, 189, 248, 0.95);
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.28), rgba(56, 189, 248, 0.1));
+.qc-transition-wedge__hit:hover {
+  background: rgba(56, 189, 248, 0.28);
 }
 
-.qc-transition-wedge:focus-visible {
+.qc-transition-wedge__hit:focus-visible {
   outline: rgba(255, 255, 255, 0.62) solid 2px;
   outline-offset: 1px;
 }

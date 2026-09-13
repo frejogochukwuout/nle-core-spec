@@ -9,20 +9,21 @@ export const VOL_MIN = 0;
 export const VOL_MAX = 2;
 export const DB_MIN = -18;
 export const DB_MAX = 6;
-/** −∞ below DB_MIN reads as the fader floor (the map clamps, never NaN). */
-export const DB_FLOOR = -24;
 
-/** linear → dB (clamped to the pair; the floor for near-zero). */
+/** linear → dB (clamped to the ONE declared pair [DB_MIN, DB_MAX] —
+ *  F7/wave-review: the DB_FLOOR escape hatch is retired; a near-zero
+ *  linear clamps to DB_MIN so the Volume field never shows a value its
+ *  own validation rejects). */
 export function volToDb(v: number): number {
   const lin = Math.min(Math.max(v, VOL_MIN), VOL_MAX);
-  if (lin <= 0) return DB_FLOOR;
+  if (lin <= 0) return DB_MIN;
   const db = 20 * Math.log10(lin);
-  return Math.min(Math.max(db, DB_FLOOR), DB_MAX);
+  return Math.min(Math.max(db, DB_MIN), DB_MAX);
 }
 
 /** dB → linear (clamped to the pair). */
 export function dbToVol(db: number): number {
-  const d = Math.min(Math.max(db, DB_FLOOR), DB_MAX);
+  const d = Math.min(Math.max(db, DB_MIN), DB_MAX);
   const lin = Math.pow(10, d / 20);
   return Math.min(Math.max(lin, VOL_MIN), VOL_MAX);
 }
