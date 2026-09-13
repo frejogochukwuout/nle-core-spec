@@ -1753,3 +1753,73 @@ describe('R24 W3: the trim-mode radio + the tool-dispatch seam', () => {
     expect(a.sourceStart).toBeUndefined(); // untouched — no slip happened
   });
 });
+
+/* ---- R24-miniplus W5 (DESIGN-R24 D8): the track M/S family ---- */
+
+describe('R24 W5: solo-in-place (the anySolo law)', () => {
+  beforeEach(() => {
+    S().reset();
+  });
+
+  it('toggleTrackSolo cycles absent -> true -> absent (one entry per flip)', () => {
+    act(() => {
+      S().toggleTrackSolo('V1');
+    });
+    expect(S().doc.tracks.find((t) => t.id === 'V1')!.solo).toBe(true);
+    expect(S().past.length).toBe(1);
+    act(() => {
+      S().toggleTrackSolo('V1');
+    });
+    expect(S().doc.tracks.find((t) => t.id === 'V1')!.solo).toBeUndefined();
+    expect(S().past.length).toBe(2);
+  });
+
+  it('the S chip renders (gate ON); the M chip keeps its conditional law (additive)', () => {
+    render(<Timeline />);
+    expect(screen.getByTestId('mini-track-solo-V1')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-track-solo-A1')).toBeInTheDocument();
+    // M only when muted (the R20 law):
+    expect(screen.queryByTestId('mini-track-mute-chip-V1')).toBeNull();
+    act(() => {
+      S().toggleTrackMute('V1');
+    });
+    expect(screen.getByTestId('mini-track-mute-chip-V1')).toBeInTheDocument();
+  });
+
+  it('the anySolo law: soloing V1 dims A1 (the effective mute), V1 stays bright', () => {
+    render(<Timeline />);
+    act(() => {
+      S().toggleTrackSolo('V1');
+    });
+    expect(screen.getByTestId('mini-lane-A1')).toHaveClass('is-muted');
+    expect(screen.getByTestId('mini-lane-V1')).not.toHaveClass('is-muted');
+    // muted AND solo = STILL MUTED (the registered formula is mute-wins:
+    // effectiveMute = muted || (anySolo && !solo) — the variants' law):
+    act(() => {
+      S().toggleTrackMute('V1');
+    });
+    expect(screen.getByTestId('mini-lane-V1')).toHaveClass('is-muted');
+  });
+
+  it('gate OFF: the S chip unmounts; the dim degenerates to the R20 muted law', () => {
+    render(<Timeline />);
+    act(() => {
+      useMini.setState({ miniPlus: false });
+      S().toggleTrackSolo('V1');
+    });
+    expect(screen.queryByTestId('mini-track-solo-V1')).toBeNull();
+    // no solos RENDER (the doc flag exists but the dim reads effective mute:
+    // the solo still applies — the gate hides the CONTROL, not the doc's law)
+    expect(screen.getByTestId('mini-lane-A1')).toHaveClass('is-muted');
+    // unmuting the world: the R20 law with no solos
+    act(() => {
+      S().toggleTrackSolo('V1'); // clear the solo
+      S().toggleTrackMute('A1');
+    });
+    expect(screen.getByTestId('mini-lane-A1')).toHaveClass('is-muted');
+    act(() => {
+      S().toggleTrackMute('A1');
+    });
+    expect(screen.getByTestId('mini-lane-A1')).not.toHaveClass('is-muted');
+  });
+});

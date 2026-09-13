@@ -1590,3 +1590,167 @@ describe('R24 W3: roll/slip/slide preview laws (from-snapshot idempotence)', () 
           S().endDrag();
   });
 });
+
+/* ---- R24-miniplus W4 (DESIGN-R24 D7): source mode + the insert modes ---- */
+
+describe('R24 W4: source view state (the range laws)', () => {
+  beforeEach(() => {
+    S().reset();
+  });
+
+  it('enter/exit swap the mode; the marked ranges SURVIVE the round trip', () => {
+    S().enterSourcePreview('m-drone');
+    expect(S().viewerMode).toBe('source');
+    expect(S().sourceMediaId).toBe('m-drone');
+    S().setSourceRangeIn('m-drone', 2);
+    S().exitSourcePreview();
+    expect(S().viewerMode).toBe('program');
+    expect(S().sourceMediaId).toBeNull();
+    expect(S().sourceRanges['m-drone']).toEqual({ in: 2, out: 4.5 }); // per-media, survives
+  });
+
+  it('entering pauses playback (the F9 freeze — the program playhead never moves in source mode)', () => {
+    S().togglePlay();
+    expect(S().playing).toBe(true);
+    S().enterSourcePreview('m-drone');
+    expect(S().playing).toBe(false);
+    // Space in source mode refuses with the honest toast, never plays
+    S().togglePlay();
+    expect(S().playing).toBe(false);
+    expect(S().toast?.text).toMatch(/source mode/i);
+  });
+
+  it('the in<out refusal law: an inverted/equal in keeps the PREVIOUS edge', () => {
+    S().enterSourcePreview('m-drone'); // full window {0, 4.5}
+    S().setSourceRangeIn('m-drone', 2); // {2, 4.5}
+    S().setSourceRangeIn('m-drone', 5); // inverted — refuses
+    S().setSourceRangeIn('m-drone', 4.5); // equal — refuses
+    S().setSourceRangeIn('m-drone', 4.2); // quantizes to 4 — legal (grid: 4 <= out-0.5)
+    expect(S().sourceRanges['m-drone']).toEqual({ in: 4, out: 4.5 });
+    S().setSourceRangeIn('m-drone', 4.5); // still refused
+    expect(S().sourceRanges['m-drone']!.in).toBe(4);
+  });
+
+  it('the mirrored refusal: an inverted/equal out keeps the PREVIOUS edge', () => {
+    S().enterSourcePreview('m-drone');
+    S().setSourceRangeOut('m-drone', 2.5); // {0, 2.5}
+    S().setSourceRangeOut('m-drone', 0); // inverted — refuses
+    S().setSourceRangeOut('m-drone', 0.5); // equals in 0.5? no: in is 0 — legal minimum
+    expect(S().sourceRanges['m-drone']).toEqual({ in: 0, out: 0.5 });
+    S().setSourceRangeIn('m-drone', 2); // now beyond out — refuses
+    expect(S().sourceRanges['m-drone']!.in).toBe(0);
+    S().setSourceRangeOut('m-drone', 0); // inverted again — refuses
+    expect(S().sourceRanges['m-drone']!.out).toBe(0.5);
+  });
+
+  it('the clamps + the 0.5 quantize: in >= 0, out <= media.duration, both grid-clean', () => {
+    S().enterSourcePreview('m-drone'); // 4.5s
+    S().setSourceRangeIn('m-drone', -3); // clamps to 0
+    expect(S().sourceRanges['m-drone']!.in).toBe(0);
+    S().setSourceRangeIn('m-drone', 2.3); // quantizes to 2.5
+    expect(S().sourceRanges['m-drone']!.in).toBe(2.5);
+    S().setSourceRangeOut('m-drone', 99); // clamps to the extent
+    expect(S().sourceRanges['m-drone']!.out).toBe(4.5);
+    S().setSourceRangeOut('m-drone', 3.7); // quantizes to 3.5
+    expect(S().sourceRanges['m-drone']!.out).toBe(3.5);
+  });
+
+  it('clearSourceRange drops the mark (absent = the full window, never stored)', () => {
+    S().enterSourcePreview('m-drone');
+    S().setSourceRangeIn('m-drone', 1);
+    expect('m-drone' in S().sourceRanges).toBe(true);
+    S().clearSourceRange('m-drone');
+    expect('m-drone' in S().sourceRanges).toBe(false);
+    S().clearSourceRange('m-drone'); // no-op on the unmarked
+    expect(S().past.length).toBe(0); // view state: never an entry
+  });
+
+  it('setSourcePlayhead clamps to [0, media.duration] and the view family is drag-gated', () => {
+    S().enterSourcePreview('m-drone');
+    S().setSourcePlayhead(99);
+    expect(S().sourcePlayhead).toBe(4.5);
+    S().setSourcePlayhead(-1);
+    expect(S().sourcePlayhead).toBe(0);
+    // the interaction lock: every source view write refuses mid-gesture
+    S().beginDrag();
+    S().setSourcePlayhead(2);
+    S().setSourceRangeIn('m-drone', 1);
+    S().enterSourcePreview('m-beach');
+    expect(S().sourcePlayhead).toBe(0);
+    expect(S().sourceRanges['m-drone']).toBeUndefined();
+    expect(S().sourceMediaId).toBe('m-drone');
+    S().endDrag();
+  });
+
+  it('reset clears the whole source surface (D2/F15)', () => {
+    S().enterSourcePreview('m-drone');
+    S().setSourceRangeIn('m-drone', 1);
+    S().setSourcePlayhead(2);
+    S().reset();
+    expect(S().viewerMode).toBe('program');
+    expect(S().sourceMediaId).toBeNull();
+    expect(S().sourceRanges).toEqual({});
+    expect(S().sourcePlayhead).toBe(0);
+  });
+});
+
+describe('R24 W4: insertFromSource (ONE entry + the honest refusals)', () => {
+  beforeEach(() => {
+    S().reset();
+  });
+
+  it('insert: ONE history entry; the straddler splits + later clips shift', () => {
+    // seed V1: c1 [0,3.5], c2 [4.5,8], c3 [9,12.5]
+    S().enterSourcePreview('m-sunset'); // 4s media
+    S().setSourceRangeIn('m-sunset', 1);
+    S().setSourceRangeOut('m-sunset', 2); // a 1s window
+    S().setPlayhead(2);
+    S().insertFromSource('insert');
+    const clips = S().doc.clips.filter((c) => c.trackId === 'V1').sort((a, b) => a.start - b.start);
+    expect(clips.map((c) => [c.start, c.duration])).toEqual([
+      [0, 2], // c1 left half
+      [2, 1], // placed m-sunset
+      [3, 1.5], // c1 right half (the content [2,3.5) rests after the placed)
+      [5.5, 3.5], // c2 shifted +1
+      [10, 3.5], // c3 shifted +1
+    ]);
+    expect(S().past.length).toBe(1); // exactly ONE entry
+    S().undo();
+    expect(S().doc.clips).toHaveLength(4); // the seed restored
+    expect(S().past.length).toBe(0);
+  });
+
+  it('insert outside source mode is a no-op (the surface owns the action)', () => {
+    S().setSourceRangeIn('m-drone', 1);
+    S().insertFromSource('insert');
+    expect(S().doc.clips).toHaveLength(4);
+    expect(S().past.length).toBe(0);
+  });
+
+  it('fitToFill refusals: no span, no marked range — the honest toast, NO history entry', () => {
+    S().enterSourcePreview('m-sunset');
+    S().insertFromSource('fitToFill'); // no selection → the span refusal
+    expect(S().toast?.kind).toBe('info');
+    expect(S().toast?.text).toMatch(/marked span/i);
+    S().select('c1');
+    S().insertFromSource('fitToFill'); // selected but unmarked → the range refusal
+    expect(S().toast?.text).toMatch(/in\/out range/i);
+    expect(S().past.length).toBe(0);
+    expect(S().doc.clips).toHaveLength(4);
+  });
+
+  it('the binding window picks the lane (multiTrackDoc: bound V2, not the first V1)', () => {
+    useMini.setState({ doc: multiTrackDoc() });
+    S().enterSourcePreview('m-sunset');
+    S().setSourceRangeIn('m-sunset', 1);
+    S().setSourceRangeOut('m-sunset', 2);
+    useMini.setState({ boundVideoTrack: 'V2' });
+    S().setPlayhead(0);
+    S().insertFromSource('append');
+    const placed = S().doc.clips.filter((c) => c.trackId === 'V2' && !['c5', 'c6'].includes(c.id));
+    expect(placed).toHaveLength(1);
+    expect(placed[0].start).toBe(12); // V2's tail (c6 [8,12])
+    expect(placed[0]).toMatchObject({ mediaId: 'm-sunset', duration: 1, sourceStart: 1 });
+    expect(S().doc.clips.some((c) => c.trackId === 'V1' && c.mediaId === 'm-sunset')).toBe(false);
+  });
+});

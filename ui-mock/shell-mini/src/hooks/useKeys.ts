@@ -1,6 +1,9 @@
 /* Keyboard surface (D3.8, audit m4): Space, S, [ ], Del, ⌘Z/⌘⇧Z, ±, 0, Esc
-   + R24-miniplus (gate ON): V/X = the tool radio's select/transition.
-   Esc priority: cancel active drag FIRST, else deselect.
+   + R24-miniplus (gate ON): V/T/Y/U/X = the tool radio; I/O/,/. = the
+   source-mode surface (mark in/out + insert/overwrite).
+   Esc priority: cancel active drag FIRST, else exit source mode, else
+   deselect (F19f — the source branch sits between the dragActive check
+   and the classic deselect).
    While dragActive, ONLY Esc is honored (audit M2 interaction lock) —
    every other key returns early. Form-control targets (typing in a
    field, opening a select) are skipped so the surface stays honest —
@@ -45,7 +48,11 @@ export function useKeys() {
       const s = useMini.getState();
 
       if (e.key === 'Escape') {
-        if (s.dragActive) s.cancelDrag(); // drag-cancel outranks deselect (m4)
+        if (s.dragActive) s.cancelDrag(); // drag-cancel outranks everything (m4)
+        /* R24-miniplus W4 (F19f): source-mode exit comes NEXT — an in-flight
+         * source session is one Esc closer than the classic deselect. The
+         * mode is view state (not gate-bound): Esc exits it either way. */
+        else if (s.viewerMode === 'source') s.exitSourcePreview();
         else s.select(null);
         e.preventDefault();
         return;
@@ -82,6 +89,33 @@ export function useKeys() {
           e.preventDefault();
           s.setTrimTool('transition');
           return;
+        }
+        /* R24-miniplus W4 (DESIGN-R24 D7/D10, deviation #4): the source-mode
+         * keys — I/O mark in/out at the sourcePlayhead; ,/. fire
+         * insert/overwrite. Gated to gate-ON + source mode (program mode:
+         * inert — no collision with the classic map; the store's refusal
+         * law toasts honestly). */
+        if (s.viewerMode === 'source' && s.sourceMediaId) {
+          if (k === 'i') {
+            e.preventDefault();
+            s.setSourceRangeIn(s.sourceMediaId, s.sourcePlayhead);
+            return;
+          }
+          if (k === 'o') {
+            e.preventDefault();
+            s.setSourceRangeOut(s.sourceMediaId, s.sourcePlayhead);
+            return;
+          }
+          if (e.key === ',') {
+            e.preventDefault();
+            s.insertFromSource('insert');
+            return;
+          }
+          if (e.key === '.') {
+            e.preventDefault();
+            s.insertFromSource('overwrite');
+            return;
+          }
         }
       }
 

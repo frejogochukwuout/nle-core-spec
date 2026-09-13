@@ -1098,3 +1098,321 @@
   line-height: 1.5;
   color: rgba(255, 255, 255, 0.55);
 }
+
+.mini-inspector__mute.is-solo {
+  border-color: rgba(250, 204, 21, 0.55);
+  background: rgba(250, 204, 21, 0.12);
+  color: rgb(250, 204, 21);
+}
+
+/* ---------- R24-miniplus W4 (DESIGN-R24 D7): the source surface -------- */
+
+/* the pool card wrap — the card keeps its own box grammar; the wrap only
+   owns the absolutely-positioned "open in source" affordance (a SIBLING
+   button: interactive content never nests inside the card button) */
+.mini-media-card-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+/* the drag-dim moves to the wrap (the affordance dims with its card) */
+.mini-media-card-wrap.is-drag-source .mini-media-card {
+  opacity: 0.55;
+}
+
+/* F7 — the "open in source" affordance: the thumb's top-right corner,
+   revealed on hover/focus-within (visibility keeps it OUT of the tab
+   order while hidden — focusing the CARD reveals it, the next Tab
+   reaches it; progressive disclosure, keyboard-honest). The accent ring
+   separates it from the kind badge on the opposite corner. */
+.mini-media-card__srcbtn {
+  position: absolute;
+  top: var(--canvas-editor-space-sm);
+  right: var(--canvas-editor-space-sm);
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  color: var(--canvas-quick-cut-accent, #38bdf8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s, visibility 0.12s, background 0.12s;
+}
+
+.mini-media-card-wrap:hover .mini-media-card__srcbtn,
+.mini-media-card-wrap:focus-within .mini-media-card__srcbtn {
+  opacity: 1;
+  visibility: visible;
+}
+
+.mini-media-card__srcbtn:hover {
+  background: rgba(56, 189, 248, 0.18);
+}
+
+.mini-media-card__srcbtn:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
+/* the source head: back-to-program + the max toggle share the right slot */
+.mini-viewer__head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  flex: 0 0 auto;
+}
+
+.mini-src__backbtn {
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: var(--canvas-editor-control-surface);
+  color: var(--canvas-editor-text-default);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.mini-src__backbtn:hover {
+  background: var(--canvas-editor-control-hover);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.mini-src__backbtn:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
+/* the poster — kind-aware (filmstrip head frame / waveform / still
+   block), always carrying the honest name + duration labels. The
+   letterbox law (the program frame's): width = the smaller constraint,
+   never cropped, never distorted. */
+.mini-src__poster {
+  position: relative;
+  width: min(100cqw, calc(100cqh * 1.7778));
+  aspect-ratio: 16 / 9;
+  background: #0a0c0e center / cover no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.mini-src__poster.is-audio {
+  color: var(--canvas-quick-cut-audio-waveform, rgba(255, 255, 255, 0.52));
+}
+
+.mini-src__wave {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 10% 4%;
+}
+
+.mini-src__name {
+  position: relative;
+  z-index: 1;
+  max-width: 70%;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-src__dur {
+  position: relative;
+  z-index: 1;
+  margin-left: auto;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 10px;
+}
+
+/* the range bar's row: the bar fills, the source timecode pins right */
+.mini-src__rangewrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  margin: 0 var(--canvas-editor-space-lg) 0;
+}
+
+.mini-src__tc {
+  flex: 0 0 auto;
+  color: var(--canvas-editor-text-strong);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the marks row: Set In / Set Out / Clear (compact, the field grammar) */
+.mini-src__marks {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--canvas-editor-space-sm);
+  margin: var(--canvas-editor-space-sm) var(--canvas-editor-space-lg) 0;
+}
+
+.mini-src__markbtn {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: var(--canvas-editor-control-surface);
+  color: var(--canvas-editor-text-default);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.mini-src__markbtn:hover:not(:disabled) {
+  background: var(--canvas-editor-control-hover);
+}
+
+.mini-src__markbtn:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
+.mini-src__markbtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* the mode row: the 6 one-shot insert actions — a 2-row wrap at the
+   panel's foot (never disabled; a refusal toasts, the store's law) */
+.mini-src__modes {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: var(--canvas-editor-space-sm) var(--canvas-editor-space-lg) var(--canvas-editor-space-md);
+}
+
+.mini-src__modebtn {
+  flex: 1 1 calc(33% - 2px);
+  min-width: 0;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: var(--canvas-editor-control-surface);
+  color: var(--canvas-editor-text-default);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.mini-src__modebtn:hover {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.mini-src__modebtn:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}
+
+/* the SourceRangeBar (SourceRangeBar.tsx) — the scrub strip grammar:
+   a 16px rail like the program scrub bar; the trimmed band is the
+   accent, the handles are the accent-framed grabs, the playhead is the
+   quick-cut tick. touch-action none — the pointer drag owns the gesture. */
+.mini-srcbar {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 16px;
+  cursor: pointer;
+  touch-action: none;
+  border-radius: 8px;
+}
+
+.mini-srcbar__inner {
+  position: relative;
+  height: 100%;
+}
+
+.mini-srcbar__track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.mini-srcbar__band {
+  position: absolute;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  /* unmarked = the full window at low emphasis (nothing decided yet);
+     marked = the accent band the insert modes will place */
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.mini-srcbar__band.is-marked {
+  background: var(--canvas-quick-cut-accent, #38bdf8);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+}
+
+.mini-srcbar__ph {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  border-radius: 1px;
+  background: #f2f2f2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  pointer-events: none; /* the scrub underneath owns the pointer */
+}
+
+.mini-srcbar__handle {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(56, 189, 248, 0.8);
+  border-radius: 2px;
+  background: #e6edf3;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.mini-srcbar__handle:hover {
+  border-color: #fff;
+}
+
+.mini-srcbar__handle:focus-visible {
+  outline: rgba(255, 255, 255, 0.62) solid 2px;
+  outline-offset: 1px;
+}

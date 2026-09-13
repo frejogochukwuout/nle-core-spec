@@ -15,16 +15,28 @@
    BAR joins as the transport's second row — the bar's CENTER sits
    directly under the centered play button (the reviewer's
    "centerly aligned" reading), drag/click scrubs the playhead, and the
-   focusable slider surface carries ←/→/Home/End. */
+   focusable slider surface carries ←/→/Home/End.
+   R24-miniplus W4 (DESIGN-R24 D7): the dual monitor — viewerMode
+   'source' swaps the whole surface for the SOURCE stage (the pool
+   asset's poster + the SourceRangeBar + the insert-mode row + Set
+   In/Out/Clear + back-to-program). The program branch is
+   BYTE-IDENTICAL (the additive law: the source surface mints new DOM,
+   new testids — nothing program-mode is superseded). The mode is view
+   state; it renders regardless of the gate (the ENTRY is what the gate
+   hides — a source session already in flight must not vanish under the
+   user's feet). */
 
 import { useRef, useState } from 'react';
 import { Play, Pause, Maximize2, Minimize2 } from 'lucide-react';
 import { useMini, VIEWER_ASPECTS, aspectEntry, boundClips } from '../state/useMini';
 import { usePlayhead } from '../hooks/usePlayhead';
 import { fmtTimecode } from '../lib/timecode';
-import { thumbGradientFor } from '../lib/filmstrip';
+import { thumbGradientFor, filmstripFor } from '../lib/filmstrip';
+import { waveformFor } from '../lib/waveform';
 import { contentEnd, RUNWAY_FLOOR_S } from '../lib/geometry';
 import { ToStartIcon, ClipHeadIcon } from '../lib/icons';
+import { SourceRangeBar } from './SourceRangeBar';
+import type { Media } from '../lib/mockData';
 
 export function Viewer() {
   /* PR69 C3: the playback loop mounts HERE too (singleton — Timeline
@@ -59,6 +71,17 @@ export function Viewer() {
   const media = under ? doc.media.find((m) => m.id === under.mediaId) : undefined;
   const end = contentEnd(world);
   const ar = aspectEntry(viewerAspect);
+
+  /* R24-miniplus W4 (D7): the source branch — only when the mode AND the
+   * media are live (a dangling sourceMediaId falls back to the program
+   * render — honest, never a blank panel). */
+  const viewerMode = useMini((s) => s.viewerMode);
+  const sourceMediaId = useMini((s) => s.sourceMediaId);
+  const srcMedia =
+    viewerMode === 'source' && sourceMediaId ? doc.media.find((m) => m.id === sourceMediaId) : undefined;
+  if (viewerMode === 'source' && srcMedia) {
+    return <SourceStage media={srcMedia} />;
+  }
 
   return (
     <section className="mini-panel mini-viewer" data-testid="mini-viewer" aria-label="Viewer">
@@ -187,6 +210,170 @@ export function Viewer() {
           past the content end. */}
       <ScrubBar extent={Math.max(end, RUNWAY_FLOOR_S)} />
     </section>
+  );
+}
+
+/* ---------- R24-miniplus W4 (DESIGN-R24 D7): the SOURCE stage ----------
+ * The dual monitor's other half: the pool asset's poster (kind-aware:
+ * filmstrip head frame / waveform / still block — simple and honest, a
+ * labeled poster, never a fake decode), the SourceRangeBar (mark +
+ * scrub), the one-shot insert-mode row (the variants' ruling — no
+ * persistent mode; a refusal toasts, the buttons never disable), and Set
+ * In/Out/Clear at the sourcePlayhead. The PROGRAM playhead never moves
+ * from anything on this surface (the F9 freeze). */
+function SourceStage({ media }: { media: Media }) {
+  const sourcePlayhead = useMini((s) => s.sourcePlayhead);
+  const setIn = useMini((s) => s.setSourceRangeIn);
+  const setOut = useMini((s) => s.setSourceRangeOut);
+  const clearRange = useMini((s) => s.clearSourceRange);
+  const insertFromSource = useMini((s) => s.insertFromSource);
+  const exitSourcePreview = useMini((s) => s.exitSourcePreview);
+  const viewerMax = useMini((s) => s.viewerMax);
+  const toggleViewerMax = useMini((s) => s.toggleViewerMax);
+  const range = useMini((s) => s.sourceRanges[media.id]);
+  const isAudio = media.kind === 'audio';
+
+  const posterStyle =
+    media.kind === 'image'
+      ? { background: thumbGradientFor(media) }
+      : isAudio
+        ? undefined
+        : { backgroundImage: filmstripFor(media), backgroundSize: 'cover' };
+
+  return (
+    <section className="mini-panel mini-viewer" data-testid="mini-viewer" aria-label="Source viewer">
+      <div className="mini-panel__head mini-viewer__head">
+        <span className="mini-viewer__head-label">Source</span>
+        <div className="mini-viewer__head-actions">
+          <button
+            type="button"
+            className="mini-src__backbtn"
+            onClick={exitSourcePreview}
+            title="Back to the program monitor (Esc)"
+            data-testid="mini-btn-src-back"
+          >
+            Back to program
+          </button>
+          {/* the max toggle composes with source mode too (view state) */}
+          <button
+            type="button"
+            className="mini-viewer__maxbtn"
+            aria-label={viewerMax ? 'Restore normal layout' : 'Maximize viewer'}
+            aria-pressed={viewerMax}
+            title={
+              viewerMax
+                ? 'Restore the normal layout (panels and timeline return)'
+                : 'Maximize the viewer — side panels collapse, timeline minimizes'
+            }
+            onClick={toggleViewerMax}
+            data-testid="mini-btn-viewer-max"
+          >
+            {viewerMax ? <Minimize2 size={14} strokeWidth={1.75} /> : <Maximize2 size={14} strokeWidth={1.75} />}
+          </button>
+        </div>
+      </div>
+      <div className="mini-viewer__stage">
+        <div
+          className={`mini-src__poster${isAudio ? ' is-audio' : ''}`}
+          role="img"
+          aria-label={`${media.name} — source preview (${media.kind})`}
+          style={posterStyle}
+          data-testid="mini-src-poster"
+        >
+          {isAudio && <SourceWaveform media={media} />}
+          <span className="mini-src__name" data-testid="mini-src-name">
+            {media.name}
+          </span>
+          <span className="mini-src__dur mini-mono" data-testid="mini-src-dur">
+            {fmtTimecode(media.duration)}
+          </span>
+        </div>
+      </div>
+      {/* the range bar IS the scrub surface (the stage's own playhead — F9) */}
+      <div className="mini-src__rangewrap" data-testid="mini-src-range">
+        <SourceRangeBar media={media} />
+        <span className="mini-src__tc mini-mono" data-testid="mini-src-tc">
+          {fmtTimecode(sourcePlayhead)}
+        </span>
+      </div>
+      <div className="mini-src__marks">
+        <button
+          type="button"
+          className="mini-src__markbtn"
+          onClick={() => setIn(media.id, sourcePlayhead)}
+          title={`Mark in at ${fmtTimecode(sourcePlayhead)} (I)`}
+          data-testid="mini-btn-src-setin"
+        >
+          Set In
+        </button>
+        <button
+          type="button"
+          className="mini-src__markbtn"
+          onClick={() => setOut(media.id, sourcePlayhead)}
+          title={`Mark out at ${fmtTimecode(sourcePlayhead)} (O)`}
+          data-testid="mini-btn-src-setout"
+        >
+          Set Out
+        </button>
+        <button
+          type="button"
+          className="mini-src__markbtn"
+          onClick={() => clearRange(media.id)}
+          title="Clear the marked range — back to the full window"
+          disabled={!range}
+          data-testid="mini-btn-src-clear"
+        >
+          Clear
+        </button>
+      </div>
+      {/* the mode row: 6 ONE-SHOT action buttons (never disabled — an
+          impossible edit toasts honestly, the store's refusal law) */}
+      <div className="mini-src__modes" role="group" aria-label="Insert modes" data-testid="mini-src-modes">
+        {(
+          [
+            ['insert', 'Insert', 'Insert at the playhead — straddlers split, later clips shift right'],
+            ['overwrite', 'Overwrite', 'Overwrite at the playhead — covered clips trim or die'],
+            ['replace', 'Replace', 'Swap the selected clip — exact length, window slides to fit'],
+            ['append', 'Append', 'Place at the lane tail — the playhead is ignored'],
+            ['rippleOverwrite', 'Ripple Overwrite', 'Overwrite, then shift later clips by the difference'],
+            ['fitToFill', 'Fit to Fill', 'Retime the marked window into the selected clip span'],
+          ] as const
+        ).map(([mode, label, hint]) => (
+          <button
+            key={mode}
+            type="button"
+            className="mini-src__modebtn"
+            onClick={() => insertFromSource(mode)}
+            title={hint}
+            data-testid={`mini-btn-insert-${mode.toLowerCase()}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** The audio poster's waveform block — the same deterministic envelope
+ *  grammar the timeline lanes render (waveformFor), simplified to a fixed
+ *  bar count (a poster is not a lane — no zoom, no sizing law). */
+function SourceWaveform({ media }: { media: Media }) {
+  const values = waveformFor(media, 48);
+  return (
+    <svg
+      className="mini-src__wave"
+      viewBox={`0 0 ${values.length} 100`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      focusable="false"
+      data-testid="mini-src-wave"
+    >
+      {values.map((v, i) => {
+        const h = v * 84;
+        return <rect key={i} x={i + 0.15} y={50 - h / 2} width={0.7} height={h} rx={0.35} fill="currentColor" />;
+      })}
+    </svg>
   );
 }
 
