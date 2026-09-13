@@ -1020,6 +1020,55 @@ describe('R15 T5: the snap indicator line (2px accent/40%, z 40, gesture-held on
   });
 });
 
+/* ---------- R25 W2 (DESIGN-R25 §2.1 / §3 W2): trim affordances in the REAL
+   tree — the overlays mount in the LANE layer (Clip's ghost layer), z 10
+   (below the snap indicator 40 / playhead 100 — the canonical §17 ladder),
+   and unmount on release. The per-mode geometry laws pin at the component
+   level (Clip.test.tsx); these pins hold the MOUNTING contract. ---------- */
+
+describe('R25 W2 trim-mode affordances (Timeline integration)', () => {
+  it("a roll drag mounts the seam grammar inside the dragging clip's own lane — z 10, pointer-dead, gone on release", () => {
+    boot({ tool: 'roll' }); // default selection ['el-2'] → the handles render
+    const handle = screen.getByTestId('clip-trim-l-el-2');
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(handle, { pointerId: 1, buttons: 1, clientX: 437 }); // junction 8.5 → 9.5
+    const arrow = screen.getByTestId('trim-roll-arrow');
+    // lane-layer mounting: the overlay is a SIBLING of the clip box (the alt-drag ghost layer)
+    expect(laneOf('el-2').contains(arrow)).toBe(true);
+    expect(arrow.parentElement).not.toBe(screen.getByTestId('clip-el-2'));
+    // the z-law: drag-ghost layer 10 — above clip content, below snap 40 / playhead 100
+    expect(arrow.style.zIndex).toBe('10');
+    expect(arrow.getAttribute('class')).toContain('pointer-events-none');
+    expect(screen.getByTestId('trim-roll-edge-l')).toBeInTheDocument();
+    expect(screen.getByTestId('trim-roll-edge-r')).toBeInTheDocument();
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(screen.queryByTestId('trim-roll-arrow')).not.toBeInTheDocument();
+    // the gesture itself still commits through the untouched R15 T4 path
+    const el1 = scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-1')!;
+    const el2 = scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!;
+    expect(el1.duration).toBe(9.5);
+    expect(el2.startTime).toBe(9.5);
+  });
+
+  it('a slip drag mounts the source-outline grammar (outline + in-preview) in the lane; the release commits the slip', () => {
+    boot({ tool: 'slip' });
+    const clip = screen.getByTestId('clip-el-2');
+    fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 391 });
+    fireEvent.pointerMove(clip, { pointerId: 1, buttons: 1, clientX: 437 }); // +1 s → ss 2
+    const outline = screen.getByTestId('trim-slip-outline');
+    expect(laneOf('el-2').contains(outline)).toBe(true);
+    expect(outline.style.zIndex).toBe('10');
+    // the same law math the component pins run on: source pos 0 sits 253 px in
+    expect(parseFloat(outline.style.left)).toBeCloseTo((8.5 - 3) * 46, 6);
+    expect(parseFloat(screen.getByTestId('trim-slip-in-preview').style.left)).toBeCloseTo(7.5 * 46, 6);
+    fireEvent.pointerUp(clip, { pointerId: 1 });
+    expect(screen.queryByTestId('trim-slip-outline')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('trim-slip-in-preview')).not.toBeInTheDocument();
+    const el2 = scene1().tracks.find((t) => t.id === 'tr-main')!.elements.find((e) => e.id === 'el-2')!;
+    expect(el2.sourceStart).toBeCloseTo(2, 5);
+  });
+});
+
 /* ---------- R15-F1: mid-gesture discipline (FIX 3) + T8 scrub laws (FIX 4) ---------- */
 
 describe('R15-F1 FIX 3: mid-drag unmount + destructive-key gesture gate', () => {
