@@ -95,3 +95,29 @@ its ID; fix waves cite the IDs they close.
 - [x] F1 wave: A1, E1, E2, C2-C5, A2-A4 (X1 CLAIMED but never landed — caught by B3, fixed in-tree)
 - [x] F2 wave: E3-E11, C6-C11, A5-A9, X2, X4, X6, X7 (X3 deferred)
 - [ ] F3 wave: I2, I3, I4, D1, T1, T2, T3 + the P3 family (I5-I8, D2-D8, T4-T8)
+
+## B4 — A11Y + SHORTCUTS/STATE (17)
+
+- **AA1 [P1]** 7 of 8 F6 region stops are unnamed (no role="region"/aria-label; only slot [6] has one).
+- **AA2 [P1]** The viewer marker-color palette is a menu without the menu grammar (no initial focus, no roving, no focus return on Escape/click).
+- **AA3 [P2]** CheatSheet never restores focus (the ConfirmDialog pattern exists; the sheet lacks it).
+- **AA4 [P2]** Curve-point insertion is mouse-only (no keyboard insert route).
+- **AA5 [P2]** Informative text rides text-tfaint (violates the token's own law; 5 sites incl. the grade-target clip name).
+- **AA6 [P3]** MarkerInspector color tablist doesn't rove (8 tab stops).
+- **AA7 [P3]** DeliverPage disabled reasons ride title= not data-tip.
+- **AA8 [P3]** CaptionInspector Prev/Next use native disabled without reason.
+- **AA9 [P3]** aria-disabled on a non-interactive lane div.
+- **SS1 [P2]** deleteScene skips the scene-switch clear-site domains (stale fx-object/effectId/stripFocus survive; setActiveScene misses focusedTrackId too — the 9th domain).
+- **SS2 [P2]** No e.repeat gate in useShortcuts (held keys machine-gun discrete writers; the mini's C16 law; a 4th unregistered GAP member).
+- **SS3 [P3]** updateMarker lacks the identical-patch no-op guard (the one unguarded member of the writer family; moveElement/moveElements same-class).
+- **SS4 [P3]** createScene mints colliding track ids after a delete (templated n vs nextId).
+- **SS5 [P3]** Escape has no source-mode exit rung (mouse-only exit).
+- **SS6 [P3]** Escape escapes the mid-drag gesture gate (runs the domain ladder under an active drag).
+- **SS7 [P3]** ,/. slip is not tool-dispatched (spec D34.3's four-meaning law).
+- **SS8 [P3]** Tool keys fire page-ungated (R shadows the color-page reset row).
+
+## Ledger (updated)
+
+- [x] F1 (A1, E1, E2, C2-C5, A2-A4 + X1 recovered) · [x] F2 (24) · [x] F3 (21)
+- [ ] F4 wave: AA1-AA5, SS1-SS2 (the P1/P2 class) + the P3 family (AA6-AA9, SS3-SS8)
+- VLM sweep: complete pass; P1=24 triaged to the known artifact classes (clipped story captions + isolated-component voids — same corpus classes as R24); 58 rate-limit errors, resumable.
