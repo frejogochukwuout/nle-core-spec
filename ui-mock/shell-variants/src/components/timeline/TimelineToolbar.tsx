@@ -24,19 +24,26 @@
      markers               |  ✔  |   —   |   —   | —  |    —    |
      density (popover)     |  ✔  |   ✔   |   ✔   | ✗  |    ✔    |
      zoom                  |  ✔  |   ✔   |   ✔   | ✔  | ✔ (read-mostly) |
-     mixer state           |  —  |   —   |   ✔   | —  |    —    |
      master audio          |  ✔  |   —   |   ✔   | —  |    —    |
+
+   R25-W4-D (DESIGN-R25 §1 R16; thread th_mtzoy9f9 "redundant we already
+   have a Mixer button at top"): the mixer-state cluster is DELETED — the
+   whole row above is gone (deletion-pinned in TimelineToolbar.test).
+   Toolbar2's mixer toggle is the ONE control for the ONE surface (the
+   reviewer's ruling; this SUPERSEDES the R24-W1 A3-R3 placement that kept
+   both — the #65/#66 resolution put the toggle here, the reviewer's
+   latest takes it away). The store's binary open/close seam is unchanged
+   (Toolbar2 calls it).
 
    Every hidden cluster is DOM-ABSENT (never display:none — the F6/rover
    dense laws); the vseps ride along (a separator between two clusters
    renders only when BOTH clusters render — an absent cluster never leaves
-   a dangling bar). The mixer-state cluster hides on every page EXCEPT
-   audio (A3-R3 — the binary toggle's only home); master-audio stays
-   Edit+Audio (its own ruling-15 law). The view-options
-   button is the pre-matrix house button — it stays on every page. */
+   a dangling bar). master-audio stays Edit+Audio (its own ruling-15 law).
+   The view-options button is the pre-matrix house button — it stays on
+   every page. */
 
 import { useRef } from 'react';
-import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX, AudioLines, SlidersVertical } from 'lucide-react';
+import { MousePointer2, Magnet, Link2, Lock, Flag, ScanSearch, Frame, Volume2, VolumeX } from 'lucide-react';
 import { useUi, type Page, type ToolId } from '../../state/useUiStore';
 import { sceneDuration } from '../../lib/mockData';
 import { StripMeter } from '../mixer/MixerPrimitives';
@@ -100,7 +107,11 @@ import { zoomBus } from '../../lib/zoomController';
    R-b: the FX page forces the full Timeline — the resolver returns false
    there and the toggle is DOM-absent so no control can claim otherwise);
    the flags exist anyway so the code mirrors the design table 1:1 and a
-   future page MUST decide. Record<Page, …> is exhaustive by construction. */
+   future page MUST decide. Record<Page, …> is exhaustive by construction.
+   R25-W4-D (D-D2 matrix change, th_mtzoy9f9): the `mixer` row is DELETED
+   from the matrix — the mixer dock's open/close toggle lives ONLY in
+   Toolbar2 ("redundant we already have a Mixer button at top"); this
+   toolbar keeps no mixer surface of any kind. */
 interface PageClusters {
   tools: boolean;   /* the 8-tool radio (+ the FX tool, D-A1) */
   snap: boolean;    /* the magnet — Edit + Audio (Audio needs snap for clip
@@ -113,22 +124,20 @@ interface PageClusters {
                        Timeline, always) */
   zoom: boolean;    /* the zoom cluster — every page (read-mostly on deliver:
                        the deliver timeline is live, so zoom still works) */
-  mixer: boolean;   /* mixer-state — AUDIO ONLY (R24-W1 A3-R3 supersedes
-                       R23-WB's edit+audio; the binary toggle's only home) */
   master: boolean;  /* master mute/volume/meter/DIM — Edit + Audio (ruling 15,
                        its own law — edit keeps the master-audio row) */
 }
 const CLUSTERS: Record<Page, PageClusters> = {
-  edit:    { tools: true,  snap: true,  linkLock: true,  markers: true,  density: true, zoom: true, mixer: false, master: true },
-  color:   { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, mixer: false, master: false },
-  audio:   { tools: false, snap: true,  linkLock: false, markers: false, density: true, zoom: true, mixer: true,  master: true },
-  fx:      { tools: false, snap: false, linkLock: false, markers: false, density: false, zoom: true, mixer: false, master: false },
-  deliver: { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, mixer: false, master: false },
+  edit:    { tools: true,  snap: true,  linkLock: true,  markers: true,  density: true, zoom: true, master: true },
+  color:   { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, master: false },
+  audio:   { tools: false, snap: true,  linkLock: false, markers: false, density: true, zoom: true, master: true },
+  fx:      { tools: false, snap: false, linkLock: false, markers: false, density: false, zoom: true, master: false },
+  deliver: { tools: false, snap: false, linkLock: false, markers: false, density: true, zoom: true, master: false },
 };
 
 /* the right-side clusters in DOM order — drives the vsep law (a separator
    renders only BETWEEN two present clusters) */
-const RIGHT_CLUSTER_ORDER = ['tools', 'snapGroup', 'markers', 'zoom', 'mixer', 'master'] as const;
+const RIGHT_CLUSTER_ORDER = ['tools', 'snapGroup', 'markers', 'zoom', 'master'] as const;
 type RightCluster = (typeof RIGHT_CLUSTER_ORDER)[number];
 
 export function TimelineToolbar() {
@@ -148,9 +157,7 @@ export function TimelineToolbar() {
   const masterVolume = useUi((s) => s.masterVolume);
   const toggleMasterMute = useUi((s) => s.toggleMasterMute);
   const setMasterVolume = useUi((s) => s.setMasterVolume);
-  const mixerState = useUi((s) => s.mixerState);
   const page = useUi((s) => s.page);
-  const toggleMixerOpen = useUi((s) => s.toggleMixerOpen);
   /* R23-WB (D-B3) → R24-W1 (A3-R4): the density law lives in the
      ViewOptionsPopover now (the ONE resolver + the override write — shared
      with AppShell's mount decision, they can never disagree); this toolbar
@@ -165,7 +172,7 @@ export function TimelineToolbar() {
   const m = CLUSTERS[page];
 
   /* the vsep law: a separator renders only between two PRESENT right-side
-     clusters (order: tools, snap/link/lock, markers, zoom, mixer, master).
+     clusters (order: tools, snap/link/lock, markers, zoom, master).
      An absent cluster takes its separators with it — a dangling bar would
      read as a phantom divider and violate the dense-DOM law. */
   const clusterOn: Record<RightCluster, boolean> = {
@@ -173,10 +180,9 @@ export function TimelineToolbar() {
     snapGroup: m.snap || m.linkLock,
     markers: m.markers,
     zoom: m.zoom,
-    mixer: m.mixer,
     master: m.master,
   };
-  const vsep: Record<RightCluster, boolean> = { tools: false, snapGroup: false, markers: false, zoom: false, mixer: false, master: false };
+  const vsep: Record<RightCluster, boolean> = { tools: false, snapGroup: false, markers: false, zoom: false, master: false };
   let seenPresent = false;
   for (const k of RIGHT_CLUSTER_ORDER) {
     vsep[k] = clusterOn[k] && seenPresent;
@@ -417,34 +423,6 @@ export function TimelineToolbar() {
           <button className="icon-btn !h-[18px] !w-[18px] !text-[15px]" onClick={() => zoomBus.zoomIn()} data-tip="Zoom in (+)" aria-label="Zoom in">+</button>
           <span className="mono hidden shrink-0 pl-1 text-[11px] text-tmuted xl:inline">{Math.round(pxPerSec)} px/s</span>
         </>
-      )}
-
-      {/* vsep law: renders only between two PRESENT clusters (D-D2) */}
-      {vsep.mixer && <div className="vsep" />}
-
-      {/* mixer dock open/close — R20-W1 (D1.4) → R24-W1 (A3-R3; issues
-          #65/#66): the 3-state cycle is DEAD — this is the BINARY
-          toggleMixerOpen (with lastVisual memory), and the cluster renders
-          on the AUDIO page ONLY (the master-audio cluster below keeps its
-          own Edit+Audio law). Glyph law: AudioLines when CLOSED (opening
-          shows strips), SlidersVertical when OPEN — NEVER the
-          Inspector-collision glyph (Toolbar2's twin). Binary
-          wording; no chord (⌘M is spec 16 §3.5 focused-track mute). */}
-      {m.mixer && (
-        <button
-          className={`icon-btn ${mixerState !== 'collapsed' ? 'toggled' : ''}`}
-          data-tip={mixerState !== 'collapsed' ? 'Hide audio mixer' : 'Show audio mixer'}
-          aria-label={mixerState !== 'collapsed' ? 'Hide audio mixer' : 'Show audio mixer'}
-          aria-pressed={mixerState !== 'collapsed'}
-          onClick={toggleMixerOpen}
-          data-testid="btn-mixer-state"
-        >
-          {mixerState !== 'collapsed' ? (
-            <SlidersVertical size={14} strokeWidth={1.6} />
-          ) : (
-            <AudioLines size={14} strokeWidth={1.6} />
-          )}
-        </button>
       )}
 
       {/* vsep law: renders only between two PRESENT clusters (D-D2) */}

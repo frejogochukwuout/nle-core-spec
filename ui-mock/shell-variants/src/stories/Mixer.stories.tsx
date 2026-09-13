@@ -142,15 +142,16 @@ export const Collapsed: StoryObj = {
 
 /* ---- ChannelStrip solo ----------------------------------------------------- */
 
-/* ---- ChannelStrip solo (tier API: MIXER_TIER {FULL 560, LEAN 420, MIN
-   340, FLOOR 280}; the strip's own height drives the accessory stack) ---- */
+/* ---- ChannelStrip solo (the R25-W4-E API: tier T0/T1/T2 within density
+   'full' + the density ladder {full ≥340 / lean [280,340) / core [200,280)};
+   MIXER_TIER {FULL 560, LEAN 420, MIN 340, FLOOR 280} + MIXER_CORE_FLOOR 200) ---- */
 
-function StripSolo({ tier = 0, height = 520, narrow = false }: { tier?: 0 | 1 | 2 | 3; height?: number; narrow?: boolean }) {
+function StripSolo({ tier = 0, density = 'full', height = 520, narrow = false }: { tier?: 0 | 1 | 2; density?: 'full' | 'lean' | 'core'; height?: number; narrow?: boolean }) {
   const track = useUi((s) => s.scenes[0].tracks.find((t): t is TrackJSON => t.id === 'tr-audio-2'));
   if (!track) return null;
   return (
     <div className="flex items-stretch border border-hairline" style={{ height }}>
-      <ChannelStrip track={track} sceneId="sc-1" tier={tier} narrow={narrow} stripH={height} focused onStripClick={() => { /* demo */ }} />
+      <ChannelStrip track={track} sceneId="sc-1" tier={tier} density={density} narrow={narrow} focused onStripClick={() => { /* demo */ }} />
     </div>
   );
 }
@@ -207,18 +208,31 @@ export const ChannelStripLean: StoryObj = {
   ),
 };
 
-/** T3 (<340px): the per-channel VERTICAL SCROLL tier — the accessory stack
- *  (input/fx/graphs/pan/routing/title/RSM) scrolls inside the strip while
- *  the fader+scale+meter trio stays PINNED at the bottom (travel ≥140px,
- *  proportions locked) — thread #59's "tight vertical space, per-channel
- *  scroll if we truly need more space". */
-export const ChannelStripT3: StoryObj = {
-  name: 'Mixer — ChannelStrip T3 (per-channel scroll @300px)',
+/** T3 is DEAD (R25-W4-E, th_mtzozdvo): the per-channel-scroll tier became
+ *  the DENSITY LADDER — this story now shows the two new ladder levels:
+ *  'lean' [280,340) hides the optional blocks (fader+meters+RSM stay);
+ *  'core' [200,280) = meters+fader only. The old "scroll the accessory
+ *  stack" behavior is deletion-pinned in ChannelStrip.test. */
+export const ChannelStripLeanDensity: StoryObj = {
+  name: 'Mixer — ChannelStrip lean density (ladder L1 @300px)',
   parameters: { layout: 'padded' },
   render: () => (
     <>
       <StoreBoot patch={{ stripFocus: 'tr-audio-2' }} />
-      <StripSolo tier={3} height={300} />
+      <StripSolo density="lean" height={300} />
+    </>
+  ),
+};
+
+/** Ladder Level 2 ('core', [200,280)): meters+fader only — the LAST strip
+ *  form before the dock's mini-meters fallback at the true floor. */
+export const ChannelStripCoreDensity: StoryObj = {
+  name: 'Mixer — ChannelStrip core density (ladder L2 @240px)',
+  parameters: { layout: 'padded' },
+  render: () => (
+    <>
+      <StoreBoot patch={{ stripFocus: 'tr-audio-2' }} />
+      <StripSolo density="core" height={240} />
     </>
   ),
 };

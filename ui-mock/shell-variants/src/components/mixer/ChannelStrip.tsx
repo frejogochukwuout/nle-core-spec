@@ -14,15 +14,31 @@
    - Cross-strip dB gridlines + the 24px headroom readout live INSIDE the
      pinned fader section (D2/D15).
 
-   Height tiers (D1.3, contract §4.2 revised): the DOCK measures once and
-   passes the tier down (cross-strip fader-top alignment requires a SHARED
-   tier) — T0 ≥560 full anatomy; T1 420-559 (name merges into the header,
-   graphs → ONE combined 28px row, pan box 36, fx-rack 3 slots, no
-   routing/title rows); T2 340-419 (graphs + input hidden, fx count chip in
-   the header, expandable); T3 280-339 (the accessory stack scrolls INSIDE
-   the strip; the trio + RSM pin at the bottom, faderSection = clamp(H−53−
-   scrollMin, 164, 260) with scrollMin = max(40, H−53−164)). Below the 280px
-   FLOOR the dock auto-falls back to the meters state (MixerDock).
+   Height ladder (D1.3 → R25-W4-E, thread th_mtzozdvo — the responsive
+   degradation ladder): the DOCK measures once and passes BOTH axes down
+   (cross-strip fader-top alignment requires a SHARED ladder):
+   - density 'full' (H ≥ MIXER_TIER.MIN 340): the TIER system runs —
+     T0 ≥560 full anatomy; T1 420-559 (name merges into the header, graphs →
+     ONE combined 28px row, pan box 36, fx-rack 3 slots, no routing/title
+     rows); T2 340-419 (graphs + input + rack hidden, fx count chip in the
+     header, expandable). The old T3 per-channel scroll tier is DEAD
+     (deletion-pinned — the ladder replaces it: hiding elements, not
+     scrolling them).
+   - density 'lean' (FLOOR 280 ≤ H < 340): ladder Level 1 — the OPTIONAL
+     blocks are hidden (the W4-A element set: FX grid + pan + input +
+     graphs) plus the ladder's own removals (I row, routing, title — name
+     merges into the header); strips keep top bar + header + RSM + fader +
+     meters.
+   - density 'core' (MIXER_CORE_FLOOR 200 ≤ H < 280): ladder Level 2 —
+     meters+fader only (RSM goes too; the identification chrome — top bar +
+     header+name — survives every level; an anonymous strip would be
+     unusable). Compact spacing = the row-set compaction itself.
+   - density 'mini' (H < 200): the CONTAINER pure-renders MetersDock (the
+     LAST resort — only when even meters+fader cannot fit; the R24-W1 #60
+     floor law, re-based to the true meters+fader floor).
+   The W4-A user toggles COMPOSE (a block renders iff the user toggle is on
+   AND the density allows it AND the tier renders it natively — user-hidden
+   stays hidden at every level; the ladder only removes more).
 
    Width compaction is DECOUPLED from height: `narrow` (72px strips, trio
    drops the meter column) fires when the dock's width budget < N×86.
@@ -44,7 +60,7 @@ import { useMeter } from '../../lib/meterEngine';
 
 const DEFAULT_STRIP: MixerTrackSettings = { fader: -6, pan: 0, inserts: [null, null], auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0 };
 import type { TrackJSON } from '../../lib/mockData';
-import type { MixerTier } from './MixerDock';
+import type { MixerTier, MixerDockDensity } from './MixerDock';
 
 import { Fader, PanBox, StripMeter, HeadroomReadout, FaderGridlines } from './MixerPrimitives';
 import { EqThumb, DynThumb, CombinedThumb } from './StripGraphs';
@@ -133,6 +149,7 @@ function FxRack({ inserts, name, slots, pushToast }: {
         }
         aria-label={`Add insert ${name}`}
         data-tip="Add insert (browser is v2)"
+        data-tip-in=""
         className="flex h-[18px] w-full shrink-0 items-center justify-center rounded-[2px] border border-strong bg-inset text-[10px] font-semibold text-tmuted hover:text-tprimary"
       >
         +
@@ -201,6 +218,7 @@ function IRow({ trackId, name }: { trackId: string; name: string }) {
         aria-pressed={on}
         aria-label={`${name} inserts power`}
         data-tip="Inserts power (display state, gap C40)"
+        data-tip-in=""
         className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${
           on ? 'border-[var(--solo)] bg-[var(--solo)] text-black' : 'border-[var(--solo)] text-[var(--solo)]'
         }`}
@@ -215,14 +233,20 @@ function IRow({ trackId, name }: { trackId: string; name: string }) {
    R = record arm: DISPLAY-ONLY toggle (no G-surface field — gap C40; B6: the
    flag lives in the store now). S/M stay REAL — the same undoable
    toggleTrackCmd commands as the track headers. 20×20 letter buttons with
-   the reference's inset top highlight. */
+   the reference's inset top highlight.
+   R25-W4-B (th_mtzovsvz — the RSM hover jump): every data-tip inside the
+   channel strips ALSO carries data-tip-in — the CSS variant that clamps
+   the tooltip inside the strip box (see app.css) so the hover state can
+   never extend the channel scroll region's scrollable overflow (the live-
+   DOM-diagnosed cause of the fader-area jump: tooltip → scrollbar → 9px
+   content-height loss → strip re-layout). */
 function RsmRow({ sceneId, track, name }: { sceneId: string; track: TrackJSON; name: string }) {
   const armed = useUi((s) => s.stripArm[track.id] ?? false);
   const toggleStripArm = useUi((s) => s.toggleStripArm);
   const pushToast = useUi((s) => s.pushToast);
   const btn = 'mono flex h-[20px] w-[20px] items-center justify-center rounded-[2px] border text-[10px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]';
   return (
-    <div className="flex h-[24px] w-full shrink-0 items-center justify-center gap-[3px]">
+    <div data-testid="rsm-row" className="flex h-[24px] w-full shrink-0 items-center justify-center gap-[3px]">
       <button
         data-testid="strip-rec-arm"
         onClick={() => {
@@ -232,6 +256,7 @@ function RsmRow({ sceneId, track, name }: { sceneId: string; track: TrackJSON; n
         aria-pressed={armed}
         aria-label={`Record arm ${name}`}
         data-tip="Record arm (display state, gap C40)"
+        data-tip-in=""
         className={`${btn} ${armed ? 'border-[var(--meter-red)] text-[var(--meter-red)]' : 'border-strong bg-raised text-tmuted'}`}
       >
         R
@@ -270,6 +295,7 @@ function RoutingRow({ track, strip, onBus }: { track: TrackJSON; strip: MixerTra
         aria-pressed={active}
         aria-label={`Route ${track.name} to aux ${bus}`}
         data-tip={`Output bus: ${strip.outputBus === 0 ? 'master' : `aux ${bus}`} (click to ${active ? 'return to master' : `route to aux ${bus}`})`}
+        data-tip-in=""
         className={`mono flex h-[16px] w-[16px] items-center justify-center rounded-[2px] border text-[10px] font-bold ${active ? 'text-black' : ''}`}
         style={{ borderColor: color, background: active ? color : 'transparent', color: active ? '#000' : color }}
       >
@@ -300,17 +326,16 @@ const TitleRow = ({ name, gold }: { name: string; gold: boolean }) => (
    peak, D15) above the [scale | fader | meter] columns (D1 order) sharing one
    height var — exactly equal, top-aligned — with the cross-strip dB
    gridlines (D2) painted behind them. The section is the strip's TERMINAL
-   flex-1 block at T0-T2 (travel floor: section min 164 = 140 travel + the
-   24px headroom); at T3 it takes the clamp formula's FIXED height so the
-   trio pins at the strip bottom while the accessory stack scrolls above. */
-function FaderSection({ id, db, peakDb, pinnedHeight, children }: {
-  id: string; db: number; peakDb: number; pinnedHeight?: number; children: React.ReactNode;
+   flex-1 block at EVERY density (travel floor: section min 164 = 140 travel
+   + the 24px headroom). The old T3 pinnedHeight clamp died with the T3
+   scroll tier (R25-W4-E — the ladder replaces the scroll with hiding). */
+function FaderSection({ id, db, peakDb, children }: {
+  id: string; db: number; peakDb: number; children: React.ReactNode;
 }) {
   return (
     <div
       data-testid={`fader-section-${id}`}
-      className={`flex w-full flex-col ${pinnedHeight !== undefined ? 'shrink-0' : 'min-h-[164px] flex-1'}`}
-      style={pinnedHeight !== undefined ? { height: `${Math.round(pinnedHeight)}px` } : undefined}
+      className="flex min-h-[164px] w-full flex-1 flex-col"
     >
       <HeadroomReadout db={db} peakDb={peakDb} testId={`mixer-readout-${id}`} />
       <div
@@ -334,27 +359,27 @@ const FaderCol = ({ col, children }: { col: string; children: React.ReactNode })
   </div>
 );
 
-/* ---------- T3 scroll math (D1.3 / contract §4.2 — exact) ----------
-   Fixed part = top bar 3 + header 25 + hairline 1 + RSM 24 = 53; the scroll
-   region floors at max(40, H−53−164) and the fader section takes
-   clamp(H−53−scrollMin, 164, 260): the ≥140px travel floor WINS, the scroll
-   floor yields to 40px. */
-const T3_FIXED = 53;
-export function t3FaderLayout(H: number): { faderHeight: number; scrollMin: number } {
-  const scrollMin = Math.max(40, H - T3_FIXED - 164);
-  const faderHeight = Math.min(260, Math.max(164, H - T3_FIXED - scrollMin));
-  return { faderHeight, scrollMin };
-}
+/* ---------- the R25-W4-E ladder note ----------
+   The old T3 scroll math (t3FaderLayout: scrollMin = max(40, H−53−164),
+   faderHeight = clamp(H−53−scrollMin, 164, 260)) is DELETED with the T3
+   per-channel-scroll tier (deletion-pinned in ChannelStrip.test): the
+   W4-E ladder replaces the scroll with ELEMENT HIDING (lean/core densities
+   below 340px — the reviewer's "responsive design, not mini-style switch"
+   ruling), and the fader section is the TERMINAL flex-1 block (min 164 =
+   the ≥140px travel floor + the 24px headroom) at EVERY level. */
 
-export function ChannelStrip({ track, sceneId, tier = 0, narrow = false, stripH, focused, flashing, index = 0, onStripClick }: {
+export function ChannelStrip({ track, sceneId, tier = 0, density = 'full', narrow = false, focused, flashing, index = 0, onStripClick }: {
   track: TrackJSON; sceneId: string;
-  /** height tier (D1.3) — the dock measures once and shares it so fader
-      tops align across strips; 0 = full reference anatomy */
+  /** height tier (D1.3, within density 'full' only) — the dock measures once
+   *  and shares it so fader tops align across strips; 0 = full reference
+   *  anatomy (T3 is dead — the W4-E ladder replaced it) */
   tier?: MixerTier;
+  /** R25-W4-E: the dock's density-ladder level — 'full' runs the tier
+   *  system; 'lean' hides the optional blocks (fader+meters+RSM stay);
+   * 'core' = meters+fader only. jsdom/stories default 'full'. */
+  density?: MixerDockDensity;
   /** width-tier fallback (decoupled from height): 72px strip, scale+fader */
   narrow?: boolean;
-  /** the measured strip height (T3 clamp math; dock/stories pass it) */
-  stripH?: number;
   focused: boolean; flashing?: boolean;
   /** strip position in the dock row — drives the subtle bg parity (A4) */
   index?: number;
@@ -376,72 +401,96 @@ export function ChannelStrip({ track, sceneId, tier = 0, narrow = false, stripH,
   // subtle alternating row parity (A4) — raised on odd strips, shell on even
   const parityBg = index % 2 === 1 ? 'bg-raised' : 'bg-shell';
 
-  /* ---- the accessory stack, parameterized by tier ---- */
-  const inputRow = tier === 2 ? null : <InputRow />;
-  const fxRack = <FxRack inserts={strip.inserts} name={track.name} slots={tier === 0 || tier === 3 ? 5 : 3} pushToast={pushToast} />;
-  const iRow = <IRow trackId={track.id} name={track.name} />;
-  const graphs =
-    tier === 0 || tier === 3 ? (
-      <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
-        <EqThumb trackKey={track.id} />
-        <DynThumb trackKey={track.id} />
-      </div>
-    ) : tier === 1 ? (
-      <div data-testid="strip-graphs" className="flex w-full shrink-0 px-1 py-[2px]">
-        <CombinedThumb trackKey={track.id} />
-      </div>
-    ) : null;
-  const panRow = (
-    <div className={`flex w-full shrink-0 items-center justify-center ${tier === 0 || tier === 3 ? 'h-[56px]' : 'h-[44px]'}`}>
-      <PanBox pan={strip.pan} size={tier === 0 || tier === 3 ? 48 : 36} onChange={(pan) => setMixerTrack(track.id, { pan })} ariaLabel={`${track.name} pan`} />
-    </div>
-  );
-  const routingRow = <RoutingRow track={track} strip={strip} onBus={(bus) => setMixerTrack(track.id, { outputBus: bus })} />;
-  const titleRow = <TitleRow name={track.name} gold={role === 'music'} />;
-  const rsmRow = <RsmRow sceneId={sceneId} track={track} name={track.name} />;
+  /* ---- R25-W4-A + W4-E: the block-visibility composition law ----
+     A block renders iff the USER toggle (mixerElementVisibility) is on AND
+     the density ladder allows it AND the tier renders it natively
+     (T0/T1/T2 omit blocks natively — hiding applies only where the block
+     exists). User-hidden stays hidden at every level; the ladder only
+     removes more. Reference identity (the object is replaced only on
+     toggle — stable between writes). */
+  const vis = useUi((s) => s.mixerElementVisibility);
+  const showInput = vis.input && density === 'full' && tier !== 2;
+  const showFx = vis.fx && density === 'full';
+  const showPan = vis.pan && density === 'full';
+  const showGraphs = vis.graphs && density === 'full' && tier !== 2;
 
-  /* ---- tier structure ---- */
-  const headerName = tier === 1 || tier === 2 ? track.name : undefined;
-  const fxCount = tier === 2 ? <FxCountChip inserts={strip.inserts} name={track.name} /> : null;
+  /* ---- the accessory stack, parameterized by tier ---- */
+  const inputRow = showInput ? <InputRow /> : null;
+  const fxRack = showFx ? (
+    <FxRack inserts={strip.inserts} name={track.name} slots={tier === 0 ? 5 : 3} pushToast={pushToast} />
+  ) : null;
+  const iRow = density === 'full' ? <IRow trackId={track.id} name={track.name} /> : null;
+  const graphs = showGraphs
+    ? tier === 0
+      ? (
+        <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
+          <EqThumb trackKey={track.id} />
+          <DynThumb trackKey={track.id} />
+        </div>
+      )
+      : (
+        <div data-testid="strip-graphs" className="flex w-full shrink-0 px-1 py-[2px]">
+          <CombinedThumb trackKey={track.id} />
+        </div>
+      )
+    : null;
+  const panRow = showPan ? (
+    <div className={`flex w-full shrink-0 items-center justify-center ${tier === 0 ? 'h-[56px]' : 'h-[44px]'}`}>
+      <PanBox pan={strip.pan} size={tier === 0 ? 48 : 36} onChange={(pan) => setMixerTrack(track.id, { pan })} ariaLabel={`${track.name} pan`} />
+    </div>
+  ) : null;
+  const routingRow = density === 'full' ? <RoutingRow track={track} strip={strip} onBus={(bus) => setMixerTrack(track.id, { outputBus: bus })} /> : null;
+  const titleRow = density === 'full' ? <TitleRow name={track.name} gold={role === 'music'} /> : null;
+  const rsmRow = density !== 'core' ? <RsmRow sceneId={sceneId} track={track} name={track.name} /> : null;
+
+  /* ---- tier/density structure ---- */
+  const headerName = density !== 'full' || tier === 1 || tier === 2 ? track.name : undefined;
+  const fxCount = tier === 2 && density === 'full' ? <FxCountChip inserts={strip.inserts} name={track.name} /> : null;
+
+  const faderCols = (
+    <>
+      <FaderCol col="fader">
+        <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} fillHeight scale headroom={false} ariaLabel={`${track.name} fader`} />
+      </FaderCol>
+      {!narrow && (
+        <FaderCol col="meter">
+          <StripMeter
+            trackId={track.id}
+            db={strip.fader}
+            duckAmount={role === 'bgm' || role === 'music' ? (duck?.amount ?? 0) : 0}
+            fillHeight
+            label={track.name}
+          />
+        </FaderCol>
+      )}
+    </>
+  );
 
   let body: React.ReactNode;
-  if (tier === 3) {
-    // the accessory stack scrolls; hairline + RSM + the pinned trio follow
-    const { faderHeight, scrollMin } = t3FaderLayout(stripH ?? 300);
+  if (density === 'core') {
+    // W4-E Level 2: meters+fader only (compact spacing = the row set); the
+    // identification chrome (top bar + header+name) survives — an anonymous
+    // strip would be unusable. This is the LAST strip form before the mini
+    // meters surface (the container's fallback below MIXER_CORE_FLOOR).
     body = (
       <>
         <TopBar testId={`mixer-topbar-${track.badge}`} background={role ? ROLE_BAR[role] : 'var(--type-audio)'} />
-        <StripHeader badge={track.badge} />
-        <div
-          data-testid={`strip-scroll-${track.badge}`}
-          className="scroll-y flex min-h-0 w-full flex-1 flex-col"
-          style={{ minHeight: `${scrollMin}px` }}
-        >
-          {inputRow}
-          {fxRack}
-          {graphs}
-          {panRow}
-          {routingRow}
-          {titleRow}
-        </div>
+        <StripHeader badge={track.badge} name={track.name} />
+        <Hairline />
+        <FaderSection id={track.badge} db={strip.fader} peakDb={peak}>{faderCols}</FaderSection>
+      </>
+    );
+  } else if (density === 'lean') {
+    // W4-E Level 1: the optional blocks are gone (the W4-A set: FX grid,
+    // pan, input, graphs — plus the ladder's own removals: I row, routing,
+    // title); the strips keep fader+meters+RSM.
+    body = (
+      <>
+        <TopBar testId={`mixer-topbar-${track.badge}`} background={role ? ROLE_BAR[role] : 'var(--type-audio)'} />
+        <StripHeader badge={track.badge} name={track.name} />
         <Hairline />
         {rsmRow}
-        <FaderSection id={track.badge} db={strip.fader} peakDb={peak} pinnedHeight={faderHeight}>
-          <FaderCol col="fader">
-            <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} fillHeight scale headroom={false} ariaLabel={`${track.name} fader`} />
-          </FaderCol>
-          {!narrow && (
-            <FaderCol col="meter">
-              <StripMeter
-                trackId={track.id}
-                db={strip.fader}
-                duckAmount={role === 'bgm' || role === 'music' ? (duck?.amount ?? 0) : 0}
-                fillHeight
-                label={track.name}
-              />
-            </FaderCol>
-          )}
-        </FaderSection>
+        <FaderSection id={track.badge} db={strip.fader} peakDb={peak}>{faderCols}</FaderSection>
       </>
     );
   } else if (tier === 0) {
@@ -454,28 +503,21 @@ export function ChannelStrip({ track, sceneId, tier = 0, narrow = false, stripH,
         {fxRack}
         {iRow}
         {graphs}
-        <Hairline />
-        {panRow}
-        <Hairline />
+        {/* the pan sandwich: ONE hairline when the pan row is hidden (user
+            toggle or ladder) — two adjacent hairlines would double the row */}
+        {showPan ? (
+          <>
+            <Hairline />
+            {panRow}
+            <Hairline />
+          </>
+        ) : (
+          <Hairline />
+        )}
         {routingRow}
         {titleRow}
         {rsmRow}
-        <FaderSection id={track.badge} db={strip.fader} peakDb={peak}>
-          <FaderCol col="fader">
-            <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} fillHeight scale headroom={false} ariaLabel={`${track.name} fader`} />
-          </FaderCol>
-          {!narrow && (
-            <FaderCol col="meter">
-              <StripMeter
-                trackId={track.id}
-                db={strip.fader}
-                duckAmount={role === 'bgm' || role === 'music' ? (duck?.amount ?? 0) : 0}
-                fillHeight
-                label={track.name}
-              />
-            </FaderCol>
-          )}
-        </FaderSection>
+        <FaderSection id={track.badge} db={strip.fader} peakDb={peak}>{faderCols}</FaderSection>
       </>
     );
   } else {
@@ -496,22 +538,7 @@ export function ChannelStrip({ track, sceneId, tier = 0, narrow = false, stripH,
         {tier === 1 && <Hairline />}
         {panRow}
         {rsmRow}
-        <FaderSection id={track.badge} db={strip.fader} peakDb={peak}>
-          <FaderCol col="fader">
-            <Fader db={strip.fader} onChange={(db) => setMixerTrack(track.id, { fader: db })} fillHeight scale headroom={false} ariaLabel={`${track.name} fader`} />
-          </FaderCol>
-          {!narrow && (
-            <FaderCol col="meter">
-              <StripMeter
-                trackId={track.id}
-                db={strip.fader}
-                duckAmount={role === 'bgm' || role === 'music' ? (duck?.amount ?? 0) : 0}
-                fillHeight
-                label={track.name}
-              />
-            </FaderCol>
-          )}
-        </FaderSection>
+        <FaderSection id={track.badge} db={strip.fader} peakDb={peak}>{faderCols}</FaderSection>
       </>
     );
   }
@@ -538,8 +565,11 @@ export function ChannelStrip({ track, sceneId, tier = 0, narrow = false, stripH,
    chip share the 22px input-row slot; the bus name lives in the header at
    T1/T2 (the tier law — those tiers drop the title row) or the title row
    (T0: the header is ID-only, D5 — R24-W5c). Same TERMINAL fader section
-   law as the channels. */
-export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' | 'a2'; tier?: MixerTier; narrow?: boolean; stripH?: number }) {
+   law as the channels. R25-W4-A/W4-E: the same block-visibility law (the
+   user toggles + the density ladder compose — the alignment spacers
+   collapse with the channel blocks they mirror so fader tops stay
+   aligned), and the T3 scroll branch is DEAD with the tier. */
+export function AuxStrip({ bus, tier = 0, density = 'full', narrow = false }: { bus: 'a1' | 'a2'; tier?: MixerTier; density?: MixerDockDensity; narrow?: boolean }) {
   const settings = useUi((s) => s.mixer.buses[bus]);
   const setAuxBus = useUi((s) => s.setAuxBus);
   const pushToast = useUi((s) => s.pushToast);
@@ -564,6 +594,15 @@ export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' 
   });
   const badge = bus === 'a1' ? 'A1' : 'A2';
 
+  /* R25-W4-A + W4-E: the channel strips' block-visibility law, mirrored —
+     the spacers/rack/graphs the aux strip carries at the SAME y as the
+     channel blocks collapse with them (the #72 alignment law). */
+  const vis = useUi((s) => s.mixerElementVisibility);
+  const showInput = vis.input && density === 'full' && tier !== 2;
+  const showFx = vis.fx && density === 'full';
+  const showPan = vis.pan && density === 'full';
+  const showGraphs = vis.graphs && density === 'full' && tier !== 2;
+
   /* R22 (#72 — "bus and master strips vs. channel all have separate length
      on the dailer and meter which looks bad"): the aux strips now carry the
      MASTER's alignment grammar — the same spacer stack (input 22 / fx-rack /
@@ -572,17 +611,20 @@ export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' 
      ON/OFF rides the mRow slot (the terminal 24px row above the fader —
      the master's M row position). */
   const Spacer = ({ h }: { h: number }) => <div aria-hidden="true" className="w-full shrink-0" style={{ height: h }} />;
-  const graphs =
-    tier === 0 || tier === 3 ? (
-      <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
-        <EqThumb trackKey={bus === 'a1' ? 'auxA' : 'auxB'} flat />
-        <DynThumb trackKey={bus === 'a1' ? 'auxA' : 'auxB'} />
-      </div>
-    ) : tier === 1 ? (
-      <div data-testid="strip-graphs" className="flex w-full shrink-0 px-1 py-[2px]">
-        <CombinedThumb trackKey={bus === 'a1' ? 'auxA' : 'auxB'} flat />
-      </div>
-    ) : null;
+  const graphs = showGraphs
+    ? tier === 0
+      ? (
+        <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
+          <EqThumb trackKey={bus === 'a1' ? 'auxA' : 'auxB'} flat />
+          <DynThumb trackKey={bus === 'a1' ? 'auxA' : 'auxB'} />
+        </div>
+      )
+      : (
+        <div data-testid="strip-graphs" className="flex w-full shrink-0 px-1 py-[2px]">
+          <CombinedThumb trackKey={bus === 'a1' ? 'auxA' : 'auxB'} flat />
+        </div>
+      )
+    : null;
 
   /* the routing-slot row (the master's LUFS position): the honest no-source
      chip when the bus is unfed; empty otherwise */
@@ -618,8 +660,8 @@ export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' 
     </div>
   );
 
-  const faderBlock = (pinnedHeight?: number) => (
-    <FaderSection id={`aux-${bus}`} db={settings.returnGain} peakDb={peak} pinnedHeight={pinnedHeight}>
+  const faderBlock = (
+    <FaderSection id={`aux-${bus}`} db={settings.returnGain} peakDb={peak}>
       <FaderCol col="fader">
         <Fader db={settings.returnGain} onChange={(db) => setAuxBus(bus, { returnGain: db })} fillHeight headroom={false} ariaLabel={`Aux ${bus} return`} />
       </FaderCol>
@@ -632,39 +674,51 @@ export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' 
     </FaderSection>
   );
 
-  /* the accessory stack per tier — MIRRORS the master's spacer grammar so
-     every strip in the dock aligns (#72) */
-  const accessory = (t: 0 | 3) => (
+  /* the accessory stack — MIRRORS the master's spacer grammar so every
+     strip in the dock aligns (#72); the visibility law collapses the
+     mirrored blocks with the channels' (user toggle OR ladder) */
+  const accessory = (
     <>
-      <Spacer h={22} />
-      <FxRack inserts={[null, null]} name={`Aux ${badge}`} slots={5} pushToast={pushToast} />
+      {showInput ? <Spacer h={22} /> : null}
+      {showFx ? <FxRack inserts={[null, null]} name={`Aux ${badge}`} slots={5} pushToast={pushToast} /> : null}
       <Spacer h={26} />
       {graphs}
-      <Hairline />
-      <Spacer h={56} />
-      <Hairline />
+      {/* the pan-mirror sandwich — ONE hairline when the pan row collapses */}
+      {showPan ? (
+        <>
+          <Hairline />
+          <Spacer h={56} />
+          <Hairline />
+        </>
+      ) : (
+        <Hairline />
+      )}
       {sourceRow}
       <TitleRow name={settings.name} gold={false} />
     </>
   );
 
   let body: React.ReactNode;
-  if (tier === 3) {
-    const { faderHeight, scrollMin } = t3FaderLayout(stripH ?? 300);
+  if (density === 'core') {
+    // W4-E Level 2: meters+fader only (the identification chrome survives)
     body = (
       <>
         <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
-        <StripHeader badge={badge} />
-        <div
-          data-testid={`strip-scroll-aux-${bus}`}
-          className="scroll-y flex min-h-0 w-full flex-1 flex-col"
-          style={{ minHeight: `${scrollMin}px` }}
-        >
-          {accessory(3)}
-        </div>
+        <StripHeader badge={badge} name={settings.name} />
+        <Hairline />
+        {faderBlock}
+      </>
+    );
+  } else if (density === 'lean') {
+    // W4-E Level 1: the optional mirror blocks are gone; the bus keeps its
+    // one real terminal control (the ON/OFF row — the channels' RSM twin)
+    body = (
+      <>
+        <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
+        <StripHeader badge={badge} name={settings.name} />
         <Hairline />
         {onRow}
-        {faderBlock(faderHeight)}
+        {faderBlock}
       </>
     );
   } else if (tier === 0) {
@@ -675,13 +729,12 @@ export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' 
             law the channels/master keep) — the bus NAME lives in the 26px
             title row below (the old name-in-header duplicated it live:
             "A1Reverb" + "Reverb"). T1/T2 still merge the name up (those
-            tiers drop the title row — the shared tier law); T3 was already
-            ID-only. */}
+            tiers drop the title row — the shared tier law). */}
         <StripHeader badge={badge} />
         <Hairline />
-        {accessory(0)}
+        {accessory}
         {onRow}
-        {faderBlock()}
+        {faderBlock}
       </>
     );
   } else if (tier === 1) {
@@ -690,27 +743,28 @@ export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' 
         <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
         <StripHeader badge={badge} name={settings.name} />
         <Hairline />
-        <Spacer h={22} />
-        <FxRack inserts={[null, null]} name={`Aux ${badge}`} slots={3} pushToast={pushToast} />
+        {showInput ? <Spacer h={22} /> : null}
+        {showFx ? <FxRack inserts={[null, null]} name={`Aux ${badge}`} slots={3} pushToast={pushToast} /> : null}
         <Spacer h={26} />
         {graphs}
         <Hairline />
-        <Spacer h={44} />
+        {showPan ? <Spacer h={44} /> : null}
         {onRow}
-        {faderBlock()}
+        {faderBlock}
       </>
     );
   } else {
-    // T2 — 123 fixed rows, matching the lean channels + master exactly
+    // T2 — the lean channels + master mirror (the rack/graphs/input natively
+    // gone; the pan spacer collapses with the visibility law)
     body = (
       <>
         <TopBar testId={`mixer-topbar-aux-${bus}`} background="var(--type-audio)" />
         <StripHeader badge={badge} name={settings.name} />
         <Hairline />
         <Spacer h={26} />
-        <Spacer h={44} />
+        {showPan ? <Spacer h={44} /> : null}
         {onRow}
-        {faderBlock()}
+        {faderBlock}
       </>
     );
   }
@@ -735,7 +789,7 @@ export function AuxStrip({ bus, tier = 0, narrow = false, stripH }: { bus: 'a1' 
    the master fader ~10px high). The routing spacer carries the honest
    LUFS-v2 note (D12). M-only RSM (the real store master mute — same values
    as the toolbar, 18 §4.5); accent top bar + accent fader cap (D10). */
-export function MasterStrip({ tier = 0, narrow = false, stripH }: { tier?: MixerTier; narrow?: boolean; stripH?: number }) {
+export function MasterStrip({ tier = 0, density = 'full', narrow = false }: { tier?: MixerTier; density?: MixerDockDensity; narrow?: boolean }) {
   const masterMuted = useUi((s) => s.masterMuted);
   const masterVolume = useUi((s) => s.masterVolume);
   const toggleMasterMute = useUi((s) => s.toggleMasterMute);
@@ -745,6 +799,14 @@ export function MasterStrip({ tier = 0, narrow = false, stripH }: { tier?: Mixer
   // engine view for the peak readout (ONE 'master' key — R15-A2 unification)
   const meter = useMeter('master');
   const peak = Math.max(meter.l.peakDb, meter.r.peakDb);
+
+  /* R25-W4-A + W4-E: the channel strips' block-visibility law, mirrored
+     (the master's spacers collapse with the channel blocks they mirror). */
+  const vis = useUi((s) => s.mixerElementVisibility);
+  const showInput = vis.input && density === 'full' && tier !== 2;
+  const showFx = vis.fx && density === 'full';
+  const showPan = vis.pan && density === 'full';
+  const showGraphs = vis.graphs && density === 'full' && tier !== 2;
 
   const Spacer = ({ h }: { h: number }) => <div aria-hidden="true" className={`w-full shrink-0`} style={{ height: h }} />;
   const LufsRow = () => (
@@ -766,21 +828,24 @@ export function MasterStrip({ tier = 0, narrow = false, stripH }: { tier?: Mixer
       </button>
     </div>
   );
-  const graphs =
-    tier === 0 || tier === 3 ? (
-      <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
-        {/* reference M1's EQ graph is a flat line — deterministic flat */}
-        <EqThumb trackKey="master" flat />
-        <DynThumb trackKey="master" />
-      </div>
-    ) : tier === 1 ? (
-      <div data-testid="strip-graphs" className="flex w-full shrink-0 px-1 py-[2px]">
-        <CombinedThumb trackKey="master" flat />
-      </div>
-    ) : null;
+  const graphs = showGraphs
+    ? tier === 0
+      ? (
+        <div data-testid="strip-graphs" className="flex w-full shrink-0 flex-col gap-[2px] px-1 py-1">
+          {/* reference M1's EQ graph is a flat line — deterministic flat */}
+          <EqThumb trackKey="master" flat />
+          <DynThumb trackKey="master" />
+        </div>
+      )
+      : (
+        <div data-testid="strip-graphs" className="flex w-full shrink-0 px-1 py-[2px]">
+          <CombinedThumb trackKey="master" flat />
+        </div>
+      )
+    : null;
 
-  const faderBlock = (pinnedHeight?: number) => (
-    <FaderSection id="master" db={db} peakDb={peak} pinnedHeight={pinnedHeight}>
+  const faderBlock = (
+    <FaderSection id="master" db={db} peakDb={peak}>
       <FaderCol col="fader">
         <Fader db={db} onChange={(ndb) => setMasterVolume(Math.max(0, Math.min(1, (ndb + 60) / 66)))} fillHeight accent headroom={false} ariaLabel="Master fader" />
       </FaderCol>
@@ -792,41 +857,53 @@ export function MasterStrip({ tier = 0, narrow = false, stripH }: { tier?: Mixer
     </FaderSection>
   );
 
-  /* the scrolling/spacer accessory set — master has no input/I/pan/routing
-     controls (no model fields), so those rows are alignment spacers; the
-     hairline rhythm matches the channels so the fader tops align EXACTLY
-     (T0: 380 fixed rows both; T1: 240; T2: 123) */
-  const accessory = (t: 0 | 3) => (
+  /* the spacer accessory set — master has no input/I/pan/routing controls
+     (no model fields), so those rows are alignment spacers; the hairline
+     rhythm matches the channels so the fader tops align EXACTLY, and the
+     W4-A/W4-E visibility law collapses the mirrored blocks with the
+     channels' (user toggle OR ladder) */
+  const accessory = (
     <>
-      <Spacer h={22} />
-      <FxRack inserts={[null, null]} name="Master" slots={5} pushToast={pushToast} />
+      {showInput ? <Spacer h={22} /> : null}
+      {showFx ? <FxRack inserts={[null, null]} name="Master" slots={5} pushToast={pushToast} /> : null}
       <Spacer h={26} />
       {graphs}
-      <Hairline />
-      <Spacer h={56} />
-      <Hairline />
+      {/* the pan-mirror sandwich — ONE hairline when the pan row collapses */}
+      {showPan ? (
+        <>
+          <Hairline />
+          <Spacer h={56} />
+          <Hairline />
+        </>
+      ) : (
+        <Hairline />
+      )}
       <LufsRow />
       <TitleRow name="Master" gold={false} />
     </>
   );
 
   let body: React.ReactNode;
-  if (tier === 3) {
-    const { faderHeight, scrollMin } = t3FaderLayout(stripH ?? 300);
+  if (density === 'core') {
+    // W4-E Level 2: meters+fader only (the identification chrome survives)
     body = (
       <>
         <TopBar testId="mixer-topbar-master" background="linear-gradient(90deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))" />
-        <StripHeader badge="M1" />
-        <div
-          data-testid="strip-scroll-master"
-          className="scroll-y flex min-h-0 w-full flex-1 flex-col"
-          style={{ minHeight: `${scrollMin}px` }}
-        >
-          {accessory(3)}
-        </div>
+        <StripHeader badge="M1" name="Master" />
+        <Hairline />
+        {faderBlock}
+      </>
+    );
+  } else if (density === 'lean') {
+    // W4-E Level 1: the optional mirror blocks are gone; the master keeps
+    // its one real terminal control (the M mute row — the RSM twin)
+    body = (
+      <>
+        <TopBar testId="mixer-topbar-master" background="linear-gradient(90deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))" />
+        <StripHeader badge="M1" name="Master" />
         <Hairline />
         {mRow}
-        {faderBlock(faderHeight)}
+        {faderBlock}
       </>
     );
   } else if (tier === 0) {
@@ -835,9 +912,9 @@ export function MasterStrip({ tier = 0, narrow = false, stripH }: { tier?: Mixer
         <TopBar testId="mixer-topbar-master" background="linear-gradient(90deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))" />
         <StripHeader badge="M1" />
         <Hairline />
-        {accessory(0)}
+        {accessory}
         {mRow}
-        {faderBlock()}
+        {faderBlock}
       </>
     );
   } else if (tier === 1) {
@@ -846,27 +923,28 @@ export function MasterStrip({ tier = 0, narrow = false, stripH }: { tier?: Mixer
         <TopBar testId="mixer-topbar-master" background="linear-gradient(90deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))" />
         <StripHeader badge="M1" name="Master" />
         <Hairline />
-        <Spacer h={22} />
-        <FxRack inserts={[null, null]} name="Master" slots={3} pushToast={pushToast} />
+        {showInput ? <Spacer h={22} /> : null}
+        {showFx ? <FxRack inserts={[null, null]} name="Master" slots={3} pushToast={pushToast} /> : null}
         <Spacer h={26} />
         {graphs}
         <Hairline />
-        <Spacer h={44} />
+        {showPan ? <Spacer h={44} /> : null}
         {mRow}
-        {faderBlock()}
+        {faderBlock}
       </>
     );
   } else {
-    // T2 — 123 fixed rows, matching the lean channels exactly
+    // T2 — the lean channels' mirror (rack/graphs/input natively gone; the
+    // pan spacer collapses with the visibility law)
     body = (
       <>
         <TopBar testId="mixer-topbar-master" background="linear-gradient(90deg, var(--fader-cap-accent-1), var(--fader-cap-accent-2))" />
         <StripHeader badge="M1" name="Master" />
         <Hairline />
         <Spacer h={26} />
-        <Spacer h={44} />
+        {showPan ? <Spacer h={44} /> : null}
         {mRow}
-        {faderBlock()}
+        {faderBlock}
       </>
     );
   }
