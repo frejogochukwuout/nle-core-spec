@@ -28,7 +28,7 @@ import type { Media } from '../lib/mockData';
 
 type DragState = 'in' | 'out' | 'ph';
 
-export function SourceRangeBar({ media }: { media: Media }) {
+export function SourceRangeBar({ media, hideHandles = false }: { media: Media; hideHandles?: boolean }) {
   const range = useMini((s) => s.sourceRanges[media.id]);
   const ph = useMini((s) => s.sourcePlayhead);
   const setIn = useMini((s) => s.setSourceRangeIn);
@@ -164,7 +164,8 @@ export function SourceRangeBar({ media }: { media: Media }) {
         <div
           className="mini-srcbar__handle"
           role="slider"
-          tabIndex={0}
+          tabIndex={hideHandles ? -1 : 0}
+          aria-hidden={hideHandles || undefined}
           aria-label="Source in point"
           aria-orientation="horizontal"
           aria-valuemin={0}
@@ -184,7 +185,8 @@ export function SourceRangeBar({ media }: { media: Media }) {
         <div
           className="mini-srcbar__handle"
           role="slider"
-          tabIndex={0}
+          tabIndex={hideHandles ? -1 : 0}
+          aria-hidden={hideHandles || undefined}
           aria-label="Source out point"
           aria-orientation="horizontal"
           aria-valuemin={0}

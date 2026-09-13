@@ -303,9 +303,6 @@
   user-select: none;
 }
 
-.mini-media-card.is-drag-source {
-  opacity: 0.55;
-}
 
 /* kind badge — ICON chip, not text (R18g port of the reviewer's sibling
    feedback #28/#30: "an icon would be better… the standard NLE way") */

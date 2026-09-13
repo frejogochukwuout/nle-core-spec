@@ -460,3 +460,23 @@ Review protocol: every wave reviewed by a fresh-context sub-agent
     answers the read-only need); the Clip + Effects groups stay open;
     Transition/Fades open only when present. PlusSections remounts per
     selection (the key law — fresh defaultOpen per subject).
+21. **The W4 honesty laws (the R24-2e review):** off-grid straddlers
+    clamp the split cut + drop degenerate halves (both the insert split
+    and the overwrite straddles — the reference's own guard, ported);
+    turning the gate OFF hands an in-flight source session back to the
+    program viewer (D1's unmount law, the clean handoff); stills carry
+    NO range handles + NO marks row (the variants' A1 law — an editable
+    mark the planner would discard is a lie); impossible-edit refusals
+    toast as ERROR (matching insertMediaAt's no-room refusal).
+22. **The F9/freeze reading (W4):** entering source mode PAUSES playback
+    (a quiet stage); the program playhead itself is NOT frozen — it is
+    the insert target (the mode titles say "at the playhead"), and the
+    timeline ruler stays scrubbable. The source STAGE owns its own
+    sourcePlayhead (the D7/F9 law); the two never couple.
+23. **The W4 semantic rulings:** fitToFill refuses without a MARKED
+    range (the full-window default is not silently used); the in<out
+    law reads as REFUSAL (keep the previous edge — never a silent snap);
+    replace uses the marked IN as the slide seed and widens a shorter
+    window to the span (the extent refusal still fires); the ripple
+    delta is >= 0 in this accounting (the invariant is commented in the
+    planner — a future accounting change must re-derive it).

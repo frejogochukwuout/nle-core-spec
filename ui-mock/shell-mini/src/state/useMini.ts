@@ -1271,9 +1271,18 @@ export const useMini = create<MiniState>((set, get) => {
     },
     toggleMiniPlus: () => {
       /* R24-miniplus (D1): the gate joins the drag-gated view family — a
-       *  relayout mid-gesture would invalidate the live pointer math. */
+       *  relayout mid-gesture would invalidate the live pointer math.
+       *  F2 (W4 review): turning the gate OFF hands an in-flight source
+       *  session back to the program viewer (D1's "source mode unmounts"
+       *  — the clean handoff; otherwise the marks-row would advertise
+       *  I/O keys the gate just killed). */
       if (get().dragActive) return;
-      set({ miniPlus: !get().miniPlus });
+      const next = !get().miniPlus;
+      if (!next && get().viewerMode === 'source') {
+        set({ miniPlus: next, viewerMode: 'program', sourceMediaId: null });
+        return;
+      }
+      set({ miniPlus: next });
     },
 
     /* ---- R18j layout actions (view-only, drag-gated) ---------------- */

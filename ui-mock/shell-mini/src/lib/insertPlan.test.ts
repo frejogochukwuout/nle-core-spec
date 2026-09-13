@@ -220,7 +220,7 @@ describe('R24 W4 planInsert: append (lane tail, playhead ignored)', () => {
 });
 
 describe('R24 W4 planInsert: rippleOverwrite (the delta law)', () => {
-  it('later clips shift by placed − displaced (the gap closes), floored at the placed end', () => {
+  it('later clips shift by placed − displaced (the gap is preserved — the followers shift by the delta only), floored at the placed end', () => {
     const doc: Doc = {
       tracks: seedDoc().tracks,
       media: seedDoc().media,

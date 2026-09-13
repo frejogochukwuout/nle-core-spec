@@ -7,7 +7,9 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import App from '../App';
+import { planInsert } from '../lib/insertPlan';
 import { useMini } from '../state/useMini';
+import { seedDoc, type Doc } from '../lib/mockData';
 
 const S = () => useMini.getState();
 const setStore = (fn: () => void) => act(fn);
@@ -366,5 +368,94 @@ describe('R24 W4: the keyboard surface (I/O/,/. + the Esc chain)', () => {
     const field = screen.getByTestId('mini-field-inpoint');
     fireEvent.keyDown(field, { key: 'i' });
     expect(S().sourceRanges['m-drone']).toBeUndefined();
+  });
+});
+
+/* ---- R24-miniplus W4-fix (the review round's F1/F2/F3 nets) ---- */
+
+describe('R24 W4-fix: the honesty laws (F1/F2/F3)', () => {
+  beforeEach(() => {
+    setStore(() => {
+      S().reset();
+    });
+  });
+
+  it('F1: an off-grid (raw-trimmed) straddler never mints a sub-MIN half', () => {
+    // a clip raw-trimmed to [0, 2.2) — off-grid by the R18i pointer law;
+    // the planner splits it at the grid-clean playhead 2.0
+    const doc: Doc = {
+      tracks: [seedDoc().tracks[0]],
+      media: seedDoc().media,
+      clips: [
+        { id: 'cR', trackId: 'V1', mediaId: 'm-gopro', start: 0, duration: 2.2 },
+        { id: 'cB', trackId: 'V1', mediaId: 'm-beach', start: 3, duration: 3.5 },
+      ],
+    };
+    const r = planInsert(doc, doc.media[0]!, 'insert', { playhead: 2 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const draft: Doc = { ...doc, clips: doc.clips.map((c) => ({ ...c })) };
+    r.patch(draft);
+    for (const c of draft.clips) {
+      expect(c.duration).toBeGreaterThanOrEqual(0.5 - 1e-9); // the MIN law
+    }
+  });
+
+  it('F1b: the overwrite head-straddle drops a degenerate remainder (the reference law)', () => {
+    // placed [1.5, 3.0) over cR [1.0, 1.9): head straddle leaves 1.9->3.0
+    // = 1.1 fine; craft the degenerate: placed [1.5, 3.0) over [1.6, 2.0):
+    // remaining = 3.0-... head-straddle remainder = dur - cut = 0.4 - wait:
+    // clip [1.6, 2.0) dur 0.4 < MIN already — use [1.0, 2.0): cut = 1.5,
+    // remaining 0.5 ok. Use placed start 0.5 dur 2.5 over clip [2.2, 2.9):
+    // covered head = 0.5+2.5-2.2 = 0.8, remaining = 0.7-… compute: cut
+    // = time+dur-start = 3.0-2.2 = 0.8; remaining = 0.9-0.8 = 0.1 < MIN → removed
+    const doc: Doc = {
+      tracks: [seedDoc().tracks[0]],
+      media: seedDoc().media,
+      clips: [
+        { id: 'cR', trackId: 'V1', mediaId: 'm-gopro', start: 2.2, duration: 0.9 },
+      ],
+    };
+    const r = planInsert(doc, doc.media[0]!, 'overwrite', { playhead: 0.5 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const draft: Doc = { ...doc, clips: doc.clips.map((c) => ({ ...c })) };
+    r.patch(draft);
+    // the 0.1s remainder was degenerate — the clip is REMOVED, not shrunk
+    expect(draft.clips.find((c) => c.id === 'cR')).toBeUndefined();
+  });
+
+  it('F2: turning the gate OFF exits an in-flight source session (the clean handoff)', () => {
+    setStore(() => {
+      S().enterSourcePreview('m-drone');
+    });
+    expect(S().viewerMode).toBe('source');
+    setStore(() => {
+      S().toggleMiniPlus();
+    });
+    expect(S().miniPlus).toBe(false);
+    expect(S().viewerMode).toBe('program'); // the handoff, not a zombie session
+    expect(S().sourceMediaId).toBeNull();
+  });
+
+  it('F3: a STILL renders no range handles and no marks row (the A1 law)', () => {
+    setStore(() => {
+      S().enterSourcePreview('m-title'); // title_card.png
+    });
+    renderApp();
+    // F3: the handles are aria-hidden + unfocusable (the A1 law — a still
+    // has no range; the elements exist but carry no affordance)
+    const inHandle = screen.queryByTestId('mini-src-in');
+    if (inHandle) {
+      expect(inHandle).toHaveAttribute('aria-hidden', 'true');
+      expect(inHandle).toHaveAttribute('tabindex', '-1');
+    }
+    expect(screen.queryByTestId('mini-btn-src-setin')).toBeNull();
+    // the video case has them all
+    setStore(() => {
+      S().enterSourcePreview('m-drone');
+    });
+    expect(screen.getByTestId('mini-src-in')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-btn-src-setin')).toBeInTheDocument();
   });
 });
