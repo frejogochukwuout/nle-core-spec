@@ -27,6 +27,7 @@ import {
   mintClipId,
   laneForMedia,
   cloneClip,
+  defaultTransition,
   EFFECT_DEFS,
   TRACK_VIDEO,
   TRACK_AUDIO,
@@ -299,6 +300,25 @@ export interface MiniState {
   setEffectParam: (clipId: string, fxId: string, key: string, v: number) => void;
   /** Move an effect up/down in the stack (bounds-refuses). One entry. */
   reorderEffect: (clipId: string, fxId: string, dir: -1 | 1) => void;
+
+  /* ---- R24-miniplus W2 (DESIGN-R24 D5): transitions + fades ---- */
+
+  /** Mint or patch the clip's outgoing seam transition. Default mint
+   *  (patch absent): {crossfade, Cross Dissolve, 0.5, 0.5}, duration
+   *  clamped to min(l.d, r.d) − MIN and grid-quantized. Identical-patch
+   *  no-op guard. */
+  setTransition: (clipId: string, patch?: Partial<Pick<import('../lib/mockData').TransitionJSON, 'presentation' | 'duration' | 'alignment'>>) => void;
+  /** Remove the clip's outgoing transition (delete-aware). */
+  removeTransition: (clipId: string) => void;
+  /** Set a clip-edge fade (0.5-grid, clamped to the duration). Absent
+   *  patch = mint min(0.5, duration). */
+  setFade: (clipId: string, side: 'in' | 'out', dur?: number) => void;
+  /** Remove a fade (delete-aware). */
+  removeFade: (clipId: string, side: 'in' | 'out') => void;
+  /** The trim/transition TOOL (D6/D5): 'select' is the R18k law; the
+   *  transition tool mints at seams/edges. View state, drag-gated. */
+  trimTool: 'select' | 'roll' | 'slip' | 'slide' | 'transition';
+  setTrimTool: (t: 'select' | 'roll' | 'slip' | 'slide' | 'transition') => void;
 }
 
 function clampZoom(step: number): number {
@@ -417,6 +437,7 @@ export const useMini = create<MiniState>((set, get) => {
     filmstripOn: true,
     audioLaneVisible: true,
     miniPlus: true, // R24-miniplus (D1): default ON; reset restores ON
+    trimTool: 'select', // R24-miniplus (D5/D6): the R18k law is the default tool
     rulerEnd: 8, // R18i: floor = the min runway; Timeline raises it to viewport coverage
     // R18j layout defaults: everything expanded, normal (non-max) viewer
     poolCollapsed: false,
@@ -683,6 +704,96 @@ export const useMini = create<MiniState>((set, get) => {
         [next[i], next[j]] = [next[j], next[i]];
         c.effects = next;
       });
+    },
+
+    /* ---- R24-miniplus W2 (DESIGN-R24 D5) ------------------------------- */
+
+    setTransition: (clipId, patch) => {
+      const state = get();
+      const clip = findClip(state.doc, clipId);
+      if (!clip) return;
+      /* the seam bound: min(left.duration, right.duration) − MIN. The
+       * right side is the same-track clip whose start touches this clip's
+       * end (EPS for float safety). A detached tail has no seam partner —
+       * the bound is just the left clip's own duration (a transition to
+       * nothing is a FADE, handled by setFade; setTransition on a
+       * detached clip is honest no-op territory but the bound still
+       * works for the patch path). */
+      const eps = 1e-9;
+      const right = state.doc.clips.find(
+        (c) => c.trackId === clip.trackId && Math.abs(c.start - (clip.start + clip.duration)) < eps,
+      );
+      const seamMax = Math.max(MIN_DUR, Math.min(clip.duration, right?.duration ?? Infinity) - MIN_DUR);
+      const current = clip.transitionOut;
+      const next = current
+        ? { ...current, ...(patch ?? {}) }
+        : { ...defaultTransition(), ...(patch ?? {}) };
+      next.duration = Math.min(Math.max(quantize(next.duration) || MIN_DUR, MIN_DUR), seamMax);
+      next.alignment = Math.min(Math.max(next.alignment, 0), 1);
+      if (
+        current &&
+        current.duration === next.duration &&
+        current.alignment === next.alignment &&
+        current.presentation === next.presentation
+      ) {
+        return; // identical-patch no-op guard
+      }
+      commit((doc) => {
+        const c = doc.clips.find((x) => x.id === clipId);
+        if (!c) return;
+        c.transitionOut = next;
+      });
+    },
+
+    removeTransition: (clipId) => {
+      const state = get();
+      const clip = findClip(state.doc, clipId);
+      if (!clip || !clip.transitionOut) return; // no-op guard
+      commit((doc) => {
+        const c = doc.clips.find((x) => x.id === clipId);
+        if (!c) return;
+        delete c.transitionOut; // delete-aware: Object.assign cannot unset
+      });
+    },
+
+    setFade: (clipId, side, dur) => {
+      const state = get();
+      const clip = findClip(state.doc, clipId);
+      if (!clip) return;
+      const v = Math.min(
+        Math.max(quantize(dur ?? 0.5) || MIN_DUR, MIN_DUR),
+        Math.min(clip.duration, 0.5 * 8),
+      );
+      // the mint default never exceeds the clip (0.5 cap by the D5 law)
+      const capped = dur === undefined ? Math.min(v, clip.duration, 0.5) : Math.min(v, clip.duration);
+      const current = side === 'in' ? clip.fadeIn : clip.fadeOut;
+      if (current === capped) return; // no-op guard
+      commit((doc) => {
+        const c = doc.clips.find((x) => x.id === clipId);
+        if (!c) return;
+        if (side === 'in') c.fadeIn = capped;
+        else c.fadeOut = capped;
+      });
+    },
+
+    removeFade: (clipId, side) => {
+      const state = get();
+      const clip = findClip(state.doc, clipId);
+      if (!clip) return;
+      const current = side === 'in' ? clip.fadeIn : clip.fadeOut;
+      if (current === undefined) return; // no-op guard
+      commit((doc) => {
+        const c = doc.clips.find((x) => x.id === clipId);
+        if (!c) return;
+        if (side === 'in') delete c.fadeIn;
+        else delete c.fadeOut;
+      });
+    },
+
+    setTrimTool: (t) => {
+      if (get().dragActive) return; // the view-family law
+      if (get().trimTool === t) return;
+      set({ trimTool: t });
     },
 
     toggleTrackMute: (trackId) => {
@@ -1190,14 +1301,38 @@ export const useMini = create<MiniState>((set, get) => {
         if (!c) return;
         const q = splitPoint(get().playhead, c);
         if (q === null) return;
+        /* R24-miniplus (DESIGN-R24 D2, the F2 P0 fix — the split
+         * FIELD-DISPOSITION TABLE; captured from the pre-mutation shape):
+         * sourceStart advances by the consumed offset on the right;
+         * speed/volume/opacity/effects ride BOTH halves; fadeIn stays
+         * LEFT (clamped to its new duration); fadeOut rides RIGHT
+         * (clamped); transitionOut rides RIGHT (the tail seam survives
+         * the cut — the left half's outgoing seam DIED with the cut). */
+        const rate = c.speed ?? 1;
+        const offset = (q - c.start) * rate;
+        const leftDur = q - c.start;
+        const rightDur = c.start + c.duration - q;
         const right: Clip = {
           id: mintClipId(),
           trackId: c.trackId,
           mediaId: c.mediaId,
           start: q,
-          duration: c.start + c.duration - q,
+          duration: rightDur,
         };
-        c.duration = q - c.start;
+        if (c.sourceStart !== undefined || offset > 0) {
+          right.sourceStart = (c.sourceStart ?? 0) + offset;
+        }
+        if (c.speed !== undefined) right.speed = c.speed;
+        if (c.volume !== undefined) right.volume = c.volume;
+        if (c.opacity !== undefined) right.opacity = c.opacity;
+        if (c.effects) right.effects = c.effects.map((e) => ({ ...e, params: e.params ? { ...e.params } : undefined }));
+        if (c.fadeOut !== undefined) right.fadeOut = Math.min(c.fadeOut, rightDur);
+        if (c.transitionOut) right.transitionOut = { ...c.transitionOut };
+        // left half: duration shrinks, the tail-family fields leave
+        c.duration = leftDur;
+        if (c.fadeIn !== undefined) c.fadeIn = Math.min(c.fadeIn, leftDur);
+        delete c.fadeOut;
+        delete c.transitionOut;
         doc.clips.push(right);
       });
       // keep the left half selected (the split product the user is editing)
@@ -1392,6 +1527,7 @@ export const useMini = create<MiniState>((set, get) => {
         filmstripOn: true,
         audioLaneVisible: true,
         miniPlus: true, // R24-miniplus (D1): the gate is a session surface — reset restores ON
+        trimTool: 'select',
         rulerEnd: 8,
         poolCollapsed: false,
         inspectorCollapsed: false,

@@ -1073,3 +1073,28 @@
   display: grid;
   gap: 4px;
 }
+
+/* R24-miniplus W2: the inspector select (the transition style picker) */
+.mini-field__select {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 11px;
+  color: var(--canvas-editor-text-default);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.mini-field__select:focus {
+  outline: none;
+  border-color: var(--canvas-quick-cut-accent, #38bdf8);
+}
+
+.mini-inspector__hint {
+  margin: 2px 0 6px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+}

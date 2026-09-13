@@ -1230,3 +1230,136 @@ describe('R24 W0: the deep-clone + no-alias law (the F1 P0 fix)', () => {
     expect(S().miniPlus).toBe(true);
   });
 });
+
+/* ---- R24-miniplus W2 (DESIGN-R24 D5): transitions + fades ---- */
+
+describe('R24 W2: the transition/fade action family', () => {
+  /** A doc with TOUCHING clips on V1 (the seed has 0.5s gaps — no seams):
+   *  cA [0,3.5] + cB [3.5,7] touching at 3.5. */
+  const touchingDoc = () => ({
+    ...seedDoc(),
+    clips: [
+      { id: 'cA', trackId: 'V1', mediaId: 'm-drone', start: 0, duration: 3.5 },
+      { id: 'cB', trackId: 'V1', mediaId: 'm-beach', start: 3.5, duration: 3.5 },
+      { id: 'c4', trackId: 'A1', mediaId: 'm-interview', start: 1.5, duration: 7 },
+    ],
+  });
+
+  beforeEach(() => {
+    S().reset();
+    useMini.setState({ doc: touchingDoc() });
+  });
+
+  it('setTransition mints the default {Cross Dissolve, 0.5, 0.5} on the LEFT clip', () => {
+    S().setTransition('cA');
+    const t = S().doc.clips.find((c) => c.id === 'cA')!.transitionOut;
+    expect(t).toEqual({ type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 });
+    expect(S().past.length).toBe(1);
+  });
+
+  it('duration clamps to min(l.d, r.d) − MIN (a 3s patch on a 3.5/3.5 seam caps at 3)', () => {
+    S().setTransition('cA');
+    S().setTransition('cA', { duration: 3 });
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut!.duration).toBe(3);
+    S().setTransition('cA', { duration: 9 });
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut!.duration).toBe(3); // capped
+  });
+
+  it('the identical-patch no-op guard: no phantom history entry', () => {
+    S().setTransition('cA');
+    const len = S().past.length;
+    S().setTransition('cA', { duration: 0.5 }); // same values
+    expect(S().past.length).toBe(len);
+  });
+
+  it('removeTransition deletes the field (delete-aware)', () => {
+    S().setTransition('cA');
+    S().removeTransition('cA');
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.transitionOut).toBeUndefined();
+    expect(S().past.length).toBe(2);
+  });
+
+  it('setFade mints min(0.5, duration) and clamps patches to the duration', () => {
+    S().setFade('cA', 'in');
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.fadeIn).toBe(0.5);
+    S().setFade('cA', 'out', 9);
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.fadeOut).toBe(3.5); // clamped to duration
+    S().removeFade('cA', 'in');
+    expect(S().doc.clips.find((c) => c.id === 'cA')!.fadeIn).toBeUndefined();
+  });
+});
+
+describe('R24 W2: the split FIELD-DISPOSITION TABLE (the F2 P0 fix)', () => {
+  beforeEach(() => {
+    S().reset();
+    useMini.setState({
+      doc: {
+        ...seedDoc(),
+        clips: [
+          {
+            id: 'cX',
+            trackId: 'V1',
+            mediaId: 'm-gopro', // 5.5s media
+            start: 0,
+            duration: 4, // window = 4 (rate 1)
+            sourceStart: 0.5,
+            speed: 1,
+            volume: 0.8,
+            opacity: 0.9,
+            fadeIn: 1,
+            fadeOut: 1.5,
+            effects: [{ id: 'fx-blur', name: 'Gaussian Blur', enabled: true, params: { radius: 8 } }],
+            transitionOut: { type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 },
+          },
+          { id: 'cY', trackId: 'V1', mediaId: 'm-beach', start: 5, duration: 3 },
+        ],
+      },
+      playhead: 2,
+      selectedId: 'cX',
+      selectedTrackId: null,
+    });
+  });
+
+  it('the split lands the full disposition table on both halves', () => {
+    S().splitAtPlayhead();
+    const clips = S().doc.clips;
+    const left = clips.find((c) => c.id === 'cX')!;
+    const right = clips.find((c) => c.id !== 'cX' && c.id !== 'cY' && c.trackId === 'V1')!;
+    // geometry
+    expect(left.start).toBe(0);
+    expect(left.duration).toBe(2);
+    expect(right.start).toBe(2);
+    expect(right.duration).toBe(2);
+    // sourceStart: left KEEPT, right ADVANCES by the consumed offset
+    expect(left.sourceStart).toBe(0.5);
+    expect(right.sourceStart).toBeCloseTo(2.5, 5);
+    // scalars ride both halves
+    expect(right.volume).toBe(0.8);
+    expect(right.opacity).toBe(0.9);
+    expect(left.volume).toBe(0.8);
+    // effects ride both (deep-cloned on the right)
+    expect(right.effects).toEqual([{ id: 'fx-blur', name: 'Gaussian Blur', enabled: true, params: { radius: 8 } }]);
+    expect(right.effects![0].params).not.toBe(left.effects![0].params); // no alias
+    // fadeIn stays LEFT (clamped), fadeOut rides RIGHT (clamped)
+    expect(left.fadeIn).toBe(1);
+    expect(left.fadeOut).toBeUndefined();
+    expect(right.fadeIn).toBeUndefined();
+    expect(right.fadeOut).toBe(1.5);
+    // transitionOut rides RIGHT (the tail seam survives); the left's died
+    expect(left.transitionOut).toBeUndefined();
+    expect(right.transitionOut).toEqual({ type: 'crossfade', presentation: 'Cross Dissolve', duration: 0.5, alignment: 0.5 });
+  });
+
+  it('the split + undo round-trips the whole superset', () => {
+    S().splitAtPlayhead();
+    expect(S().doc.clips).toHaveLength(3);
+    S().undo();
+    expect(S().doc.clips).toHaveLength(2);
+    const c = S().doc.clips.find((x) => x.id === 'cX')!;
+    expect(c.sourceStart).toBe(0.5);
+    expect(c.fadeIn).toBe(1);
+    expect(c.fadeOut).toBe(1.5);
+    expect(c.transitionOut!.duration).toBe(0.5);
+    expect(c.effects).toHaveLength(1);
+  });
+});
