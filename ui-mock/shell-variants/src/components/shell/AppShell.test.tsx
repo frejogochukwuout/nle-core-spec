@@ -1076,3 +1076,76 @@ describe('R23-FIX R5-P3#5: the F6 guard', () => {
     expect(document.activeElement?.className).toContain('shell-region');
   });
 });
+
+/* ---------- W1 (DESIGN-R25 §3, R1+R2 — the insert/edit rescue): the full
+   shell in SOURCE mode at a NARROW mock width. jsdom measures no layout, so
+   the ladder is driven the MixerDock way — a recording ResizeObserver + a
+   stubbed rect on the transport row and the edit bar; jsdom's silent default
+   stub = un-measured = the FULL rendering (every other AppShell pin rides
+   that law). PARTITION NOTE: this block is the wave contract's required
+   full-shell pin — AppShell.test.tsx is the pin's home (the wave partition
+   otherwise touches only Viewer/SourceEditBar/SourceRangeBar/useUiStore +
+   their tests; documented in the commit message). ---------- */
+describe('W1 (R1+R2): the full shell, source mode, narrow width — all 7 mode buttons + the transport stay visible', () => {
+  /** Recording ResizeObserver — captures callbacks so the test fires them
+   *  with stubbed rects (the MixerDock pattern; the default stub never fires). */
+  function withRecordingRO(fn: (fire: () => void) => ReturnType<typeof renderAppShell>) {
+    const cbs: ResizeObserverCallback[] = [];
+    const Orig = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      constructor(cb: ResizeObserverCallback) { cbs.push(cb); }
+      observe() { /* no-op */ }
+      unobserve() { /* no-op */ }
+      disconnect() { /* no-op */ }
+    } as unknown as typeof ResizeObserver;
+    try {
+      const utils = fn(() => { act(() => { cbs.forEach((cb) => cb([], {} as ResizeObserver)); }); });
+      return utils;
+    } finally {
+      globalThis.ResizeObserver = Orig;
+    }
+  }
+  const fakeRect = (width: number) =>
+    ({ top: 0, left: 0, right: width, bottom: 32, width, height: 32, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+
+  it('the reviewer\'s narrow-canvas band (row 620px / bar ~370px): the bar drops to icon-only, all 7 mode buttons + 5 transport + 3 trim buttons render, the readouts degrade — nothing hides a BUTTON', () => {
+    let fire = () => { /* assigned below */ };
+    const utils = withRecordingRO((f) => {
+      fire = f;
+      return renderAppShell({ viewerMode: 'source', sourceMediaId: 'm-02', selection: [] });
+    });
+    try {
+      const row = screen.getByTestId('shell-viewer-transport');
+      const bar = screen.getByTestId('shell-source-edit-bar');
+      // the reviewer's band: the row measures 620px, the bar's share ~370px
+      row.getBoundingClientRect = () => fakeRect(620);
+      bar.getBoundingClientRect = () => fakeRect(370);
+      act(() => fire());
+      // the bar's OWN ladder: icon-only (the names live in aria-label)
+      expect(bar).toHaveAttribute('data-labels', 'icons');
+      // ALL SEVEN mode buttons render — the R1 defect (a 0px starved bar)
+      // is dead: 7 buttons, each with its accessible name + the hit floor
+      const modeBtns = bar.querySelectorAll('button');
+      expect(modeBtns).toHaveLength(7);
+      for (const b of modeBtns) {
+        expect(b.getAttribute('aria-label')).toBeTruthy();
+        expect(b.className).toContain('!h-[24px]');
+      }
+      // the W1-B transport: 5 buttons + the play button, all in the row
+      expect(within(screen.getByTestId('shell-source-transport')).getAllByRole('button')).toHaveLength(5);
+      expect(screen.getByTestId('shell-viewer-btn-play')).toBeInTheDocument();
+      // the trim cluster keeps its 3 icons (degrades SECOND = it stays)
+      expect(within(screen.getByTestId('shell-source-trim-controls')).getAllByRole('button')).toHaveLength(3);
+      // the readouts degrade FIRST — the duration readout hides below its
+      // floor (620 < 720) with the full text preserved in data-tip
+      const readout = screen.getByTestId('shell-viewer-source-duration');
+      expect(readout).toHaveAttribute('hidden');
+      expect(readout.getAttribute('data-tip')).toContain('Source duration 00:01:35:05');
+      // the strip is the real scrub strip (playhead + handles + dim law)
+      expect(screen.getByTestId('shell-source-playhead')).toHaveAttribute('role', 'slider');
+      expect(screen.getByTestId('shell-source-range-in')).toBeInTheDocument();
+    } finally {
+      utils.unmount();
+    }
+  });
+});

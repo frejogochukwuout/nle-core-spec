@@ -1,8 +1,18 @@
-/* SourceRangeBar — R22 W4 (issues #84/#85). Pins:
+/* SourceRangeBar — R22 W4 (issues #84/#85) + W1-B (DESIGN-R25 §3/§6 A1,
+   R2 "no play control, I/O crop not functional"): the strip is now a REAL
+   SCRUB STRIP. Pins:
    - the dual in/out handles render as role=slider with the range band;
+   - the source PLAYHEAD marker renders at the right pct (role=slider);
+   - the OUT-OF-RANGE DIMMING (A1: on the STRIP, never the poster) — the
+     left/right spans cover [0,in] and [out,dur] with the right widths;
+   - scrubbing (pointerdown + move on the track) seeks through the store
+     seam, clamped into the [in,out] domain when a range is set (the
+     documented ruling);
+   - stills (A1: a still = a normal 5s clip in Resolve) get the transport
+     strip over the 5s pseudo-duration but NO trim handles (a still has no
+     real source range — the insert stays the fixed-length still);
    - dragging a handle clamps (in < out always — the honest guard);
    - the store setters round-trip per mediaId (each source keeps its trim);
-   - stills (no duration) keep the honest static band;
    - the trimmed range RIDES the insert planner: a planned insert places
      dur = out−in and sourceStart = in (the W4 seam). */
 
@@ -11,6 +21,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { SourceRangeBar } from './SourceRangeBar';
 import { useUi } from '../../state/useUiStore';
 import { planInsertMedia, type InsertIdFactory } from '../../lib/insertPlan';
+import { snapToFrame } from '../../lib/timecode';
 
 const MID = 'm-01'; // 62.4s duration in the fixture (fps 24)
 const setStore = (patch: Record<string, unknown>) => useUi.setState((s) => ({ ...patch } as object));
@@ -20,6 +31,8 @@ beforeEach(() => {
     viewerMode: 'source',
     sourceMediaId: MID,
     sourceRanges: {},
+    sourcePlayhead: {},
+    sourcePlaying: false,
     playhead: 4,
     loop: { start: 0, end: 0 },
     selection: [],
@@ -39,10 +52,115 @@ describe('SourceRangeBar (R22 #84/#85)', () => {
     expect(screen.getByTestId('shell-source-range-out')).toHaveAttribute('aria-valuenow', '1498');
   });
 
-  it('a still image (no duration) keeps the honest static band — no sliders', () => {
+  /* RE-PIN (W1-B, A1 supersedes the R22 static-band law): a still = a
+     normal 5s clip in Resolve — the strip gains the transport (playhead
+     marker, scrubbable, role=slider over the 5s pseudo-duration) but keeps
+     the honest NO-TRIM half of the old law: no in/out handles (a still has
+     no real source range; the insert stays the fixed-length still). */
+  it("RE-PIN W1-B: a still rides the 5s pseudo transport strip (playhead slider, NO trim handles — the honest no-trim half of the old static-band law)", () => {
     render(<SourceRangeBar mediaId="m-08" />);
-    expect(screen.getByTestId('shell-viewer-scrub')).toHaveAttribute('aria-label', expect.stringContaining('static'));
+    // the A1 transport: the playhead marker over the 5s pseudo-duration
+    const ph = screen.getByTestId('shell-source-playhead');
+    expect(ph).toHaveAttribute('role', 'slider');
+    expect(ph).toHaveAttribute('aria-valuemax', '120'); // 5 s × 24 fps
+    expect(ph).toHaveAttribute('aria-valuenow', '0');
+    expect(ph).toHaveAttribute('aria-valuetext', '00:00:00:00');
+    // the honest no-trim half survives: no handles, no range band, no dim
     expect(screen.queryByTestId('shell-source-range-in')).toBeNull();
+    expect(screen.queryByTestId('shell-source-range-out')).toBeNull();
+    expect(screen.queryByTestId('shell-source-dim')).toBeNull();
+    expect(screen.getByTestId('shell-viewer-scrub')).toHaveAttribute('aria-label', expect.stringContaining('still image'));
+  });
+
+  /* ---- W1-B (DESIGN-R25 §3/§6 A1): the real scrub strip ---- */
+  describe('W1-B (A1): the scrub strip', () => {
+    const fakeBar = () =>
+      ({ top: 0, left: 0, right: 300, bottom: 16, width: 300, height: 16, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+
+    it('the playhead marker renders at the right pct — left = calc(pct + 8px), the handle pad law', () => {
+      act(() => { useUi.setState({ sourcePlayhead: { [MID]: 31.2 } }); }); // 50% of 62.4
+      render(<SourceRangeBar mediaId={MID} />);
+      const ph = screen.getByTestId('shell-source-playhead');
+      expect(ph).toHaveAttribute('role', 'slider');
+      expect(ph).toHaveAttribute('aria-valuenow', '749'); // 31.2 s × 24 = 748.8 → 749
+      expect(ph.style.left).toBe('calc(50% + 8px)');
+      expect(ph.style.background).toContain('var(--playhead)');
+    });
+
+    it('the OUT-OF-RANGE DIMMING (A1: on the STRIP, never the poster): left span [0,in], right span [out,dur]; no range → no dim', () => {
+      render(<SourceRangeBar mediaId={MID} />);
+      // untrimmed: the whole strip is the preview — no dim spans at all
+      expect(screen.queryByTestId('shell-source-dim')).toBeNull();
+      // a range 12.48–49.92s = 20%–80% of 62.4s
+      act(() => { useUi.getState().setSourceRangeIn(MID, 12.48); });
+      act(() => { useUi.getState().setSourceRangeOut(MID, 49.92); });
+      expect(screen.getByTestId('shell-source-dim-left').style.width).toBe('20%');
+      // jsdom's CSSOM normalizes calc(100% − 80%) → calc(20%): the right
+      // dim span covers [out,100%] (a 20%-wide span anchored right-0)
+      expect(screen.getByTestId('shell-source-dim-right').style.width).toBe('calc(20%)');
+      // pointer-events-none: the scrub stays live over the dimmed spans
+      expect(screen.getByTestId('shell-source-dim').className).toContain('pointer-events-none');
+    });
+
+    it('scrubbing the track seeks through the store seam (pointerdown + move, the handle pad law math)', () => {
+      render(<SourceRangeBar mediaId={MID} />);
+      screen.getByTestId('shell-viewer-scrub').getBoundingClientRect = fakeBar;
+      const track = screen.getByTestId('shell-viewer-scrub');
+      fireEvent.pointerDown(track, { pointerId: 9, button: 0, clientX: 158 });
+      // (158−8)/(300−16) of 62.4 s, FRAME-SNAPPED (the seek's house law —
+      // the same timeAt math the handles use, on the frame grid)
+      expect(useUi.getState().sourcePlayhead[MID]).toBeCloseTo(snapToFrame(((158 - 8) / (300 - 16)) * 62.4), 5);
+      fireEvent.pointerMove(track, { pointerId: 9, buttons: 1, clientX: 100 });
+      expect(useUi.getState().sourcePlayhead[MID]).toBeCloseTo(snapToFrame(((100 - 8) / (300 - 16)) * 62.4), 5);
+      // release: a stray move (buttons held elsewhere) writes nothing (B7)
+      fireEvent.pointerUp(track, { pointerId: 9, buttons: 0, clientX: 0 });
+      const after = useUi.getState().sourcePlayhead[MID];
+      fireEvent.pointerMove(track, { pointerId: 9, buttons: 1, clientX: 250 });
+      expect(useUi.getState().sourcePlayhead[MID]).toBe(after);
+    });
+
+    it('the domain ruling: with a range set, a scrub CLAMPS into [in,out] — the previewed span is the span an insert commits', () => {
+      render(<SourceRangeBar mediaId={MID} />);
+      screen.getByTestId('shell-viewer-scrub').getBoundingClientRect = fakeBar;
+      act(() => { useUi.getState().setSourceRangeIn(MID, 20); });
+      act(() => { useUi.getState().setSourceRangeOut(MID, 40); });
+      const track = screen.getByTestId('shell-viewer-scrub');
+      // scrub far left (t≈0) → clamps UP to range.in = 20
+      fireEvent.pointerDown(track, { pointerId: 1, button: 0, clientX: 0 });
+      expect(useUi.getState().sourcePlayhead[MID]).toBe(20);
+      // scrub far right (t≈62.4) → clamps DOWN to range.out = 40
+      fireEvent.pointerMove(track, { pointerId: 1, buttons: 1, clientX: 300 });
+      expect(useUi.getState().sourcePlayhead[MID]).toBe(40);
+    });
+
+    it('a handle drag never leaks into a track scrub (the drag state carries the identity)', () => {
+      render(<SourceRangeBar mediaId={MID} />);
+      screen.getByTestId('shell-viewer-scrub').getBoundingClientRect = fakeBar;
+      const inH = screen.getByTestId('shell-source-range-in');
+      // grabbing the handle then moving over the track: the range moves,
+      // the playhead does NOT (the handle's pointerdown stops propagation)
+      fireEvent.pointerDown(inH, { pointerId: 2, button: 0, clientX: 50 });
+      fireEvent.pointerMove(inH, { pointerId: 2, buttons: 1, clientX: 150 });
+      expect(useUi.getState().sourceRanges[MID]!.in).toBeCloseTo(((150 - 8) / (300 - 16)) * 62.4, 5);
+      expect(useUi.getState().sourcePlayhead[MID]).toBeUndefined(); // no scrub leaked
+    });
+
+    it('playhead keyboard: ←/→ nudge ±1 frame (⇧ ×10); Home/End land on the domain ends (range.in/out when trimmed)', () => {
+      render(<SourceRangeBar mediaId={MID} />);
+      const ph = screen.getByTestId('shell-source-playhead');
+      ph.focus();
+      fireEvent.keyDown(ph, { key: 'ArrowRight' });
+      expect(useUi.getState().sourcePlayhead[MID]).toBeCloseTo(1 / 24, 5);
+      fireEvent.keyDown(ph, { key: 'ArrowRight', shiftKey: true });
+      expect(useUi.getState().sourcePlayhead[MID]).toBeCloseTo(11 / 24, 5);
+      // with a range, Home/End land on the DOMAIN ends (the store's clamp)
+      act(() => { useUi.getState().setSourceRangeIn(MID, 10); });
+      act(() => { useUi.getState().setSourceRangeOut(MID, 50); });
+      fireEvent.keyDown(ph, { key: 'Home' });
+      expect(useUi.getState().sourcePlayhead[MID]).toBe(10); // range.in
+      fireEvent.keyDown(ph, { key: 'End' });
+      expect(useUi.getState().sourcePlayhead[MID]).toBe(50); // range.out
+    });
   });
 
   it('the store setters clamp: in can never pass out; out can never pass in', () => {
