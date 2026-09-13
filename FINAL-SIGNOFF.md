@@ -1,5 +1,7 @@
 # Final Sign-Off Report — Multi-Round Spec Refinement Process
 
+> **[2026-09-14 — the R27 re-stamp note.]** This signoff certifies the **R7 refinement process** (2026-08-22) — the scout→audit→revise cycles it describes completed, and its verdicts stand **as of that date**. It is **not the corpus's current seal**: the spec set has since grown to 21 numbered specs + `REFERENCE-REGISTER.md` + `IMPLEMENTATION-PLAN.md` (Decisions D8-D41; the fleet rounds R8-R27 at `audits/`), and the operative acceptance contract is the plan's **K-tier ladder** (K1 LANDED — the module nets green at the R27 pins: engine 748 / OT 632 / WDC 777 / nle-ui 690 / app 252; K2-K4 + w1-r6 pending), enforced by the per-round battery (`scripts/battery_r2N.py`). The R27 final-tightness fleet's per-spec P1 fix-lists (`audits/fleet-r27/spec-*.md`) were pre-implementation corrections this signoff could not see; the W6 amendment wave (~159 amendments) landed them 2026-09-13/14. The mock-surface OPEN decisions live in the register's table. **The re-stamp (the corpus-final seal) lands after the four conditions: (1) the R27 amendment wave W6 — LANDED 2026-09-14; (2) battery_r27 green; (3) the register's OPEN decisions ruled; (4) K4's crawl exit.** Until then: implementation-ready **in architecture**, not yet sealed.
+
 **Date:** 2026-08-22
 **Process:** Multi-round scout → audit → revise → re-audit cycle
 **Owner:** Architect (main conversation)
