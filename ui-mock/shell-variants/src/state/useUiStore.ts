@@ -179,6 +179,15 @@ export type GradePatch = Partial<Omit<MockGrade, 'qualifier' | 'curves'>> & {
 
 const DEFAULT_MOCK_GRADE: MockGrade = { ...DEFAULT_GRADE };
 
+/* R25-F1-C2: the primaries-only reset patch — every GradeParams SCALAR at
+ * its spec 08 §4.2 default. qualifier and curves are DELIBERATELY ABSENT
+ * (they are the Qualifier/Curves tabs' own records — the wheels' header
+ * reset must never touch them; the old button called resetGrade and wiped
+ * the WHOLE record). Routed through setGrade so ONE undo entry carries it
+ * and an already-default primaries surface mints nothing. */
+const { qualifier: _primariesStrip, ...PRIMARIES_FIELDS } = DEFAULT_GRADE;
+const PRIMARIES_RESET_PATCH: GradePatch = PRIMARIES_FIELDS;
+
 const cloneGrades = (g: Record<string, MockGrade>): Record<string, MockGrade> => {
   const out: Record<string, MockGrade> = {};
   for (const k of Object.keys(g)) {
@@ -937,6 +946,10 @@ interface UiState {
   /* R20-W4b grade sidecar + console view-state (C50/C51). */
   setGrade: (id: string, patch: GradePatch) => void;
   resetGrade: (id: string) => void;
+  /** R25-F1-C2: resets ONLY the primaries surface (the §4.2 scalar fields)
+   *  — the qualifier + curves records survive. One undo entry; a no-op
+   *  reset (already-default primaries) mints nothing. */
+  resetPrimaries: (id: string) => void;
   setColorInspectorTab: (tab: UiState['colorInspectorTab']) => void;
   /** R22-D3 → R23-WB: sets the scopes console state (dedicated setter —
    *  togglePanel is boolean-keyed; the 'open' state is the only visual now). */
@@ -1096,6 +1109,18 @@ function withHistory(set: (partial: any) => void, get: () => UiState, mutate: (s
    `undefined` into a partial record and the next ChannelStrip render crashed
    on `strip.inserts[0]` — caught by the code review wave. */
 const DEFAULT_MIXER_TRACK: MixerTrackSettings = { fader: -6, pan: 0, inserts: [null, null], auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0 };
+
+/* R25-F1-A2 (audit A2): the ONE source of truth for the sidecar invariant
+   "every audio track has a mixer strip" — the WRITER that creates the track
+   seeds it, at creation (createScene + addTrack below). The old healers
+   stay as defense: enterAudioFocus's additive pass (for scenes created
+   before this law, or the loadSampleProject rebuild) and setMixerTrack's
+   ?? DEFAULT guard (the R13 crash law above). A view-state write riding the
+   withHistory set() — the G-slice law: never snapshotted, never undoable. */
+const seedMixerTrack = (mixer: MockMixerScene, trackId: string): MockMixerScene => ({
+  ...mixer,
+  tracks: { ...mixer.tracks, [trackId]: { ...DEFAULT_MIXER_TRACK } },
+});
 
 /* R19: overwrite-span resolution moved to lib/insertPlan.ts (R20-W2) as the
    recording twin planOverwriteSpans — the same trim engine (fully-covered →
@@ -1338,7 +1363,12 @@ export const useUi = create<UiState>((set, get) => ({
       dirty: true,
     };
     scenes.push(sc);
-    set({ activeSceneId: sc.id, selection: [] });
+    /* R25-F1-A2: seed the mixer sidecar for the new scene's audio track —
+       without it the ChannelEditor's TRACK section rendered its "No audio
+       tracks in this scene" fallback on the audio page while the A1 strip
+       rendered beside it (the strips read through the DEFAULT guards; the
+       editor reads the sidecar directly). */
+    set({ activeSceneId: sc.id, selection: [], mixer: seedMixerTrack(get().mixer, `t-au-${n}`) });
     return scenes;
   }),
   deleteScene: (id) => withHistory(set, get, (scenes) => {
@@ -2057,6 +2087,13 @@ export const useUi = create<UiState>((set, get) => ({
     set({ mockGrades: next });
     return scenes;
   }),
+  /* R25-F1-C2: the wheels' header button — a PRIMARIES-ONLY reset (the
+     audit's C2: it used to call resetGrade and silently deleted the curves
+     + qualifier records with it). Delegates to setGrade so the ONE-entry +
+     no-op laws hold by construction. */
+  resetPrimaries: (id) => {
+    get().setGrade(id, PRIMARIES_RESET_PATCH);
+  },
   setColorInspectorTab: (tab) => set({ colorInspectorTab: tab }),
   setColorScopesState: (state) => set({ colorScopesState: state }),
   /* R25-W3: plain view-state write (the sourceRanges law — a tab flip never
@@ -2736,6 +2773,10 @@ export const useUi = create<UiState>((set, get) => ({
       insertAt = kind === 'audio' ? sc.tracks.length : kind === 'overlay' ? Math.max(0, mainIdx) : mainIdx + 1;
     }
     sc.tracks.splice(insertAt, 0, track);
+    /* R25-F1-A2 (the same class): an audio track joins the MIXER the moment
+       it exists — seed its strip now, so the ChannelEditor and the strips
+       agree before any fader drag or audio-focus entry heals the gap. */
+    if (kind === 'audio') set({ mixer: seedMixerTrack(s.mixer, track.id) });
     return scenes;
   }),
   loadSampleProject: () => withHistory(set, get, (scenes) => {

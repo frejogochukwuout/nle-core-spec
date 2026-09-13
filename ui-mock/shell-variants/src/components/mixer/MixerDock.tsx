@@ -448,10 +448,21 @@ function FullDock({ density, tier }: { density: Exclude<MixerDockDensity, 'mini'
         </span>
         <AudioLines size={11} strokeWidth={1.6} className="text-tfaint" aria-hidden="true" />
       </div>
-      {/* channel strips — their own horizontal scroll region (2-strip floor);
-          strips stretch the FULL dock height with terminal fader sections
-          (th_mto6496s) and the shared density/tier ladder (D1.3 → W4-E) */}
-      <div className="flex min-h-0 min-w-[172px] items-stretch overflow-x-auto">
+      {/* channel strips + the aux/master bank — ONE horizontal scroll region
+          (2-strip floor). R25-F1-A3 (RE-PINS th_mto63f99): the bank used to
+          sit OUTSIDE this scroll region as shrink-0 siblings, so the B1
+          maxWidth budget (which binds only the scroll region — the only
+          shrinkable child) never bound the pinned bank: below ~750px row
+          width the aux-A2 + master strips painted past the dock's cap and
+          the shell clipped them — unreachable at any width under ~750px.
+          The bank now rides INSIDE the scroll region as scrolling content at
+          its natural end: when the budget cannot fit it, the SAME horizontal
+          scrollbar that covers overflowed channels covers the bank too — the
+          master bus stays reachable at every width (scrollLeft reaches it).
+          Strips still stretch the FULL dock height with terminal fader
+          sections (th_mto6496s) and the shared density/tier ladder
+          (D1.3 → W4-E). */}
+      <div data-testid="channel-scroll" className="flex min-h-0 min-w-[172px] items-stretch overflow-x-auto">
         {audio.map((t, i) => (
           <ChannelStrip
             key={t.id}
@@ -466,26 +477,23 @@ function FullDock({ density, tier }: { density: Exclude<MixerDockDensity, 'mini'
             onStripClick={() => setStripFocus(t.id)}
           />
         ))}
+        {/* R23-WC (D-C3, #70): the bank collapses to meters-only columns via
+            its OWN toggle — the channel strips are untouched (the
+            independence law). */}
+        {masterBusCollapsed ? (
+          <>
+            <BusMeterCol bus="a1" />
+            <BusMeterCol bus="a2" />
+            <MasterMeterCol />
+          </>
+        ) : (
+          <>
+            <AuxStrip bus="a1" tier={tier} density={density} narrow={narrow} />
+            <AuxStrip bus="a2" tier={tier} density={density} narrow={narrow} />
+            <MasterStrip tier={tier} density={density} narrow={narrow} />
+          </>
+        )}
       </div>
-      {/* aux returns + master PINNED to the dock's right edge — the dock's
-          right region always carries the return/master bank cleanly, never
-          dead space and never scrolled away under the channel row (fixes
-          th_mto63f99). R23-WC (D-C3, #70): the bank collapses to meters-only
-          columns via its OWN toggle — the channel strips above are untouched
-          (the independence law). */}
-      {masterBusCollapsed ? (
-        <>
-          <BusMeterCol bus="a1" />
-          <BusMeterCol bus="a2" />
-          <MasterMeterCol />
-        </>
-      ) : (
-        <>
-          <AuxStrip bus="a1" tier={tier} density={density} narrow={narrow} />
-          <AuxStrip bus="a2" tier={tier} density={density} narrow={narrow} />
-          <MasterStrip tier={tier} density={density} narrow={narrow} />
-        </>
-      )}
     </div>
   );
 }

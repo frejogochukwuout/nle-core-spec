@@ -506,13 +506,30 @@ describe('audio focus', () => {
     expect(S().audioLaneBoost).toBe(false);
   });
 
-  it('auto-creates strips for audio tracks added after boot (G-slice sync)', () => {
+  it('auto-creates strips for audio tracks added after boot (G-slice sync — RE-PINNED R25-F1-A2)', () => {
+    /* RE-PINNED (R25-F1-A2): addTrack now seeds the sidecar AT CREATION
+       (the writer is the ONE source of truth), so "not yet — sync happens
+       on entry" is dead: the strip exists immediately. enterAudioFocus's
+       additive pass stays as the belt-and-braces healer (pre-A2 scenes,
+       loadSampleProject rebuilds) and is pinned right below. */
     act(() => { S().addTrack('audio'); });
     const newId = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.at(-1)!.id;
-    expect(S().mixer.tracks[newId]).toBeUndefined(); // not yet — sync happens on entry
+    expect(S().mixer.tracks[newId]).toBeDefined(); // seeded at creation (R25-F1-A2)
+    expect(S().mixer.tracks[newId].fader).toBe(-6);
+    // the entry pass stays a NO-OP now (nothing left to heal — idempotent)
     act(() => { S().enterAudioFocus('dock'); });
     expect(S().mixer.tracks[newId]).toBeDefined();
     expect(S().mixer.tracks[newId].fader).toBe(-6);
+  });
+
+  it('R25-F1-A2: enterAudioFocus still HEALS a sidecar gap (the belt-and-braces pass survives for pre-law scenes)', () => {
+    // simulate a pre-A2 scene: an audio track with no sidecar entry
+    act(() => { S().addTrack('audio'); });
+    const newId = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.at(-1)!.id;
+    act(() => { useUi.setState((s) => ({ mixer: { ...s.mixer, tracks: Object.fromEntries(Object.entries(s.mixer.tracks).filter(([k]) => k !== newId)) } })); });
+    expect(S().mixer.tracks[newId]).toBeUndefined();
+    act(() => { S().enterAudioFocus('dock'); });
+    expect(S().mixer.tracks[newId]).toBeDefined(); // the entry pass healed the gap
   });
 
   /* R24-W1 (DESIGN-R24 §1.3 A3-R3; issues #65/#66 — cycleMixerState is
@@ -961,6 +978,41 @@ describe('scene management', () => {
     expect(sc.dirty).toBe(true);
     expect(sc.tracks.map((t) => t.kind)).toEqual(['overlay', 'main', 'audio']);
     expect(S().selection).toEqual([]);
+  });
+
+  /* R25-F1-A2 (audit A2): createScene SEEDS the mixer sidecar for the new
+     scene's audio track. Without it the ChannelEditor rendered its "No
+     audio tracks in this scene" fallback on the audio page while the A1
+     strip rendered beside it — and the fader's own nudges were what
+     self-healed the sidecar (the DEFAULT guard). ONE history entry still
+     (the mixer write is view-state riding the same commit — the G-slice
+     law: never snapshotted). */
+  it('R25-F1-A2: createScene seeds the mixer sidecar for the new audio track (one history entry; the sidecar is view-state)', () => {
+    act(() => { S().createScene(); });
+    const sc = S().scenes.at(-1)!;
+    const audioTrack = sc.tracks.find((t) => t.kind === 'audio')!;
+    const strip = S().mixer.tracks[audioTrack.id];
+    expect(strip).toBeDefined(); // seeded at creation — no fallback lie, no self-heal needed
+    expect(strip).toMatchObject({ fader: -6, pan: 0, auxA: 0, auxB: 0, auxPreFader: false, outputBus: 0 });
+    expect(strip!.inserts).toEqual([null, null]);
+    // ONE undoable entry for the scene creation (the mixer seed never mints)
+    expect(S().past).toHaveLength(1);
+    // undo removes the scene AND leaves the seeded strip an orphan-free no-op
+    // (the sidecar is view state — undo does not roll it back, by law)
+    act(() => { S().undo(); });
+    expect(S().scenes).toHaveLength(2);
+  });
+
+  it('R25-F1-A2 (the same class): addTrack("audio") seeds the sidecar the moment the track exists', () => {
+    act(() => { S().addTrack('audio'); });
+    const added = S().scenes.find((sc) => sc.id === 'sc-1')!.tracks.at(-1)!;
+    expect(added.kind).toBe('audio');
+    expect(S().mixer.tracks[added.id]).toBeDefined(); // seeded — the editor never lies while the strip renders
+    expect(S().mixer.tracks[added.id]!.fader).toBe(-6);
+    // a non-audio track never seeds (no phantom mixer strips)
+    const before = Object.keys(S().mixer.tracks).length;
+    act(() => { S().addTrack('overlay'); });
+    expect(Object.keys(S().mixer.tracks)).toHaveLength(before);
   });
 
   it('deleteScene refuses to delete the last scene', () => {

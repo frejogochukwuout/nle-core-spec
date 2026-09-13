@@ -138,10 +138,14 @@ export interface GradePass {
  * `buildGradeStack(clipGrade, timelineGrade)` — the sequential composition
  * law (color-layout §3.6): [clip → timeline], each a FULL pass. Identity
  * records with no curve are SKIPPED (spec 08 §12.1 no-op rule — an
- * untouched timeline costs nothing; an identity grade WITH a qualifier is
- * still a real pass). Source-preview mode builds the EMPTY stack (the raw
- * poster, ungraded — color-layout §3.6's one-line divergence: source =
- * un-graded asset; grades are keyed by element id, a pool asset has none).
+ * untouched timeline costs nothing; RE-PINNED R25-F1-C3: an identity grade
+ * with a DEFAULT-equal qualifier is a no-op skip too — the old law "any
+ * qualifier is a real pass" made a view gesture that materialized the
+ * record force a pass; a qualifier holding ADJUSTMENTS — or showMask, the
+ * grayscale matte — stays a real pass). Source-preview mode builds the
+ * EMPTY stack (the raw poster, ungraded — color-layout §3.6's one-line
+ * divergence: source = un-graded asset; grades are keyed by element id, a
+ * pool asset has none).
  */
 export function buildGradeStack(clipGrade: MockGrade | null, timelineGrade: MockGrade | null): GradePass[] {
   const passes: GradePass[] = [];

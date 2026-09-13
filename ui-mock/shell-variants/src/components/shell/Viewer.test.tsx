@@ -31,13 +31,53 @@ describe('Viewer (spec 18 §4.3)', () => {
     expect(container.querySelector('img')).toHaveAttribute('alt', 'Program monitor: Marina interview');
   });
 
-  it('composites the text overlay at the playhead; past the last clip the frame is empty', () => {
-    const { container } = render(<Viewer duration={DUR} />);
-    act(() => { S().setPlayhead(10); }); // el-5 (8.75–12) sits over el-2
-    expect(screen.getByText('MARINA — FISHERWOMAN')).toBeInTheDocument();
-    act(() => { S().setPlayhead(30); }); // past el-4's exclusive end
-    expect(container.querySelector('img')).not.toBeInTheDocument();
+  it('composites the text overlay at the playhead; AT the scene tail the monitor HOLDS the last clip (R25-F1-E1 re-pin)', () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = render(<Viewer duration={DUR} />);
+      act(() => { S().setPlayhead(10); }); // el-5 (8.75–12) sits over el-2
+      expect(screen.getByText('MARINA — FISHERWOMAN')).toBeInTheDocument();
+      act(() => { S().setPlayhead(30); }); // el-4's exclusive end — the exact scene tail
+      /* RE-PINNED (R25-F1-E1): the at-time probe is half-open, so t === duration
+         used to match NOTHING and a POPULATED timeline rendered the import CTA
+         ("No media — import or drop a file") on its own end frame — the
+         go-to-end transport button parked the monitor on a lie. At the exact
+         tail the monitor now HOLDS the last main element (el-4
+         sunset_timelapse, 24+6=30): Resolve holds the last frame. The cut to
+         it still mints the honest §4.2 600 ms decode window first; the poster
+         never gives way to the CTA. */
+      expect(screen.getByTestId('shell-viewer-state-loading')).toBeInTheDocument();
+      act(() => { vi.advanceTimersByTime(600); });
+      expect(container.querySelector('img')).toHaveAttribute('alt', 'Program monitor: sunset_timelapse');
+      expect(screen.queryByText('No media — import or drop a file')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('R25-F1-E1: playhead AT the duration → the LAST clip\'s poster holds (no import CTA on a populated timeline); a mid-timeline gap stays honestly empty', () => {
+    // pre-set the playhead BEFORE render — the boot resolve skips the decode
+    // theater (the same boot-skip contract as the first-frame test above)
+    act(() => { S().setPlayhead(30); });
+    const first = render(<Viewer duration={DUR} />);
+    expect(first.container.querySelector('img')).toHaveAttribute('alt', 'Program monitor: sunset_timelapse');
+    expect(screen.queryByText('No media — import or drop a file')).not.toBeInTheDocument();
+    first.unmount();
+    // the strict half-open law survives BELOW the tail: a time no element
+    // covers is still the honest empty frame (the tail edge is the ONLY
+    // closure — a mid-timeline gap must not inherit a neighbor). sc-2 has a
+    // real gap (s2-1 ends 6.25, s2-2 starts 6.5) with its own tail at 19.5.
+    act(() => { useUi.setState({ activeSceneId: 'sc-2' }); });
+    act(() => { S().setPlayhead(6.3); }); // inside the 6.25→6.5 gap
+    const second = render(<Viewer duration={19.5} />);
+    expect(second.container.querySelector('img')).not.toBeInTheDocument();
     expect(screen.getByText('No media — import or drop a file')).toBeInTheDocument();
+    second.unmount();
+    // sc-2's own tail (19.5 = s2-3 14.5+5) holds its last clip too
+    act(() => { S().setPlayhead(19.5); });
+    const third = render(<Viewer duration={19.5} />);
+    expect(third.container.querySelector('img')).toHaveAttribute('alt', 'Program monitor: interview_marina (take 7)');
+    third.unmount();
   });
 
   it('zoom ladder: honest fit-anchored labels with matching magnifications', () => {
@@ -260,14 +300,19 @@ describe('Viewer (spec 18 §4.3)', () => {
     expect(S().toasts).toHaveLength(2);
   });
 
-  it('§4.2 offline/empty fallback rows are untouched by the new state rows', () => {
-    const { container } = render(<Viewer duration={DUR} />);
-    // past the last clip: empty-frame row (no loading/error theater)
-    act(() => { S().setPlayhead(30); });
+  it('§4.2 offline/empty fallback rows are untouched by the new state rows (RE-PINNED R25-F1-E1: the empty probe moved to a real gap)', () => {
+    /* RE-PINNED (R25-F1-E1): this used to probe t=30 for the empty row — but
+       that time IS the scene tail now (the monitor holds el-4 there). The
+       honest empty-frame probe is sc-2's real mid-timeline gap (6.25→6.5):
+       no element covers it, and no loading/error theater rides it. */
+    act(() => { useUi.setState({ activeSceneId: 'sc-2' }); });
+    act(() => { S().setPlayhead(6.3); });
+    const { container } = render(<Viewer duration={19.5} />);
     expect(screen.getByText('No media — import or drop a file')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-viewer-state-loading')).toBeNull();
     expect(screen.queryByTestId('shell-viewer-state-error')).toBeNull();
     // offline media: the §4.2 offline row (m-04 fixture via a patched element)
+    act(() => { useUi.setState({ activeSceneId: 'sc-1' }); });
     act(() => {
       const scenes = S().scenes.map((sc) => sc.id === 'sc-1' ? {
         ...sc,

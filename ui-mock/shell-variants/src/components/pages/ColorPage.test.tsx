@@ -565,16 +565,41 @@ describe('QualifierPanel (C54 — spec 08 §8.1 store-driven keyer)', () => {
     expect(S().mockGrades['el-2'].qualifier?.hueWidth).toBeCloseTo(7.2, 2);
   });
 
-  it('Preview matte toggles the qualifierPreviewOn view-state AND mirrors showMask (undoable)', () => {
+  /* RE-PINNED (R25-F1-C3): the toggle used to ALSO mirror showMask into the
+     grade record — a VIEW gesture materializing the doc (one undo entry, the
+     Qualifier tab's orange dot, a stills node-count bump, and a second
+     pipeline-level grayscale matte over the viewer's own green overlay).
+     The mirror is DEAD: Preview Matte is pure view-state. */
+  it('Preview matte toggles the qualifierPreviewOn view-state ONLY — no record write, no history (R25-F1-C3)', () => {
     mountQualifier();
     fireEvent.click(screen.getByTestId('shell-color-qualifier-preview'));
     expect(S().qualifierPreviewOn).toBe(true);
-    expect(S().mockGrades['el-2'].qualifier?.showMask).toBe(true);
-    // the view-state never mints history; the record write does (ONE entry)
-    expect(S().past).toHaveLength(1);
+    // the record is NEVER materialized by the view gesture
+    expect(S().mockGrades['el-2']).toBeUndefined();
+    expect(S().past).toHaveLength(0); // NO history entry minted
     fireEvent.click(screen.getByTestId('shell-color-qualifier-preview'));
     expect(S().qualifierPreviewOn).toBe(false);
-    expect(S().mockGrades['el-2'].qualifier?.showMask).toBe(false);
+    expect(S().mockGrades['el-2']).toBeUndefined();
+    expect(S().past).toHaveLength(0);
+  });
+
+  it('R25-F1-C3: the toggle does NOT light the Qualifier tab dot; a DEFAULT-equal qualifier reads clean, a real adjustment lights it', () => {
+    setStore({ colorInspectorTab: 'qualifier' });
+    const q = render(<QualifierPanel />);
+    fireEvent.click(screen.getByTestId('shell-color-qualifier-preview'));
+    expect(S().qualifierPreviewOn).toBe(true); // the matte's own seam (the viewer overlay reads exactly this)
+    q.unmount();
+    // the inspector reads the same store: the toggle alone mints NO record → no dot
+    const insp = render(<ColorInspector />);
+    expect(screen.queryByTestId('shell-color-inspector-tab-dot-qualifier')).toBeNull();
+    // a materialized DEFAULT-equal qualifier also reads clean (the identity seam)
+    act(() => { S().setGrade('el-2', { qualifier: { hueCenter: DEFAULT_QUALIFIER.hueCenter } }); });
+    expect(S().mockGrades['el-2']?.qualifier).not.toBeNull(); // the record IS materialized…
+    expect(screen.queryByTestId('shell-color-inspector-tab-dot-qualifier')).toBeNull(); // …but carries no adjustment
+    // a REAL adjustment lights it
+    act(() => { S().setGrade('el-2', { qualifier: { hueWidth: 60 } }); });
+    expect(screen.getByTestId('shell-color-inspector-tab-dot-qualifier')).toBeInTheDocument();
+    insp.unmount();
   });
 
   it('reset qualifier clears the secondary node (record falls back to null)', () => {

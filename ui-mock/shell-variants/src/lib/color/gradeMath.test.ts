@@ -75,9 +75,20 @@ describe('applyGrade — identity (spec 08 §4.2, all 14 steps neutral)', () => 
       { contrast: 1.01 }, { lift: 0.01 }, { gamma: 1.01 }, { gain: 1.01 }, { offset: 0.01 },
       { blackPoint: 0.01 }, { whitePoint: 0.99 }, { midDetail: 1 }, { colorBoost: 1 },
       { shadows: 1 }, { highlights: 1 }, { hue: 51 }, { lumMix: 99 },
-      { qualifier: DEFAULT_QUALIFIER },
+      /* RE-PINNED (R25-F1-C3): the perturbation used to be a bare
+         DEFAULT_QUALIFIER (the law "any materialized qualifier breaks
+         identity") — a DEFAULT-equal node is a no-op SKIP now, so the
+         perturbation carries a real adjustment instead; the skip law is
+         pinned in the describe right below. */
+      { qualifier: { ...DEFAULT_QUALIFIER, hueWidth: 60 } },
     ];
     for (const p of perturbs) expect(isIdentityGrade(g(p))).toBe(false);
+  });
+
+  it('R25-F1-C3: a materialized DEFAULT-equal qualifier (showMask off) is STILL the identity — a view gesture that wrote the record costs nothing', () => {
+    expect(isIdentityGrade(g({ qualifier: { ...DEFAULT_QUALIFIER } }))).toBe(true);
+    // showMask is a real pixel-level effect (the grayscale matte) → non-identity
+    expect(isIdentityGrade(g({ qualifier: { ...DEFAULT_QUALIFIER, showMask: true } }))).toBe(false);
   });
 });
 

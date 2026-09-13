@@ -334,6 +334,37 @@ describe('ChannelStrip height tiers (D1.3, contract §4.2 revised)', () => {
     expect(within(pop).getAllByText('—')).toHaveLength(2); // the 2 model slots, empty
   });
 
+  /* R25-F1-A1 (P1): the T2 popover is a DOM child of the 25px StripHeader,
+     absolutely positioned at top-[26px] — BELOW the header row. The header
+     row used to carry overflow-hidden, so the popover painted ZERO pixels at
+     ANY dock height (340-419, the default 1600×900 and 700×900 densities):
+     a fully invisible control. The row-level clip is gone; the only clipper
+     left in the chain is the name span's own truncate (self-contained, never
+     an ancestor of the popover). Structural pin: NO ancestor of the popover
+     between it and the strip root clips overflow. */
+  it('R25-F1-A1: the T2 fx-count popover is not clipped — NO overflow-hidden ancestor between it and the strip root (the header row dropped its clip)', () => {
+    renderPlain(<Strip trackId="tr-audio-2" tier={2} />);
+    const s = strip('A2');
+    fireEvent.click(within(s).getByTestId('fx-count'));
+    const pop = within(s).getByTestId('fx-count-popover');
+    expect(pop.className).toContain('top-[26px]'); // the popover still opens below the 25px header
+    // walk the chain: popover → chip span → HEADER ROW → … → strip root.
+    // NONE may clip (the old bug: the header row itself carried overflow-hidden).
+    let node: HTMLElement | null = pop.parentElement;
+    const clippers: string[] = [];
+    while (node && node !== s.parentElement) {
+      if (/overflow-(hidden|clip)/.test(node.className)) clippers.push(node.className);
+      node = node.parentElement;
+    }
+    expect(clippers).toEqual([]);
+    // the header row (the popover's containing-chain grandparent) is clean
+    const headerRow = pop.parentElement!.parentElement!;
+    expect(headerRow.className).not.toContain('overflow-hidden');
+    expect(headerRow.className).toContain('h-[25px]'); // it is still the header row
+    // the name span KEEPS its own clip (truncate) — the only content that overflows
+    expect(headerRow.querySelector('.truncate')).not.toBeNull();
+  });
+
   /* R25-W4-E (th_mtzozdvo — "responsive design, not mini-style switch"): the
      T3 per-channel-scroll tier is DEAD. RE-PINNED (was "T3: the accessory
      stack scrolls inside the strip; the trio + RSM pin at the bottom (clamp

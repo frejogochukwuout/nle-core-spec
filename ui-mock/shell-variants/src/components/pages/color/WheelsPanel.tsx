@@ -574,7 +574,7 @@ export function WheelsPanel() {
     );
   }
 
-  const { grade, setGrade, resetGrade } = rec;
+  const { grade, setGrade, resetPrimaries } = rec;
 
   return (
     <div data-testid="shell-color-wheels" className="flex flex-col">
@@ -599,7 +599,19 @@ export function WheelsPanel() {
           >
             LOG
           </button>
-          <button type="button" aria-label="Reset primaries" data-tip="Reset" className="icon-btn" onClick={resetGrade}>
+          {/* R25-F1-C2 (audit C2): the header reset is PRIMARIES-ONLY now —
+              the old onClick={resetGrade} deleted the ENTIRE record and took
+              the Curves + Qualifier tabs' work with it (a destructive reset
+              wearing a "Reset primaries" label). resetPrimaries writes the
+              §4.2 scalar defaults as ONE mergeGrade patch; qualifier and
+              curves survive. */}
+          <button
+            type="button"
+            aria-label="Reset primaries only"
+            data-tip="Reset the color wheels and sliders only — curves and qualifier are kept"
+            className="icon-btn"
+            onClick={resetPrimaries}
+          >
             <RotateCcw size={16} strokeWidth={1.5} />
           </button>
         </div>

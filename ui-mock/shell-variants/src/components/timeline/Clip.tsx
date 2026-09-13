@@ -483,6 +483,10 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
   const splitElement = useUi((s) => s.splitElement);
   const pushToast = useUi((s) => s.pushToast);
   const snap = useUi((s) => s.snap);
+  /* R25-F1-C4 (audit C4): the color-page clip click also SEEKS — see the
+     onClick comment below. */
+  const page = useUi((s) => s.page);
+  const setPlayhead = useUi((s) => s.setPlayhead);
   /* R23-WA (DESIGN-R23 D-A2/D-A3): the FX engine's two view reads — fxMode
      recedes the clip (trim/drag/context-menu OFF, body 45%, clicks keep
      selecting); selectedFxObject drives the fade objects' selection ring
@@ -1057,6 +1061,15 @@ export function Clip({ el, track, pxPerSec, laneHeight, snapTargets, dragHost, p
       return;
     }
     selectElement(el.id, e.shiftKey || e.metaKey);
+    /* R25-F1-C4 (audit C4): on the COLOR page the selection click ALSO moves
+       the playhead INTO the clip (Resolve's color-page current-clip
+       navigation). The viewer + scopes follow the PLAYHEAD, so a
+       selection-only click let the grade target silently diverge from the
+       monitor: you graded clip B while looking at clip A. Frame-snap law
+       (the MediaPool reveal's own pattern): startTime + 1 frame lands
+       INSIDE the clip, ON the grid. Gated to the color page — on every
+       other page a clip click never moves the playhead (edit-page pin). */
+    if (page === 'color') setPlayhead(snapToFrame(el.startTime + 1 / 24));
   };
 
   const cursor = locked

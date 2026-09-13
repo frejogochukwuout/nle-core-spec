@@ -178,6 +178,55 @@ describe('resetGrade', () => {
   });
 });
 
+/* R25-F1-C2 (audit C2): the wheels' header reset is a SEPARATE, narrower
+   action. resetGrade deletes the WHOLE record — the old "Reset primaries"
+   button called it and silently took the Curves + Qualifier tabs' work with
+   the primaries. resetPrimaries writes the §4.2 scalar defaults as ONE
+   mergeGrade patch; the qualifier + curves records survive. */
+describe('resetPrimaries (R25-F1-C2 — the primaries-only surface reset)', () => {
+  it('a grade with curves + qualifier + primaries set → reset primaries → curves + qualifier SURVIVE, primaries are defaults, ONE history entry', () => {
+    act(() => {
+      S().setGrade('el-2', {
+        shHue: 205, shAmount: 0.137, temperature: 18, contrast: 1.2,
+        qualifier: { hueCenter: 120, hueWidth: 60 },
+        curves: { master: [{ x: 0, y: 0.25 }, { x: 1, y: 1 }] },
+      });
+    });
+    const before = S().past.length; // 1 — the seed write
+    act(() => { S().resetPrimaries('el-2'); });
+    const g = S().mockGrades['el-2'];
+    // the primaries surface is back at the spec 08 §4.2 defaults…
+    expect(g.shHue).toBe(DEFAULT_GRADE.shHue);
+    expect(g.shAmount).toBe(DEFAULT_GRADE.shAmount);
+    expect(g.temperature).toBe(DEFAULT_GRADE.temperature);
+    expect(g.contrast).toBe(DEFAULT_GRADE.contrast);
+    // …while the OTHER tabs' records survive untouched
+    expect(g.qualifier).toMatchObject({ hueCenter: 120, hueWidth: 60 });
+    expect(g.curves?.master[0]).toEqual({ x: 0, y: 0.25 });
+    // ONE undo entry for the whole reset (not one per field)
+    expect(S().past).toHaveLength(before + 1);
+    // and undo restores the primaries with the same single step
+    act(() => { S().undo(); });
+    expect(S().mockGrades['el-2'].shHue).toBe(205);
+    expect(S().mockGrades['el-2'].qualifier).toMatchObject({ hueCenter: 120, hueWidth: 60 });
+  });
+
+  it('an already-default primaries surface (qualifier/curves only) mints NO history entry — the no-op guard holds', () => {
+    act(() => { S().setGrade('el-2', { qualifier: { invert: true }, curves: { master: [{ x: 0, y: 0.25 }, { x: 1, y: 1 }] } }); });
+    const before = S().past.length;
+    act(() => { S().resetPrimaries('el-2'); });
+    expect(S().past).toHaveLength(before); // nothing changed → nothing minted
+    expect(S().mockGrades['el-2'].qualifier?.invert).toBe(true); // and nothing was harmed
+  });
+
+  it('a record that never existed (identity grade) mints NOTHING', () => {
+    const before = S().past.length;
+    act(() => { S().resetPrimaries('el-2'); });
+    expect(S().past).toHaveLength(before);
+    expect(S().mockGrades['el-2']).toBeUndefined(); // no phantom record materialized
+  });
+});
+
 describe('undo/redo round-trip (the snapshot EXTENSION, C50)', () => {
   it('undo restores the pre-edit grades; redo restores the edit', () => {
     act(() => { S().setGrade('el-2', { shHue: 205, shAmount: 0.137 }); });

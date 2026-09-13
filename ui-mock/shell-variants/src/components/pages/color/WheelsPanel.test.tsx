@@ -307,3 +307,33 @@ describe('R24-W5a F2: WheelsPanel luma dials — dbl-click resets to the spec 08
     expect(S().mockGrades['el-2'].hue).toBe(DEFAULT_GRADE.hue); // 50
   });
 });
+
+/* R25-F1-C2 (audit C2): the header reset button. It used to call
+   resetGrade — deleting the ENTIRE record, so a "Reset primaries" click
+   silently wiped the Curves and Qualifier tabs' work too. It is
+   resetPrimaries now: the §4.2 scalar surface goes to the defaults, the
+   other tabs' records survive, ONE undo entry. */
+describe('R25-F1-C2: the header reset is primaries-ONLY', () => {
+  it('curves + qualifier + primaries set → the button resets ONLY the primaries; curves + qualifier survive; ONE history entry', () => {
+    boot();
+    act(() => {
+      S().setGrade('el-2', {
+        shHue: 205, temperature: 18, contrast: 1.2,
+        qualifier: { hueCenter: 120, hueWidth: 60 },
+        curves: { master: [{ x: 0, y: 0.25 }, { x: 1, y: 1 }] },
+      });
+    });
+    const btn = screen.getByRole('button', { name: 'Reset primaries only' });
+    expect(btn).toHaveAttribute('data-tip', 'Reset the color wheels and sliders only — curves and qualifier are kept');
+    fireEvent.click(btn);
+    const g = S().mockGrades['el-2'];
+    // the primaries surface is back at the spec defaults…
+    expect(g.shHue).toBe(DEFAULT_GRADE.shHue);
+    expect(g.temperature).toBe(DEFAULT_GRADE.temperature);
+    expect(g.contrast).toBe(DEFAULT_GRADE.contrast);
+    // …and the OTHER tabs' records survive (the old button deleted them)
+    expect(g.qualifier).toMatchObject({ hueCenter: 120, hueWidth: 60 });
+    expect(g.curves?.master[0]).toEqual({ x: 0, y: 0.25 });
+    expect(S().past).toHaveLength(2); // the seed write + ONE reset entry
+  });
+});

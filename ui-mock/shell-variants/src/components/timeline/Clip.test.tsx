@@ -1480,3 +1480,36 @@ describe('R24-W3 (A1-R3): the parser\'s routing at the body door', () => {
     expect(store().past).toHaveLength(1); // one addEffectToElement entry
   });
 });
+
+/* ---------- R25-F1-C4 (audit C4): the color-page clip click SEEKS.
+   The viewer + scopes follow the PLAYHEAD; the grade target follows the
+   SELECTION — a selection-only click let the two silently diverge (you
+   graded clip B while the monitor showed clip A). On the color page the
+   click also moves the playhead INTO the clip (Resolve's color-page
+   current-clip navigation; startTime + 1 frame, ON the grid — the
+   MediaPool reveal's own pattern). The full Timeline's Clip owns the law
+   here; the compact strip's twin is pinned in TimelineCompact.test. ---------- */
+
+describe('R25-F1-C4: color-page clip clicks seek (the target never diverges from the monitor)', () => {
+  it('on the COLOR page, clicking clip B (≠ the playhead clip) moves the playhead INTO B (frame-snapped +1 frame)', () => {
+    boot({ page: 'color' });
+    expect(store().playhead).toBe(16); // the boot playhead sits inside el-2 (8.5–17)
+    fireEvent.click(screen.getByTestId('clip-el-4'));
+    expect(store().selection).toEqual(['el-4']); // the grade target follows the click…
+    expect(store().playhead).toBe(24 + 1 / 24); // …and the monitor follows it: el-4's start + 1 frame, ON the grid
+  });
+
+  it('PAGE GATING: on the EDIT page the same click selects but NEVER seeks', () => {
+    boot({ page: 'edit' });
+    fireEvent.click(screen.getByTestId('clip-el-4'));
+    expect(store().selection).toEqual(['el-4']);
+    expect(store().playhead).toBe(16); // unchanged — the edit page owns the playhead
+  });
+
+  it('extend-selection clicks (⇧) on color seek too — the monitor follows every retarget', () => {
+    boot({ page: 'color', selection: ['el-2'] });
+    fireEvent.click(screen.getByTestId('clip-el-4'), { shiftKey: true });
+    expect(store().selection).toEqual(['el-2', 'el-4']); // the extend law survives
+    expect(store().playhead).toBe(24 + 1 / 24); // the playhead still lands inside the clicked clip
+  });
+});

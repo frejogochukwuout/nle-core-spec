@@ -28,7 +28,7 @@
 
 import type { RGB } from './colorSpace';
 import { hsv2rgb, luma709, rgb2hsv, smoothstep } from './colorSpace';
-import type { QualifierParams } from './qualifierMath';
+import { isIdentityQualifier, type QualifierParams } from './qualifierMath';
 
 /**
  * GradeParams — spec 08 §4.2 `WheelsParams` (the 28-f32 uniform, 26 meaningful
@@ -262,7 +262,10 @@ export const WHEELS_PARAM_SLOTS: Readonly<Record<string, number>> = {
 
 const FRACT_EPS = 0.001; // shader-side early-out thresholds (L159/192/209/214)
 
-/** True when every stage is a no-op (skip the pixel pass — spec 08 §12.1). */
+/** True when every stage is a no-op (skip the pixel pass — spec 08 §12.1).
+ *  R25-F1-C3: the qualifier arm uses isIdentityQualifier — a materialized
+ *  DEFAULT-equal node (showMask off) is a no-op too, so a view gesture that
+ *  materialized the record can never force a non-identity pixel pass. */
 export function isIdentityGrade(p: GradeParams): boolean {
   const e = 1e-6;
   return (
@@ -277,7 +280,7 @@ export function isIdentityGrade(p: GradeParams): boolean {
     Math.abs(p.midDetail) < e && Math.abs(p.colorBoost) < e &&
     Math.abs(p.shadows) < e && Math.abs(p.highlights) < e &&
     Math.abs(p.hue - 50) < e && Math.abs(p.lumMix - 100) < e &&
-    !p.qualifier
+    isIdentityQualifier(p.qualifier)
   );
 }
 

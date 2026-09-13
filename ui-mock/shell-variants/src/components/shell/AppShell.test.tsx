@@ -1107,24 +1107,53 @@ describe('R23-WC D-C2 (#99): the channel-selected rail law', () => {
    table mount + the R-b FX density + the scene-switch marker clear —
    the review round's new shell laws, pinned at the composition level ---------- */
 
-describe('R23-FIX R-a: marker/caption rails hoist above the page rails', () => {
-  it('the marker rail is reachable on the COLOR page (the old chain buried it under the page default)', () => {
+describe('R23-FIX R-a → R25-F1-C5: marker/caption rails hoist above the page rails (NON-COLOR pages only)', () => {
+  /* RE-PINNED (R25-F1-C5, audit C5): the hoist used to fire on EVERY page —
+     on color, selecting a caption/marker clip UNMOUNTED the ColorInspector
+     (the grading surface) while the Gallery + the whole color console kept
+     writing grades to that caption's record: a live writer with a deleted
+     surface. The hoist is now GATED to non-color pages; on color the rail
+     stays the ColorInspector (the selection domains still update — the
+     timeline keeps the highlight and the inspector grades the selected
+     clip). The fx-page and edit-page pins below keep the R-a law where it
+     was honest. */
+  it('R25-F1-C5: on the COLOR page a marker selection does NOT steal the rail — the ColorInspector stays', () => {
     renderAppShell({ page: 'color', selection: [], selectedMarkerId: 'mk-2' });
-    expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
-    expect(screen.queryByTestId('shell-color-inspector')).not.toBeInTheDocument();
-    // Done exits the domain → the page default returns
-    fireEvent.click(screen.getByTestId('shell-marker-inspector-done'));
-    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument(); // the grading surface stays
+    expect(screen.queryByTestId('shell-marker-inspector')).not.toBeInTheDocument();
+    // the marker domain itself still holds (the timeline keeps the highlight)
+    expect(store().selectedMarkerId).toBe('mk-2');
   });
 
-  it('the marker rail is reachable on the FX page too (an ACTIVE selection is newer intent than the page default)', () => {
+  it('R25-F1-C5: on the COLOR page a caption clip selection does NOT steal the rail — the ColorInspector stays (the Gallery keeps a surface to write to)', () => {
+    renderAppShell({ page: 'color', selection: ['cap-3'] });
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-caption-inspector')).not.toBeInTheDocument();
+    // the caption selection domain is live — only the RAIL swap is color-gated
+    expect(store().selection).toEqual(['cap-3']);
+    // the ColorInspector even retargets to the caption clip (captions are
+    // gradable targets — the rail's own grade target resolver)
+    expect(screen.getByTestId('shell-color-inspector-chip')).toHaveTextContent('Sub 3');
+  });
+
+  it('R25-F1-C5 (the real click path): clicking a caption clip on color keeps shell-color-inspector mounted', async () => {
+    const user = userEvent.setup();
+    renderAppShell({ page: 'color', selection: [], colorGradeTarget: 'clip' });
+    // the color page boots the full Timeline — the caption lane's clip is clickable
+    await user.click(screen.getByTestId('clip-cap-3'));
+    expect(store().selection).toEqual(['cap-3']); // the caption IS selected…
+    expect(screen.getByTestId('shell-color-inspector')).toBeInTheDocument(); // …and the grading surface never unmounted
+    expect(screen.queryByTestId('shell-caption-inspector')).not.toBeInTheDocument();
+  });
+
+  it('the marker rail is reachable on the FX page (an ACTIVE selection is newer intent than the page default)', () => {
     renderAppShell({ page: 'fx', fxMode: true, selection: [], selectedMarkerId: 'mk-2' });
     expect(screen.getByTestId('shell-marker-inspector')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-fxinspector')).not.toBeInTheDocument();
   });
 
-  it('the caption rail hoists on color: a single caption-track selection swaps the rail there', () => {
-    renderAppShell({ page: 'color', selection: ['cap-3'] });
+  it('the caption rail hoists on the EDIT page (the R-a law where it was honest)', () => {
+    renderAppShell({ page: 'edit', selection: ['cap-3'] });
     expect(screen.getByTestId('shell-caption-inspector')).toBeInTheDocument();
     expect(screen.queryByTestId('shell-color-inspector')).not.toBeInTheDocument();
   });

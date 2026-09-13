@@ -54,6 +54,7 @@
 import { useUi, useActiveScene } from '../../state/useUiStore';
 import { getRulerConfig, formatRulerLabel, shouldShowLabel } from '../../lib/rulerTiers';
 import { snapPxToDeviceGrid } from '../../lib/pixel';
+import { snapToFrame } from '../../lib/timecode';
 import { RangeBand } from './RangeBand';
 
 /* ---------- geometry (C51 compact set, unchanged) ---------- */
@@ -103,6 +104,10 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
   const loop = useUi((s) => s.loop);
   const setSelection = useUi((s) => s.setSelection);
   const setColorGradeTarget = useUi((s) => s.setColorGradeTarget);
+  /* R25-F1-C4: the color-page clip click also SEEKS — the viewer/scopes
+     follow the playhead, so a selection-only click let the grade target
+     (the selection) silently diverge from the monitor. */
+  const setPlayhead = useUi((s) => s.setPlayhead);
   /* R23-WB (D-B3/#96): the trackhead selection domain — the badge cell
      writes selectedTrackId (the TrackHeader seam; on color the rail stays
      the grade surface — the honest registered limit). */
@@ -119,12 +124,21 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
   const ticks: number[] = [];
   for (let t = 0; t <= duration; t += tickInterval) ticks.push(Math.round(t * 1000) / 1000);
 
-  const clickClip = (id: string) => {
-    setSelection([id]);
+  const clickClip = (el: { id: string; startTime: number }) => {
+    setSelection([el.id]);
     /* R23-FIX (R3-P3#8): the grade RE-TARGET write rides only the color
        mount — on other pages the strip is a selector (the AppShell passes
        'select'; nothing else writes colorGradeTarget from here). */
-    if (clipClick === 'grade') setColorGradeTarget('clip');
+    if (clipClick === 'grade') {
+      setColorGradeTarget('clip');
+      /* R25-F1-C4 (audit C4): the grade target must never diverge from the
+         viewer/scopes — they follow the PLAYHEAD, so the color-page clip
+         click also moves the playhead INTO the clip (Resolve's color-page
+         current-clip navigation). The frame-snap law (the MediaPool
+         reveal's own pattern): startTime + 1 frame lands INSIDE the clip,
+         ON the grid. */
+      setPlayhead(snapToFrame(el.startTime + 1 / 24));
+    }
   };
 
   return (
@@ -252,7 +266,7 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
                           whiteSpace: 'nowrap',
                           textOverflow: 'ellipsis',
                         }}
-                        onClick={() => clickClip(el.id)}
+                        onClick={() => clickClip(el)}
                       >
                         {el.name}
                       </button>
