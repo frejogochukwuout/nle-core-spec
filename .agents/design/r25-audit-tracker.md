@@ -1,0 +1,50 @@
+# R25 AUDIT TRACKER — the fleet's findings + fix-wave ledger
+
+**Started:** 2026-09-13 (post-W6, baseline 1855/1855, 126 stories public).
+**Fleet batches:** B1 = Edit/Color/Audio views. Each finding lands here with
+its ID; fix waves cite the IDs they close.
+
+## B1-a — EDIT VIEW (11)
+
+- **E1 [P2]** Program monitor shows the import CTA at the timeline tail — the at-time probe is half-open, at t=duration no element matches (`mainElementAt`, Viewer.tsx:41-48; empty-state row :451-456). Fix: clamp `<=` at the scene-duration edge / hold last frame.
+- **E2 [P2]** The 7 edit-mode buttons are icon-only below ~1830px viewport (label floor 660px is measured on the BAR but the bar only gets the row's leftovers; measured 336px@1500, 302px@1280). Fix: floor ~420-480px + label truncation, or shorter labels.
+- **E3 [P3]** Source playhead slider aria-valuemin/max wrong when a range is set (domain is [in,out] but aria says 0..dur).
+- **E4 [P3]** Program scrub boundary ticks cover only the FIRST main track (`Viewer.tsx:157` uses `.find`, the probe above it scans ALL).
+- **E5 [P3]** No hover-TC tooltip on the source strip (program strip has one).
+- **E6 [P3]** I/O keys while source open write the PROGRAM loop (ungated in useShortcuts.ts:448-449); source-mode I/O collision.
+- **E7 [P3]** A carried reverse shuttle rate makes the first Space press look dead after re-entering source mode (exitSourcePreview doesn't reset sourcePlayRate).
+- **E8 [P3]** Below 1280px the STORY starves instead of overlaying (FullShell omits the TooSmall overlay deliberately; app.tsx is correct).
+- **E9 [P3]** Marker-color chevron is a 16px hit target (below the 24px house floor).
+- **E10 [P3]** No zoom control in the source viewer (program has one).
+- **E11 [P3]** Hidden readouts' data-tip fallback claim is unreachable (display:none can't be hovered; the real channel is the strip's aria-label).
+
+## B1-b — COLOR VIEW (11)
+
+- **C1 [P2]** Wheels have NO keyboard path (disc is role=img, no tabIndex; pointer-only tint).
+- **C2 [P2]** "Reset primaries" wipes the ENTIRE grade record (curves + qualifier too) — resetGrade deletes the whole key.
+- **C3 [P2]** Preview Matte view-toggle materializes the grade record (orange dot, 2N stills, non-identity pass, one undo entry) — a view gesture minting doc history.
+- **C4 [P2]** Grade target can silently diverge from the viewer/scopes (clip clicks never seek; overlay/caption targets never displayable).
+- **C5 [P2]** Selecting a caption clip on Color swaps the rail to CaptionInspector (grading surface deleted) while the Gallery still writes grades to the caption's record.
+- **C6 [P3]** Unguarded setPointerCapture at CurvesPanel.tsx:334 + Viewer.tsx:571 (the F4-P3 law; the Viewer twin threw live).
+- **C7 [P3]** Qualifier hue range widget cannot express wraparound (linear bar, circular mask math — half the default mask invisible).
+- **C8 [P3]** Stale toast copy ("W4c lands" — it shipped; test caption too).
+- **C9 [P3]** Clip-selector button fires an off-topic deferral toast (pan/zoom copy on a clip picker).
+- **C10 [P3]** Eyedropper arming feedback inconsistent in source mode (cursor flips, hint doesn't).
+- **C11 [P3]** Stale empty-state copy ("click a clip in the lane strip"; compact is no longer the default; ColorPage.tsx:14 header claim stale).
+
+## B1-c — AUDIO/MIXER (9)
+
+- **A1 [P1]** T2 FX-count popover is 100% CLIPPED (invisible) at the default viewport — the popover opens below the 25px overflow-hidden StripHeader; any dock height [340,420) (the default 1600×900 and 700×900 densities). Fix: portal the popover / keep overflow-hidden only on the name span.
+- **A2 [P2]** "No audio tracks in this scene" lies after createScene (the mixer sidecar is never seeded; ChannelEditor fallback at :470; fader nudges self-heal via the DEFAULT guard).
+- **A3 [P2]** Aux/master bank renders off-screen below ~750px row width (the B1 budget doesn't bind the pinned bank; vw=500 → aux-A2 + master fully clipped, unreachable).
+- **A4 [P2]** SoundLibrary "drop files on the library" is a DEAD instruction (no onDrop/onDragOver handler; the MediaPool twin has both).
+- **A5 [P3]** Meters-state column 4px misalignment (track columns p-1 vs pinned master py-1).
+- **A6 [P3]** "Expand to full strips" is a silent no-op at mini density (writes the store, render stays MetersDock).
+- **A7 [P3]** Aux/master strips lack the dB scale column (3 of 5 strips).
+- **A8 [P3]** Element-toggle tips lie at lean/core densities ("shown" while the ladder hides it).
+- **A9 [P3]** ⌘I on the audio page points at the Media Pool (not mounted there; library tip says "library").
+
+## Ledger
+
+- [ ] F1 wave: closes A1, E1, E2, C2, C3, C4, C5, A2, A3, A4 (+ the P2s from later batches)
+- [ ] F2 wave: the P3 family
