@@ -776,6 +776,13 @@
     hsl(var(--qc-block-hue) 30% 30%) 0%,
     hsl(var(--qc-block-hue) 24% 18%) 100%
   );
+  /* R24 (user report: "audio clip has no surrounding box — completely
+     blends into the timeline track"): the audio body ALWAYS renders (the
+     waveform's underlay), so its ring is the clip's surrounding box. It
+     runs one step brighter than the video block ring (45% vs 30% sat,
+     62% vs 46% lightness) — the boundary must stay readable under the
+     0.52-alpha waveform bars drawn on top of it. */
+  box-shadow: inset 0 0 0 1px hsl(var(--qc-block-hue) 45% 62% / 0.6);
 }
 
 /* clip label (mini addition: media name chip, RH text-label token) */

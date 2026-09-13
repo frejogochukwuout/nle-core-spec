@@ -404,6 +404,36 @@ describe('R18e filmstrip toggle (feedback #15)', () => {
   });
 });
 
+describe('R24 audio clip surrounding box (user report: clip blended into track)', () => {
+  it('audio clips carry the block body (the box) in both filmstrip modes, under the waveform', () => {
+    render(<Timeline />);
+    const c4 = screen.getByTestId('mini-clip-c4');
+    // the body exists in filmstrip-ON (the mode audio ignores)…
+    let body = c4.querySelector(':scope > .qc-track-item__block--audio');
+    expect(body).toBeInTheDocument();
+    // …and it carries the media hue (the box is media-kind coded)…
+    expect(body!.getAttribute('style')).toContain('--qc-block-hue');
+    // …and the waveform stacks ABOVE it (block is the earlier sibling)
+    const wave = c4.querySelector(':scope > .qc-track-item__waveform');
+    expect(wave).toBeInTheDocument();
+    expect(body!.compareDocumentPosition(wave!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    fireEvent.click(screen.getByTestId('mini-btn-filmstrip'));
+    // …and it survives the filmstrip toggle (the box is unconditional)
+    body = c4.querySelector(':scope > .qc-track-item__block--audio');
+    expect(body).toBeInTheDocument();
+  });
+
+  it('video clips do NOT gain the audio body (no class bleed across kinds)', () => {
+    render(<Timeline />);
+    expect(screen.getByTestId('mini-clip-c2').querySelector('.qc-track-item__block--audio')).toBeNull();
+    fireEvent.click(screen.getByTestId('mini-btn-filmstrip'));
+    // filmstrip-OFF video blocks are the plain block, never the audio variant
+    const block = screen.getByTestId('mini-clip-c2').querySelector('.qc-track-item__block');
+    expect(block).toBeInTheDocument();
+    expect(block!.className).not.toContain('audio');
+  });
+});
+
 describe('R18e real waveform (feedback #12)', () => {
   it('audio clip body is an SVG with discrete envelope bars', () => {
     render(<Timeline />);

@@ -10,22 +10,23 @@ the chrome/App/MediaPool/timecode/waveform laws — C4's entry list) plus
 check). The crawl app re-expresses this corpus as app-side tests; this file
 is the acceptance list those tests are checked against, row by row.
 
-**Corpus state (sealed at the R23 seal round):** **8 files / 355 tests /
-122 law families** — `src/lib/geometry.test.ts` (15 families / 47),
+**Corpus state (sealed R23; re-censused R24 — the audio-clip-box nets):**
+**8 files / 357 tests / 123 law families** — `src/lib/geometry.test.ts` (15 families / 47),
 `src/state/useMini.test.ts` (29 / 107), `src/timeline/Timeline.test.tsx`
-(47 / 95), `src/App.test.tsx` (18 / 60), `src/shell/MediaPool.test.tsx`
+(48 / 97), `src/App.test.tsx` (18 / 60), `src/shell/MediaPool.test.tsx`
 (5 / 19), `src/lib/timecode.test.ts` (3 / 8), `src/lib/waveform.test.ts`
 (2 / 7), `src/lib/otProject.test.ts` (3 / 12 — the R23 bridge + fix-round nets).
 Lineage: 358 (R21e) → 333 (the R22 drag-machinery retirement, user
-directive) → 343 (the R22 review-loop nets) → **355** (the R23 seal
+directive) → 343 (the R22 review-loop nets) → 355 (the R23 seal
 round: the otProject bridge nets + the audit-fix discrimination/guard
-nets).
+nets) → **357** (R24: the audio-clip surrounding-box regression nets —
+the user's blend report).
 
 ## 0. Counting + classification rules (read before using the tables)
 
 - **Census unit = the law family** (a `describe` block). The app-side
   authoring scope is reported in BOTH columns — families and tests — and
-  the test column always sums to exactly 355, so the census is auditable
+  the test column always sums to exactly 357, so the census is auditable
   against `npx vitest run` at any time.
 - **Split rule:** no family carries two dispositions. Where a describe
   block mixes wire-semantics tests with app-policy tests (e.g. `history
@@ -66,7 +67,7 @@ nets).
 ## 1. PART A — the timeline-law subset (C1's entry list)
 
 The timeline-side corpus: geometry (15 families / 47 tests) + useMini
-(29 / 107) + Timeline (47 / 95) = **91 families / 249 tests**. Split-rule
+(29 / 107) + Timeline (48 / 97) = **92 families / 251 tests**. Split-rule
 sub-rows are indented under their family.
 
 ### 1.1 geometry.test.ts — the pure interaction laws (`src/lib/geometry.ts`)
@@ -131,7 +132,7 @@ sub-rows are indented under their family.
 
 ### 1.3 Timeline.test.tsx — the component/view laws (`src/timeline/Timeline.tsx`)
 
-All 47 families / 95 tests are **GAP-app-C1** (the view port reproduces
+All 48 families / 97 tests are **GAP-app-C1** (the view port reproduces
 them; OT covers none of the component layer). The bullets below are the
 SELECTED families with OT-SEAMS citations for their SEAM half (the
 full 47-family enumeration is the file's own describe map — the census
@@ -151,19 +152,20 @@ counts it exactly):
 - Pure view families (no citation): render · selection · trim zones ·
   split glyph · tools row · zoom tiers/anchor/slider · coordinate law ·
   cut styles · ripple/filmstrip/audio-lane toggles · waveform sizing ·
-  trim-mode edge shade · keyboard [ / ] · the clip-is-a-button law
+  trim-mode edge shade · the R24 audio-clip surrounding-box family ·
+  keyboard [ / ] · the clip-is-a-button law
   (C2/C46) · scroll preservation · surface swaps · the R18k review-fix
   hardening family · the R18f collapsed-audio-lane placeholder family
   (distinct from C47's routing family above).
 
-**Part A totals:** 91 describes / 249 tests → **97 census units** (6
+**Part A totals:** 92 describes / 251 tests → **98 census units** (6
 families split per the split rule) = **10 HOLDS units (21 tests)** + **2
-GAP-verify units (3 tests)** + **85 GAP units (225 tests)**. Exact
+GAP-verify units (3 tests)** + **86 GAP units (227 tests)**. Exact
 disposition totals corpus-wide are in §2.3 (the audited arithmetic).
 
 ## 2. PART B — the full corpus (C4's entry list)
 
-### 2.1 The chrome-side files (Part A + these = the whole 355)
+### 2.1 The chrome-side files (Part A + these = the whole 357)
 
 | File | Families | Tests | Disposition summary |
 |---|---:|---:|---|
@@ -230,25 +232,25 @@ presence — mini-clip-harness is story-surface-only, per the note above):
 ### 2.3 The disposition totals (the audited arithmetic)
 
 Census units = top-level describes, with the 6 split families counting
-their sub-rows (122 describes → 128 units); the test column sums to 355
+their sub-rows (123 describes → 129 units); the test column sums to 357
 (auditable against `npx vitest run`).
 
 | Disposition | Census units | Tests |
 |---|---:|---:|
 | HOLDS-on-OT (projection conformance) | 13 | 33 |
-| GAP-app-C0/C1/C2 (view + policy; authored across the crawl's view phases) | 102 | 282 |
+| GAP-app-C0/C1/C2 (view + policy; authored across the crawl's view phases) | 103 | 284 |
 | GAP-C2/C3 (engine/audio boundary) | 7 | 21 |
 | GAP-W-ops (composed ripple family) | 4 | 16 |
 | GAP-verify-C1 (constant verification) | 2 | 3 |
-| **Total** | **128** | **355** |
+| **Total** | **129** | **357** |
 
 (The four GAP classes are all "GAP-with-owner" in the spec-14 vocabulary —
 the owner is the phase in the class name.)
 
 ### 2.4 The app-side authoring count + the ARCH-R22 reconciliation
 
-**The exact app-side authoring scope: 322 tests across 115 GAP census
-units** (355 − 33 HOLDS tests; 128 − 13 HOLDS units). The crawl app
+**The exact app-side authoring scope: 324 tests across 116 GAP census
+units** (357 − 33 HOLDS tests; 129 − 13 HOLDS units). The crawl app
 re-authors these as app-side tests; the 33 HOLDS tests may be kept
 near-verbatim as projection conformance pins (they will pass over real
 OT for the same reasons the mini's pass over the mock).
@@ -256,13 +258,13 @@ OT for the same reasons the mini's pass over the mock).
 **Reconciliation with ARCH-R22's "~130-180 view/chrome/window/policy
 laws" bound (the C4 gate text):** that estimate counted LAWS, not tests,
 at the 333-test corpus. The exact census at the census-unit level is
-**115 GAP units** (within the estimate's intent — the estimate was honest
-but coarse); at the test unit it is 322. **The C4 gate should consume the
-census-unit count (115) as the scope headline and the test count (322)
+**116 GAP units** (within the estimate's intent — the estimate was honest
+but coarse); at the test unit it is 324. **The C4 gate should consume the
+census-unit count (116) as the scope headline and the test count (324)
 as the corpus total** — this file supersedes the ~130-180 bound (spec 14's
 C4 row is amended to point here; ARCH-R22 line 51 carries the supersession
 note). No scope blowout occurred: the mini's many-cases-per-law test style
-(e.g. 95 component tests over ~47 view laws) was always the corpus shape;
+(e.g. 97 component tests over ~48 view laws) was always the corpus shape;
 the estimate simply predated the census.
 
 ## 3. How the crawl consumes this (the gate wording)
@@ -288,5 +290,5 @@ the estimate simply predated the census.
   → export) rides on top.
 - **Standing law:** this file is generated from the live corpus — if the
   mini's tests change, THIS FILE MUST BE RE-CENSUSED (the counts are
-  battery-checkable: `npx vitest run` == 355 tests / 8 files; 122
-describes → 128 census units).
+  battery-checkable: `npx vitest run` == 357 tests / 8 files; 123
+describes → 129 census units).

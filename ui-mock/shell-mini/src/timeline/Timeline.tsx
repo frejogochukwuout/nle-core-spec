@@ -654,7 +654,21 @@ export const ClipItem = memo(function ClipItem({ clip, media, pps, snapOn, selec
       onPointerCancel={(e) => finishGesture(e, true)}
     >
       {compact ? null : isAudio ? (
-        media && <WaveformBody media={media} widthPx={timeToPx(clip.duration, pps)} />
+        <>
+          {/* R24 (user report): audio clips had NO body — the waveform
+           * bars floated directly on the lane surface
+           * (rgba(255,255,255,0.075) + 1px inset ring), so the clip
+           * boundary vanished and the clip read as bare track. The body
+           * reuses the filmstrip-OFF block grammar (gradient + inset
+           * ring = the surrounding box) in the media hue; the waveform
+           * renders on top (later sibling wins the stack). */}
+          <span
+            className="qc-track-item__block qc-track-item__block--audio"
+            aria-hidden="true"
+            style={{ ['--qc-block-hue' as string]: media?.hue ?? 145 }}
+          />
+          {media && <WaveformBody media={media} widthPx={timeToPx(clip.duration, pps)} />}
+        </>
       ) : filmstripOn ? (
         media && (
           <span

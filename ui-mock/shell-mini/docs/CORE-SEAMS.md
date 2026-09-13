@@ -149,7 +149,7 @@ enumerating the absences):
 | The sceneBridge copy + OT field-name binding (S6/S19) | app | C1-entry | `otProject.ts` copied; the main/overlay/audio mapping decided + pinned against the vendored OT types |
 | The MiniShell store-slots architecture (S22) | nle-ui | C0 | MiniShell renders with package-owned state; zero engine imports (boundary script) |
 | Export wiring (S15) | app+engine | C4 | the CTA → engine export call; the demo's export leg |
-| The C4 corpus re-expression (S25) | app | C4 | 322 tests / 115 census units authored app-side; the row-by-row check |
+| The C4 corpus re-expression (S25) | app | C4 | 324 tests / 116 census units authored app-side; the row-by-row check |
 
 **Standing cross-refs:** the timeline-op reasoning lives in
 `docs/OT-SEAMS.md`; the law corpus + testid census in
