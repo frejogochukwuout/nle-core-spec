@@ -355,6 +355,49 @@ describe('SourceEditBar — the mode-button set (#83: always inline, no overflow
     expect(screen.getByTestId('shell-source-edit-insert').textContent).toBe('Insert');
   });
 
+  /* R25-F1-E2: the label floor dropped 660 → 420 + the names TRUNCATE. The
+     660 floor was honest content math on the WRONG quantity — the bar eats
+     the transport row's LEFTOVERS (measured 336px@1500px viewport,
+     302px@1280), so labels only appeared above ~1830px viewports: every
+     normal canvas got icon-only buttons. Now: labels render from ≥420px and
+     ellipsize to whatever the row feeds the bar (Resolve truncates, never
+     drops); icon-only only below 420. */
+  it('R25-F1-E2: the label-mode thresholds — full at the 420px floor (was 660), icons at 419; the names TRUNCATE in full mode', () => {
+    let fire = () => { /* assigned below */ };
+    withRecordingRO((f) => { fire = f; boot(); });
+    const bar = screen.getByTestId('shell-source-edit-bar');
+    const rect = (width: number) =>
+      ({ top: 0, left: 0, right: width, bottom: 32, width, height: 32, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    // just BELOW the floor → icon-only (the old 660 floor would have flipped
+    // at this width too — the reviewer's 700–1100px canvas band)
+    bar.getBoundingClientRect = () => rect(419);
+    act(() => fire());
+    expect(bar).toHaveAttribute('data-labels', 'icons');
+    // AT the floor → full labels: the 336px@1500px-viewport leftover band now
+    // shows names once the readouts degrade (row <720 hides the 178px
+    // duration readout — the ~1100px canvas case)
+    bar.getBoundingClientRect = () => rect(420);
+    act(() => fire());
+    expect(bar).toHaveAttribute('data-labels', 'full');
+    // the truncation law: every full-mode label span carries truncate +
+    // min-w-0 and the FULL name rides the title tooltip (ellipsis, not drop)
+    for (const slug of SLUGS) {
+      const b = screen.getByTestId(`shell-source-edit-${slug}`);
+      expect(b.className).toContain('!shrink'); // the button yields to the row (min 24px)
+      expect(b.className).toContain('min-w-[24px]'); // the hit floor survives the shrink
+      const span = b.querySelector('span[title]');
+      expect(span).not.toBeNull();
+      expect(span!.className).toContain('truncate');
+      expect(span!.className).toContain('min-w-0');
+    }
+    // the shortened visible name: 'Append' on the button, the FULL reference
+    // name in aria-label + title (one a11y name, the reference wording)
+    const append = screen.getByTestId('shell-source-edit-append-at-end');
+    expect(append).toHaveAccessibleName('Append at End');
+    expect(append.textContent).toBe('Append');
+    expect(append.querySelector('span')!).toHaveAttribute('title', 'Append at End');
+  });
+
   it('R22 #83: the 7-button arrow cycle covers every mode in DOM order (no hidden stops)', () => {
     boot();
     const order = ['Insert', 'Overwrite', 'Replace', 'Append at End', 'Ripple Overwrite', 'Place on Top', 'Fit to Fill'];

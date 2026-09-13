@@ -28,7 +28,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play, Pause, ChevronDown, ChevronLeft, ChevronRight, SkipBack, SkipForward, Repeat, Flag, Frame, Eye, X } from 'lucide-react';
 import { useUi, sourcePlayheadOf, SOURCE_STILL_PSEUDO_DUR } from '../../state/useUiStore';
-import { mediaById, type ElementJSON, type SceneJSON, type TrackJSON } from '../../lib/mockData';
+import { mediaById, sceneDuration, type ElementJSON, type SceneJSON, type TrackJSON } from '../../lib/mockData';
 import { snapToFrame, tc } from '../../lib/timecode';
 import { getWaveform } from '../../lib/waveform';
 import { SourceEditBar } from './SourceEditBar';
@@ -37,12 +37,25 @@ import { SourceRangeBar } from './SourceRangeBar';
 
 /* multi-track law (R14): scan ALL tracks of the kind, topmost wins — the
    single-find version hid clips on a second Video/Text track (addTrack makes
-   them) from the viewer. Same contract as elementAtTime in lib/mockData. */
+   them) from the viewer. Same contract as elementAtTime in lib/mockData.
+   R25-F1-E1: the half-open [start, start+duration) probe misses at the exact
+   scene tail (t === duration → nothing covers it), so a POPULATED timeline
+   fell to the import CTA at its own end frame. At the tail the monitor HOLDS
+   the last main element ending exactly there (Resolve holds the last frame).
+   t < duration keeps the strict half-open law (the frame AFTER a clip's last
+   frame belongs to the next clip); only the exact-tail edge is closed. */
 function mainElementAt(scene: SceneJSON, time: number): ElementJSON | null {
   const kindTracks = scene.tracks.filter((tr) => tr.kind === 'main');
   for (let i = kindTracks.length - 1; i >= 0; i--) {
     const hit = kindTracks[i].elements.find((e) => time >= e.startTime && time < e.startTime + e.duration);
     if (hit) return hit;
+  }
+  const tail = sceneDuration(scene);
+  if (time === tail && tail > 0) {
+    for (let i = kindTracks.length - 1; i >= 0; i--) {
+      const hold = kindTracks[i].elements.find((e) => e.duration > 0 && e.startTime + e.duration === tail);
+      if (hold) return hold;
+    }
   }
   return null;
 }

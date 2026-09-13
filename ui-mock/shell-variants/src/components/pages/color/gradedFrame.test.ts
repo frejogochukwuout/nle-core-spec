@@ -112,9 +112,20 @@ describe('buildGradeStack — the timeline-grade composition law (color-layout �
     expect(passes).toHaveLength(1);
     expect(passes[0].params.exposure).toBeCloseTo(1);
   });
-  it('an identity grade WITH a qualifier is still a real pass (§8 secondary node)', () => {
+  /* RE-PINNED (R25-F1-C3): "any qualifier is a real pass" became "a
+     qualifier holding ADJUSTMENTS is a real pass" — a materialized
+     DEFAULT-equal node (the old Preview-Matte view-mirror's residue) is a
+     no-op skip, same as an identity record. hueCenter 20 IS an adjustment,
+     so this pass survives; the DEFAULT-equal skip is pinned right below. */
+  it('an identity grade with a QUALIFIER HOLDING ADJUSTMENTS is still a real pass (§8 secondary node)', () => {
     const passes = buildGradeStack({ ...grade({}), qualifier: { ...DEFAULT_QUALIFIER, hueCenter: 20 } }, null);
     expect(passes).toHaveLength(1);
+  });
+  it('R25-F1-C3: a materialized DEFAULT-equal qualifier is a NO-OP skip (a view gesture that wrote the record costs nothing); showMask stays a real pass', () => {
+    // the record EXISTS (materialized) but equals the spec default → skip
+    expect(buildGradeStack({ ...grade({}), qualifier: { ...DEFAULT_QUALIFIER } }, null)).toHaveLength(0);
+    // showMask is a real pixel-level effect (the grayscale matte) → a pass
+    expect(buildGradeStack({ ...grade({}), qualifier: { ...DEFAULT_QUALIFIER, showMask: true } }, null)).toHaveLength(1);
   });
 });
 

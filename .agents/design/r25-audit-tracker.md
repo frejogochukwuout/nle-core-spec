@@ -44,7 +44,19 @@ its ID; fix waves cite the IDs they close.
 - **A8 [P3]** Element-toggle tips lie at lean/core densities ("shown" while the ladder hides it).
 - **A9 [P3]** ⌘I on the audio page points at the Media Pool (not mounted there; library tip says "library").
 
+## B2-a — FX VIEW + TRANSITIONS (8)
+
+- **X1 [P2]** Edit-page Inspector "Fades" group renders for VIDEO clips and reads/writes the WRONG fade domain (reads `audioFadeIn ?? 0` while the FX view reads `fadeIn` via effectiveFade; the write is dead data for video; bypasses setFade's clamp+snap) — Inspector.tsx:80/:1278-1303.
+- **X2 [P3]** A transition can outlive its cut (orphaned TransitionBox at a non-seam; no adjacency check in the render path; out-trim can open a gap while transitionOut holds).
+- **X3 [P3]** FxBrowser has no browse/filter affordance (38 rows, Fades ~3 screens down; no search).
+- **X4 [P3]** FxBrowser click toast says "mock drag-to-clip" — the route is fully live now (deflationary staleness).
+- **X5 [P3]** EdgeFadeZone is click-only — a dragged fade row over the 12px head/tail zone is a silent dead drop (no drop door on the zone).
+- **X6 [P3]** Transition duration renders raw float in title/tooltip ("1.2916666666666667s") vs aria's toFixed(2).
+- **X7 [P3]** Duplicate policy inconsistent: browser rows stack duplicates (×2 toast) but the Inspector's Add-effect picker HIDES applied names.
+- **X8 [P3]** (harness note, no app change) auditors must use isolated browser sessions; the default session is contended.
+
 ## Ledger
 
-- [ ] F1 wave: closes A1, E1, E2, C2, C3, C4, C5, A2, A3, A4 (+ the P2s from later batches)
+- [ ] F1 wave: closes A1, E1, E2, C2, C3, C4, C5, A2, A3, A4, X1 (+ the P2s from later batches)
 - [ ] F2 wave: the P3 family
+- Re-dispatch: timeline-gestures audit (agent hit max-turns without returning — tighter scope next time); deliver+inspector audit (pending/TBD)

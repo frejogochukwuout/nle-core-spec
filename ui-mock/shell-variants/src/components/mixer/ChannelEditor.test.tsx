@@ -74,6 +74,30 @@ describe('ChannelEditor', () => {
     expect(screen.getByRole('slider', { name: 'A1 fader' })).toBeInTheDocument(); // fallback
   });
 
+  /* R25-F1-A2 (audit A2): createScene SEEDS the mixer sidecar for its audio
+     track. The old gap made the ChannelEditor's TRACK section render its
+     "No audio tracks in this scene" fallback on a scene that HAD an audio
+     track — while the A1 strip rendered beside it (the strips read through
+     the DEFAULT guards; the editor reads the sidecar directly). */
+  it('R25-F1-A2: a scene created ON THE AUDIO PAGE renders the TRACK section with real values — no "No audio tracks" fallback (the sidecar is seeded at creation)', () => {
+    boot({ selection: [], page: 'audio' });
+    act(() => { useUi.getState().createScene(); });
+    const sc = store().scenes.at(-1)!;
+    const audioTrack = sc.tracks.find((t) => t.kind === 'audio')!;
+    expect(store().activeSceneId).toBe(sc.id);
+    // the new scene's A1 is the editor's fallback track and its strip EXISTS
+    expect(audioTrack.badge).toBe('A1');
+    expect(store().mixer.tracks[audioTrack.id]).toBeDefined();
+    expect(screen.queryByText('No audio tracks in this scene')).not.toBeInTheDocument();
+    // the TRACK section renders the real G-layer values (the seeded defaults;
+    // the created scene's audio track is NAME-labeled — 'Audio 1', not 'A1')
+    expect(screen.getByRole('slider', { name: 'Audio 1 fader' })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Audio 1 pan' })).toBeInTheDocument();
+    // and the fader is LIVE — a keyboard step writes the seeded record
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Audio 1 fader' }), { key: 'ArrowUp' });
+    expect(store().mixer.tracks[audioTrack.id]!.fader).toBe(-5);
+  });
+
   it('clip-gain commit writes the S-layer element volume (design doc: strip fader ≠ clip gain)', () => {
     // el-6 (tr-audio-1, UNLOCKED) — el-7 sits on the locked tr-audio-2 whose
     // inspector writes are inert by the R13 locked-track store guard

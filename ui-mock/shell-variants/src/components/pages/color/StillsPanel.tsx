@@ -40,15 +40,19 @@ import { useUi, resolveGradeTargetId, type GradePatch, type Still } from '../../
 import { useGradeRecord } from './useGradeTarget';
 import { useGradingToast } from './useHonestToast';
 import { isIdentityCurve } from './curveMath';
+import { isIdentityQualifier } from '../../../lib/color';
 import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../../shell/ContextMenu';
 import { findElement } from '../../../lib/mockData';
 
 /* the node-count chip: the grade pipeline the record actually carries —
-   PRIMARY (always) + the Secondary qualifier node when present + the
-   Curves node when the set is non-identity (ANY channel off the diagonal).
-   Derived, honest, never a fake count. */
+   PRIMARY (always) + the Secondary qualifier node when it holds ADJUSTMENTS
+   + the Curves node when the set is non-identity (ANY channel off the
+   diagonal). Derived, honest, never a fake count.
+   R25-F1-C3: the qualifier arm counts ADJUSTMENTS (DEFAULT-equality), not
+   the record's mere existence — a materialized DEFAULT-equal node must not
+   bump the count. */
 const nodeCountOf = (st: Still): number =>
-  1 + (st.grade.qualifier ? 1 : 0) + (isIdentityCurve(st.grade.curves) ? 0 : 1);
+  1 + (isIdentityQualifier(st.grade.qualifier) ? 0 : 1) + (isIdentityCurve(st.grade.curves) ? 0 : 1);
 
 /** the still "thumbnail" — a swatch derived from its grade's temp/tint/sat
  *  (honest: a preview chip, not a decoded frame; the real gallery renders

@@ -68,6 +68,34 @@ export const DEFAULT_QUALIFIER: QualifierParams = {
 };
 
 /**
+ * `isIdentityQualifier(q)` — the qualifier node carries NO adjustment: the
+ * key is absent, or every field is DEFAULT-equal with showMask off. A
+ * DEFAULT-equal node is a pixel-level no-op (the §17.E corrections are
+ * neutral, so the mask mix returns the input regardless of the mask) and
+ * must READ as clean in every derived seam (the inspector's orange dot, the
+ * stills' node count, `isIdentityGrade`'s pass skip).
+ * R25-F1-C3: the old Preview-Matte toggle MATERIALIZED a DEFAULT-equal
+ * qualifier by mirroring showMask into the record — the record's mere
+ * existence (not its values) lit all those seams. `showMask: true` stays
+ * NON-identity (the grayscale matte is a real pixel-level effect).
+ */
+export function isIdentityQualifier(q: QualifierParams | null | undefined): boolean {
+  if (!q) return true;
+  if (q.showMask) return false;
+  return (
+    q.hueCenter === DEFAULT_QUALIFIER.hueCenter && q.hueWidth === DEFAULT_QUALIFIER.hueWidth &&
+    q.hueSoftness === DEFAULT_QUALIFIER.hueSoftness &&
+    q.satLow === DEFAULT_QUALIFIER.satLow && q.satHigh === DEFAULT_QUALIFIER.satHigh &&
+    q.satSoftness === DEFAULT_QUALIFIER.satSoftness &&
+    q.lumaLow === DEFAULT_QUALIFIER.lumaLow && q.lumaHigh === DEFAULT_QUALIFIER.lumaHigh &&
+    q.lumaSoftness === DEFAULT_QUALIFIER.lumaSoftness &&
+    q.invert === DEFAULT_QUALIFIER.invert && q.strength === DEFAULT_QUALIFIER.strength &&
+    q.exposure === DEFAULT_QUALIFIER.exposure && q.saturation === DEFAULT_QUALIFIER.saturation &&
+    q.temperature === DEFAULT_QUALIFIER.temperature && q.tint === DEFAULT_QUALIFIER.tint
+  );
+}
+
+/**
  * Circular hue distance with wraparound — spec 08 §17.E L1520-1523:
  * `diff = |hue − center|; min(diff, 1 − diff)`. Both inputs are 0..1 hue
  * fractions; result is the shortest way around the wheel (also 0..1).

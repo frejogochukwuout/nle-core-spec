@@ -181,13 +181,18 @@ describe('MixerDock', () => {
     expect(screen.getByTestId('mixer-strip-A1')).not.toHaveAttribute('data-flash');
   });
 
-  it('a track added after boot joins the G-slice on the next audio-focus entry (store contract)', () => {
+  it('a track added after boot is seeded into the mixer sidecar IMMEDIATELY (the R25-F1/A2 law — the unseeded strip + "No audio tracks" lie is dead)', () => {
     boot({ mixerState: 'full' });
-    act(() => { useUi.getState().addTrack('audio'); }); // A3 — not yet in the mixer sidecar
+    act(() => { useUi.getState().addTrack('audio'); });
     const added = store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.badge === 'A3')!;
-    expect(store().mixer.tracks[added.id]).toBeUndefined(); // sidecar lags the doc until entry
-    expect(screen.getByTestId('mixer-strip-A3')).toBeInTheDocument(); // dock lists doc tracks already
-    act(() => { useUi.getState().enterAudioFocus('shortcut'); }); // ensures coverage for every audio id
+    // R25-F1 (A2): addTrack seeds the sidecar at WRITE time (createScene's twin)
+    // — the strip is real the moment the doc track exists; the old
+    // "sidecar lags the doc until the next audio-focus entry" workaround
+    // (the documented useUiStore.ts seed-on-entry) is superseded.
+    expect(store().mixer.tracks[added.id]).toBeDefined();
+    expect(store().mixer.tracks[added.id]).toMatchObject({ fader: -6, pan: 0, outputBus: 0 });
+    expect(screen.getByTestId('mixer-strip-A3')).toBeInTheDocument();
+    act(() => { useUi.getState().enterAudioFocus('shortcut'); }); // idempotent re-seed: no clobber
     expect(store().mixer.tracks[added.id]).toBeDefined();
     expect(store().mixerState).toBe('full');
   });
@@ -232,19 +237,60 @@ describe('MixerDock', () => {
     expect(within(master).getByTestId('strip-title')).toHaveTextContent('Master'); // D5: name in the title row
   });
 
-  it('the dock\'s right edge carries the aux/master bank: channels scroll, aux+master pin outside (th_mto63f99)', () => {
+  /* RE-PINNED (R25-F1-A3): th_mto63f99 originally pinned the aux/master bank
+     OUTSIDE the channel scroll region (pinned to the dock's right edge as
+     shrink-0 siblings). That made the bank INVISIBLE to the B1 budget — the
+     maxWidth cap only ever bound the scroll region (the sole shrinkable
+     child), so below ~750px row width the pinned aux-A2 + master strips
+     painted past the dock's cap and the shell clipped them: unreachable
+     (audit A3). The bank now rides INSIDE the scroll region as scrolling
+     content at its natural end — the same horizontal scrollbar that covers
+     overflowed channels covers the bank; the master bus stays reachable at
+     every width. */
+  it('the bank rides INSIDE the channel scroll region: [header | scroll [A1 A2 aux-a1 aux-a2 master]] — the master is scrolling content, never a clipped pinned sibling (R25-F1-A3, re-pins th_mto63f99)', () => {
     boot({ mixerState: 'full' });
     const dock = screen.getByTestId('mixer-dock-full');
-    const children = Array.from(dock.children);
-    // [header | channel scroll region | aux a1 | aux a2 | master]
-    expect(children).toHaveLength(5);
-    expect(dock.lastElementChild).toHaveAttribute('data-testid', 'mixer-strip-master');
-    expect(children[3]).toHaveAttribute('data-testid', 'mixer-strip-aux-a2');
-    const scroll = children[1] as HTMLElement;
-    expect(scroll.className).toContain('overflow-x-auto'); // channels own the overflow
+    // [header | ONE scroll region carrying channels + the whole bank]
+    expect(dock.children).toHaveLength(2);
+    const scroll = dock.lastElementChild as HTMLElement;
+    expect(scroll).toHaveAttribute('data-testid', 'channel-scroll');
+    expect(scroll.className).toContain('overflow-x-auto'); // the bank's overflow is OWNED here
     expect(within(scroll).getByTestId('mixer-strip-A1')).toBeInTheDocument();
     expect(within(scroll).getByTestId('mixer-strip-A2')).toBeInTheDocument();
-    expect(within(scroll).queryByTestId('mixer-strip-master')).toBeNull(); // master never scrolls away
+    // the bank is scrolling content at the region's natural end
+    const master = within(scroll).getByTestId('mixer-strip-master');
+    expect(master.closest('[data-testid="channel-scroll"]')).toBe(scroll); // structural: the offsetParent chain (jsdom: containment) reaches the scroller
+    expect(scroll.lastElementChild).toBe(master);
+    expect(within(scroll).getByTestId('mixer-strip-aux-a1')).toBeInTheDocument();
+    expect(within(scroll).getByTestId('mixer-strip-aux-a2')).toBeInTheDocument();
+    // the collapsed meters-only bank rides the SAME scroll region (D-C3)
+    fireEvent.click(screen.getByTestId('mixer-masterbus-toggle'));
+    expect(screen.getByTestId('mixer-bank-col-master').closest('[data-testid="channel-scroll"]')).toBe(scroll);
+  });
+
+  it('R25-F1-A3: below the ~750px budget the bank stays REACHABLE — the scroll region covers it and scrollLeft reaches the master (the pinned-bank clip is dead)', () => {
+    withRecordingRO((fire) => {
+      boot({ mixerState: 'full' });
+      const dock = screen.getByTestId('mixer-dock-full');
+      // mock the B1 row at 500px wide → budget = min(0.6×500, 452) = 300
+      // (the old geometry: 22 header + 172 floor + 3×86 bank = 452 > 300 → the
+      // pinned bank painted past the cap and was clipped by the shell)
+      const row = dock.parentElement?.parentElement?.parentElement as HTMLElement;
+      row.getBoundingClientRect = () => ({ width: 500, height: 400, top: 0, left: 0, right: 500, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+      Object.defineProperty(dock, 'offsetHeight', { configurable: true, value: 600 });
+      fire();
+      expect(dock.style.maxWidth).toBe('300px'); // the B1 budget still binds the dock
+      const scroll = dock.lastElementChild as HTMLElement;
+      // the bank is INSIDE the capped, scrollable region — reachable, not clipped
+      const master = within(scroll).getByTestId('mixer-strip-master');
+      expect(master.closest('[data-testid="channel-scroll"]')).toBe(scroll);
+      expect(scroll.className).toContain('min-w-[172px]'); // the 2-strip floor survives
+      // horizontal scroll reaches it: the scroller accepts a scroll offset
+      // (jsdom keeps the scroll range uncomputed — the reachability pin is
+      // that the offset is settable and retained on the OWNING scroller)
+      scroll.scrollLeft = 260;
+      expect(scroll.scrollLeft).toBe(260);
+    });
   });
 
   it('master readout −∞ guard: volume 0 (or mute) reads −∞, not −60.0 (A3)', () => {

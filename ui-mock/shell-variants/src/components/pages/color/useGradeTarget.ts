@@ -22,6 +22,9 @@ export interface GradeRecord {
   /** ONE committed store write (undoable). */
   setGrade: (patch: GradePatch) => void;
   resetGrade: () => void;
+  /** R25-F1-C2: the primaries-ONLY reset (the §4.2 scalars — the qualifier
+   *  + curves records survive; the wheels' header button). */
+  resetPrimaries: () => void;
 }
 
 export function useGradeRecord(): GradeRecord {
@@ -31,6 +34,7 @@ export function useGradeRecord(): GradeRecord {
   const grade = useUi((s) => gradeOf(s, targetId ?? '__none__'));
   const setGradeRaw = useUi((s) => s.setGrade);
   const resetGradeRaw = useUi((s) => s.resetGrade);
+  const resetPrimariesRaw = useUi((s) => s.resetPrimaries);
   return {
     targetId,
     isTimeline: targetId === TIMELINE_GRADE_KEY,
@@ -39,6 +43,7 @@ export function useGradeRecord(): GradeRecord {
     // the empty state instead, so these guards are belt-and-braces.
     setGrade: (patch) => { if (targetId != null) setGradeRaw(targetId, patch); },
     resetGrade: () => { if (targetId != null) resetGradeRaw(targetId); },
+    resetPrimaries: () => { if (targetId != null) resetPrimariesRaw(targetId); },
   };
 }
 

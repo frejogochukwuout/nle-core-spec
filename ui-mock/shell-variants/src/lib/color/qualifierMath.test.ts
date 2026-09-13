@@ -12,6 +12,7 @@ import {
   centeredRangeMask,
   circularHueDistance,
   computeQualifierMask,
+  isIdentityQualifier,
   sampleMatte,
 } from './qualifierMath';
 import type { QualifierParams } from './qualifierMath';
@@ -33,6 +34,33 @@ describe('DEFAULT_QUALIFIER (spec 08 §8.1 param defaults)', () => {
     expect(DEFAULT_QUALIFIER.invert).toBe(false);
     expect(DEFAULT_QUALIFIER.showMask).toBe(false);
     expect(DEFAULT_QUALIFIER.exposure).toBe(0);
+  });
+});
+
+/* R25-F1-C3: the identity seam — a DEFAULT-equal qualifier must read as
+   CLEAN everywhere (the inspector dot, the stills node count, the §12.1
+   pass skip). The old Preview-Matte toggle materialized exactly such a
+   record and every derived seam lit up off the record's mere existence. */
+describe('isIdentityQualifier (R25-F1-C3 — the DEFAULT-equal node reads clean)', () => {
+  it('absent/undefined/null → identity', () => {
+    expect(isIdentityQualifier(undefined)).toBe(true);
+    expect(isIdentityQualifier(null)).toBe(true);
+  });
+  it('field-equal to DEFAULT_QUALIFIER (showMask off) → identity, even though the record is materialized', () => {
+    expect(isIdentityQualifier({ ...DEFAULT_QUALIFIER })).toBe(true);
+  });
+  it('ANY adjustment breaks identity (one field per pin)', () => {
+    expect(isIdentityQualifier(q({ hueCenter: 20 }))).toBe(false);
+    expect(isIdentityQualifier(q({ hueWidth: 60 }))).toBe(false);
+    expect(isIdentityQualifier(q({ satLow: 0.2 }))).toBe(false);
+    expect(isIdentityQualifier(q({ lumaHigh: 0.8 }))).toBe(false);
+    expect(isIdentityQualifier(q({ invert: true }))).toBe(false);
+    expect(isIdentityQualifier(q({ strength: 0.5 }))).toBe(false);
+    expect(isIdentityQualifier(q({ exposure: -0.5 }))).toBe(false);
+    expect(isIdentityQualifier(q({ tint: 5 }))).toBe(false);
+  });
+  it('showMask: true is NON-identity (the grayscale matte is a real pixel-level effect)', () => {
+    expect(isIdentityQualifier(q({ showMask: true }))).toBe(false);
   });
 });
 

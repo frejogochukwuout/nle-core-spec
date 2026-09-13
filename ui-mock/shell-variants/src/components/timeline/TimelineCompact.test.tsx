@@ -113,6 +113,28 @@ describe('TimelineCompact — click-to-target (the color page law)', () => {
     expect(screen.getByTestId('shell-timeline-compact-clip-el-1')).toHaveAttribute('aria-pressed', 'true');
   });
 
+  /* R25-F1-C4 (audit C4): the grade target must never diverge from the
+     viewer/scopes — they follow the PLAYHEAD, so the color-page clip click
+     also SEEKS into the clicked clip (Resolve's color-page current-clip
+     navigation; the frame-snap law, the MediaPool reveal's own pattern). */
+  it('R25-F1-C4: the color mount ALSO seeks — clicking clip B (≠ the playhead clip) moves the playhead into B (+1 frame, on the grid)', () => {
+    mount({ playhead: 16, selection: ['el-2'] }); // the playhead sits inside el-2
+    fireEvent.click(screen.getByTestId('shell-timeline-compact-clip-el-4'));
+    expect(S().selection).toEqual(['el-4']); // the grade target follows the click
+    expect(S().playhead).toBe(24 + 1 / 24); // el-4's start + 1 frame — INSIDE B, ON the grid
+    // the strip's own playhead marker follows (the read-only indicator rides the store)
+    expect(S().playhead).not.toBe(16);
+  });
+
+  it('R25-F1-C4 (page gating): the clipClick="select" mount selects but NEVER seeks', () => {
+    setStore({ page: 'edit', playhead: 16, selection: ['el-2'], colorGradeTarget: 'timeline' });
+    render(<TimelineCompact clipClick="select" />);
+    fireEvent.click(screen.getByTestId('shell-timeline-compact-clip-el-4'));
+    expect(S().selection).toEqual(['el-4']);
+    expect(S().playhead).toBe(16); // unchanged — the non-color pages own the playhead
+    expect(S().colorGradeTarget).toBe('timeline'); // NEVER re-targeted off the color page
+  });
+
   /* R23-FIX (review-sweep R3-P3#8): the clip click is PAGE-AWARE — 'grade'
      retargeting is the COLOR page's law; every other page gets honest
      selection-only with a 'select clip' label (the old copy claimed "set

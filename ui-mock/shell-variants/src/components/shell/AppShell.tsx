@@ -347,10 +347,20 @@ function AppShellInner() {
      captionSelected → page rails (color/fx/audio) → channelRailLive →
      Inspector. channelRailLive therefore no longer yields to a carried
      stripFocus on the audio/fx/color pages (their page rails win; the audio
-     page rail IS the ChannelEditor, so #99's own case is unchanged). */
+     page rail IS the ChannelEditor, so #99's own case is unchanged).
+     R25-F1-C5 (RE-PINS the hoist): the marker/caption hoist is GATED to
+     NON-COLOR pages. On color the rail stays the ColorInspector — the hoist
+     used to unmount the GRADING surface the moment a caption clip was
+     selected, while the Gallery (and the whole console) kept writing grades
+     to that caption's record: a live writer with a deleted surface. The
+     caption/marker selection domains still update on color (the timeline
+     keeps the highlight; the inspector grades the selected clip — caption
+     clips are gradable targets); only the RAIL swap is color-gated. */
+  const markerRailLive = !!selectedMarkerId && page !== 'color';
+  const captionRailLive = captionSelected && page !== 'color';
   const rightPanel: ReactNode =
-    selectedMarkerId ? <MarkerInspector />
-    : captionSelected ? <CaptionInspector />
+    markerRailLive ? <MarkerInspector />
+    : captionRailLive ? <CaptionInspector />
     : page === 'color' ? <ColorInspector />
     : page === 'fx' ? <FxInspector />
     : page === 'audio' ? <ChannelEditor />

@@ -18,8 +18,14 @@
    the toggle arms the viewer canvas picker (qualifierPickerOn view-state);
    the click-through samples the graded buffer and seeds the qualifier
    Center values (one setGrade per pick; the pick disarms), and the green
-   matte overlay renders in the viewer while qualifierPreviewOn (the toggle
-   also mirrors showMask into the grade record so it round-trips undo). */
+   matte overlay renders in the viewer while qualifierPreviewOn.
+   R25-F1-C3: the toggle is PURE VIEW-STATE — the old showMask mirror into
+   the grade record is DEAD. A view gesture must never materialize the
+   record (it minted an undo entry, lit the Qualifier tab's orange dot and
+   painted a second, pipeline-level grayscale matte over the viewer's own
+   green overlay). The record's showMask field stays a real spec 08 §8.1
+   pipeline field (record-level patches can still set it); the toggle no
+   longer writes it. */
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Contrast, Eye, Pipette, RotateCcw } from 'lucide-react';
@@ -314,12 +320,12 @@ export function QualifierPanel() {
   const q: QualifierParams = grade.qualifier ?? DEFAULT_QUALIFIER;
   const setQualifier = (patch: Partial<QualifierParams>) => setGrade({ qualifier: patch });
 
-  /* Preview Matte: the toggle writes the view-state (immediate, never
-     snapshotted — W4c's viewer-overlay seam) AND mirrors showMask into the
-     grade record (the spec 08 §8.1 field — undoable, round-trips). */
+  /* Preview Matte: PURE VIEW-STATE — flips qualifierPreviewOn (the
+     viewer-overlay seam; immediate, never snapshotted, never a setGrade).
+     R25-F1-C3: the old showMask mirror died with the history mint it
+     caused — the matte renders from the view-state alone. */
   const togglePreview = (v: boolean) => {
     setPreviewOn(v);
-    setQualifier({ showMask: v });
   };
 
   return (

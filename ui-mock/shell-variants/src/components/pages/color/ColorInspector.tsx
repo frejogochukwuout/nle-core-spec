@@ -42,7 +42,7 @@ import { type KeyboardEvent } from 'react';
 import { Crosshair } from 'lucide-react';
 import { useUi, resolveGradeTargetId, gradeOf, TIMELINE_GRADE_KEY, type MockGrade } from '../../../state/useUiStore';
 import { findElement } from '../../../lib/mockData';
-import { DEFAULT_GRADE } from '../../../lib/color';
+import { DEFAULT_GRADE, isIdentityQualifier } from '../../../lib/color';
 import { WheelsPanel } from './WheelsPanel';
 import { CurvesPanel } from './CurvesPanel';
 import { QualifierPanel } from './QualifierPanel';
@@ -79,6 +79,11 @@ const primariesDirty = (g: MockGrade) => {
   return strip(g) !== strip(DEFAULT_GRADE);
 };
 
+/* R25-F1-C3: the qualifier dot lights on ADJUSTMENTS (DEFAULT-equality),
+ * not on the record's mere existence — a materialized DEFAULT-equal node
+ * (the old Preview-Matte view-mirror's residue) must read as clean. */
+const qualifierDirty = (g: MockGrade) => !isIdentityQualifier(g.qualifier);
+
 export function ColorInspector() {
   const tab = useUi((s) => s.colorInspectorTab);
   const setTab = useUi((s) => s.setColorInspectorTab);
@@ -107,7 +112,7 @@ export function ColorInspector() {
   const dots: Record<InspectorTab, boolean> = {
     primaries: primariesDirty(grade),
     curves: grade.curves != null,
-    qualifier: grade.qualifier != null,
+    qualifier: qualifierDirty(grade),
   };
 
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, current: InspectorTab) => {

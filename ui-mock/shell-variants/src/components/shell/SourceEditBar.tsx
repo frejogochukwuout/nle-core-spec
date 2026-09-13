@@ -63,25 +63,39 @@ import {
 const DWELL_MS = 150;
 const slug = (label: string) => label.toLowerCase().replace(/\s+/g, '-');
 
-/* W1-A (DESIGN-R25 §3, R1): the bar's own label-mode floor — the honest
- * content math for all 7 LABELED buttons: Σ(icon 16 + gap 4 + text 33–88 +
- * pad 12) ≈ 633 + the 7 × 2px gaps + the 9px divider ≈ 655 → 660. Below it
- * the bar drops to icon-only (7 × 24px + gaps ≈ 190px of content; the
- * names live on in aria-label + data-tip). Un-measured (jsdom's silent
- * ResizeObserver) = FULL — the deterministic default every pin boots on. */
-const EDIT_BAR_LABELS_MIN_PX = 660;
+/* W1-A (DESIGN-R25 §3, R1) → R25-F1-E2: the bar's own label-mode floor.
+ *   The ORIGINAL W1-A floor (660px = the full-width content math Σ(icon 16
+ *   + gap 4 + text 33–88 + pad 12) ≈ 655) was honest arithmetic on the WRONG
+ *   quantity: the bar never OWNS 660px — it eats the transport row's
+ *   LEFTOVERS (measured 336px@1500px viewport, 302px@1280), so labels only
+ *   appeared above ~1830px viewports and every normal canvas got icon-only.
+ *   The floor is now 420px — combined with label TRUNCATION (Resolve
+ *   truncates, never drops): at ≥420 the names render and ellipsize to
+ *   whatever the row actually feeds the bar (each button may shrink to its
+ *   24px icon floor, never below — the hit-floor law survives); below 420
+ *   icon-only (names live on in aria-label + data-tip). Un-measured
+ *   (jsdom's silent ResizeObserver) = FULL — the deterministic default
+ *   every pin boots on. */
+const EDIT_BAR_LABELS_MIN_PX = 420;
 
 /* primary pair + the secondary five — reference descriptions condensed to
    one line each (contract §1.2 verbatim source, §1.4 condensation law);
-   Icon resolved through the ICONS registry (withIcon) */
-interface ModeDef { mode: InsertMediaMode; label: string; tip: string; Icon?: EditModeIconComponent }
+   Icon resolved through the ICONS registry (withIcon).
+   R25-F1-E2: `short` is the VISIBLE name when the full label would force a
+   premature icon-only flip ('Append at End' → 'Append'); the aria-label,
+   data-tip, data-testid and MODE_LABELS all keep the FULL reference name
+   (one a11y name, the reference's own wording). */
+interface ModeDef { mode: InsertMediaMode; label: string; short?: string; tip: string; Icon?: EditModeIconComponent }
+/* R25-F1-E2: `short` stays OPTIONAL in the resolved def (only the append
+   button shortens) — Required<ModeDef> would force it on every mode. */
+type ResolvedModeDef = ModeDef & { Icon: EditModeIconComponent };
 const PRIMARY: ModeDef[] = [
   { mode: 'insert', label: 'Insert', tip: 'Inserts at the playhead and pushes everything else down — splits a straddling clip' },
   { mode: 'overwrite', label: 'Overwrite', tip: 'Places a new clip at the playhead, writing over whatever clips were there' },
 ];
 const SECONDARY: ModeDef[] = [
   { mode: 'replace', label: 'Replace', tip: 'Replaces a single selected clip with one of the exact same length (needs a clip selection)', Icon: ReplaceModeIcon },
-  { mode: 'append', label: 'Append at End', tip: 'Places the source after the last edit on the timeline, wherever the playhead is' },
+  { mode: 'append', label: 'Append at End', short: 'Append', tip: 'Places the source after the last edit on the timeline, wherever the playhead is' },
   { mode: 'rippleOverwrite', label: 'Ripple Overwrite', tip: 'Replaces a shot of a different length — pushes down or pulls in so there are no gaps' },
   { mode: 'placeOnTop', label: 'Place on Top', tip: 'Drops the source on the topmost overlay track (audio falls to its own lane)', Icon: PlaceOnTopModeIcon },
   { mode: 'fitToFill', label: 'Fit to Fill', tip: 'Retimes the marked source (speed change) to fit the In/Out range (needs I/O)', Icon: FitToFillModeIcon },
@@ -104,7 +118,7 @@ export const MODE_LABELS: Record<InsertMediaMode, string> = Object.fromEntries(
 const DESC_ID = 'shell-source-edit-desc';
 
 interface ModeButtonProps {
-  def: Required<ModeDef>;
+  def: ResolvedModeDef;
   mediaId: string | null;
   run: (mode: InsertMediaMode) => void;
   setHover: (v: { mediaId: string; mode: InsertMediaMode } | null) => void;
@@ -154,9 +168,14 @@ function ModeButton({ def, mediaId, run, setHover, refusal, asMenuItem = false, 
       {...(extraProps ?? {})}
       /* W1-A: the house 24px hit FLOOR is the height law in BOTH modes
          (a labeled button is naturally ≥24 wide; icon mode pins the width
-         too). icon-btn is flex-shrink:0 so the row scrolls, never squishes. */
+         too). R25-F1-E2: full mode lets the button SHRINK toward that same
+         24px floor (!shrink + min-w — .icon-btn's flex-shrink:0 is
+         overridden) so the row's leftovers feed the names progressively;
+         the label ellipsizes (truncate) instead of forcing the old 660px
+         full-content floor. Below the icon-only floor the bar's
+         overflow-x-auto stays the LAST resort (~190px of content). */
       className={labels === 'full'
-        ? 'icon-btn !h-[24px] !w-auto gap-1 px-1.5'
+        ? 'icon-btn !h-[24px] !w-auto !shrink min-w-[24px] gap-1 px-1.5'
         : 'icon-btn !h-[24px] !w-[24px]'}
       aria-label={def.label}
       aria-describedby={DESC_ID}
@@ -171,8 +190,14 @@ function ModeButton({ def, mediaId, run, setHover, refusal, asMenuItem = false, 
     >
       <def.Icon size={16} />
       {/* W1-A: the visible name — full mode only; icons mode keeps it in
-          aria-label + data-tip (the a11y name never changes). */}
-      {labels === 'full' && <span className="whitespace-nowrap text-[11px] font-medium">{def.label}</span>}
+          aria-label + data-tip (the a11y name never changes).
+          R25-F1-E2: the name TRUNCATES (min-w-0 + truncate) as the bar
+          narrows — Resolve truncates, never drops — and the FULL name
+          rides the span's title tooltip (the short label 'Append' still
+          reveals 'Append at End' on hover). */}
+      {labels === 'full' && (
+        <span title={def.label} className="min-w-0 truncate text-[11px] font-medium">{def.short ?? def.label}</span>
+      )}
     </button>
   );
   return button;
@@ -265,7 +290,7 @@ export function SourceEditBar() {
   const refusalFor = (mode: InsertMediaMode): string | null =>
     plan && plan.mode === mode && !plan.ok && plan.reason ? `${plan.reason.title} — ${plan.reason.detail}` : null;
 
-  const withIcons = (d: ModeDef): Required<ModeDef> => ({ ...d, Icon: d.Icon ?? ICONS[d.mode] });
+  const withIcons = (d: ModeDef): ResolvedModeDef => ({ ...d, Icon: d.Icon ?? ICONS[d.mode] });
   const primary = PRIMARY.map(withIcons);
   const secondary = SECONDARY.map(withIcons);
 

@@ -92,10 +92,15 @@ export const ROLE_BAR: Record<Role, string> = {
 
 /** 25px header row. T0/T3: track ID ONLY (the NAME lives in the 26px title
     row — D5). T1/T2: ID + name merged up (those tiers drop the title row);
-    T2 channels add the expandable fx-count chip. */
+    T2 channels add the expandable fx-count chip.
+
+    R25-F1-A1: NO overflow-hidden on the ROW — the T2 fx-count popover
+    (absolute top-[26px], a DOM child of this row) painted ZERO pixels at any
+    dock height because the row clipped it. Clipping stays on the NAME SPAN
+    alone (its own truncate — the only content that ever overflows). */
 function StripHeader({ badge, name, children }: { badge: string; name?: string; children?: React.ReactNode }) {
   return (
-    <div className="flex h-[25px] w-full shrink-0 items-center justify-center gap-1 overflow-hidden px-1">
+    <div className="flex h-[25px] w-full shrink-0 items-center justify-center gap-1 px-1">
       <span className="mono shrink-0 text-[12px] font-semibold text-tprimary">{badge}</span>
       {name && <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-tprimary" title={name}>{name}</span>}
       {children}
