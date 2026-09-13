@@ -99,10 +99,12 @@ const MARKER_CYCLE = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pin
    The honest content math: readout-visible row ≈ TC 73 + transport 140 +
    divider 10 + icon-bar 190 + trim 72 + readout 178 + gaps/padding 56
    ≈ 719 → 720; TC-visible row ≈ 475 → 490. Below the floors the READOUTS
-   drop (full text survives in data-tip + the strip's aria-label) — the
-   5 transport buttons, the trim icons and the 7 edit-mode buttons NEVER
-   hide; the W5b overflow-x-auto inside the edit bar stays only as the
-   LAST resort below its icon-only floor. */
+   drop (R25-F2/E11: the full text survives ONLY in the scrub strip's
+   aria-label — a display:none element can't be hovered, so the old
+   data-tip fallback claim was dead; the strip's label carries playhead +
+   in/out + duration) — the 5 transport buttons, the trim icons and the 7
+   edit-mode buttons NEVER hide; the W5b overflow-x-auto inside the edit
+   bar stays only as the LAST resort below its icon-only floor. */
 const SOURCE_ROW_READOUT_MIN_PX = 720;
 const SOURCE_ROW_TC_MIN_PX = 490;
 
@@ -167,7 +169,11 @@ export function Viewer({ duration }: { duration: number }) {
   const el = mainElementAt(scene, playhead);
   const overlayEl = overlayElementAt(scene, playhead);
   const img = el ? mediaById(el.mediaId) : undefined;
-  const boundaries = scene.tracks.find((t) => t.kind === 'main')?.elements ?? [];
+  /* R25-F2 (E4): the scrub boundary ticks span ALL main tracks — the old
+     `.find` grabbed only the FIRST one while the at-time probe above
+     (mainElementAt) walks every main track, so a cut on a stacked main
+     track rendered no tick at its boundary. */
+  const boundaries = scene.tracks.filter((t) => t.kind === 'main').flatMap((t) => t.elements);
   /* R19 caption overlay data: caption elements covering the playhead
      (program mode only — source preview shows the raw asset instead) */
   const captionHits = sourceMode ? [] : captionHitsAt(scene, playhead);
@@ -328,6 +334,22 @@ export function Viewer({ duration }: { duration: number }) {
           >
             SOURCE
           </span>
+          {/* R25-F2 (E10): the SOURCE-mode zoom select — the program toolbar's
+              own ladder, riding the SAME zoom state + zoomStyle (the frame's
+              aspect-video wrapper multiplies the fit width; ≥2× scrolls in the
+              overflow-auto monitor well). The source poster is letterboxed
+              object-contain, so a magnification ladder is meaningful there
+              too (inspecting a still's grain at 2×); the labels stay the
+              honest fit-anchored set. */}
+          <select
+            aria-label="Source viewer zoom"
+            data-testid="shell-source-zoom"
+            value={zoom}
+            onChange={(e) => setZoom(e.target.value)}
+            className="field shrink-0 cursor-pointer py-0"
+          >
+            {zoomOptions.map((z) => <option key={z}>{z}</option>)}
+          </select>
           <div className="grow" />
           {sourceMedia?.width ? <span className="tc-chip">{sourceMedia.width}×{sourceMedia.height}</span> : null}
           {sourceMedia?.fps ? <span className="tc-chip">{sourceMedia.fps} fps</span> : null}
@@ -581,7 +603,13 @@ export function Viewer({ duration }: { duration: number }) {
         className="relative flex shrink-0 cursor-pointer items-center border-t border-hairline px-2"
         style={{ height: 12, minHeight: 12 }}
         onPointerDown={(e) => {
-          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          /* R25-F2 (C6 — the F4-P3 law, the twin of CurvesPanel's fix): the
+             scrub row's capture is GUARDED — a synthetic/inactive pointer id
+             throws NotFoundError in real browsers (the live repro the audit
+             caught); best-effort capture, the scrub math runs regardless. */
+          try {
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          } catch { /* inactive pointer id — the seek still ran */ }
           seekFromEvent(e.clientX);
         }}
         onPointerMove={(e) => {
@@ -618,9 +646,9 @@ export function Viewer({ duration }: { duration: number }) {
             className="absolute top-1/2 h-[2px] -translate-y-1/2 rounded-sm"
             style={{ left: pct(loop.start), width: `calc(${pct(loop.end)} - ${pct(loop.start)})`, background: 'var(--accent-selection)', opacity: loopEnabled ? 0.85 : 0.3 }}
           />
-          {/* clip boundary ticks */}
+          {/* clip boundary ticks — E4: elements from EVERY main track */}
           {boundaries.map((b) => (
-            <div key={b.id} className="absolute top-1/2 h-[5px] w-px -translate-y-1/2 bg-tfaint" style={{ left: pct(b.startTime) }} />
+            <div key={b.id} data-testid="shell-viewer-scrub-tick" className="absolute top-1/2 h-[5px] w-px -translate-y-1/2 bg-tfaint" style={{ left: pct(b.startTime) }} />
           ))}
           {/* playhead marker — dedicated time color */}
           <div data-testid="shell-viewer-scrub-playhead" className="absolute top-1/2 h-[11px] w-[2px] -translate-y-1/2 rounded-sm" style={{ left: pct(playhead), background: 'var(--playhead)' }} />
@@ -656,12 +684,12 @@ export function Viewer({ duration }: { duration: number }) {
         >
           {/* W1-B: LEFT = the live source TC — tc(sourcePlayhead), mono 11px;
               ticks live while playing (the readout IS the playing feedback,
-              with the poster progress line). W1-A: hides below the row's
-              TC floor (data-tip keeps the position; the strip's aria-label
-              carries it too). */}
+              with the poster progress line). W1-A: hides below the row's TC
+              floor — R25-F2 (E11): the DEAD data-tip is dropped (a hidden
+              element can't be hovered); the honest surviving channel is the
+              SCRUB STRIP's aria-label (playhead + in/out + of-dur). */}
           <span
             data-testid="shell-viewer-source-tc"
-            data-tip={`Source playhead ${tc(sourcePh)}`}
             hidden={sourceTcHidden || undefined}
             className="mono shrink-0 text-[11px] text-tmuted"
           >
@@ -818,20 +846,17 @@ export function Viewer({ duration }: { duration: number }) {
             </div>
           )}
           {/* W1-A: the duration readout DEGRADES FIRST — below the row's
-              readout floor it hides entirely (the full text survives in
-              data-tip + the scrub strip's aria-label); above it, it may
-              truncate (min-w-0 + shrink) instead of starving the priority
-              clusters. The R23-FIX reactive subscription stays (the
-              readout follows every range writer). */}
+              readout floor it hides entirely (R25-F2/E11: the DEAD data-tip
+              is dropped — display:none can't be hovered; the full text
+              survives in the SCRUB STRIP's aria-label, which carries the
+              in/out range + the source duration); above it, it may truncate
+              (min-w-0 + shrink) instead of starving the priority clusters.
+              The R23-FIX reactive subscription stays (the readout follows
+              every range writer). */}
           <span
             hidden={sourceReadoutHidden || undefined}
             className="mono min-w-0 shrink truncate text-[11px] text-tmuted"
             data-testid="shell-viewer-source-duration"
-            data-tip={
-              sourceMediaId && sourceDur != null && sourceRange
-                ? `Range ${tc(sourceRange.in)}–${tc(sourceRange.out)} · ${tc(sourceRange.out - sourceRange.in)} of ${tc(sourceDur)}`
-                : `Source duration ${sourceDur !== null ? tc(sourceDur) : '— still image'}`
-            }
           >
             {sourceMediaId && sourceDur != null && sourceRange
               ? `Range ${tc(sourceRange.in)}–${tc(sourceRange.out)} · ${tc(sourceRange.out - sourceRange.in)} of ${tc(sourceDur)}`
@@ -901,9 +926,12 @@ export function Viewer({ duration }: { duration: number }) {
               <Flag size={13} strokeWidth={1.6} />
             </button>
             {/* explicit keyboard-open path: a labelled chevron toggle next to
-                the flag (R13 fix — the palette was right-click-only) */}
+                the flag (R13 fix — the palette was right-click-only).
+                R25-F2 (E9): the chevron's hit zone widens 16→24px — the house
+                ≥24px-wide floor (the row is 32px tall; 24×20 clears the floor
+                without out-growing its siblings). */}
             <button
-              className="icon-btn !h-[20px] !w-[16px]"
+              className="icon-btn !h-[20px] !w-[24px]"
               onClick={() => setPaletteOpen(!paletteOpen)}
               data-tip="Marker color palette"
               aria-label="Marker color"

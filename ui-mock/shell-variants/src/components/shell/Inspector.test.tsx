@@ -90,7 +90,7 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expectSections(['transform', 'composite', 'speed-change', 'effects'], true);
     expect(screen.getByTestId('inspector-entity-chip')).toHaveAttribute('data-entity', 'multi');
     expect(screen.getByTestId('inspector-entity-name')).toHaveTextContent('2 clips selected');
-    expect(screen.getByTestId('chip-mixed-values')).toHaveTextContent('Mixed values');
+    expect(screen.getAllByTestId('chip-mixed-values').length).toBeGreaterThanOrEqual(1); // R25-F1 X1: the Fades rows can ALSO be mixed now (el-1 carries demo fades, el-4 doesn't — the honest effectiveFade domain)
     expect(screen.queryByRole('slider', { name: 'Opacity slider' })).not.toBeInTheDocument();
     const field = screen.getByLabelText('Opacity — mixed values; typing sets all selected');
     expect(field).toHaveValue('');
@@ -342,6 +342,22 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expect(el('el-6').audioFadeIn).toBe(0.5); // invalid = no dispatch
   });
 
+  it('R25-F1 X1 (batch-3 P1): the Fades group carries the VIDEO fade domain — effectiveFade reads, setFade writes (the single owner)', () => {
+    boot({ selection: ['el-1'] }); // VIDEO clip: fadeIn 0.5, fadeOut 0.75 (the R23-WA demo fixture)
+    // READ: the group shows the video clip's OWN domain (the old audioFadeIn reads showed 0.00 while the FX view painted 0.50/0.75)
+    expect(screen.getByLabelText('Fade in value')).toHaveValue('0.50s');
+    expect(screen.getByLabelText('Fade out value')).toHaveValue('0.75s');
+    // WRITE: a commit lands on the video owner field (fadeIn) through the clamped/snapped single writer
+    fireEvent.change(screen.getByLabelText('Fade in value'), { target: { value: '48f' } }); // 2 frames * 24 = 2.0s
+    fireEvent.keyDown(screen.getByLabelText('Fade in value'), { key: 'Enter' });
+    expect(el('el-1').fadeIn).toBe(2); // the video owner — NOT audioFadeIn (the dead field)
+    expect(el('el-1').audioFadeIn).toBeUndefined();
+    // the field-level duration cap: el-1 duration 8.5s → max 8.5 — a 99s commit is REFUSED by the field (invalid range, no dispatch; setFade's own clamp is the second belt)
+    fireEvent.change(screen.getByLabelText('Fade out value'), { target: { value: '99' } });
+    fireEvent.keyDown(screen.getByLabelText('Fade out value'), { key: 'Enter' });
+    expect(el('el-1').fadeOut).toBe(0.75); // refused — the original survives
+  });
+
   it('section Reset restores store-backed AND mock-local fields through the write path', () => {
     render(<Inspector />); // el-2
     const posX = screen.getByLabelText('Position X value');
@@ -429,6 +445,28 @@ describe('Inspector (R20-W3 D4 — type-driven, no tab strip)', () => {
     expect(fx.map((f) => f.name)).toEqual(['Gaussian Blur', 'Vignette']);
     expect(fx[1].params).toEqual({ amount: 50, feather: 50 }); // nominal defaults
     expect(screen.queryByRole('menu')).not.toBeInTheDocument(); // picker closed after add
+  });
+
+  /* R25-F2 (X7) — ONE duplicate policy: the picker RE-OFFERS applied names
+   * (stacking — the Resolve/Premiere OFX law; the browser rows' own policy).
+   * A re-pick pushes a second instance through addEffectToElement and
+   * answers with the ×N count toast; the hiding filter + the "all applied"
+   * dead branch are gone. */
+  it('R25-F2 (X7): the picker re-offers APPLIED effects — a re-pick STACKS + answers with the ×2 toast (the browser rows\' law)', () => {
+    boot({ selection: ['el-1'] }); // el-1 seeds Gaussian Blur (fx-1)
+    fireEvent.click(screen.getByRole('button', { name: 'Add effect' }));
+    const menu = screen.getByRole('menu', { name: 'Add effect' });
+    // the applied name is still offered (the old filter hid it)
+    const reoffer = within(menu).getByRole('menuitem', { name: 'Gaussian Blur' });
+    expect(reoffer.getAttribute('data-tip')).toContain('already on this clip');
+    fireEvent.click(reoffer);
+    const fx = el('el-1').effects!;
+    expect(fx).toHaveLength(2); // stacked — each instance its own node
+    expect(fx.every((f) => f.name === 'Gaussian Blur')).toBe(true);
+    expect(fx[1].id).not.toBe(fx[0].id); // fresh id — a REAL second instance
+    expect(S().toasts.at(-1)).toMatchObject({ kind: 'info', title: 'Gaussian Blur × 2' });
+    expect(S().toasts.at(-1)!.detail).toContain('duplicates stack');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument(); // closed after add
   });
 
   it('effects stack: reorder (first pinned), remove deletes; multi-select shows the aggregate', () => {

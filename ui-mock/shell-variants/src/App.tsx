@@ -5,8 +5,10 @@ import { AppShell } from './components/shell/AppShell';
 import { ErrorBoundary } from './components/shell/ErrorBoundary';
 
 /** Window-too-small overlay — spec 18 §3.2: below 1280×800 show an overlay
- *  rather than degrade. */
-function TooSmall() {
+ *  rather than degrade. Exported since R25-F2 (E8): the stories' FullShell
+ *  decorator mounts the SAME guard so reviewers see the honest ≤1279px
+ *  overlay instead of a starved shell (the old story omitted it). */
+export function TooSmall() {
   return (
     <div className="window-too-small fixed inset-0 z-[95] flex-col items-center justify-center gap-2 bg-app/95 text-center backdrop-blur-sm">
       <span className="text-[16px] font-semibold text-tprimary">Window too small</span>

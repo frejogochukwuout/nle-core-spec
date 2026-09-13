@@ -5,7 +5,7 @@
    altKey exactly. F6 region cycling stays in AppShell (spec 18 §11.5). */
 
 import { useEffect, useRef } from 'react';
-import { useUi } from '../state/useUiStore';
+import { useUi, sourcePlayheadOf } from '../state/useUiStore';
 import { snapToFrame } from '../lib/timecode';
 import { zoomBus } from '../lib/zoomController';
 import { isGestureActive } from '../lib/timelinePlacement';
@@ -395,9 +395,17 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
           return;
         }
         if (lower === 'i') {
-          // real shell opens the OS file picker; mock explains the drop path
+          /* R25-F2 (A9): the ⌘I import toast is PAGE-AWARE — the audio page
+             mounts the Sound Library, not the Media Pool (the drop surface
+             the toast names must be the one on screen). */
           e.preventDefault();
-          s.pushToast({ kind: 'info', title: 'Import media', detail: 'File picker is mock — drop files on the Media Pool' });
+          s.pushToast({
+            kind: 'info',
+            title: 'Import media',
+            detail: s.page === 'audio'
+              ? 'File picker is mock — drop files on the Sound Library'
+              : 'File picker is mock — drop files on the Media Pool',
+          });
           return;
         }
         return;
@@ -445,8 +453,28 @@ export function useShortcuts(duration: number, confirm?: ConfirmFn) {
         case 'u': s.setTool('slide'); return;
         case 'r': s.setTool('ripple'); return;
         case 'n': s.toggleSnap(); return;
-        case 'i': s.markIn(); return;
-        case 'o': s.markOut(); return;
+        case 'i':
+        case 'o': {
+          /* R25-F2 (E6): I/O are VIEWER-MODE-GATED. In source mode they
+             write the SOURCE strip's own trim range — the handles' own
+             setters (setSourceRangeIn/setSourceRangeOut) at the CURRENT
+             source playhead — never the program loop under the open source
+             monitor (the W1-B seam law: program playhead/loop must not move
+             under source mode). Program mode keeps the spec 16 §3.1 loop
+             path unchanged. */
+          if (s.viewerMode === 'source') {
+            const id = s.sourceMediaId;
+            if (id) {
+              const ph = sourcePlayheadOf(s, id);
+              if (lower === 'i') s.setSourceRangeIn(id, ph);
+              else s.setSourceRangeOut(id, ph);
+            }
+            return;
+          }
+          if (lower === 'i') s.markIn();
+          else s.markOut();
+          return;
+        }
         case 'm': {
           // spec 16 §3.7: ⇧M = delete marker at playhead; plain M = add marker.
           // (⌥⇧M add-with-color is handled up in the alt block — unreachable here.)

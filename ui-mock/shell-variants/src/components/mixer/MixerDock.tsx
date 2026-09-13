@@ -267,13 +267,17 @@ function MeterColumn({ track }: { track: TrackJSON }) {
   );
 }
 
-function MetersDock() {
+function MetersDock({ expandBlocked = false }: { expandBlocked?: boolean }) {
   const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
   const masterMuted = useUi((s) => s.masterMuted);
   const masterVolume = useUi((s) => s.masterVolume);
   const toggleMasterMute = useUi((s) => s.toggleMasterMute);
   /* R24-W1 (A3-R3): the expand control is a MODE action — no aria-pressed
-     (an action can't lie); it goes to FULL, exactly what it says. */
+     (an action can't lie); it goes to FULL, exactly what it says.
+     R25-F2 (A6): below MIXER_CORE_FLOOR the container pure-renders THIS
+     surface no matter what mixerState says, so the action would be a SILENT
+     NO-OP — the honest-control law: aria-disabled + the height-floor reason
+     in the tip + NO onClick (nothing can mint a no-op store write). */
   const setMixerState = useUi((s) => s.setMixerState);
   const audio = scene.tracks.filter((t) => t.kind === 'audio');
   const ref = useRef<HTMLDivElement>(null);
@@ -298,12 +302,15 @@ function MetersDock() {
       </div>
       {/* master column pinned right: badge + full-height meter + mute +
           expand (R15-A2: the ONE 'master' engine key, same values as the
-          toolbar/strip masters — one source) */}
+          toolbar/strip masters — one source). R25-F2 (A5): the column's
+          padding is p-1 — the meters-scroll twin (the old py-1 left the
+          master's badge/meter 4px out of line with the track columns:
+          the scroll region carries p-1 around ITS columns). */}
       <div
         data-testid="meter-col-master"
         role="group"
         aria-label="Master meter column"
-        className="flex w-[30px] shrink-0 flex-col items-center gap-1 border-l border-hairline py-1"
+        className="flex w-[30px] shrink-0 flex-col items-center gap-1 border-l border-hairline p-1"
       >
         <span className="mono text-[10px] font-semibold uppercase tracking-wide text-tprimary">MST</span>
         <div className="flex min-h-0 w-full flex-1 justify-center">
@@ -320,9 +327,14 @@ function MetersDock() {
         </button>
         <button
           className="icon-btn icon-btn-sm"
-          onClick={() => setMixerState('full')}
-          data-tip={EXPAND_LABEL}
-          aria-label={EXPAND_LABEL}
+          onClick={expandBlocked ? undefined : () => setMixerState('full')}
+          data-tip={expandBlocked
+            ? `${EXPAND_LABEL} — disabled: the dock is below the 200px core floor (meters+fader cannot fit); raise the mixer row's height first`
+            : EXPAND_LABEL}
+          aria-label={expandBlocked
+            ? `${EXPAND_LABEL} — disabled below the 200px core floor`
+            : EXPAND_LABEL}
+          aria-disabled={expandBlocked || undefined}
         >
           <PanelRight size={12} strokeWidth={1.7} />
         </button>
@@ -423,21 +435,36 @@ function FullDock({ density, tier }: { density: Exclude<MixerDockDensity, 'mini'
         </div>
         {/* R25-W4-A: the strip element-visibility mini toggles (aria-pressed +
             the element name in the tip; view-state, no history) — grouped so
-            the F6/rover semantics stay one landmark */}
+            the F6/rover semantics stay one landmark. R25-F2 (A8): the TIP is
+            composed with the density + tier ladder — the toggle's stored
+            flag is the PREFERENCE, the ladder is what's on screen; a "shown"
+            tip at lean/core density lied (the ladder hides the element even
+            with the flag on). */}
         <div role="group" aria-label="Strip elements" className="flex flex-col items-center gap-1">
-          {ELEMENT_TOGGLES.map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              onClick={() => toggleMixerElement(key)}
-              className={`icon-btn icon-btn-sm ${elementVisibility[key] ? 'toggled' : ''}`}
-              data-testid={`mixer-element-${key}`}
-              data-tip={`${label} — ${elementVisibility[key] ? 'shown' : 'hidden'} (view state)`}
-              aria-label={`${label} visibility`}
-              aria-pressed={elementVisibility[key]}
-            >
-              <Icon size={12} strokeWidth={1.7} />
-            </button>
-          ))}
+          {ELEMENT_TOGGLES.map(({ key, label, Icon }) => {
+            /* the ladder's own hiding: lean/core hide ALL four elements; T2
+               additionally hides the input row + graphs inside 'full'. */
+            const tierHides = (key === 'input' || key === 'graphs') && tier === 2;
+            const shown = elementVisibility[key] && density === 'full' && !tierHides;
+            const reason = shown
+              ? 'shown'
+              : elementVisibility[key]
+                ? `hidden by the density ladder (dock at ${density}${tierHides ? ` / T${tier}` : ''} density — full strips at T0/T1 carry it)`
+                : 'hidden (view state)';
+            return (
+              <button
+                key={key}
+                onClick={() => toggleMixerElement(key)}
+                className={`icon-btn icon-btn-sm ${elementVisibility[key] ? 'toggled' : ''}`}
+                data-testid={`mixer-element-${key}`}
+                data-tip={`${label} — ${reason}`}
+                aria-label={`${label} visibility`}
+                aria-pressed={elementVisibility[key]}
+              >
+                <Icon size={12} strokeWidth={1.7} />
+              </button>
+            );
+          })}
         </div>
         <span
           className="mono select-none text-[10px] font-semibold uppercase tracking-[0.18em] text-tfaint"
@@ -553,7 +580,10 @@ function MixerDockBody({ state }: { state: Exclude<MixerDockState, 'collapsed'> 
       className="flex h-full min-h-0 shrink-0 items-stretch"
     >
       {state === 'meters' || density === 'mini' ? (
-        <MetersDock />
+        /* A6: the mini-density fallback carries the blocked flag so the
+           expand control renders honestly disabled (the container would
+           pure-render this surface regardless of the store write). */
+        <MetersDock expandBlocked={density === 'mini'} />
       ) : (
         <FullDock density={density} tier={mixerTierFor(H ?? MIXER_TIER.FULL)} />
       )}

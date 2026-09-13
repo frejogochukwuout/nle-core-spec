@@ -190,7 +190,10 @@ describe('WheelsPanel (Primaries — store-driven GradeParams)', () => {
     expect(S().toasts.filter((t) => t.title === 'Color params')).toHaveLength(1);
   });
 
-  it('first grade write fires ONE honest boundary toast per mount (the viewer preview deferral)', () => {
+  /* R25-F2 (C8 re-truth): the caption's "viewer preview deferral" claim is
+     gone — the canvas SHIPPED with W4c; the toast is the orientation notice
+     (what's real where), not a boundary. */
+  it('first grade write fires ONE honest orientation toast per mount (real mockGrades + the live canvas preview)', () => {
     mountWheels();
     fireEvent.keyDown(screen.getByRole('slider', { name: 'Hue' }), { key: 'ArrowRight' });
     expect(S().toasts.at(-1)).toMatchObject({
@@ -469,13 +472,21 @@ describe('QualifierPanel (C54 — spec 08 §8.1 store-driven keyer)', () => {
   it('dual-handle keyboard commits center/width (the bars and fields are ONE state)', () => {
     mountQualifier();
     const low = screen.getByRole('slider', { name: 'Hue range low' });
-    // spec defaults: center 0, width 35 → clamped bar [0, 17.5]
-    expect(low).toHaveAttribute('aria-valuenow', '0');
+    /* RE-PIN (R25-F2/C7 — the wrap law): spec defaults center 0, width 35
+       → the TRUE matte arc is [342.5,360)∪[0,17.5] — the lo handle now sits
+       at 342.5 (the OLD pin "0" was the linear clamp that hid half the
+       default mask). */
+    expect(low).toHaveAttribute('aria-valuenow', '343'); // round(342.5)
+    expect(low).toHaveAttribute('aria-valuetext', '342.5');
     fireEvent.keyDown(low, { key: 'ArrowRight' });
     const q = S().mockGrades['el-2'].qualifier;
     expect(q).toBeDefined();
-    expect(q?.hueCenter).toBeCloseTo(10.55, 2); // (3.6 + 17.5)/2
-    expect(q?.hueWidth).toBeCloseTo(13.9, 2);
+    /* RE-PIN (C7): the wrap commit — the lo endpoint steps +3.6° to 346.1,
+       the arc [346.1 → 17.5] (clockwise, mod 360) is 31.4° wide, so
+       width = 31.4 and center = mod(346.1 + 15.7) = 1.8° (the OLD linear
+       pin 10.55/13.9 assumed lo clamped at 0). */
+    expect(q?.hueCenter).toBeCloseTo(1.8, 2);
+    expect(q?.hueWidth).toBeCloseTo(31.4, 2);
   });
 
   it('sat/lum handles + fields write the 0..1 store fields (percent display)', () => {
@@ -559,10 +570,51 @@ describe('QualifierPanel (C54 — spec 08 §8.1 store-driven keyer)', () => {
     } finally {
       Element.prototype.setPointerCapture = real;
     }
-    // the gesture COMMITTED through the store seam (the handler survived
-    // the capture throw; the separation law clamped lo to hi − 2%: 10.3/17.5)
-    expect(S().mockGrades['el-2'].qualifier?.hueCenter).toBeCloseTo(13.9, 2);
-    expect(S().mockGrades['el-2'].qualifier?.hueWidth).toBeCloseTo(7.2, 2);
+    /* RE-PIN (R25-F2/C7 — the wrap law): the gesture COMMITTED through the
+       store seam (the handler survived the capture throw). The wrap grammar:
+       the lo endpoint dragged to v=108 with hi anchored at 17.5 asks for a
+       269.5° arc — clamped to the 180° mask cap; lo lands at
+       mod(17.5 − 180) = 197.5, so width = 180 and center = mod(197.5+90) =
+       287.5 (the OLD linear pin 13.9/7.2 assumed the lo-pinned-at-0 bar). */
+    expect(S().mockGrades['el-2'].qualifier?.hueCenter).toBeCloseTo(287.5, 2);
+    expect(S().mockGrades['el-2'].qualifier?.hueWidth).toBeCloseTo(180, 2);
+  });
+
+  /* R25-F2 (C7): the hue bar is WRAP-AWARE — the mask math is circular
+     (circularHueDistance), so the bar renders the true matte. The DEFAULT
+     (center 0, width 35) crosses the 0/360 seam: the matte is TWO segments
+     [342.5,360)∪[0,17.5] and the OUT-OF-RANGE mask is the single middle
+     span [17.5,342.5] — the old linear bar clamped lo at 0 and hid half the
+     mask. Pinned at the handle positions + the middle-mask geometry. */
+  it('R25-F2 (C7): the default hue range WRAPS — two-segment matte, ONE middle out-of-range mask, handles at 342.5/17.5', () => {
+    mountQualifier();
+    const lo = screen.getByRole('slider', { name: 'Hue range low' });
+    const hi = screen.getByRole('slider', { name: 'Hue range high' });
+    expect(lo).toHaveAttribute('aria-valuetext', '342.5');
+    expect(hi).toHaveAttribute('aria-valuetext', '17.5');
+    const mask = screen.getByTestId('shell-color-hue-range-outmask');
+    expect(parseFloat(mask.style.left)).toBeCloseTo((100 * 17.5) / 360, 5);
+    /* jsdom's CSSOM may simplify calc(A% − B%) to a single percentage —
+       parse either shape. */
+    const nums = (mask.style.width.match(/[\d.]+/g) ?? []).map(Number);
+    const w = nums.length >= 2 ? nums[0]! - nums[1]! : (nums[0] ?? 0);
+    expect(w).toBeCloseTo((100 * (342.5 - 17.5)) / 360, 3);
+    // the arc's center-line rides the ARC (lo + w/2 mod 360 = the hue center)
+    const mid = Array.from(screen.getByTestId('shell-color-hue-range').children)
+      .find((c) => (c as HTMLElement).className.includes('w-px')) as HTMLElement | undefined;
+    expect(mid).toBeDefined();
+    expect(mid!.style.left).toBe('0%');
+  });
+
+  /* R25-F2 (C7): a NON-wrapping range keeps the classic two-mask linear
+     rendering (the sat/lum bars' own grammar — no regression). */
+  it('R25-F2 (C7): a non-wrapping hue range (center 180, width 40) keeps the two outer masks', () => {
+    mountQualifier();
+    act(() => { S().setGrade('el-2', { qualifier: { hueCenter: 180, hueWidth: 40 } }); });
+    expect(screen.queryByTestId('shell-color-hue-range-outmask')).toBeNull();
+    const lo = screen.getByRole('slider', { name: 'Hue range low' });
+    expect(lo).toHaveAttribute('aria-valuetext', '160.0');
+    expect(screen.getByRole('slider', { name: 'Hue range high' })).toHaveAttribute('aria-valuetext', '200.0');
   });
 
   /* RE-PINNED (R25-F1-C3): the toggle used to ALSO mirror showMask into the
@@ -674,6 +726,20 @@ describe('ColorNodeGraph (left dock — reference topology kept, C56 binding)', 
     expect(screen.getByTestId('shell-color-nodegraph-clip')).toHaveTextContent('Clip');
     expect(screen.getByRole('button', { name: 'Node page 1' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Node graph menu' })).toBeInTheDocument();
+  });
+
+  /* R25-F2 (C9): the clip-selector chip answers with ITS OWN honest copy —
+     the targeting routes (timeline selection / the header's level control),
+     not the generic pan/zoom gesture-round deferral the toolbar controls
+     carry (an off-topic answer for a clip picker). */
+  it('R25-F2 (C9): the clip chip fires its OWN targeting toast — never the pan/zoom gesture-round copy', () => {
+    render(<ColorNodeGraph />);
+    fireEvent.click(screen.getByTestId('shell-color-nodegraph-clip'));
+    const t = S().toasts.at(-1)!;
+    expect(t).toMatchObject({ kind: 'info', title: 'Node graph' });
+    expect(t.detail).toContain('the clip selector is display state');
+    expect(t.detail).toContain('timeline selection');
+    expect(t.detail).not.toContain('pan / zoom'); // the old off-topic copy
   });
 
   /* R25-W3 (A2, th_mtzonhlu): the graph header mirrors the inspector's

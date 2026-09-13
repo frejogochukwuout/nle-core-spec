@@ -568,7 +568,7 @@ export function WheelsPanel() {
     return (
       <div data-testid="shell-color-wheels" className="flex h-full min-h-0 items-center justify-center bg-panel p-6 text-center">
         <p className="text-[12px] text-tmuted">
-          No clip selected — click a clip in the lane strip (or switch the target to Timeline) to grade.
+          No clip selected — select a clip in the timeline (or switch the grade target to Timeline) to grade.
         </p>
       </div>
     );

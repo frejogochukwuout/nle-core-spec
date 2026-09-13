@@ -21,7 +21,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { SourceRangeBar } from './SourceRangeBar';
 import { useUi } from '../../state/useUiStore';
 import { planInsertMedia, type InsertIdFactory } from '../../lib/insertPlan';
-import { snapToFrame } from '../../lib/timecode';
+import { snapToFrame, tc } from '../../lib/timecode';
 
 const MID = 'm-01'; // 62.4s duration in the fixture (fps 24)
 const setStore = (patch: Record<string, unknown>) => useUi.setState((s) => ({ ...patch } as object));
@@ -160,6 +160,52 @@ describe('SourceRangeBar (R22 #84/#85)', () => {
       expect(useUi.getState().sourcePlayhead[MID]).toBe(10); // range.in
       fireEvent.keyDown(ph, { key: 'End' });
       expect(useUi.getState().sourcePlayhead[MID]).toBe(50); // range.out
+    });
+
+    /* R25-F2 (E3): the playhead slider's aria domain IS the live [in,out]
+     * domain — the documented playhead-domain ruling. The old 0..dur
+     * min/max told assistive tech a domain the playhead can't occupy once
+     * a range is set. */
+    it('R25-F2 (E3): the playhead slider\'s aria-valuemin/max derive from the LIVE domain ([in,out] when trimmed; 0..dur untrimmed)', () => {
+      render(<SourceRangeBar mediaId={MID} />);
+      const ph = screen.getByTestId('shell-source-playhead');
+      // untrimmed: the whole source is the domain
+      expect(ph).toHaveAttribute('aria-valuemin', '0');
+      expect(ph).toHaveAttribute('aria-valuemax', '1498'); // 62.4 s × 24
+      act(() => { useUi.getState().setSourceRangeIn(MID, 10); });
+      act(() => { useUi.getState().setSourceRangeOut(MID, 50); });
+      // trimmed: the slider SPEAKS the domain the playhead occupies
+      expect(ph).toHaveAttribute('aria-valuemin', '240'); // 10 s × 24
+      expect(ph).toHaveAttribute('aria-valuemax', '1200'); // 50 s × 24
+      // the in/out handles keep the FULL 0..dur domain (they trim it)
+      expect(screen.getByTestId('shell-source-range-in')).toHaveAttribute('aria-valuemin', '0');
+      expect(screen.getByTestId('shell-source-range-out')).toHaveAttribute('aria-valuemax', '1498');
+    });
+
+    /* R25-F2 (E5): the floating hover-TC tooltip — the program strip's
+     * SMPTE grammar, with the TC clamped to the live domain: hovering the
+     * dimmed out-of-range spans reads range.in/range.out (exactly what a
+     * click there would seek — the store's clamp law). */
+    it('R25-F2 (E5): the hover TC floats over the strip, CLAMPED to the domain — the dimmed spans read range.in/out', () => {
+      render(<SourceRangeBar mediaId={MID} />);
+      const track = screen.getByTestId('shell-viewer-scrub');
+      track.getBoundingClientRect = fakeBar;
+      act(() => { useUi.getState().setSourceRangeIn(MID, 20); });
+      act(() => { useUi.getState().setSourceRangeOut(MID, 40); });
+      // mid-strip (x=158 → t≈33): inside the range — the raw TC shows
+      fireEvent.pointerMove(track, { pointerId: 4, clientX: 158, buttons: 0 });
+      const tip = screen.getByTestId('shell-source-hover-tc');
+      const tMid = snapToFrame(((158 - 8) / (300 - 16)) * 62.4);
+      expect(tip).toHaveTextContent(tc(Math.max(20, Math.min(40, tMid))));
+      // far-left over the dimmed span (t≈0): CLAMPED UP to range.in
+      fireEvent.pointerMove(track, { pointerId: 4, clientX: 0, buttons: 0 });
+      expect(screen.getByTestId('shell-source-hover-tc')).toHaveTextContent(tc(20));
+      // far-right (t≈62.4): CLAMPED DOWN to range.out
+      fireEvent.pointerMove(track, { pointerId: 4, clientX: 300, buttons: 0 });
+      expect(screen.getByTestId('shell-source-hover-tc')).toHaveTextContent(tc(40));
+      // pointer leave dismisses it (the program strip's grammar)
+      fireEvent.pointerLeave(track);
+      expect(screen.queryByTestId('shell-source-hover-tc')).toBeNull();
     });
   });
 

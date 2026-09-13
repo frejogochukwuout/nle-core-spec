@@ -143,7 +143,7 @@ export function CurvesPanel() {
     return (
       <div data-testid="shell-color-curves" className="flex h-full min-h-0 items-center justify-center bg-panel p-6 text-center">
         <p className="text-[12px] text-tmuted">
-          No clip selected — click a clip in the lane strip (or switch the target to Timeline) to curve.
+          No clip selected — select a clip in the timeline (or switch the grade target to Timeline) to curve.
         </p>
       </div>
     );
@@ -331,7 +331,13 @@ export function CurvesPanel() {
                   }
                 }}
                 onPointerDown={(e: ReactPointerEvent<HTMLDivElement>) => {
-                  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                  /* R25-F2 (C6 — the F4-P3 guarded-capture law, the twin of
+                     the Viewer scrub row's fix): a synthetic/inactive
+                     pointer id throws NotFoundError in real browsers; the
+                     capture is best-effort so the handle math always runs. */
+                  try {
+                    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                  } catch { /* inactive pointer id — drag still works */ }
                   tell();
                   setDrag({ index: i, x: p.x, y: p.y });
                 }}

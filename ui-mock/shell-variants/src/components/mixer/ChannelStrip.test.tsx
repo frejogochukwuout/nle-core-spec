@@ -522,7 +522,7 @@ describe('ChannelStrip terminal fader section (equal-height law)', () => {
     expect(well.className).not.toContain('w-full');
   });
 
-  it('carries the fader\'s dB scale column at the reference piecewise positions (channel strips only)', () => {
+  it('carries the fader\'s dB scale column at the reference piecewise positions (every strip — channels, aux, master)', () => {
     renderPlain(<Strip trackId="tr-audio-2" />);
     const scale = strip('A2').querySelector('[data-testid="fader-scale"]') as HTMLElement;
     expect(scale).not.toBeNull();
@@ -533,6 +533,28 @@ describe('ChannelStrip terminal fader section (equal-height law)', () => {
     // the old linear labels are gone
     expect(scale.textContent).not.toContain('+6');
     expect(scale.textContent).not.toContain('−∞');
+  });
+
+  /* R25-F2 (A7): the aux + master strips carry the scale column too — the
+   * channels' own law (3 of 5 strips used to lack it; passing beats the
+   * registered deviation). */
+  it('R25-F2 (A7): the aux and master strips carry the SAME dB scale column (the #72 alignment family\'s read side)', () => {
+    const a1 = renderPlain(<AuxStrip bus="a1" />);
+    const a1Scale = screen.getByTestId('mixer-strip-aux-a1').querySelector('[data-testid="fader-scale"]') as HTMLElement;
+    expect(a1Scale).not.toBeNull();
+    expect(a1Scale.textContent).toContain('−30');
+    a1.unmount();
+    const a2 = renderPlain(<AuxStrip bus="a2" />);
+    const a2Scale = screen.getByTestId('mixer-strip-aux-a2').querySelector('[data-testid="fader-scale"]') as HTMLElement;
+    expect(a2Scale).not.toBeNull();
+    expect(a2Scale.textContent).toContain('−30');
+    a2.unmount();
+    const m = renderPlain(<MasterStrip />);
+    const masterScale = screen.getByTestId('mixer-strip-master').querySelector('[data-testid="fader-scale"]') as HTMLElement;
+    expect(masterScale).not.toBeNull();
+    expect(masterScale.textContent).toContain('0');
+    expect(masterScale.textContent).toContain('−30');
+    m.unmount();
   });
 
   it('section hairlines (--border-strong) rhythm the strip (A4)', () => {

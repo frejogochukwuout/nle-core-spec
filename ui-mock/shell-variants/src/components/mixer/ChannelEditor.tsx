@@ -28,7 +28,7 @@
 import { useState } from 'react';
 import { Volume2, Music2, Waves, AudioLines, Trash2 } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
-import { mediaById, type ElementJSON } from '../../lib/mockData';
+import { mediaById, effectiveFade, type ElementJSON } from '../../lib/mockData';
 import { ROLE_LABEL, dbLabel, type Role } from '../../state/mockMixer';
 import { useMeter } from '../../lib/meterEngine';
 import { Fader, PanKnob, StripMeter, HeadroomReadout, FaderGridlines } from './MixerPrimitives';
@@ -274,24 +274,25 @@ export function ChannelEditor() {
                 numAria="Clip gain"
                 sliderAria="Clip gain slider (commit on release)"
                 onCommit={(dbv) => setElementField(el.id, { volume: dbToVol(dbv) })} />
+              {/* R25-F1 X1 (batch-3 P1): the fade rows join the ONE effective-fade domain (effectiveFade reads + setFade writes — the clamp-to-duration/frame-snap/no-op single writer); the old raw audioFadeIn writes were dead data for video clips. */}
               <ClipParamRow
                 label="Fade in"
                 keyId={el.id}
-                value={el.audioFadeIn ?? 0}
-                min={0} max={10} step={0.1}
+                value={effectiveFade(el, 'in')}
+                min={0} max={Math.min(10, el.duration)} step={0.1}
                 fmt={(v) => v.toFixed(1) + ' s'}
                 numAria="Audio fade in"
                 sliderAria="Audio fade in slider (commit on release)"
-                onCommit={(v) => setElementField(el.id, { audioFadeIn: v })} />
+                onCommit={(v) => useUi.getState().setFade(el.id, 'in', v)} />
               <ClipParamRow
                 label="Fade out"
                 keyId={el.id}
-                value={el.audioFadeOut ?? 0}
-                min={0} max={10} step={0.1}
+                value={effectiveFade(el, 'out')}
+                min={0} max={Math.min(10, el.duration)} step={0.1}
                 fmt={(v) => v.toFixed(1) + ' s'}
                 numAria="Audio fade out"
                 sliderAria="Audio fade out slider (commit on release)"
-                onCommit={(v) => setElementField(el.id, { audioFadeOut: v })} />
+                onCommit={(v) => useUi.getState().setFade(el.id, 'out', v)} />
               <p className="mt-1 text-[10px] leading-[1.4] text-tfaint">
                 Same fields and commands as the inspector Audio tab (spec 17 §6.1 parity). Strip fader ≠ clip gain — different layers.
               </p>

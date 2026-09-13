@@ -111,7 +111,10 @@ export function FxBrowser() {
                 onClick={() => pushToast({
                   kind: 'info',
                   title: `Add ${e.name}`,
-                  detail: 'drag the row onto a timeline clip to apply (mock drag-to-clip, spec 15 §5.4), or double-click it to apply to the selected clip; the FX inspector carries the param UI',
+                  /* R25-F2 (X4): the drag-to-clip route is LIVE (the shared
+                     parser in Clip.tsx — the FxBrowser drop door); the old
+                     "(mock drag-to-clip…)" deflationary clause is dropped. */
+                  detail: 'drag the row onto a timeline clip to apply (spec 15 §5.4), or double-click it to apply to the selected clip; the FX inspector carries the param UI',
                 })}
                 data-testid={`shell-fxbrowser-row-${slug(e.name)}`}
                 aria-label={`${e.cat === 'Transition' ? 'Transition' : e.cat === 'Fade' ? 'Fade preset' : 'Effect'} ${e.name}`}

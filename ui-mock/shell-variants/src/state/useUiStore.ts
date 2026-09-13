@@ -1557,8 +1557,14 @@ export const useUi = create<UiState>((set, get) => ({
      preview — program mode is the output view and never previews inserts
      (the guard is the law, the clearing is the side-effect). W1-B: it also
      PAUSES the source transport — no ghost rAF loop or stale play flag
-     survives the monitor it belongs to (the exit is the one owner). */
-  exitSourcePreview: () => set({ viewerMode: 'program', sourceMediaId: null, hoverInsertPreview: null, sourcePlaying: false }),
+     survives the monitor it belongs to (the exit is the one owner).
+     R25-F2 (E7): the exit ALSO resets sourcePlayRate to 1 — a carried
+     reverse shuttle rate (J, −1×) used to survive into the NEXT source
+     session, where the first Space played BACKWARDS toward range.in and
+     the transport looked dead (the flag flipped, the poster progress line
+     ran the wrong way). One owner, one reset: the exit hands back the
+     forward-default transport. */
+  exitSourcePreview: () => set({ viewerMode: 'program', sourceMediaId: null, hoverInsertPreview: null, sourcePlaying: false, sourcePlayRate: 1 }),
   /* R22 #84/#85: the source trim-range setters — clamp to the media's
    * duration; in < out always (an inverted/equal range refuses by keeping
    * the previous edge — the honest guard, no silent snap). */
