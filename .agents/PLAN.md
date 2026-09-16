@@ -406,3 +406,29 @@ audit till ≤P3.
 **Registered residue (P3, deliberate):** X3 FxBrowser search; T5 scrollMax monotonicity;
 T8 scroll continuity; the r5 shortcut long tail; the C16 GAP-row update.
 **SKILL laws #146-#148** (verify-claims-in-recovery; max-turns finish-maps; the fleet shape).
+
+## R26 — shell-variants: the full-issue verification sweep (COMPLETE 2026-09-16)
+
+**User ask:** "multiple GH issues (filed from SB) are not resolved yet closed — full sweep
+for every issue, verify proper UX solutions not quick fixes, scan overrides, group by UX
+feature scope, as many waves as needed. Unless what I'm seeing in the hosted SB is stale?"
+
+**Landed (the incident + the sweep + the replies; 1950 → 1960 tests, 126 stories, all pushed):**
+- THE STALE-SB INCIDENT (root cause of "not resolved"): unclean recycle → stale repo.tar →
+  R18b-era .zscripts/dev.sh (no code-sync) → public served R24 code while threads self-healed
+  current. Fixed + hardened: stub dev.sh, boot-restore 1b-2 self-heal, stamp-check ritual (SKILL #149)
+- THE SILENT RESOLUTIONS: PATCH comment field = no-op; 72 historical notes never delivered.
+  Reply wave: evidence replies on ALL 138 threads (T#72 hand-answered with the incident
+  explanation + verification path); 0 open; mirror propagating (SKILL #150)
+- THE AUDIT: 8 group auditors, ~95 verdict rows, overwhelmingly PROPER with live probes
+  (.agents/design/r26-audit/); GG's thread-identity correction (th_mto2zq0g = GH #36)
+- W-F1 fixes: F1 sourceRange preview==commit (live-verified 26.483s ghost); F2 snap OFF
+  restored (+ the test that pinned the regression re-pinned); F3 deliver Inspector toggle
+  honest; F4 SoundLibrary Download glyph; F5 fx-tip tier wording; P3-2/3/4/5; P3-1 reverted
+  (the D-E2 absence law wins — SKILL #153)
+- Exit gate: 5-point live probe pass + 1960/1960 + builds + public 126 stories
+
+**Registered residue (P3):** X3 FxBrowser search; T5/T8 scroll items; the r5 shortcut tail;
+C16 GAP-row update; C59 stills-as-snapshots; C42 thumb assets.
+**SKILL laws #149-#154** (stale-serve; reply-first; false-corruption od-check; getAllByRole
+-on-zero; polish-vs-pinned-law; cap-dominance verification).

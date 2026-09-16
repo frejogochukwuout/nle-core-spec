@@ -1,44 +1,29 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-16, end of the R29 execution round. **Read this FIRST.**
+**Written:** 2026-09-16, end of the R26-variants round (THE FULL-ISSUE VERIFICATION SWEEP + the stale-serve incident round). **Read this FIRST; the spec-track state below the divider is R29-era background still accurate as environment context.**
 
-## What R29 finished (the one-paragraph state)
+## Current state (R26-variants — COMPLETE: 138/138 threads verified + replied; the stale-SB incident root-caused + hardened)
 
-**The execution began — the plan's HEAD BLOCK landed.** The S-app D-ARCH-6 consumer duty (the gate-breaking duty, plan §0 step 1) is COMPLETE on the disk of record: the app's both OT mirrors re-vendored to 55c81c0, the port's gesture seams switched to the batch wire verbs (origin "ui"), the pool multi-insert riding timeline.insertBatch through nle-ui's shell seam, the nle-ui re-pin to 6754979. The acceptance discriminator held — the wire-coverage gate went RED at the bare re-pin (the three new verbs uncovered against the LIVE 31/28+3 registry) and returned GREEN with the switches. The app is 256/256 with the M49R pair pinned BOTH halves. The whole fleet moved in the same window (a parallel session): the engine cascade @ e3f55bd, the WDC S-series docs wrap @ 94f6460 (that track's head item CLOSED), the OT seal18 W1-W2 @ 3e18722 (the census fleet + the s18 design v1 — the r1-port rows D-S18-1..4 filed), nle-ui @ 6754979 (691/691). The spec corpus was re-keyed to the R29 pin world (19 files, every LIVE statement moved, every historical record preserved) and **battery_r29 is 166/166 ALL GREEN**. The R17 engine-vendor divergence is RESOLVED (the app vendors the engine HEAD — re-converged at e3f55bd).
+- **The round's driver:** the user found "multiple GH issues (filed from SB) not resolved yet closed" and ordered a full sweep of every issue — proper UX solutions not quick fixes, override scanning, grouped by feature scope, as many waves as needed — plus "is the hosted SB stale?"
+- **YES IT WAS STALE (the round's first finding):** the container's unclean recycle had resurrected an R18b-era `.zscripts/dev.sh` (no code-sync) via a stale repo.tar; the public SB served R24-era code (124 stories, 78 files behind) while the annotakit store self-healed from GitHub — threads current, code stale. The reviewer's live "this is NOT fixed" (T#72, 07:33 today) judged two-rounds-old UI. FIXED: runtime re-synced (126 stories public, verified); the boot chain now SELF-HEALS (stub dev.sh → boot-restore.sh; boot-restore 1b-2 refreshes .zscripts from the GitHub-authoritative copy + re-execs). Session-start ritual: check `.code-sync-stamp` == repo HEAD + public story count.
+- **The silent-resolution finding:** R24/R25 resolve scripts' PATCH `comment` payloads were silently IGNORED by the annotakit API (only `POST /threads/:id/comments` lands) — threads closed with zero visible replies ("never responded either"). FIXED: the reply wave posted evidence replies on ALL 138 threads (T#72 hand-written with the incident explanation + verification path; the 72 historical r22-r25 notes finally delivered; era threads stamped with R26 group verifications; the 5 fix-notable threads updated). 0 open threads; GH mirror propagates (spot-verified).
+- **The audit:** 8 feature-group auditors (GA color / GB mixer / GC source+insert / GD transitions / GE deliver / GF media-dock / GG timeline-core / GH inspector+polish — the last orchestrator-run after 3 dispatch kills) over the full 138-thread corpus with the verdict taxonomy (PROPER/QUICKFIX/BROKEN/OVERRIDDEN/DEFERRED). Result: ~95 verdict rows, overwhelmingly PROPER with live probes on the FRESH runtime; reports in `.agents/design/r26-audit/`.
+- **The fix wave (W-F1, agent + orchestrator recovery):** F1 the insert-preview sourceRange threading (preview==commit for cropped sources — live-verified: ghost 26.483s = the range); F2 snap boots OFF again (the R18e law lost in the R20 store reorg; test had pinned the regression — both fixed); F3 the deliver Inspector toggle DOM-absent (was state-only); F4 SoundLibrary Import = Download glyph; F5 the fx-tip tier wording; P3-2 union-span auto-scroll; P3-3 transition label compose; P3-4 compact-strip type-based tint; P3-5 orphaned tabpanel removed; P3-1 fade-out REVERTED (violated the pinned D-E2 absence law — SKILL #153).
+- **Gates: tsc 0 · 1960/1960 (R25's 1950 → 1960) · vite + storybook builds green · public serves 126 stories.** Commits: boot-hardening 3fae3dc → DESIGN 46db450 → audits 77b2253 → W-F1 ec543d5 → reply-wave a5fea7b → SKILL bf9b94f, all pushed (GitHub; GitLab mirror CURRENT with the new PAT — first successful mirror push since R24).
 
-## The next session = THE CRAWL'S BULK (K3) → K4
+## Next session scope (immediate)
 
-**The critical path, in plain language (the plan §0 is the authority; fetch-first — the parallel session is ACTIVE):**
+1. **The user's / reviewer's reaction round** — the 138 evidence replies + T#72's direct answer are live; expect the reviewer's next pass. Pull ALL open threads first (`curl :3000/annotakit/api/threads`); any new comment on a RESOLVED thread may need the reopen flow honored (the mirror handles GH↔SB both ways).
+2. **The reply-first law is standing:** any resolution = POST the evidence comment FIRST, then PATCH the status (SKILL #150; the PATCH comment field is a no-op).
+3. **Session-start ritual (SKILL #149):** verify `.code-sync-stamp` == repo HEAD, public story count matches, THEN trust the runtime.
+4. **Registered residue (all P3, deliberate):** X3 FxBrowser search/filter; T5 scrollMax monotonicity; T8 scroll view-state continuity; the r5 shortcut long tail; the C16 GAP-row update; C59 stills-as-node-snapshots (the T#39 asset musing); C42 thumb-specific poster assets.
+5. **Process reminders:** fetch-before-commit (#129 — 2 sibling races absorbed this round); commit→push→bundle after every wave (#143); the secret scanner REJECTS pushes containing the PAT (strip tokens from scripts before `git add` — use `process.env.ANNOTAKIT_GH_TOKEN`).
 
-1. **K3's corpus — the LAW-NET re-expression (the crawl's bulk).** Over the REAL vendored OT (@ 55c81c0 in the app): the re-expression target = the app's real surfaces (the GluedShell store family + engineService.ts + sceneBridge.ts — `ui-mock/shell-mini/docs/CORE-SEAMS.md` §2 is the field-by-field map; `ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md` the acceptance list — cite the inventory, never a stale split). Each family's tests land in the app's vitest beside the surface they pin. The routed-verb completeness half is DONE (the wire-coverage gate); the mode-matrix K3 rows (the slip pin etc.) + the page-key tests (D50's impl half) + the D48/D49 bridge pins remain.
-2. **K4 — the crawl exit** (the single e2e: import → cut → play → export; needs K2+K3 gates both green — E8).
-3. **The OT seal18 W3+ watch** (the L-wave landings: L1 S-family → L2 carrier → L3 contract/view-config → L4 structural/token → L5 P3 → L6 exhaustiveness) — their session's queue; the spec lane only re-pins at their milestones.
-4. **w1-w3** (the real-app walk tiers), then **the r-phases — r1's head is Stage 0**: the D42 linkage field + the D43 `edit-domains.ts` + the D44 error envelope, ONE additive OT change, acceptance per **17 §13A.8** (the r1-port acceptance protocol). OT's seal18 W2 already filed the r1-port design rows (D-S18-1..4 — read `opencut-timeline/reviews/arch-design-s18.md` + `seal18-r-linkage.md` first).
+## VARIANTS-TRACK state (supersedes the sections below)
 
-## The immediate maintenance (small, P3)
+- R24: COMPLETE + reconstructed. R25: COMPLETE. R26: COMPLETE (this round — the sweep + the incident hardening; 138/138 replied+resolved; 1960/1960; the boot chain self-heals).
+- The GitLab mirror PAT works again (glpat-… re-issued by the user 2026-09-16; WAF 403 ≈ 1/3 — retry twice).
 
-- The per-spec `## Testing` section mirrors + 17 §14.2's mapping repair (registered rows; the battery is green without them).
-- 00-master's version label (v12.0 stands; the v13.0 bump rides the next natural corpus edit).
-- 15 §13.5's "181 bindings" known-stale cite (16's Appendix A carries 182).
-- battery_r29's two REGISTERED-SKIP windows close at the OT Stage-0 landing (the D43-A3 leaf-edge LIVE check + the D42 drift fence).
-- 12:14's "the engine consumes @ 494f6ff" stale cite (pre-existing R24-era; out of the R29 pin set — fold at the next 12 edit).
+## Standing laws (battery-enforced)
 
-## The round's artifacts (context restore map)
-
-- `scripts/battery_r29.py` — 166 checks, the R29 pin world; run `python3 scripts/battery_r29.py` after any spec edit.
-- The corpus state: 19 files re-keyed @ 22ca935 (00/19 carry the R29 layers; 06/12/17/20 + the signoffs re-based; the engine-side + wire/shell/plan sets).
-- The pin world: engine `e3f55bd` (code anchor `74bef08`, 749/749) · OT `3e18722` (code pin `970948a`, 632/632) · WDC `94f6460` (code anchor `ec8fd5c`, 777/777) · nle-ui `6754979` (691/691) · app `876f2b8` (256/256; vendors engine e3f55bd + nle-ui 6754979 + WDC ec8fd5c + OT mirror 55c81c0 — the engine-vendor divergence RESOLVED) · variants 1,939/68 (declared pair 1,950/126) · mini 495/12 at last WRAP (in-flight activity exists — the WRAP-gated law).
-- The app-side record: `nle-test-app` @ 876f2b8 — the D-ARCH-6 landing (0686504, the sibling session) + the M49R homogeneous completion (876f2b8, this session); `docs/port-census.md` carries the 55c81c0 re-key note.
-
-## Process reminders (the standing laws — R29's own lessons appended)
-
-- **Fetch-before-push EVERYWHERE, every time** — the parallel session is active across ALL repos (this round: the app push rejected mid-session; the race had landed the same work 40 minutes earlier). Absorb the disk of record, complete the gaps, push the delta. NEVER force push.
-- **The saturation protocol**: an agent killed at the deadline has USUALLY finished — check the tree + the worklog before re-dispatching (this round: 2 of 5 K1 agents "failed" with their work fully landed).
-- **The submodule PAT law**: `git config url.insteadOf` does NOT reach `git submodule update --init` clones — embed the PAT in the local `.git/config` submodule URLs (never committed) instead.
-- **The dispatch-granularity law**: split heavy file re-keys by FILE, not by topic — the two agents given 3+ huge files timed out; the single-file agents returned.
-- Battery-check calibration: verify every target text with grep BEFORE encoding a check; sibling edits in the same commit drift anchors.
-- The sub-agent brief: point at `.agents/SKILL.md` + the worklog tail; give disjoint file sets for parallel amendment agents.
-
-## VARIANTS/MINI TRACKS (background)
-
-Variants R25: COMPLETE (1,939/68; 126 stories). Mini R24-2: WRAPPED @ 495/12 (the mini-plus foundation); the mini stream has in-flight activity past the wrap (584 it-blocks/58 files static at R29) — its register row re-keys at ITS next wrap only. Both streams' registers live in REFERENCE-REGISTER.md (the WRAP-gated re-key law). The mocks' own next steps are their streams' business — the spec side only coordinates at WRAP.
+- The posture law (D20), the pin world (D21), the drag law (D22), the single-tree law (D25 + amendments), the plan-executability law (§2A.6), the census law (§2A.7), the productization gate (D28.2), the mode-matrix completeness law (§2A.8), the reference-register law (§2A.9) — all as at R28 (spec-track). Variants-side: SKILL #121-#154.
