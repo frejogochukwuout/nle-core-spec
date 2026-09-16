@@ -334,6 +334,8 @@ function TimelineElement({ element, track, isSelected }: Props) {
 }
 ```
 
+**(Round 28 amendment, D49/ARCH-R28 — the caption chips lane):** a caption element (`type:'text'` on a `captions` track — 09 §3.1's fourth SceneTracksJSON family) renders as a **caption chip**, not a clip: the 24px parchment chip (the reference's Sub-lane grammar) carrying the `text` body (the first-class `ElementJSON.text` field — D49's body-home law), frame-clean timings, and the ordinary trim handles/selection grammar (shape ops apply — the mode matrix needs zero new rows; text's membership decides). The lane is the 32px caption lane (§12.2); the lane tint is the dedicated caption parchment (the mock's `CAPTION_PARCHMENT` local constant — the tokens file stays B4-owned).
+
 ---
 
 ## 8. Interactions
@@ -734,6 +736,7 @@ interface Marker {               // (Round 15 amendment, A2) per-scene — see 0
 Using `SceneTracks` type:
 
 ```
+Caption tracks (top to bottom):  [captions-fr] [captions-en]   <- R28/D49: TOP
 Overlay tracks (top to bottom):  [overlay-2] [overlay-1]
 Main video (single):              [main]
 Audio tracks (top to bottom):    [audio-1] [audio-2]
@@ -745,11 +748,14 @@ Visual stacking:
 - Audio tracks render below main (audio-only, doesn't composite with video)
 - Tracks within overlay/audio are ordered by their position in the array
 
+**(Round 28 amendment, D49/ARCH-R28 — the captions family's order + burn-in exclusion):** `SceneTracksJSON` gains the FOURTH family `captions: CaptionTrackJSON[]` (0..n, one per language — BCP-47, DESCRIPTIVE v1; 09 §3.1). **The lane position is TOP** — above the overlay stack (the reference's Sub 1/Sub 2 lanes above V2/V1; the z-mirror reading). **The family-filter burn-in exclusion (the D49 render law):** captions are NOT in the composite z-walk — the walk covers `overlay` + `main` only, and the play-visible-element read (`elementAtTime`-class) excludes the caption family as a one-line kind filter (`['overlay','main']`); captions render via the SEPARATE burn-in pass, z-above the composite — the topmost VISUAL layer, not the topmost composite layer (the viewer's DOM-chip pass; the TextNode composite path is the r5 styled-subtitle vehicle). (Registered churn: the mock's current fixture orders the caption lane BOTTOM with `addTrack` inserting mid-stack — the fixture re-normalizes to TOP at the r5 touch, the ruling's one churn item.)
+
 ### 12.2 Track height
 
 - Video tracks: 80px (room for filmstrip)
 - Audio tracks: 60px (room for waveform)
 - Overlay tracks: 60px
+- Caption tracks: 32px (R28/D49 — room for the 24px parchment chips; the lane is always the compact single-row header, 18 §4.7; compact mode 20px — the mini-lane grammar: video 24 / caption 20 / audio 16)
 - Collapsed tracks: 24px (just the header)
 
 ### 12.3 Linked selection

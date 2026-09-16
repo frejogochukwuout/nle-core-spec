@@ -120,6 +120,14 @@ interface SceneTracksJSON {
   overlay: OverlayTrackJSON[];
   main: VideoTrackJSON;
   audio: AudioTrackJSON[];
+  // (Round 28 amendment, D49/ARCH-R28 — the captions family) the FOURTH
+  // family: 0..n caption tracks, ONE PER LANGUAGE (BCP-47 tag; descriptive
+  // v1 — addTrack does NOT reject a duplicate language, export merges
+  // deterministically; enforced uniqueness is registered to r5). Carries
+  // `type:'text'` elements with the first-class `text` body field (see
+  // ElementJSON.text below). The OpenCut-classic `SubtitleSegmentItem`
+  // element path is REJECTED v1. See §3.1A's D49 ruling note.
+  captions: CaptionTrackJSON[];
 }
 
 interface TrackJSON {
@@ -146,6 +154,14 @@ interface OverlayTrackJSON extends TrackJSON {}
 // kinds, V on non-audio only (cross-ref 18 §4.7's correction):
 interface AudioTrackJSON extends Omit<TrackJSON, 'visible'> {
   audioEq?: AudioEq;
+}
+// (Round 28 amendment, D49/ARCH-R28 — the captions track kind) one per
+// language, BCP-47. `language?` is OPTIONAL because one-track-per-language is
+// DESCRIPTIVE in v1 (15 §4.3.22's addTrack row carries the same law). The
+// lane renders TOP (05 §12.1); the burn-in pass excludes the family from the
+// composite walk (the one-line kind filter).
+interface CaptionTrackJSON extends TrackJSON {
+  language?: string;              // BCP-47 ('en', 'fr-CA', ...)
 }
 
 interface ElementJSON {
@@ -200,6 +216,14 @@ interface ElementJSON {
   // Transitions
   transitionIn?: TransitionJSON;
   transitionOut?: TransitionJSON;
+
+  // Text body (Round 28 amendment, D49/ARCH-R28) the caption/text element's
+  // body field — FIRST-CLASS here, NOT in `params` (10:544's `params?.text`
+  // stand-in RETIRES with it; OT's TextElement gains the body field at the
+  // r1 port — the register flip's full OT cost: TrackType + the captions
+  // family + this field + the addTrack machinery branches). Styling params
+  // (font/size/color/alignment) stay in `params`.
+  text?: string;
 
   // Name
   name: string;
@@ -288,6 +312,17 @@ interface Marker {               // (Round 15 amendment, A2) the ONE marker type
   time: MediaTime;               // separate Bookmark shape is DELETED (was here)
   label?: string;
   color?: string;                // 16 §3.7's 8-color palette cycles this field
+  // (Round 28 amendment, D48/ARCH-R28 — the marker model v2, the OT-aligned
+  // subset) ONE family, point/range by `duration`: absent = point; present =
+  // range with `end = time + duration`, >= 1 frame, <= scene duration
+  // (write-time invariant; the scene-shrink law is 05 §11.1's keep-and-
+  // display-clamp). `notes?` is USER CONTENT that round-trips OT's
+  // `Bookmark.note` (the D48/F1 disposition) while `label` is DOC-SIDE-
+  // SYNTHESIZED (the `id` pattern). `keyword` is REJECTED — no OT home, no
+  // consumer (the registered deviation). Clip markers are RE-QUEUED to
+  // r5-entry as one field+re-offset-laws bundle. See §3.1A's D48 note.
+  duration?: MediaTime;
+  notes?: string;
 }
 
 interface ColorRGBA {
@@ -332,7 +367,7 @@ interface KeyframeJSON {
 
 **N1 — the ElementJSON container (P1).** `TrackJSON.elements` is an INLINE array of `ElementJSON` records, in time order. The earlier `string[]`-of-IDs reading is retired: under it no field anywhere held the records themselves, while spec 05's own examples (`§6.1`'s `track.elements.filter(el => el.startTime…)` and `§7.3`'s `TimelineElement({element…})`) and the opencut-timeline `SceneTracks` producer both read inline objects. This ruling reconciles 05 §6.1/§7.3 with the schema: their `track.elements` / `element` shapes ARE `ElementJSON`, not IDs. Mock evidence: `mockData.ts` inlines `elements: ElementJSON[]`.
 
-**A2 — one marker family, per scene.** ONE type — `Marker {id, time, label?, color?}` — stored PER SCENE (`SceneJSON.markers`), absorbing `Bookmark` (the separate project-level `Marker` array and the `Bookmark` shape are both retired; mock and opencut-timeline store markers per scene). The wire form is spec 15 §13.3's `addMarker`/`deleteMarker`/`updateMarker` command family; 16 §3.7's `toggleBookmark`/`removeBookmark`/`updateBookmark` trio and 15 §13.15's bookmark rows RENAME into this family (toggle ≈ add/delete, move ≈ update position). No project-level marker surface remains (ARCH-R15 §2.4 sub-gate (c)). 05 §11.1 carries the UI-side cross-reference. **A2-rename execution note (single owner — dated 2026-09-06, R15 fix wave; shared verbatim by 16 §3.7):** the 16 §3.7 binding rows now speak the unified marker family's verbs (`deleteMarker`, `updateMarker`, `Marker.color`); the union's Bookmark block (spec 15 §4.3.39-42) retires at the next union-version bump per §4.1A's Bookmark row. ONE owner for the remaining fold: **spec 15 §13.15's C7 worklist** (the OT-side rename pass at A2).
+**A2 — one marker family, per scene.** ONE type — `Marker {id, time, label?, color?}` — stored PER SCENE (`SceneJSON.markers`), absorbing `Bookmark` (the separate project-level `Marker` array and the `Bookmark` shape are both retired; mock and opencut-timeline store markers per scene). The wire form is spec 15 §13.3's `addMarker`/`deleteMarker`/`updateMarker` command family; 16 §3.7's `toggleBookmark`/`removeBookmark`/`updateBookmark` trio and 15 §13.15's bookmark rows RENAME into this family (toggle ≈ add/delete, move ≈ update position). No project-level marker surface remains (ARCH-R15 §2.4 sub-gate (c)). 05 §11.1 carries the UI-side cross-reference. **A2-rename execution note (single owner — dated 2026-09-06, R15 fix wave; shared verbatim by 16 §3.7):** the 16 §3.7 binding rows now speak the unified marker family's verbs (`deleteMarker`, `updateMarker`, `Marker.color`); the union's Bookmark block (spec 15 §4.3.39-42) retires at the next union-version bump per §4.1A's Bookmark row. ONE owner for the remaining fold: **spec 15 §13.15's C7 worklist** (the OT-side rename pass at A2). **(Round 28 amendment note, D48/ARCH-R28 — the marker model v2: the OT-aligned subset; the ruling text the schema's D48 fields cite):** the family WIDENS to `Marker {id, time, label?, color?, duration?, notes?}` per scene — **one family, point/range by `duration`** (absent = point; `end = time + duration`, ≥ 1 frame, ≤ scene duration — the write-time invariant; the scene-shrink law is 05 §11.1's keep-and-display-clamp, landed R28). Decisive evidence: OT's own `Bookmark {time, note?, color?, duration?}` + `getBookmarksActiveAtTime` already carry the range semantic — the flat spec Marker was narrower than its own SSOT, and the app bridge silently dropped OT's `duration` (the fleet-r23 09-report's flag). **The D48/F1 disposition (the notes/label round-trip): `notes` OWNS OT's `Bookmark.note`; `label` is DOC-SIDE-SYNTHESIZED (the `id` pattern)** — `notes` is user content that MUST round-trip while `label` is a display name; zero OT change for `duration` only, and if r5's marker v2 wants a persistent label, `Bookmark` gains `label?` THEN (registered, not now). **`keyword` is REJECTED** (no OT home, no consumer — the registered deviation; the mock's ~3-pin keyword churn named in the register's row-5 deviation text). **Clip markers are RE-QUEUED to r5-entry** as ONE field+re-offset-laws bundle (the C35 precedent's STRONGER form: the field alone corrupts offsets on split/trim; C33b's r5 acceptance pins carried — the 4 Clip.test pins + the insertPlan re-offset laws). Zero new wire verbs (`Partial<Marker>` rides `updateMarker`; markers stay absent from r1's ten-mode leverage map — the plan phase-tags marker v2 at r5-entry). The ⇧M start-match reading + the ⌥M inspector field set are 16 §3.7's (landed R28); the export fold (per-scene read + duration/note mapping) is 10 §4.7's (landed R28).
 
 **A3 — track gain has one home.** `TrackJSON.volume` is removed; per-track gain is owned by the G layer (spec 20 §4.2 `MixerTrackSettings.fader`). For round-trips, the persisted projection of the fader is the per-scene audio-settings sidecar serialized with the scene — never a TrackJSON field. Mock evidence: `mockMixer.ts` keeps gain only in the G slice; TrackJSON has no volume.
 
@@ -349,6 +384,8 @@ interface KeyframeJSON {
 *volume (D38.2 — the D28-A2 dual-representation + the [−60, +20] domain law):* the persisted unit is LINEAR gain (**1 = unity**; the linear span of the dB domain is [0.001, 10]). The AUTHORING/display domain is dB **[−60, +20]** — the fleet-coherent domain with **ONE HOME: opencut-timeline's `src/lib/timeline/core/audio-params.ts`** (`VOLUME_DB_MIN/-MAX`, `DEFAULT_VOLUME_DB = 0`, `clampVolumeDb`, `volumeDbToLinear` — the zero-import leaf every consumer bridge deep-imports; nle-engine's OV-01/OV-02 collapsed its replicas onto it: `opencut-laws.ts:54-79`). The engine's `params.volume` is the RUNTIME PROJECTION in dB (the bridge converts linear⇄dB both directions — D28-A2: **display dB, commit linear**). **ABSENT ≡ unity on BOTH sides, with two numerically distinct defaults (the two-field law):** the doc model's `el.volume` (LINEAR) is absent ≡ **1**; OT's `params.volume` (dB) is absent ≡ **0 dB** (the D-S5 header, `audio-params.ts:4`) — both ≡ unity gain; the one-home owns the dB domain + the conversions, NOT the persistence shape. Non-finite never poisons the fold: **NaN → DEFAULT (0 dB) at the clamp** (`audio-params.ts:39-43`) and **read-as-absent at the engine fold** (`scene-to-segments.ts:170-173`), plus the UI's linear floor 0.001 (≡ −60 dB, `Inspector.tsx:1007`). Cross-refs: 20 §4.1/§N2b (the fold law, incl. the lane-replaces-static rule), 18 §4.4 (the authoring rail), 10 §4.4 (the export fold — absent omits the `<adjust-volume>`).
 
 **N3 — MediaRecord.** `importedAt` (ISO 8601) is added (18 §4.2's import-date sort); `size` stays numeric bytes — display formatting ("1.8 GB") is the shell's job, never a persisted string.
+
+**D49 — the captions family (Round 28 amendment, ARCH-R28 §4 — the track-kind hybrid; the ruling text the schema's D49 fields cite).** `SceneTracksJSON` gains the FOURTH family `captions: CaptionTrackJSON[]` — **0..n, one per language (BCP-47 tag), carrying `type:'text'` elements with the `text` body field** (C34's "track kind + body field" — both halves; the body's home is first-class `ElementJSON.text`, above). The OpenCut-classic `SubtitleSegmentItem` element path is REJECTED v1. Why track-kind: every consumer surface requires a track — export granularity is file-per-language (SRT/ASS/VTT; FCPXML `<caption>` — the rationale is r5-forward; the current export surface is FCPXML-only per 10 §8's re-keyed row), the inspector/style/language are track-scoped, the burn-in pass excludes captions from the composite walk as a one-line kind filter, and the TextNode render path comes free (captions ARE text elements). Sub-rulings: **the lane position is TOP** (the reference + z-mirror; the mock's bottom fixture re-normalizes at the r5 touch — the one churn item); **the v1 render home is the burn-in pass** (viewer-side, the topmost VISUAL layer via the burn-in pass — z-above the composite; the TextNode composite path is the r5 styled-subtitle vehicle); **the language law is DESCRIPTIVE v1** (addTrack does NOT reject a duplicate language; export merges deterministically — enforced uniqueness registered to r5; the D49/F1 ruling); **the mode matrix needs zero new rows** (text's membership decides — shape ops apply, source-window ops don't); **D32: no A/V pairs v1; sync-lock participates** (linkedTo permitted-not-authored). The full OT r1 cost (the register flip's set): `TrackType +'caption'` + `SceneTracks.captions` + the `TextElement` body field + the addTrack machinery branches — 15 §4.3.22's wire row (landed R28) and 05 §12/18 §4.4/§4.7/10 §8 are the cross-spec folds.
 
 **Multi-scene is app-level (ARCH-R15 §2.4).** The app owns `scenes[]` + the scene wire ops; per-scene editing state is exactly ONE opencut-timeline `TimelineCore` (state-isolated by construction). Per-core undo NEVER crosses a scene switch (registered UX law, mock-consistent); inactive cores' history is budget-capped/evicted beyond a memory budget; scene persistence rides per-scene `toJSON`/`fromJSON`. `ProjectJSON.scenes[]` above is the persisted form of that ruling.
 
@@ -381,7 +418,10 @@ export const ProjectSchema = z.object({
   scenes: z.array(SceneSchema),
   currentSceneId: z.string().uuid(),
   media: z.array(MediaRecordSchema),
-  markers: z.array(MarkerSchema),
+  // (R28/D48 amendment — the stale-zod cleanup) the project-level
+  // `markers: z.array(MarkerSchema)` row is DELETED: markers are PER SCENE
+  // (SceneJSON.markers — A2; the R15 retirement comment at the ProjectJSON
+  // shape above). This illustrative schema had contradicted A2 since R15.
   uiState: ProjectUIStateSchema.optional(),
 });
 

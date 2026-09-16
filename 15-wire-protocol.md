@@ -1575,13 +1575,27 @@ export interface AddMarkerCommand {
     label?: string;
     /** Optional marker color (hex string). */
     color?: string;
-    /** Optional marker type. */
-    type?: 'note' | 'chapter' | 'todo' | 'custom';
+    /**
+     * (R28/D48) optional range duration — absent = POINT marker; present =
+     * RANGE marker with `end = time + duration`, >= 1 frame, <= scene
+     * duration (09 §3.1's widened `Marker` family — the OT-aligned subset).
+     */
+    duration?: MediaTime;
+    /**
+     * (R28/D48) optional user notes — round-trips OT's `Bookmark.note`
+     * (the D48/F1 disposition: `notes` owns the OT text home; `label` is
+     * doc-side-synthesized). NOT `keyword` — rejected, no OT home.
+     */
+    notes?: string;
+    // (R28/D48 sweep) the vestigial `type?: 'note' | 'chapter' | 'todo' |
+    // 'custom'` param is RETIRED — it consumed no `Marker` field (09 §3.1
+    // carries no marker-type discriminator; one family, point/range by
+    // `duration`).
   };
 }
 ```
 
-**Maps to:** the ACTIVE scene's `markers` (per the A2 amendment — `SceneJSON.markers: Marker[]`, one unified type, spec 09 §3.1; via the scene-scoped editing core — see §13.3's Round-15 note; NOT a project-level array). The patch adds a new marker.
+**Maps to:** the ACTIVE scene's `markers` (per the A2 amendment — `SceneJSON.markers: Marker[]`, one unified type, spec 09 §3.1; via the scene-scoped editing core — see §13.3's Round-15 note; NOT a project-level array). The patch adds a new marker. **(R28/D48 amendment — the wire form carries the ruled subset:** `duration?` + `notes?` join the add-params; `updateMarker`'s `updates: Partial<Marker>` widens with them BY CONSTRUCTION (the family's one shape, 09 §3.1); zero new wire verbs. **The OT verb-surface footnote (D48/F8):** the "unchanged" claim applies to THIS spec-15 union only — OT's routed bookmark surface (`toggleBookmark`/`removeBookmark`/`moveBookmark`) has NO update verb, and `toggleBookmark`'s create params carry only `{timeTicks, color, note}` — a range marker CANNOT be created through the OT routed surface today; the r5 marker-v2 port widens the OT surface (toggle gains `duration` on create, or an update verb joins), riding the same registered r5-entry phase as the C33b clip-marker bundle.)
 
 **Undoable:** ✅.
 
@@ -1613,7 +1627,7 @@ export interface UpdateMarkerCommand {
 }
 ```
 
-**Maps to:** patches the marker in the ACTIVE scene's `markers` (per-scene per the A2 amendment — §13.3's Round-15 note; via the scene-scoped editing core).
+**Maps to:** patches the marker in the ACTIVE scene's `markers` (per-scene per the A2 amendment — §13.3's Round-15 note; via the scene-scoped editing core). (R28/D48: `updates: Partial<Marker>` carries the widened family — `duration?`/`notes?` patch by construction, `null`/absent clearing per the patch semantics; the ⇧M START-match + id-addressed remove laws are 16 §3.7's.)
 
 **Undoable:** ✅.
 

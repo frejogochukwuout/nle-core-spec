@@ -2290,10 +2290,18 @@ must have a UI test.]
   elementId: <selected>, effect: <preset1> } }`; resulting `SceneState`
   matches the state from a direct `engine.command.apply()` call (state
   WYSIWYG, spec 17 §6.1)
-- `keyboard-cmd-1-through-9-switches-color-grading-panel` — `Cmd+1`
-  through `Cmd+9` focus the corresponding color grading panel
-  (Lift/Gamma/Gain/Saturation/etc.); assert via `page.uiState.activePanel`
-  and DOM `aria-activedescendant` (UI-only state per spec 16 §3.11)
+- `keyboard-cmd-1-through-9-switches-color-grading-panel` — **(R28/D50
+  re-key — the row's original assertion is RULED OUT)** the ⌘-number
+  namespace belongs to the page law unconditionally (16 §3.8 + §6.1 row 11
+  — the three-claimant resolution): `Cmd+1`–`Cmd+5` are PAGE switches
+  (Edit/Color/Deliver/Audio-focus/FX per 18 §4.8's five-page inventory) and
+  `Cmd+6`–`Cmd+9` are RESERVED (assert inert — no page, no panel, no focus
+  claim). Color grading panel focus (Lift/Gamma/Gain/Saturation/etc.) is
+  POINTER/INSPECTOR-ROUTED in v1 — no ⌘-number panel chord exists (the
+  `page.uiState.activePanel` assertion of the original row is retired with
+  the chord); a future color-panel chord (the free `Option+Shift+1`–`9`
+  family) registers via SPEC-REVISION-CANDIDATES. Effect presets stay
+  `1`–`9` no-modifier (the row above — different modifiers, no conflict)
 - `real-time-color-wheel-drag-updates-grade-within-33ms` — drag the
   color-wheel pointer by Δx=20px via `page.mouse.move()` with 1ms steps;
   sample the rendered canvas via `requestAnimationFrame` callback timing;

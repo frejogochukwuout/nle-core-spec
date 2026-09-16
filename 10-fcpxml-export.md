@@ -808,7 +808,7 @@ This must be done manually as part of the test matrix (see `12-testing-strategy.
 - ❌ **Audio EQ.** Per-track EQ settings. (FCPXML 1.10 supports `<adjust-EQ>` with predefined modes like `voice_enhance`, `music_enhance` — but custom EQ bands require Motion templates.)
 - ❌ **Animation keyframes for transforms.** FCPXML supports keyframes via `<keyframeAnimation>` for any `<param>` (DTD lines 195-202), so this is actually feasible. Implementation ⚠️ DEFERRED to v2.
 - ❌ **Multi-camera angles.** Deferred to v2.
-- ❌ **Subtitles/captions.** FCPXML 1.10 has `<caption>` support, but our project model doesn't yet.
+- ❌ **Subtitles/captions (v1 export surface).** (R28/D49 re-key — the blocker's model half is CLOSED: the project model NOW carries captions — `SceneTracksJSON.captions` (09 §3.1/§3.1A, one per language, `type:'text'` elements with the first-class `text` body field; 15 §4.3.22's addTrack `'caption'`+`language?`). What remains r5-SCHEDULED is the export corpus itself: the FCPXML `<caption>` mapping (the DTD lanes exist, §3's concept list) + the file-per-language SRT/ASS/VTT granularity — the rationale for the track-kind model (D49), stated r5-forward; the current export surface is FCPXML-only.)
 
 ### 8.2 The "include a LUT" workaround for color
 

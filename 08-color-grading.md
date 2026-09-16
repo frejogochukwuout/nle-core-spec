@@ -2165,7 +2165,7 @@ The following tests are **owned by spec 04** and are NOT re-stated here
 | `power-window-rectangular-left-half-only`  | Verifies GPU power window shader masking                                       |
 | `real-time-color-wheel-drag-updates-grade-within-33ms` | Verifies render latency invariant (spec 17 §6.3)                  |
 | `keyboard-1-through-9-applies-effect-preset`           | Verifies UI→engine command bus (state WYSIWYG)                    |
-| `keyboard-cmd-1-through-9-switches-color-grading-panel`| Verifies UI panel-focus routing (UI-only state)                    |
+| `keyboard-cmd-1-through-9-switches-color-grading-panel`| Verifies the D50 re-key of the ⌘-number namespace (spec 04 §17 Tier 3's RULED-OUT row: ⌘1–⌘5 = page switches, ⌘6–⌘9 reserved-inert; panel focus is pointer/inspector-routed — R28-D50)                  |
 | `keyboard-shift-1-toggles-effect-1-enabled`            | Verifies toggle-effect keyboard path                              |
 | `srgb-linear-round-trip-fp-precision` (property)        | Verifies transfer-function FP precision                          |
 | `lut-3d-identity-preserves-arbitrary-input` (property)  | Verifies GPU LUT trilinear sampling                              |
@@ -2396,7 +2396,8 @@ boundary table above).]
 with `page.keyboard` and `page.mouse`. Every shortcut from spec 16 §3.11
 (Effects / Color) that is not already owned by spec 04 §17 Tier 3 has a UI
 test here. The four shortcuts already covered by spec 04 (`1`–`9` apply
-preset, `Cmd+1`–`Cmd+9` panel switch, `Shift+1` toggle effect 1, color-wheel
+preset, the D50-re-keyed `Cmd+1`–`Cmd+9` namespace row (⌘1–⌘5 page
+switches / ⌘6–⌘9 reserved — R28-D50), `Shift+1` toggle effect 1, color-wheel
 drag latency) are cross-referenced in the boundary table above.]
 
 Panel-focus routing targets the spec 18 inspector tab set (video/audio/effects/transition); the Color shortcut lands on the spec 18 Color dock page, not a Resolve color page.
