@@ -17,15 +17,15 @@
 - nle-ui @ `32abd58` — **690/690** (the R9-b preservePitch + F4 identity guards + FW-D `setElementFieldAll` + AW1-2 the Gain ceiling [−60,+20] waves). The package's shell keymap: `src/hooks/useShortcuts.ts` + `src/lib/shortcutMap.ts` (**53 cheat-sheet rows — re-verified at `32abd58` (R27)** — the honest implemented-set ledger, §8.6 single-source discipline) + the CheatSheet modal (§7.3, auto-generated). The **engine-owned yield law (D22b)**: router-attached → the port keymap owns the plain NLE editing keys (incl. the shifted ⇧J/⇧L/⇧Backspace/⇧←→ — the W3/F5 double-fire fix); the shell keeps the ⌘-family, pages, markers, ⌥-family, F6. **The yield-set's third row LANDED (`2646d80`): 'r' sits in `engineOwnedPlain` + `shiftedYields` (`useShortcuts.ts:69/:85`); the ripple tool keeps r in the mock world only.**
 - The variants track (1521+ tests, the R24 canon) — the page-key grammar: **⌘1-⌘5** (Edit/Color/Deliver/Audio/FX — R23-WA's ⌘5 row), the **FX tool joins the tool radio with NO plain key** (V/B/T/Y/U/R own the radio; the FX entry + the ⌘5 chord own the FX surface), **Escape exits** (FX tool → select; audio focus → edit); `src/lib/shortcutMap.ts` 56 rows (adds ⌘5 + the source-mode `,`/`.` insert/overwrite rows, R20-W2 C46).
 - OT @ HEAD **`55c81c0`** (code pin **`970948a`** — the trailing commits are docs/runner-artifacts; the src diff is empty) — **632/632** (72 milestone entries — the total only, the report json committed at the code pin the count authority). **The CANONICAL keymap now lives in the tree, W11-rewritten (DECISIONS #25 — a CONSCIOUS divergence from classic's j/k/l jump rows)**: `src/components/timeline/hooks/use-keybindings.ts` (`:23-81` at the R27 pin) — the 28-row map: the JKL rows are the **M28R stateless rate-based ladder** (rate ∈ {0, ±1, ±2, ±4}; same-direction doubling capped; opposite-direction reset; **K = pause-ONLY** — `timeline.pause`; Space resumes at the persisted rate; **setPlaybackRate BEFORE play** — the S1 rate-conditioned restart), the jump gestures survive on ⇧Arrow (±1 s / ±5 s), **r / ⇧R = loop set/clear** (`setLoopFromSelection` / `clearLoopRegion` — the W11 pair, both previously unbound), the ctrl+z / ctrl+shift+z / ctrl+y undo rows OT keeps; the in-page real-keyboard suites (**M24**: S split, Space + rAF ticker, follow-scroll, arrows + Home/End, Delete + Ctrl+Z, B bookmark, text-input guard; **M28R** — the actions real-mouse suite: the JKL ladder pins (l → +1, l l → +2, the +4 cap, K-pause-with-rate-persisted, Space-resume-at-persisted-rate, j → −1, j j → −2, opposite-direction reset) + ⇧arrow 5 s, q/w split sides, Enter, Backspace, n snap, ⌘a, Escape, ⌘d, ⌘y/⌘⇧z redo; **M49T**: rate control, loop region, wrap laws).
-- C22 ledger state: the ledger row reads "42→~60 bindings implemented" (`.agents/SPEC-REVISION-CANDIDATES.md` §C C22); the live cheat-sheet ledgers count **53 rows (nle-ui) / 56 rows (variants)** of this spec's **181-row Appendix A universe** — the remainder is the r5 long tail (the old "~54 of ~178" claim is retired: both sides stale; both counts re-verified at the R24 pins).
+- C22 ledger state: the ledger row reads "42→~60 bindings implemented" (`.agents/SPEC-REVISION-CANDIDATES.md` §C C22); the live cheat-sheet ledgers count **53 rows (nle-ui) / 56 rows (variants)** of this spec's **182-row Appendix A universe** (re-keyed R28-D50: the `Cmd+5` FX-page row) — the remainder is the r5 long tail (the old "~54 of ~178" claim is retired: both sides stale; both counts re-verified at the R24 pins).
 
 **GAP (the work — owner + acceptance; phase tags per the D24 verification ladder (ARCH-R23; the dual-vocabulary window closed at R24 — pure D24 tags below) — spec 14 §4's per-domain registers are RETIRED, this §0 is the register):**
 - **K3 — the crawl's editing keyboard surface + undo/redo exposure.** MiniShell owns the editing keys (CORE-SEAMS S9, the w1-prep/S-package C0 chrome row carries the component; the KEY laws are K3). Landed since R22: the app's port keymap, the W3 JKL engine-rate ladder, the shell-owner undo law (D22b); **landed (W-C `f681d34`, W-D `78e7283` — the D30 absorption waves: the wire-dispatch seam + the M28R JKL adoption, the R5/R6/Z4 rows below all DONE; the app's PLAN now queues the D-ARCH-6 re-pin instead).** **Remains:** the mini's key laws re-expressed as app-side tests over the canonical tree — the LAW-NET-INVENTORY corpus (the keyboard-on-shell families C1/C16/C46/C49 + the history family: cap + no-op guard + selection healing). Acceptance: the corpus rows green app-side (the K3 gate; ordering law: the DOM-structural half after the D25 swap, the store/policy halves ∥).
 - **K3 — the OT-side keyboard-laws census (registered R23, re-shaped R24; re-verified R27 @ `970948a`).** The three R23 divergences re-verify as: **K and J/L RESOLVED OT-side** — W11's M28R rewrote OT's rows to K = pause-ONLY + the shuttle rate ladder (both now match §3.1's rows; the ladder mechanism is stateless rate math off the live engine state, not §8.7's tap-count closure — the observable ladder is the same); the app-side K divergence CLOSED with the W-D adoption (R5, LANDED below); **B remains the sole live divergence** (OT + the app port: `b` = bookmark-at-playhead vs §3.2's razor tool — the nle-ui/variants mocks implement B = razor per this spec). The port's keymap deltas are the D26 census's documented carriers (the keymap surgery in use-keybindings.ts — one of the 3 merge files; the yield-set port-local; the Z4 guard to come) — no longer a D25-bridge PORT-LOCAL set. The mini's **C16 auto-repeat gate (`e.repeat`) is STILL in neither the OT nor the app-port keymap** (grep-verified at `55c81c0` / `c020b2a` / `32abd58` — re-verified at all three R27 pins) — a held S machine-guns splits there (live-proven in the mini; the canonical tree needs the gate or the app-side re-expression pins it). Disposition: the B row + the mechanism note ride the D26 carrier-reduction program's review cycles + the D30 R10(k) spec ask (record the divergent keymap laws as decisions, not silent divergences); K3 re-points the app-side key tests at the canonical tree. Owner: S-ot (carrier program) + S-app (K3).
-- **r5 — the keymap long tail.** Acceptance: the C22 ledger closed row-by-row (53/56 of 181 rows implemented today) + spec 17 facet rows.
+- **r5 — the keymap long tail.** Acceptance: the C22 ledger closed row-by-row (53/56 of 182 rows implemented today — re-keyed R28-D50) + spec 17 facet rows.
 - **r1 — keymap surfaces for the new op families** (slip/slide/roll/rateStretch wave 1; retime/freezeFrame/rangeRemoval wave 2). Acceptance: keymap rows + nle-ui sync (the S-package workstream's r1 queue row).
 - **The carrier-reduction program (S-ot, the crawl window — the old D25-bridge view-config halves, re-pointed by D26).** The view-config surface — zoom-ladder config (the ± keys' ladder constant) + ripple-toggle semantics exposure (the ⌥R mode's engine-side semantics) — **re-verified ABSENT at `970948a` (R27)** (rippleMode is an internal `useState` at TimelineView.tsx:237; zoom is continuous-clamped, no exposed ladder). The keyboard-side consumers: §3.8's zoom rows + §3.2's Option+R row. Owner: S-ot (ONE carrier-reduction work order, D26.3 — no longer a bridge prerequisite: K3 gates on the coverage vocabulary per D29).
-- **K3 (the page-key grammar reconciliation).** The live mock grammar (⌘1=Edit / ⌘2=Color / ⌘3=Deliver / ⌘4=Audio / ⌘5=FX; the FX tool radio; Escape exits) vs §3.8's ⌘1-⌘4 (⌘3 = "Effects workspace" — the collision). R23-WA landed the ⌘5 row + the spec-side registration note; the ⌘3 reconciliation is PENDING (re-verified R24: the variants' ⌘3 = Deliver at HEAD; SPEC-REVISION-CANDIDATES still carries no ⌘3 registration). Acceptance: §3.8 amended (or the deviation registered in SPEC-REVISION-CANDIDATES) + the app-side page-key tests at K3.
+- **K3 (the page-key grammar reconciliation) — the spec half LANDED (R28-D50; §3.8 + Appendix A now carry the five-page law).** The live mock grammar (⌘1=Edit / ⌘2=Color / ⌘3=Deliver / ⌘4=Audio / ⌘5=FX; the FX tool radio; Escape exits) IS §3.8's law since the D50 fold: the old ⌘3 = "Effects workspace" row is retired, the ⌘5 FX row landed, and the ⌘-number namespace's other two claimants (§3.11's color-panel set, §5.4's track-focus set) are RULED OUT (§6.1 row 11 names all three). Remaining at K3: the app-side page-key tests + the nle-ui FX-page absorption — XMOCK-6's r5/K3 impl half (the DECISION is closed; the implementation window is registered, D50/F6).
 - **D30 W-D — R5, the JKL adoption. LANDED (the app's W-C/W-D waves `f681d34`/`0328bc0`, re-pinned `c020b2a`): the port ships the M28R stateless ladder** (rate ∈ {0, ±1, ±2, ±4}; same-direction doubling capped; opposite reset; **K = pause-ONLY**; Space resumes at the persisted rate; setPlaybackRate BEFORE play — `use-keybindings.ts:38-47` + `use-timeline-actions.ts:223-238`); the tap-accel closure is RETIRED (upstream DECISIONS #25 ruling 4); **⇧L/⇧J fixed-2× stay PORT-LOCAL** (`shuttle(direction, fixedRate)`); the S1 pin rewritten to the new law, assertions surviving (`GluedShell.test.tsx:470/:484`; K-pause-only pinned :1866). Owner: S-app (W-D) — DONE.
 - **D30 W-D — R6, the `r`-key coordination. LANDED as the cross-repo lockstep pair:** nle-ui `2646d80` (yield-sets gain 'r' — `useShortcuts.ts:69` engineOwnedPlain + `:85` shiftedYields; the shortcutMap tool-ripple dual-world row) + the app `78e7283` (K2 un-withheld — the r/⇧R loop-from-selection rows, `use-keybindings.ts:56-60`; acceptance pinned `GluedShell.test.tsx:1850-1851/:1940`: engine world — one r-press = one loop-set, no tool change; mock world — the ripple tool fires). The D28-A5 pattern (one package commit, the app re-pin last) executed as specified. Owner: S-package + S-app — DONE.
 - **D30 W-D — Z4, the scrub-row double-apply guard. LANDED, both halves:** S-PACKAGE `755235c` — stopPropagation on all four nudge branches (Viewer scrub-row `Viewer.tsx:296-307` + Ruler root `Ruler.tsx:233-245`; the `data-transport` marker itself landed R9 `2646d80`, `Viewer.tsx:317`; the row's own preventDefault stays for a11y per the option-(a) rejection); acceptance pinned `AppShell.test.tsx:505-517`. S-APP `78e7283` — the `[data-transport]` member in `SURFACE_OWNED_KEYS` (`use-keybindings.ts:139-150`, no shiftKey carve-out per 9-G1 P1-1); acceptance pinned `GluedShell.test.tsx:1876`. One ArrowLeft at the scrub row = exactly one frame step — verified in both repos. Owner: S-package + S-app — DONE.
@@ -39,7 +39,7 @@
 
 | Area | Before (spec 05 §19) | After (this spec) |
 |---|---|---|
-| Shortcut count | ~50 actions (union of 2 repos) | **181 bindings** (180 at v1.0 + `Option+R` from the R15/A6 amendment) across 13 categories (~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings), every common NLE action covered |
+| Shortcut count | ~50 actions (union of 2 repos) | **182 bindings** (180 at v1.0 + `Option+R` from the R15/A6 amendment + `Cmd+5` from the R28-D50 page-law fold) across 13 categories (~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings), every common NLE action covered |
 | Mapping target | "FCP/Premiere equivalent" column | **`EngineCommand` discriminator** + manager-method cross-ref (§12) |
 | Conflict handling | 5 conflicts noted, resolutions inline | **Full conflict table** (§6) covering 18 disambiguation cases (12 original + 6 audit-flagged direct conflicts resolved in §6.1 #13–#18) |
 | Test integration | "Keyboard test: Press each shortcut, assert correct command fires" | **4 named patterns** + Playwright recipes (§4, §9) + test enumeration appendix (§A) |
@@ -339,8 +339,8 @@ With the **slide tool** armed, `,`/`.` and their `Shift+` twins slide the primar
 | Key | Action | EngineCommand | Context | FCP equiv |
 |---|---|---|---|---|
 | `M` | Add marker at playhead (always adds — see the N8 note below) | `{ type: 'addMarker', params: { time: <currentTime> } }` | Always | M |
-| `Shift+M` | Delete marker at playhead | `{ type: 'deleteMarker', params: { time: <currentTime> } }` | When marker at playhead | Shift+M |
-| `Option+M` | Edit marker (open dialog, focus name field) | (UI only — opens marker dialog via uiStore; EngineCommand `updateMarker` fires on save) | When marker at playhead | (none) |
+| `Shift+M` | Delete marker at playhead (**start-match** — the D48 range reading, see the note below) | `{ type: 'deleteMarker', params: { time: <currentTime> } }` | When marker at playhead | Shift+M |
+| `Option+M` | Edit marker (open the marker inspector — 18 §4.4's rail swap; focus name field) | (UI only — opens the marker inspector rail via uiStore; EngineCommand `updateMarker` fires on commit) | When marker at playhead | (none) |
 | `Cmd+Option+M` | Delete all markers | `{ type: 'batch', label: 'Delete all markers', commands: ... }` | Always | (none) |
 | `Option+Shift+M` | Add marker at playhead with cycled color (next in the 8-color palette) | `{ type: 'addMarker', params: { time: <currentTime>, color: <nextColor> } }` | Always | (none) |
 | `Up` (in marker nav mode) | Jump to previous marker | `{ type: 'seekToMarker', params: { direction: -1 } }` | Always | Cmd+Up |
@@ -348,7 +348,7 @@ With the **slide tool** armed, `,`/`.` and their `Shift+` twins slide the primar
 
 **Marker color palette:** 8 colors — red, orange, yellow, green, blue, purple, pink, gray. Cycle order matches FCP. Color is stored on the marker (`Marker.color: string` — the A2 amendment's unified type; the old `Bookmark.color` shape is absorbed).
 
-**M-key behavior (Round 15 amendment, N8 — DECIDED):** the mock's proven behavior is adopted: `M` **always adds** a marker at the playhead — there is no toggle/edit-at-playhead semantics (the v1.0 row's "or edit existing if one is at playhead" was undefined behavior: one gesture, one meaning, and the always-add form is pinned by the mock's tests). Editing an existing marker is `Option+M`'s dialog; deleting is `Shift+M` — the three verbs stay three keys. `Option+Shift+M` likewise **always adds** (with the next palette color) rather than cycling an existing marker's color. Command verbs on the two amended rows are aligned to spec 15 §4.3.49's shipped `addMarker` (spec 15 wins per §0.2); the remaining bookmark verbs (`toggleBookmark`/`removeBookmark`/`updateBookmark`) retire into the marker family via the A2 unification (09-side R15 pass). **A2-rename execution note (single owner — dated 2026-09-06, R15 fix wave; shared verbatim by 09 §3.1A):** the §3.7 binding rows above now speak the unified marker family's verbs (`deleteMarker`, `updateMarker`, `Marker.color`); the union's Bookmark block (spec 15 §4.3.39-42) retires at the next union-version bump per §4.1A's Bookmark row. ONE owner for the remaining fold: **spec 15 §13.15's C7 worklist** (the OT-side rename pass at A2).
+**M-key behavior (Round 15 amendment, N8 — DECIDED):** the mock's proven behavior is adopted: `M` **always adds** a marker at the playhead — there is no toggle/edit-at-playhead semantics (the v1.0 row's "or edit existing if one is at playhead" was undefined behavior: one gesture, one meaning, and the always-add form is pinned by the mock's tests). Editing an existing marker is `Option+M`'s inspector (the D48 dialog→inspector re-home, below); deleting is `Shift+M` — the three verbs stay three keys. `Option+Shift+M` likewise **always adds** (with the next palette color) rather than cycling an existing marker's color. Command verbs on the two amended rows are aligned to spec 15 §4.3.49's shipped `addMarker` (spec 15 wins per §0.2); the remaining bookmark verbs (`toggleBookmark`/`removeBookmark`/`updateBookmark`) retire into the marker family via the A2 unification (09-side R15 pass). **A2-rename execution note (single owner — dated 2026-09-06, R15 fix wave; shared verbatim by 09 §3.1A):** the §3.7 binding rows above now speak the unified marker family's verbs (`deleteMarker`, `updateMarker`, `Marker.color`); the union's Bookmark block (spec 15 §4.3.39-42) retires at the next union-version bump per §4.1A's Bookmark row. ONE owner for the remaining fold: **spec 15 §13.15's C7 worklist** (the OT-side rename pass at A2). **⇧M's range reading (R28-D48 amendment — DECIDED):** with range markers in the family (D48: `duration` present ⇒ range marker, `end = time + duration`, ≥ 1 frame, ≤ scene duration), `Shift+M` deletes by **START-match only** — the frame-width window (±1 frame) at the marker's `time`; a playhead strictly inside a range marker's span deletes nothing. This is the mock's proven law (`removeMarkersAt`, useUiStore.ts:1982-1987 — the design-of-record witness D48 adopts; the same N8 pattern as `M`-always-adds); the span-contains alternative is registered as a future-round amendment (SPEC-REVISION-CANDIDATES), and the id-addressed remove routes (the inspector's Remove Marker button, `removeMarker{id}`) delete range markers regardless of playhead. The `Option+M` row above opens the **marker inspector** (18 §4.4's rail swap — the v2 field set: Time / Duration [range-only] / Name / Notes / Color; `notes` is user content that round-trips OT's `Bookmark.note` — the D48/F1 disposition — while `keyword` is REJECTED); the row's old "opens marker dialog" reading retired with the dialog itself.
 
 ### 3.8 View / Zoom
 
@@ -362,10 +362,11 @@ With the **slide tool** armed, `,`/`.` and their `Shift+` twins slide the primar
 | `Shift+\` | Zoom to 100% (1 frame = N px based on fps) | `{ type: 'zoom', params: { pixelsPerFrame: 10 } }` | Always | Shift+\ |
 | `Cmd+Option+0` | Zoom to selection (fit selected clips in view) | `{ type: 'zoomToSelection' }` | When clip selected | (none) |
 | `Cmd+Shift+F` | Toggle fullscreen preview (UI only) | (no EngineCommand — UI state) | Always | Cmd+Shift+F ⚠ conflict |
-| `Cmd+1` | Switch to Edit workspace | (no EngineCommand — UI state) | Always | Cmd+1 |
-| `Cmd+2` | Switch to Color workspace | (UI state) | Always | Cmd+2 |
-| `Cmd+3` | Switch to Effects workspace | (UI state) | Always | Cmd+3 |
-| `Cmd+4` | Switch to Audio workspace | (UI state) | Always | Cmd+4 |
+| `Cmd+1` | Switch to Edit page | (no EngineCommand — UI state) | Always | Cmd+1 |
+| `Cmd+2` | Switch to Color page | (UI state) | Always | Cmd+2 |
+| `Cmd+3` | Switch to Deliver page | (UI state) | Always | Cmd+3 |
+| `Cmd+4` | Toggle Audio focus page (re-click or `Escape` exits — a focus mode on a Page-union member) | (UI state) | Always | Cmd+4 |
+| `Cmd+5` | Switch to FX page | (UI state) | Always | Cmd+5 |
 | `Option+1` | Toggle Inspector panel | (UI state) | Always | (none) |
 | `Option+2` | Toggle Effects panel | (UI state) | Always | (none) |
 | `Option+3` | Toggle Media library panel | (UI state) | Always | (none) |
@@ -375,7 +376,7 @@ With the **slide tool** armed, `,`/`.` and their `Shift+` twins slide the primar
 
 **Fullscreen-preview conflict:** FCP uses `Cmd+Ctrl+F` for fullscreen; the binding `Cmd+Shift+F` here matches FreeCut's "open Scene Browser". Resolution: `Cmd+Shift+F` = **fullscreen preview** (more common in browser context where there is no separate Scene Browser window). Scene Browser opens via `Cmd+Option+B`.
 
-**R23 page-key reconciliation (PENDING — the live grammar vs these rows):** the shipped mock grammar (nle-ui + the variants) is `⌘1` Edit / `⌘2` Color / `⌘3` **Deliver** / `⌘4` Audio / `⌘5` **FX** (R23-WA) — this table's `⌘3` = "Effects workspace" collides with the live `⌘3` = Deliver, and the live surfaces add a fifth page (FX) this table lacks. The registered disposition (the variants' R23-WA wrap note): the FX page took spec 16's free `⌘5` chord; the `⌘3` reconciliation (Effects-workspace renamed/re-homed vs Deliver) is the pending edit — resolution rides the seal round or the SPEC-REVISION-CANDIDATES registration (see §0's GAP register row). `Escape` exits the Audio focus page and the FX tool back to Edit (the live law; §3.2's tool-escape row + §3.13's modal row generalize it).
+**R23 page-key reconciliation — RESOLVED (R28-D50, DECIDED — the five-page law):** 18 §4.8's page dock is **Edit / Color / Audio / FX / Deliver** (the accepted BASE's 4-page union + the variants mock's FX page; Audio = a Page-union member whose activation grammar is a focus mode — the ⌘4 toggle, re-click/Esc exits). This table now carries the live grammar verbatim: `⌘1` Edit / `⌘2` Color / `⌘3` **Deliver** / `⌘4` **Audio focus** / `⌘5` **FX** — the FX page per the one-flag law (`fxMode`, two doors one engine: the FX tool implies it, `setPage('fx')` writes it). The old `⌘3` = "Effects workspace" row is RETIRED (the Effects/FX surface is the FX page's, not a workspace switch), and the rows' "workspace" vocabulary retires with it (the corpus term is **page**). The ⌘-number namespace belongs to the page law **unconditionally** — §6.1 row 11 resolves the namespace's three historical claimants (§3.11's color-panel set and §5.4's track-focus set are RULED OUT). `Escape` exits the Audio focus page and the FX tool back to Edit (the live law; §3.2's tool-escape row + §3.13's modal row generalize it). The nle-ui FX-page absorption + the app-side page-key tests ride XMOCK-6's r5/K3 impl half (the DECISION is closed; the implementation window is registered — D50/F6).
 
 ### 3.9 Project / File
 
@@ -414,7 +415,7 @@ With the **slide tool** armed, `,`/`.` and their `Shift+` twins slide the primar
 |---|---|---|---|---|
 | `1`–`9` | Apply effect preset N to selected clip | `{ type: 'addEffect', params: { elementId: <selected>, effect: <presetN> } }` | When clip selected | (none) |
 | `Shift+1`–`Shift+9` | Toggle effect N on/off (without removing) | `{ type: 'toggleEffect', params: { elementId: <selected>, effectIndex: <N> } }` | When clip selected | (none) |
-| `Cmd+1`–`Cmd+9` | Switch color grading panel (Lift/Gamma/Gain/Saturation/etc.) | (UI only — panel focus) | Always | (none) |
+| `Cmd+1`–`Cmd+9` | **RULED OUT of the ⌘-number namespace (R28-D50)** — color grading panel focus (Lift/Gamma/Gain/Saturation/etc.) is pointer/inspector-routed in v1: no live keymap implements a ⌘-number panel chord (the page law wins unconditionally, §6.1 row 11), and no chord is minted in this fold. A future color-panel chord (the free `Option+Shift+1`–`9` family) registers via SPEC-REVISION-CANDIDATES | (none — no chord minted v1) | n/a — no active binding | (none) |
 | `Tab` (in effects panel) | Cycle focus through effects on selected clip | (UI only — panel navigation) | Effects panel focused | Tab |
 | `Cmd+Shift+E` (in effects panel) | Enable/disable currently-focused effect | `{ type: 'toggleEffect', params: { elementId: <selected>, effectId: <focused> } }` | Effects panel focused | (none) |
 | `Cmd+Shift+Option+E` | Reset all effects on selected clip to defaults | `{ type: 'resetEffects', params: { elementId: <selected> } }` | When clip selected | (none) |
@@ -426,24 +427,24 @@ With the **slide tool** armed, `,`/`.` and their `Shift+` twins slide the primar
 
 | Key | Action | EngineCommand | Context | FCP equiv |
 |---|---|---|---|---|
-| `K` (in keyframe panel) | Add keyframe at playhead for focused property | `{ type: 'upsertKeyframes', params: { elementId: <selected>, property: <focusedProp>, keyframes: [{ time: <currentTime>, value: <currentPropValue> }] } }` | Keyframe panel focused | K |
-| `Shift+K` | Delete keyframe at playhead for focused property | `{ type: 'removeKeyframes', params: { elementId: <selected>, property: <focusedProp>, keyframeIds: [<kfAtPlayhead>] } }` | Keyframe panel focused | Shift+K |
+| `K` (in keyframe panel) | Add keyframe at playhead for focused property | `{ type: 'upsertKeyframes', params: { keyframes: [{ elementId: <selected>, trackId: <selectedTrack>, propertyPath: <focusedProp>, spec: { time: <currentTime>, value: <currentPropValue> } }] } }` *(R28-D47.2 — the flat self-addressing form: each member carries its own address; the grouped `{elementId, property, keyframes[]}` wrapper retires; a missing `keyframeId` generates one, 15 §4.3.64)* | Keyframe panel focused | K |
+| `Shift+K` | Delete keyframe at playhead for focused property | `{ type: 'removeKeyframes', params: { keyframes: [{ elementId: <selected>, trackId: <selectedTrack>, propertyPath: <focusedProp>, keyframeId: <kfAtPlayhead> }] } }` *(R28-D47.2 — the flat self-addressing form; the grouped `{elementId, property, keyframeIds[]}` wrapper retires)* | Keyframe panel focused | Shift+K |
 | `Option+K` | Toggle keyframe navigation mode (snap to keyframes) | `{ type: 'toggleKeyframeNav' }` | Keyframe panel focused | (none) |
-| `Cmd+Shift+K` | Clear all keyframes on focused property | `{ type: 'removeKeyframes', params: { elementId: <selected>, property: <focusedProp>, keyframeIds: <allKfsOnProp> } }` | Keyframe panel focused | (none) |
+| `Cmd+Shift+K` | Clear all keyframes on focused property | `{ type: 'removeKeyframes', params: { keyframes: <allKfsOnProp>.map(kfId => ({ elementId: <selected>, trackId: <selectedTrack>, propertyPath: <focusedProp>, keyframeId: kfId })) } }` *(R28-D47.2 — the flat self-addressing form, same fold as the ⇧K row)* | Keyframe panel focused | (none) |
 | `[` (in keyframe panel) | Jump to previous keyframe (focused property) | `{ type: 'seekToKeyframe', params: { direction: -1, property: <focusedProp> } }` | Keyframe panel focused | Option+[ |
 | `]` (in keyframe panel) | Jump to next keyframe | `{ type: 'seekToKeyframe', params: { direction: 1, property: <focusedProp> } }` | Keyframe panel focused | Option+] |
 | `Option+[` | Jump to previous keyframe (any property) | `{ type: 'seekToKeyframe', params: { direction: -1, property: null } }` | Keyframe panel focused | (none) |
 | `Option+]` | Jump to next keyframe (any property) | `{ type: 'seekToKeyframe', params: { direction: 1, property: null } }` | Keyframe panel focused | (none) |
 | `Up`/`Down` (in keyframe panel) | Nudge keyframe value ±1 (small step) | `{ type: 'nudgeKeyframe', params: { keyframeId: <focused>, valueDelta: <step> } }` | Keyframe panel focused, keyframe selected | Up/Down |
 | `Shift+Up`/`Shift+Down` (in keyframe panel) | Nudge keyframe value ±10 (large step) | `{ type: 'nudgeKeyframe', params: { keyframeId: <focused>, valueDelta: <step*10> } }` | Keyframe panel focused, keyframe selected | Shift+Up/Down |
-| `Left`/`Right` (in keyframe panel) | Nudge keyframe time ±1 frame | `{ type: 'retimeKeyframe', params: { elementId: <selected>, keyframeId: <focused>, time: <currentTime ± 1frame> } }` *(the union's singular-absolute form has NO OT counterpart — the wire exposes the plural DELTA-shaped `retimeKeyframes`; the nudge composes `deltaTicks = target − key.time`; rides 15's r1 decision (a))* | Keyframe panel focused, keyframe selected | Left/Right |
-| `Shift+Left`/`Shift+Right` (in keyframe panel) | Nudge keyframe time ±10 frames | `{ type: 'retimeKeyframe', params: { elementId: <selected>, keyframeId: <focused>, time: <currentTime ± 10frames> } }` *(same singular-absolute annotation as above — the wire form is the plural delta `retimeKeyframes`)* | Keyframe panel focused, keyframe selected | Shift+Left/Right |
+| `Left`/`Right` (in keyframe panel) | Nudge keyframe time ±1 frame | `{ type: 'retimeKeyframes', params: { keyframes: [{ elementId: <selected>, trackId: <selectedTrack>, propertyPath: <focusedProp>, keyframeId: <focused> }], deltaTicks: <±1 frame, ticks> } }` *(R28-D47.1 RULED — the singular-absolute `retimeKeyframe` retires for the plural delta form; the nudge IS the delta gesture's native commit; programmatic absolute-time callers compose `deltaTicks = target − key.time`)* | Keyframe panel focused, keyframe selected | Left/Right |
+| `Shift+Left`/`Shift+Right` (in keyframe panel) | Nudge keyframe time ±10 frames | `{ type: 'retimeKeyframes', params: { keyframes: [{ elementId: <selected>, trackId: <selectedTrack>, propertyPath: <focusedProp>, keyframeId: <focused> }], deltaTicks: <±10 frames, ticks> } }` *(same D47.1 fold as the ±1 row — the plural delta form)* | Keyframe panel focused, keyframe selected | Shift+Left/Right |
 | `1` (in keyframe panel) | Switch to graph view | (UI only) | Keyframe panel focused | 1 |
 | `2` (in keyframe panel) | Switch to dopesheet view | (UI only) | Keyframe panel focused | 2 |
 | `3` (in keyframe panel) | Switch to split view | (UI only) | Keyframe panel focused | 3 |
 | `F` (in keyframe panel) | Fit keyframe panel to selection | (UI only) | Keyframe panel focused | F |
 
-**Spec 15 alignment:** keyframe command type names are aligned to spec 15 §4.1: `upsertKeyframes` (was spec-16-only `addKeyframe`), `removeKeyframes` (was `deleteKeyframe` / `clearKeyframes`), `retimeKeyframe` (was `moveKeyframe`). The spec-16 `nudgeKeyframe` and `seekToKeyframe` UI-layer extensions remain as composites (they wrap `upsertKeyframes` and `seek` respectively — see §8.3 resolver).
+**Spec 15 alignment:** keyframe command type names are aligned to spec 15 §4.1: `upsertKeyframes` (was spec-16-only `addKeyframe`), `removeKeyframes` (was `deleteKeyframe` / `clearKeyframes`), `retimeKeyframes` (was `moveKeyframe`, then the interim singular-absolute `retimeKeyframe` — retired R28-D47.1 for the plural delta form). **R28-D47.2 (the flat self-addressing law):** the keyframe family's params are cross-element flat member lists of self-addressing objects — `KeyframeRef = {trackId, elementId, propertyPath, keyframeId}` (OT's landed 4-tuple, api.ts:156-176) — with shared gesture scalars hoisted to verb level (`retimeKeyframes.deltaTicks`); the grouped per-element wrappers (`{elementId, keyframes[]}` / `{elementId, keyframeIds[]}`) retire at 15's r1 union-version bump (the :4918 convention; §2-law-5's old-replay deprecation path). The spec-16 `nudgeKeyframe` and `seekToKeyframe` UI-layer extensions remain as composites (they wrap `upsertKeyframes` and `seek` respectively — see §8.3 resolver).
 
 ### 3.13 Help / Cheat Sheet
 
@@ -618,7 +619,7 @@ This separation lets a test do "select all on track 2, then nudge up to track 1"
 | `Cmd+Down` | Move track focus down one track |
 | `Cmd+Shift+Up` | Move track focus to top track |
 | `Cmd+Shift+Down` | Move track focus to bottom track |
-| `Cmd+1`–`Cmd+9` (timeline focused) | Focus track N directly |
+| `Cmd+1`–`Cmd+9` | **RULED OUT (R28-D50)** — direct track-focus-by-index claims a ⌘-number chord the page law owns unconditionally (§6.1 row 11); no live keymap implements it. Track focus keeps this table's `Cmd+Up`/`Cmd+Down` walk + the `F2` under-playhead row |
 | `F2` | Focus the track under the playhead |
 
 ---
@@ -641,7 +642,7 @@ Some keys have multiple meanings depending on context. **Every conflict is resol
 | 8 | `Shift+Left` / `Shift+Right` | Jump 5 sec (OpenCut-classic) | Nudge 10 frames (FreeCut) | **`Shift+Left`/`Shift+Right` = 10-frame nudge** (more useful day-to-day). 5-sec jump removed; use `PageUp`/`PageDown` for edit-point navigation. | §3.1 (this spec) vs §19 (OpenCut-classic) |
 | 9 | `Cmd+Shift+F` | Toggle fullscreen preview | Open Scene Browser (FreeCut) | **`Cmd+Shift+F` = fullscreen preview** (browser context). Scene Browser is `Cmd+Option+B`. | §3.8 |
 | 10 | `Cmd+L` | Lock focused track (this spec) | Loop playback toggle (some editors) | **`Cmd+L` = lock track.** Loop playback is `Cmd+Shift+G` (avoids Cmd+L entirely). | §3.5 |
-| 11 | `Cmd+1`–`Cmd+9` | Switch workspace (§3.8) | Apply effect preset (§3.11, no Cmd) | **Workspace = `Cmd+1`–`Cmd+9`.** Effect presets = `1`–`9` (no modifier). No conflict — different modifiers. | §3.8 vs §3.11 |
+| 11 | `Cmd+1`–`Cmd+9` | Switch page (§3.8 — ⌘1–⌘5, the D50 five-page law) | Apply effect preset (§3.11, no Cmd) | **The ⌘-number namespace belongs to the page law (R28-D50): `Cmd+1`–`Cmd+5` = Edit / Color / Deliver / Audio focus / FX, Always, unconditionally — no panel, page, or focus context can claim a ⌘-number (§6.2's ladder never reaches them; the live keymaps implement no other ⌘-number claimant).** Effect presets = `1`–`9` (no modifier — different modifiers, no conflict). The namespace's OTHER two historical claimants are RULED OUT in the same fold (the three-claimant resolution): §3.11's color-panel reading (`Cmd+1`–`Cmd+9` "switch color grading panel" — retired; panels are pointer/inspector-routed) and §5.4's track-focus reading (`Cmd+1`–`Cmd+9` "focus track N" — retired; ⌘↑/⌘↓ + F2 remain the keyboard route). `Cmd+6`–`Cmd+9` stay reserved for future pages. | §3.8 vs §3.11 vs §5.4 (R28-D50) |
 | 12 | `Tab` | Select next clip (timeline region focused) | Cycle focus in effects panel (effects panel focused) | **Panel focus determines op.** Effects panel focused → cycle effects; timeline region focused → select next clip. (Round 15 amendment, N11 — §3.3's context column now reads "Timeline region focused", reconciling its old "Always" with this row.) | §3.3 vs §3.11 |
 | 13 | `Cmd+Option+L` | Toggle A/V link (when clip selected) | Unlock all tracks (always) | **`Cmd+Option+L` = A/V link toggle (clip-context priority).** Unlock-all-tracks reassigned to `Cmd+Shift+Option+L` (4-key chord). | §3.4 vs §3.5 (audit Issue #8 fix) |
 | 14 | `Cmd+Option+E` | Export current frame (always) | Reset all effects (when clip selected) | **`Cmd+Option+E` = export frame (Always-active primary).** Reset-all-effects reassigned to `Cmd+Shift+Option+E`. | §3.9 vs §3.11 (audit Issue #8 fix) |
@@ -908,10 +909,11 @@ export type EngineCommand =
   // Effect
   | { type: 'addEffect'; params: { elementId: ElementRef; effect: EffectPreset } }
   | { type: 'toggleEffect'; params: { elementId: ElementRef; effectIndex?: number; effectId?: string } }
-  // Keyframe (spec 15 names: `upsertKeyframes`, `removeKeyframes`, `retimeKeyframe`)
-  | { type: 'upsertKeyframes'; params: { elementId: ElementRef; property: string; keyframes: Keyframe[] } }   // was `addKeyframe`
-  | { type: 'removeKeyframes'; params: { elementId: ElementRef; property: string; keyframeIds: string[] } }   // was `deleteKeyframe`/`clearKeyframes`
-  | { type: 'retimeKeyframe'; params: { elementId: ElementRef; keyframeId: string; time: number } }            // was `moveKeyframe`
+  // Keyframe (spec 15 names — R28-D47 flat self-addressing forms; KeyframeRef =
+  // { trackId: string; elementId: string; propertyPath: string; keyframeId: string } — OT's landed 4-tuple, api.ts:156-176)
+  | { type: 'upsertKeyframes'; params: { keyframes: Array<KeyframeRef & { spec: KeyframeSpec }> } }   // D47.2 — was `addKeyframe`; was grouped {elementId, keyframes[]}
+  | { type: 'removeKeyframes'; params: { keyframes: KeyframeRef[] } }                                 // D47.2 — was `deleteKeyframe`/`clearKeyframes`; was grouped {elementId, keyframeIds[]}
+  | { type: 'retimeKeyframes'; params: { keyframes: KeyframeRef[]; deltaTicks: number } }             // D47.1 — the singular-absolute `retimeKeyframe` (was `moveKeyframe`) RETIRES for the plural delta form
 
   // ── Spec-16 UI-layer extensions (NOT in spec 15; route to UI store) ──
   // These commands affect UI state (panel focus, viewport, snap, ripple flag) or
@@ -1306,20 +1308,20 @@ export function resolveEngineCommand(
       engine.color.matchColor({ targetId: command.params.targetId, sourceId: command.params.sourceId });
       return;
 
-    // ── Keyframes (spec 15 names: `upsertKeyframes`, `removeKeyframes`, `retimeKeyframe`) ─
-    case 'upsertKeyframes':                                // was `addKeyframe`
+    // ── Keyframes (spec 15 names — R28-D47 flat self-addressing forms: `upsertKeyframes`, `removeKeyframes`, `retimeKeyframes`) ─
+    case 'upsertKeyframes':                                // was `addKeyframe`; D47.2 — the grouped {elementId, keyframes[]} wrapper retires
       engine.command.execute({ command: new UpsertKeyframesCommand({
-        elementId: command.params.elementId, keyframes: command.params.keyframes,
+        keyframes: command.params.keyframes,              // flat self-addressing members (KeyframeRef & {spec})
       }) });
       return;
-    case 'removeKeyframes':                                // was `deleteKeyframe` / `clearKeyframes`
+    case 'removeKeyframes':                                // was `deleteKeyframe` / `clearKeyframes`; D47.2 — the grouped {elementId, keyframeIds[]} wrapper retires
       engine.command.execute({ command: new RemoveKeyframesCommand({
-        elementId: command.params.elementId, keyframeIds: command.params.keyframeIds,
+        keyframes: command.params.keyframes,              // flat self-addressing KeyframeRefs
       }) });
       return;
-    case 'retimeKeyframe':                                 // was `moveKeyframe`
-      engine.command.execute({ command: new RetimeKeyframeCommand({
-        elementId: command.params.elementId, keyframeId: command.params.keyframeId, time: command.params.time,
+    case 'retimeKeyframes':                                // was `moveKeyframe` / `retimeKeyframe`; D47.1 — the singular-absolute form retires for the plural delta
+      engine.command.execute({ command: new RetimeKeyframesCommand({
+        keyframes: command.params.keyframes, deltaTicks: command.params.deltaTicks,
       }) });
       return;
     case 'nudgeKeyframe': {
@@ -1428,17 +1430,17 @@ function resolveToCommandInstance(
       return new RemoveBookmarkCommand({ time: command.params.time });
     case 'updateBookmark':
       return new UpdateBookmarkCommand({ time: command.params.time, updates: command.params.updates });
-    case 'upsertKeyframes':
+    case 'upsertKeyframes':                              // D47.2 — flat self-addressing members
       return new UpsertKeyframesCommand({
-        elementId: command.params.elementId, keyframes: command.params.keyframes,
+        keyframes: command.params.keyframes,
       });
-    case 'removeKeyframes':
+    case 'removeKeyframes':                              // D47.2 — flat KeyframeRefs
       return new RemoveKeyframesCommand({
-        elementId: command.params.elementId, keyframeIds: command.params.keyframeIds,
+        keyframes: command.params.keyframes,
       });
-    case 'retimeKeyframe':
-      return new RetimeKeyframeCommand({
-        elementId: command.params.elementId, keyframeId: command.params.keyframeId, time: command.params.time,
+    case 'retimeKeyframes':                              // D47.1 — plural delta (the singular-absolute retires)
+      return new RetimeKeyframesCommand({
+        keyframes: command.params.keyframes, deltaTicks: command.params.deltaTicks,
       });
     case 'addEffect':
       return new AddEffectCommand({
@@ -1649,17 +1651,20 @@ export class ShortcutMap {
       action: 'Add keyframe at playhead (keyframe panel)',
       category: 'keyframes',
       buildCommand: (ctx) => ({
-        type: 'upsertKeyframes',
+        type: 'upsertKeyframes',                          // D47.2 — the flat self-addressing form
         params: {
-          elementId: ctx.engine.selection.getSelectedElements()[0],
-          property: ctx.uiStore.keyframes.focusedProperty,
-          keyframes: [{ time: ctx.engine.playback.getCurrentTime(), value: ctx.engine.timeline.getPropertyValue(/* ... */) }],
+          keyframes: [{
+            elementId: ctx.engine.selection.getSelectedElements()[0],
+            trackId: ctx.engine.selection.getSelectedElements()[0].trackId,
+            propertyPath: ctx.uiStore.keyframes.focusedProperty,
+            spec: { time: ctx.engine.playback.getCurrentTime(), value: ctx.engine.timeline.getPropertyValue(/* ... */) },
+          }],
         },
       }),
       contextPredicate: (ctx) => ctx.uiStore.keyframes.isPanelFocused(),
       fcpEquiv: 'K',
     });
-    // ... ~178 more entries mirroring §3 (181 total — see Appendix A)
+    // ... ~179 more entries mirroring §3 (182 total — see Appendix A; re-keyed R28-D50)
     return m;
   }
 
@@ -2058,7 +2063,7 @@ Spec 05 §19 documented the *union* of FreeCut + OpenCut-classic shortcuts as a 
 | `alt+c` (FreeCut) = split at cursor | `B` (razor) + click = split at click | Razor tool + click is more discoverable than a chord |
 | (none) | `Cmd+Shift+B` = split all tracks | New — addresses test need for "split everything at playhead" |
 
-**Net change:** this spec defines **181 bindings** across 13 categories (180 at v1.0 + `Option+R` from the R15/A6 amendment; ~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings — see Appendix A footer for the collapsing rule) vs §19's ~50, with explicit conflict resolution for all 12 disambiguation cases (§6) plus 6 audit-flagged direct conflicts resolved in §6.1 #13–#18. §19's union table remains useful as a *reference* for "what do FCP/Premiere/FreeCut/OpenCut-classic do" — this spec is the *normative* definition for our NLE.
+**Net change:** this spec defines **182 bindings** across 13 categories (180 at v1.0 + `Option+R` from the R15/A6 amendment + `Cmd+5` from the R28-D50 page-law fold; ~110 unique actions after parameterizing presets/panels/workspaces/alt-bindings — see Appendix A footer for the collapsing rule) vs §19's ~50, with explicit conflict resolution for all 12 disambiguation cases (§6) plus 6 audit-flagged direct conflicts resolved in §6.1 #13–#18. §19's union table remains useful as a *reference* for "what do FCP/Premiere/FreeCut/OpenCut-classic do" — this spec is the *normative* definition for our NLE.
 
 ---
 
@@ -2115,9 +2120,9 @@ Each `EngineCommand` type maps to one or more manager methods on `EditorCore` **
 | `resetEffects` (UI) | `BatchCommand(N× RemoveEffectCommand)` | TimelineManager | Yes | Composite (spec-16 wraps spec-15 `removeEffect`) |
 | `resetColorGrade` (UI) | `timeline.updateElements({updates: {colorGrade: default}})` | TimelineManager | Yes | Property reset |
 | `matchColor` (UI) | `color.matchColor({target, source})` | ColorManager | Yes | Composite |
-| `upsertKeyframes` | `timeline.upsertKeyframes({elementId, keyframes})` | TimelineManager | Yes | `UpsertKeyframesCommand` — **spec 15 type name** (was spec-16 `addKeyframe`) |
-| `removeKeyframes` | `timeline.removeKeyframes({elementId, keyframeIds})` | TimelineManager | Yes | `RemoveKeyframesCommand` — **spec 15 type name** (was spec-16 `deleteKeyframe` / `clearKeyframes`) |
-| `retimeKeyframe` | `timeline.retimeKeyframe({elementId, keyframeId, time})` | TimelineManager | Yes | `RetimeKeyframeCommand` — **spec 15 type name** (was spec-16 `moveKeyframe`) |
+| `upsertKeyframes` | `timeline.upsertKeyframes({keyframes})` — flat self-addressing members (`KeyframeRef & {spec}`) | TimelineManager | Yes | `UpsertKeyframesCommand` — **spec 15 type name** (was spec-16 `addKeyframe`); D47.2 — the grouped `{elementId, keyframes[]}` wrapper retires (OT's routed surface keeps the singular `upsertKeyframe` — the r1 port aligns) |
+| `removeKeyframes` | `timeline.removeKeyframes({keyframes})` — flat `KeyframeRef[]` | TimelineManager | Yes | `RemoveKeyframesCommand` — **spec 15 type name** (was spec-16 `deleteKeyframe` / `clearKeyframes`); D47.2 — the grouped `{elementId, keyframeIds[]}` wrapper retires |
+| `retimeKeyframes` | `timeline.retimeKeyframes({keyframes, deltaTicks})` — flat refs + the verb-level shared delta | TimelineManager | Yes | `RetimeKeyframesCommand` — **spec 15 type name** (was spec-16 `moveKeyframe`); D47.1 — the singular-absolute `retimeKeyframe` retires for the plural delta form |
 | `seekToKeyframe` (UI) | resolver finds nearest kf, then `playback.seek(t)` | PlaybackManager | No | Composite |
 | `nudgeKeyframe` (UI) | reads kf, then `upsertKeyframes` with shifted value | TimelineManager | Yes | Composite (wraps spec-15 `upsertKeyframes`) |
 | `toggleKeyframeNav` (UI) | `uiStore.keyframes.toggleKeyframeNav()` | UIStore | No | UI state |
@@ -2271,10 +2276,11 @@ kbd-zoom-fit-alt            | Cmd+\              | Zoom to fit (alt)            
 kbd-zoom-100                | Shift+\            | Zoom to 100%                       | view      | Always
 kbd-zoom-selection          | Cmd+Option+0      | Zoom to selection                  | view      | When clip selected
 kbd-fullscreen              | Cmd+Shift+F        | Toggle fullscreen preview          | view      | Always
-kbd-workspace-edit          | Cmd+1              | Edit workspace                     | view      | Always
-kbd-workspace-color         | Cmd+2              | Color workspace                    | view      | Always
-kbd-workspace-effects       | Cmd+3              | Effects workspace                  | view      | Always
-kbd-workspace-audio         | Cmd+4              | Audio workspace                    | view      | Always
+kbd-workspace-edit          | Cmd+1              | Edit page                          | view      | Always
+kbd-workspace-color         | Cmd+2              | Color page                         | view      | Always
+kbd-workspace-deliver       | Cmd+3              | Deliver page                       | view      | Always
+kbd-workspace-audio         | Cmd+4              | Audio focus page (toggle)          | view      | Always
+kbd-workspace-fx            | Cmd+5              | FX page                            | view      | Always
 kbd-toggle-inspector        | Option+1          | Toggle Inspector panel             | view      | Always
 kbd-toggle-effects-panel    | Option+2          | Toggle Effects panel               | view      | Always
 kbd-toggle-media            | Option+3          | Toggle Media library panel         | view      | Always
@@ -2343,7 +2349,7 @@ kbd-context-help            | F1                 | Contextual help              
 kbd-close-modal             | Escape             | Close modal / cancel                | help      | When modal open
 ```
 
-**Total bindings: 181 rows** (180 at v1.0 + `Option+R` from the R15/A6 amendment; the A1 delete-family re-row is count-neutral — Backspace-alias + `Shift+Delete`-ripple replace Backspace-ripple + `Cmd+Delete`-ripple-alt, the latter dropped). Each row maps 1:1 to a test in `tests/e2e/keyboard.spec.ts`. Unique actions: **~110** (after parameterizing: effect presets 1–9 counted as 1 unique action, effect toggles 1–9 as 1, panel toggles as 1, workspace switches as 1, alt bindings merged with primaries — collapsing rule: 181 → ~150 → ~120 → ~110). This 181 / ~110 split is the canonical binding count referenced in §0A TL;DR, §16 test matrix, and §11 net-change summary (spec 15 §13.5's citation now reads **181 bindings** — the R15 15-side sync landed; its old "180 bindings" text predates the R15 pass).
+**Total bindings: 182 rows** (180 at v1.0 + `Option+R` from the R15/A6 amendment + `Cmd+5` from the R28-D50 page-law fold — the new kbd-workspace-fx row; the A1 delete-family re-row is count-neutral — Backspace-alias + `Shift+Delete`-ripple replace Backspace-ripple + `Cmd+Delete`-ripple-alt, the latter dropped; the D50 kbd-workspace-effects→deliver re-key is count-neutral). Each row maps 1:1 to a test in `tests/e2e/keyboard.spec.ts`. Unique actions: **~110** (after parameterizing: effect presets 1–9 counted as 1 unique action, effect toggles 1–9 as 1, panel toggles as 1, workspace switches as 1 — the fifth page folds into the same unique action — alt bindings merged with primaries — collapsing rule: 182 → ~150 → ~120 → ~110). This 182 / ~110 split is the canonical binding count referenced in §0A TL;DR, §16 test matrix, and §11 net-change summary (spec 15 §13.5's citation still reads **181 bindings** — the R15 15-side sync; the D50 +1 re-key rides the W6 cross-file sweep).
 
 ---
 
@@ -2374,9 +2380,9 @@ For implementers. Each `EngineCommand` type maps to a `Command` subclass (or dir
 | `removeBookmark` | `RemoveBookmarkCommand` | `src/commands/scenes/remove-bookmark.ts` |
 | `updateBookmark` | `UpdateBookmarkCommand` | `src/commands/scenes/update-bookmark.ts` |
 | `addEffect` | `AddEffectCommand` (spec 15 §4.2 — greenfield) | `src/commands/timeline/effect/add-effect.ts` |
-| `upsertKeyframes` | `UpsertKeyframesCommand` (spec 15 type name — was `addKeyframe`) | `src/commands/timeline/keyframe/upsert-keyframes.ts` |
-| `removeKeyframes` | `RemoveKeyframesCommand` (spec 15 type name — was `deleteKeyframe`/`clearKeyframes`) | `src/commands/timeline/keyframe/remove-keyframes.ts` |
-| `retimeKeyframe` | `RetimeKeyframeCommand` (spec 15 type name — was `moveKeyframe`) | `src/commands/timeline/keyframe/retime-keyframe.ts` |
+| `upsertKeyframes` | `UpsertKeyframesCommand` (spec 15 type name — was `addKeyframe`; D47.2 flat form) | `src/commands/timeline/keyframe/upsert-keyframes.ts` |
+| `removeKeyframes` | `RemoveKeyframesCommand` (spec 15 type name — was `deleteKeyframe`/`clearKeyframes`; D47.2 flat form) | `src/commands/timeline/keyframe/remove-keyframes.ts` |
+| `retimeKeyframes` | `RetimeKeyframesCommand` (spec 15 type name — was `moveKeyframe`/`retimeKeyframe`; D47.1 — the singular-absolute retires for the plural delta) | `src/commands/timeline/keyframe/retime-keyframes.ts` |
 | `freezeFrame` (UI) | `BatchCommand([SplitElementsCommand, InsertElementCommand])` | composite |
 | `join` (UI) | `BatchCommand([DeleteElementsCommand, UpdateElementsCommand(merge)])` | composite |
 | `undo` | `command.undo()` | direct (spec 15 §4.2) |
@@ -2387,15 +2393,15 @@ For implementers. Each `EngineCommand` type maps to a `Command` subclass (or dir
 | `exportFrame` | `engine.command.apply({type:'exportFrame'})` → `ExportFrameCommand` (spec 15 §4.3.76) | `src/commands/export/export-frame.ts` |
 | (all playback / UI-store ops) | direct manager calls / `uiStore.*` setters | (no Command class) |
 
-**Greenfield files** (marked "greenfield" above) are new — they do not exist in OpenCut-classic and must be authored as part of this spec's implementation. Scheduling (R23 re-base): the composites that are app-side behavior (the `splitAndRemove`/ripple composes) author at **K3** over `timeline.trim`/`rippleDelete` (the GAP-W-ops rows); the op-depth families (slip/slide/roll/rateStretch/retime/freezeFrame/rangeRemoval) queue at **r1** (S-ot's workstream) — see `IMPLEMENTATION-PLAN.md` §3. Spec-15-canonical type renames (`deleteTrack`, `upsertKeyframes`, `removeKeyframes`, `retimeKeyframe`, `copyClipboardEntry`, `buildPasteClipboardCommand`, `closeProject`) reflect alignment with `15-wire-protocol.md` §4 — files keep their existing OpenCut-classic file paths (e.g., `remove-track.ts`) but the EngineCommand discriminator uses the spec-15 name.
+**Greenfield files** (marked "greenfield" above) are new — they do not exist in OpenCut-classic and must be authored as part of this spec's implementation. Scheduling (R23 re-base): the composites that are app-side behavior (the `splitAndRemove`/ripple composes) author at **K3** over `timeline.trim`/`rippleDelete` (the GAP-W-ops rows); the op-depth families (slip/slide/roll/rateStretch/retime/freezeFrame/rangeRemoval) queue at **r1** (S-ot's workstream) — see `IMPLEMENTATION-PLAN.md` §3. Spec-15-canonical type renames (`deleteTrack`, `upsertKeyframes`, `removeKeyframes`, `retimeKeyframes` (the R28-D47.1 rename of the interim `retimeKeyframe`), `copyClipboardEntry`, `buildPasteClipboardCommand`, `closeProject`) reflect alignment with `15-wire-protocol.md` §4 — files keep their existing OpenCut-classic file paths (e.g., `remove-track.ts`) but the EngineCommand discriminator uses the spec-15 name.
 
 ---
 
 ## 16. Appendix C — Test Matrix
 
-Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status column tracks implementation. **Counts aligned to Appendix A's 181-row canonical registry** (see Appendix A footer for the collapsing rule that derives ~110 unique actions).
+Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status column tracks implementation. **Counts aligned to Appendix A's 182-row canonical registry** (re-keyed R28-D50 — see Appendix A footer for the collapsing rule that derives ~110 unique actions).
 
-**[R23 status note: the "Tests written: 0" column tracks THIS spec's planned app-side Playwright enumeration corpus (the K3/r5 target) — it is still 0 as a named suite. The crawl's keyboard NETS, however, are real and green in their owner repos (the verification layer moved under the R22 plan): the app's vitest pins (`GluedShell.test.tsx` S1/S2 — the JKL ladder, the delete/undo round-trips; 252/252 at `c020b2a`), the mini's LAW-NET law tests (C1/C16/C46/C49 + Space/Escape; 428→441 in flight), nle-ui's useShortcuts.test.tsx (690 at `32abd58`), the variants' useShortcuts/shortcutMap tests (1,762 registered, live higher — in flight), and OT's in-page real-keyboard suites (M24 + M28R's keyboard half, `55c81c0` code pin `970948a` — 632/632). The 181-row enumeration corpus lands with the K3 re-expression (the mini's key laws re-expressed app-side) + the r5 long tail. The per-category phase tags below are the OLD spec-14 ladder — see §13's D24 re-base.]**
+**[R23 status note: the "Tests written: 0" column tracks THIS spec's planned app-side Playwright enumeration corpus (the K3/r5 target) — it is still 0 as a named suite. The crawl's keyboard NETS, however, are real and green in their owner repos (the verification layer moved under the R22 plan): the app's vitest pins (`GluedShell.test.tsx` S1/S2 — the JKL ladder, the delete/undo round-trips; 252/252 at `c020b2a`), the mini's LAW-NET law tests (C1/C16/C46/C49 + Space/Escape; 428→441 in flight), nle-ui's useShortcuts.test.tsx (690 at `32abd58`), the variants' useShortcuts/shortcutMap tests (1,762 registered, live higher — in flight), and OT's in-page real-keyboard suites (M24 + M28R's keyboard half, `55c81c0` code pin `970948a` — 632/632). The 182-row enumeration corpus lands with the K3 re-expression (the mini's key laws re-expressed app-side) + the r5 long tail. The per-category phase tags below are the OLD spec-14 ladder — see §13's D24 re-base.]**
 
 | Category | Tests planned | Tests written | Status |
 |---|---|---|---|
@@ -2406,15 +2412,15 @@ Coverage matrix for `tests/e2e/keyboard.spec.ts`. Each row = one test. Status co
 | Track ops (§3.5) | 13 | 0 | pending Phase 3 |
 | Nudge (§3.6) | 10 | 0 | pending Phase 3 |
 | Markers (§3.7) | 5 | 0 | pending Phase 3 |
-| View / zoom (§3.8) | 18 | 0 | pending Phase 2 |
+| View / zoom (§3.8) | 19 | 0 | pending Phase 2 |
 | Project / file (§3.9) | 10 | 0 | pending Phase 2 |
 | Undo / redo (§3.10) | 3 | 0 | pending Phase 2 |
 | Effects (§3.11) | 22 | 0 | pending Phase 4 |
 | Keyframes (§3.12) | 20 | 0 | pending Phase 5 |
 | Help (§3.13) | 5 | 0 | pending Phase 6 |
-| **Total** | **181** | **0** | — |
+| **Total** | **182** | **0** | — |
 
-(The 181 count is the canonical Appendix A row count — see §0A TL;DR. Tests cover all 181 rows, with effect presets (1–9) and effect toggles (1–9) parameterized into 2 unique-action test groups (9 + 9 = 18 rows → 2 parameterized tests). Adjusted unique-action test count: ~110. Multi-tap JKL combos (`J`×2, `J`×3, `L`×2, `L`×3, `K`+`J`, `K`+`L`) are tested via the base `J`/`L`/`K` testIds with timed multi-press sequences — see §9.2 JKL shuttle recipe and Appendix A scope note.)
+(The 182 count is the canonical Appendix A row count — see §0A TL;DR. Tests cover all 182 rows, with effect presets (1–9) and effect toggles (1–9) parameterized into 2 unique-action test groups (9 + 9 = 18 rows → 2 parameterized tests). Adjusted unique-action test count: ~110. Multi-tap JKL combos (`J`×2, `J`×3, `L`×2, `L`×3, `K`+`J`, `K`+`L`) are tested via the base `J`/`L`/`K` testIds with timed multi-press sequences — see §9.2 JKL shuttle recipe and Appendix A scope note.)
 
 ---
 

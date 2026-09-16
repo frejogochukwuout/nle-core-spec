@@ -11,7 +11,7 @@
 ## 0. FORWARD INVENTORY (R22 posture, R24-re-based — what needs to be done; the BASE is accepted, not re-explained)
 
 **BASE (accepted, pinned 2026-09-08):**
-- opencut-timeline (OT) @ **HEAD `55c81c0`** (**code pin `970948a`** — the trailing commits are docs/runner-artifacts, src-diff empty) — **632/632** (72 report entries — the total only, the split convention changed shape; the report json committed at `970948a` is the count authority), tsc 0. The wire surface (`src/lib/timeline/headless/api.ts`): **the census re-declared at D-ARCH-6 (session 17, code pin `970948a`): 31 verbs = 28 UI-routed + 3 exceptions** (machine-checked three ways: the tsc-lockstep asserts; the M49C coverage gate, 28/28 PASS; the M55R arithmetic pin). The routed 28 (`WIRE_COMMAND_TYPES`, api.ts:243-275; tsc-lockstep both directions at :277-297): `timeline.{delete, duplicate, insert, insertBatch, move, moveBookmark, pause, play, redo, removeBookmark, removeKeyframes, retimeKeyframes, rippleDelete, seek, setLoopRegion, setPlaybackRate, split, toggleBookmark, undo, updateElements, upsertKeyframe}` (21) + `track.{add, remove, setAllLocked, setAllMuted, toggleLock, toggleMute, toggleVisibility}` (7). The 3 exceptions (`WIRE_UI_EXCEPTIONS`, api.ts:328-335 — **an exported tsc-asserted `Record<verb→law>`**, see the AR-2 consumption-law row below): `timeline.selectElements` (selection is VIEW state — the remote-consumer surface), `timeline.advancePlayhead` (the ticker is rAF-local), `timeline.trim` (the uniform-delta engine shape; the UI's resize commits as `updateElements` patches). The census lineage: the R15 charter's 24 → 28 actual at the R22 pin `05584d8` (the R22-era "24/78" claim was already stale at its own pin) → 30 at the R23 pin `222532c` → **the routed/exceptions split at `c15a629`** (24+6) → **25 routed + 5 exceptions at AR-2 `30bfe2a`** (the dblclick authoring ROUTED the keyframe-upsert verb) → **31 = 28+3 at D-ARCH-6 `970948a`** (+3 batch verbs; −2 retired singulars GONE — a stale singular dispatch hits the never-guard's typed INVALID_PARAMS at api.ts:2537-2545). The **M49C coverage gate** machine-checks the split (runner :390-425: reads BOTH registries LIVE from the page — no driftable copy; **origin-attributed — only origin:"ui" dispatches count (HA-4-2)**; 28/28 + 3 exceptions PASS, the report json the authority). **The W11 engine widenings are BASE (all landed @ `56dcd8f`, the W11-a wave):** the `HeadlessTimelineApi` **attach** option (api.ts:388-401 — SA-5 fps/instance validation: a silent mismatch would mint a wire whose time math disagrees with the view, api.ts:453); the **dispatch recorder** (the `wireLog` bounded ring, cap 500, api.ts:410/:416-418, + the `wireLogDropped` honesty counter + the UNBOUNDED `wireCoverage` Set — coverage must survive arbitrarily long suites — + the full `wireReset`/`wireLogReset` pair, api.ts:465-479); `WIRE_COMMAND_TYPES` (the tsc-lockstep law, both directions); `applyBatch` **`data.results`** (api.ts:2573-2612 — the R-A P1-3 stranding fix: per-command results; previously a bare ok DISCARDED the minted refs, stranding the UI's post-insert selection/scroll on a state diff); and the **keyframe-verb `TRACK_LOCKED`** — the batch-atomic keyframe-verb law (R-A P3-9, rewritten batch-atomic at D-ARCH-6: `removeKeyframes`/`retimeKeyframes`/`upsertKeyframe` lock-pre-check whole-batch, api.ts:2139/:2239-2246/:2337-2344 — still 12 commands total, counted live). **S3 LANDED** (M46 @ `a4e971d`: `setTracksMuted` the mute-all batch op — the `setTracksLocked` D-T3 twin, ONE history entry, every-track-at-target NOOP predicate both directions — + the `track.setAllMuted` wire verb with the A9 `ok:true` + `data:{changed, muted}` echo, never a failure code for the idempotent set). **The F1 hardening LANDED** (F1B-4 malformed/null/array params → `INVALID_PARAMS` — 16/16 commands had been reporting `INTERNAL_ERROR`; F1B-2 update-patch no-overlap → `CONFLICT` (insert, move, AND update now enforced on the wire); F1B-5 `setLoopRegion` `clear:false` never clears; F1B-6 negative trims/starts rejected; F1B-7 failed `applyBatch` preserves the pre-batch redo stack; F1C-4 the strict wire-echo assert; the lock pre-checks now on **12 commands** emitting `TRACK_LOCKED` — the W11 keyframe additions (below)). M45/M46/M49T/H/R/G/C pins. **29 of the 78** union members now have live OT wire counterparts (the natural-reading convention, stated once here: +`upsertKeyframes` via the routed singular, +`removeKeyframes` via the landed plural; `insertBatch` counts toward insert's existing slot; `retimeKeyframe`'s singular-absolute form has NO counterpart — the plural delta form is an OT extension pending the r1 §4.1A decision); 3 OT-side verbs have no union member yet (`advancePlayhead`/`setAllLocked`/`setAllMuted` — the C7-fold disposition rows in §13.15).
+- opencut-timeline (OT) @ **HEAD `55c81c0`** (**code pin `970948a`** — the trailing commits are docs/runner-artifacts, src-diff empty) — **632/632** (72 report entries — the total only, the split convention changed shape; the report json committed at `970948a` is the count authority), tsc 0. The wire surface (`src/lib/timeline/headless/api.ts`): **the census re-declared at D-ARCH-6 (session 17, code pin `970948a`): 31 verbs = 28 UI-routed + 3 exceptions** (machine-checked three ways: the tsc-lockstep asserts; the M49C coverage gate, 28/28 PASS; the M55R arithmetic pin). The routed 28 (`WIRE_COMMAND_TYPES`, api.ts:243-275; tsc-lockstep both directions at :277-297): `timeline.{delete, duplicate, insert, insertBatch, move, moveBookmark, pause, play, redo, removeBookmark, removeKeyframes, retimeKeyframes, rippleDelete, seek, setLoopRegion, setPlaybackRate, split, toggleBookmark, undo, updateElements, upsertKeyframe}` (21) + `track.{add, remove, setAllLocked, setAllMuted, toggleLock, toggleMute, toggleVisibility}` (7). The 3 exceptions (`WIRE_UI_EXCEPTIONS`, api.ts:328-335 — **an exported tsc-asserted `Record<verb→law>`**, see the AR-2 consumption-law row below): `timeline.selectElements` (selection is VIEW state — the remote-consumer surface), `timeline.advancePlayhead` (the ticker is rAF-local), `timeline.trim` (the uniform-delta engine shape; the UI's resize commits as `updateElements` patches). The census lineage: the R15 charter's 24 → 28 actual at the R22 pin `05584d8` (the R22-era "24/78" claim was already stale at its own pin) → 30 at the R23 pin `222532c` → **the routed/exceptions split at `c15a629`** (24+6) → **25 routed + 5 exceptions at AR-2 `30bfe2a`** (the dblclick authoring ROUTED the keyframe-upsert verb) → **31 = 28+3 at D-ARCH-6 `970948a`** (+3 batch verbs; −2 retired singulars GONE — a stale singular dispatch hits the never-guard's typed INVALID_PARAMS at api.ts:2537-2545). The **M49C coverage gate** machine-checks the split (runner :390-425: reads BOTH registries LIVE from the page — no driftable copy; **origin-attributed — only origin:"ui" dispatches count (HA-4-2)**; 28/28 + 3 exceptions PASS, the report json the authority). **The W11 engine widenings are BASE (all landed @ `56dcd8f`, the W11-a wave):** the `HeadlessTimelineApi` **attach** option (api.ts:388-401 — SA-5 fps/instance validation: a silent mismatch would mint a wire whose time math disagrees with the view, api.ts:453); the **dispatch recorder** (the `wireLog` bounded ring, cap 500, api.ts:410/:416-418, + the `wireLogDropped` honesty counter + the UNBOUNDED `wireCoverage` Set — coverage must survive arbitrarily long suites — + the full `wireReset`/`wireLogReset` pair, api.ts:465-479); `WIRE_COMMAND_TYPES` (the tsc-lockstep law, both directions); `applyBatch` **`data.results`** (api.ts:2573-2612 — the R-A P1-3 stranding fix: per-command results; previously a bare ok DISCARDED the minted refs, stranding the UI's post-insert selection/scroll on a state diff); and the **keyframe-verb `TRACK_LOCKED`** — the batch-atomic keyframe-verb law (R-A P3-9, rewritten batch-atomic at D-ARCH-6: `removeKeyframes`/`retimeKeyframes`/`upsertKeyframe` lock-pre-check whole-batch, api.ts:2139/:2239-2246/:2337-2344 — still 12 commands total, counted live). **S3 LANDED** (M46 @ `a4e971d`: `setTracksMuted` the mute-all batch op — the `setTracksLocked` D-T3 twin, ONE history entry, every-track-at-target NOOP predicate both directions — + the `track.setAllMuted` wire verb with the A9 `ok:true` + `data:{changed, muted}` echo, never a failure code for the idempotent set). **The F1 hardening LANDED** (F1B-4 malformed/null/array params → `INVALID_PARAMS` — 16/16 commands had been reporting `INTERNAL_ERROR`; F1B-2 update-patch no-overlap → `CONFLICT` (insert, move, AND update now enforced on the wire); F1B-5 `setLoopRegion` `clear:false` never clears; F1B-6 negative trims/starts rejected; F1B-7 failed `applyBatch` preserves the pre-batch redo stack; F1C-4 the strict wire-echo assert; the lock pre-checks now on **12 commands** emitting `TRACK_LOCKED` — the W11 keyframe additions (below)). M45/M46/M49T/H/R/G/C pins. **29 of the 78** union members now have live OT wire counterparts (the natural-reading convention, stated once here: +`upsertKeyframes` via the routed singular, +`removeKeyframes` via the landed plural; `insertBatch` counts toward insert's existing slot; `retimeKeyframe`'s singular-absolute form has NO counterpart — the plural delta form is an OT extension pending the r1 §4.1A decision — **now RULED (R28/D47: the plural delta form IS the union member; the singular retires at the r1 union-version bump)**); **the R28/D47 counterpart re-derivation (the r1-fold projection, per this convention): 29 → 31 — BOTH `retimeKeyframes`' slot (the retired singular-absolute slot has NO counterpart; the ruled plural-delta replacement IS OT's landed wire verb, +1) AND `insertBatch`'s own new slot (minted as the 79th union member at the r1 fold, +1) gain — 29 + 1 + 1 = 31 of the post-bump 79-member union; `replace` mints 80th with NO counterpart until `timeline.replace` lands (32 of 80 then — the census re-declares mechanically per D29-F8)**; 3 OT-side verbs have no union member yet (`advancePlayhead`/`setAllLocked`/`setAllMuted` — the C7-fold disposition rows in §13.15).
 - nle-test-app @ **`c020b2a`** — **252/252** (8 suites, live-run R27), tsc 0. The consumer side: the vendored OT core (mirror @ **`6e2b91a`** via `vendor/nle-timeline`/UPSTREAM.lock — pre-D-ARCH-6; the `970948a` re-pin is QUEUED at `c020b2a`'s filing, the gate goes red at the re-pin until the gesture-seam switch lands — the consumer's queue duty) + the **D28 edit-command dispatch** (`engineService.ts` — store action → core-method dispatch → the GluedShell mirror store) + the Wave-B S-round seam consumption (S1-S4 + D-S5) + W3 JKL + the R8 real-wiring waves (autosave/persistence, sidechain ducking, deliver export, effects/color preview); consumes `core.setTracksMuted`/`setTracksLocked` directly (the batch verbs are op-level consumers, pre-C7 — the trusted-integrator design; see the D30 wire-plan GAP rows below).
 - nle-engine @ **`f9ac806`** — **748/748** vitest (timeline.ts 8,997 LOC — every pre-R26 engine line pin is suspect), tsc 0. The service-slice home: the 19-op JSON-RPC dispatch (`src/lib/nle/headless/api.ts` — INTERNAL transport per Decision 12.2; the union façade is the r1 GAP row below) + the engine's own frozen-surface discipline (the 455-name `api-surface.frozen.ts` + `api-surface.test.ts` — the conscious-change gate the façade must flow through; grew from 453 names at the R23 pin) + N2b keyframed volume LANDED @ `37cdd28` + **the fleet-coherence re-pin**: the engine's own vendored OT submodule pins **`6e2b91a`** (one session behind the `970948a` code pin — the D-ARCH-6 absorption is the engine's queued next; the W11 wire surface importable at its own test seam; zero engine mediation by design).
 - In-repo: CORE-SEAMS S1 (doc-ops → wire commands, CLEAN) + S10 (error-code → toast rendering — the code→message map is the seam; the §6.3 envelope refinement is the r1 first item).
@@ -28,7 +28,7 @@
   - **R2 — the port's command verbs + gesture commits cross the wire** (owner S-app, the D30 W-C/W-D waves feeding K3; upstream W11 law verbatim: `useWireDispatch` routing for the toolbar, keyboard, menus, transport, label buttons, bookmark seek + the gesture commits move/patch/moveBookmark/insert; the exception registry is upstream's 6). The app does NOT re-route its own D28 `engineService` dispatch — the **trusted-integrator design** (direct core calls, the SEAMS §1 escape-hatch clause), with the REGISTERED blind spot: the shell-path verbs (⌘B, [ ]/⌥[ ], ,/., M/⇧M, ⌘M/⌘⇧M) are permanently invisible to the coverage gate + the wire-error chip (the gate measures the PORT surface; D29.1 registers the compensating pin family + the exception, owner-tagged app-side).
   - **R3 — EngineMount mints the wire via the `wire` prop** (owner S-app, K3's instrument carrier — the D30 W-C wave; the upstream `/view` page-owns-the-wire pattern — the injected wire wins, the view's own mint is bypassed): `useWireDispatch({core, fps})` in EngineMount, passed to TimelineView. `engineService.attachWire(api)` re-registers on every wire RE-MINT (identity-guarded detach — scene switches mint a fresh core → fresh wire → re-register); **the coverage carry**: the re-mint copies the prior api's `wireCoverage` into the fresh one (upstream view/page.tsx:437-443), so the coverage Set survives scene switches + Load swaps. Tests observe via `engineService.wireHandle()`.
   - **R8 — the coverage-gate port — K3's routed-verb completeness instrument (per D29.1)**: a GluedShell-driven app test module drives every routed wire verb via real UI events (toolbar buttons, keymap keys, context menus, label buttons, gesture sims), a module-scope accumulator Set unions `engineService.wireHandle().wireCoverage` in `afterEach`, and the final assertion is `accumulated ⊇ WIRE_COMMAND_TYPES − WIRE_UI_EXCEPTIONS` (the gate consumes the LIVE `WIRE_UI_EXCEPTION_VERBS` from the vendored barrel — the AR-2 consumption law; the app's R27-era gate already does, `wire-coverage.test.tsx:29/:59`). Wave order: W-C (the interlocked five + the EngineMount mint) → W-D (keybindings) → W-E (app seams) → W-F (this gate) → W-G (queues + wrap). *(R25 status: LANDED — the app's D30 W-F wave shipped the gate at `64fb0ab`, 206/206 live-run; the row is history.)*
-- **The edit-mode completeness families — r1-scheduled (D30.2/D31, R25; owners: S-spec for 06's family law — landed in this round's sibling amendment — + S-ot for the r1 ports per Decision 12.3; acceptance: the §13.15 rows' landing contracts)**: the four absent DaVinci families enter as **r1-scheduled verb rows in §13.15** (schedule, NOT census — D30.2): the **replace verb** (`timeline.replace` now → bare `replace` at the C7 r1-END fold; a NEW §4.1A union member, 78 → 79), the **append placement** (the 6th `PlacementStrategy {type:'append'}` + the `insertBatch {placement:'append'}` composite + the optional `timeline.append` documented wrapper per the rippleDelete pattern), the **ripple-overwrite composite** (delete+move+insert via `applyBatch`, one undo; the r1 verb decision: `InsertCommand` gains a replace-placement carrying the DELTA-law ripple flag — `insert{ripple}` pushes by the full duration, the replace-placement's ripple shifts by delta, one boolean cannot mean both), and the **fit-to-fill composition** (`insert + updateElements{retime}`; a first-class verb optional r2). On each landing the census re-declares MECHANICALLY (the tsc-lockstep + M49C law, D29 F8 — `WIRE_COMMAND_TYPES` fails typecheck until listed, the coverage gate fails until routed or registered; no spec amendment); until then the landed census (**31 = 28+3 since D-ARCH-6**) is unaffected by this row.
+- **The edit-mode completeness families — r1-scheduled (D30.2/D31, R25; owners: S-spec for 06's family law — landed in this round's sibling amendment — + S-ot for the r1 ports per Decision 12.3; acceptance: the §13.15 rows' landing contracts)**: the four absent DaVinci families enter as **r1-scheduled verb rows in §13.15** (schedule, NOT census — D30.2): the **replace verb** (`timeline.replace` now → bare `replace` at the C7 r1-END fold; a NEW §4.1A union member — the 80th, per R28/D47.3's post-`insertBatch` sequence (78→79→80; the ordinal reconciliation at §13.15's replace row)), the **append placement** (the 6th `PlacementStrategy {type:'append'}` + the `insertBatch {placement:'append'}` composite + the optional `timeline.append` documented wrapper per the rippleDelete pattern), the **ripple-overwrite composite** (delete+move+insert via `applyBatch`, one undo; the r1 verb decision: `InsertCommand` gains a replace-placement carrying the DELTA-law ripple flag — `insert{ripple}` pushes by the full duration, the replace-placement's ripple shifts by delta, one boolean cannot mean both), and the **fit-to-fill composition** (`insert + updateElements{retime}`; a first-class verb optional r2). On each landing the census re-declares MECHANICALLY (the tsc-lockstep + M49C law, D29 F8 — `WIRE_COMMAND_TYPES` fails typecheck until listed, the coverage gate fails until routed or registered; no spec amendment); until then the landed census (**31 = 28+3 since D-ARCH-6**) is unaffected by this row.
 
 **ACCEPTANCE & TEST PLAN:** §12 (Test Harness Usage) is this spec's battery; BASE acceptance = the cited suites at the cited pins (OT **632**; app **252**; engine **748**) — the regression role (K1). GAP acceptance is per-row above; facet rows in spec 17 §13A.
 
@@ -262,7 +262,7 @@ export type EngineCommand =
   // ── Keyframe ops ───────────────────────────────────────────────
   | UpsertKeyframesCommand
   | RemoveKeyframesCommand
-  | RetimeKeyframeCommand
+  | RetimeKeyframesCommand   // (R28/D47) the plural delta form — the singular-absolute form retired at the r1 union-version bump
   | UpdateKeyframeCurvesCommand
   // ── Clipboard ops ──────────────────────────────────────────────
   | CopyCommand
@@ -293,7 +293,7 @@ Each command type is defined below in §4.3 with:
 
 ### 4.1A Routing-disposition table (Round 15 — normative; the app bus's implementation map)
 
-**What this is:** Decision 16's completeness instrument. Every union member is assigned ONE home: **OT** (opencut-timeline headless API — the editing SSOT), **ENGINE** (nle-engine union façade — the service slice), **APP** (nle-app-level semantics), or **DEFERRED** (typed `NOT_IMPLEMENTED` — see §4.1B). The app bus's exhaustive-switch dispatch compiles against THIS table; DEFERRED members return `{ok:false, code:'NOT_IMPLEMENTED'}` honestly rather than silently missing. The battery (spec 17) verifies: implemented rows cite a module pin SHA; DEFERRED rows cite a phase or a user-signed deferral. **Baseline (Round 15):** OT @`0412e41` implements 24 of 78 (with prefixed names pending C7 + form deltas in §13.15); the engine's JSON-RPC surface (19 edit ops) is INTERNAL transport (Decision 12.2-amended) and does not count toward this table. **R24 live reading (@ OT code tip `c15a629`):** the prefixed census is 30, split **24 UI-routed + 6 documented exceptions** (§13.15's re-refreshed worklist; the exceptions are wire verbs whose UI-path law routes them elsewhere — they remain live wire surface for consumers, not absent commands) — 27 of the 78 union members have live OT wire counterparts (the R15 24 + `toggleTrackLock`←`track.toggleLock` S2 + `setRate`←`timeline.setPlaybackRate` + `setLoop`←`timeline.setLoopRegion` S1); 3 OT-side verbs await the C7-fold disposition (`advancePlayhead`/`setAllLocked`/`setAllMuted` — no union member). **R27 re-read (@ code pin `970948a`, D-ARCH-6):** the prefixed census is **31 = 28 routed + 3 exceptions** — the three: `timeline.selectElements` (selection is VIEW state), `timeline.advancePlayhead` (the ticker is rAF-local), `timeline.trim` (the engine's uniform-delta shape; the UI's resize commits as `updateElements` patches). The re-key lineage: the batch verbs `insertBatch`/`removeKeyframes`/`retimeKeyframes` landed; the singular remove/retime RETIRED; `upsertKeyframe` ROUTED since AR-2 — no keyframe exception remains; counterparts = **29 of 78** (the natural-reading convention stated once at §0's BASE: +`upsertKeyframes` via the routed singular, +`removeKeyframes` via the landed plural; `insertBatch` counts toward insert's existing slot; `retimeKeyframe`'s singular-absolute form has NO counterpart — the plural delta form is the OT extension pending the r1 decision). The phase column below is tagged per the D24 ladder only (crawl K1-K4 / walk w1-w3 / run r1-r6) — the R24 fleet closed the dual-vocabulary window (the R15/R22-era superseded tags are stripped). **Member census (R15 fix):** the rows below sum to exactly 78 of 78 union members — Timeline 17 + Track 7 + Playback 5 + Project 7 + Scene 4 + Bookmark 4 + Media 2 + Selection 4 + Marker 3 + Effect 5 + Mask 4 + Transition 3 + Keyframe 4 + Clipboard 3 + Undo/redo 2 + Snapshot 1 + Export 3 = **78**.
+**What this is:** Decision 16's completeness instrument. Every union member is assigned ONE home: **OT** (opencut-timeline headless API — the editing SSOT), **ENGINE** (nle-engine union façade — the service slice), **APP** (nle-app-level semantics), or **DEFERRED** (typed `NOT_IMPLEMENTED` — see §4.1B). The app bus's exhaustive-switch dispatch compiles against THIS table; DEFERRED members return `{ok:false, code:'NOT_IMPLEMENTED'}` honestly rather than silently missing. The battery (spec 17) verifies: implemented rows cite a module pin SHA; DEFERRED rows cite a phase or a user-signed deferral. **Baseline (Round 15):** OT @`0412e41` implements 24 of 78 (with prefixed names pending C7 + form deltas in §13.15); the engine's JSON-RPC surface (19 edit ops) is INTERNAL transport (Decision 12.2-amended) and does not count toward this table. **R24 live reading (@ OT code tip `c15a629`):** the prefixed census is 30, split **24 UI-routed + 6 documented exceptions** (§13.15's re-refreshed worklist; the exceptions are wire verbs whose UI-path law routes them elsewhere — they remain live wire surface for consumers, not absent commands) — 27 of the 78 union members have live OT wire counterparts (the R15 24 + `toggleTrackLock`←`track.toggleLock` S2 + `setRate`←`timeline.setPlaybackRate` + `setLoop`←`timeline.setLoopRegion` S1); 3 OT-side verbs await the C7-fold disposition (`advancePlayhead`/`setAllLocked`/`setAllMuted` — no union member). **R27 re-read (@ code pin `970948a`, D-ARCH-6):** the prefixed census is **31 = 28 routed + 3 exceptions** — the three: `timeline.selectElements` (selection is VIEW state), `timeline.advancePlayhead` (the ticker is rAF-local), `timeline.trim` (the engine's uniform-delta shape; the UI's resize commits as `updateElements` patches). The re-key lineage: the batch verbs `insertBatch`/`removeKeyframes`/`retimeKeyframes` landed; the singular remove/retime RETIRED; `upsertKeyframe` ROUTED since AR-2 — no keyframe exception remains; counterparts = **29 of 78** (the natural-reading convention stated once at §0's BASE: +`upsertKeyframes` via the routed singular, +`removeKeyframes` via the landed plural; `insertBatch` counts toward insert's existing slot; `retimeKeyframe`'s singular-absolute form has NO counterpart — the plural delta form is the OT extension pending the r1 decision — **RULED R28/D47: the post-bump counterpart re-derivation is 29 → 31 (BOTH `retimeKeyframes`' replacement slot AND `insertBatch`'s own new 79th-member slot gain counterparts; the derivation stated at §0's BASE)**). The phase column below is tagged per the D24 ladder only (crawl K1-K4 / walk w1-w3 / run r1-r6) — the R24 fleet closed the dual-vocabulary window (the R15/R22-era superseded tags are stripped). **Member census (R15 fix):** the rows below sum to exactly 78 of 78 union members — Timeline 17 + Track 7 + Playback 5 + Project 7 + Scene 4 + Bookmark 4 + Media 2 + Selection 4 + Marker 3 + Effect 5 + Mask 4 + Transition 3 + Keyframe 4 + Clipboard 3 + Undo/redo 2 + Snapshot 1 + Export 3 = **78**.
 
 | Category | Members (78) | Home | Status @ R15 → phase (D24) |
 |---|---|---|---|
@@ -317,7 +317,7 @@ Each command type is defined below in §4.3 with:
 | **Effect** | `addEffect` + 4 more (5) | ENGINE | engine effects registry exists (44 GPU effects); wire = engine façade + OT model extension (SceneTracks effect shapes — spec 06/07 gap work) → **DEFERRED pending the model extension** |
 | **Mask** | 4 | ENGINE | as effects → **DEFERRED pending the model extension** |
 | **Transition** | `addTransition`, `updateTransition`, `removeTransition` (3) | ENGINE (engine has the registry; OT models transitions element-hung — projector translation A1) | wire → **DEFERRED pending the model extension** |
-| **Keyframe** | `upsertKeyframes`, `removeKeyframes`, `retimeKeyframe`, `updateKeyframeCurves` (4; upsert/remove are plural batch forms, `retimeKeyframe` is singular per the union) | OT | wire @ `970948a`: `upsertKeyframe` (singular, UI-ROUTED since AR-2), `removeKeyframes`/`retimeKeyframes` (plural batch verbs, D-ARCH-6 — ONE history entry each; the singular remove/retime RETIRED); `retimeKeyframe` (§4.3.66's singular-absolute form) has NO OT counterpart — the plural delta form is the OT extension pending the r1 union decision; `updateKeyframeCurves` still no OT form → **r1**; batch engine-ops (timeline-core.ts:1726/:1966, R27 re-pinned) |
+| **Keyframe** | `upsertKeyframes`, `removeKeyframes`, `retimeKeyframes`, `updateKeyframeCurves` (4; the flat cross-element batch forms — R28/D47 rulings 1+2; the singular-absolute `retimeKeyframe` retired at the r1 union-version bump) | OT | wire @ `970948a`: `upsertKeyframe` (singular, UI-ROUTED since AR-2), `removeKeyframes`/`retimeKeyframes` (plural batch verbs, D-ARCH-6 — ONE history entry each; the singular remove/retime RETIRED); `retimeKeyframe`'s retirement RULED (R28/D47): the plural delta form IS the union member — its slot GAINS the live counterpart at the r1 fold (29→31, §0's BASE re-derivation); `updateKeyframeCurves` still no OT form → **r1**; batch engine-ops (timeline-core.ts:1726/:1966, R27 re-pinned) |
 | **Clipboard** | `copy`, `cut`, `paste` (3) | APP | greenfield (mock registers C19 → the K3 re-expression) → **r1 tail** (the wire verbs land with the r1 dispatch-completeness pass or re-scope at r1 entry) |
 | **Undo/redo** | `undo`, `redo` | OT | implemented |
 | **Snapshot** | `snapshot` | APP (test seam) | readouts exist (OT out-of-band readouts; engine headless) → **K3** (the app test seam) |
@@ -400,9 +400,9 @@ Every command type maps 1:1 to a manager method on `EditorCore`. This mapping is
 | **Transition** | `addTransition` | `engine.timeline.addTransition({transition})` (greenfield — OpenCut has no `TransitionsManager`) | ✅ |
 | | `updateTransition` | `engine.timeline.updateTransition({transitionId, params})` | ✅ |
 | | `removeTransition` | `engine.timeline.removeTransition({transitionId})` | ✅ |
-| **Keyframe** | `upsertKeyframes` | `engine.timeline.upsertKeyframes({elementId, keyframes})` | ✅ |
-| | `removeKeyframes` | `engine.timeline.removeKeyframes({elementId, keyframeIds})` | ✅ |
-| | `retimeKeyframe` | `engine.timeline.retimeKeyframe({elementId, keyframeId, time})` | ✅ |
+| **Keyframe** | `upsertKeyframes` | `engine.timeline.upsertKeyframes({keyframes})` — (R28/D47 ruling 2) the flat cross-element member list (`KeyframeRef & {spec}`) | ✅ |
+| | `removeKeyframes` | `engine.timeline.removeKeyframes({keyframes})` — (R28/D47) flat `KeyframeRef[]` | ✅ |
+| | `retimeKeyframes` | `engine.timeline.retimeKeyframes({keyframes, delta})` — (R28/D47 ruling 1) the plural delta form; the singular-absolute `retimeKeyframe` retired | ✅ |
 | | `updateKeyframeCurves` | `engine.timeline.updateKeyframeCurves({elementId, keyframeId, curves})` | ✅ |
 | **Clipboard** | `copy` | `engine.clipboard.copyClipboardEntry({elementIds})` | ❌ |
 | | `cut` | `copy` + `delete(elementIds)` (BatchCommand internally) | ✅ (the delete is) |
@@ -958,7 +958,16 @@ export interface UpdateElementsCommand {
     updates: Array<{
       trackId: string;
       elementId: string;
-      /** Partial patch — only listed fields are overwritten. */
+      /**
+       * Partial patch — only listed fields are overwritten.
+       *
+       * (R28/D42 rider 8: `linkedTo` joins the patchable key set — string;
+       * `null` CLEARS the pairwise link (D32.5's pairwise-at-rest field on
+       * OT's BaseTimelineElement). OT's `ElementPatch` + `ALLOWED_PATCH_KEYS`
+       * self-declare it; the wire census re-declares mechanically per
+       * D29-F8. The insert payload carries the field by reference —
+       * §4.3.9's ElementSpec → spec 09 §3.1 ElementJSON.)
+       */
       patch: Partial<TimelineElement>;
     }>;
     /**
@@ -1079,17 +1088,31 @@ export interface ToggleTrackVisibilityCommand {
 export interface AddTrackCommand {
   type: 'addTrack';
   params: {
-    /** Track type. */
-    type: TrackType;  // 'video' | 'audio' | 'overlay'
+    /**
+     * Track type. (R28/D49 — the stale-comment sweep: this comment read
+     * `'video' | 'audio' | 'overlay'`, already wrong vs OT's five TrackType
+     * kinds.) The corrected enumeration: OT's five — `'video' | 'text' |
+     * 'audio' | 'graphic' | 'effect'` — plus spec 09's fourth
+     * SceneTracksJSON family `'caption'` (CaptionTrackJSON[], one per
+     * language, carrying `type:'text'` elements).
+     */
+    type: TrackType;  // 'video' | 'text' | 'audio' | 'graphic' | 'effect' | 'caption'
     /** Display index. If omitted, append at end of the type's section. */
     index?: number;
     /** Optional name. If omitted, auto-generated ("Video Track 3", etc.). */
     name?: string;
+    /**
+     * (R28/D49) BCP-47 language tag — caption tracks only. Optional because
+     * one-track-per-language is DESCRIPTIVE in v1 (export merges;
+     * `addTrack` does NOT reject a duplicate language — enforced uniqueness
+     * is registered to r5).
+     */
+    language?: string;
   };
 }
 ```
 
-**Maps to:** `engine.timeline.addTrack({type, index})` (spec 01 §3.3, `timeline-manager.ts:75-79`).
+**Maps to:** `engine.timeline.addTrack({type, index})` (spec 01 §3.3, `timeline-manager.ts:75-79`). (R28/D49: the r1 OT port widens `addTrack` — the `'caption'` kind and the `language` param join the machinery branches; the register flip carries the full OT r1 cost.)
 
 **Undoable:** ✅ (`AddTrackCommand`).
 
@@ -1834,15 +1857,40 @@ export interface RemoveTransitionCommand {
 export interface UpsertKeyframesCommand {
   type: 'upsertKeyframes';
   params: {
-    elementId: string;
-    /** Keyframes to insert or update (matched by `keyframeId`). */
-    keyframes: KeyframeSpec[];
+    /**
+     * (R28/D47 ruling 2 — the flat self-addressing law) Cross-element
+     * FLAT member list: ONE keyframe per entry, each entry the
+     * self-addressing `KeyframeRef` (below) plus ONLY its per-member spec —
+     * marquee selections span elements by design. The per-element
+     * `{elementId, keyframes[]}` grouping RETIRES at the r1 union-version
+     * bump (§13.15's :4918 convention; §4.1A's :314 bookmark-block
+     * precedent); old replay files load against newer engines via
+     * §2-law-5's deprecation path. Never parallel arrays — a partial
+     * failure must NAME its member (F16's named NOT_FOUND).
+     */
+    keyframes: Array<KeyframeRef & { spec: KeyframeSpec }>;
   };
 }
 
+/**
+ * (R28/D47) The self-addressing keyframe reference — ONE keyframe, fully
+ * addressed (OT's flat wire member: `{elementId, trackId, propertyPath,
+ * keyframeId}`, api.ts:156-176). `keyframeId` omitted ⇒ upsert mints a
+ * fresh id; present ⇒ matched for update.
+ */
+export interface KeyframeRef {
+  trackId: string;
+  elementId: string;
+  /** Dotted path: 'transform.scaleX', 'effects[0].params.exposure', ... */
+  propertyPath: string;
+  keyframeId?: string;
+}
+
+/**
+ * (R28/D47) The per-member payload — the address (id + property) moved
+ * onto `KeyframeRef`; the spec carries only the keyframe's data.
+ */
 export interface KeyframeSpec {
-  id?: string;  // if omitted, a new ID is generated
-  property: string;  // dotted path: 'transform.scaleX', 'effects[0].params.exposure', ...
   time: MediaTime;
   value: number | number[] | string | boolean;
   interpolation: 'linear' | 'bezier' | 'step' | 'hold';
@@ -1850,9 +1898,9 @@ export interface KeyframeSpec {
 }
 ```
 
-**Maps to:** `engine.timeline.upsertKeyframes({elementId, keyframes})` (spec 01 §3.3, `timeline-manager.ts:481-521`).
+**Maps to:** `engine.timeline.upsertKeyframes({keyframes})` (spec 01 §3.3 — the R28/D47 flat param form; OT's routed singular `upsertKeyframe` (AR-2) is the one-at-a-time consumer of the same member shape).
 
-**Undoable:** ✅ (uses `BatchCommand` internally if multiple keyframes).
+**Undoable:** ✅ (ONE history entry for the whole batch — the D-ARCH-6 law).
 
 #### 4.3.65 `RemoveKeyframesCommand`
 
@@ -1860,33 +1908,56 @@ export interface KeyframeSpec {
 export interface RemoveKeyframesCommand {
   type: 'removeKeyframes';
   params: {
-    elementId: string;
-    keyframeIds: string[];
+    /**
+     * (R28/D47 ruling 2) Cross-element flat member list of self-addressing
+     * refs — `KeyframeRef` (§4.3.64), one keyframe per entry. The
+     * per-element `{elementId, keyframeIds[]}` grouping RETIRES on the
+     * same r1 union-version bump (grouping forces caller-side bucketing
+     * the wire re-flattens anyway). Batch-atomic `TRACK_LOCKED`; a stale
+     * ref is a NAMED `ELEMENT_NOT_FOUND` (F16 — never a silent skip);
+     * wire-side dedup.
+     */
+    keyframes: KeyframeRef[];
   };
 }
 ```
 
-**Maps to:** `engine.timeline.removeKeyframes({elementId, keyframeIds})` (spec 01 §3.3, `timeline-manager.ts:523-590`).
+**Maps to:** `engine.timeline.removeKeyframes({keyframes})` (spec 01 §3.3 — the R28/D47 flat param form; OT's landed wire shape, api.ts:156-176).
 
-**Undoable:** ✅.
+**Undoable:** ✅ (ONE history entry for the whole batch — the D-ARCH-6 law).
 
-#### 4.3.66 `RetimeKeyframeCommand`
+#### 4.3.66 `RetimeKeyframesCommand`
 
 ```ts
-export interface RetimeKeyframeCommand {
-  type: 'retimeKeyframe';
+export interface RetimeKeyframesCommand {
+  type: 'retimeKeyframes';
   params: {
-    elementId: string;
-    keyframeId: string;
-    /** New time for this keyframe. */
-    time: MediaTime;
+    /**
+     * (R28/D47 ruling 1 — the gesture-native per-family law)
+     * Cross-element flat refs (`KeyframeRef`, §4.3.64). The
+     * singular-absolute `retimeKeyframe` RETIRES on the same r1
+     * union-version bump — D-ARCH-6 D6-2's multiplicity-mirroring
+     * rejection: "the singular retime is ABSOLUTE-time while the drag
+     * gesture is DELTA-shaped … two code paths for one gesture
+     * semantics" (arch-design-s17.md:152-155). Absolute retarget
+     * composes as delta = target − current, or rides `updateElements`
+     * patches.
+     */
+    keyframes: KeyframeRef[];
+    /**
+     * ONE shared delta for the whole selection — the drag gesture computes
+     * one delta, never N synthesized absolute times. Zero-delta is the
+     * benign echo: `ok:true` + `data:{changed:false}`, no history entry
+     * (§6.3's never-silent law).
+     */
+    delta: MediaTime;
   };
 }
 ```
 
-**Maps to:** `engine.timeline.retimeKeyframe({elementId, keyframeId, time})`.
+**Maps to:** `engine.timeline.retimeKeyframes({keyframes, deltaTicks})` (OT's landed wire shape, api.ts:187-197; the spec's `delta: MediaTime` is the ticks-typed twin).
 
-**Undoable:** ✅.
+**Undoable:** ✅ (ONE history entry; snapshot-based undo — §14.1).
 
 #### 4.3.67 `UpdateKeyframeCurvesCommand`
 
@@ -2801,6 +2872,8 @@ export type CommandResultData =
   | { kind: 'frameArtifact'; artifactId: string; mimeType: string };
 ```
 
+**The flat-payload reconciliation (R28/D44 A-9):** OT's flat `CommandResult {ok, code?, error?, data?}` is the canonical wire serialization — this discriminated union is the consumer-side view of that payload **plus the out-of-band readouts**: `stateChange` and `undoInfo` are absent from the wire (`ok:true` results carry the honest echo payload in `data`); consumers derive them from OT's readout surface (`getTracks`/`getScene`/`getSelection`/…) and the in-protocol `snapshot` command — the T1 test seam. One wire shape, two views: the union is a TypeScript narrowing, not a second protocol. This resolves §13.15's §6.1 disposition row by the spec-note option — readouts serve T1 tests; `stateChange` stays out-of-band v1.
+
 ### 6.1 `StateChange`
 
 Describes what changed in the engine state as a result of the command. The UI uses this to update React state incrementally (rather than re-rendering everything on every command).
@@ -2892,9 +2965,14 @@ export interface CommandError {
    * - 'EXPORT_UNSUPPORTED_FORMAT' — export command's format value is not in the supported set (§4.3.74-76)
    * - 'JOB_QUEUE_FULL' — exportMaster rejected: render queue at maxConcurrent (spec 11 §9.2)
    * - 'TIME_OUT_OF_RANGE' — exportFrame time outside [0, totalDuration]
+   * - 'RATE_OUT_OF_DOMAIN' — fit-to-fill's computed rate falls outside the
+   *   acceptance domain [0.1, 5] (06 §5.9F's never-clamp law — a clamped
+   *   fit silently violates exact-fill): REFUSES, never clamps, with
+   *   constraint {type:'domain'} (R28/D44 — the one new fine code; class
+   *   INVALID_PARAMS)
    * - 'PROJECT_NOT_FOUND' — renameProject/deleteProject target does not exist (§4.3.77-78)
    * - 'PROJECT_ACTIVE' — deleteProject called on the active project (§4.3.78)
-   * - 'NOOP' — command semantically valid but clamped to a no-op at current bounds — e.g. a trim whose delta is fully absorbed by the source-bounds clamp, a move whose delta snaps back to the same position. Distinct from ELEMENT_NOT_FOUND (Round 8, adopted from opencut-timeline api.ts:198-208: "NOOP is not NOT_FOUND"; tests assert the distinction)
+   * - 'NOOP' — command semantically valid but clamped to a no-op at current bounds — e.g. a trim whose delta is fully absorbed by the source-bounds clamp, a split at an element edge. Distinct from ELEMENT_NOT_FOUND (Round 8, adopted from opencut-timeline api.ts:198-208: "NOOP is not NOT_FOUND"; tests assert the distinction). (R28/D44 A-8: the old "a move whose delta snaps back to the same position" example is RECLASSIFIED — the same-position `move` is the benign-echo family's load-bearing member (D-T7, DECISIONS #23 ruling 2: `ok:true`, zero history), not a NOOP refusal; see the never-silent law below the class-tag table)
    * - 'NOT_IMPLEMENTED' — union member whose routing-disposition row (§4.1A) is DEFERRED: the app bus (and the engine façade / OT for their not-yet-wired members) returns it honestly rather than silently missing; carries `data: {member, phase?}` so callers distinguish "not yet built" from "wrong usage" (Round 15 — see §4.1B)
    * - 'INTERNAL_ERROR' — unexpected exception (see `message` for details)
    */
@@ -2908,7 +2986,9 @@ export interface CommandError {
    * the offending element/track in the timeline.
    */
   constraint?: {
-    type: 'overlap' | 'source' | 'transition' | 'lock' | 'compatibility';
+    // (R28/D44) 'domain' — RATE_OUT_OF_DOMAIN's never-clamp refusal
+    // carries the fit-to-fill acceptance domain (06 §5.9F: [0.1, 5]).
+    type: 'overlap' | 'source' | 'transition' | 'lock' | 'compatibility' | 'domain';
     elementId?: string;
     trackId?: string;
     details?: string;
@@ -2918,6 +2998,20 @@ export interface CommandError {
   stack?: string;
 }
 ```
+
+**The two-tier error taxonomy (R28/D44):** the registry above is the FINE layer (open — `code` stays `string`, "extend as needed"); every fine code declares exactly ONE CLASS from the closed enum `INVALID_PARAMS / NOT_FOUND / CONFLICT / NOOP / TRACK_LOCKED / INTERNAL_ERROR` (+ `NOT_IMPLEMENTED` at the app bus, §4.1B). The class is what `applyBatch`'s abort logic and the UI chip/retry classification key on. Emission law: a verb emits its FINE code when its §4.3 section declares one, else its CLASS code — never worse than today's granularity. The class-tag table — ALL 24 registry codes + `RATE_OUT_OF_DOMAIN` (25), each to exactly one class (R28/D44 A-6 restores the three the W1 research mapping dropped: `TRIM_BEYOND_SOURCE`→INVALID_PARAMS with constraint `source`, `JOB_QUEUE_FULL`→CONFLICT, `PROJECT_DIRTY`→CONFLICT):
+
+| Class | Fine codes |
+|---|---|
+| `INVALID_PARAMS` | `SCHEMA_INVALID`, `TRIM_BEYOND_SOURCE` (constraint `source`), `SPLIT_INSIDE_TRANSITION` (constraint `transition`), `TIME_OUT_OF_RANGE`, `EXPORT_UNSUPPORTED_FORMAT`, `RATE_OUT_OF_DOMAIN` (constraint `domain`) |
+| `NOT_FOUND` | `ELEMENT_NOT_FOUND`, `TRACK_NOT_FOUND`, `NO_ACTIVE_SCENE`, `NO_ACTIVE_PROJECT`, `PROJECT_NOT_FOUND` |
+| `CONFLICT` | `OVERLAP_REJECTED`, `CROSS_SECTION_REJECTED`, `MAIN_TRACK_CONSTRAINT`, `MEDIA_IN_USE`, `TRACK_NOT_EMPTY`, `JOB_QUEUE_FULL` (retryable resource conflict), `PROJECT_DIRTY`, `PROJECT_ACTIVE` |
+| `NOOP` | `NOOP`, `NOTHING_TO_UNDO`, `NOTHING_TO_REDO` |
+| `TRACK_LOCKED` | `TRACK_LOCKED` |
+| `NOT_IMPLEMENTED` | `NOT_IMPLEMENTED` |
+| `INTERNAL_ERROR` | `INTERNAL_ERROR` |
+
+**The never-silent law (R28/D44 A-8):** a command that refuses to mutate returns `{ok:false, code}` — never a silent identity `ok:true` with an empty payload. **NOOP is the compliant benign refusal** (`ok:false` + code — the state-dependent zero-clamp; chip-benign per DECISIONS #25 ruling 6). The sanctioned `ok:true` non-mutations are the **benign-echo family** — honest echo payload, no `applyBatch` abort: the A9 idempotent set-alls (`setAllLocked`/`setAllMuted` → `data:{changed:false, …}`), the zero-delta `retimeKeyframes` (`data:{changed:false}`), and the same-position `move` (D-T7's `moveElements` return asymmetry — load-bearing, DECISIONS #23 ruling 2; zero history entry). No other `ok:true` non-mutation is spec-legal: state-dependent clamps are NOOP refusals; completed idempotent sets are echoes.
 
 ### 6.4 Example `CommandResult` for a successful split
 
@@ -4238,35 +4332,48 @@ export const RemoveTransitionCommandSchema = z.object({
 
 // ── Keyframe ops ─────────────────────────────────────────────────────
 
+// (R28/D47) The self-addressing keyframe ref — the flat wire member.
+export const KeyframeRefSchema = z.object({
+  trackId: z.string().uuid(),
+  elementId: z.string().uuid(),
+  propertyPath: z.string().min(1),  // dotted path: 'transform.scaleX', ...
+  keyframeId: z.string().uuid(),
+});
+
+// (R28/D47 ruling 2) the flat cross-element upsert member: KeyframeRef & {spec}
+// (keyframeId optional here — omitted ⇒ mint a fresh id).
 export const UpsertKeyframesCommandSchema = z.object({
   type: z.literal('upsertKeyframes'),
   params: z.object({
-    elementId: z.string().uuid(),
     keyframes: z.array(z.object({
-      id: z.string().uuid().optional(),
-      property: z.string().min(1),
-      time: MediaTimeSchema,
-      value: z.union([z.number(), z.array(z.number()), z.string(), z.boolean()]),
-      interpolation: z.enum(['linear', 'bezier', 'step', 'hold']),
-      curves: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
+      trackId: z.string().uuid(),
+      elementId: z.string().uuid(),
+      propertyPath: z.string().min(1),
+      keyframeId: z.string().uuid().optional(),
+      spec: z.object({
+        time: MediaTimeSchema,
+        value: z.union([z.number(), z.array(z.number()), z.string(), z.boolean()]),
+        interpolation: z.enum(['linear', 'bezier', 'step', 'hold']),
+        curves: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
+      }),
     })).min(1),
   }),
 });
 
+// (R28/D47 ruling 2) flat refs — the grouped {elementId, keyframeIds[]} retired.
 export const RemoveKeyframesCommandSchema = z.object({
   type: z.literal('removeKeyframes'),
   params: z.object({
-    elementId: z.string().uuid(),
-    keyframeIds: z.array(z.string().uuid()).min(1),
+    keyframes: z.array(KeyframeRefSchema).min(1),
   }),
 });
 
-export const RetimeKeyframeCommandSchema = z.object({
-  type: z.literal('retimeKeyframe'),
+// (R28/D47 ruling 1) the plural delta form — the singular-absolute retired.
+export const RetimeKeyframesCommandSchema = z.object({
+  type: z.literal('retimeKeyframes'),
   params: z.object({
-    elementId: z.string().uuid(),
-    keyframeId: z.string().uuid(),
-    time: MediaTimeSchema,
+    keyframes: z.array(KeyframeRefSchema).min(1),
+    delta: MediaTimeSchema,
   }),
 });
 
@@ -4447,7 +4554,7 @@ export const EngineCommandSchema = z.discriminatedUnion('type', [
   // Keyframe ops
   UpsertKeyframesCommandSchema,
   RemoveKeyframesCommandSchema,
-  RetimeKeyframeCommandSchema,
+  RetimeKeyframesCommandSchema,
   UpdateKeyframeCurvesCommandSchema,
   // Clipboard ops
   CopyCommandSchema,
@@ -4908,14 +5015,14 @@ The timeline-side headless surface (`src/lib/timeline/headless/api.ts`). It is *
 | §4.3.2 TrimCommand | `headless/api.ts:55-62` (type) / `:877` (case) — `{elements: ElementRef[], side: 'left'|'right', deltaTicks}` | CONVERGENT | Group+side is the controller-layer shape; wire shape stays single-element+edge (spec 06 §5.2 documents the mapping); F1B-6 rejects negative span patches (insert/update start/duration) INVALID_PARAMS-side |
 | §4.3.9 InsertCommand | `headless/api.ts:42-50` (type) / `:558` (case) — `{element, startTimeTicks, strategy 2-value, trackId}` | CONVERGENT | 5-strategy placement is `ops/placement`; wire needs full `PlacementStrategy` + `ripple` + `idSeed`; returns actual landed time on zero-anchor clamp (`api.ts:709-718` — the `data.startTime` echo the spec's `data` should carry is landed, R24 re-pinned); **R25/P11 re-key (Decision 31.1/31.6): the `ripple` flag NEVER produces an insert-edit push — the flag routes delete + the placement surface's displacement, the source-edit family's push is intrinsic (06 §5.9's splice law, D31.1's everywhere-clause), and the ripple composite is the delete+move+insert law (D31.6 — a replace-placement's ripple carries the DELTA shift, per the ripple-overwrite row below)** |
 | §6.3 error codes | `headless/api.ts:153-167` — **6 codes**: INVALID_PARAMS/NOT_FOUND/CONFLICT/NOOP/**TRACK_LOCKED**/INTERNAL_ERROR | PARTIAL | NOOP absorbed into §6.3 (R8) **+ classified BENIGN by the W11 UI (DECISIONS #25 ruling 6: NOOP never lights the wire-error chip — split-at-edge is reachable by design; the chip surface is `data-test="wire-error"` + `data-code`)**; **TRACK_LOCKED absorbed exact-match (S2) and rewritten BATCH-ATOMIC at D-ARCH-6 (R-A P3-9: `removeKeyframes`/`retimeKeyframes` lock-pre-check the WHOLE batch — api.ts:2239-2246/:2337-2344, + upsert :2139; **still 12 commands total** — counted live; the R23 row understated OT at 10)**; F1B-4 hardened the INVALID_PARAMS boundary (malformed params were INTERNAL_ERROR — 16/16 commands); the other 3 coarse codes map to ~24 spec codes — the coarseness itself is the **r1 FIRST** refinement (the §0 GAP row) |
-| §6.1 StateChange | absent — out-of-band readouts (`getTracks/getScene/getSelection/getPlayhead/isPlaying/getTotalDurationTicks` :1783-1805) | CORRECTIVE | Add `stateChange` to results OR spec-note that readouts serve T1 tests (in-protocol `snapshot` is the spec-15 way) |
+| §6.1 StateChange | absent — out-of-band readouts (`getTracks/getScene/getSelection/getPlayhead/isPlaying/getTotalDurationTicks` :1783-1805) | **ALIGNED (was CORRECTIVE — resolved R28/D44 A-9)** | Disposition RESOLVED, the spec-note option: readouts serve T1 tests; `stateChange` stays out-of-band v1 — §6's flat-payload reconciliation (the union is the consumer-side view of the flat payload PLUS the out-of-band readouts; the in-protocol `snapshot` is the spec-15 way) |
 | §7 batch semantics | `headless/api.ts:2559-2616` — `applyBatch` | **AHEAD** | The five transaction invariants (eviction-suspended, depth-anchored rollback, redo preservation, undo/redo-in-batch rejection, intra-batch overlap guard) EXCEED spec §7.1's atomicity — absorbed as §7.1A (R8) **+ the F1B-7 redo-preservation refinement (R23 — the §7.1A note is the controlling reading, re-verified @ `c15a629`)** **+ `data.results` (W11, R-A P1-3: the per-command results array — previously a bare ok DISCARDED the minted refs, stranding the UI's post-insert selection/scroll on a state diff; api.ts:2573-2612)** |
 | §4.3.4 ripple | `timeline.rippleDelete` (:1012) | CONVERGENT | Documented convenience wrapper — spec keeps `delete{ripple:true}`/RippleCommand as canonical (spec 06 §5.4 note) |
-| command coverage | **29 of 78** spec-15 union members have live OT wire counterparts (the R15 24 + the S2 `toggleLock` + the S1 `setPlaybackRate`/`setLoopRegion` + AR-2's routed `upsertKeyframe` (← `upsertKeyframes`) + D-ARCH-6's `removeKeyframes`; `rippleDelete` counts as the wrapper; `insertBatch` counts toward insert's existing slot; `retimeKeyframe`'s singular-absolute form has NO counterpart — the plural delta form is the OT extension pending the r1 decision); **3 OT-side verbs beyond the union** (`advancePlayhead`/`setAllLocked`/`setAllMuted` — UNCHANGED ✓); 49 absent (roll/slip/slide/rateStretch/retime/freezeFrame/rangeRemoval + scenes/project/media/effects/masks/transitions/clipboard/export/marker-forms/…) | ENGINE-GAP | The op-family port is **r1 wave 1/2** (spec 06 §0's r1 rows — the retired spec-14 §4.1 rows re-homed there); the full disposition for all 78 members is the **routing-disposition table (§4.1A, Round 15, R24-re-tagged)** — the C7 rename + param alignment (this table) is the **r1 END** prerequisite; **the routed-verb half is machine-checked live** (M49C: 28/28 fired through the real UI, runner :390-425; the app's D30 W-F ports the gate as K3's routed-verb completeness instrument — D29.1, the §0 GAP row) |
-| §4.3.64-65 keyframe batch forms — **LANDED (D-ARCH-6, BASE @ `970948a`)** | `timeline.removeKeyframes` (api.ts:156-176, arm :2188-2285) + `timeline.upsertKeyframe` UI-ROUTED (AR-2) — ONE history entry each; the wire's cross-element flat member lists (`{elementId, trackId, propertyPath, keyframeId}[]`); the WYSIWYG bake through the wire (timeline-core.ts:1834-1863); wire-side dedup; batch-atomic TRACK_LOCKED; **F16: a stale ref is a NAMED NOT_FOUND** (api.ts:2252-2263); the singular `removeKeyframe`/`retimeKeyframe` RETIRED (never-guard :2537-2545; absence pinned milestones-ar1.ts:201-210) | **BASE** | The census re-declared MECHANICALLY as D29-F8 promised (no census amendment); the r1 param-alignment decisions the landing forces: (a) `retimeKeyframe` (§4.3.66, singular absolute) vs OT's plural delta-shaped `retimeKeyframes` (+ the benign zero-delta `{changed:false}` law); (b) param grouping: the union's per-element `{elementId, keyframeIds[]}` vs OT's cross-element flat lists; (c) 16 §3.12's nudge rows ride decision (a). OT deliberately did not pre-empt (api.ts:163-166/:183-186) |
-| §4.3.9 InsertCommand batch form — **LANDED (D-ARCH-6, BASE @ `970948a`)** | `timeline.insertBatch` (api.ts:66-88, arm :1262-1370): ONE history entry; the shared `validateInsertElement` (api.ts:634-809 — one writer for the element-field law); F1A-3 mixed-kind INVALID_PARAMS; intra-batch overlap CONFLICT whole-batch; empty INVALID_PARAMS (the deliberate divergence from delete's NOT_FOUND-for-empty, M58-1); TRACK_LOCKED; the minted-refs echo; the library multi-insert switched to ONE insertBatch per kind-group with staggered construction (view/page.tsx:535-599); M49R inverted to the one-entry law | **BASE** | The C7 rename absorbs it as bare `insertBatch`; the **bare-verb vs `insert {elements[]}` superset decision stays OPEN** (the r1 param-alignment wave's charge); the 06 §5.9D kind-split + append-riding rows point here |
+| command coverage | **29 of 78** spec-15 union members have live OT wire counterparts (the R15 24 + the S2 `toggleLock` + the S1 `setPlaybackRate`/`setLoopRegion` + AR-2's routed `upsertKeyframe` (← `upsertKeyframes`) + D-ARCH-6's `removeKeyframes`; `rippleDelete` counts as the wrapper; `insertBatch` counts toward insert's existing slot; `retimeKeyframe`'s singular-absolute form has NO counterpart — the plural delta form is the OT extension pending the r1 decision — **RULED R28/D47: the post-bump counterpart re-derivation is 29 → 31 (BOTH `retimeKeyframes`' replacement slot AND `insertBatch`'s own new 79th-member slot gain counterparts; the derivation stated at §0's BASE)**); **3 OT-side verbs beyond the union** (`advancePlayhead`/`setAllLocked`/`setAllMuted` — UNCHANGED ✓); 49 absent (roll/slip/slide/rateStretch/retime/freezeFrame/rangeRemoval + scenes/project/media/effects/masks/transitions/clipboard/export/marker-forms/…) | ENGINE-GAP | The op-family port is **r1 wave 1/2** (spec 06 §0's r1 rows — the retired spec-14 §4.1 rows re-homed there); the full disposition for all 78 members is the **routing-disposition table (§4.1A, Round 15, R24-re-tagged)** — the C7 rename + param alignment (this table) is the **r1 END** prerequisite; **the routed-verb half is machine-checked live** (M49C: 28/28 fired through the real UI, runner :390-425; the app's D30 W-F ports the gate as K3's routed-verb completeness instrument — D29.1, the §0 GAP row) |
+| §4.3.64-65 keyframe batch forms — **LANDED (D-ARCH-6, BASE @ `970948a`)** | `timeline.removeKeyframes` (api.ts:156-176, arm :2188-2285) + `timeline.upsertKeyframe` UI-ROUTED (AR-2) — ONE history entry each; the wire's cross-element flat member lists (`{elementId, trackId, propertyPath, keyframeId}[]`); the WYSIWYG bake through the wire (timeline-core.ts:1834-1863); wire-side dedup; batch-atomic TRACK_LOCKED; **F16: a stale ref is a NAMED NOT_FOUND** (api.ts:2252-2263); the singular `removeKeyframe`/`retimeKeyframe` RETIRED (never-guard :2537-2545; absence pinned milestones-ar1.ts:201-210) | **BASE** | The census re-declared MECHANICALLY as D29-F8 promised (no census amendment); **the r1 param-alignment decisions the landing forced are RULED (R28/D47): (a) CLOSED — the plural delta `retimeKeyframes` IS the union member (§4.3.66 amended; the singular-absolute form RETIRES at the r1 union-version bump; the benign zero-delta `{changed:false}` echo is law — §6.3's never-silent paragraph); (b) CLOSED — the flat cross-element self-addressing forms (§4.3.64-65 amended; the per-element `{elementId, keyframeIds[]}` grouping retires on the same bump; the migration rides §2-law-5's old-replay deprecation path — the :4918 convention, §4.1A's :314 bookmark precedent); (c) 16 §3.12's nudge rows compose `retimeKeyframes`**. OT deliberately did not pre-empt (api.ts:163-166/:183-186) |
+| §4.3.9 InsertCommand batch form — **LANDED (D-ARCH-6, BASE @ `970948a`)** | `timeline.insertBatch` (api.ts:66-88, arm :1262-1370): ONE history entry; the shared `validateInsertElement` (api.ts:634-809 — one writer for the element-field law); F1A-3 mixed-kind INVALID_PARAMS; intra-batch overlap CONFLICT whole-batch; empty INVALID_PARAMS (the deliberate divergence from delete's NOT_FOUND-for-empty, M58-1); TRACK_LOCKED; the minted-refs echo; the library multi-insert switched to ONE insertBatch per kind-group with staggered construction (view/page.tsx:535-599); M49R inverted to the one-entry law | **BASE** | The C7 rename absorbs it as bare `insertBatch`; the **bare-verb vs `insert {elements[]}` superset decision is RULED (R28/D47 ruling 3 — BOTH, by family: dedicated verbs for the atomic op families; `insertBatch`-composites for the placement-family modes (append/ripple-overwrite/fit-to-fill); the union gains the bare `insertBatch` as the 79th member at this r1 fold — 78→79→80, `replace` the 80th; `insert` stays singular, neither deprecated nor aliased)**. **The ruled spec-side shape (R28/D47): `{elements: ElementSpec[], placement?: PlacementStrategy, anchor?: MediaTime, ripple?: boolean, idSeed?}`** — `anchor` is REQUIRED for the five time-based strategies (optional ONLY where the placement resolves it server-side, e.g. the r1 `append` strategy's per-track last-element-end law; OT's landed `startTimeTicks` is the required-anchor form today); **`ripple?: boolean` (R28/D47-A-1, the meta-lane ruling): push by the block's TOTAL span — the first-element anchor + the relative offsets compose, so the push magnitude mirrors `insert`'s D31.6 law (`insert{ripple}` = push by the FULL inserted duration); the batch laws (F1A-3 homogeneity, dedup, whole-batch atomicity) are orthogonal**; the 06 §5.9D kind-split + append-riding rows point here |
 | §4.3.29 SetLoopCommand | `timeline.setLoopRegion` (:1273) — **the N5 invariant LANDED S1**: `endTicks > startTicks` else INVALID_PARAMS; non-negative finite ticks; `clear:true`-only (F1B-5 — a falsy clear never clears) | **ALIGNED (was CORRECTIVE/N5)** | The r1 residual is only the C7 fold (`setLoopRegion`→`setLoop` + the spec's `start/end` param shape vs the wire's ticks shape); the inverted-window hang remains a REAL mock-history lesson (R13 found, R14 fixed: mark-in/out now move the other half — start ≤ end always; zero-width = no-op loop) |
-| §4.1A new union member + §4.3 command family (06 §5.9C, D31.4) — **r1-SCHEDULED (D30.2, R25 — the REPLACE family)** | **NEW ROW (R25): the replace verb** — `timeline.replace` (prefixed) folding to bare `replace` at the C7 r1-END rename pass: `{ type: 'timeline.replace', params: { target: ElementRef, source: { sourceId \| element payload, sourceStart, sourceEnd? }, linked?: false } }` → result `data: { insertedClipId, removedClipId, durationInFrames, sourceEnd }` (the A9-style honest echo — the UI toast's source); errors `NOT_FOUND` (no target) / `TRACK_LOCKED` / `INVALID_PARAMS` (the unfillable-source refusal — 06 §5.9C's law; the CONFLICT-vs-INVALID_PARAMS disposition rides §6.3's r1 refinement row) / `NOOP` never (a replace that changes nothing still minted a new id). `replace` is NOT among the 78 §4.1A members — a **NEW union member (78 → 79, union-version bump)**, needing a §4.1A row (home: OT), a §4.3 command section, and a §4.2 manager-method row. A DEDICATED op, not a composite (D31A: the transition-remap + companion-sever semantics need single-op atomicity — one `execute`, one undo entry); one-shot from the SourceEditBar button, F11, and (K3+) the drop-on-clip gesture; undoable ✅ (the §4.2 column) | **QUEUED (r1-scheduled — NOT in the landed census; the landed census (31 = 28+3 since D-ARCH-6) is unaffected by this row)** | The census re-declares MECHANICALLY per the tsc-lockstep/M49C law (D29 F8): on landing, the typecheck asserts fail until the verb is listed in `WIRE_COMMAND_TYPES`, the coverage gate fails until it is routed or exception-registered — the routed/exceptions split re-declares with NO spec amendment; the landed census stays exactly as-is until then (D30.2) |
+| §4.1A new union member + §4.3 command family (06 §5.9C, D31.4) — **r1-SCHEDULED (D30.2, R25 — the REPLACE family)** | **NEW ROW (R25): the replace verb** — `timeline.replace` (prefixed) folding to bare `replace` at the C7 r1-END rename pass: `{ type: 'timeline.replace', params: { target: ElementRef, source: { sourceId \| element payload, sourceStart, sourceEnd? }, linked?: false } }` → result `data: { insertedClipId, removedClipId, durationInFrames, sourceEnd }` (the A9-style honest echo — the UI toast's source); errors `NOT_FOUND` (no target) / `TRACK_LOCKED` / `INVALID_PARAMS` (the unfillable-source refusal — 06 §5.9C's law; the CONFLICT-vs-INVALID_PARAMS disposition rides §6.3's r1 refinement row) / `NOOP` never (a replace that changes nothing still minted a new id). `replace` is NOT among the 78 §4.1A members — a **NEW union member (union-version bump — the post-D47.3 sequence, R28/D46-B5 reconciliation: `insertBatch` mints 79th on its r1 fold, `replace` is the NEXT new member — the 80th; final count 80)**, needing a §4.1A row (home: OT), a §4.3 command section, and a §4.2 manager-method row. A DEDICATED op, not a composite (D31A: the transition-remap + companion-sever semantics need single-op atomicity — one `execute`, one undo entry); one-shot from the SourceEditBar button, F11, and (K3+) the drop-on-clip gesture; undoable ✅ (the §4.2 column) | **QUEUED (r1-scheduled — NOT in the landed census; the landed census (31 = 28+3 since D-ARCH-6) is unaffected by this row)** | The census re-declares MECHANICALLY per the tsc-lockstep/M49C law (D29 F8): on landing, the typecheck asserts fail until the verb is listed in `WIRE_COMMAND_TYPES`, the coverage gate fails until it is routed or exception-registered — the routed/exceptions split re-declares with NO spec amendment; the landed census stays exactly as-is until then (D30.2) |
 | §4.3.9 InsertCommand placement family (06 §5.9D, D31.5) — **r1-SCHEDULED (D30.2, R25 — the APPEND-AT-END family)** | **NEW ROW (R25): the append placement** — `InsertCommand` gains the 6th `PlacementStrategy` `{ type: 'append'; trackId?: string }` (server-side time resolution — the per-track last-element-end law; `trackId` optional with kind-routing default); the multi form rides the already-endorsed r1-adjacent `timeline.insertBatch` (the row above) as `insertBatch {elements[], placement:'append'}` — ONE history entry, append points resolved inside the apply; an OT-side convenience verb `timeline.append` may exist as a DOCUMENTED WRAPPER exactly per the `timeline.rippleDelete` pattern (the row above — spec keeps `insert{placement:'append'}` canonical). NO new engine op (a placement-level composite per D31.5/D31A: `insertElements`' relative-offset homogeneous batch is the primitive; the F1A-3 kind-split rule applies to mixed pool selections); lands WITH the r1 param-alignment wave (the §4.3.9 row above — the wire exposes only 2-of-5 strategies today, `api.ts:42-50`) | **QUEUED (r1-scheduled — NOT in the landed census; the landed census (31 = 28+3 since D-ARCH-6) is unaffected by this row)** | Same mechanical re-declare law (D29 F8): the `WIRE_COMMAND_TYPES` typecheck-gate + the M49C coverage gate re-declare the split on landing, no spec amendment — the landed census unchanged until then (D30.2); a routed wrapper follows the `rippleDelete` census convention |
 | the ripple composite family (06 §5.9E, D31.6) — **r1-SCHEDULED (D30.2, R25 — the RIPPLE-OVERWRITE family)** | **NEW ROW (R25): the ripple-overwrite composite** — `delete + move + insert` via `applyBatch`, ONE undo entry (F1A-2's intra-batch overlap guard passes: the trajectory is delete→move→insert, never overlapping). **The r1 verb decision: extend `InsertCommand` with a replace/overwrite placement carrying `target: ElementRef` + a ripple flag whose law is the DELTA shift** — `delta = newDuration − oldDuration`, push if positive, PULL if negative (pull leaves no gap; the zero-floor law); the whole source-edit family (overwrite/replace/append/rippleOverwrite/fitToFill) shares this one seam, and the C7 r1-END fold already owes `InsertCommand` the full `PlacementStrategy` + `ripple` + `idSeed` alignment (the §4.3.9 row above). **The law-split, stated in the row: `insert{ripple}` = push by the FULL inserted duration; the replace-placement's ripple = shift by delta — one boolean cannot mean both** (the §4.3.11/§4.3.12 rateStretch/retime wording is the documentation template). NOT "overwrite + the ripple flag" (the classic §12 diff produces the PULL exactly but cannot produce the PUSH — freed = ∅, the intermediate state is overlap-rejected; D31.6); at crawl (K3) the 3-verb composite is available TODAY over the routed verbs (delete/move/insert all routed); the engine port rides the §10.4 3-point family (`performRippleOverwriteEdit`, Decision 12.3) | **QUEUED (r1-scheduled — NOT in the landed census; the landed census (31 = 28+3 since D-ARCH-6) is unaffected by this row)** | Same mechanical re-declare law (D29 F8) — the landed census unchanged until the verb lands (D30.2); the composite itself needs NO census change (its three constituent verbs are routed today) |
 | the fit-to-fill composition (06 §5.9F, D31.7) — **r1-SCHEDULED (D30.2, R25 — the FIT-TO-FILL family; composite-first)** | **NEW ROW (R25): the fit-to-fill composition** — `insert + updateElements{retime}` (both verbs LANDED and UI-routed; one `applyBatch` = one history entry), documented as the composite mapping: `speed = markedDuration / targetDuration` (a LONGER marked range into a SHORTER span speeds UP); the placed element's `duration = snapToFrame(targetDuration)` — EXACTLY the span, always; the source window = the full marked range; acceptance domain **[0.1, 5]** — the three-domain intersection (engine [0.1,16] ∩ OT [0.01,5] ⊂ WDC [1/32,32] ⇒ pitch preserved for every accepted fit) — out-of-domain REFUSES `INVALID_PARAMS`, NEVER clamps (a clamped fit silently violates exact-fill); the linked pair takes the SAME rate, ONE commit. The engine reference is the 3-point family overload (`performOverwriteEdit` with a `targetDuration` option, speed via `calculateSpeed`); **a first-class wire union member is OPTIONAL at r2 — do NOT add it at r1** | **QUEUED (r1-scheduled composite — NOT in the landed census; no census change needed; verb optional r2)** | The composite needs no census change (both constituent verbs are routed); a first-class verb, if minted at r2, re-declares the census mechanically per the same D29 F8 law — the landed census (31 = 28+3 since D-ARCH-6) is unaffected by this row either way (D30.2) |
