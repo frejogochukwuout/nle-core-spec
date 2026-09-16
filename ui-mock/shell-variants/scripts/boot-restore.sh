@@ -74,6 +74,41 @@ if [ -n "${GH_TOK:-}" ] && [ -d "$REPO/.git" ]; then
   fi
 fi
 
+# 1b-2. BOOT-CHAIN SELF-HEAL (the 2026-09-16 incident): /start.sh execs
+#       /home/z/my-project/.zscripts/dev.sh — a COPY frozen into repo.tar at
+#       the last clean pre-stop. An unclean recycle can resurrect an OLD
+#       dev.sh (the R18b-era one lacked the checkout guard + GitHub FF +
+#       code-sync entirely) and the container then serves a STALE tree while
+#       GitHub is rounds ahead (the reviewer saw exactly this). Law: THIS
+#       file (repo-side, GitHub-versioned) is the single source of truth;
+#       after the repo is restored+FF'd, any drift between it and the
+#       .zscripts copies is healed NOW, and we re-exec the healed copy so the
+#       CURRENT logic finishes this boot. Guard SB_CHAIN_HEALED stops the
+#       re-exec from looping.
+SELF_SRC="$REPO/ui-mock/shell-variants/scripts/boot-restore.sh"
+ZDEV="/home/z/my-project/.zscripts/dev.sh"
+ZBR="/home/z/my-project/.zscripts/boot-restore.sh"
+if [ "${SB_CHAIN_HEALED:-0}" != "1" ] && [ -f "$SELF_SRC" ] && [ -d /home/z/my-project/.zscripts ]; then
+  NEED_HEAL=0
+  if ! diff -q "$SELF_SRC" "$ZBR" >/dev/null 2>&1; then NEED_HEAL=1; fi
+  if [ -f "$ZDEV" ] && ! grep -q 'boot-restore.sh' "$ZDEV" 2>/dev/null; then NEED_HEAL=1; fi
+  if [ "$NEED_HEAL" = "1" ]; then
+    echo "boot-chain self-heal: .zscripts copies drifted from repo — refreshing + re-exec"
+    cp "$SELF_SRC" "$ZBR"
+    printf '%s\n' \
+      '#!/usr/bin/env bash' \
+      '# STUB (self-healing boot chain): /start.sh execs THIS file, but the' \
+      '# authoritative logic lives in boot-restore.sh beside it, which itself' \
+      '# gets refreshed from the GitHub repo on every boot (see 1b-2 there).' \
+      '# NEVER edit this stub to add logic — edit the repo copy instead:' \
+      '#   ui-mock/shell-variants/scripts/boot-restore.sh' \
+      'exec bash "$(dirname "$0")/boot-restore.sh" "$@"' > "$ZDEV"
+    chmod +x "$ZBR" "$ZDEV"
+    # re-exec the healed copy so the CURRENT logic completes this boot
+    SB_CHAIN_HEALED=1 exec bash "$ZBR"
+  fi
+fi
+
 # 1c. CODE SYNC repo→runtime (stamp-gated). Runtime-only state is protected:
 # .git/ (incl. the annotakit threads.db store), .env, node_modules, dist,
 # logs, the stamp itself. A live daemon hot-reloads the synced files.
