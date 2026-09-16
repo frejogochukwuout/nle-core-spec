@@ -1,47 +1,27 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-02, end of Round 9 (pushed @ `4bc8c4d`)
-**Scope of this file:** IMMEDIATE next session ONLY. Long horizon lives in `.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`.
+**Written:** 2026-09-13, end of the R25-variants round (THE REACTION + AUDIT-FLEET round). **Read this FIRST; the spec-track state below the divider is R26-era background still accurate as environment context.**
 
----
+## Current state (R25-variants — COMPLETE: 19/19 reviewer threads resolved; exit gates PASS)
 
-## Restore context first (10 min)
+- **The round's driver:** the user's directive — check the new SB feedbacks (19 open threads, the reviewer's second pass over R24); deep-apply `ui-mock/trim_edit_modes.html`; fix the "not functional" timeline insert/edit mode; then 50+ sub-agent rounds of deep UX audit till ≤P3.
+- **The 19 threads are ALL resolved** (annotakit PATCH with wave evidence; 0 open; the GH mirror syncs). The headline fixes: the insert-mode bar's flex-starvation root cause (0px below ~1000px canvas); the source viewer's full Resolve transport (stills = normal clips, play/scrub honest, I/O flags + strip dimming); the wheels REWRITTEN to Resolve's relative/accumulating trackball grammar (research-verified); the 3-chip GRADE TARGET breadcrumb; the console-row TAB strip ([Timeline|Nodes|Scopes] color, [Timeline|Export] deliver); per-page timeline view memory + 4-way compact scopes; the mixer element-visibility toggles + the progressive density ladder; the deliver custom-JSON REAL export; trim-mode affordances from the reference grammar (slip's white full-source outline + bright in-preview, slide's shrink boxes, roll/ripple arrows + displaced ghosts).
+- **The audit fleet ran to the bar:** 4 research/verification + 11 audit agents + 2 exit-gate verifiers (B1 views, B2 FX, B3 deliver/inspector/timeline-core, B4 a11y+shortcuts/state, the VLM 127-story sweep). 80 findings registered; ~77 closed across fix waves F1-F4; **BOTH EXIT GATES PASS (0 P1, 0 P2; console 28/28 stories clean)**.
+- **Gates: tsc 0 · 1950/1950 tests (R24's 1740 → 1950, +210) · build green · zero console.log · public URL serves 126 stories (SKILL #122 holds).** Commits: W1-W6 + F1-F4 + X1 + the wrap artifacts, all pushed (GitHub; GitLab PAT still dead-401 — re-issue before the next mirror push); /home/sync bundle refreshed.
+- **The R25 tracker** (`.agents/design/r25-audit-tracker.md`) is the findings ledger + the B5 exit-gate record. DESIGN-R25 (`.agents/design/r25-reaction-round.md`) carries the research verdicts (A1/A2/A3 — binding for future rounds).
 
-1. `/home/z/my-project/worklog.md` — tail (Round-9 record)
-2. `audits/ARCH-R9-three-domain-strategy.md` — **the round's ruling** (three domains; read §2-5 for the reasoning, §7 for the seal watch items)
-3. `00-master-spec.md` — Decisions 12/13/14 + §2.5 doc governance (v5.0)
-4. `.agents/PLAN.md` — seal-round priority order
-5. Repo states + PATs: see worklog Round-9 bootstrap entry (NOTE: a second PAT was issued for the three bearachprema repos — engine/OT/web-daw-core; the spec repo PAT is unchanged)
+## Next session scope (immediate)
 
-## Repository states at handoff
+1. **The user's reaction round on the R25 state** — the 19 resolutions + the rebuilt compositions (source transport, wheels, console tabs, compact scopes, the deliver export). Expect a third-pass thread corpus; pull ALL open threads first (the annotakit API pattern: `curl :3000/annotakit/api/threads`).
+2. **The registered residue (all P3, deliberate):** X3 FxBrowser search/filter; T5 scrollMax monotonicity during zoom-out; T8 scroll view-state continuity (scene-switch scrollTop + compact-flip scrollLeft); the r5 shortcut long tail (spec 16 §0's 56-row remainder); the spec 16 §0 C16 GAP row now includes the variants' e.repeat landing (update the row).
+3. **The 62 legacy open threads** (pre-R24 corpus — the long-tail triage).
+4. **Process reminders:** fetch-before-push (3 sibling races THIS round, all absorbed — never force push); commit→push→bundle after every wave (#143); tight-scoped audit agents only (#147); recovery commits verify claims in the diff (#146).
 
-| Repo | Commit | Notes |
-|---|---|---|
-| nle-core-spec (canon) | `4bc8c4d` | Round 9 complete: 21 specs (00-20) + ARCH-R9 + R9 review + battery_r9 48/48 |
-| nle-engine | `624a76b` | Waves 4A→5C complete: 202/202, 25/25 milestones, ~47k LOC, real A/V export. **M1.5 audio wiring (vendor/web-daw-core) NOT yet landed** — it is the next convergence duty (Decision 13) |
-| opencut-timeline | `4e39b67` | **"FINAL as a distilled opencut timeline"** — 297/297, components+controllers+hardening landed, SEAMS.md written. Remaining: P3 polish + **C7 rename (open)** |
-| web-daw-core | `bc68ee0` | 737/737, M1 bridge + triangle de-risk landed. M1.5 engine-side wiring open; M2 (mixer surface) not started |
-| cloudcut-nle | `ux-spec` @ `9b9f68a` | Integrated ours-wins (spec 18 v1.1); watch for branch evolution |
+## VARIANTS-TRACK state (supersedes the R24 section below)
 
-All four repos are ACTIVELY DEVELOPED ("still finalizing" per the user) — `git fetch`/`git pull` every one before any analysis; re-baseline line-number citations with fresh greps (R8 lesson: every engine citation moved; R9 confirmed it again with 4D-B→5C).
+- R24: COMPLETE + reconstructed (the 14-thread full-audit round). R25: COMPLETE (this round — the reaction + fleet; 19/19 resolved; exit gates PASS; 1950/1950; 126 stories).
+- The GitLab mirror PAT (glpat-…) died 401 mid-R24 and was NOT re-issued — GitHub + /home/sync bundles carry durability alone.
 
-## Next session's task: the SEAL ROUND (or a Round-9 delta if repos advanced)
+## Standing laws (battery-enforced)
 
-Default scope = `.agents/PLAN.md`'s seal priority order (which equals 19 §12 + ARCH-R9 §7). First actions:
-
-1. **Fetch/pull all repos; diff engine vs `624a76b`, OT vs `4e39b67`, web-daw-core vs `bc68ee0`.** The user said all three are "still finalizing" — a delta is LIKELY. If any advanced: scout the delta FIRST (its HANDOFF/gaps/DECISIONS docs), then apply the seal items against the new state. Pay special attention to: engine `vendor/web-daw-core` appearing (M1.5!), OT's C7 rename (types losing their `timeline.*` prefixes), web-daw-core M1.5/M2 movement.
-2. **If M1.5 landed in the engine**: verify per ARCH-R9 §7.1 (submodule + parity gate + EXECUTED AudioMixer retirement + audio-mix.ts end-state) — this is PLAN item 1 and the biggest single seal event.
-3. **If nothing moved**: the C7-rename charter and the decision-reconciliation sign-off lines (PLAN items 3-4) are pure spec-side work — safe to start immediately.
-
-## Round-9 mechanics to reuse
-
-- **The challenge round pattern**: when the user pushes back on an architecture, re-derive from measured facts (LOC matrices, test assets, who-owns-what tables), not from prior-round conclusions — the R9 rulings each started with a fresh evidence table (ARCH-R9 §1).
-- **The domain-decomposition lens**: overlap between two repos is resolved by asking "is this ONE domain duplicated, or TWO domains that each need a home?" — the answer differs for timeline (was duplicate → merged) vs audio (two domains → layered seam).
-- **Battery discipline**: fix → full battery re-run → recalibrate; exempt-window logic must look BEFORE AND AFTER each hit (R9 lesson: a `superseded` marker 240 chars after a phrase is still context).
-- **Rename mechanics** (if another suffix-era ever appears): git rm seed + git mv + header self-reference rewrite + path sed on LIVE docs only, historical round records untouched.
-
-## Standing cautions
-
-- Never edit web-daw-core's `copy`-class files by hand (file-class law; sync overwrites).
-- The spec set is now CONTRACT + GAP + ACCEPTANCE (Decision 14): new spec text should state boundary contracts, deltas, and acceptance — not re-describe internals the repos already document (their SKILL/DECISIONS docs).
-- The 6 historical round records keep their point-in-time `.refined.md` paths **by design** — do "fix" them.
+- The posture law (D20), the pin world (D21), the drag law (D22), the single-tree law (D25 + amendments), the plan-executability law (§2A.6), the census law (§2A.7 — mechanism-backed), the productization gate (D28.2), the mode-matrix completeness law (§2A.8), the reference-register law (§2A.9) — all as at R25. Variants-side: SKILL #121-#148.

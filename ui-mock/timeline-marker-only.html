@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Editor Timeline Reproduction</title>
+    <style>
+        :root {
+            --bg-main: #2b2d30;
+            --bg-ruler: #242528;
+            --bg-ruler-dark: #1b1d1f;
+            --bg-track: #2a2c2e;
+            --border-dark: #161719;
+            --text-ruler: #929599;
+            --tick-color: #55575a;
+            --clip-border: #62b1e3;
+            --clip-label-bg: #35769f;
+            --marker-cyan: #00e5ff;
+            --marker-blue: #097dff;
+            --marker-purple: #c343f5;
+            --marker-pink: #f82998;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #121212;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: white;
+        }
+
+        .timeline-container {
+            width: 100%;
+            max-width: 1400px;
+            min-width: 800px;
+            height: 380px;
+            background-color: var(--bg-main);
+            border: 1px solid #000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        /* --- Ruler Section --- */
+        .ruler-section {
+            height: 75px;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-ruler);
+            border-bottom: 2px solid var(--border-dark);
+        }
+
+        .timecode-row {
+            height: 40px;
+            position: relative;
+            background-color: var(--bg-ruler-dark);
+            border-bottom: 1px solid #2a2c30;
+        }
+
+        /* Minor Ticks Pattern */
+        .minor-ticks {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 8px;
+            background: repeating-linear-gradient(
+                to right,
+                var(--tick-color) 0,
+                var(--tick-color) 1px,
+                transparent 1px,
+                transparent 1.33%
+            );
+            opacity: 0.7;
+        }
+
+        .timecode-mark {
+            position: absolute;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transform: translateX(-50%);
+        }
+
+        .timecode-mark span {
+            color: var(--text-ruler);
+            font-size: 11px;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+        }
+
+        .timecode-mark .major-tick {
+            width: 1px;
+            height: 12px;
+            background-color: #8c8f93;
+        }
+
+        /* Marker Track Area (Below Ruler) */
+        .marker-track-area {
+            height: 35px;
+            position: relative;
+            background-color: var(--bg-ruler);
+        }
+
+        /* --- Global Markers --- */
+        .global-marker {
+            position: absolute;
+            top: 6px;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .range-marker-container {
+            position: absolute;
+            top: 6px;
+            height: 14px;
+            display: flex;
+            align-items: center;
+        }
+
+        .range-bar {
+            flex-grow: 1;
+            height: 8px;
+            background-color: rgba(9, 125, 255, 0.2);
+            border-top: 2px solid var(--marker-blue);
+            border-bottom: 2px solid var(--marker-blue);
+            margin-top: -6px;
+        }
+
+        /* --- Tracks Area --- */
+        .tracks-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-track);
+        }
+
+        .track {
+            flex: 1;
+            position: relative;
+            border-bottom: 2px solid var(--border-dark);
+        }
+
+        /* --- Clips --- */
+        .clip {
+            position: absolute;
+            top: 5px;
+            bottom: 5px;
+            background-color: var(--clip-label-bg);
+            border: 1px solid var(--clip-border);
+            border-radius: 2px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.3);
+        }
+
+        .clip-thumbnails {
+            flex: 1;
+            width: 100%;
+            background-repeat: repeat-x;
+            background-position: left center;
+            border-bottom: 1px solid rgba(0,0,0,0.5);
+        }
+
+        .clip-label-bar {
+            height: 22px;
+            background-color: var(--clip-label-bg);
+            display: flex;
+            align-items: center;
+            padding-left: 6px;
+            color: #ffffff;
+            font-size: 11.5px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .clip-label-text {
+            text-overflow: ellipsis;
+            overflow: hidden;
+            z-index: 2;
+        }
+
+        /* Clip Specific Marker */
+        .clip-marker {
+            position: absolute;
+            top: -5px; /* Overlaps the border between thumbnail and label */
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+
+        /* SVG styling */
+        svg.marker-svg {
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="timeline-container">
+    
+    <!-- Timeline Ruler -->
+    <div class="ruler-section">
+        <div class="timecode-row">
+            <div class="minor-ticks"></div>
+            
+            <!-- Major Timecodes (Calculated positions based on original image scaling) -->
+            <div class="timecode-mark" style="left: 7%;">
+                <span>01:00:00:00</span>
+                <div class="major-tick"></div>
+            </div>
+            <div class="timecode-mark" style="left: 33.6%;">
+                <span>01:00:04:00</span>
+                <div class="major-tick"></div>
+            </div>
+            <div class="timecode-mark" style="left: 60.2%;">
+                <span>01:00:08:00</span>
+                <div class="major-tick"></div>
+            </div>
+            <div class="timecode-mark" style="left: 86.8%;">
+                <span>01:00:12:00</span>
+                <div class="major-tick"></div>
+            </div>
+        </div>
+
+        <div class="marker-track-area">
+            <!-- Global Markers -->
+            <div class="global-marker" style="left: 50.5%;">
+                <svg class="marker-svg" width="12" height="14" viewBox="0 0 12 14">
+                    <path d="M0,0 L12,0 L12,9 L6,14 L0,9 Z" fill="var(--marker-cyan)" stroke="#000" stroke-width="1"/>
+                </svg>
+            </div>
+            
+            <!-- Range Marker (Blue) -->
+            <div class="range-marker-container" style="left: 56.5%; width: 10.5%;">
+                <svg class="marker-svg" width="10" height="14" viewBox="0 0 10 14" style="margin-left: -5px;">
+                    <polygon points="0,0 10,0 10,9 5,14 0,9" fill="var(--marker-blue)" stroke="#000" stroke-width="1"/>
+                </svg>
+                <div class="range-bar"></div>
+                <svg class="marker-svg" width="10" height="14" viewBox="0 0 10 14" style="margin-right: -5px;">
+                    <polygon points="0,0 10,0 10,9 5,14 0,9" fill="var(--marker-blue)" stroke="#000" stroke-width="1"/>
+                </svg>
+            </div>
+
+            <div class="global-marker" style="left: 81.5%;">
+                <svg class="marker-svg" width="12" height="14" viewBox="0 0 12 14">
+                    <path d="M0,0 L12,0 L12,9 L6,14 L0,9 Z" fill="var(--marker-purple)" stroke="#000" stroke-width="1"/>
+                </svg>
+            </div>
+
+            <div class="global-marker" style="left: 98%;">
+                <svg class="marker-svg" width="12" height="14" viewBox="0 0 12 14">
+                    <path d="M0,0 L12,0 L12,9 L6,14 L0,9 Z" fill="var(--marker-blue)" stroke="#000" stroke-width="1"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tracks Area -->
+    <div class="tracks-section">
+        
+        <!-- Track 1 (Top) -->
+        <div class="track">
+            <!-- Clip 1: Amalfi Aerial -->
+            <div class="clip" style="left: 0.5%; width: 41.5%;">
+                <!-- Unsplash Amalfi coast image acting as filmstrip -->
+                <div class="clip-thumbnails" style="background-image: url('https://images.unsplash.com/photo-1612275685521-12c416e91ea6?auto=format&fit=crop&w=400&q=80'); background-size: 33.33% 100%;"></div>
+                <div class="clip-label-bar">
+                    <span class="clip-label-text">Amalfi_Coast_Aerial_4.mov</span>
+                </div>
+            </div>
+
+            <!-- Clip 2: Boat Top Down -->
+            <div class="clip" style="left: 78.5%; width: 5.5%;">
+                <div class="clip-thumbnails" style="background-image: url('https://images.unsplash.com/photo-1522061234909-54d9c79ec97b?auto=format&fit=crop&w=200&q=80'); background-color: #000; background-size: contain; background-repeat: no-repeat; background-position: center;"></div>
+                <div class="clip-label-bar">
+                    <span class="clip-label-text">Amal...</span>
+                </div>
+            </div>
+
+            <!-- Clip 3: Water Top Down -->
+            <div class="clip" style="left: 84.3%; width: 6.4%;">
+                <div class="clip-thumbnails" style="background-image: url('https://images.unsplash.com/photo-1500367215255-0e0b218c50cc?auto=format&fit=crop&w=200&q=80'); background-size: cover; background-position: center;"></div>
+                <div class="clip-label-bar">
+                    <span class="clip-label-text">Amalfi_...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Track 2 (Bottom) -->
+        <div class="track">
+            <!-- Clip 4: Talent Balcony -->
+            <div class="clip" style="left: 0.5%; width: 88%;">
+                <!-- Unsplash woman looking at sea acting as filmstrip -->
+                <div class="clip-thumbnails" style="background-image: url('https://images.unsplash.com/photo-1516483638261-f4085ee20ff8?auto=format&fit=crop&w=400&q=80'); background-size: 14.28% 100%;"></div>
+                <div class="clip-label-bar">
+                    <span class="clip-label-text">Amalfi_Coast_Talent_2.mov</span>
+                    
+                    <!-- Clip Markers -->
+                    <div class="clip-marker" style="left: 32.3%;">
+                        <svg class="marker-svg" width="10" height="12" viewBox="0 0 10 12">
+                            <path d="M0,0 L10,0 L10,8 L5,12 L0,8 Z" fill="var(--marker-cyan)" stroke="#000" stroke-width="1"/>
+                        </svg>
+                    </div>
+                    <div class="clip-marker" style="left: 85.7%;">
+                        <svg class="marker-svg" width="10" height="12" viewBox="0 0 10 12">
+                            <path d="M0,0 L10,0 L10,8 L5,12 L0,8 Z" fill="var(--marker-blue)" stroke="#000" stroke-width="1"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clip 5: Amalfi Aerial 2 -->
+            <div class="clip" style="left: 88.7%; width: 11.3%;">
+                <div class="clip-thumbnails" style="background-image: url('https://images.unsplash.com/photo-1612275685521-12c416e91ea6?auto=format&fit=crop&w=400&q=80'); background-size: auto 100%;"></div>
+                <div class="clip-label-bar">
+                    <span class="clip-label-text">Amalfi_Coast_Aeria...</span>
+                    
+                    <!-- Clip Marker -->
+                    <div class="clip-marker" style="left: 65%;">
+                        <svg class="marker-svg" width="10" height="12" viewBox="0 0 10 12">
+                            <path d="M0,0 L10,0 L10,8 L5,12 L0,8 Z" fill="var(--marker-pink)" stroke="#000" stroke-width="1"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+</body>
+</html>

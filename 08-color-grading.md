@@ -1,11 +1,32 @@
 # 08 — Color Grading: Wheels, Curves, LUT, Qualifier, Power Window, Scopes (REFINED)
 
 **Stream:** Color grading effects & UI
-**Status:** Refined spec — sub-agent scout SCOUT-08 has verified all claims against FreeCut + OpenCut-classic source
+**Status:** v-next (Round 24 — the per-file audit fleet's re-verify: the §0 BASE re-pinned to the R24 pins (engine `5036387` 458/458; app `c885ece` 174; nle-ui `fc4cc35` 674; variants 1,521+ live) and **the W2.5 D29 grade-sidecar landing promoted to BASE** (nle-ui `7280372` — the per-scene `SceneGrade` sidecar + `setGrade` + ColorPage's LIVE Contrast/Saturation sliders; app `41f5bc9` — ProgramCanvas's per-scene grade FINAL PASS + the persistence sidecar both ways); the register gains the **scene-grade DECLINE decision row (D29.5c — the twin of spec 04's row: the consumer-side final pass is the law, the app's Z2 grade→export fix stands)**; the phase tags are the D24 set only (the dual-vocabulary window closed this round); the R23 re-verify's facts stand re-verified live (the W-B color wave's mock references, the instruments' zero-code state + the advertised-on-wire trap, the 167-test color lib; §15A's engine line refs re-held EXACTLY at the new pin); the forward work: the grade-math binding + parity (r3) + the S-engine instruments (∥ crawl, consumed at r3) + the app's Z2 consumer fix); Refined spec — sub-agent scout SCOUT-08 has verified all claims against FreeCut + OpenCut-classic source (the §15A engine refs re-verified @ `5036387` — content holds, line numbers re-held; see the §15A re-verify note)
 **Primary teacher:** FreeCut `gpu-effects/effects/color.ts` (1546 LOC, ported to scene-linear, 16-bit) + `gpu-effects/effects/lut.ts` + `gpu-effects/effects/keying.ts` + `shared/utils/gpu-curves.ts` + `gpu-effects/common.ts` + `gpu-scopes/*`
 **Seed file:** `08-color-grading.md`
 **Refined by:** SCOUT-08 (general-purpose scout)
 **Date:** 2026-08-22
+
+---
+
+## 0. FORWARD INVENTORY (R22 posture — what needs to be done; the BASE is accepted, not re-explained. R24 fleet re-verified 2026-09-08 against the live HEADs; phase tags are the D24 set — the dual-vocabulary window closed at this fleet)
+
+**BASE (accepted, re-verified @ the R24 pins — engine `5036387`, app `c885ece`, nle-ui `fc4cc35`, variants @ the in-repo fleet HEAD):**
+- The spec-08-exact math, verified in the variants mock: `ui-mock/shell-variants` @ **1,521+ tests live** (the R24 convention — 00-master's "1521+ (live; the sibling stream's round-wrap declares the exact figure)"; the R23 fleet's 1,542 reading is superseded: the mock's own R23 review-sweep + wrap-fix rounds (`6ec61df` 1,594 / `de3fd47` 1,597, the last variants-code commits) landed after the fleet's 2026-09-07 reading — only ops/serving commits since; the R22 pin's 1,334 and 00-master's 1,470 are point-in-time figures — the battery's central post-fleet re-baseline reconciles) — the `src/lib/color/` libraries (colorSpace sRGB LUTs, gradeMath with the EXACT §4.2 14-step op order, qualifierMath, scopesMath, gradedImage, index; **167 dedicated tests, re-counted live**: colorSpace 31 / gradeMath 56 / qualifierMath 28 / scopesMath 20 / gradedImage 26 / index 6). MOCK-side, pinned in-repo — design reference, not shipping code; the W4 math is **r3's parity reference**.
+- **The R23 W-B color wave LANDED (mock-side reference surfaces, honest view-state markers; the composition re-truthed R24-W2 + R25-A2 registered forward):** ScopesDock (the four scope TABS — Parade/Waveform/Vectorscope/Histogram — as the ~160px pane UNDER the viewer, store-gated, ONE scope at a time, the §11.4 10fps throttle; the R22-W4c four-at-once law is REVERSED by DESIGN-R23 D-B1; the R24-W1 console-row placement supersedes the R23 note that sat it next to the MixerDock — **REGISTERED FORWARD: R25-A2 supersedes — the color console row becomes a thin TAB strip [Timeline | Nodes | Scopes], the under-viewer pane RETIRES, and the scopes react to the PLAYHEAD FRAME, not selection**), ColorNodeGraph (the node-graph surface — console-row slot [6]; region [2] is ALWAYS viewer-led since W2 `0196c22`, so the earlier "the AppShell swaps the viewer for the graph" viewer-swap text and ruling-14's stale-frame clause RETIRE with the W2 composition; the C56 parallel-topology toast is the mock's honest marker), StillsPanel (the DaVinci-style Gallery: still cards with the honest derived node-count chip, clip-level captions, Save Still → the store's `colorStills` view state; the .drx/PowerGrade render-round boundary + gap C59 — the MOCK's own deviation ledger; the spec register's C-ledger ends at C58 — registered there), and the track-density control is the ViewOptionsPopover's Compact-tracks checkbox (W1 — the `timelineCompact` auto|on|off toggles are DEAD since W1's popover). Surface tests (re-counted live at the R27 reading — this audit): ColorPage 43 / ScopesDock 22 / StillsPanel 19 / ColorInspector 10 / GradedViewerCanvas 15 / mockGrades 21; the `src/lib/color/` libraries carry **170 dedicated tests** (colorSpace 33 / gradeMath 56 / qualifierMath 28 / scopesMath 20 / gradedImage 27 / index 6) — the counts re-keyed R27 over the R24 reading's 33/20/14/10/15/18 and 167.
+- The mock's GradedViewerCanvas runs the real pipeline: decode → grade → encode at ≤960×540, rAF-coalesced (§12's cache strategy realized), and publishes the graded display buffer on gradedFrameBus (the seam's BUFFER half; useScopeSource the STORE half) — **the scopes plot THIS MOCK buffer; at r3 they must plot ENGINE data (GAP row 2's consumption — the mock is the reference PLOTTING implementation, not the data source)**.
+- nle-engine @ `5036387` — **458/458 vitest, tsc 0** (was 440 @ `b8c6f88` at the R23 pin; +18 = the W2.5 D29 effects-sidecar round `8a0b7fe` (+17, bridge-seams) + the R8-REV #5 blur-radius clamp `4b2dfd1` (+1) — the round's ONLY engine source deltas, both in `bridge/composition-frame.ts`, NOT the GPU color stack) — the **44-effect registry** (43 in `effects/pipeline.ts` + `gpu-lut` in `effects/lut.ts`, re-counted) + the WebGPU compositor: the engine landing pad r3 binds into. **The instruments are still ZERO engine code** (re-verified @ `5036387`: still zero progress — the only mentions are the param-metadata comment at `effects/pipeline.ts:12` + the FreeCut wire-schema strings `gpu-power-window` / `gpu-secondary-qualifier` in `headless/api.ts`'s `GPU_EFFECT_TYPES` (:1509/:1515) — the wire ADVERTISES both, the 44-id registry implements NEITHER, the advertised-on-wire ≠ implemented trap; the P2 backlog still lists "scopes (waveform/vectorscope)"). Its color ops are still FreeCut-baseline 8-bit/gamma (`rgba8unorm` — 46 sites/10 files, re-verified, the count IDENTICAL to R23: the 440→458 growth touched none of them; §15A — the binding is the correction), and the Wave-3E `gpu-lut` is the 8-bit FreeCut-baseline port (Uint8Array/base64 rgba8, no linearization — §16.C/§17.D's fixes land with the binding). The W2.5 effects CSS-filter subset (`CompositionElementParams.effects` + `buildElementFilterString` — the honest Gaussian-Blur-only map) is spec 04's BASE row; the scene-GRADE half of the seam is DECLINED here by design (the D29.5c row below).
+- **The W2.5 D29 grade-sidecar landing — THE ROUND'S REAL DELTA, both sides of the seam (BASE):** nle-ui @ `fc4cc35` (674/674, live-run) — commit `7280372` (+8 pins, 666→674): the store's per-scene **`color: Record<sceneId, SceneGrade>`** ({contrast, saturation, brightness, hue} — the CSS-filter domain, 1/1/1/0 neutral; type-only export) + **`setGrade`** (merges a Partial into the NEUTRAL-seeded record — a partial never persists a partial record; new record ref per write; G-slice view-state law — no history entry, never in SceneJSON; the engine mirror never touches it, the app's persistence carries the snapshot) + **ColorPage's LIVE sliders** — Contrast + Saturation store-driven (slider −100..100 ⇄ grade 0..2), following scene switches; Pivot + Qualifier hue honest-LOCAL (marked, no store write); brightness/hue contract-complete but slider-less v1 (the honest-subset rule). The app @ `c885ece` (174/174) — commit `41f5bc9`: the per-scene grade renders as **ProgramCanvas's FINAL PASS** (compose-then-filter: the frame composes on a scratch canvas, then ONE filtered `drawImage` onto the monitor — contrast/saturate/brightness/hue-rotate; the grade string is `''` when neutral = the direct paint path; the jsdom pin surface is `data-grade`), and **persistenceService carries the sidecar both ways** (the autosave identity key gains `s.color` — a grade write dirties via the new record ref; the snapshot's optional `color` field hydrates NEUTRAL for pre-W2.5 saves; loadSnapshotFile's grades REPLACE, never merge). Honest-mock ledger v1 (the package): the LUT select + the four wheels stay honest-mock ("the preview lands with the render round, spec 08") — the GPU fidelity path (nle-ui queue item L; consumed by the r3 binding; the engine's D29.5d widening coordinates with it, spec 04's row).
+
+**GAP (the work — owner + phase per the D24 ladder / `IMPLEMENTATION-PLAN.md` §2, the D24 set only; acceptance in parentheses):**
+- **The grade-math binding + parity (re-homed from the retired spec-14 §3.2/§4).** Bind the W4 mock math (spec-08-exact) to the ENGINE pipeline's real pixels. Owner app+engine; **r3** — UNCHANGED this round (acceptance: grade-math parity pins — the mock's W4 math vs the engine's output on the SAME shared fixtures, max delta ≤ 1 LSB-equivalent; the 8-bit→10-bit correction is the binding's substance — the engine's `rgba8unorm` chain, the LUT data path's Uint16Array/rgba16uint port (§16.B/§16.C), and §17.D's LUT linearization fix land with it; the parity corpus = the shared fixtures + both sides' pins, green). (The W2.5 grade final pass is NOT this row: the CSS-filter consumer preview v1 is fenced off — this row targets the engine's linear-light pipeline.)
+- **The engine-side instruments — scopes, secondary qualifier, power window (still zero engine code — re-verified @ `5036387`, zero progress per the engine card; the retired spec-14 §4 consumption row, re-homed).** Engine; **S-engine ∥ crawl, 4-6 wk** (the ARCH-R22 reviewed register; acceptance: each instrument's engine milestone green; consumed + pinned at **r3** — the mock's ScopesDock/scopeDraw/scopesMath are the reference PLOTTING implementation, but at r3 the scopes must plot ENGINE data, and the qualifier + window apply in the linear-light pipeline; close the wire trap — either implement the advertised `gpu-secondary-qualifier`/`gpu-power-window` ids or pull them from `GPU_EFFECT_TYPES`).
+- **The scene-grade DECLINE (D29.5c — a DECISION row, not a gap; the twin of spec 04's row):** the engine seam **declines the scene-grade promotion into composition/export BY DESIGN** — "the scene GRADE stays a consumer-side FINAL PASS by design (hue-rotate/saturate are non-linear under per-element alpha compositing — per-element grade filters ≠ composited grade; the app host composes first, filter-draws once)" (the engine's `8a0b7fe` design law). **The consumer-side final pass is THE LAW** — realized in BASE above (nle-ui's sidecar + the app's ProgramCanvas pass); the app's **Z2 grade→export fix** (the monitor↔export grade divergence: the monitor grades, the export does not — zero `grade`/`color` terms in deliverService.ts, re-verified live) stands as the CONSUMER-side open item in the app's D30 W-E queue — not re-filed engine-side. **R28 amendment (D45 — the R9-c fold, ARCH-R28 §4):** the seam-side proposal `paintCompositionFrame(ctx, ops, media, { grade })` — the **retained open proposal** in the engine's PLAN (never re-filed by the engine itself; the R27 fleet's reading is the origin) — is **RATIFIED as D29.5c's registered evolution**: it preserves the compose-then-filter ORDER (the math law — the decline's own reasoning, per-element ≠ composited, untouched) and moves only the venue consumer→seam, landing engine-side at its r3-consumption point (with the color venue work); spec 04's twin row flips to "ratified-as-evolution, r3-consumable" per the same ruling. Tier-precise (the W3 review's A3 rewording): R9-c gives the **consumer-preview tier** (monitor + export) its ONE law home at the seam's final pass — NOT the venue's; **the venue's grade home stays THIS spec's r3 fragment passes** over the scene-linear `rgba16float` working texture (§0's venue-law row — the painter is Canvas2D/CSS-filter domain, the honest-preview tier); the shared law is the ORDER itself (compose-then-filter — one law, two tiers, the effects family's own D29.5d pattern). App-side migration registered (lands with the seam, r3): `ProgramCanvas` + `deliverService` switch to the `{grade}` param and RETIRE their wrapper pairs (today's two app-side final-pass homes — `ProgramCanvas.tsx:201-215` monitor / `deliverService.ts:315-338` export, the Z2 cite whole `:299-338` — plus the app-side string mapping `buildGradeFilterString` `ProgramCanvas.tsx:91-94`); **`buildGradeFilterString`'s landing shape: engine-side, as the pinnable string law** (the `buildElementFilterString` precedent, `bridge/composition-frame.ts:257`) — the `{grade}` param carries the object, the string mapping lives at the seam; the app's Z2 grade→export fix lands through this seam.
+- **Timeline-grade vs clip-grade sequential law — RULED (Round 27, §21 — the C50 ruling):** `[clipGrade] → [timelineGrade]`, each a full application in sequence, not a params merge (mock-verified live: the store's TIMELINE_GRADE_KEY + the frame bus's 'program' mode; the R20-W4c / `docs/r20/color-layout.md` §3.6 record is the history) — the full ruling (the homes, the sequential law, the D29.5c boundary, the persistence round-trip) is §21 below.
+- **The grading venue law (Round 27 — what runs where; the user's "to what extent" question codified; cross-linked 04 §8):** all per-pixel color math — the wheels' 14-step grade, the curve-LUT hop, the 3D LUT, the qualifier, the power window, tone mapping — runs as **WebGPU fragment passes over the scene-linear `rgba16float` working texture** (04 §4's box), one pass per grade node, ping-ponged (04 §5.2), between composite and display transfer; clip→timeline (and future node-graph) grades are **sequential full passes, never params merges** (§21). Curve and 3D-LUT data are **CPU-baked at edit time** (1024-entry 1D / 33³ 3D, 16-bit) and uploaded as textures — never evaluated per pixel on the CPU. **Scopes are compute-shader reductions over the post-grade signal with `linear_to_srgb` before binning** (§18), rendered **on-GPU** (graticule + trace render pass; zero readback), throttled to 10fps (§11.4); readback of the small u32 accumulators is permitted ONLY as the canvas2d-drawing fallback. The **eyedropper's 3×3 seed** is the one mandatory CPU readback (a 3×3 `copyTextureToBuffer`). UI gesture state (the §4.3a trackball law, transient buffers, one undoable commit per gesture) is CPU-side and reaches the GPU **only through the 112-byte uniform write** per committed grade. The mock's `src/lib/color/` CPU implementation is the **parity oracle** (≤1 LSB-equivalent, shared fixtures, CI), not a production venue; there is no production CPU render path (WebGPU-only, master Decision 4).
+- Register: `IMPLEMENTATION-PLAN.md` §2 (r3's row: "the grade-math binding + parity; the S-engine instruments consumed" — the parity pins ≤ 1 LSB-equivalent; scopes plot engine data) + §3 (the S-engine/S-app workstreams) + ARCH-R24 D29.5 (the DECLINE ruling recorded as the law; the CSS-filter widening is spec 04's D29.5d row, coordinating with this file's LUT GPU-fidelity path); spec 14 is retired to the redirect stub — its color-domain rows live HERE.
+
+**ACCEPTANCE & TEST PLAN:** §19 (the executable contract; §14 = the intent list) + spec 17 §13A facet rows + the battery's posture checks; the r3 grade-math parity pins are the binding's own gate; BASE acceptance = the cited suites at the cited pins (regression role).
 
 ---
 
@@ -256,6 +277,18 @@ The seed spec proposed a flat list of `<ColorWheel>` components. FreeCut's actua
 
 **FreeCut UI reference:** `src/features/effects/components/panels/gpu-wheels-panel.tsx` (1378 LOC, NOT `gpu-color-wheels-panel.tsx` as the seed spec mistakenly named it — see §16.I). Sub-agent verified at `:429-543` for the wheel/param descriptor tables, `:66-77` for the `getHueAmountFromClient` pointer→hue/amount conversion, `:1-64` for the dock vs sidebar CSS gradient constants.
 
+### 4.3a Wheel input model (the R25-A3 law, ruled D39 — Round 27; FreeCut's panel remains the ANATOMY reference — layout/descriptors — not the input model)
+
+Disc drags are **relative and accumulating (trackball-style)**: grab anywhere inside the disc; the value accumulates pointer deltas (`amount += k·Δrim`; hue advances by the tangent direction), clamped at the rim (amount |v| ≤ 1; hue wraps mod 360). **Live preview during the drag** — every accumulated delta re-grades the target within the §2 goal-4 latency law (§14 test 9's 33ms); there is no commit-on-release *deferral of the preview*. **One undo entry per gesture**: the drag buffers transiently and commits a single `updateEffect`/`setGrade` on pointer-up or lostpointercapture (the preview rides the transient buffer at full frame rate). Center = neutral; crossing to the opposite side passes through the complementary hue (continuous; an optional ≤3% dead zone at center).
+
+**Master luma:** a horizontal dial below the wheel (left darker / right lighter; YRGB move together) + **Ctrl/Cmd+drag inside the disc = master adjust** + **Shift+drag = absolute jump** (the reachability escape hatch).
+
+**Resets:** double-click the disc = **color-only reset** (hue+amount → neutral; the master/luma scalar survives — the explicit exception to 18 §5A's blanket double-click reset); the per-wheel corner button = full reset (color + master).
+
+**Readouts — the YRGB fields are EDITABLE via projection (D39, the widen-via-projection ruling):** 4 YRGB numeric fields per wheel, live during the drag; the Y field writes the same scalar the master dial drives (per-wheel: lift −0.2..0.2 / gamma 0.25..4 / gain 0.25..4 / offset in ×1023 code values — the offset wheel's dual-unit readout law, D28-A2-class); an R/G/B edit is a UI-side **solve onto the existing (hue, amount) uniform** via the luma-neutral `wheelDelta` derivation (`gradeMath.ts:146-155`) — ZERO shader/uniform change; the 28-f32 layout (§4.2/§16.A) stands untouched. **The projection-snap law (D39's honest price):** the (hue, amount) model spans a **1-D curve inside the 2-D luma-neutral plane** — `wheelDelta(h,a) = (t−1)·a − luma709((t−1)·a)` sweeps one direction per hue, so an arbitrary typed R/G/B triple generally has **no exact representation**: an off-curve edit snaps to the nearest on-curve (hue, amount) and the residual is silently dropped (Resolve's YRGB fields are 3 independent channel values — ours cannot fully honor that, which is the price of zero-shader-change; state it, don't rediscover it at r3). **The round-trip law:** the displayed R/G/B are luma-INCLUSIVE (`t_c·amount`) while the solve is luma-NEUTRAL — typing displayed values back must return the same (hue, amount) (it does algebraically — the luma component strips exactly — but only because the solve neutralizes first; pinned by a §19 test). **The 2-to-1 ambiguity convention:** `wheelDelta(h,−a) = −wheelDelta(h,a)`, so (h, −a) and (h+180°, a) are the same point — the canonical form is **the amount sign carries the polarity; hue confined to [0,360)**. Hue-ring graticule: vectorscope orientation (red upper-left, 60° spacing).
+
+> **Ruling provenance:** the input model is R25-A3 (binding round-doc law, `r25-reaction-round.md` §6); D39 (Round 27, adversarially reviewed) resolved the A3-vs-§16.A model question in favor of widen-via-projection with the projection-snap/round-trip/2-to-1/offset-dual-unit riders above. The ruling must hold before the mock's next wheels touch and before r3 parity fixtures are cut (the original "before the sibling's W3 rewrite" constraint is spent — W3 landed `b08b83a` with the readouts still read-only, deferring to this ruling).
+
 ---
 
 ## 5. Curves
@@ -276,8 +309,10 @@ export const GPU_CURVES_POINT_MIN_GAP = 0.04                             // :25
 // multi-point list (`masterPoints`, `redPoints`, ...). The JSON form takes
 // precedence when present; otherwise the legacy 2-point form is used.
 //
-// Channels are composed: out = channel(master(x)), so the master curve is
-// applied first, then per-channel. (evaluateGpuCurvesEffectChannel, :302-312)
+// Channels are composed: out = master(channel(x)) — the channel curve is
+// applied first, then the luma/master curve on top (y∘r / y∘g / y∘b).
+// (D37, Round 27 — OUR law; FreeCut/evaluateGpuCurvesEffectChannel
+// composes channel(master(x)), master-first: the named r3 flip corrective.)
 ```
 
 We override the LUT width and bit depth:
@@ -287,6 +322,8 @@ We override the LUT width and bit depth:
 export const GPU_CURVES_LUT_WIDTH = 1024   // was 256 — 4× more samples for 10-bit
 // Storage: Uint16Array (16-bit per channel) instead of Uint8Array
 ```
+
+**The composition-order ruling (D37, Round 27 — y∘ch):** OUR order is **channel first, luma/master LAST** — `out = master(channel(x))`, i.e. `y∘r / y∘g / y∘b`. Grounds: (1) the parity corpus pins it — the mock (this spec's named r3 parity reference, §0) ships and tests exactly this order (`gradedFrame.ts:83-108`; `gradedFrame.test.ts:84` "THE COMPOSITION ORDER: the Y curve applies to all three rgb channels AFTER each channel's own curve (y∘r, not r∘y)" + the :187 pixel-loop pin); flipping the mock churns the corpus for zero functional gain, keeping it costs a two-line spec edit; (2) it composes with the sequential-pass family ([clip] → [timeline] — later passes see earlier output; the luma curve is the final tonal authority over the channel-balanced signal); (3) FreeCut's order carries no counterweight beyond being the reference's behavior, and Resolve's internal order is publicly undocumented (BMD manual silent; 3 negative web probes, R24-A2's research base) — **spec text must NOT cite "Resolve's order" absent a source; we cite our own order and grounds**. **The named r3 flip correctives** (the same corrective class as the 8-bit LUTs §16.B/§16.C, the sRGB bug §7.4, and the clamps §4.2): (a) FreeCut's `evaluateGpuCurvesEffectChannel` composes `channel(master(x))` — master-first (`gpu-curves.ts:302-312`); (b) **the ENGINE's own current bake is master-first**: `nle-engine/src/lib/nle/effects/pipeline.ts:1483-1486` (`buildGpuCurvesLutData`: `const master = evaluateMonotoneCurve(masterPoints, x); data[i*4] = Math.round(clampNum(evaluateMonotoneCurve(redPoints, master), 0, 1) * 255)` — channel(master(x)), plus the same 256-entry 8-bit LUT shape we already override to 1024/Uint16) — the r3 binding must CONSCIOUSLY flip it, never silently ship master-first against this law. Open verification (non-blocking): a live Resolve dual-curve probe may confirm or refute; if it contradicts, re-open D37 before r3 fixtures ship.
 
 ### 5.2 Curve → 1D LUT baking
 
@@ -331,14 +368,20 @@ function bakeCurvesLUT(params: EffectParams): Uint16Array {
   const data = new Uint16Array(width * 4)
   for (let i = 0; i < width; i++) {
     const x = i / (width - 1)
-    const master = evaluateMonotoneCurve(masterPoints, x)
+    // D37 (Round 27): channel curve FIRST, luma/master curve ON TOP —
+    // out = master(channel(x)) (y∘r / y∘g / y∘b) — NOT FreeCut's
+    // channel(master(x)); the engine's pipeline.ts:1483-1486 bake flips
+    // with this law at the r3 binding.
+    const r = evaluateMonotoneCurve(redPoints, x)
+    const g = evaluateMonotoneCurve(greenPoints, x)
+    const b = evaluateMonotoneCurve(bluePoints, x)
     // Curves are authored in sRGB-encoded space (typical UI convention);
     // for our linear-light pipeline we sample them AFTER converting
     // linear → sRGB in the shader, so the LUT stays in sRGB-encoded [0,1]
     // space but with 16-bit precision for smoother gradients.
-    data[i * 4]     = Math.round(clamp(evaluateMonotoneCurve(redPoints,   master), 0, 1) * 65535)
-    data[i * 4 + 1] = Math.round(clamp(evaluateMonotoneCurve(greenPoints, master), 0, 1) * 65535)
-    data[i * 4 + 2] = Math.round(clamp(evaluateMonotoneCurve(bluePoints,  master), 0, 1) * 65535)
+    data[i * 4]     = Math.round(clamp(evaluateMonotoneCurve(masterPoints, r), 0, 1) * 65535)
+    data[i * 4 + 1] = Math.round(clamp(evaluateMonotoneCurve(masterPoints, g), 0, 1) * 65535)
+    data[i * 4 + 2] = Math.round(clamp(evaluateMonotoneCurve(masterPoints, b), 0, 1) * 65535)
     data[i * 4 + 3] = 65535
   }
   return data
@@ -791,6 +834,12 @@ The same 8-bit pattern appears in:
 
 **FreeCut reference:** All 5 files in `src/infrastructure/gpu-scopes/`: `histogram-scope.ts`, `waveform-scope.ts`, `vectorscope-scope.ts`, `scope-renderer.ts`, `scope-render-pass.ts`. See §18 for the full bit-depth port.
 
+### 11.6 The scope-trigger + measured-signal + render-venue laws (Round 27 — the three §11 riders)
+
+1. **The playhead-frame trigger (R25-A2):** scopes analyze the frame under the PLAYHEAD — always-on analysis, never selection-driven; the visible scope follows the playhead at the §11.4 throttle (10fps). The analyzed frame changes only when the playhead crosses a frame boundary or the grade under it changes.
+2. **The measured signal is the POST-GRADE, display-encoded signal (the WYSIWYG instrument):** computed from the graded working texture, `linear_to_srgb` before binning (§18.2) — Resolve behavior; pre-grade display is a v2 viewer toggle. This rules 04 §16.5's ambiguity ("reads from working linear-light texture" names the texture, not the GRADE STATE — the signal is post-grade by this law).
+3. **The render venue is ON-GPU (zero readback):** scope traces render via the graticule + trace render pass; CPU readback of the small u32 accumulators is the canvas2d-drawing FALLBACK only — the mock's canvas2d painters + ≤10k stride cap are the CPU-fallback reference, not the production venue (§0's venue law).
+
 ---
 
 ## 12. Real-time Feedback
@@ -904,7 +953,7 @@ Read in full:
 
 ❗ **No dedicated panels found for**: vibrance, brightness, contrast, exposure, hue shift, saturation, temperature, tint, levels, grayscale, sepia, invert, chroma key. These all use the generic `gpu-effect-panel.tsx` (which auto-renders `<SliderInput>` rows from the effect's `params` definition). For our port, we recommend dedicated panels for `exposure`, `chroma-key`, and `levels` (the most commonly adjusted), and leave the rest as generic.
 
-UI-surface scope note (Round 7): the DaVinci-derived UI shell (spec 18, from `ui-mock/davinci_resolve_ui_mock.html`) is **simplified** — its Color dock page hosts this spec's panels in a simplified single-column layout, with **no Resolve-style node graph or gallery**; grading surfaces via the shell's Color workspace and the inspector's Effects tab. Scope placement (§11.4) follows spec 18 §4.8's page inventory.
+UI-surface scope note (Round 7): the DaVinci-derived UI shell (spec 18, from `ui-mock/davinci_resolve_ui_mock.html`) is **simplified** — its Color dock page hosts this spec's panels in a simplified single-column layout, with **no Resolve-style node graph or gallery**; grading surfaces via the shell's Color workspace and the inspector's Effects tab. Scope placement (§11.4) follows spec 18 §4.8's page inventory. *(R23 note: this remains true for SPEC 18's package page — nle-ui `85dcf57`'s ColorPage is exactly that simplified stack, honest static-mock. The shell-VARIANTS mock has since landed the node graph (ColorNodeGraph, W-B/D-B2) and the Stills Gallery (W-B/D-B4) as DESIGN-REFERENCE surfaces — mock references for the run-era depth, not a spec-18 scope change; see §0.)* *(R24: the package pin is `fc4cc35`; W2.5 made the page's Contrast/Saturation sliders LIVE (store-driven — §0) but the stack is still the simplified single-column page with the wheels/LUT honest-mock — the note's substance stands at the new pin.)*
 
 ### Q7. FreeCut `gpu-effects/effects-pipeline.ts` (1132 LOC) ✅
 
@@ -933,7 +982,7 @@ Read in full. The `COMMON_WGSL` template literal is prepended to every effect sh
 
 ### Q9. Resolve/FCP reference
 
-UI reference only — not code. FreeCut's `gpu-wheels-panel.tsx` is already heavily Resolve-inspired (the dock layout with master ring gauges at `:478-519` matches Resolve's Color Page wheel layout, including the phase-flipped gain gauge at `:504-506`). We adopt FreeCut's UI as our reference, with adjustments for our linear-light working space (no visual change — just internal math).
+UI reference only — not code. FreeCut's `gpu-wheels-panel.tsx` is already heavily Resolve-inspired (the dock layout with master ring gauges at `:478-519` matches Resolve's Color Page wheel layout, including the phase-flipped gain gauge at `:504-506`). We adopt FreeCut's UI as our reference, with adjustments for our linear-light working space (no visual change — just internal math). *(Round 27: the INPUT model is superseded by §4.3a — the R25-A3 trackball law, ruled D39; FreeCut's panel remains the ANATOMY reference — layout/descriptors — not the input model.)*
 
 ---
 
@@ -1013,6 +1062,10 @@ UI reference only — not code. FreeCut's `gpu-wheels-panel.tsx` is already heav
 ### 15A. Code References — nle-engine (reference, NOT canon)
 
 > The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room FreeCut-port **in-between reference, NOT canon**. It de-risks implementation but inherits FreeCut patterns this spec corrects (8-bit sRGB pipeline, JSON-RPC+$ref headless protocol, class-based API, procedural media, single-tier tests, zero workers). Where engine and spec conflict, **the spec wins**; deltas are documented, not adopted. Full reconciliation: `19-code-references.md`.
+>
+> **R23 fleet re-verify (2026-09-07, @ `b8c6f88`, 440/440):** every row below still HOLDS on content; the line numbers drifted with the engine's R22→R23 waves (356→440 tests) — `wheelTint` :1883→:1919, `registerEffects({` :4559→:4595, `luminance601` :1894→:1930, the `rgba8unorm` data-texture site :4812→:4850, the `runEffectChain` call :5086→:5179, `GPU_EFFECT_REGISTRY` :3003→:3039, player's `enabledEffects` :1076→:1656. The ENGINE-GAP rows hold exactly (no scopes module in `src/lib/nle`; `effects/` is `pipeline.ts` + `lut.ts` only; the wire-schema trap: `GPU_EFFECT_TYPES` advertises `gpu-power-window`/`gpu-secondary-qualifier`, the 44-effect registry implements neither). The "37,958 LOC, 124 tests" figure is the SCOUT-08-era record (2026-08-22); the live engine is 440/440 @ `b8c6f88` (see §0).
+>
+> **R24 fleet re-verify (2026-09-08, @ `5036387`, 458/458):** every row below still HOLDS exactly — the round's only engine source deltas (the W2.5 `8a0b7fe` + the R8-REV #5 `4b2dfd1` blur-radius clamp) touched `bridge/composition-frame.ts` + `bridge-seams.test.ts` ONLY, so every R23 line ref above is UNMOVED and re-checked live (`wheelTint` :1919, `registerEffects({` :4595, `luminance601` :1930, the `rgba8unorm` data-texture site :4850, the `runEffectChain` call :5179, `GPU_EFFECT_REGISTRY` :3039, player's `enabledEffects` :1656); the 8-bit baseline is IDENTICAL (46 `rgba8unorm` sites / 10 files); the ENGINE-GAP rows hold (still no scopes module; `effects/` = `pipeline.ts` + `lut.ts`; the wire-schema trap unchanged — only the `pipeline.ts:12` param-metadata comment + the `headless/api.ts:1509/:1515` wire strings). The live engine is 458/458 @ `5036387` (see §0).
 
 | Spec section | nle-engine file:line | verified quote | status | note |
 |---|---|---|---|---|
@@ -1396,6 +1449,8 @@ fn curvesFragment(input: VertexOutput) -> @location(0) vec4f {
   return vec4f(c, color.a);
 }
 ```
+
+Note (D37, Round 27 — the LUT-semantics comment): the shader samples per-channel exactly as FreeCut does — the **composition order lives in the BAKE, not in the sample loop** (the baked LUT already composes `y∘ch` per §5.1/§5.2; the sample-time `.r/.g/.b` lookups are order-free). Parity rider (P2): the GPU port samples an encoded→encoded LUT with shader-side linear↔sRGB conversions (above); the mock bakes an encoded→**linear** LUT (srgbDecode baked in, 256-entry, 8-bit output quantization — `gradedFrame.ts:100-117`) — same law, coarser bake; the r3 parity gate compares in the ENCODED domain and either widens the mock's bake (256→1024, `Math.round(out*255)`→float) or budgets the 8-bit hops inside the ≤1-LSB-equivalent gate.
 
 ### 17.C FreeCut `levelsFragment` shader (color.ts:245-262)
 
@@ -2146,14 +2201,31 @@ storage, 10-bit scope binning, etc.).
 - `curve-baking-identity-curve-produces-identity-lut` — control points
   `[(0,0), (1,1)]` bake to a LUT where `lut[i] ≈ i/1023` for all
   `i ∈ [0, 1023]`; max abs deviation `< 1e-6`
+- `curve-composition-order-y-after-channel` (D37, Round 27) — a y (master)
+  curve mapping `0.5 → 0.7` + an r curve mapping `0.5 → 0.4` bake to a LUT
+  where the red output at input `0.5` = `y(0.4)` (≈ the y curve evaluated at
+  `0.4` — the channel curve first, the luma curve on top), **NOT**
+  `r(y(0.5)) = r(0.7)` and NOT `0.4` evaluated at `y(0.5)`; the executable
+  pin of §5.1's D37 ruling (the mock's `gradedFrame.test.ts:84/:187` is the
+  parity twin)
+- `wheel-yrgb-round-trip-returns-same-hue-amount` (D39, Round 27) — for the
+  4 wheels: read the displayed luma-INCLUSIVE YRGB values of a `(hue,
+  amount)` state, type them back into the editable fields, and the solved
+  `(hue', amount')` deep-equals `(hue, amount)` (the luma component strips
+  exactly because the solve neutralizes first — §4.3a's round-trip law);
+  an off-curve R/G/B triple snaps to the nearest on-curve point (the
+  projection-snap law) with the residual dropped
 - `color-wheels-uniform-packing-28-f32-112-bytes` — `packColorWheelsUniforms(
   {shHue, shAmount, midHue, midAmount, hlHue, hlAmount, temperature, tint,
-  saturation, exposure, contrast, pivot, liftHue, liftAmount, gammaHue,
-  gammaAmount, gainHue, gainAmount, offsetHue, offsetAmount, lift, gamma,
-  gain, offset, wheelRotation, hueRotation, satMix, lumMix})` produces an
-  `ArrayBuffer` of `byteLength === 112` with the 28 `f32` fields laid out per
-  `color.ts:591-599` (SCOUT-08 §16.A); matches `uniformSize: 112` at
-  `color.ts:589`
+  saturation, exposure, contrast, pivot, lift, gamma, gain, offset,
+  blackPoint, whitePoint, offHue, offAmount, midDetail, colorBoost, shadows,
+  highlights, hue, lumMix, _pad1, _pad2})` produces an `ArrayBuffer` of
+  `byteLength === 112` with the 28 `f32` fields laid out per
+  `color.ts:591-599` (SCOUT-08 §16.A — the §4.2 `WheelsParams` verbatim; the
+  seed-spec's `liftHue/liftAmount/…/wheelRotation/satMix` field names are the
+  naming §16.A rules WRONG and omit 10 real fields — the mock's
+  `packWheelsParams`, `gradeMath.ts:217-248`, is the executable reference);
+  matches `uniformSize: 112` at `color.ts:589`
 - `qualifier-hsl-math-circular-hue-distance` — `hueDistance(350°, 10°)` ≈
   `20°` (wraps through 0°); `hueDistance(10°, 350°)` ≈ `20°` (symmetric);
   `hueDistance(180°, 0°)` === `180°`; `hueDistance(0°, 360°)` === `0°`
@@ -2231,10 +2303,13 @@ boundary table above).]
   data which produces visible banding on subtle gradients; SCOUT-08 §16.B)
 - `curves-master-channel-affects-luma-only` — render
   `10s-smpte-bars-1080p.mp4` with a master curve that maps `0.5 → 0.7`
-  (brightens mid-tones only); output luma (BT.709) increases at the
-  mid-gray bar, but **chroma (Cb/Cr) is unchanged** for that bar; verifies
-  the master curve operates on luminance only (spec 08 §5 master curve
-  convention), not on the RGB channels
+  (brightens mid-tones); output luma (BT.709) increases at the mid-gray bar
+  and **chroma (Cb/Cr) is unchanged** for that bar — the master curve
+  applies EQUALLY to all three channels (D37's `y∘r / y∘g / y∘b`), so a
+  neutral bar's chroma is preserved BY CONSTRUCTION (the identical
+  per-channel map is chroma-neutral on neutral input); there is no separate
+  "luma-only master" semantics (the R25 review's reword — matches §5.1
+  and the mock; a third model would match neither)
 - `qualifier-feathered-edge-smooth-transition` — apply a qualifier with
   `hueCenter: 120°` (green), `hueWidth: 30°` to a horizontal
   red→green→blue gradient clip; sample the qualifier mask alpha along the
@@ -2365,14 +2440,18 @@ Panel-focus routing targets the spec 18 inspector tab set (video/audio/effects/t
   call — the element's `effects` array no longer contains `E`, all other
   effects remain at their original indices
 - `color-wheel-pointer-drag-issues-update-effect-command` — dragging the
-  Lift wheel puck by `Δx = 20, Δy = 10` (toward magenta-up) issues
-  `previewElements({updates:[{elementId, effectId, params:{liftHue:
-  <computed>, liftAmount: <computed>}}]})` → `commitPreview()`; the
-  committed state matches a direct `engine.command.apply({type:
-  'updateEffect', params:{elementId, effectId, params:{liftHue, liftAmount}}})`
-  with the same computed values; puck-to-param conversion uses the same
-  `(dx, dy) → (hue, amount)` formula as the FreeCut `gpu-wheels-panel.tsx`
-  gizmo at `:87-100`
+  Lift wheel by `Δx = 20, Δy = 10` (toward magenta-up) ACCUMULATES the
+  relative delta per §4.3a (the R25-A3/D39 trackball law: `amount +=
+  k·Δrim`, hue advances by the tangent direction — NOT the FreeCut
+  absolute-puck `(dx, dy) → (hue, amount)` re-solve at `gpu-wheels-panel.tsx:87-100`);
+  every intermediate delta issues a LIVE `previewElements({updates:
+  [{elementId, effectId, params:{shHue: <accumulated>, shAmount:
+  <accumulated>}}]})` re-grade (the §14 test-9 33ms law — no deferred
+  preview); pointer-up or lostpointercapture issues ONE commit —
+  `commitPreview()` — and the committed state matches a direct
+  `engine.command.apply({type: 'updateEffect', params:{elementId,
+  effectId, params:{shHue, shAmount}}})` with the same accumulated values;
+  exactly ONE undo entry per gesture
 
 ### Property-based tests
 
@@ -2490,6 +2569,30 @@ npm run test:all -- --filter "08-color-grading"
 # Regenerate reference PNGs for spec 08 fixtures (see spec 17 §10)
 npm run regen-references -- --filter "08-color-grading"
 ```
+
+---
+
+## 20. Grading node graph — data + execution model (Round 27 — the C56 closure)
+
+**Data model:** a grade target owns an **ordered node list**. Targets: a clip (its list) and the timeline (one shared list applied after every clip's list — the F4/§21 sequential law). Node: `{ id, kind: 'wheels' | 'curves' | 'qualifier' | 'window' | 'lut' | 'fx', enabled, label, params }`. v1 is **serial only** — no parallel branches, no mixer (the reference's 2-in/1-out mixer and the Water/Tilt/Lens cards are v2 topology; the mock renders them as display state, `ColorNodeGraph.tsx:64-121/:271-284`, gap C56). Soft UI cap 8 nodes/target (the reference topology's count).
+
+**Execution model:** the node list maps to **N sequential fragment passes over the scene-linear `rgba16float` working texture** (04 §5.2 ping-pong), inside 04 §4's "all grading math happens here" box (04:145), one fullscreen-quad draw per node: uniform write (112B wheels / 64B qualifier / 64B window) or data-texture bind (curves 1D LUT §5.3 / 3D LUT §7.3). Qualifier ∩ window composition stays the §9.3 v2 chain.
+
+**No-op law (explicit):** identity nodes are skipped at build time (§12.1 — an untouched list costs nothing; the mock's `buildGradeStack` identity-skip, `gradedFrame.ts:146-157`, is the reference).
+
+**Keyframing:** OUT of v1 — per-node keyframes require a param-over-time model no spec owns; register as the follow-up if asked.
+
+**Stills interop (C59):** once node lists exist, a still captures the whole list (the mock's clip-level still is the v0 reference; StillsPanel.tsx:96-135).
+
+## 21. Grade persistence + the sequential law (Round 27 — the C50 ruling)
+
+**Homes:** clip grades are the EXISTING per-element effect records (15 §4.3.52-56's addEffect/updateEffect/removeEffect/toggleEffect; a `colorWheels`+`curves`+`lut` stack on the element). The **timeline grade** is one scene-level `GradeRecord` (`{ wheels?, curves?, qualifier? }`) in the project model (09-side field — cross-spec note) that applies to **every video element in the timeline, after that element's clip grade** — never "one track" (Resolve has no track grade; R25-A2's copy law).
+
+**The sequential law (normative):** frame grade = `[clipGrade] → [timelineGrade]`, **each a full record application in sequence — NOT a params merge** (order matters: clip gain 2 + timeline lift 0.05 ≠ one merged record; pinned by `gradedFrame.test.ts:140/:156`). The curve LUT + qualifier node of each pass compose right after its §4.2 pass (`gradedFrame.ts:169-176`).
+
+**Boundary (do not conflate):** this linear per-element sequential pass is NOT D29.5c's consumer-side CSS-filter final pass (the nle-ui `SceneGrade` preview — a different domain, compose-then-filter on the display canvas; 08:24). Both stand.
+
+**Persistence round-trip:** records serialize with the scene; load REPLACEs, never merges; one undo entry per gesture (§4.3a).
 
 ---
 

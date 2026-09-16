@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Track Mixer</title>
+    <style>
+        :root {
+            --bg-main: #18191b;
+            --bg-track: #242426;
+            --bg-panel: #2b2b2b;
+            --bg-dark: #1b1b1b;
+            --bg-button: #313131;
+            --border-color: #121212;
+            --border-light: #3a3a3a;
+            
+            --text-main: #cccccc;
+            --text-dim: #888888;
+            --text-gold: #ceaa51;
+            --text-green: #5eb75e;
+            
+            --meter-green: #1fd61f;
+            --meter-yellow: #e8e125;
+            
+            --track-orange: #d17528;
+            --track-teal: #229399;
+            --track-gray: #4d4d4d;
+            
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: #111;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            margin: 0;
+            padding: 20px;
+            font-family: var(--font-main);
+            user-select: none;
+        }
+
+        .mixer-board {
+            display: flex;
+            background-color: var(--bg-main);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+
+        .track {
+            display: flex;
+            flex-direction: column;
+            width: 86px;
+            border-right: 1px solid var(--border-color);
+            background-color: var(--bg-track);
+        }
+        
+        .track:last-child {
+            border-right: none;
+        }
+
+        .track-header {
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: #ddd;
+            background-color: #2a2b2d;
+            border-bottom: 1px solid var(--border-color);
+            border-top: 3px solid transparent;
+        }
+
+        .header-orange { border-top-color: var(--track-orange); }
+        .header-teal { border-top-color: var(--track-teal); }
+        .header-gray { border-top-color: var(--track-gray); }
+
+        .input-select {
+            height: 22px;
+            background-color: #1f1f1f;
+            color: #a0a0a0;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            padding-left: 6px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .fx-rack {
+            display: flex;
+            flex-direction: column;
+            padding: 2px 4px;
+            gap: 2px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: #1d1d1f;
+            height: 105px;
+        }
+
+        .fx-slot {
+            height: 18px;
+            background-color: #272727;
+            border: 1px solid #1a1a1a;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            padding-left: 4px;
+            font-size: 10.5px;
+            color: #555;
+        }
+
+        .fx-slot.filled {
+            color: var(--text-gold);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .fx-slot.add {
+            justify-content: center;
+            padding: 0;
+            color: #888;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .i-btn-container {
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #242426;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .i-btn {
+            width: 16px;
+            height: 16px;
+            border: 1px solid var(--text-gold);
+            color: var(--text-gold);
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 2px;
+        }
+
+        .graphs {
+            display: flex;
+            flex-direction: column;
+            background-color: #1c1c1e;
+            border-bottom: 1px solid var(--border-color);
+            padding: 4px;
+            gap: 2px;
+        }
+
+        .graph-box {
+            height: 28px;
+            border: 1px solid #333;
+            background-color: #222;
+            position: relative;
+        }
+
+        .graph-box svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .pan-box-container {
+            padding: 4px;
+            background-color: #242426;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .pan-box {
+            height: 48px;
+            background-color: #191919;
+            border: 1px solid #333;
+            position: relative;
+        }
+
+        .pan-grid {
+            position: absolute;
+            top: 50%; left: 0; right: 0; height: 1px; background-color: #2a2a2a;
+        }
+        .pan-grid.vert {
+            top: 0; bottom: 0; left: 50%; width: 1px; height: auto;
+        }
+
+        .pan-dot {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .pan-dot.blue { background-color: #2fa1d6; }
+        .pan-dot.green { background-color: #62c362; }
+
+        .routing-btns {
+            height: 24px;
+            display: flex;
+            align-items: center;
+            padding-left: 6px;
+            gap: 4px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .r-btn {
+            width: 16px;
+            height: 16px;
+            font-size: 9px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 2px;
+            background-color: transparent;
+        }
+        .r-btn.b1 { border: 1px solid #58b258; color: #58b258; }
+        .r-btn.b2 { border: 1px solid #ceaa51; color: #ceaa51; }
+
+        .track-title {
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .track-title.gold {
+            color: var(--text-gold);
+        }
+
+        .rsm-row {
+            display: flex;
+            justify-content: center;
+            gap: 3px;
+            height: 24px;
+        }
+
+        .btn-sq {
+            width: 20px;
+            height: 20px;
+            background-color: #383838;
+            border: 1px solid #1a1a1a;
+            border-radius: 2px;
+            color: #aaa;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .fader-section {
+            position: relative;
+            flex: 1;
+            height: 380px;
+            display: flex;
+            padding: 4px 6px;
+            background-color: #242426;
+        }
+        
+        /* Grid lines across all faders */
+        .fader-section::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: 
+                linear-gradient(to bottom, 
+                    transparent 14.5%, rgba(255,255,255,0.03) 15%, 
+                    transparent 15.5%, transparent 27.5%, rgba(255,255,255,0.03) 28%,
+                    transparent 28.5%, transparent 41.5%, rgba(255,255,255,0.03) 42%,
+                    transparent 42.5%, transparent 54.5%, rgba(255,255,255,0.03) 55%,
+                    transparent 55.5%, transparent 67.5%, rgba(255,255,255,0.03) 68%,
+                    transparent 68.5%, transparent 79.5%, rgba(255,255,255,0.03) 80%,
+                    transparent 80.5%, transparent 89.5%, rgba(255,255,255,0.03) 90%,
+                    transparent 90.5%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .db-readout {
+            position: absolute;
+            top: 4px;
+            left: 6px;
+            font-size: 9px;
+            color: #ddd;
+            font-weight: 500;
+        }
+
+        .scale {
+            width: 14px;
+            position: relative;
+            margin-top: 24px;
+            height: 340px;
+        }
+
+        .scale-lbl {
+            position: absolute;
+            right: 2px;
+            font-size: 8px;
+            color: #777;
+            transform: translateY(-50%);
+        }
+
+        .fader-col {
+            flex: 1;
+            position: relative;
+            margin-top: 24px;
+            height: 340px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .fader-groove {
+            width: 6px;
+            height: 100%;
+            background-color: #0c0c0c;
+            border: 1px solid #1e1e1e;
+            border-radius: 3px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);
+            position: relative;
+        }
+        
+        .fader-groove::after {
+            content: '';
+            position: absolute;
+            top: 15%; /* 0dB mark */
+            left: -2px;
+            right: -2px;
+            height: 1px;
+            background-color: #888;
+        }
+
+        .fader-thumb {
+            position: absolute;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 22px;
+            height: 36px;
+            background: linear-gradient(to bottom, #d6d6d6, #999);
+            border: 1px solid #000;
+            border-radius: 2px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5), inset 0 1px 1px #fff;
+            cursor: pointer;
+            z-index: 2;
+        }
+        
+        .fader-thumb::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 2px; right: 2px;
+            height: 2px;
+            background-color: #111;
+            transform: translateY(-50%);
+        }
+        .fader-thumb::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 2px; right: 2px;
+            height: 1px;
+            background-color: rgba(255,255,255,0.7);
+            transform: translateY(-100%);
+        }
+
+        .meter-col {
+            width: 14px;
+            display: flex;
+            gap: 1px;
+            margin-top: 24px;
+            height: 340px;
+            position: relative;
+        }
+
+        .meter-bar {
+            flex: 1;
+            background-color: #111;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* The actual gradient level - using full height and a mask on top */
+        .meter-bg {
+            position: absolute;
+            bottom: 0; left: 0; right: 0; top: 0;
+            background: linear-gradient(to top, var(--meter-green) 0%, var(--meter-green) 75%, var(--meter-yellow) 75%, var(--meter-yellow) 100%);
+        }
+
+        .meter-mask {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            background-color: #111;
+            z-index: 1;
+            /* Height is set inline */
+        }
+        
+        .meter-peak {
+            position: absolute;
+            left: 0; right: 0;
+            height: 1px;
+            background-color: var(--meter-yellow);
+            z-index: 2;
+        }
+
+        /* Scale mappings - used as helper classes for positions */
+        .sc-0 { top: 15%; }
+        .sc-5 { top: 28%; }
+        .sc-10 { top: 42%; }
+        .sc-15 { top: 55%; }
+        .sc-20 { top: 68%; }
+        .sc-30 { top: 80%; }
+        .sc-40 { top: 90%; }
+        .sc-50 { top: 98%; }
+
+        /* Specific overrides for M1 */
+        .m1-empty-space {
+            height: 48px;
+            background-color: #242426;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .m1-empty-routing {
+            height: 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .m1-empty-i {
+            height: 26px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="mixer-board">
+    
+    <!-- Track A1 -->
+    <div class="track">
+        <div class="track-header header-orange">A1</div>
+        <div class="input-select">No Input</div>
+        <div class="fx-rack">
+            <div class="fx-slot filled">Vocal C...</div>
+            <div class="fx-slot filled">De-Esser</div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot add">+</div>
+        </div>
+        <div class="i-btn-container"><div class="i-btn">I</div></div>
+        <div class="graphs">
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 15 Q 15 15, 30 10 T 60 15 T 100 15" fill="none" stroke="#2dbbd2" stroke-width="1.5" />
+                </svg>
+            </div>
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 30 L 100 0" fill="none" stroke="#a3c42e" stroke-width="1.5" />
+                    <line x1="80" y1="0" x2="80" y2="30" stroke="#467cb4" stroke-width="1.5" />
+                </svg>
+            </div>
+        </div>
+        <div class="pan-box-container">
+            <div class="pan-box">
+                <div class="pan-grid"></div><div class="pan-grid vert"></div>
+                <div class="pan-dot blue" style="top:25%; left:45%"></div>
+            </div>
+        </div>
+        <div class="routing-btns">
+            <div class="r-btn b1">1</div><div class="r-btn b2">2</div>
+        </div>
+        <div class="track-title">Dialog</div>
+        <div class="rsm-row">
+            <div class="btn-sq">R</div><div class="btn-sq">S</div><div class="btn-sq">M</div>
+        </div>
+        <div class="fader-section">
+            <div class="db-readout">+0.3</div>
+            <div class="scale">
+                <div class="scale-lbl sc-0">0</div>
+                <div class="scale-lbl sc-5">-5</div>
+                <div class="scale-lbl sc-10">-10</div>
+                <div class="scale-lbl sc-15">-15</div>
+                <div class="scale-lbl sc-20">-20</div>
+                <div class="scale-lbl sc-30">-30</div>
+                <div class="scale-lbl sc-40">-40</div>
+                <div class="scale-lbl sc-50">-50</div>
+            </div>
+            <div class="fader-col">
+                <div class="fader-groove"></div>
+                <div class="fader-thumb" style="top: 18%;"></div>
+            </div>
+            <div class="meter-col">
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 20%;"></div><div class="meter-peak" style="top: 18%;"></div>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 20%;"></div><div class="meter-peak" style="top: 18%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Track A2 -->
+    <div class="track">
+        <div class="track-header header-orange">A2</div>
+        <div class="input-select">No Input</div>
+        <div class="fx-rack">
+            <div class="fx-slot filled">Noise R...</div>
+            <div class="fx-slot filled">De-Hum...</div>
+            <div class="fx-slot filled">Vocal C...</div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot add">+</div>
+        </div>
+        <div class="i-btn-container"><div class="i-btn">I</div></div>
+        <div class="graphs">
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 15 Q 20 15, 35 10 T 70 15 T 100 15" fill="none" stroke="#2dbbd2" stroke-width="1.5" />
+                </svg>
+            </div>
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 30 L 100 0" fill="none" stroke="#a3c42e" stroke-width="1.5" />
+                    <line x1="70" y1="0" x2="70" y2="30" stroke="#467cb4" stroke-width="1.5" />
+                </svg>
+            </div>
+        </div>
+        <div class="pan-box-container">
+            <div class="pan-box">
+                <div class="pan-grid"></div><div class="pan-grid vert"></div>
+                <div class="pan-dot blue" style="top:25%; left:50%"></div>
+            </div>
+        </div>
+        <div class="routing-btns">
+            <div class="r-btn b1">1</div><div class="r-btn b2">2</div>
+        </div>
+        <div class="track-title">Laughter</div>
+        <div class="rsm-row">
+            <div class="btn-sq">R</div><div class="btn-sq">S</div><div class="btn-sq">M</div>
+        </div>
+        <div class="fader-section">
+            <div class="db-readout">-1.4</div>
+            <div class="scale">
+                <div class="scale-lbl sc-0">0</div>
+                <div class="scale-lbl sc-5">-5</div>
+                <div class="scale-lbl sc-10">-10</div>
+                <div class="scale-lbl sc-15">-15</div>
+                <div class="scale-lbl sc-20">-20</div>
+                <div class="scale-lbl sc-30">-30</div>
+                <div class="scale-lbl sc-40">-40</div>
+                <div class="scale-lbl sc-50">-50</div>
+            </div>
+            <div class="fader-col">
+                <div class="fader-groove"></div>
+                <div class="fader-thumb" style="top: 25%;"></div>
+            </div>
+            <div class="meter-col">
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 52%;"></div><div class="meter-peak" style="top: 48%;"></div>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 52%;"></div><div class="meter-peak" style="top: 48%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Track A3 -->
+    <div class="track">
+        <div class="track-header header-teal">A3</div>
+        <div class="input-select">No Input</div>
+        <div class="fx-rack">
+            <div class="fx-slot filled">Reverb</div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot add">+</div>
+        </div>
+        <div class="i-btn-container"><div class="i-btn">I</div></div>
+        <div class="graphs">
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 25 Q 30 15, 60 10 T 100 10" fill="none" stroke="#2dbbd2" stroke-width="1.5" />
+                </svg>
+            </div>
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 30 L 60 12 L 100 12" fill="none" stroke="#a3c42e" stroke-width="1.5" />
+                    <line x1="60" y1="0" x2="60" y2="30" stroke="#467cb4" stroke-width="1.5" />
+                </svg>
+            </div>
+        </div>
+        <div class="pan-box-container">
+            <div class="pan-box">
+                <div class="pan-grid"></div><div class="pan-grid vert"></div>
+                <div class="pan-dot blue" style="top:25%; left:20%"></div>
+            </div>
+        </div>
+        <div class="routing-btns">
+            <div class="r-btn b1">1</div><div class="r-btn b2">2</div>
+        </div>
+        <div class="track-title">Foley FX 1</div>
+        <div class="rsm-row">
+            <div class="btn-sq">R</div><div class="btn-sq">S</div><div class="btn-sq">M</div>
+        </div>
+        <div class="fader-section">
+            <div class="db-readout">-5.3</div>
+            <div class="scale">
+                <div class="scale-lbl sc-0">0</div>
+                <div class="scale-lbl sc-5">-5</div>
+                <div class="scale-lbl sc-10">-10</div>
+                <div class="scale-lbl sc-15">-15</div>
+                <div class="scale-lbl sc-20">-20</div>
+                <div class="scale-lbl sc-30">-30</div>
+                <div class="scale-lbl sc-40">-40</div>
+                <div class="scale-lbl sc-50">-50</div>
+            </div>
+            <div class="fader-col">
+                <div class="fader-groove"></div>
+                <div class="fader-thumb" style="top: 36%;"></div>
+            </div>
+            <div class="meter-col">
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 65%;"></div><div class="meter-peak" style="top: 60%;"></div>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 65%;"></div><div class="meter-peak" style="top: 60%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Track A4 -->
+    <div class="track">
+        <div class="track-header header-gray">A4</div>
+        <div class="input-select">No Input</div>
+        <div class="fx-rack">
+            <div class="fx-slot filled">Reverb</div>
+            <div class="fx-slot filled">Soft Clip...</div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot add">+</div>
+        </div>
+        <div class="i-btn-container"><div class="i-btn">I</div></div>
+        <div class="graphs">
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 15 Q 40 15, 50 10 T 100 15" fill="none" stroke="#2dbbd2" stroke-width="1.5" />
+                </svg>
+            </div>
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 30 L 50 8 L 100 8" fill="none" stroke="#a3c42e" stroke-width="1.5" />
+                    <line x1="50" y1="0" x2="50" y2="30" stroke="#467cb4" stroke-width="1.5" />
+                    <line x1="55" y1="0" x2="55" y2="30" stroke="#467cb4" stroke-width="1.5" />
+                </svg>
+            </div>
+        </div>
+        <div class="pan-box-container">
+            <div class="pan-box">
+                <div class="pan-grid"></div><div class="pan-grid vert"></div>
+                <div class="pan-dot blue" style="top:25%; left:80%"></div>
+            </div>
+        </div>
+        <div class="routing-btns">
+            <div class="r-btn b1">1</div><div class="r-btn b2">2</div>
+        </div>
+        <div class="track-title">Foley FX 2</div>
+        <div class="rsm-row">
+            <div class="btn-sq">R</div><div class="btn-sq">S</div><div class="btn-sq">M</div>
+        </div>
+        <div class="fader-section">
+            <div class="db-readout">-5.9</div>
+            <div class="scale">
+                <div class="scale-lbl sc-0">0</div>
+                <div class="scale-lbl sc-5">-5</div>
+                <div class="scale-lbl sc-10">-10</div>
+                <div class="scale-lbl sc-15">-15</div>
+                <div class="scale-lbl sc-20">-20</div>
+                <div class="scale-lbl sc-30">-30</div>
+                <div class="scale-lbl sc-40">-40</div>
+                <div class="scale-lbl sc-50">-50</div>
+            </div>
+            <div class="fader-col">
+                <div class="fader-groove"></div>
+                <div class="fader-thumb" style="top: 38%;"></div>
+            </div>
+            <div class="meter-col">
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 82%;"></div><div class="meter-peak" style="top: 80%;"></div>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 82%;"></div><div class="meter-peak" style="top: 80%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Track A5 -->
+    <div class="track">
+        <div class="track-header header-teal">A5</div>
+        <div class="input-select">No Input</div>
+        <div class="fx-rack">
+            <div class="fx-slot filled">Pitch</div>
+            <div class="fx-slot filled">Stereo ...</div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot add">+</div>
+        </div>
+        <div class="i-btn-container"><div class="i-btn">I</div></div>
+        <div class="graphs">
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 15 Q 50 15, 60 12 T 100 15" fill="none" stroke="#2dbbd2" stroke-width="1.5" />
+                </svg>
+            </div>
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 30 L 40 30 L 60 0 L 100 0" fill="none" stroke="#a3c42e" stroke-width="1.5" />
+                </svg>
+            </div>
+        </div>
+        <div class="pan-box-container">
+            <div class="pan-box">
+                <div class="pan-grid"></div><div class="pan-grid vert"></div>
+                <div class="pan-dot green" style="top:25%; left:10%"></div>
+                <div class="pan-dot blue" style="top:25%; left:50%"></div>
+                <div class="pan-dot green" style="top:25%; left:90%"></div>
+            </div>
+        </div>
+        <div class="routing-btns">
+            <div class="r-btn b1">1</div><div class="r-btn b2">2</div>
+        </div>
+        <div class="track-title">Ambience</div>
+        <div class="rsm-row">
+            <div class="btn-sq">R</div><div class="btn-sq">S</div><div class="btn-sq">M</div>
+        </div>
+        <div class="fader-section">
+            <div class="db-readout">-11</div>
+            <div class="scale">
+                <div class="scale-lbl sc-0">0</div>
+                <div class="scale-lbl sc-5">-5</div>
+                <div class="scale-lbl sc-10">-10</div>
+                <div class="scale-lbl sc-15">-15</div>
+                <div class="scale-lbl sc-20">-20</div>
+                <div class="scale-lbl sc-30">-30</div>
+                <div class="scale-lbl sc-40">-40</div>
+                <div class="scale-lbl sc-50">-50</div>
+            </div>
+            <div class="fader-col">
+                <div class="fader-groove"></div>
+                <div class="fader-thumb" style="top: 48%;"></div>
+            </div>
+            <div class="meter-col">
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 72%;"></div><div class="meter-peak" style="top: 66%;"></div>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 65%;"></div><div class="meter-peak" style="top: 60%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Track A6 -->
+    <div class="track">
+        <div class="track-header header-teal">A6</div>
+        <div class="input-select">No Input</div>
+        <div class="fx-rack">
+            <div class="fx-slot"></div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot add">+</div>
+        </div>
+        <div class="i-btn-container"><div class="i-btn">I</div></div>
+        <div class="graphs">
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 15 Q 35 15, 50 18 T 100 15" fill="none" stroke="#2dbbd2" stroke-width="1.5" />
+                </svg>
+            </div>
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 20 L 25 20 L 100 0" fill="none" stroke="#a3c42e" stroke-width="1.5" />
+                    <line x1="80" y1="0" x2="80" y2="30" stroke="#467cb4" stroke-width="1.5" />
+                </svg>
+            </div>
+        </div>
+        <div class="pan-box-container">
+            <div class="pan-box">
+                <div class="pan-grid"></div><div class="pan-grid vert"></div>
+                <div class="pan-dot green" style="top:25%; left:10%"></div>
+                <div class="pan-dot blue" style="top:25%; left:50%"></div>
+                <div class="pan-dot green" style="top:25%; left:90%"></div>
+            </div>
+        </div>
+        <div class="routing-btns">
+            <div class="r-btn b1">1</div><div class="r-btn b2">2</div>
+        </div>
+        <div class="track-title gold">Music</div>
+        <div class="rsm-row">
+            <div class="btn-sq">R</div><div class="btn-sq">S</div><div class="btn-sq">M</div>
+        </div>
+        <div class="fader-section">
+            <div class="db-readout">-2.2</div>
+            <div class="scale">
+                <div class="scale-lbl sc-0">0</div>
+                <div class="scale-lbl sc-5">-5</div>
+                <div class="scale-lbl sc-10">-10</div>
+                <div class="scale-lbl sc-15">-15</div>
+                <div class="scale-lbl sc-20">-20</div>
+                <div class="scale-lbl sc-30">-30</div>
+                <div class="scale-lbl sc-40">-40</div>
+                <div class="scale-lbl sc-50">-50</div>
+            </div>
+            <div class="fader-col">
+                <div class="fader-groove"></div>
+                <div class="fader-thumb" style="top: 28%;"></div>
+            </div>
+            <div class="meter-col">
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 38%;"></div><div class="meter-peak" style="top: 35%;"></div>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 38%;"></div><div class="meter-peak" style="top: 35%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Master Track M1 -->
+    <div class="track">
+        <div class="track-header" style="background: #222;">M1</div>
+        <div class="input-select" style="visibility: hidden;">No Input</div>
+        <div class="fx-rack">
+            <div class="fx-slot filled">Phase ...</div>
+            <div class="fx-slot filled">Multiba...</div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot"></div>
+            <div class="fx-slot add">+</div>
+        </div>
+        <div class="i-btn-container"><div class="i-btn">I</div></div>
+        <div class="graphs">
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 15 L 100 15" fill="none" stroke="#2dbbd2" stroke-width="1.5" />
+                </svg>
+            </div>
+            <div class="graph-box">
+                <svg viewBox="0 0 100 30">
+                    <path d="M 0 30 L 100 0" fill="none" stroke="#a3c42e" stroke-width="1.5" />
+                    <line x1="0" y1="15" x2="100" y2="15" stroke="#467cb4" stroke-width="1.5" />
+                </svg>
+            </div>
+        </div>
+        
+        <!-- Empty spaces matching Master channel UI -->
+        <div class="m1-empty-space"></div>
+        <div class="m1-empty-routing"></div>
+        
+        <div class="track-title">Main 1</div>
+        <div class="rsm-row" style="justify-content: center;">
+            <div class="btn-sq">M</div>
+        </div>
+        <div class="fader-section">
+            <div class="db-readout">-0.5</div>
+            <div class="scale">
+                <div class="scale-lbl sc-0">0</div>
+                <div class="scale-lbl sc-5">-5</div>
+                <div class="scale-lbl sc-10">-10</div>
+                <div class="scale-lbl sc-15">-15</div>
+                <div class="scale-lbl sc-20">-20</div>
+                <div class="scale-lbl sc-30">-30</div>
+                <div class="scale-lbl sc-40">-40</div>
+                <div class="scale-lbl sc-50">-50</div>
+            </div>
+            <div class="fader-col">
+                <div class="fader-groove"></div>
+                <div class="fader-thumb" style="top: 24%;"></div>
+            </div>
+            <div class="meter-col">
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 28%;"></div><div class="meter-peak" style="top: 25%; background: var(--meter-yellow);"></div>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-bg"></div><div class="meter-mask" style="height: 25%;"></div><div class="meter-peak" style="top: 23%; background: var(--meter-yellow);"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

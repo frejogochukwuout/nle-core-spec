@@ -1,0 +1,2110 @@
+[
+  {
+    "id": "shell-appshell--edit",
+    "title": "Shell/AppShell",
+    "name": "Full Shell — Edit",
+    "layer": "shell",
+    "group": "shell-appshell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--edit.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:56:39.829Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-appshell--audio-focus",
+    "title": "Shell/AppShell",
+    "name": "Full Shell — Audio Focus",
+    "layer": "shell",
+    "group": "shell-appshell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--audio-focus.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-10T07:53:47.765Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-appshell--color",
+    "title": "Shell/AppShell",
+    "name": "Full Shell — Color",
+    "layer": "shell",
+    "group": "shell-appshell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--color.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-10T07:53:53.562Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-appshell--deliver",
+    "title": "Shell/AppShell",
+    "name": "Full Shell — Deliver",
+    "layer": "shell",
+    "group": "shell-appshell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--deliver.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-10T07:53:57.518Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-appshell--fx",
+    "title": "Shell/AppShell",
+    "name": "Full Shell — FX",
+    "layer": "shell",
+    "group": "shell-appshell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--fx.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:56:59.120Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-appshell--marker-inspector-story",
+    "title": "Shell/AppShell",
+    "name": "Full Shell — Marker Inspector",
+    "layer": "shell",
+    "group": "shell-appshell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--marker-inspector-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:02.842Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-appshell--caption-inspector-story",
+    "title": "Shell/AppShell",
+    "name": "Full Shell — Caption Inspector",
+    "layer": "shell",
+    "group": "shell-appshell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--caption-inspector-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:06.300Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-appshell--markers-v-2",
+    "title": "Shell/AppShell",
+    "name": "Full Shell — Markers v2 (range + notes)",
+    "layer": "shell",
+    "group": "shell-appshell",
+    "shot": "r23-analysis/shots/shell-appshell/shell-appshell--markers-v-2.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:10.097Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--toolbar-default",
+    "title": "Chrome",
+    "name": "Toolbar — default (Edit page, all panels on)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--toolbar-default.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:13.698Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--toolbar-panels-off",
+    "title": "Chrome",
+    "name": "Toolbar — all panels toggled off",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--toolbar-panels-off.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:16.597Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--toolbar-audio-page",
+    "title": "Chrome",
+    "name": "Toolbar — audio page (page-invariant)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--toolbar-audio-page.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:19.113Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--dock-edit",
+    "title": "Chrome",
+    "name": "App dock — Edit page",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--dock-edit.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:22.029Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--dock-color",
+    "title": "Chrome",
+    "name": "App dock — Color page",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--dock-color.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:24.647Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--dock-audio",
+    "title": "Chrome",
+    "name": "App dock — Audio (audio focus)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--dock-audio.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:27.761Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--dock-deliver",
+    "title": "Chrome",
+    "name": "App dock — Deliver page",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--dock-deliver.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:30.080Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--dock-fx",
+    "title": "Chrome",
+    "name": "App dock — FX page",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--dock-fx.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:33.169Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--timeline-toolbar-default",
+    "title": "Chrome",
+    "name": "Timeline toolbar — default (select, snap on)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-default.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:35.854Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--timeline-toolbar-blade-locked",
+    "title": "Chrome",
+    "name": "Timeline toolbar — blade tool + lock all",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-blade-locked.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:38.932Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--timeline-toolbar-mixer-full",
+    "title": "Chrome",
+    "name": "Timeline toolbar — mixer dock full",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-mixer-full.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:41.963Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--timeline-toolbar-master-muted",
+    "title": "Chrome",
+    "name": "Timeline toolbar — master muted",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-master-muted.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:45.100Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--timeline-toolbar-density-on",
+    "title": "Chrome",
+    "name": "Timeline toolbar — density toggle on (compact)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-density-on.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:47.915Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--timeline-toolbar-zoom-fit-min",
+    "title": "Chrome",
+    "name": "Timeline toolbar — zoom cluster at dynamic min (fit)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-zoom-fit-min.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:50.788Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--timeline-toolbar-zoom-max",
+    "title": "Chrome",
+    "name": "Timeline toolbar — zoom cluster at max (5000 px/s)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-zoom-max.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:53.462Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--timeline-toolbar-meter-live",
+    "title": "Chrome",
+    "name": "Timeline toolbar — live master micro-meter",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--timeline-toolbar-meter-live.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:56.296Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--scene-tabs-default",
+    "title": "Chrome",
+    "name": "Scene tabs — default (2 scenes, first active)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--scene-tabs-default.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:57:58.778Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--scene-tabs-second-dirty",
+    "title": "Chrome",
+    "name": "Scene tabs — second scene active + dirty",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--scene-tabs-second-dirty.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:01.712Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--track-headers-column",
+    "title": "Chrome",
+    "name": "Track headers — column (V1 / A1 solo / A2 locked / T1)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--track-headers-column.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:04.446Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--track-headers-audio-focus",
+    "title": "Chrome",
+    "name": "Track headers — audio focus (minifaders)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--track-headers-audio-focus.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:07.330Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--track-headers-micro-meters",
+    "title": "Chrome",
+    "name": "Track headers — audio micro-meters (deterministic levels)",
+    "layer": "panel",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--track-headers-micro-meters.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:09.982Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "chrome--full-shell-effects-panel",
+    "title": "Chrome",
+    "name": "Full Shell — Effects (FX page)",
+    "layer": "shell",
+    "group": "chrome",
+    "shot": "r23-analysis/shots/chrome/chrome--full-shell-effects-panel.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:12.990Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--inspector-primaries",
+    "title": "Color",
+    "name": "ColorInspector — Primaries",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--inspector-primaries.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:16.486Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--inspector-curves",
+    "title": "Color",
+    "name": "ColorInspector — Curves",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--inspector-curves.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-10T07:54:00.968Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--inspector-qualifier",
+    "title": "Color",
+    "name": "ColorInspector — Qualifier",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--inspector-qualifier.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:22.465Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--inspector-timeline-target",
+    "title": "Color",
+    "name": "ColorInspector — Timeline target",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--inspector-timeline-target.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:25.468Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--compact-strip",
+    "title": "Color",
+    "name": "TimelineCompact — the compact strip",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--compact-strip.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:28.087Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--scopes-console-row",
+    "title": "Color",
+    "name": "ScopesDock — the console row (tabs, standby)",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--scopes-console-row.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:31.231Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--stills-gallery",
+    "title": "Color",
+    "name": "Stills — the Gallery (clip-level)",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--stills-gallery.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:34.137Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--nodes-viewer-surface",
+    "title": "Color",
+    "name": "Nodes — the viewer-region surface (#93)",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--nodes-viewer-surface.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:37.168Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--node-graph",
+    "title": "Color",
+    "name": "Node graph",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--node-graph.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:39.751Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--graded-viewer",
+    "title": "Color",
+    "name": "GradedViewer — canvas + scopes console",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--graded-viewer.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:42.647Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--qualifier-matte-eyedropper",
+    "title": "Color",
+    "name": "Qualifier matte + eyedropper",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--qualifier-matte-eyedropper.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:45.650Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "color--decode-failure-row",
+    "title": "Color",
+    "name": "GradedViewer — decode failure state row",
+    "layer": "panel",
+    "group": "color",
+    "shot": "r23-analysis/shots/color/color--decode-failure-row.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:48.703Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--full-dock",
+    "title": "Mixer",
+    "name": "Mixer — Full dock (side by side)",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--full-dock.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:51.248Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--meters-state",
+    "title": "Mixer",
+    "name": "Mixer — Meters state (full-height columns)",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--meters-state.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:54.134Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--full-dock-levels",
+    "title": "Mixer",
+    "name": "Mixer — Full dock, deterministic levels (R15 chrome)",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--full-dock-levels.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:56.628Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--meters-state-levels",
+    "title": "Mixer",
+    "name": "Mixer — Meters state, deterministic levels",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--meters-state-levels.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:58:59.483Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--collapsed",
+    "title": "Mixer",
+    "name": "Mixer — Collapsed (renders nothing)",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--collapsed.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:02.180Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--channel-strip-solo",
+    "title": "Mixer",
+    "name": "Mixer — ChannelStrip solo (reference anatomy)",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-strip-solo.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:05.043Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--channel-strip-solo-level",
+    "title": "Mixer",
+    "name": "Mixer — ChannelStrip solo, deterministic level",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-strip-solo-level.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:07.580Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--channel-strip-lean",
+    "title": "Mixer",
+    "name": "Mixer — ChannelStrip lean tier (T1 @460px)",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-strip-lean.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:10.763Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--channel-strip-t-3",
+    "title": "Mixer",
+    "name": "Mixer — ChannelStrip T3 (per-channel scroll @300px)",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-strip-t-3.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:13.262Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--channel-strip-narrow",
+    "title": "Mixer",
+    "name": "Mixer — ChannelStrip narrow (72px variant)",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-strip-narrow.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:16.361Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--channel-editor-story",
+    "title": "Mixer",
+    "name": "Channel editor",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--channel-editor-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:18.910Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "mixer--sound-library-story",
+    "title": "Mixer",
+    "name": "Sound library",
+    "layer": "panel",
+    "group": "mixer",
+    "shot": "r23-analysis/shots/mixer/mixer--sound-library-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:22.148Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "overlays--confirm-scene-delete",
+    "title": "Overlays",
+    "name": "Confirm dialog — scene delete (open)",
+    "layer": "panel",
+    "group": "overlays",
+    "shot": "r23-analysis/shots/overlays/overlays--confirm-scene-delete.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:24.917Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "overlays--confirm-multi-delete",
+    "title": "Overlays",
+    "name": "Confirm dialog — multi-delete 6 clips (open)",
+    "layer": "panel",
+    "group": "overlays",
+    "shot": "r23-analysis/shots/overlays/overlays--confirm-multi-delete.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:27.938Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "overlays--error-boundary-crash",
+    "title": "Overlays",
+    "name": "Error boundary — crash fallback",
+    "layer": "panel",
+    "group": "overlays",
+    "shot": "r23-analysis/shots/overlays/overlays--error-boundary-crash.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:30.847Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "overlays--variant-explorer-open",
+    "title": "Overlays",
+    "name": "Variant explorer — open",
+    "layer": "panel",
+    "group": "overlays",
+    "shot": "r23-analysis/shots/overlays/overlays--variant-explorer-open.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:33.516Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "overlays--toast-error-and-persist",
+    "title": "Overlays",
+    "name": "Toast region — error + persist kinds",
+    "layer": "panel",
+    "group": "overlays",
+    "shot": "r23-analysis/shots/overlays/overlays--toast-error-and-persist.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:36.271Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "overlays--toast-max-stack",
+    "title": "Overlays",
+    "name": "Toast region — max-3 stack (oldest dropped)",
+    "layer": "panel",
+    "group": "overlays",
+    "shot": "r23-analysis/shots/overlays/overlays--toast-max-stack.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:39.145Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "pages--color-page-story",
+    "title": "Pages",
+    "name": "Color page — inspector rail",
+    "layer": "panel",
+    "group": "pages",
+    "shot": "r23-analysis/shots/pages/pages--color-page-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:41.510Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "pages--deliver-page-story",
+    "title": "Pages",
+    "name": "Deliver page — full export view",
+    "layer": "panel",
+    "group": "pages",
+    "shot": "r23-analysis/shots/pages/pages--deliver-page-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:44.419Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "pages--deliver-master-preset",
+    "title": "Pages",
+    "name": "Deliver page — cloud master + custom range",
+    "layer": "panel",
+    "group": "pages",
+    "shot": "r23-analysis/shots/pages/pages--deliver-master-preset.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:46.940Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "pages--deliver-page-rail",
+    "title": "Pages",
+    "name": "Deliver page — narrow container (rail fallback)",
+    "layer": "panel",
+    "group": "pages",
+    "shot": "r23-analysis/shots/pages/pages--deliver-page-rail.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:49.790Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "pages--channel-editor-empty",
+    "title": "Pages",
+    "name": "Channel editor — no clip selected",
+    "layer": "panel",
+    "group": "pages",
+    "shot": "r23-analysis/shots/pages/pages--channel-editor-empty.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:52.527Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "pages--fx-page-story",
+    "title": "Pages",
+    "name": "FX page — browser & inspector",
+    "layer": "panel",
+    "group": "pages",
+    "shot": "r23-analysis/shots/pages/pages--fx-page-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:55.264Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "pages--fx-timeline",
+    "title": "Pages",
+    "name": "FX page — timeline (fxMode)",
+    "layer": "panel",
+    "group": "pages",
+    "shot": "r23-analysis/shots/pages/pages--fx-timeline.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T10:59:58.229Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "primitives--fader-fixed",
+    "title": "Primitives",
+    "name": "Fader — fixed height",
+    "layer": "primitive",
+    "group": "primitives",
+    "shot": "r23-analysis/shots/primitives/primitives--fader-fixed.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:01.529Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "primitives--fader-fill-height",
+    "title": "Primitives",
+    "name": "Fader — fill-height (dock mode)",
+    "layer": "primitive",
+    "group": "primitives",
+    "shot": "r23-analysis/shots/primitives/primitives--fader-fill-height.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:04.342Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "primitives--fader-scale-column",
+    "title": "Primitives",
+    "name": "Fader — scale column + unity notch (+ master cap)",
+    "layer": "primitive",
+    "group": "primitives",
+    "shot": "r23-analysis/shots/primitives/primitives--fader-scale-column.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:07.222Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "primitives--knob-dial-states",
+    "title": "Primitives",
+    "name": "Knob — dial states (min / detent zone / center / max)",
+    "layer": "primitive",
+    "group": "primitives",
+    "shot": "r23-analysis/shots/primitives/primitives--knob-dial-states.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:09.659Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "primitives--pan-knob-centered",
+    "title": "Primitives",
+    "name": "Pan knob — centered",
+    "layer": "primitive",
+    "group": "primitives",
+    "shot": "r23-analysis/shots/primitives/primitives--pan-knob-centered.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:12.488Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "primitives--pan-knob-l-25",
+    "title": "Primitives",
+    "name": "Pan knob — L25",
+    "layer": "primitive",
+    "group": "primitives",
+    "shot": "r23-analysis/shots/primitives/primitives--pan-knob-l-25.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:14.920Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "primitives--strip-meter-static",
+    "title": "Primitives",
+    "name": "Strip meter — static (paused)",
+    "layer": "primitive",
+    "group": "primitives",
+    "shot": "r23-analysis/shots/primitives/primitives--strip-meter-static.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:17.604Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "primitives--strip-meter-playing",
+    "title": "Primitives",
+    "name": "Strip meter — playing (seeded walk)",
+    "layer": "primitive",
+    "group": "primitives",
+    "shot": "r23-analysis/shots/primitives/primitives--strip-meter-playing.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:19.921Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "primitives--strip-meter-levels",
+    "title": "Primitives",
+    "name": "Strip meter — deterministic levels (engine __setLevel)",
+    "layer": "primitive",
+    "group": "primitives",
+    "shot": "r23-analysis/shots/primitives/primitives--strip-meter-levels.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:22.840Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--viewer-default",
+    "title": "Regions",
+    "name": "Viewer — program monitor",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--viewer-default.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:25.408Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--viewer-overlays-hidden",
+    "title": "Regions",
+    "name": "Viewer — in-canvas overlays hidden (blade tool)",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--viewer-overlays-hidden.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:28.346Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--viewer-safe-guides",
+    "title": "Regions",
+    "name": "Viewer — safe-area guides on",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--viewer-safe-guides.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:31.276Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--viewer-source-preview",
+    "title": "Regions",
+    "name": "Viewer — source preview mode",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--viewer-source-preview.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:34.186Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--viewer-source-audio",
+    "title": "Regions",
+    "name": "Viewer — source preview (audio waveform)",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--viewer-source-audio.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:36.713Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--viewer-caption-overlay",
+    "title": "Regions",
+    "name": "Viewer — caption overlay at playhead",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--viewer-caption-overlay.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:39.673Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--viewer-zoom-2-x",
+    "title": "Regions",
+    "name": "Viewer — zoom 2×",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--viewer-zoom-2-x.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:42.220Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--media-pool-offline",
+    "title": "Regions",
+    "name": "Media pool — offline asset",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--media-pool-offline.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:45.169Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--media-pool-no-results",
+    "title": "Regions",
+    "name": "Media pool — no search results",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--media-pool-no-results.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:47.844Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--inspector-empty",
+    "title": "Regions",
+    "name": "Inspector — nothing selected",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--inspector-empty.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:51.023Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "regions--inspector-multi-mixed",
+    "title": "Regions",
+    "name": "Inspector — multi-select mixed values",
+    "layer": "panel",
+    "group": "regions",
+    "shot": "r23-analysis/shots/regions/regions--inspector-multi-mixed.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:53.774Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--media-pool-grid",
+    "title": "Shell/Components",
+    "name": "Media pool — grid",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--media-pool-grid.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:56.709Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--media-pool-list",
+    "title": "Shell/Components",
+    "name": "Media pool — list",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--media-pool-list.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:00:59.537Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--media-pool-audio-mode-filter",
+    "title": "Shell/Components",
+    "name": "Media pool — audio mode filter (thread #67)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--media-pool-audio-mode-filter.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:02.395Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--media-pool-hover-preview",
+    "title": "Shell/Components",
+    "name": "Media pool — hover scrub preview (gap C42)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--media-pool-hover-preview.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:04.902Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--left-dock-tabbed",
+    "title": "Shell/Components",
+    "name": "Left dock — FX browser (FX page)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--left-dock-tabbed.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:07.878Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--left-dock-effects-tab",
+    "title": "Shell/Components",
+    "name": "Left dock — FX browser rows (transitions + fades)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--left-dock-effects-tab.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:10.539Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--left-dock-effects-only",
+    "title": "Shell/Components",
+    "name": "Left dock — FX browser narrow (220px)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--left-dock-effects-only.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:13.523Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--left-dock-audio",
+    "title": "Shell/Components",
+    "name": "Left dock — audio page (Sound Library)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--left-dock-audio.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:16.075Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--viewer-story",
+    "title": "Shell/Components",
+    "name": "Viewer",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--viewer-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:19.174Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--inspector-video-clip",
+    "title": "Shell/Components",
+    "name": "Inspector — video clip (type-driven sections)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-video-clip.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:21.736Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--inspector-audio-clip",
+    "title": "Shell/Components",
+    "name": "Inspector — audio clip (Levels|EQ sub-tabs)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-audio-clip.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:24.559Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--inspector-track-sheet",
+    "title": "Shell/Components",
+    "name": "Inspector — track sheet (track domain)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-track-sheet.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:27.224Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--inspector-effect-editor",
+    "title": "Shell/Components",
+    "name": "Inspector — effect editor (accordion + breadcrumb)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-effect-editor.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:29.739Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--inspector-empty-fallback",
+    "title": "Shell/Components",
+    "name": "Inspector — empty selection (active-track fallback)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-empty-fallback.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:32.546Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--inspector-project-sheet",
+    "title": "Shell/Components",
+    "name": "Inspector — project sheet (read-only, C58 pending)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--inspector-project-sheet.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:35.256Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--status-saved",
+    "title": "Shell/Components",
+    "name": "Status strip — saved",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--status-saved.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:37.776Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--status-saving",
+    "title": "Shell/Components",
+    "name": "Status strip — saving (transient → saved)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--status-saving.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:40.717Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--status-failed",
+    "title": "Shell/Components",
+    "name": "Status strip — save failed (retry link)",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--status-failed.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:43.719Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--toast-region-story",
+    "title": "Shell/Components",
+    "name": "Toast region",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--toast-region-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:46.603Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--context-menu-story",
+    "title": "Shell/Components",
+    "name": "Context menu — open state",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--context-menu-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:49.205Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-components--cheat-sheet-story",
+    "title": "Shell/Components",
+    "name": "Cheat sheet",
+    "layer": "panel",
+    "group": "shell-components",
+    "shot": "r23-analysis/shots/shell-components/shell-components--cheat-sheet-story.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:52.102Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--default",
+    "title": "Timeline",
+    "name": "Timeline — default",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--default.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:54.715Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--blocks-style",
+    "title": "Timeline",
+    "name": "Timeline — blocks style",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--blocks-style.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:01:58.191Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--fx-mode",
+    "title": "Timeline",
+    "name": "Timeline — FX mode (seam zones & objects)",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--fx-mode.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-10T07:54:06.763Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--clip-states",
+    "title": "Timeline",
+    "name": "Clip states",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--clip-states.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:04.142Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--ruler-markers",
+    "title": "Timeline",
+    "name": "Ruler + markers",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--ruler-markers.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:06.973Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--ruler-tiers",
+    "title": "Timeline",
+    "name": "Ruler — CapCut tiers (46 / 120 / 240 px/s)",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--ruler-tiers.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:09.968Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--markers-and-captions",
+    "title": "Timeline",
+    "name": "Timeline — markers v2 + captions",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--markers-and-captions.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:12.418Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--loop-handles-full-band",
+    "title": "Timeline",
+    "name": "Ruler — loop handles full-band (edges)",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--loop-handles-full-band.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:15.566Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--text-clip-thin-bar",
+    "title": "Timeline",
+    "name": "Clip — text thin bar",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--text-clip-thin-bar.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:17.916Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--track-heights-mixed",
+    "title": "Timeline",
+    "name": "Timeline — track heights mixed",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--track-heights-mixed.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:20.804Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--fade-transition-objects",
+    "title": "Timeline",
+    "name": "Clip — fade transition objects",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--fade-transition-objects.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:23.536Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "timeline--snap-indicator",
+    "title": "Timeline",
+    "name": "Timeline — snap indicator (mid-drag)",
+    "layer": "panel",
+    "group": "timeline",
+    "shot": "r23-analysis/shots/timeline/timeline--snap-indicator.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:26.189Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-variants--preset-a",
+    "title": "Shell/Variants",
+    "name": "Preset A",
+    "layer": "shell",
+    "group": "shell-variants",
+    "shot": "r23-analysis/shots/shell-variants/shell-variants--preset-a.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:29.170Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-variants--preset-b",
+    "title": "Shell/Variants",
+    "name": "Preset B",
+    "layer": "shell",
+    "group": "shell-variants",
+    "shot": "r23-analysis/shots/shell-variants/shell-variants--preset-b.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:32.774Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "shell-variants--preset-c",
+    "title": "Shell/Variants",
+    "name": "Preset C",
+    "layer": "shell",
+    "group": "shell-variants",
+    "shot": "r23-analysis/shots/shell-variants/shell-variants--preset-c.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-07T11:02:36.318Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  },
+  {
+    "id": "pages--deliver-strip",
+    "title": "Pages",
+    "name": "Deliver page — compact strip (ruler + range band)",
+    "layer": "panel",
+    "group": "pages",
+    "shot": "r23-analysis/shots/pages/pages--deliver-strip.png",
+    "viewport": "1280x800",
+    "capturedAt": "2026-09-10T07:54:04.008Z",
+    "iframe": {
+      "w": 1280,
+      "h": 800,
+      "rootX": 0,
+      "rootW": 1280,
+      "stuck": true
+    }
+  }
+]
