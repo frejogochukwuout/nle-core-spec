@@ -1,27 +1,44 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-13, end of the R25-variants round (THE REACTION + AUDIT-FLEET round). **Read this FIRST; the spec-track state below the divider is R26-era background still accurate as environment context.**
+**Written:** 2026-09-16, end of the R28 seal round. **Read this FIRST.**
 
-## Current state (R25-variants — COMPLETE: 19/19 reviewer threads resolved; exit gates PASS)
+## What R28 finished (the one-paragraph state)
 
-- **The round's driver:** the user's directive — check the new SB feedbacks (19 open threads, the reviewer's second pass over R24); deep-apply `ui-mock/trim_edit_modes.html`; fix the "not functional" timeline insert/edit mode; then 50+ sub-agent rounds of deep UX audit till ≤P3.
-- **The 19 threads are ALL resolved** (annotakit PATCH with wave evidence; 0 open; the GH mirror syncs). The headline fixes: the insert-mode bar's flex-starvation root cause (0px below ~1000px canvas); the source viewer's full Resolve transport (stills = normal clips, play/scrub honest, I/O flags + strip dimming); the wheels REWRITTEN to Resolve's relative/accumulating trackball grammar (research-verified); the 3-chip GRADE TARGET breadcrumb; the console-row TAB strip ([Timeline|Nodes|Scopes] color, [Timeline|Export] deliver); per-page timeline view memory + 4-way compact scopes; the mixer element-visibility toggles + the progressive density ladder; the deliver custom-JSON REAL export; trim-mode affordances from the reference grammar (slip's white full-source outline + bright in-preview, slide's shrink boxes, roll/ripple arrows + displaced ghosts).
-- **The audit fleet ran to the bar:** 4 research/verification + 11 audit agents + 2 exit-gate verifiers (B1 views, B2 FX, B3 deliver/inspector/timeline-core, B4 a11y+shortcuts/state, the VLM 127-story sweep). 80 findings registered; ~77 closed across fix waves F1-F4; **BOTH EXIT GATES PASS (0 P1, 0 P2; console 28/28 stories clean)**.
-- **Gates: tsc 0 · 1950/1950 tests (R24's 1740 → 1950, +210) · build green · zero console.log · public URL serves 126 stories (SKILL #122 holds).** Commits: W1-W6 + F1-F4 + X1 + the wrap artifacts, all pushed (GitHub; GitLab PAT still dead-401 — re-issue before the next mirror push); /home/sync bundle refreshed.
-- **The R25 tracker** (`.agents/design/r25-audit-tracker.md`) is the findings ledger + the B5 exit-gate record. DESIGN-R25 (`.agents/design/r25-reaction-round.md`) carries the research verdicts (A1/A2/A3 — binding for future rounds).
+**The spec + architecture + implementation plan are SEALED.** Every design decision that was still open at the start of the round is now RULED (D42-D50 + R15-R21), each one independently researched (10 research packs), adversarially reviewed (9 reviewers across W3/T4 — ZERO rejections), and folded into the corpus (the W4 + T3 amendment waves, 20+ files). The register's OPEN design table is at **0 rows** — machine-checked. The implementation plan is **multi-track** (the eight repo streams + the first-class test track + the P3 lane), estimate-free, gate-defined, with the meta-lane statement landed (this repo stays the spec/architecture/test-law lane through execution — the user affirmed it). The testability directive is fulfilled: **the design law and the test law moved in the same round** — spec-17 v1.6 carries the test matrix/facets/protocol rows for every D42-D50 area, spec-12 carries the invariants and the WDC/parity laws, the plan carries the carve ("a stream row whose gates column cites no test law is a spec bug"), and **battery_r28 is 166/166 ALL GREEN** with the thirteen R28 check classes. The certification: *implementation-ready in architecture AND in verification law.*
 
-## Next session scope (immediate)
+## The next session = EXECUTION (there is nothing left to decide)
 
-1. **The user's reaction round on the R25 state** — the 19 resolutions + the rebuilt compositions (source transport, wheels, console tabs, compact scopes, the deliver export). Expect a third-pass thread corpus; pull ALL open threads first (the annotakit API pattern: `curl :3000/annotakit/api/threads`).
-2. **The registered residue (all P3, deliberate):** X3 FxBrowser search/filter; T5 scrollMax monotonicity during zoom-out; T8 scroll view-state continuity (scene-switch scrollTop + compact-flip scrollLeft); the r5 shortcut long tail (spec 16 §0's 56-row remainder); the spec 16 §0 C16 GAP row now includes the variants' e.repeat landing (update the row).
-3. **The 62 legacy open threads** (pre-R24 corpus — the long-tail triage).
-4. **Process reminders:** fetch-before-push (3 sibling races THIS round, all absorbed — never force push); commit→push→bundle after every wave (#143); tight-scoped audit agents only (#147); recovery commits verify claims in the diff (#146).
+**The critical path, in plain language:**
 
-## VARIANTS-TRACK state (supersedes the R24 section below)
+1. **HEAD BLOCK — the app's vendor re-pin (S-app step 1, the gate-breaking duty).** The app (`nle-test-app` @ `85cff80`) still vendors opencut-timeline at `6e2b91a`, which is one session behind OT's code pin `970948a`. The work: re-pin the vendor to the s17 tip (`55c81c0` mirror), re-run the census (the count re-keys), and flip the app's gesture-dispatch seam to the wire path (the "gesture-seam switch" = the app's drag/trim/move handlers dispatch wire verbs instead of direct ops calls). Acceptance: the app's suites green post-re-pin + the census register re-keyed + the M49C gate's verbs routed. Full detail: the plan's §0 S-app row, step (1), citing the D-ARCH-6 filings @ `c020b2a` PLAN `:104-147`.
+2. **K3's corpus** (the app-behavior nets — the bulk of the crawl): the routed-verb completeness machine-check extension + the page-key tests (D50's impl half) + the D48/D49 bridge pins.
+3. **K4 the crawl exit** (the single e2e: import → cut → play → export).
+4. **w1-w3** (the real-app walk tiers), then **the r-phases** — r1's head is **Stage 0**: the D42 linkage field + the D43 `edit-domains.ts` + the D44 error envelope, all landed in ONE additive OT change, **acceptance per 17 §13A.8 (the r1-port acceptance protocol)** — the consolidated recipe with the pins, order slots, and battery checks. The four absent families (replace/append/fit-to-fill/ripple-overwrite) enter at Stages 2-4 per D46; the RE-3 transition-remap probe fires at Stage-4 entry (test-first, two exits, cannot silently fail).
 
-- R24: COMPLETE + reconstructed (the 14-thread full-audit round). R25: COMPLETE (this round — the reaction + fleet; 19/19 resolved; exit gates PASS; 1950/1950; 126 stories).
-- The GitLab mirror PAT (glpat-…) died 401 mid-R24 and was NOT re-issued — GitHub + /home/sync bundles carry durability alone.
+**Every "user gate" from earlier rounds is now a ruled default with a registered reversal** — if you want to flip one later (e.g. defer r4's real-media decode), it's a one-line plan amendment, never a blocker. Nothing needs the user's answer before work can proceed.
 
-## Standing laws (battery-enforced)
+## The immediate maintenance (small, P3 — ride the first execution session)
 
-- The posture law (D20), the pin world (D21), the drag law (D22), the single-tree law (D25 + amendments), the plan-executability law (§2A.6), the census law (§2A.7 — mechanism-backed), the productization gate (D28.2), the mode-matrix completeness law (§2A.8), the reference-register law (§2A.9) — all as at R25. Variants-side: SKILL #121-#148.
+- The per-spec `## Testing` section mirrors + 17 §14.2's mapping repair (registered rows; the battery is green without them).
+- 00-master's version label (v12.0 stands; the v13.0 bump rides the next natural edit — the R28 round re-keyed the fleet rows, not the label).
+- 15 §13.5's "181 bindings" is the known-stale citation (16's Appendix A carries 182 — the W6-style sweep rides the next 15 edit).
+- battery_r28's two REGISTERED-SKIP windows close at the OT Stage-0 landing (the D43-A3 leaf-edge LIVE check + the D42 drift fence) — re-scope them when the modules land.
+
+## The round's artifacts (context restore map)
+
+- **`audits/ARCH-R28-seal-round.md`** — the round's decision venue: §4 the D42-D50 rulings + §4.1 the ratification record (the three meta-lane rulings) + §5-§6 the outcome/fleet record.
+- **`audits/fleet-r28/`** (30 files): 4 W0 scouts · 10 W1 research packs · 6 W3 adversarial reviews · 3 T1 test-practice scouts (the pattern library) · 1 T1 coverage audit · 3 T2 test-law designs (~530 pins) · 3 T4 testability reviews.
+- **`scripts/battery_r28.py`** — 166 checks, the thirteen R28 classes; run `python3 scripts/battery_r28.py` after any spec edit.
+- The corpus state: 17 v1.6, 12 R28-status, 18 v1.8, 19 v3.4, the register (0 open rows), the plan (the test-track carve + S-spec(6)), both SIGNOFF re-riders.
+- The pin world: engine `074a2f6` (code anchor `74bef08`, 749/749 — NOT docs-only) · OT `55c81c0`/`970948a` (632/632) · WDC `83b8850` (docs-only over `ec8fd5c`, 777/777) · nle-ui `32abd58` (690/690) · app `85cff80` (252/252; vendors engine `74bef08` + nle-ui `83ff8a8` + WDC `ec8fd5c` + OT mirror `6e2b91a` — the engine-vendor divergence from HEAD is BY DESIGN) · variants 1,939/68 (declared pair 1,950/126) · mini 495/12.
+
+## Process reminders (the standing laws)
+
+- Fetch-before-push (sibling races land mid-round; never force push). Commit→push after every wave; /home/sync bundle + the GitLab mirror at milestones.
+- The dispatch-saturation pattern: agents killed at the deadline have USUALLY finished their work — check the tree before re-dispatching (6 of 42 R28 dispatches died post-completion; all recovered).
+- Battery-check calibration: verify every target text with grep BEFORE encoding a check; sibling edits in the same commit drift anchors (+14 lines this round).
+- The sub-agent brief: point at `.agents/SKILL.md` + the worklog tail; give disjoint file sets for parallel amendment agents.
+
+## VARIANTS/MINI TRACKS (background)
+
+Variants R25: COMPLETE (1,939/68; 126 stories; 19/19 threads). Mini R24-2: WRAPPED @ 495/12 (the mini-plus foundation). Both streams' registers live in REFERENCE-REGISTER.md (the WRAP-gated re-key law). The mocks' own next steps are their streams' business — the spec side only coordinates at WRAP.
