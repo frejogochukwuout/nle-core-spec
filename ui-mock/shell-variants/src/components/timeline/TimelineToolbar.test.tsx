@@ -164,10 +164,15 @@ describe('TimelineToolbar', () => {
   it('snap / link toggles flip the store and their aria-pressed state (spec 18 §4.5)', () => {
     boot({});
     const snap = screen.getByTestId('shell-timeline-toolbar-btn-snap');
-    expect(snap).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(snap);
-    expect(store().snap).toBe(false);
+    /* RE-PINNED (R26-W-F1 F2, the GH regression sweep): snap boots OFF —
+       the reviewer's own R18e law ("snap toggle should be off by default").
+       The old pin asserted aria-pressed 'true' right after boot, pinning
+       the R20-reorg regression as law. */
     expect(snap).toHaveAttribute('aria-pressed', 'false');
+    expect(store().snap).toBe(false);
+    fireEvent.click(snap);
+    expect(store().snap).toBe(true);
+    expect(snap).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Toggle A/V link' }));
     expect(store().link).toBe(false);
   });

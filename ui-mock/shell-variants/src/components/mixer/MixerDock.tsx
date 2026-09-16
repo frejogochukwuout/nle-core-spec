@@ -443,11 +443,19 @@ function FullDock({ density, tier }: { density: Exclude<MixerDockDensity, 'mini'
         <div role="group" aria-label="Strip elements" className="flex flex-col items-center gap-1">
           {ELEMENT_TOGGLES.map(({ key, label, Icon }) => {
             /* the ladder's own hiding: lean/core hide ALL four elements; T2
-               additionally hides the input row + graphs inside 'full'. */
+               additionally hides the input row + graphs inside 'full'.
+               R26-W-F1 (F5, GB's R1 tip-honesty residue): at T2 the fx block
+               is not "shown" either — the tier's native anatomy SWAPS the FX
+               rack for the fx-count chip (ChannelStrip's fxCount; the rack
+               renders at T0/T1 only). The tip states what the tier actually
+               does instead of the blanket "shown". */
             const tierHides = (key === 'input' || key === 'graphs') && tier === 2;
+            const tierSwapsFxForChip = key === 'fx' && tier === 2;
             const shown = elementVisibility[key] && density === 'full' && !tierHides;
             const reason = shown
-              ? 'shown'
+              ? tierSwapsFxForChip
+                ? 'shown as the fx-count chip (T2 density swaps the FX rack for the chip)'
+                : 'shown'
               : elementVisibility[key]
                 ? `hidden by the density ladder (dock at ${density}${tierHides ? ` / T${tier}` : ''} density — full strips at T0/T1 carry it)`
                 : 'hidden (view state)';

@@ -240,6 +240,10 @@ body {
     transform: translateY(0);
   }
 }
+/* R26-W-F1: the P3-1 exit animation was REVERTED — the D-E2 absence law
+   ("absence, never an opacity stub") wins over the fade-out polish; only
+   the enter animation (insert-preview-anim, the reference's own motion)
+   survives. */
 @media (prefers-reduced-motion: reduce) {
   .insert-preview-anim {
     animation: none;

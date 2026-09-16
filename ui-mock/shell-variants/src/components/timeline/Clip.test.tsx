@@ -592,7 +592,8 @@ describe('Clip', () => {
     // el-6's right edge → 23.85 s: the SNAP list carries 24 (el-4's start) within
     // the 10 px tolerance. Without shift the edge snaps to 24; WITH shift the
     // snap pass is skipped entirely and the edge lands on the pure frame grid.
-    boot({ selection: ['el-6'] });
+    // R26-W-F1 (F2): snap boots OFF now — the snap-engine test states its own precondition.
+    boot({ selection: ['el-6'], snap: true });
     const rightHandle = screen.getByTestId('clip-trim-r-el-6');
     fireEvent.pointerDown(rightHandle, { pointerId: 1, button: 0, clientX: 391 });
     fireEvent.pointerMove(rightHandle, { pointerId: 1, buttons: 1, clientX: 108 }); // −6.152 s → 23.848

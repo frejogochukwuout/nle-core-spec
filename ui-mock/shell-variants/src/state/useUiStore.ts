@@ -1170,7 +1170,12 @@ export const useUi = create<UiState>((set, get) => ({
   page: 'edit',
   activeSceneId: 'sc-1',
   tool: 'select',
-  snap: true,
+  /* R26-W-F1 (F2, the GH regression sweep): snap boots OFF — the reviewer's
+     own law (R18e, the T-snap story ask: "snap toggle should be off by
+     default"). The ON default crept back in the R20 store reorg and
+     TimelineToolbar.test pinned the bug as law; re-pinned there + at the
+     boot-default pin in useUiStore.test. */
+  snap: false,
   link: true,
   lockAll: false,
   playhead: 16,

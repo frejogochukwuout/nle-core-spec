@@ -709,6 +709,31 @@ describe('R25-W4-A: the dock header strip-element toggle group (th_mtzou0op)', (
       expect(screen.getByTestId('mixer-element-fx').getAttribute('data-tip')).toContain('shown');
     });
   });
+
+  /* R26-W-F1 (F5, GB's R1 tip-honesty residue): at T2 density the tier's
+   * native anatomy SWAPS the FX rack for the fx-count chip — the fx toggle's
+   * tip must state what the tier actually does, never the blanket "shown"
+   * (the flag governs T0/T1 racks only). The input/graphs wording at the
+   * same tier is unchanged (tierHides). */
+  it('R26-W-F1 (F5): at T2 density the fx tip states the tier swap (the fx-count chip) — never the blanket "shown"', () => {
+    withRecordingRO((fire) => {
+      boot({ mixerState: 'full' });
+      const wrapper = screen.getByTestId('mixer-dock');
+      Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: 380 }); // T2 [340,420) at full density
+      fire();
+      expect(wrapper).toHaveAttribute('data-density', 'full');
+      const fx = screen.getByTestId('mixer-element-fx');
+      expect(fx).toHaveAttribute('aria-pressed', 'true'); // the preference is untouched
+      expect(fx.getAttribute('data-tip')).toContain('FX sends grid — shown as the fx-count chip (T2 density swaps the FX rack for the chip)');
+      expect(fx.getAttribute('data-tip')).not.toMatch(/FX sends grid — shown$/); // the blanket "shown" is dead at T2
+      // the tier's real anatomy: the rack is gone, the chip answers
+      expect(within(screen.getByTestId('mixer-strip-A1')).queryByTestId('fx-rack')).toBeNull();
+      expect(within(screen.getByTestId('mixer-strip-A1')).getByTestId('fx-count')).toBeInTheDocument();
+      // the input toggle at the SAME tier keeps the tierHides compose (unchanged law)
+      const input = screen.getByTestId('mixer-element-input');
+      expect(input.getAttribute('data-tip')).toContain('Input row — hidden by the density ladder (dock at full / T2 density');
+    });
+  });
 });
 
 /* ---------- R25-F2 (A5/A6): the meters dock's alignment + the honest floor ---------- */

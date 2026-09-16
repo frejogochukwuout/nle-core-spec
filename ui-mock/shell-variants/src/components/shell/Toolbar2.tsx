@@ -37,6 +37,9 @@
    with its own presets rail — a toolbar toggle there would be the lying
    control #100 flags. The rover indices stay dense over the buttons that
    actually render (the hidden toggle leaves no hole).
+   R26-W-F1 (F3, the GE audit): the Inspector toggle joins the same law on
+   DELIVER — DOM-absent (the deliver settings column is always-on; the
+   button was state-only). See showInspector below.
    REMOVED: the Effects button (#86) and the Project button (#87). */
 
 import { useRef, useState } from 'react';
@@ -122,21 +125,33 @@ export function Toolbar2() {
   const showMixer = page === 'audio';
   const mixerOpen = mixerState !== 'collapsed';
 
+  /* R26-W-F1 (F3, the GE audit's state-only toggle): the Inspector toggle
+     is DOM-ABSENT on DELIVER — the deliver settings column is DeliverPage's
+     own always-on region (AppShell's generic `panels.inspector`-gated rail
+     exists only on the non-deliver branch), so the button flipped
+     aria-pressed while gating nothing: the lying control #100 flags. Same
+     treatment as the left toggle two laws up ("a toolbar toggle there would
+     be the lying control #100 flags"). Every other page keeps it — the rail
+     is real there. */
+  const showInspector = page !== 'deliver';
+
   /* dense DOM order: the left asset toggle (audio/fx/deliver hide it —
      ruling 16 + the R-c slot-ownership law), then (color only) scopes,
-     nodes, then (audio only) mixer, then inspector. The indices are
-     CONTIGUOUS over the buttons that actually render (a hole where the
-     left toggle's index would sit on audio/fx/deliver — or between nodes
-     and inspector on color — strands the arrows: the wrap math counts
-     rendered buttons). */
+     nodes, then (audio only) mixer, then inspector (deliver hides it — the
+     GE F1 law above). The indices are CONTIGUOUS over the buttons that
+     actually render (a hole where the left toggle's index would sit on
+     audio/fx/deliver — or between nodes and inspector on color — strands
+     the arrows: the wrap math counts rendered buttons). */
   let next = 0;
   const iLeft = showLeft ? next++ : -1;
   const iScopes = page === 'color' ? next++ : -1;
   const iNodes = page === 'color' ? next++ : -1;
   const iMixer = showMixer ? next++ : -1;
-  const iInspector = next;
-  /* the rendered count drives the wrap (End = last rendered index) */
-  const nButtons = iInspector + 1;
+  const iInspector = showInspector ? next++ : -1;
+  /* the rendered count drives the wrap (End = last rendered index). On
+     DELIVER nothing renders (title-only toolbar) — nButtons 0 leaves the
+     rover clamped below -1 and the keydown handler a no-op, honestly. */
+  const nButtons = next;
 
   /* per-button roving props — indices are DENSE and follow the buttons
      that actually render (the color-only console toggles are absent on
@@ -249,16 +264,22 @@ export function Toolbar2() {
           <span>Mixer</span>
         </button>
       )}
-      <button
-        {...roverProps(iInspector)}
-        className={`toolbtn ${panels.inspector ? 'active' : ''}`}
-        data-testid="shell-toolbar-btn-inspector"
-        aria-pressed={panels.inspector}
-        onClick={() => togglePanel('inspector')}
-      >
-        <SlidersHorizontal size={14} strokeWidth={1.8} />
-        <span>Inspector</span>
-      </button>
+      {/* R26-W-F1 (F3): the Inspector toggle — DOM-ABSENT on deliver (the
+          settings column there is DeliverPage's own always-on region; the
+          #100 lying-control law, same shape as the left toggle's deliver
+          treatment). Real binary toggle everywhere else. */}
+      {showInspector && (
+        <button
+          {...roverProps(iInspector)}
+          className={`toolbtn ${panels.inspector ? 'active' : ''}`}
+          data-testid="shell-toolbar-btn-inspector"
+          aria-pressed={panels.inspector}
+          onClick={() => togglePanel('inspector')}
+        >
+          <SlidersHorizontal size={14} strokeWidth={1.8} />
+          <span>Inspector</span>
+        </button>
+      )}
       {/* R22-D5 (#87): the Project button is GONE — it toggled the read-only
           ProjectSheet stub (inspectorProjectMode) but read as non-functional;
           the space carries the console toggles above. The store field stays

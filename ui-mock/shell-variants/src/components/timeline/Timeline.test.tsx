@@ -57,7 +57,7 @@ describe('Timeline', () => {
   });
 
   it('dragging the playhead head scrubs the time and snaps to clip edges (spec 05 §14.3 + §9 snap)', () => {
-    boot({});
+    boot({ snap: true }); // R26-W-F1 F2: snap boots OFF now — the snap tests state their own precondition
     const head = document.querySelector('.cursor-col-resize') as HTMLElement;
     expect(head).not.toBeNull();
     fireEvent.pointerDown(head, { pointerId: 1, button: 0 });
@@ -309,7 +309,10 @@ describe('Timeline', () => {
 
   it('renders the crossfade box straddling the el-2 → el-3 cut (spec 05 §12.3 transition indicator)', () => {
     boot({});
-    expect(screen.getByTestId('transition-el-2')).toHaveAttribute('aria-label', 'Crossfade transition, 0.75 seconds');
+    /* RE-PINNED (R26-W-F1 P3-3): the label composes from the CURRENT
+       presentation ("Cross Dissolve transition") — the stale type-level
+       "Crossfade" prefix is retired. */
+    expect(screen.getByTestId('transition-el-2')).toHaveAttribute('aria-label', 'Cross Dissolve transition, 0.75 seconds');
     expect(screen.queryByTestId('transition-el-1')).not.toBeInTheDocument(); // only el-2 carries one
   });
 
@@ -1005,9 +1008,13 @@ describe('R15 T3: edge auto-scroll during active clip drags (rAF, 100px threshol
 
 /* ---------- R15 T5: snap upgrade (sources, closest-wins, indicator, shift) ---------- */
 
+/* R26-W-F1 (F2) NOTE: snap boots OFF (the R18e reviewer law, restored). Every
+   test in these describes is a SNAP-ENGINE test — each boots `snap: true`
+   explicitly instead of riding the regressed on-boot the old suite leaned
+   on (which also leaked across tests via the shared store). */
 describe('R15 T5: snap sources + closest-wins', () => {
   it('head-drag CLOSEST-WINS: between two in-tolerance targets the NEARER one wins (old loop took first-in-order)', () => {
-    boot({});
+    boot({ snap: true });
     const head = document.querySelector('.cursor-col-resize') as HTMLElement;
     // t = 8.5435: el-5's start 8.75 is FIRST in the target list (overlay lane
     // leads) and 0.207 away — in tol; el-1's end 8.5 is LATER but only 0.043
@@ -1020,7 +1027,7 @@ describe('R15 T5: snap sources + closest-wins', () => {
   });
 
   it('LOCKED tracks are not snap sources: el-7 (tr-audio-2) reshaped to a unique edge never attracts the scrub', () => {
-    boot({});
+    boot({ snap: true });
     // give the LOCKED lane's clip a unique edge no unlocked element carries
     act(() => useUi.setState({
       scenes: store().scenes.map((s) =>
@@ -1042,7 +1049,7 @@ describe('R15 T5: snap sources + closest-wins', () => {
   });
 
   it('markers and in/out points are snap sources (shared list — head-drag gets them too)', () => {
-    boot({});
+    boot({ snap: true });
     const head = document.querySelector('.cursor-col-resize') as HTMLElement;
     // t = 15.55: the mk-3 marker at 15.5 is 0.05 away — the only near target
     fireEvent.pointerDown(head, { pointerId: 1, button: 0 });
@@ -1055,7 +1062,7 @@ describe('R15 T5: snap sources + closest-wins', () => {
   });
 
   it('SHIFT suppresses snapping during the scrub: the raw time lands un-snapped (canonical §5)', () => {
-    boot({});
+    boot({ snap: true });
     const head = document.querySelector('.cursor-col-resize') as HTMLElement;
     fireEvent.pointerDown(head, { pointerId: 1, button: 0 });
     // 790 px → 17.174 s: 17 is 0.174 in tol — snapped without shift, raw with
@@ -1067,7 +1074,7 @@ describe('R15 T5: snap sources + closest-wins', () => {
   });
 
   it('the dragged clip is not snapped to ITS OWN edges (group/self exclusion — an unselected mover stays free)', () => {
-    boot({});
+    boot({ snap: true });
     // el-5 [8.75,12) on the overlay: nudge its start by +6 px (0.13 s) — its
     // own 8.75 edge is 0.13 away (in tol) but excluded → the move COMMITS to
     // the frame grid instead of snapping back onto its own edge (no-op).
@@ -1083,7 +1090,7 @@ describe('R15 T5: snap sources + closest-wins', () => {
 
 describe('R15 T5: the snap indicator line (2px accent/40%, z 40, gesture-held only)', () => {
   it('renders at the snapped content px while a clip drag holds the snap, clears on release', () => {
-    boot({});
+    boot({ snap: true });
     const clip = screen.getByTestId('clip-el-5');
     // el-5 → ~15.51 s: the mk-3 marker at 15.5 captures (closest, in tol);
     // clientY 70 keeps the drag in el-5's own overlay band (no cross-track)
@@ -1102,7 +1109,7 @@ describe('R15 T5: the snap indicator line (2px accent/40%, z 40, gesture-held on
   });
 
   it('a trim gesture drives the indicator too (kind "trim" host events — and the marquee never does)', () => {
-    boot({ selection: ['el-6'] });
+    boot({ selection: ['el-6'], snap: true });
     const handle = screen.getByTestId('clip-trim-r-el-6');
     // el-6's right edge → 23.85: el-4's start 24 is 0.15 away (in tol) and
     // INSIDE the trim bounds (no neighbor on A1, source 120 s) → held snap
@@ -1120,7 +1127,7 @@ describe('R15 T5: the snap indicator line (2px accent/40%, z 40, gesture-held on
   });
 
   it('snap OFF (N key) suppresses the indicator even when a gesture holds a would-be target', () => {
-    boot({});
+    boot({ snap: true }); // the engine ON first — the N-key toggle below is the test's subject
     act(() => { store().toggleSnap(); });
     const clip = screen.getByTestId('clip-el-5');
     fireEvent.pointerDown(clip, { pointerId: 1, button: 0, clientX: 402, clientY: 70 });
@@ -1290,7 +1297,7 @@ describe('R15-F1 FIX 3: mid-drag unmount + destructive-key gesture gate', () => 
 
 describe('R15 T8 (R15-F1 FIX 4b): head-drag scrub domain', () => {
   it('head-drag is CLAMPED to the scene duration and FRAME-SNAPS with element snap off', () => {
-    boot({});
+    boot({ snap: true }); // element snap ON first — the toggle below turns it OFF (the test's subject)
     act(() => { store().toggleSnap(); }); // N — element snap off
     const head = document.querySelector('.cursor-col-resize') as HTMLElement;
     expect(head).not.toBeNull();
@@ -1534,6 +1541,48 @@ describe('R23-WE D-E2: the insert-preview visibility law (#102)', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  /* R26-W-F1 (P3-2, the GC audit's union-span edge): when the affected
+   * region (ghost ∪ split ghost) is WIDER than the viewport, the two
+   * sequential scrollIntoView calls fought — the split ghost's 'nearest'
+   * won and the insertion head + mode badge could sit OFFSCREEN at extreme
+   * zoom (live probe: ghostStart −686px). The union law: ONE scrollLeft
+   * write pinning the insertion head at the viewport's left edge. */
+  it('(a) AUTO-SCROLL union-span (R26-W-F1 P3-2): a region wider than the viewport pins the INSERTION HEAD at the left edge — the badge stays visible, no scrollIntoView fight', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      // m-03 insert at 12 (no range): ghost [12, 30.6]s ∪ split [30.6, 35.6]s
+      // → content px [552, 1637.6] = 1085.6px — WIDER than the mocked 800px viewport
+      boot({ playhead: 12, hoverInsertPreview: { mediaId: 'm-03', mode: 'insert' } });
+      const sc = scrollEl();
+      Object.defineProperty(sc, 'clientWidth', { value: 800, configurable: true });
+      Object.defineProperty(sc, 'scrollWidth', { value: 5000, configurable: true });
+      await nextFrame();
+      expect(sc.scrollLeft).toBe(552); // 12s × 46 — the insertion head pinned at the left edge
+      expect(spy).not.toHaveBeenCalled(); // ONE scrollLeft write — the 'nearest' pair never ran
+      // the mode badge rides the head (+4px) — INSIDE the viewport, visible
+      expect(parseFloat(screen.getByTestId('insert-preview-mode-badge').style.left)).toBe(556);
+      expect(screen.getByTestId('insert-preview-ghost').style.left).toBe('552px');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  /* R26-W-F1 (P3-1): the fade-out-on-disarm polish was landed then REVERTED —
+   * it violated the pinned D-E2 absence law ("absence, never an opacity
+   * stub"). The enter keeps the reference's own 0.3s fade+slide; disarm is
+   * the instant unmount the law requires (re-pinned below). */
+  it('R26-W-F1 (P3-1 REVERTED): DISARM = the instant ABSENCE the D-E2 law pins ("absence, never an opacity stub")', () => {
+    boot({ playhead: 16, hoverInsertPreview: { mediaId: 'm-08', mode: 'insert' } });
+    expect(screen.getByTestId('insert-preview-layer').className).toContain('insert-preview-anim');
+    disarm();
+    // the fade-out exit hold was landed then REVERTED — it violated the pinned
+    // D-E2 absence law (no residue chrome; the refusal state must render no
+    // geometry either). Disarm unmounts the layer + badge + ghost AT ONCE.
+    expect(screen.queryByTestId('insert-preview-layer')).toBeNull();
+    expect(screen.queryByTestId('insert-preview-ghost')).toBeNull();
+    expect(screen.queryByTestId('insert-preview-mode-badge')).toBeNull();
   });
 });
 
@@ -1989,8 +2038,22 @@ describe('R23-WA: the transition box — interactive ONLY in fxMode (D-A2.4)', (
     // 31 frames = 1.2916666666666667 s — a frame-clean raw float
     act(() => { useUi.getState().setTransition('el-2', { duration: 31 / 24 }); });
     const box = screen.getByTestId('transition-el-2');
-    expect(box.getAttribute('title')).toBe('Crossfade · Cross Dissolve · 1.29s');
-    expect(box.getAttribute('aria-label')).toBe('Crossfade transition, 1.29 seconds');
+    /* RE-PINNED (R26-W-F1 P3-3): presentation-composed labels. */
+    expect(box.getAttribute('title')).toBe('Cross Dissolve · 1.29s');
+    expect(box.getAttribute('aria-label')).toBe('Cross Dissolve transition, 1.29 seconds');
+  });
+
+  /* R26-W-F1 (P3-3, the GD audit's F1): the label composes from the CURRENT
+   * presentation — after a presentation swap the box names the swap ("Wipe
+   * Left …"), never the stale type-level "Crossfade" prefix it used to
+   * carry while the inspector already showed the truth. */
+  it('R26-W-F1 (P3-3): after a presentation swap the box label follows the presentation — the stale "Crossfade" prefix is dead', () => {
+    boot({ tool: 'fx', fxMode: true, selection: [] });
+    act(() => { useUi.getState().setTransition('el-2', { presentation: 'Wipe Left' }); });
+    const box = screen.getByTestId('transition-el-2');
+    expect(box.getAttribute('title')).toBe('Wipe Left · 0.75s');
+    expect(box.getAttribute('aria-label')).toBe('Wipe Left transition, 0.75 seconds');
+    expect(box.getAttribute('title')).not.toContain('Crossfade'); // the stale type-level prefix, pinned dead
   });
 });
 

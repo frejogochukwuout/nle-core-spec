@@ -122,6 +122,25 @@ describe('TimelineCompact — the V/A/T color coding (#75)', () => {
     expect(clip).toHaveAttribute('aria-pressed', 'true');
     expect(clip.style.borderColor).toBe('var(--accent-selection)');
   });
+
+  /* R26-W-F1 (P3-4, the GG audit's T#21 fidelity item): a TEXT clip on the
+   * OVERLAY lane paints --clip-text — the full Timeline's type-based law
+   * (Clip.tsx paints text bodies --clip-text). The strip's kind-based table
+   * alone painted el-5 with the VIDEO token, leaving V-vs-T to ride only the
+   * 30→22 tint delta. The track BADGE keeps the kind token (it names the
+   * LANE, not the clip). */
+  it('R26-W-F1 (P3-4): a TEXT clip on the overlay lane paints the TEXT token — the two surfaces agree for text-on-overlay', () => {
+    mount();
+    const overlayClip = screen.getByTestId('shell-timeline-compact-clip-el-5'); // the T1 overlay track's text clip
+    expect(overlayClip.style.borderColor).toBe('var(--clip-text)');
+    expect(overlayClip.style.background).toContain('var(--clip-text)');
+    expect(overlayClip.style.background).not.toContain('var(--clip-video)'); // the kind-based video token, pinned dead
+    // the TRACK BADGE keeps the kind token (it names the lane, not the clip)
+    const badge = screen.getByTestId('shell-timeline-compact-track-tr-overlay-1').querySelector('span');
+    expect(badge!.getAttribute('style')).toContain('var(--clip-video)');
+    // a VIDEO clip on the same-shaped main lane is unchanged (kind == type there)
+    expect(screen.getByTestId('shell-timeline-compact-clip-el-1').style.borderColor).toBe('var(--clip-video)');
+  });
 });
 
 describe('TimelineCompact — click-to-target (the color page law)', () => {

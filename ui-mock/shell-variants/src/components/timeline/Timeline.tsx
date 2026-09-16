@@ -37,6 +37,7 @@ import { ContextMenu, isMenuKey, useContextMenu, type MenuItem } from '../shell/
 import { POOL_DRAG_TYPE, isDroppable } from '../shell/MediaPool';
 import { useConfirm } from '../shell/ConfirmDialog';
 import { useInsertPreview } from '../../hooks/useInsertPreview';
+import type { InsertPlan } from '../../lib/insertPlan';
 /* R23-WE D-E2 (#102): the preview MODE BADGE's name source — the hovered
    mode button's own label, exported by the bar (single source). */
 import { MODE_LABELS } from '../shell/SourceEditBar';
@@ -336,6 +337,12 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked, orphaned }: 
            an inherited property) — the F3 law, pinned at the style level. */
         pointerEvents: fxMode && !locked ? 'auto' : 'none',
       }}
+      /* R26-W-F1 (P3-3, the GD audit's F1 wording nit): the label composes
+         from the CURRENT presentation — the type-level "Crossfade" prefix
+         read stale after a presentation swap (the inspector showed Wipe
+         Left while the box still said "Crossfade · Wipe Left"). The mock's
+         TransitionJSON carries the single type 'crossfade' (spec 09 §3.4);
+         the presentation is the truth the box names. */
       title={orphaned
         /* X2 (R25-F2): an orphaned record RENDERS its truth — the clips no
            longer butt-splice (an out-trim opened a gap), so this box claims
@@ -343,11 +350,11 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked, orphaned }: 
            mutation in the paint path); the flag + tip are the honest
            presentation, and the FX inspector / removeTransition still own
            the delete. */
-        ? `Crossfade · ${tr.presentation} · ${tr.duration.toFixed(2)}s — NO CUT: the clips no longer butt-splice (a trim opened a gap); remove it or close the seam`
-        : `Crossfade · ${tr.presentation} · ${tr.duration.toFixed(2)}s`}
+        ? `${tr.presentation} · ${tr.duration.toFixed(2)}s — NO CUT: the clips no longer butt-splice (a trim opened a gap); remove it or close the seam`
+        : `${tr.presentation} · ${tr.duration.toFixed(2)}s`}
       aria-label={orphaned
-        ? `Crossfade transition, ${tr.duration.toFixed(2)} seconds — orphaned, no cut at this seam`
-        : `Crossfade transition, ${tr.duration.toFixed(2)} seconds`}
+        ? `${tr.presentation} transition, ${tr.duration.toFixed(2)} seconds — orphaned, no cut at this seam`
+        : `${tr.presentation} transition, ${tr.duration.toFixed(2)} seconds`}
       data-testid={`transition-${el.id}`}
       data-orphaned={orphaned || undefined}
       {...(fxMode && !locked ? {
@@ -519,7 +526,6 @@ function TransitionBox({ el, h, pxPerSec, fxMode, selected, locked, orphaned }: 
    floor bumps (once per arm) so the preview is actually legible. */
 const PREVIEW_MIN_SPAN_PX = 24;
 
-
 export function Timeline() {
   const { variant } = useVariant();
   const scene = useUi((s) => s.scenes.find((x) => x.id === s.activeSceneId)!);
@@ -537,8 +543,17 @@ export function Timeline() {
   /* R20-W2 (C48): the armed hover-placement preview — plan computed by the
      SAME pure planner the commit runs (useInsertPreview hook; never a raw
      zustand selector). ok:false renders NO geometry (the source bar's tip
-     carries the refusal instead). */
+     carries the refusal instead).
+     R26-W-F1 (P3-1 REVERTED): the GC audit's fade-out-on-disarm polish was
+     landed then rolled back — it violates the pinned D-E2 law ("the
+     display:none law: absence, never an opacity stub" — no residue chrome,
+     ever). The enter keeps the reference's own 0.3s fade+slide; the exit is
+     the instant absence the law requires. */
   const insertPreview = useInsertPreview();
+  /* P3-1's replacement shape (kept): the plan the layer paints THIS frame. */
+  const paintedPreview = insertPreview?.ok && insertPreview.geometry.ghost
+    ? insertPreview
+    : null;
   /* R20-W2 (thread #65 / contract §5): source-mode-only frozen-lane guard —
      while an AUDIO source is loaded in the source viewer, non-audio lanes
      render dimmed + aria-disabled and refuse drops honestly. PROGRAM MODE
@@ -1258,12 +1273,36 @@ export function Timeline() {
     }
     const raf = requestAnimationFrame(() => {
       if (ghost) {
-        previewGhostRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-        // F3's leftover: the straddler's split ghost joins the scroll target
-        // (comment above — the union span, not just the head). It scrolls
-        // only when it EXISTS; a no-split preview (fresh lanes, place-on-top)
-        // keeps exactly the one ghost scroll.
-        previewSplitGhostRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        /* R26-W-F1 (P3-2, the GC audit's union-span edge): when the affected
+           region (ghost ∪ split ghost) is WIDER than the viewport, the two
+           sequential scrollIntoView calls fought — the split ghost's
+           'nearest' won and the insertion head + MODE BADGE could sit
+           offscreen at extreme zoom (the live probe: ghostStart −686px).
+           Compute the union span and set scrollLeft ONCE: the insertion
+           head pins at the viewport's LEFT edge (the badge rides it at
+           head+4), the union runs past the right edge by construction. A
+           region narrower than the viewport keeps the legacy 'nearest'
+           pair; viewW 0 (jsdom's no-layout default) keeps it too — the
+           mock's own tests pin the scrollIntoView contract there. */
+        const sc = scrollRef.current;
+        const gLeft = ghost.start * pxPerSec;
+        const gRight = gLeft + Math.max(6, ghost.dur * pxPerSec);
+        const sg = insertPreview.geometry.splitGhost;
+        const sRight = sg ? sg.start * pxPerSec + Math.max(6, sg.dur * pxPerSec) : gRight;
+        const uLeft = gLeft;
+        const uRight = Math.max(gRight, sRight);
+        const viewW = sc?.clientWidth ?? 0;
+        if (sc && viewW > 0 && uRight - uLeft > viewW) {
+          sc.scrollLeft = Math.max(0, Math.min(uLeft, sc.scrollWidth - viewW));
+          setScrollLeft(sc.scrollLeft); // keep the ruler's virtualization window live
+        } else {
+          previewGhostRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+          // F3's leftover: the straddler's split ghost joins the scroll target
+          // (comment above — the union span, not just the head). It scrolls
+          // only when it EXISTS; a no-split preview (fresh lanes, place-on-top)
+          // keeps exactly the one ghost scroll.
+          previewSplitGhostRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        }
       } else {
         const sc = scrollRef.current;
         if (!sc) return;
@@ -1687,9 +1726,13 @@ export function Timeline() {
                toolbar's role=status description, not this layer.
                R23-WE D-E2 (#102): the layer also owns the visibility law —
                the ghost ref (auto-scroll target) + the MODE BADGE at the
-               ghost's head (the effects live above, by the seam). ---- */}
-          {insertPreview?.ok && insertPreview.geometry.ghost && (() => {
+               ghost's head (the effects live above, by the seam).
+               R26-W-F1: the P3-1 exit hold was REVERTED (the D-E2 absence
+               law wins over the fade-out polish). ---- */}
+          {paintedPreview && (() => {
+            const insertPreview = paintedPreview; // the live armed plan this frame
             const g = insertPreview.geometry.ghost;
+            if (!g) return null; // the paintedPreview gate above already requires a ghost — this narrows the optional for TS
             /* R20-W6FIX (P2-1): a plan that MINTS a track (placeOnTop with
                no unlocked overlay) splices it into the LIVE track array at
                ghost.insertLineAfter — render at that INSERT LINE, the live

@@ -220,7 +220,8 @@ describe('Ruler in/out brackets (R14 draggable edges)', () => {
 
 describe('R15 T8 (R15-F1): ruler scrub — element snap after the first move, click gate, edge auto-scroll', () => {
   it('FIX 4c: the FIRST move frame-snaps only (no jarring jump); the SECOND move element-snaps to the nearest edge (snap ON)', () => {
-    boot({});
+    boot({}); // R26-W-F1 F2: snap boots OFF now — this engine test states its own precondition
+    act(() => { store().toggleSnap(); }); // ON for this test's premise
     const r = ruler();
     // pointerdown seeks immediately (frame-snapped): 300 px → 6.5217 → 6.5
     fireEvent.pointerDown(r, { pointerId: 1, button: 0, clientX: 300 });
@@ -237,8 +238,9 @@ describe('R15 T8 (R15-F1): ruler scrub — element snap after the first move, cl
   });
 
   it('FIX 4c: element snap OFF (N) — every move frame-snaps only, even past the first', () => {
-    boot({});
-    act(() => { store().toggleSnap(); });
+    boot({}); // ON first — the N-key toggle below is the test's subject
+    act(() => { store().toggleSnap(); }); // false→true (the new default is OFF)
+    act(() => { store().toggleSnap(); }); // true→false — the test's subject
     const r = ruler();
     fireEvent.pointerDown(r, { pointerId: 1, button: 0, clientX: 300 });
     fireEvent.pointerMove(r, { pointerId: 1, buttons: 1, clientX: 393 });

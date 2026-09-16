@@ -6,7 +6,7 @@
    Thumb/waveform grammar. */
 
 import { useMemo, useState } from 'react';
-import { Search, Upload, Waves, Music2, X, ArrowUpNarrowWide, ArrowDownWideNarrow, AudioLines } from 'lucide-react';
+import { Search, Download, Waves, Music2, X, ArrowUpNarrowWide, ArrowDownWideNarrow, AudioLines } from 'lucide-react';
 import { useUi } from '../../state/useUiStore';
 import { project, isAudioBearing, type MediaRecord } from '../../lib/mockData';
 import { tc } from '../../lib/timecode';
@@ -128,7 +128,12 @@ export function SoundLibrary() {
           aria-label="Import sound"
           data-tip="Import sound (⌘I)"
         >
-          <Upload size={12} strokeWidth={1.6} />
+          {/* R26-W-F1 (F4, the GF audit's T#4 residue): the IMPORT glyph law —
+              Download (media flows INTO the project), the same swap the pool's
+              own Import button got (th_mto2t03u); the export-reading Upload
+              arrow never propagated to the audio page's bay until now. Pinned
+              in SoundLibrary.test (the no-upload-glyph pin, extended). */}
+          <Download size={12} strokeWidth={1.6} />
           <span className="text-[11px]">Import sound…</span>
         </button>
       </div>

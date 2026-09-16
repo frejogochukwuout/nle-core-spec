@@ -27,11 +27,15 @@ const mainEls = () => track('sc-1', 'tr-main').elements.map((e) => e.id);
 /* ---------- initial state ---------- */
 
 describe('initial state (sample project boot)', () => {
-  it('boots into Edit page, sc-1 active, select tool, snap+link on', () => {
+  it('boots into Edit page, sc-1 active, select tool, snap OFF (the R18e reviewer law) + link on', () => {
     expect(S().page).toBe('edit');
     expect(S().activeSceneId).toBe('sc-1');
     expect(S().tool).toBe('select');
-    expect(S().snap).toBe(true);
+    /* RE-PINNED (R26-W-F1 F2, the GH regression sweep): snap boots FALSE —
+       the reviewer's own R18e law ("snap toggle should be off by default").
+       The true boot crept back in the R20 store reorg; the old pin here
+       asserted the regression. */
+    expect(S().snap).toBe(false);
     expect(S().link).toBe(true);
     expect(S().lockAll).toBe(false);
   });
@@ -79,7 +83,9 @@ describe('page + view toggles', () => {
   it('setTool / toggleSnap / toggleLink / toggleViewerOverlays / toggleViewerSafeGuides', () => {
     act(() => { S().setTool('blade'); S().toggleSnap(); S().toggleLink(); S().toggleViewerOverlays(); S().toggleViewerSafeGuides(); });
     expect(S().tool).toBe('blade');
-    expect(S().snap).toBe(false);
+    /* RE-PINNED (R26-W-F1 F2): snap boots false → ONE toggle flips it true
+       (was `false` under the regressed on-boot). */
+    expect(S().snap).toBe(true);
     expect(S().link).toBe(false);
     expect(S().viewerOverlays).toBe(false);
     expect(S().viewerSafeGuides).toBe(true);

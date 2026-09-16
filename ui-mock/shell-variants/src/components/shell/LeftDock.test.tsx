@@ -41,6 +41,12 @@ describe('LeftDock (R19 th_mtoyt5fv — one surface in the bin slot)', () => {
     expect(screen.queryByTestId('shell-leftdock-tab-pool')).toBeNull();
     expect(screen.queryByTestId('shell-leftdock-tab-effects')).toBeNull();
     expect(screen.getByTestId('shell-mediapool')).toBeInTheDocument();
+    /* R26-W-F1 (P3-5, the GF audit's R2): NO orphaned tabpanel either — the
+       Pool|Effects tablist that once owned #leftdock-panel-pool died with
+       the tab bar, and an unowned role="tabpanel" is an ARIA fib. The id
+       stays (a stable wrapper hook). */
+    expect(screen.queryByRole('tabpanel')).toBeNull();
+    expect(document.getElementById('leftdock-panel-pool')).toBeInTheDocument();
     // the effects panel moved to the FX page's FxBrowser — nothing here
     expect(screen.queryByTestId('shell-fxbrowser')).toBeNull();
     expect(screen.queryByTestId('shell-effects')).toBeNull();

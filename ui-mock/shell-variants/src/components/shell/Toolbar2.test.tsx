@@ -379,7 +379,7 @@ describe('R23-FIX R-c: the FX page owns the left slot — no toggle, dense rover
     expect(screen.queryByRole('button', { name: 'Effects' })).toBeNull(); // edit keeps the honest pool name
   });
 
-  it('the fx-page rover stays dense — Inspector is the ONLY button and the single tab stop (like deliver)', () => {
+  it('the fx-page rover stays dense — Inspector is the ONLY button and the single tab stop', () => {
     useUi.setState({ page: 'fx' });
     renderPlain(<Toolbar2 />);
     const buttons = screen.getAllByRole('button');
@@ -440,21 +440,36 @@ describe('R23-WD (D-D1): the leftDockContent table drives the left toggle', () =
     for (const label of ['Media Pool', 'Stills', 'Sound Library', 'Effects']) {
       expect(screen.queryByRole('button', { name: label })).toBeNull();
     }
-    // the toolbar itself survives — title center + Inspector right
+    /* R26-W-F1 (F3, the GE audit's state-only toggle) RE-PIN: the Inspector
+       toggle is DOM-ABSENT on deliver too — the deliver settings column is
+       DeliverPage's own always-on region, so the button flipped aria-pressed
+       while gating nothing (the lying-control #100 law, the left toggle's
+       own deliver treatment). The toolbar survives title-only. */
     expect(screen.getByTestId('shell-toolbar')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Inspector' })).toBeInTheDocument();
+    expect(screen.queryByTestId('shell-toolbar-btn-inspector')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Inspector' })).toBeNull();
     act(() => { useUi.setState({ page: 'edit' }); });
   });
 
-  it('DELIVER: the rover stays dense — Inspector is the ONLY button and the single tab stop', () => {
+  it('R26-W-F1 (F3): DELIVER carries ZERO toolbar buttons — the Inspector absence is honest (no lying toggle on an always-on region)', () => {
+    act(() => { useUi.setState({ page: 'deliver', panels: { mediaPool: true, effects: false, inspector: true } }); });
+    const { rerender } = renderPlain(<Toolbar2 />);
+    expect(screen.queryAllByRole('button')).toHaveLength(0); // title-only — every toggle on this page would lie (queryAll: getAll THROWS on zero)
+    // the toggle RETURNS on the other pages (the rail is real there — read per render, like the left toggle)
+    act(() => { useUi.setState({ page: 'edit' }); });
+    rerender(<Toolbar2 />);
+    expect(screen.getByRole('button', { name: 'Inspector' })).toBeInTheDocument();
+    expect(screen.getByTestId('shell-toolbar-btn-inspector')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('DELIVER: the rover holds ZERO buttons without stranding (title-only toolbar; arrows are a no-op)', () => {
     act(() => { useUi.setState({ page: 'deliver' }); });
     renderPlain(<Toolbar2 />);
-    const buttons = screen.getAllByRole('button');
-    expect(buttons).toHaveLength(1); // Inspector alone — no hole where the toggle sat
-    expect(buttons[0]).toHaveAttribute('tabindex', '0');
-    // the wrap math clamps on a one-button toolbar: arrows never strand focus
-    fireEvent.keyDown(buttons[0], { key: 'ArrowRight' });
-    expect(document.activeElement).toBe(buttons[0]);
+    const buttons = screen.queryAllByRole('button'); // queryAll — the toolbar is title-only here; getAll throws on zero matches
+    expect(buttons).toHaveLength(0);
+    // keydown on the title-only toolbar never throws and never strands focus
+    fireEvent.keyDown(screen.getByTestId('shell-toolbar'), { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(document.body);
     act(() => { useUi.setState({ page: 'edit' }); });
   });
 

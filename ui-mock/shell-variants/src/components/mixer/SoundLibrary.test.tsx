@@ -91,6 +91,23 @@ describe('SoundLibrary', () => {
     expect(store().toasts.at(-1)!.kind).toBe('info');
   });
 
+  /* R26-W-F1 (F4, the GF audit's T#4 residue — the pool's pin extended to
+   * the audio page's bay): the Import-sound CTA carries the proper IMPORT
+   * glyph (Download — media flows INTO the project), never the
+   * export-reading Upload arrow the pool's own fix (th_mto2t03u) retired.
+   * The pool's pin covered only the pool; this bay is the ONLY media bay
+   * visible in Audio Focus. */
+  it('Import affordance uses the proper IMPORT glyph (R26-W-F1 F4): Download, not the export-looking Upload arrow', () => {
+    renderPlain(<SoundLibrary />);
+    const btn = screen.getByRole('button', { name: 'Import sound' });
+    const svg = btn.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(svg!.getAttribute('class')).toContain('lucide-download');
+    expect(svg!.getAttribute('class')).not.toContain('lucide-upload');
+    // aria-label preserved — the affordance's name never changed
+    expect(btn).toHaveAttribute('aria-label', 'Import sound');
+  });
+
   it('the footer counts live-region reports items + selection (design doc §3.2)', () => {
     renderPlain(<SoundLibrary />);
     expect(screen.getByText('6 sounds · 1 selected')).toBeInTheDocument(); // m-02 ships selected

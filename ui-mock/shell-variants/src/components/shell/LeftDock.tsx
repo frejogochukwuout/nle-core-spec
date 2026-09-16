@@ -75,12 +75,16 @@ export function LeftDock() {
     /* R23-WA (ruling 4): the EDIT page renders the Media Pool ALONE — the
        Effects tab retired with the FX view (#86/#82). panels.effects is dead
        view state (harmless); the effects assets live on the FX page's
-       FxBrowser now. */
+       FxBrowser now. R26-W-F1 (P3-5, the GF audit's R2): the wrapper's
+       orphaned role="tabpanel" is GONE — the Pool|Effects tablist that once
+       owned it died with the tab bar, and an unowned tabpanel is an ARIA
+       fib (LeftDock.test pins the no-tabpanel law). The id stays (a stable
+       hook for the wrapper). */
     case 'media-pool':
       return (
         <div data-testid="shell-leftdock" className="flex h-full w-full min-h-0 min-w-0 flex-col bg-shell">
           <div className="min-h-0 flex-1">
-            <div id="leftdock-panel-pool" role="tabpanel" className="h-full min-h-0">
+            <div id="leftdock-panel-pool" className="h-full min-h-0">
               <MediaPool />
             </div>
           </div>

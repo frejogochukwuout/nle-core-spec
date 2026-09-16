@@ -183,13 +183,16 @@ describe('transport keys', () => {
 /* ---- tools ---- */
 
 describe('tool keys', () => {
-  it('V B T Y U R switch tools; N toggles snap', () => {
+  it('V B T Y U R switch tools; N toggles snap (boots OFF — the R18e law, re-pinned R26-W-F1 F2)', () => {
     for (const [k, tool] of [['b', 'blade'], ['t', 'roll'], ['y', 'slip'], ['u', 'slide'], ['r', 'ripple'], ['v', 'select']] as const) {
       press({ key: k });
       expect(S().tool).toBe(tool);
     }
+    expect(S().snap).toBe(false); // the boot default pinned at the seam too
     press({ key: 'n' });
-    expect(S().snap).toBe(false);
+    expect(S().snap).toBe(true); // one N flips the OFF boot ON
+    press({ key: 'n' });
+    expect(S().snap).toBe(false); // and back — the toggle is binary
   });
 });
 

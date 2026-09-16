@@ -80,6 +80,16 @@ const clipTint: Record<TrackKind, { border: string; tint: string; badge: string 
   caption: { border: 'var(--clip-text)', tint: 'color-mix(in srgb, var(--clip-text) 35%, #23242a)', badge: 'var(--clip-text)' },
 };
 
+/* R26-W-F1 (P3-4, the GG audit's T#21 fidelity item): per-ELEMENT token —
+   a TEXT clip paints --clip-text on ANY lane, the full Timeline's type-
+   based law (Clip.tsx paints text bodies --clip-text). The strip's kind-
+   based table alone painted the T1 overlay track's text clip (el-5) with
+   the VIDEO token, leaving V-vs-T to ride the 30→22 tint delta only — the
+   two surfaces diverged exactly for text-on-overlay. The track BADGE keeps
+   the kind token (it names the LANE, not the clip). */
+const clipTintOf = (kind: TrackKind, type: string): { border: string; tint: string; badge: string } =>
+  type === 'text' ? clipTint.caption : clipTint[kind];
+
 export interface TimelineCompactProps {
   /** What a clip click does. 'grade' (the COLOR page law: setSelection +
    *  re-target clip mode); 'select' (every other page: plain selection —
@@ -270,6 +280,7 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
                 <div className="relative flex-1 border-b border-[#222]" style={{ background: dim ? '#15161a' : '#1d1e22' }}>
                   {track.elements.map((el) => {
                     const isTarget = targetId === el.id;
+                    const elTone = clipTintOf(track.kind, el.type); // P3-4: the clip paints its TYPE token
                     return (
                       <button
                         key={el.id}
@@ -283,10 +294,10 @@ export function TimelineCompact({ clipClick = 'grade', rangeBand = false }: Time
                           left: el.startTime * pps,
                           width: Math.max(14, el.duration * pps - 1),
                           height: h - 3,
-                          borderColor: isTarget ? 'var(--accent-selection)' : tone.border,
+                          borderColor: isTarget ? 'var(--accent-selection)' : elTone.border,
                           background: isTarget
-                            ? 'color-mix(in srgb, var(--accent-selection) 28%, ' + tone.tint + ')'
-                            : tone.tint,
+                            ? 'color-mix(in srgb, var(--accent-selection) 28%, ' + elTone.tint + ')'
+                            : elTone.tint,
                           color: 'var(--text-primary)',
                           padding: '2px 3px',
                           whiteSpace: 'nowrap',
