@@ -55,7 +55,7 @@ RATIFIED (the four partial rulings LANDED as code: the resize-handle data-elemen
 grammar + the zoom-slider aria-valuetext §11.3 form; the drop-indicator marker+index ruling; the
 audiolane registered divergence) + ALL 13 RE-EXPRESS-PORT rows LANDED (the app suite 377/377 12-file
 → **413/413 across 21 files**: dom-structural 8 + scrub-session 4 + clip-lifecycle 3 + trim-gesture 3 +
-edge-autoscroll 2 + zoom-anchor 2 + dnd-fallback 3 + mid-drag-yield 5 + e2e-crawl 6 as the NINE new
+edge-autoscroll 2 + zoom-anchor 2 + dnd-fallback 3 + mid-drag-yield 5 + e2e-crawl 11 as the NINE new
 files) + **D51 the mid-drag keyboard yield** (the mini useKeys.ts:60 law's engine-world twin — the
 isInteractionActive gate in use-keybindings.ts, adversarially reviewed APPROVE-WITH-AMENDMENTS, the
 five amendments folded, blast radius zero; the two-keymap residual registered with the D52 candidate) +
@@ -481,16 +481,16 @@ def _roof():
 check("the app's 12-file roof inventory in 12/17 (124+26+42+20+4+9+15+20+31+41+38+7 = 377 @ 8f12cf9)", _roof, "app suites")
 
 def _roof31():
-    """The app's 21-file roof at fc2da09: the R30 12-file inventory (377) + the R31 nine new files
+    """The app's 21-file roof at f58147c: the R30 12-file inventory (377) + the R31 nine new files
     (dom-structural 8 + scrub-session 4 + clip-lifecycle 3 + trim-gesture 3 + edge-autoscroll 2 +
-    zoom-anchor 2 + dnd-fallback 3 + mid-drag-yield 5 + e2e-crawl 6 = 36 new tests -> 413)."""
+    zoom-anchor 2 + dnd-fallback 3 + mid-drag-yield 5 + e2e-crawl 11 = 41 new tests -> 418)."""
     ok = all(k in specs[12] for k in ["dom-structural 8", "scrub-session 4", "clip-lifecycle 3",
                                       "trim-gesture 3", "edge-autoscroll 2", "zoom-anchor 2",
-                                      "dnd-fallback 3", "mid-drag-yield 5", "e2e-crawl 6"])
-    ok2 = "413/413" in specs[12] and "21 files" in specs[12]
-    ok3 = "413/413" in specs[17] and "fc2da09" in specs[17]
+                                      "dnd-fallback 3", "mid-drag-yield 5", "e2e-crawl 11"])
+    ok2 = "418/418" in specs[12] and "21 files" in specs[12]
+    ok3 = "418/418" in specs[17] and "f58147c" in specs[17]
     return (ok and ok2 and ok3), f"R31 inventory in 12: {ok}; 413/21-file in 12: {ok2}; 17 re-key: {ok3}"
-check("the app's 21-file roof inventory in 12/17 (377 + 36 new = 413 @ fc2da09 — the DOM-structural tranche)", _roof31, "app suites R31")
+check("the app's 21-file roof inventory in 12/17 (377 + 41 new = 418 @ f58147c — the DOM-structural tranche)", _roof31, "app suites R31")
 
 # === U. THE R31 CHECK CLASSES (the DOM-structural tranche + D51 + the K4 legs + the filings) ===
 check("R31: the D26.5 ratification evidence in the app tree (the resize-handle data-element-id + the zoom-slider aria-valuetext — the two attr fixes)", lambda: (
@@ -784,8 +784,8 @@ check("LIVE: the WDC repo HEAD is 94f6460 (the ENG-2 docs wrap, docs-only over c
     _git("web-daw-core", "rev-parse", "--short", "HEAD") == "94f6460", _git("web-daw-core", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
 check("LIVE: the nle-ui repo HEAD is dc3644b (701/701 UNCHANGED — docs-only: the D29 DECISIONS first-party record + the C0 MiniShell row filing)", lambda: (
     _git("nle-ui", "rev-parse", "--short", "HEAD") == "dc3644b", _git("nle-ui", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
-check("LIVE: the app repo HEAD is fc2da09 (413/413 the 21-file roof; the DOM-structural tranche + D51 + the e2e-crawl suite; the census register UNCHANGED @ 55c81c0)", lambda: (
-    _git("nle-test-app", "rev-parse", "--short", "HEAD") == "fc2da09", _git("nle-test-app", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
+check("LIVE: the app repo HEAD is f58147c (418/418 the 21-file roof; the DOM-structural tranche + D51 + the e2e-crawl suite; the census register UNCHANGED @ 55c81c0)", lambda: (
+    _git("nle-test-app", "rev-parse", "--short", "HEAD") == "f58147c", _git("nle-test-app", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
 check("LIVE: the engine's vendored pins are OT 55c81c0 + WDC 83b8850 (the submodule pair — the s17 cascade)", lambda: (
     _git("nle-engine", "submodule", "status", "vendor/opencut-timeline").lstrip(" +-").startswith("55c81c0") and
     _git("nle-engine", "submodule", "status", "vendor/web-daw-core").lstrip(" +-").startswith("83b8850"), "engine submodules"))
@@ -1070,7 +1070,7 @@ for name, ok, detail in results:
     if not ok:
         print(f"  FAIL  {name}  {detail}")
 if not fails:
-    print("ALL GREEN — the R31 world is coherent: the DOM-structural tranche LANDED (all 13 RE-EXPRESS-PORT rows + the D26.5 four partial rulings as code @ app fc2da09 413/413 the 21-file roof), D51 the mid-drag keyboard yield LANDED (adversarially ratified, blast radius zero, the D52 residual registered), the K4 e2e legs begun (the capstone chain — six wire verbs, each ok, each origin ui), the OT queue filing LANDED (31f2764 — the carrier-reduction work order + the D25.3b worklist + the data-test freeze ask), the nle-ui filings LANDED (dc3644b — the D29 DECISIONS first-party record + the C0 row), the corpus re-keyed to the R31 pin world (the K1 convention — every LIVE statement moved, every historical record preserved), the R28/R30 check classes all standing re-keyed to the R31 figures.")
+    print("ALL GREEN — the R31 world is coherent: the DOM-structural tranche LANDED (all 13 RE-EXPRESS-PORT rows + the D26.5 four partial rulings as code @ app f58147c 418/418 the 21-file roof), D51 the mid-drag keyboard yield LANDED (adversarially ratified, blast radius zero, the D52 residual registered), the K4 e2e legs begun (the capstone chain — six wire verbs, each ok, each origin ui), the OT queue filing LANDED (31f2764 — the carrier-reduction work order + the D25.3b worklist + the data-test freeze ask), the nle-ui filings LANDED (dc3644b — the D29 DECISIONS first-party record + the C0 row), the corpus re-keyed to the R31 pin world (the K1 convention — every LIVE statement moved, every historical record preserved), the R28/R30 check classes all standing re-keyed to the R31 figures.")
 sys.exit(1 if fails else 0)
 
 # === V. THE EIGHT R30 CHECK CLASSES (the K3-corpus round) =====================
