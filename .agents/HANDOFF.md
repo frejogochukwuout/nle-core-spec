@@ -1,29 +1,30 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-16, end of the R26-variants round (THE FULL-ISSUE VERIFICATION SWEEP + the stale-serve incident round). **Read this FIRST; the spec-track state below the divider is R29-era background still accurate as environment context.**
+**Written:** 2026-09-17, end of the R30 K3-corpus round. **Read this FIRST.**
 
-## Current state (R26-variants — COMPLETE: 138/138 threads verified + replied; the stale-SB incident root-caused + hardened)
+## Current state (R30 — COMPLETE: the crawl's bulk begun)
 
-- **The round's driver:** the user found "multiple GH issues (filed from SB) not resolved yet closed" and ordered a full sweep of every issue — proper UX solutions not quick fixes, override scanning, grouped by feature scope, as many waves as needed — plus "is the hosted SB stale?"
-- **YES IT WAS STALE (the round's first finding):** the container's unclean recycle had resurrected an R18b-era `.zscripts/dev.sh` (no code-sync) via a stale repo.tar; the public SB served R24-era code (124 stories, 78 files behind) while the annotakit store self-healed from GitHub — threads current, code stale. The reviewer's live "this is NOT fixed" (T#72, 07:33 today) judged two-rounds-old UI. FIXED: runtime re-synced (126 stories public, verified); the boot chain now SELF-HEALS (stub dev.sh → boot-restore.sh; boot-restore 1b-2 refreshes .zscripts from the GitHub-authoritative copy + re-execs). Session-start ritual: check `.code-sync-stamp` == repo HEAD + public story count.
-- **The silent-resolution finding:** R24/R25 resolve scripts' PATCH `comment` payloads were silently IGNORED by the annotakit API (only `POST /threads/:id/comments` lands) — threads closed with zero visible replies ("never responded either"). FIXED: the reply wave posted evidence replies on ALL 138 threads (T#72 hand-written with the incident explanation + verification path; the 72 historical r22-r25 notes finally delivered; era threads stamped with R26 group verifications; the 5 fix-notable threads updated). 0 open threads; GH mirror propagates (spot-verified).
-- **The audit:** 8 feature-group auditors (GA color / GB mixer / GC source+insert / GD transitions / GE deliver / GF media-dock / GG timeline-core / GH inspector+polish — the last orchestrator-run after 3 dispatch kills) over the full 138-thread corpus with the verdict taxonomy (PROPER/QUICKFIX/BROKEN/OVERRIDDEN/DEFERRED). Result: ~95 verdict rows, overwhelmingly PROPER with live probes on the FRESH runtime; reports in `.agents/design/r26-audit/`.
-- **The fix wave (W-F1, agent + orchestrator recovery):** F1 the insert-preview sourceRange threading (preview==commit for cropped sources — live-verified: ghost 26.483s = the range); F2 snap boots OFF again (the R18e law lost in the R20 store reorg; test had pinned the regression — both fixed); F3 the deliver Inspector toggle DOM-absent (was state-only); F4 SoundLibrary Import = Download glyph; F5 the fx-tip tier wording; P3-2 union-span auto-scroll; P3-3 transition label compose; P3-4 compact-strip type-based tint; P3-5 orphaned tabpanel removed; P3-1 fade-out REVERTED (violated the pinned D-E2 absence law — SKILL #153).
-- **Gates: tsc 0 · 1960/1960 (R25's 1950 → 1960) · vite + storybook builds green · public serves 126 stories.** Commits: boot-hardening 3fae3dc → DESIGN 46db450 → audits 77b2253 → W-F1 ec543d5 → reply-wave a5fea7b → SKILL bf9b94f, all pushed (GitHub; GitLab mirror CURRENT with the new PAT — first successful mirror push since R24).
+- **The round:** the K3 re-expression — the mini's law corpus (495 tests / 163 census units, the acceptance list at `ui-mock/shell-mini/docs/LAW-NET-INVENTORY.md`) re-expressed over the app's REAL surfaces. **The app suite 256/256 (8-suite) → 377/377 across 12 files.**
+- **The four maps are the work orders** (in the APP repo, `nle-test-app/docs/`): `k3-map-store.md` (36 rows), `k3-map-geometry.md` (17), `k3-map-libchrome.md` (55), `k3-map-timeline.md` (52 — the Part-A hole the review caught, mapped last). Every row: the law, the app-side target surface (grep-verified), the test home, the disposition (RE-EXPRESS / SUPERSEDED / N-A-DIFFERENT / OVERLAP-LANDED / DOM-GATED). ~96% of the store/geometry/libchrome maps' RE-EXPRESS target is now LANDED; the timeline map is UNSTARTED authoring.
+- **The C16 auto-repeat guards landed BOTH trees** (the port's `use-keybindings.ts:220` + the package's `useShortcuts.ts:52` — holding `s` machine-gunned `timeline.split`; fixed, zero exemptions, mutation-verified). The 3-verb dead-history-entry defect class fixed in the package (`5779295`, 701/701).
+- **Pins:** app `8f12cf9` · nle-ui `5779295` · engine `e3f55bd` · OT `3e18722` (code `970948a`) · WDC `94f6460` · spec sealed @ `6de3fca`. battery_r30 **166/166**.
+- **The adversarial review verdict:** 13/13 mutations caught (zero tautologies); every finding folded or filed.
 
-## Next session scope (immediate)
+## Next session scope (immediate, ranked)
 
-1. **The user's / reviewer's reaction round** — the 138 evidence replies + T#72's direct answer are live; expect the reviewer's next pass. Pull ALL open threads first (`curl :3000/annotakit/api/threads`); any new comment on a RESOLVED thread may need the reopen flow honored (the mirror handles GH↔SB both ways).
-2. **The reply-first law is standing:** any resolution = POST the evidence comment FIRST, then PATCH the status (SKILL #150; the PATCH comment field is a no-op).
-3. **Session-start ritual (SKILL #149):** verify `.code-sync-stamp` == repo HEAD, public story count matches, THEN trust the runtime.
-4. **Registered residue (all P3, deliberate):** X3 FxBrowser search/filter; T5 scrollMax monotonicity; T8 scroll view-state continuity; the r5 shortcut long tail; the C16 GAP-row update; C59 stills-as-node-snapshots (the T#39 asset musing); C42 thumb-specific poster assets.
-5. **Process reminders:** fetch-before-commit (#129 — 2 sibling races absorbed this round); commit→push→bundle after every wave (#143); the secret scanner REJECTS pushes containing the PAT (strip tokens from scripts before `git add` — use `process.env.ANNOTAKIT_GH_TOKEN`).
+1. **The DOM-structural tranche** per `nle-test-app/docs/k3-map-timeline.md`: FIRST ratify the D26.5 testid mapping row (the map's mapping table — 21 clean / 4 partial / 18 gaps; the 4 partial rows are the real decisions, e.g. add `data-element-id` to ResizeHandle), THEN author the 13 RE-EXPRESS-PORT rows (rows 5/6/10/11/19/24/38/39/40/41/42/47/49 — incl. the scrub-session family and the clip-auto-scroll twin). Each family's tests land in the app's vitest beside the surface they pin.
+2. **The row-40 fix-first:** the port's zoom-slider lacks `aria-valuetext` (the package's mock-world slider has it — spec 18 §11.3). Fix + pin (the C16 precedent).
+3. **The mid-drag keyboard yield ruling** (Reviewer A's P2-1): the mini's M2 interaction-lock has NO app implementation — an S mid-drag splits today. Either implement (the keymap yields during an active drag session) or register the divergence. Also rule the scrub-row/playhead hold-to-scrub question (mini-parity, currently un-owned).
+4. **K4's e2e legs** (import(virtual) → cut → play → export through the real UI) + the w1 approach (the engine playhead binding) per IMPLEMENTATION-PLAN S-app steps (7)-(8).
+5. **Standing quick wins:** OT's carrier-reduction work order STILL UNFILED (S-ot step 1 — file it in OT's PLAN as the queue head); nle-ui's D29 DECISIONS entry + C0 MiniShell row (S-package step 2, 3 rounds overdue); the app hygiene rows (the stale maintainPitch PLAN row tick; the DeliverPage blob contract CR).
 
-## VARIANTS-TRACK state (supersedes the sections below)
+## Process reminders (the round's lessons)
 
-- R24: COMPLETE + reconstructed. R25: COMPLETE. R26: COMPLETE (this round — the sweep + the incident hardening; 138/138 replied+resolved; 1960/1960; the boot chain self-heals).
-- The GitLab mirror PAT works again (glpat-… re-issued by the user 2026-09-16; WAF 403 ≈ 1/3 — retry twice).
+- **The saturation pattern held again:** 3 of the 7 wave-2/fix agents "timed out" AFTER landing their edits — ALWAYS check the tree before re-dispatching (the worklog + `git status` are the truth).
+- **The jsdom drag-math traps** (pinned in the corpus comments): the zero element rect skews clickOffsetTime (stub the hit node's rect); the collapsed render window hides deeper elements (only el-1/el-2/el-6 render); main is fully packed tail-to-tail (no small same-track move is free — el-6 on A1 is the clean mover); snap must be OFF at BOOT for threshold pins (the patch boots the store pre-render — a toggle + settle does NOT reliably reach the port's prop).
+- **Fetch-first held** (zero force-pushes); the package edits go through `vendor/nle-ui` (the submodule clone — push there, then bump the app's pin in the same app commit; the symlink validates live).
+- The battery re-baselines ONCE per round (battery_r30 is current); the corpus re-key rides the wrap (the K1 convention: layered appends, history preserved — `scripts/rekey_r30.py` is the scanner).
 
-## Standing laws (battery-enforced)
+## VARIANTS-TRACK state (the sibling session's lane — do not collide)
 
-- The posture law (D20), the pin world (D21), the drag law (D22), the single-tree law (D25 + amendments), the plan-executability law (§2A.6), the census law (§2A.7), the productization gate (D28.2), the mode-matrix completeness law (§2A.8), the reference-register law (§2A.9) — all as at R28 (spec-track). Variants-side: SKILL #121-#154.
+- The shell-variants stream (R26-variants) wrapped AFTER R29: 138/138 threads verified + replied; the SB stale-serve incident hardened (the boot chain self-heals). Its HANDOFF notes live in this file's history (git). The sibling may still be active — fetch-first everywhere.
