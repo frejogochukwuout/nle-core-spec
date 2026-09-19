@@ -2,6 +2,46 @@
 
 **Created:** 2026-09-02 (Round 8 wrap-up — user directive: push/backup every micro milestone; PLAN tracks the long horizon, HANDOFF tracks the next session only)
 
+## INCOMING FILING — from nle-engine seal-round R28-exec (THE 87-ROW REVISION-NOTES REGISTER + the testing-aspect disposition) [filed 2026-09-19]
+
+*Source: the nle-engine executor-lane seal round (the user directive's two
+aspects: close every remaining gap + reality-check the engine against the
+latest spec + implementation plan, ESPECIALLY the testing aspect). The
+register lives verbatim at `audits/ENGINE-SEAL-R28-REVISION-NOTES.md`
+(1,231 lines); the audit fleet's 18 artifacts remain in the engine repo at
+`gaps/audit/seal-round/` for provenance. Engine code baseline `e3f55bd`
+(re-pin waves since: OT `39003d3`→`17a19f8` incl. THE M58R FLAKE FIX — the
+OV-12 CI red root-caused + closed [the un-awaited wireReset race]; WDC
+`94f6460` — docs-only; 749/749 + tsc 0 throughout).*
+
+1. **THE REGISTER (87 rows = 8 P1 + 31 P2 + 48 P3, every row an executable
+   spec edit):** the P1s — 03's "each pinned in-suite" FALSE for R1-B8/R2-5;
+   the D29.5c twin rows' false Z2 clauses; 05's AR-2 family + channel model
+   with zero normative text; **07's live FALSE Gaussian-Blur default (4 vs
+   10)**; 07's falsified sidecar/STARTING bits; 07's stale K3/K4 GAP rows
+   (the law-net re-expression + the e2e BOTH landed at R31); **17/12's NFR
+   family with ZERO carriers and ZERO GAP rows (the P1 unowned family)**.
+   Full rows: severity · spec file+section · the revision · the evidence
+   cite · the filing report — apply as the R33 intake queue.
+2. **THE TESTING-ASPECT DISPOSITION (engine-side, already in flight):** the
+   engine lane's answer to "ensure extremely robust and exhaustive test
+   process" — `gaps/audit/seal-round/design-exhaustive-testing.md` v2 (the
+   adversarial-reviewed design: 33 fast-check property sites in 4 files
+   [the undo soak centerpiece over the 61 execute-mutators + the 10-law
+   invariant battery], the perf project PERF-1..4 nightly-only, coverage-v8
+   report-artifact-first, the 6-wave W0-W5 rollout + the gate self-tests
+   law) + `design-r1-port.md` (the r1 port design: D-r1-1..4 + the
+   test-migration map 749→~630-640 at r1 END). The spec counterpart rows
+   are P2-1 ↔ P2-23 (the property tier) + P1-8 (the NFR family) + P2-27
+   (coverage) — the register and the design should land together at the
+   next fold.
+3. **THE CROSS-LANE COORDINATION NOTE:** the R28 charter's fleet table
+   pins the engine at `074a2f6`/`f9ac806` — five code waves behind the
+   current `e3f55bd`+ baseline at audit time; the register's cites are
+   pinned `e3f55bd` (the delta reports re-verified every batch-1 finding
+   against the R31 spec vintage). Battery classes for the landed engine
+   work can activate at the next battery round.
+
 ## INCOMING FILING — from opencut-timeline seal18 (the Stage-0 landing + the wire-reality revision notes) [filed 2026-09-19]
 
 *Source: the opencut-timeline seal round (session 18 — the two-aspect
