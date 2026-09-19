@@ -1,47 +1,33 @@
 # HANDOFF — Next Session Scope (nle-core-spec)
 
-**Written:** 2026-09-02, end of Round 9 (pushed @ `4bc8c4d`)
-**Scope of this file:** IMMEDIATE next session ONLY. Long horizon lives in `.agents/PLAN.md`. Process meta-lessons live in `.agents/SKILL.md`.
+**Written:** 2026-09-19, end of the R32 K4-exit + w1-entry + D52 round (recovered mid-round from the W3-a agent death + the user's pause). **Read this FIRST.**
 
----
+## Current state (R32 — COMPLETE: the crawl's automated completion proof SEALED + the walk's entry infrastructure LANDED)
 
-## Restore context first (10 min)
+- **The K4 EXIT VERDICT is LANDED** (the crawl's exit — sealed): the interpretation ruling adversarially ratified (the D29.1c "28 routed wire verbs" numeral = the R27 W6-A census DECLARATION, not a gate strengthening — the e2e drives its 11 wire-visible verbs + 2 shell-path rows; R8's wire-coverage gate is the full-28 instrument, already green); the move-drag LEG 2b made the cut clause 4-of-4 literally (the e2e **12 tests** @ `src/e2e-crawl.test.tsx`); zero-mock-path + zero-human-input re-verified; the VLM collector pair recorded (**7/7 stories, 0 REAL-BUG** after measurement triage). The ruling + evidence chain: the app repo's `docs/decision-k4-exit-verdict.md`.
+- **D52 the two-keymap yield is LANDED across BOTH repos** (the D51 residual closed): nle-ui `1e0c30b` — the OPTIONAL `TimelineRouter.isInteractionActive` member (the shell's **9 doc-mutating rows** yield SILENTLY mid-gesture; view/transport/tool rows never consult it — the narrow-gate law; back-compat by the optional member) + the 6-pin package family (**743/743**); the app `ce7cfc3` — the app-layer flag store (`src/interaction-active.ts` — ONE source TWO listeners: D51's port gate + D52's shell twin read the SAME OR-composed getter) + the routerImpl member + the 4-test honest-law describe (**426/426 across 22 files**).
+- **The per-element session families are LANDED** (D51's registered follow-up): the doc-committing session registry (`src/timeline-port/doc-committing-sessions.ts`) — keyframe-drag + volume-line join the gate via their canceller effects; scrub/marquee/keyframe-box-select EXCLUDED by ruling (selection-write only); the module-singleton drain law pinned.
+- **The w1-entry infrastructure is LANDED**: the human-rounds `docs/human-rounds/PROTOCOL.md` (CAPTURE→TRIAGE→CONVERT→CLOSE, ZERO UNOWNED FINDINGS, the round-1 scripted edit session); the annotakit review loop (`.storybook/annotakit.config.json`, the tracked threads.db store, live-verified on :6007); the D25.4 side-by-side fixture pair (`docs/side-by-side/` — ONE scene, the engine toJSON + the store mirror twin, byte-stable); **the C0 MiniShell composition in nle-ui** (701→737, 78 stories); **the D25.3a mini-theme wave in OT** (`39003d3` — theme.ts mode maps + the waveform mode resolution + the Tier-2 overrides + the M60 pins; **649/649 = 632 classic + 17 M60**; the code pin MOVED off `970948a`); the app census register RE-DECLARED (**43 = 32 zero-action + 9 carriers + 2 hosts**).
+- **Pins:** app `ce7cfc3` (426/426, 22-file roof) · nle-ui `1e0c30b` (743/743) · OT `39003d3` (649/649) · engine `e3f55bd` · WDC `94f6460` · spec sealed @ `c972388`. **battery_r32 202/202.**
 
-1. `/home/z/my-project/worklog.md` — tail (Round-9 record)
-2. `audits/ARCH-R9-three-domain-strategy.md` — **the round's ruling** (three domains; read §2-5 for the reasoning, §7 for the seal watch items)
-3. `00-master-spec.md` — Decisions 12/13/14 + §2.5 doc governance (v5.0)
-4. `.agents/PLAN.md` — seal-round priority order
-5. Repo states + PATs: see worklog Round-9 bootstrap entry (NOTE: a second PAT was issued for the three bearachprema repos — engine/OT/web-daw-core; the spec repo PAT is unchanged)
+## Next session scope (immediate, ranked)
 
-## Repository states at handoff
+1. **THE HUMAN ROUNDS THEMSELVES** (w1's core — everything is now staged for them): run the round-1 scripted edit session per `docs/human-rounds/PROTOCOL.md` (import → arrange → trim incl. the 1-frame floor → split/ripple → JKL/loop/audio playback with the Q1 checklist → undo/redo mid-gesture (the D51/D52 yield, live) → save/reload → export), capture via the annotakit pins (C + [feel:*] tags via G — the remapped hotkeys), triage P1/P2/P3, convert EVERY finding to a pin/CR/queue reference, close with the round-`<n>`.md register (census-in/dispositions-out, ZERO UNOWNED FINDINGS). The three REGISTERED open decisions collect their verdicts each round: the fps 24-vs-30, the playhead cadence (frame-snapped vs unquantized), the programMonitor viewer-state rows (file both CRs — nle-ui's empty testid + the app-side wrap).
+2. **The w1 residuals:** the /view fps-param resolution (the side-by-side README's open decision — `/view` hardcodes FPS_30; the fixture pair declares 24); the D25.3b structural-gap components (crawl-tail, additive-optional — OT's queue worklist).
+3. **w2's entry** (the second WALK rung — the full-scope demo): extends the K4 suite (`src/e2e-crawl.test.tsx`) toward the complete editor journey; re-gates by extension per the K4 row.
+4. **Standing residuals:** the VLM net's continuous role (re-run at each storybook-visible landing); the per-spec `## Testing` mirrors + 17 §14.2's mapping repair (the maintenance rows); the app hygiene rows (the DeliverPage blob contract CR; the stale maintainPitch PLAN row tick); the OT carrier-reduction program (the queue-head standing quick win — the FILED row now includes the R32 census re-declaration as its substantive re-key).
 
-| Repo | Commit | Notes |
-|---|---|---|
-| nle-core-spec (canon) | `4bc8c4d` | Round 9 complete: 21 specs (00-20) + ARCH-R9 + R9 review + battery_r9 48/48 |
-| nle-engine | `624a76b` | Waves 4A→5C complete: 202/202, 25/25 milestones, ~47k LOC, real A/V export. **M1.5 audio wiring (vendor/web-daw-core) NOT yet landed** — it is the next convergence duty (Decision 13) |
-| opencut-timeline | `4e39b67` | **"FINAL as a distilled opencut timeline"** — 297/297, components+controllers+hardening landed, SEAMS.md written. Remaining: P3 polish + **C7 rename (open)** |
-| web-daw-core | `bc68ee0` | 737/737, M1 bridge + triangle de-risk landed. M1.5 engine-side wiring open; M2 (mixer surface) not started |
-| cloudcut-nle | `ux-spec` @ `9b9f68a` | Integrated ours-wins (spec 18 v1.1); watch for branch evolution |
+## Process reminders (the round's lessons — READ BEFORE ORCHESTRATING)
 
-All four repos are ACTIVELY DEVELOPED ("still finalizing" per the user) — `git fetch`/`git pull` every one before any analysis; re-baseline line-number citations with fresh greps (R8 lesson: every engine citation moved; R9 confirmed it again with 4D-B→5C).
+- **THE PUSH-EVERY-STEP LAW (the user's intervention, this round):** the W3-a agent died mid-Part-2 with 5 files uncommitted — hours of invisible work; the user saw "zero gh commit update" and paused the session. The recovery was clean ONLY because the tree survived locally. **Commit + push after EVERY gate pass** (a green test file, a green suite, a docs landing — each is a commit), never at wave ends. Verify pushes actually landed (`git log origin/main..HEAD` empty after fetch).
+- **The shell rows are ROUTED CORE-DIRECT, WIRE-INVISIBLE:** the shell's useShortcuts rows (⌘B split, ]/[ trim, m marker, ⌘M mute…) dispatch through the router into the engine core directly — the wire log ONLY records the port keymap's verbs. Assert ENGINE truth (element count + historyDepth), never `logOf`, for router-dispatched verbs.
+- **THE PACKED-MAIN COLLISION LAW:** the mock seed's main track abuts el-1..4 across [0,30) with ZERO gaps — ANY real el-1 move collides and the planner's `canApplyMoves→newTracksFallback` lawfully lands it on a NEW video track (a same-track move test must either clear all spans — the R31 +32s shape — or pin the new-track landing honestly).
+- **THE STORE-SCENE BOOT-STALENESS LAW:** the routed world never mirrors engine ops back into the store's scene — shell-row targeting (⌘B's playhead lookup, ]'s selection) reads BOOT-stable spans. Revival legs after engine ops must ride UNMOVED elements (store span = engine span) or seek into post-move spans. The drag retargets the store selection AT MOUSEDOWN. Runtime `setPlayhead` syncs the engine playhead (clamped to the scene duration).
+- **The marker one-per-tick dedupe:** the seed has mk-1@0 — an `m` control at playhead 0 NOOPs; controls need a marker-free tick.
+- **The design-decision pipeline held again** (D52 + session-families + K4 verdict: research → review → amendments → implement → pin — the K4 review's P1 conditioning + the D52 reviews' no-P1 verdicts both folded before implementation).
+- **Fetch-first held** (zero force-pushes; all repos at the R32 pins; no sibling races). The battery re-baselines ONCE per round (battery_r32 current; the re-key rode the wrap — `scripts/rekey_r32.py`, zero LIVE-stale residual).
+- **The parent `/home/z/my-project` repo is the sync-bot's LOCAL-ONLY repo** (no remote — its UUID commits stopped Sep 15; do not read its staleness as a push failure). GitLab mirrors live under `ansgareutychisO/` (WAF 403 ≈1/3 — just retry; the PAT may rotate — update the remote URLs when the user supplies a new one).
 
-## Next session's task: the SEAL ROUND (or a Round-9 delta if repos advanced)
+## VARIANTS-TRACK state (the sibling session's lane — do not collide)
 
-Default scope = `.agents/PLAN.md`'s seal priority order (which equals 19 §12 + ARCH-R9 §7). First actions:
-
-1. **Fetch/pull all repos; diff engine vs `624a76b`, OT vs `4e39b67`, web-daw-core vs `bc68ee0`.** The user said all three are "still finalizing" — a delta is LIKELY. If any advanced: scout the delta FIRST (its HANDOFF/gaps/DECISIONS docs), then apply the seal items against the new state. Pay special attention to: engine `vendor/web-daw-core` appearing (M1.5!), OT's C7 rename (types losing their `timeline.*` prefixes), web-daw-core M1.5/M2 movement.
-2. **If M1.5 landed in the engine**: verify per ARCH-R9 §7.1 (submodule + parity gate + EXECUTED AudioMixer retirement + audio-mix.ts end-state) — this is PLAN item 1 and the biggest single seal event.
-3. **If nothing moved**: the C7-rename charter and the decision-reconciliation sign-off lines (PLAN items 3-4) are pure spec-side work — safe to start immediately.
-
-## Round-9 mechanics to reuse
-
-- **The challenge round pattern**: when the user pushes back on an architecture, re-derive from measured facts (LOC matrices, test assets, who-owns-what tables), not from prior-round conclusions — the R9 rulings each started with a fresh evidence table (ARCH-R9 §1).
-- **The domain-decomposition lens**: overlap between two repos is resolved by asking "is this ONE domain duplicated, or TWO domains that each need a home?" — the answer differs for timeline (was duplicate → merged) vs audio (two domains → layered seam).
-- **Battery discipline**: fix → full battery re-run → recalibrate; exempt-window logic must look BEFORE AND AFTER each hit (R9 lesson: a `superseded` marker 240 chars after a phrase is still context).
-- **Rename mechanics** (if another suffix-era ever appears): git rm seed + git mv + header self-reference rewrite + path sed on LIVE docs only, historical round records untouched.
-
-## Standing cautions
-
-- Never edit web-daw-core's `copy`-class files by hand (file-class law; sync overwrites).
-- The spec set is now CONTRACT + GAP + ACCEPTANCE (Decision 14): new spec text should state boundary contracts, deltas, and acceptance — not re-describe internals the repos already document (their SKILL/DECISIONS docs).
-- The 6 historical round records keep their point-in-time `.refined.md` paths **by design** — do "fix" them.
+- The shell-variants stream wrapped long ago; its HANDOFF notes live in this file's history (git). The sibling may still be active across the module repos — fetch-first everywhere.

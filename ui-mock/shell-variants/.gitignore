@@ -1,0 +1,15 @@
+node_modules/
+# root-anchored: the VITE build output stays ignored, but the vendored
+# addon's dist/ IS tracked (kit dogfood #6, sibling-stream convention):
+# a fresh clone boots Storybook with zero build steps; rebuild via
+# `npm run vendor:build` + commit when the kit source changes.
+/dist/
+*.log
+.DS_Store
+
+# Storybook
+storybook-static/
+# annotakit runtime state + secrets (legacy 0.4.0 store path; the 0.5.0
+# store lives under .git/annotakit/ — never in the working tree)
+.env
+.storybook/annotakit/
