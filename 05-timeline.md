@@ -598,6 +598,16 @@ function handleDrop(e: React.DragEvent, targetTrack: Track, targetTime: MediaTim
 | `+/-` | Zoom in / out |
 | `Cmd+0` | Reset zoom |
 
+### 8.10 Keyframe authoring gestures (the AR-2 family — R33; engine seal-round register P1-3; the R27 P2-8 / xcut-amend 05-6 fold, never before applied)
+
+The AR-2 keyframe-gesture family — normative law (the vendored OT tree is the reference implementation):
+
+- **Double-click authoring on the volume line / the expanded lane** (the AR-2 seam, `use-keyframe-authoring.ts`): frame-snapped (the project fps lattice), duration-clamped (never past the element span), on-curve seed (the key's value seeds from the curve's value at that tick, not from 0), dB-clamped (the [−60,+20] authoring domain, D38.2's one-home), and **exact-tick = replace** (a second double-click at an existing key's tick replaces that key — never a duplicate).
+- **The drag commits ONE `timeline.retimeKeyframes` dispatch** (one user gesture = one history entry — the W11-f gesture-commit law; `use-keyframe-drag.ts:105-123`, the dispatch at `:117`).
+- **Delete commits `removeKeyframes` + the WYSIWYG bake**: deleting the last key of a channel bakes the currently-seen value into the base param (`use-timeline-actions.ts:406-431`, the removeKeyframes dispatch at `:407-413`; the bake law `ops/timeline-core.ts:1862-1877`) — an emptied channel never falls back to a stale default.
+- **The channel model is named**: `ElementAnimations` = propertyPath → `ScalarChannel | DiscreteChannel` (`animations/types.ts:92-104` — `ScalarChannel` at `:92`, `DiscreteChannel` at `:100`).
+
+
 ### 8A. Timeline Affordance Grammar (Round-25 amendment — the visual-grammar register's STRUCTURAL half: ARCH-R25 Decision 33; register proposal + evidence: `audits/fleet-r25/xcut-visual-grammar.md`)
 
 The DaVinci edit-mode overlay grammar — the trim family (edge bands, soft glows, dimming, the active-edit border, the white-box family, the in-point preview, cursor glyphs, arrows) and the source-edit family (ghost, fit-slot, speed badge, down/push arrows, the asymmetric-ghost tell) — was defined by exactly two reference HTML mocks and nothing else: the R25 census found 12 of 13 elements pinned NOWHERE in normative text, the only prior table being the mock-repo design doc `ui-mock/shell-variants/docs/r20/insert-modes.md` §1.3 (insert family only — its token/arrow laws are ratified INTO this register), while the four live code homes ship four mutually incompatible simplified grammars. This section is that register's **structural half** (states, geometry, z-order, state machines). The **theme half** — the semantic token values — is 18 §9's per the D25.3 theme/structural split (18 §9's color-strip precedent: tokens live there, geometry here); every token reference below is by NAME ONLY. The cursor-layering ruling lands in 18 §5A (its CSS-cursor half is already law there). The register is keyed to the trim tools of the tool-mode enum §8.1/§4 and 18 §4.5's tool radio share (roll/ripple/slip/slide) and to 06 §5.9's source-edit family (insert/overwrite/replace/append/ripple-overwrite/fit-to-fill).

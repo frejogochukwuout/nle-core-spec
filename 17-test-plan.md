@@ -2273,7 +2273,7 @@ Test failed.
 
 ### 13A.1 NFR verification recipes (00-master §6A's test hooks)
 
-Each NFR budget → a concrete, CI-runnable measurement. NFR tests run in the nightly job (§9.3) + the shell-mount smoke subset per-PR; budgets are pass/fail, not advisory.
+Each NFR budget → a concrete, CI-runnable measurement. NFR tests run in the nightly job (§9.3) + the shell-mount smoke subset per-PR; budgets are pass/fail, not advisory. **R33 venue-status note (engine seal-round register P1-8): the nightly venue LANDED engine-side first** (the perf tier PERF-1..4 @ the engine's `perf.yml`, telemetry-mode first — the fleet's first scheduled workflow); **the app-side recipes' venue (a nightly job or the per-PR smoke subset) is NOT YET LANDED — the family's GAP row (spec 12 §0, R33) owns the venue + carriers; the Tier/job column below is the TARGET model, not the current venue record.**
 
 | NFR (00 §6A) | Recipe | Tier / job | Pass criterion |
 |---|---|---|---|

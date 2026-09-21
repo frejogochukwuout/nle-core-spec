@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""r33_scan.py — the R33 intake scanner (W0).
+
+The engine seal-round filed THE 87-ROW REVISION-NOTES REGISTER
+(audits/ENGINE-SEAL-R28-REVISION-NOTES.md). The register cites spec
+file:line sites; the corpus has moved R28->R32 since the audit's
+re-verification. This scanner:
+
+  1. Parses the register into rows (id, severity, title, body).
+  2. Extracts every spec-file cite from the title + body
+     (forms: "Spec 07:1169", "07:22", "(:367)", "IMPLEMENTATION-PLAN :69",
+      "00-master D41 (:489)", "§4.3.64" alone is not a file cite).
+  3. Reads the CURRENT corpus text at each cited line (+/- 1 ctx).
+  4. Emits an evidence pack: rows/<id>.md with the row verbatim + the
+     current cite texts, and a summary table row-by-row (cites resolved
+     / drifted / row premise status guess).
+
+Output: audits/r33-intake/SCAN-PACK.md + audits/r33-intake/rows.json
+Exit 0 = parse OK (87 rows found).
+"""
+import json
+import os
+import re
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+
+REGISTER = "audits/ENGINE-SEAL-R28-REVISION-NOTES.md"
+OUTDIR = "audits/r33-intake"
+os.makedirs(OUTDIR, exist_ok=True)
+
+SPEC_MAP = {}
+for i in range(0, 22):
+    for f in os.listdir("."):
+        m = re.match(r"^%02d-" % i, f)
+        if m and f.endswith(".md"):
+            SPEC_MAP[str(i)] = f
+            SPEC_MAP["%02d" % i] = f
+SPEC_MAP["IMPLEMENTATION-PLAN"] = "IMPLEMENTATION-PLAN.md"
+SPEC_MAP["IP"] = "IMPLEMENTATION-PLAN.md"
+SPEC_MAP["00-master"] = "00-master-spec.md"
+SPEC_MAP["master"] = "00-master-spec.md"
+SPEC_MAP["REFERENCE-REGISTER"] = "REFERENCE-REGISTER.md"
+
+text = open(REGISTER, encoding="utf-8").read()
+
+# --- 1. parse rows -----------------------------------------------------
+row_re = re.compile(r"^### (P[123]-\d+) · (.*?)(?:\n|$)", re.M)
+rows = []
+matches = list(row_re.finditer(text))
+for idx, m in enumerate(matches):
+    start = m.start()
+    end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+    body = text[start:end]
+    rows.append({"id": m.group(1), "title": m.group(2).strip(), "body": body})
+
+# --- 2. extract cites --------------------------------------------------
+# form A: "Spec 07:1169" / "Spec 03 §3.4 note (:152)" / "04:24" / "08:4"
+# form B: "(:367)" inside a Spec-NN-titled row -> that file
+cite_re = re.compile(r"\b(?:(Spec|spec)\s*(\d{1,2})\s*)?[:\s]?(\d{1,2}):(\d{1,4})\b")
+paren_re = re.compile(r"\(:(\d{1,4})\)")
+
+def extract_cites(row):
+    cites = []  # (file, line, raw)
+    title, body = row["title"], row["body"]
+    # explicit file:line forms in title+body
+    for src in (title, body):
+        for m in cite_re.finditer(src):
+            raw = m.group(0)
+            specnum = m.group(2)
+            a, b = m.group(3), m.group(4)
+            # skip years, counts like "749/749", R-numbers
+            if re.match(r"^\d{4}$", a + b):
+                continue
+            if int(a) > 21:
+                continue
+            f = SPEC_MAP.get(a) or SPEC_MAP.get(specnum or "")
+            if not f:
+                continue
+            cites.append((f, int(b), raw.strip()))
+    # bare (:NNN) resolves against the first spec named in the title
+    tm = re.match(r"Spec (\d{1,2})", title)
+    if tm:
+        f = SPEC_MAP.get(tm.group(1))
+        if f:
+            for src in (title, body):
+                for m in paren_re.finditer(src):
+                    cites.append((f, int(m.group(1)), "(:%s)" % m.group(1)))
+    # dedupe, preserve order
+    seen, out = set(), []
+    for c in cites:
+        k = (c[0], c[1])
+        if k not in seen:
+            seen.add(k)
+            out.append(c)
+    return out
+
+# --- 3/4. read current corpus at cites, emit pack ----------------------
+corpus = {}
+def read_line(fname, lineno, ctx=1):
+    if fname not in corpus:
+        p = fname
+        if not os.path.isfile(p):
+            p = os.path.join("ui-mock", fname)
+        corpus[fname] = open(p, encoding="utf-8").read().splitlines() if os.path.isfile(p) else None
+    lines = corpus[fname]
+    if lines is None:
+        return None
+    if lineno > len(lines) or lineno < 1:
+        return None
+    lo, hi = max(1, lineno - ctx), min(len(lines), lineno + ctx)
+    return "\n".join("%5d| %s" % (i, lines[i - 1]) for i in range(lo, hi + 1))
+
+pack = []
+unresolved = []
+for row in rows:
+    cites = extract_cites(row)
+    cite_texts = []
+    for f, ln, raw in cites:
+        t = read_line(f, ln)
+        cite_texts.append({"file": f, "line": ln, "raw": raw, "current": t})
+        if t is None:
+            unresolved.append((row["id"], f, ln))
+    pack.append({**row, "cites": cite_texts})
+
+json.dump(pack, open(os.path.join(OUTDIR, "rows.json"), "w"), indent=1)
+
+with open(os.path.join(OUTDIR, "SCAN-PACK.md"), "w") as fh:
+    fh.write("# R33 intake scan pack — the 87-row register vs the R32-final corpus\n\n")
+    fh.write("Generated by scripts/r33_scan.py. Each row: the register text verbatim +\n")
+    fh.write("the CURRENT corpus text at each cite (line| text). Cites that fail to\n")
+    fh.write("resolve (file missing / line out of range) are DRIFTED — find the premise\n")
+    fh.write("by content grep before editing.\n\n## Summary\n\n")
+    n_res = sum(1 for r in pack for c in r["cites"] if c["current"] is not None)
+    n_tot = sum(1 for r in pack for c in r["cites"])
+    fh.write("- rows: %d (P1 %d / P2 %d / P3 %d)\n" % (
+        len(pack),
+        sum(1 for r in pack if r["id"].startswith("P1")),
+        sum(1 for r in pack if r["id"].startswith("P2")),
+        sum(1 for r in pack if r["id"].startswith("P3"))))
+    fh.write("- cites: %d (%d resolved, %d drifted/unresolved)\n\n" % (
+        n_tot, n_res, n_tot - n_res))
+    for r in pack:
+        nc = len(r["cites"])
+        nr = sum(1 for c in r["cites"] if c["current"] is not None)
+        files = sorted({c["file"] for c in r["cites"]})
+        fh.write("- %s — %d cites (%d ok) — %s — %s\n" % (
+            r["id"], nc, nr, ",".join(files), r["title"][:80]))
+    fh.write("\n---\n\n")
+    for r in pack:
+        fh.write("## %s — %s\n\n```%s\n%s```\n\n" % (
+            r["id"], r["title"], "", r["body"].rstrip()))
+        if r["cites"]:
+            fh.write("### Current corpus at cites\n\n")
+            for c in r["cites"]:
+                fh.write("**%s:%d** (cite form %s)\n\n" % (c["file"], c["line"], c["raw"]))
+                if c["current"]:
+                    fh.write("```text\n%s\n```\n\n" % c["current"])
+                else:
+                    fh.write("UNRESOLVED (drift or out-of-range)\n\n")
+        else:
+            fh.write("(no machine-extractable file:line cites — handle by content)\n\n")
+
+print("rows: %d  cites: %d  resolved: %d  unresolved: %d" % (
+    len(pack), n_tot, n_res, n_tot - n_res))
+if len(pack) != 87:
+    print("WARNING: expected 87 rows, got %d" % len(pack))
+    sys.exit(1)
