@@ -215,5 +215,12 @@ sub1('print(f"\\nbattery_r32: {len(results) - len(fails)}/{len(results)} PASS")'
 sub1('if not fails:\n    print("ALL GREEN — the R32 world is coherent: the K4 EXIT VERDICT LANDED (the interpretation ruling + the move-drag LEG 2b + the VLM collector pair — the crawl\'s automated completion proof COMPLETE), D52 the two-keymap yield LANDED across BOTH repos (nle-ui 1e0c30b the optional twin + the 9 guards + the 6-pin family; app ce7cfc3 the flag store + the composed getter + the 4-test honest-law describe), the per-element session families LANDED (the doc-committing session registry), the C0 MiniShell composition LANDED (701→737, 78 stories), the D25.3a mini-theme wave LANDED in OT (39003d3, 649/649 — the code pin MOVED), the w1-entry human infrastructure LANDED (the protocol + the annotakit loop + the side-by-side fixtures), the corpus re-keyed to the R32 pin world (rekey_r32 — zero LIVE-stale residual), the R28/R30/R31 check classes all standing re-keyed to the R32 figures.")',
      'if not fails:\n    print("ALL GREEN — the R33 world is coherent: THE INTAKE FOLD COMPLETE (the engine seal-round\'s 87-row register APPLIED 87/87 — every premise verified live; the OT seal18 wire-reality fold LANDED: TRACK_LOCKED 13, F1B-2 four verbs, HA-2-11 narrowed, the census at the report-json truth), the pin world re-keyed to the R33 pins (engine 2a0ecf4 785/785 — the property tier + perf.yml; OT 008e7f3 675/675 — the Stage-0 mechanism set; app 7664603 — the lockstep re-pin; rekey_r33 zero LIVE-stale residual), the D43-A3 + D42 drift-fence battery classes ACTIVATED (the REGISTERED-SKIP retired — OT\'s edit-domains.ts + linkage.ts live), the human-rounds track STAGED for the user (the PROTOCOL + the annotakit loop + the three open decisions — the next session\'s core).")')
 
+# PROVENANCE NOTE (R33-W6b): the built battery received 4 post-build amendments
+# applied directly to battery_r33.py (the :6039 public-method anchor for
+# performOverwriteEdit; the _lock13 gate-census strengthening [the build's
+# emit-count read 5 live, would have failed]; the R33-B correction-note leg
+# [the naive default-4 absence probe false-positived on the honest correction
+# note itself]; the R33-I 'Stage-0 EXECUTED in OT' wording). This builder
+# reproduces the PRE-amendment fork; battery_r33.py is the round's record.
 open(DST, "w", encoding="utf-8").write(text)
 print("battery_r33.py written:", len(text.splitlines()), "lines")

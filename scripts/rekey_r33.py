@@ -74,6 +74,7 @@ HISTORICAL_MARKERS = [
     "at R32", "(R32", "R32 re-pin", "R32 pins", "R32 layer", "R32 WRAP",
     "the R32 record", "R32 reading", "R33 re-key", "re-keyed R33",
     "the R32 fleet", "R32 note", "R32 final", "R32-a", "the R32 re-pin",
+    "R28-exec", "R33 lockstep",
 ]
 
 STALE_PATTERNS = [
@@ -81,10 +82,10 @@ STALE_PATTERNS = [
     "3e18722", "970948a", "876f2b8", "256/256", "f9ac806", "55c81c0",
     "83b8850", "api.ts:243-275", "api.ts:328-335", "8,997",
     "25 vitest test files", "25 test files",
-    "@ the 39003d3 re-pin",
+    "@ the 39003d3 re-pin", "6754979",
 ]
 
-NEW_PINS = ("2a0ecf4", "008e7f3", "7664603", "17a19f8", "344123a", "574d8d3")
+NEW_PINS = ("2a0ecf4", "008e7f3", "7664603", "17a19f8", "344123a", "574d8d3", "1e0c30b", "94f6460")
 
 SCAN_FILES = sorted(
     f for f in os.listdir(".")

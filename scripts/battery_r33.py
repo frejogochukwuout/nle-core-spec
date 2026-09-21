@@ -1253,20 +1253,26 @@ check("R32: the LAW-NET R32 w1-progress note (the K4 exit + D52 + C0 + D25.3a + 
 
 # --- R33-A: the 87-row register applied (the marker census) ---
 def _r33_markers():
-    import glob
-    total = 0
+    import glob, re as _re
+    ids = set()
     per_file = []
     for f in sorted(glob.glob("*.md")):
         t = open(f, encoding="utf-8").read()
-        n = t.count("engine seal-round register P")
-        if n:
-            per_file.append(f"{f}:{n}")
-            total += n
-    want_p1 = sum(open(f, encoding="utf-8").read().count("engine seal-round register P1-") for f in glob.glob("*.md"))
-    # 87 rows dispositioned: 84 marker-carrying applications + P3-36/P3-43a discharged upstream + P3-29 discharged-verified
-    ok = (total >= 84 and want_p1 >= 8)
-    return ok, f"markers={total} across {len(per_file)} files; P1 markers={want_p1}; {';'.join(per_file[:8])}"
-check("R33-A: the 87-row engine register APPLIED (the marker census: >= 84 marker sites + the 8 P1s; 3 rows discharged [P3-36/P3-43a upstream + P3-29 verified])", _r33_markers, "register fold")
+        found = set(_re.findall(r"engine seal-round register (P[123]-\d+)", t)) | set(_re.findall(r"engine seal-round register P[123]-\d+ \+ (P[123]-\d+)", t))
+        if found:
+            per_file.append(f"{f}:{len(found)}")
+            ids |= found
+    p1_ids = {i for i in ids if i.startswith("P1-")}
+    # The honest census: 87 register rows = the distinct marker-carrying ids + the
+    # recorded exceptions — P3-29 discharged-verified, P3-36 discharged upstream
+    # (the engine W0 pull_request fold), P3-43 clause (b) discharged-by-venue
+    # (clause (a) upstream d9582d5, clause (c) marker-covered), and P1-6 applied
+    # WITHOUT a marker (its edit reads "BEGUN @ R31, SEALED @ R32" — verified
+    # landed by the W6b audit; recorded here as the exception).
+    exceptions = {"P3-29", "P3-36", "P1-6"}
+    ok = (len(ids) + len(exceptions) >= 87 and len(p1_ids) >= 7)
+    return ok, f"distinct ids={len(ids)} (+{len(exceptions)} recorded exceptions = {len(ids)+len(exceptions)}); P1 ids={sorted(p1_ids)}; {';'.join(per_file[:8])}"
+check("R33-A: the 87-row engine register APPLIED (the DISTINCT-ID census: >= 84 marker ids + the 3 recorded exceptions [P3-29 verified / P3-36 upstream / P1-6 unmarked-but-landed] = 87)", _r33_markers, "register fold")
 
 # --- R33-B: the Gaussian-Blur default law corrected (4 -> 10) ---
 check("R33-B: the Gaussian-Blur preview default reads 10 both sites (the F2-5 pin; the live FALSE law killed)", lambda: (
