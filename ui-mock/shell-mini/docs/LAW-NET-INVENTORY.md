@@ -210,12 +210,18 @@ disposition totals corpus-wide are in §2.3 (the audited arithmetic).
 
 ### 2.2 The testid census (Part C)
 
-**60 static testids** (from the source census; C1's testid-mapping source,
-C2's 12 viewer testids included). NOTE: `mini-clip-harness` is
-STORY-SURFACE-ONLY (the Clip-anatomy story's render harness,
-`src/stories/Timeline.stories.tsx` — no app component emits it, no test
-queries it): the C1 DOM-structural gate checks the **59 app-emitted**
-static ids + the 15 templated families; the harness id is a
+**86 static testids in the census list = 85 app-emitted + `mini-clip-harness`**
+(re-censused R33, engine seal-round register P3-25 — the prior "60 static
+(59 app-emitted + the story-only harness) / 15 templated" basis was the
+PRE-MINIPLUS census; the miniplus rounds (W1-W5: the plus surface, the
+source stage, the transition layer, the fx stack, the tool radio, the
+track-solo chip) grew the emitted surface past it; every declared id
+re-verified present at the re-census — the presence gate stays green).
+C1's testid-mapping source, C2's 12 viewer testids included. NOTE:
+`mini-clip-harness` is STORY-SURFACE-ONLY (the Clip-anatomy story's render
+harness, `src/stories/Timeline.stories.tsx` — no app component emits it, no
+test queries it): the C1 DOM-structural gate checks the **85 app-emitted**
+static ids + the 30 templated families; the harness id is a
 storybook-only anatomy surface (excluded from the app gate, kept in the
 census for completeness):
 
@@ -240,9 +246,21 @@ mini-btn-inspector-expand` (the C2 viewer set: `mini-viewer*` (7 — incl. -aspe
 `mini-btn-play/seek-start/seek-cliphead/viewer-max` (4) — **12 total**, the
 audited count; spec 14's C2 row enumerates them).
 
-**15 templated families** (cardinality = the live doc; expansion rule
+**The 26 miniplus-era static additions** (the R33 re-census, grouped by
+family; all verified in-tree, none previously declared): the feature gate
++ tools (`mini-btn-miniplus`, `mini-tool-radio` — Timeline.tsx); the
+source stage (`mini-btn-src-back/clear/setin/setout` + `mini-src-bar/dur/
+in/modes/name/out/ph/poster/range/tc/wave` — Viewer.tsx + SourceRangeBar.tsx,
+15 ids); the fade handles (`mini-btn-fadein-add`, `mini-btn-fadein-remove`,
+`mini-btn-fadeout-add`, `mini-btn-fadeout-remove` — Inspector.tsx); the
+transition family (`mini-btn-transition-add`, `mini-btn-transition-remove`,
+`mini-transition-presentation` — Inspector.tsx); the fx stack
+(`mini-fx-add` — Inspector.tsx); and `mini-track-solo` (Inspector.tsx).
+
+**30 templated families** (the 15 pre-miniplus + the 15 miniplus-era
+additions of the R33 re-census; cardinality = the live doc; expansion rule
 stated per family — C1's DOM-structural gate ("the enumerated testid
-census present") checks the 59 APP-EMITTED static ids + the families'
+census present") checks the 85 APP-EMITTED static ids + the families'
 presence — mini-clip-harness is story-surface-only, per the note above):
 
 | Template | Expansion | Where |
@@ -261,6 +279,16 @@ presence — mini-clip-harness is story-surface-only, per the note above):
 | `mini-dur-${media.id}` | per video/audio pool card | MediaPool |
 | `mini-pool-tab-${t.id}` | per filter tab (4: all/video/image/audio) | MediaPool head |
 | `mini-splitter-${axis-}` | 3 (pool/inspector/timeline) | Splitter |
+| `mini-btn-insert-${mode.toLowerCase()}` | per insert mode (the 6-mode source-edit verb family) | Viewer source stage |
+| `mini-btn-source-open-${media.id}` | per pool card (enter the source stage) | MediaPool |
+| `mini-edge-in-${c.id}` / `mini-edge-out-${c.id}` | per clip with a fade edge (2 families — the fade-edge handles) | Timeline ClipItem |
+| `mini-fx-row-${fx.id}` | per effect row | Inspector fx stack |
+| `mini-fx-toggle-${fx.id}` / `mini-fx-enabled-${fx.id}` | per effect row (2 families) | Inspector fx stack |
+| `mini-fx-up-${fx.id}` / `mini-fx-down-${fx.id}` / `mini-fx-remove-${fx.id}` | per effect row (3 families) | Inspector fx stack |
+| `mini-seam-${c.id}` | per transition seam | Timeline transition layer |
+| `mini-wedge-${c.id}` / `mini-wedge-hit-${c.id}` | per transition wedge + its hit zone (2 families) | Timeline transition layer |
+| `mini-tool-${t}` | per tool in the tools row (the trim-tool radio) | Timeline tools row |
+| `mini-track-solo-${track.id}` | per track (the solo-in-place chip) | Timeline lane head |
 
 ### 2.3 The disposition totals (the audited arithmetic)
 
