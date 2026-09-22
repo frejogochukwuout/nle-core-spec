@@ -836,7 +836,7 @@ def _git(repo, *args):
         return ""
 check("LIVE: the engine repo HEAD is 60232ea (the R34 seal round: perf.yml FIXED [the :79 unquoted-colon quote fix] + the two §B.5 steps restored [the count-gate --table perf mode + test:property:explore] + the CI_VENDOR_URL_PREFIX variable set → the nightly GREEN + the CI GREEN; P-F4 caught on the FIRST random-seed nightly run + closed same-round; 789/789 = 785 + the 4 P-F4 pins; the code anchor MOVED to 60232ea [the P-F4 src fix])", lambda: (
     _git("nle-engine", "rev-parse", "--short", "HEAD") == "60232ea", _git("nle-engine", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
-check("LIVE: the OT repo HEAD is 008e7f3 (the R34 L2 carrier wave: CR-1/2/3/4/5/8/9 LANDED — the M59/59A/59B/59C/59D families + the M64 /view fps param + the SURFACE_OWNED_KEYS export rider; 714/714 @ 83 entries; the code pin 8f96ab2", lambda: (
+check("LIVE: the OT repo HEAD is 8f96ab2 (the R34 L2 carrier wave: CR-1/2/3/4/5/8/9 LANDED — the M59/59A/59B/59C/59D families + the M64 /view fps param + the SURFACE_OWNED_KEYS export rider; 714/714 @ 83 entries; the code pin 8f96ab2", lambda: (
     _git("opencut-timeline", "rev-parse", "--short", "HEAD") == "8f96ab2", _git("opencut-timeline", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
 check("LIVE: the WDC repo HEAD is 94f6460 (the ENG-2 docs wrap, docs-only over code anchor ec8fd5c; 777/777 unchanged)", lambda: (
     _git("web-daw-core", "rev-parse", "--short", "HEAD") == "94f6460", _git("web-daw-core", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
@@ -1385,7 +1385,7 @@ check("R34-C LIVE: the app's K4 phase row RATIFIED (both spec-side conditions la
 # --- R34-D: the /view fps param mechanism (the registered honesty gap resolved; the verdict user-gated) ---
 def _fps_param():
     p = read("../opencut-timeline/src/app/view/page.tsx")
-    return ("fps" in p and "viewFps" in p and
+    return ("viewFps" in p and
             os.path.exists(os.path.join("..", "opencut-timeline", "scripts", "m64-fps-param-pins.mjs"))), "page.tsx + the M64 pins script"
 check("R34-D LIVE: the /view fps param (the M64 family + the resolved viewFps threading; the 24-vs-30 VERDICT stays user-gated)", _fps_param, "fps param")
 
@@ -1405,14 +1405,14 @@ def _cr_families():
             "performElementDelete" in act and
             "SURFACE_OWNED_KEYS" in idx and
             "createCancelRegistry" in idx), "the CR surfaces"
-check("R34-E LIVE: the L2 carrier set CR-2/3/4/8/5 + the export rider (all seven surfaces at the live tree)", _cr_families, "CR families")
+check("R34-E LIVE: the L2 carrier surfaces CR-2/3/4/5/8 + the export rider (CR-1 M50 + CR-9 docs predate R34, pinned by their own families)", _cr_families, "CR families")
 
 # --- R34-F: P-F4 (the nightly's first catch, closed same-round) ---
 def _pf4():
     pf = read("../nle-engine/gaps/audit/seal-round/property-findings.md")
     tl = read("../nle-engine/src/lib/nle/timeline/timeline.ts")
     return ("## P-F4" in pf and "1409729458" in pf and
-            "windowEnd - 1" in tl or "windowEnd − 1" in tl), "the P-F4 record + the fix"
+            ("windowEnd - 1" in tl or "windowEnd − 1" in tl)), "the P-F4 record + the fix"
 check("R34-F LIVE: P-F4 recorded + fixed (the degenerate head-trim window-inversion; the END-branch mirror clamp)", _pf4, "P-F4")
 
 # --- R34-G: the engine perf.yml parses + the §B.5 steps ---
