@@ -2,7 +2,7 @@
 // R26: build the FULL issue inventory — GH review issues joined with annotakit threads,
 // grouped by UX feature area for the audit dispatch plan
 const PAT = process.env.ANNOTAKIT_GH_TOKEN || (() => { throw new Error('ANNOTAKIT_GH_TOKEN env required — never hardcode (the secret scanner law)'); })();
-const OWNER = 'frejogochukwuout', REPO = 'nle-core-spec';
+const OWNER = 'aivs-tech', REPO = 'nle-core-spec';
 const fs = await import('fs').then(m => m.default);
 
 async function gh(path) {

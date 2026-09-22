@@ -58,7 +58,7 @@ if [ ! -d "$REPO/.git" ]; then
   echo "repo missing — restoring from ${BUNDLE:-<none>}"
   if [ -n "${BUNDLE:-}" ]; then
     git clone "$BUNDLE" "$REPO" || { echo "bundle clone FAILED"; exit 1; }
-    git -C "$REPO" remote set-url origin https://github.com/frejogochukwuout/nle-core-spec.git
+    git -C "$REPO" remote set-url origin https://github.com/aivs-tech/nle-core-spec.git
   elif [ -n "${TARBALL:-}" ]; then
     echo "bundle missing — extracting $TARBALL"
     tar xzf "$TARBALL" -C /home/z || { echo "tarball extract FAILED"; exit 1; }

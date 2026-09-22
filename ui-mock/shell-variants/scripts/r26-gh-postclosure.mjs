@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // R26: scan ALL GH review issues for reviewer comments AFTER closure (the "not resolved yet closed" class)
 const PAT = process.env.ANNOTAKIT_GH_TOKEN || (() => { throw new Error('ANNOTAKIT_GH_TOKEN env required — never hardcode (the secret scanner law)'); })();
-const OWNER = 'frejogochukwuout', REPO = 'nle-core-spec';
+const OWNER = 'aivs-tech', REPO = 'nle-core-spec';
 const fs = await import('fs').then(m => m.default);
 
 async function gh(path) {

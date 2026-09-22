@@ -957,7 +957,7 @@ repo — see gotcha 6).
 
 ```bash
 # 1. repo (PAT from chat; never committed)
-git clone https://<PAT>@github.com/frejogochukwuout/nle-core-spec.git /home/z/nle-core-spec
+git clone https://<PAT>@github.com/aivs-tech/nle-core-spec.git /home/z/nle-core-spec
 git -C /home/z/nle-core-spec remote add gitlab https://<GLPAT>@gitlab.com/ansgareutychisO/nle-core-spec.git
 
 # 2. runtime copy on the persistent volume
@@ -969,13 +969,13 @@ npm ci --no-audit --no-fund          # ~4 min; esbuild allow-scripts warning is 
 npm run vendor:build                 # tsup → dist/{server.cjs,manager.mjs,preview.mjs}
 
 # 4. token (gitignored; never in tracked files — secret scanner blocks pushes)
-printf 'ANNOTAKIT_GH_TOKEN=<PAT>\nANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec\n' > .env
+printf 'ANNOTAKIT_GH_TOKEN=<PAT>\nANNOTAKIT_GH_REPO=aivs-tech/nle-core-spec\n' > .env
 
 # 5. runtime git repo (annotakit git-push host) — see gotcha 6
 #    v0.5.0: ANY branch works — the store lives under .git/annotakit/ and
 #    syncs to the ORPHAN branch `annotakit` on origin (auto-created).
 git init -b runtime && git add -A && git commit -m "runtime base"
-git remote add origin https://<PAT>@github.com/frejogochukwuout/nle-core-spec.git
+git remote add origin https://<PAT>@github.com/aivs-tech/nle-core-spec.git
 
 # 6. launch (double-fork; PPID=1) + verify
 python3 scripts/sb3000.py

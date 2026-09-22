@@ -47,7 +47,7 @@ if [ ! -d "$REPO/.git" ]; then
   echo "repo missing — restoring from ${BUNDLE:-<none>}"
   if [ -n "${BUNDLE:-}" ]; then
     git clone "$BUNDLE" "$REPO" || echo "bundle clone FAILED (continuing — runtime copy is the serving host)"
-    [ -d "$REPO/.git" ] && git -C "$REPO" remote set-url origin https://github.com/frejogochukwuout/nle-core-spec.git
+    [ -d "$REPO/.git" ] && git -C "$REPO" remote set-url origin https://github.com/aivs-tech/nle-core-spec.git
     # CHECKOUT GUARD (2026-09-10 incident): the sync bundles' HEAD points at a
     # ref they don't carry — `git clone` leaves master unborn with NO working
     # tree, code-sync then no-ops (empty REPO_HEAD) and the runtime serves a
@@ -66,7 +66,7 @@ fi
 #     fall back to serving the bundle state).
 GH_TOK="${ANNOTAKIT_GH_TOKEN:-$(sed -n 's/^ANNOTAKIT_GH_TOKEN=//p' "$RUNTIME/.env" 2>/dev/null | head -1)}"
 if [ -n "${GH_TOK:-}" ] && [ -d "$REPO/.git" ]; then
-  if git -C "$REPO" fetch -q "https://${GH_TOK}@github.com/frejogochukwuout/nle-core-spec.git" main 2>/dev/null \
+  if git -C "$REPO" fetch -q "https://${GH_TOK}@github.com/aivs-tech/nle-core-spec.git" main 2>/dev/null \
      && git -C "$REPO" merge --ff-only -q FETCH_HEAD 2>/dev/null; then
     echo "repo fast-forwarded: $(git -C "$REPO" rev-parse --short HEAD)"
   else
@@ -188,7 +188,7 @@ fi
 
 # 5. .env token (gitignored; PAT comes from chat/ANNOTAKIT_GH_TOKEN env var).
 if [ ! -f .env ] && [ -n "${ANNOTAKIT_GH_TOKEN:-}" ]; then
-  printf 'ANNOTAKIT_GH_TOKEN=%s\nANNOTAKIT_GH_REPO=frejogochukwuout/nle-core-spec\n' "$ANNOTAKIT_GH_TOKEN" > .env
+  printf 'ANNOTAKIT_GH_TOKEN=%s\nANNOTAKIT_GH_REPO=aivs-tech/nle-core-spec\n' "$ANNOTAKIT_GH_TOKEN" > .env
 fi
 
 # 6. Launch (double-fork — survives per-toolcall reaping).
