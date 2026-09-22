@@ -16,12 +16,12 @@
 3. **The parallel NOW-set (agent-actionable, any order):** S-app's value-passing wires (isShellOverlayOpen next; surfaceOwnedKeys UNBLOCKED [OT exports the census]; cancelRegistry the D25.2 mint) + w2 the full-scope demo (~6-9 e2e legs) · S-ot's L3 data-test census (MUST) + L5 the P3 sweep + the deferral rulings · S-engine's W4b (the m32 perf milestone) + the r1 Stage-0 prep (the design v2 complete + all inputs landed — the EXECUTION round is the long pole) · S-ui's F3-NEW sceneDuration guard.
 4. **The sibling filings** (absorb via the 5-wave intake pipeline, SKILL #179): the OT L3/L5/L6 waves + the engine's first perf dispositions (the nightly runs accumulate → W5's thresholds unblock).
 
-## The user-gated register (the ONLY items awaiting the user — everything else is agent-actionable)
+## The user-gated register (RESOLVED R35 — the four decision inputs received + folded; NOTHING product-level awaits the user)
 
-1. **fps 24-vs-30** — the product frame-rate verdict (the `/view` fps-param MECHANISM landed R34; the product default stays user-gated; until the verdict the app side is the fps-honest rendering).
-2. **The playhead cadence** — frame-snapped ~fps publish (current, 18:461-conformant) vs an unquantized display path — recorded each human round (keep = default; switch = registered).
-3. **The programMonitor viewer-state rows around ProgramCanvas** — the app-side decision (the nle-ui empty-testid CR landed R34; the app-side row wiring is the gated call).
-4. **THE HUMAN ROUNDS THEMSELVES** — the round-1 scripted edit session; fully staged, zero agent-blocked prerequisites.
+1. **fps 24-vs-30 → RULED: SUPPORT BOTH 24 AND 30** — fps a first-class configurable; both rates in the supported set; the either/or framing retired.
+2. **The playhead cadence → RULED: FRAME-SNAPPED (the NLE-convention gold standard)** — W1-a's research: frame-snapped is the unanimous convention; the unquantized display path RETIRED; the audio-units display variant = the deferred pref-toggle item (r2/audio-era).
+3. **The programMonitor viewer-state rows → RULED: APP-STATE LEVEL ALWAYS, surfacing a separate settings-tier call** — the app-side row wiring is now AGENT-ACTIONABLE (S-app's worklist).
+4. **THE HUMAN ROUNDS THEMSELVES** — remain the user's own lane (never a blocker); the rounds collect feel-verdicts through the registered-decision mechanism.
 
 ## Process reminders (the round's lessons — READ BEFORE ORCHESTRATING)
 
