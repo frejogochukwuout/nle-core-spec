@@ -62,6 +62,23 @@ The gate classes (standing): **[P]** = parallel-safe by default; **[H:reason]** 
 
 **The decision-points register:** RULED (reversal-registered): the mode-matrix (D30) · the linked-companion law (D32) · the visual-grammar register (D33) · the keyboard family (D34) · the reference register (D35) · the execution wiring (D36) · the topology (D27) + the ARCH-R28 set (D42-D50). **USER-GATED (the R34 register, top of this doc — RESOLVED R35: fps [both 24+30] · the playhead cadence [frame-snapped, convention-ruled] · the programMonitor rows [app-state-first]; the human rounds remain the user's own lane). No agent silently resolved a gated row — the user's R35 decision inputs are the register's resolutions of record.**
 
+### 2A. The shell-variant/full mountain — the SF face carve (R35, the plan's RUN-era product-surface map)
+
+The owner's R35 directive: shell-variant/full is "a much bigger mountain (almost a DaVinci Resolve equivalent)" carved "into sub-sections (per view, ui group, major feature group — e.g. color workflow, NLE editing, sound, effect/transition)." The carve (researched + ratified W1-e, `audits/r35/W1-e-shellfull-decomposition-recon.md`): **a two-level hybrid — VIEW faces at the top level, UI-group + feature-group tracks inside each face** — honoring the closed D50 five-page law (no re-litigation of page shape), absorbing the other two axes where coherent, and keeping the r1-r6 ladder as the EXECUTION rails (the faces are the product-surface map; no face mints a new engine workstream).
+
+| Face | Scope | Gold-standard anchor | Rung rails | Size |
+|------|-------|---------------------|------------|------|
+| **SF-0 Shell chrome & navigation** | the dock + five-page law, page-scoped state memory, page keys, presets, theming, context menus, toast, a11y floor | Resolve app chrome; Premiere workspace presets | XMOCK-6 (the FX-page absorption) · w2 legs | M |
+| **SF-1 Shared panel families** | viewer family (source/program, transport, scrub), Media Pool, the Inspector chassis, the Effects rail, SourceEditBar | Resolve's shared chassis; Premiere's Project/Monitors/Effect Controls | w2 (journey legs) · r1 (source-edit keys) | M |
+| **SF-2 EDIT VIEW — NLE editing** | the 10-mode timeline grammar (trim/insert families, slip/slide/roll/replace/append/ripple-overwrite/fit-to-fill), overlays, markers, the edit Inspector tabs, snapping, link/lock | Resolve Edit; Premiere Editing workspace | **r1 (the port — the long pole)** · the human rounds | L |
+| **SF-3 COLOR VIEW — color workflow** | grade console (wheels/curves/levels), LUT + color management, qualifier, windows+tracking, node graph, scopes, stills/presets, shot-match, the graded viewer | Resolve Color; Premiere Lumetri as the reduced mode | r3 (the D45 venue table) | L |
+| **SF-4 AUDIO VIEW — sound** | the mixer family (strips: fader/pan/meters/EQ/dynamics/sends), bus/aux routing, master, the audio timeline surface, Sound Library, loudness posture | Resolve Fairlight; Premiere Audio + Essential Sound | r2 (G2 + M2 Waves 2/3) | L |
+| **SF-5 FX/TRANSITION VIEW** | FxBrowser/FxInspector, fxMode timeline (seam hit-zones, fade zones), the three-doors routing, transition boxes, effect params, masks, keyframes (Fusion-scale nodes OUT, registered) | Resolve Fusion + Effects Library; Premiere Effects | r1 Stage-0 engine-home rows · r6 pipeline · XMOCK-6 | M-L |
+| **SF-6 DELIVER VIEW — export/finish** | render settings + presets, the RangeBand export range, queue + progress, FCPXML handoff, cloud master | Resolve Deliver; Premiere/Media Encoder | r5 (+11's cloud path) | M |
+| **SF-7 Dropped-pages register (Media & Cut)** | the negative face: the chrome-removal ledger, re-entry costs, the surviving features' homes | Resolve Media/Cut as the contrast set | r4 (deprioritized; the supplier rung if re-litigated) | S |
+
+**The non-collision law:** r1→SF-2 + SF-5's engine-home rows · r2→SF-4 · r3→SF-3 · r4→SF-7 · r5(+11)→SF-6 · r6→SF-5's pipeline depth. Every rung's UI surface lands in exactly one face (or SF-1 for shared panels); new work discovered mid-execution files into its face's forward inventory, never a new mountain. **The sequencing** (W1-e §5): SF-0/SF-1 spine first (hardening + the XMOCK-6 mount) → SF-2 via r1 → SF-5 ∥ SF-4 ∥ SF-3 mid-ladder → SF-6 last of the big faces. The P-tier edit styles (replace/fit-to-fill/place-on-top, slide/slip-pointer/blade-click/nudge, three-point) file into SF-2's inventory — the casual bar carries only the T-set (landed by the R35 edit-styles wave).
+
 ## 3. The workstreams (the tracks' worklists, keyed to spec §0s)
 
 §0's track table IS the worklist index (every open item in exactly one home). This section carries the two BIGGEST work orders verbatim (the executing agent's briefing):
