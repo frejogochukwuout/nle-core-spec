@@ -1610,11 +1610,17 @@ check("R35-G6: the app's .agents/HANDOFF carries the R35 state (the re-home + th
     "REGISTER RESOLVED" in _read_repo("nle-test-app", ".agents", "HANDOFF.md"), "the app handoff"))
 
 # --- R35-H: the per-track artifact truth-ups (all 6 repos at the R35 state) ---
-check("R35-H: the sibling HANDOFFs carry the R35 sections (engine + OT + ui + wdc)", lambda: (
-    "aivs-tech" in _read_repo("nle-engine", ".agents", "HANDOFF.md") and
-    "aivs-tech" in _read_repo("opencut-timeline", ".agents", "HANDOFF.md") and
-    "aivs-tech" in _read_repo("nle-ui", ".agents", "HANDOFF.md") and
-    "aivs-tech" in _read_repo("web-daw-core", "HANDOFF.md"), "all four truth-ups"))
+def _r35_h():
+    """GATE-2 P2 fold: the weak bare-grep strengthened — each HANDOFF must carry the
+    R35-re-home SECTION SHAPE (the register resolution + the re-home), not any string."""
+    sites = {
+        "engine": ("R35" in _read_repo("nle-engine", ".agents", "HANDOFF.md")) and ("aivs-tech" in _read_repo("nle-engine", ".agents", "HANDOFF.md")),
+        "OT": ("R35" in _read_repo("opencut-timeline", ".agents", "HANDOFF.md")) and ("aivs-tech" in _read_repo("opencut-timeline", ".agents", "HANDOFF.md")),
+        "ui": ("R35" in _read_repo("nle-ui", ".agents", "HANDOFF.md")) and ("aivs-tech" in _read_repo("nle-ui", ".agents", "HANDOFF.md")),
+        "wdc": ("R35" in _read_repo("web-daw-core", "HANDOFF.md")) and ("aivs-tech" in _read_repo("web-daw-core", "HANDOFF.md")),
+    }
+    return all(sites.values()), ",".join(k for k, v in sites.items() if not v) or "all four"
+check("R35-H: the sibling HANDOFFs carry the R35 sections (engine + OT + ui + wdc — the re-home + the register resolution each)", _r35_h, "the truth-ups")
 
 # --- R35-I: the rekey_r35 scanner (the wrap's gate; the K1 convention) ---
 check("R35-I: rekey_r35.py exists (the R35 wrap re-key's instrument)", lambda: (

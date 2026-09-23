@@ -86,6 +86,8 @@ STALE_PATTERNS = [
     # (the docs-only tails: the HEAD moved, the code pins stay — the scanner
     #  flags HEAD-shaped claims; the layered rows carry the R35 layer)
     "ccff397", "cdc67d8", "747/747", "d28847c",
+    # GATE-2 P1 fold: the moved nle-ui code pin + the app's pre-wave count
+    "cb04919", "426/426",
 ]
 
 NEW_PINS = (
