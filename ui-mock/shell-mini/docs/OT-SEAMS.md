@@ -1,0 +1,130 @@
+# OT-SEAMS — shell-mini ↔ opencut-timeline seam map
+
+**What this is:** the explicit tracking of every timeline operation the mock
+implements against the reference editing-domain engine (`bearachprema/
+opencut-timeline`, the "OT" of nle-core-spec 19-code-references Decision 12).
+The mini is a MOCK — but its timeline LOGIC is not improvised: every op maps
+to an OT surface, and every divergence is registered here with its reason
+and the downstream swap path. The goal: when the mock graduates to the real
+library, the ops rename, they don't redesign.
+
+> **R24 mapping note (fleet R24, 2026-09-08):** the wire census is re-based at OT
+> code pin `c15a629` — the 24 routed + 6 exceptions (R24 re-base) R23 count is now **24 UI-routed verbs + 6
+> documented exceptions** (W11's M49C coverage gate, machine-checked; re-declares
+> mechanically per the tsc-lockstep law). D25-bridge citations in this corpus →
+> the D26 census discipline: the app's `timeline-port/` is a census-governed
+> converging mirror, not a retiring fork. The op-map rows below (keyed to the
+> 24-name era) remain the seam map — names unchanged.
+
+**Reference state studied (R19, re-read R20):** `src/lib/timeline/headless/api.ts`
+(the 24 routed + 6 exceptions wire surface (the R23 census — was 24 at the R22 pin; OT-SEAMS rows keyed to the 24-name era), `{ok, code}` contract), `types/index.ts`
+(SceneTracks, element fields), `ops/group-move.ts` (resolveGroupMove,
+resolveExistingTrackMove, canApplyMovesToExistingTracks, resolveNewTrackMove,
+snapGroupEdges), `placement/index.ts` (wouldElementOverlap /
+canPlaceTimeSpansOnTrack / enforceMainTrackStart), `controllers/`
+(element-interaction-controller: idle→pending→dragging session, the doc NEVER
+mutated during a drag, threshold 5px, up-within-threshold = cancel,
+groupMoveResult null → no commit; drop-target.ts). The R20 pass re-derived
+the drag law from this source directly — the R19 "insert-push" improvisation
+is gone (see §1.3).
+
+> **R21 (user P0 revert, 2026-09-06):** the drag rows below describe the
+> R19/R20 drag rounds — **RETIRED by the user's directive** ("the last two
+> rounds of drag changes made things worse"). The shipped drag law is the
+> R18k neighbor clamp again (the mover clamps between same-track
+> neighbors, the preview is the commit, plain history entries; no
+> insert-push, no escape, no minted tracks). The rows are kept as the
+> seam MAP for a future, USER-REQUESTED retry; the mini no longer
+> implements them. The one surviving law: neighbors never move mid-gesture.
+
+**The seam family (R23 seal round):** this file carries the TIMELINE-OPS
+seam. The whole-surface audit (engine/audio/project/chrome/view seams,
+the store partition, the transport map) lives in `docs/CORE-SEAMS.md`;
+the law corpus + testid census (the C1/C4 acceptance lists) in
+`docs/LAW-NET-INVENTORY.md`. The conversion laws of §1.6/§3 below are
+EXECUTABLE since R23: `src/lib/otProject.ts` (unit-pinned — see §3).
+
+---
+
+## 1. The op map
+
+| # | mini surface (code) | OT seam (code) | Semantics parity | Delta (registered) |
+|---|---|---|---|---|
+| 1 | **Drag preview** — `previewMove` + `ClipItem` gesture (`useMini.ts`, `Timeline.tsx`) | `element-interaction-controller.ts` drag session (idle → pending → dragging; the DOC is never mutated during the drag — the view renders the mover from the drag session state) | **R22 (user directive — the simple version):** the R18k clamp law is the WHOLE law — the preview mutates the live doc's mover only (neighbors never move under the clamp, so view ≡ doc); the UP seals the LAST PREVIEWED state; one plain history entry; no verdict affordance, no commit-at-UP, no pending windows | OT frame-snaps pointer times (fps); the mini commits the raw pointer time (its mock media has no fps — grid law in `geometry.ts` header). OT uses document listeners; the mini uses (guarded) pointer capture — registered micro-delta. OT's idle→pending→dragging session states map to the mini's 5px threshold + dragActive lock |
+| 2 | **Move magnet** — `magnetTarget`/`resolveSnap` (`geometry.ts`) | `group-move.ts snapGroupEdges` + `snapping/index.ts` | **R22 (R18k law restored):** the moving clip's LEFT edge is the only magnet candidate (single-edge); targets = neighbor edges + the LIVE playhead (never self); nearest within 12px wins (the C17 fix survives as a pure-function law) | OT magnets BOTH element edges and recomputes targets live; the mini's single-edge live-field law is the R18k behavior the user explicitly restored (both-edges + frozen-field was retired 2026-09-07). OT adds keyframe + bookmark magnets (the mini has neither) |
+| 3 | **Move conflict law** — clampMove (`geometry.ts`, R18k restored) | `resolveGroupMove` → overlap ⇒ null ⇒ no commit | **REVERTED (R21, user P0):** the R20 escape/verdict law was retired; the mover CLAMPS between neighbors (the R18k law) — conflict never reaches the commit | pointer drag clamps instead of resolving (the user's verdict: the escape UX was worse than the clamp) |
+| 4 | **Programmatic move** — `moveClip` (`useMini.ts`) | `timeline.move` wire command (overlap ⇒ `{ok:false, code:'CONFLICT'}`) | REJECT on conflict, toast (the mini's error rendering); negative newStart rejected (`requireNonNegativeTicks` parity); dragActive guard BEFORE the toast (no mid-gesture spam) | single move (no `moves[]` batch, no `createTracks[]`); single selection vs `ElementRef[]`; seconds vs ticks |
+| 5 | **Insert (pool DnD)** — `insertionAt` + `insertMediaAt` | `timeline.insert` {element, startTimeTicks, strategy: firstAvailable \| explicit} | place a NEW clip on a track | OT `firstAvailable` = requested span free? take it : next TRACK/new track — **no same-track gap hunt**; the mini hunts same-track gaps (exact → next fitting gap → tail) — a mock affordance, registered. The mini's "explicit" = the exact spot only when free (the drop outline). |
+| 6 | **Trim** — `previewTrim`/`trimClip` + `clampTrimStart/End` | `timeline.trim` {elements, side: left\|right, deltaTicks} | edge semantics; media (source) bound on BOTH edges; ripple mode ignores the neighbor (followers push) | OT element carries `trimStart/trimEnd/sourceDuration`; the mini's clip is a full window over source from in-point 0 (`media.duration` is the extent). Conversion at swap: `project(clip) → {trimStart: 0, trimEnd: sourceDuration − duration}`. (The thread-#51 ghost-edge affordance was retired with the R22 sweep — the bounds stay the law, the paint is gone.) |
+| 7 | **Split** — `splitAtPlayhead` + `splitPoint` | `timeline.split` {elements, splitTimeTicks, retainSide} | quantized, windowed, both halves ≥ MIN_DUR | single clip (selection), retainSide = both always |
+| 8 | **Delete** — `deleteSelected` | `timeline.delete` / `timeline.rippleDelete` | the ripple toggle selects which command the button means | shape delta: one toggle + one button vs two commands — fine for a mock; a host maps the toggle to the command choice |
+| 9 | **Ripple** — `rippleShiftAfter` + the ripple preview/commit laws | OT ripple family (`timeline.rippleDelete`; the W-series interval-diff ops) | follower shift from the edit point, delta-quantized, floor guard | the mini's uniform-shift + floor laws are the R18e/R18f distilled set, tested |
+| 10 | **Seek/scrub** — `setPlayhead` + ruler drag + viewer scrub bar (R19) | `timeline.seek` + `seek-controller` + `playhead-controller` | pointer scrub unquantized; clamped to the measured ruler extent | the viewer bar's extent = `max(contentEnd(bound world), 8)` (runway floor family; ≤ rulerEnd always); Home/End + arrows on the focusable slider |
+| 11 | **Selection** — `select` / `selectTrack` | `timeline.selectElements` (ElementRef[]) | ONE inspector subject at a time (clip XOR track) | single-subject vs multi-ref; track selection is a mini surface (the inspector card, thread #26) — OT has no inspector concept |
+| 12 | **Undo/redo** — snapshot past/future (plain `Doc` entries; the R20 binding-aware entry was retired with the escape) | `timeline.undo` / `timeline.redo` | snapshot family parity (spec 15 §6.2 strategy 2); one entry per gesture/commit | plain doc snapshots (view-level binding healing covers story-control swaps; drags can no longer rebind) |
+| 13 | **Track model** — `Doc.tracks` + binding (`visibleTracks`) | SceneTracks {overlay[], main singleton, audio[]} | the mini renders the BOUND pair (a window onto the project) | **The embedding seam:** OT's canvas is the whole project; the mini's window binds one video + one audio track (`trackMode`, `boundVideoTrack/boundAudioTrack`, `trackBindingLocked` — host-injected). Cross-track moves in OT map to REBINDING in the mini (the selector). Track creation/removal is out of the window (host owns). |
+| 14 | **Track heads** — markers / selector / hidden | OT's track headers | — | mini law: multi-track+unlocked → selector; single-pair+unlocked → V1/A1 marker; LOCKED → hidden (thread #28) |
+
+## 2. The drop-law matrix (one lane, two sources)
+
+| Source | Conflict resolution |
+|---|---|
+| **Pool drag** (new media) | gap-fit: exact spot → next fitting same-track gap → lane tail (never fails; toast reports where) |
+| **Clip drag** (rearrange) | **R18k clamp law (R21 user P0 revert):** the mover clamps between same-track neighbors; the preview is the commit; one plain history entry — no escape, no minting, no rebind |
+| **Programmatic move** | reject (CONFLICT) + toast |
+
+Registered: the two drag paths intentionally differ — a NEW asset should not
+rearrange the timeline (conservative placement), while REARRANGING clamps
+the mover between its neighbors (the R18k clamp law — restored by the
+user's P0 revert and kept whole through R22; the R19 insert-push and the
+R20 escape/verdict laws are both retired as "making things worse" in the
+user's live verdict).
+
+## 3. The swap path (mockup → library)
+
+0. **The executable half (R23).** The registered conversion laws are CODE
+   now: `src/lib/otProject.ts` — `toTicks`/`fromTicks` (the §3.4 time base,
+   NEAREST-TICK rounding policy — pointer-committed times may be off-grid),
+   `projectClip`/`projectClipBack` (the §1.6 element model, both directions,
+   tick-arithmetic trim invariant). Unit-pinned by 12 tests that travel
+   with the module as the bridge's acceptance floor. **Honest role:** this
+   repo is not a package — the app cannot import it; the C1 sceneBridge
+   COPIES it verbatim, then binds the real OT element field names (the
+   C1-entry decision — the track-shape mapping main/overlay/audio is
+   registered in CORE-SEAMS S6, deliberately NOT decided in mock code).
+1. **Store ops → commands.** Each `useMini` doc action in §1 maps 1:1 to a
+   `TimelineCommand` (renames + param shapes only; the validation outcomes
+   are already aligned — reject/conflict semantics, media-bounded trims,
+   split windowing). The mock's `commit` history becomes the OT snapshot
+   transaction batch.
+2. **Gesture engine stays.** `ClipItem`'s session (threshold, capture,
+   live previews, auto-scroll) is the VIEW layer OT's controllers occupy —
+   the seams (what the gesture resolves to) are the commands above
+   (R22: commit-at-UP is retired with the machinery — the UP seals the
+   last previewed move, the R18k law).
+3. **The window model stays.** Track binding + lock is the mini's embedding
+   contribution (host-injected); OT's SceneTracks arrives behind it via
+   `setTracks()` (the render seam, spec 19 §2.4) — the mini's `doc` becomes
+   a projection of the bound window. (The R20 escape's mint + rebind was
+   the retired drop law; if a future USER-REQUESTED retry wants OT's
+   `moveElements({moves, createTracks})` shape, the minted track would
+   become a `createTracks` entry — recorded here as the seam map only.)
+4. **Time base.** The mini's seconds+0.5 grid converts at the boundary
+   (×120000 ticks; the grid becomes the fps quantizer's rounding step —
+   the frame-snap law turns on when real media carries fps).
+
+## 4. Registered deviations (README cross-ref)
+
+The living deviation register is the mini README; this file carries the SEAM
+reasoning. The load-bearing deviations after R22: same-track gap hunt on
+pool drops (§1.5), implicit in-point-0 element model (§1.6), single-subject
+selection (§1.11), the bound-window track model (§1.13 — with the R18k
+clamp law as its drag rendering). The R19 insert-push and R20 escape/verdict
+deviations are RETIRED (removed from the register — redesigns masquerading
+as seam deltas; the user's P0 verdict plus the R22 machinery retirement
+settled the drag on the R18k clamp law).
+
+
+---
+
+> **R23 mapping note (ARCH-R23 D23/D24):** spec 14 is RETIRED — the plan is `IMPLEMENTATION-PLAN.md`; the D24 verification ladder re-homes this file's phase hooks (the C1-entry verifications → K3's corpus authoring + the D25 bridge; W-ops → r1; the crawl's law-subset gate is the K3 acceptance list). The wire surface census this file carries is the R22-era 24-name count — the R23 census is 30 names (specs 05/06/15/19); the extra six: track.toggleLock, the S1 transport trio, setAllLocked, setAllMuted.

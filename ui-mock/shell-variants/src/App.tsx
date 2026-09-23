@@ -1,0 +1,34 @@
+import { VariantProvider } from './components/debug/VariantProvider';
+import { DebugOverlay } from './components/debug/DebugOverlay';
+import { CheatSheet } from './components/shell/CheatSheet';
+import { AppShell } from './components/shell/AppShell';
+import { ErrorBoundary } from './components/shell/ErrorBoundary';
+
+/** Window-too-small overlay — spec 18 §3.2: below 1280×800 show an overlay
+ *  rather than degrade. Exported since R25-F2 (E8): the stories' FullShell
+ *  decorator mounts the SAME guard so reviewers see the honest ≤1279px
+ *  overlay instead of a starved shell (the old story omitted it). */
+export function TooSmall() {
+  return (
+    <div className="window-too-small fixed inset-0 z-[95] flex-col items-center justify-center gap-2 bg-app/95 text-center backdrop-blur-sm">
+      <span className="text-[16px] font-semibold text-tprimary">Window too small</span>
+      <span className="text-[12px] text-tmuted">The editor needs at least 1280 × 800.</span>
+      <span className="mono text-[11px] text-tmuted">spec 18 §3.2 — overlay, not degradation</span>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <VariantProvider>
+      {/* spec 18 §6.4 global failure boundary — wraps the shell tree only, so
+          the debug overlay + cheat sheet stay reachable after a crash */}
+      <ErrorBoundary>
+        <AppShell />
+      </ErrorBoundary>
+      <DebugOverlay />
+      <CheatSheet />
+      <TooSmall />
+    </VariantProvider>
+  );
+}

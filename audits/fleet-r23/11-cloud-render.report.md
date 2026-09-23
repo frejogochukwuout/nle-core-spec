@@ -1,0 +1,45 @@
+# Fleet R23 — Spec 11 (Cloud render) audit report
+
+**Agent:** R23-fleet-11 · **File owned:** `11-cloud-render.md` (UNCHARTERED by decision) · **Date:** 2026-09-07
+**Pins audited against:** nle-engine `b8c6f88` (440/440) · OT `222532c` (489) · WDC `494f6ff` (759) · nle-ui `85dcf57` (648) · nle-test-app `70e99f0` (117) · in-repo `ui-mock/shell-variants` (the deliver-page render-queue mock)
+**Context:** ARCH-R23 D23 (plan/spec separation; spec 14 retired to stub), D24 (**R-cloud → r6: unchartered, non-goal until the user re-scopes**), D25 (irrelevant here — no timeline surface) + `IMPLEMENTATION-PLAN.md` §2's r6 row ("cloud render UNCHARTERED unless the user re-scopes").
+**Method:** zero cloud-service grep across all five repos + line-by-line re-verification of every LIVE engine claim (§0 BASE, §14R); teacher-derived design body (§1-§18, FreeCut/web research quotes) treated as historical evidence — untouched.
+
+## VERIFIED-STRONG (BASE re-verified against live code — no edit needed)
+
+1. **The unchartered posture survives the fleet move intact.** The plan's r6 row carries exactly this ruling; spec 14's stub §-redirect table maps §3.3's RUN row (incl. R-cloud) → the plan §2 r5/r6; `battery_r23.py` carries both `R-cloud` and `r6` in PHASE_VOCAB and exempts spec 11 (with 13) from the no-gap-rows check (`if not rows and n not in (11, 13)`). Nothing in the round's upstream work chartered, de-chartered, or half-landed the stream.
+2. **Zero cloud-SERVICE code re-verified by grep at all five HEADs** (`runpod|s3|RenderQueue|spawn('ffmpeg|api/render|cloud|RemoteStorage|signed url` over engine/OT/WDC/app src): only false positives — the engine's `S3A-*` wave-tags, a local `s3` track-id variable in `page.tsx`, `repackRgbaRows3D`, and nle-ui's mock DeliverPage. No Node render driver/server, no render queue, no ffmpeg subprocess, no S3, no Dockerfile/RunPod, no real-GPU flag set. The engine's P3 "Node-side HTTP headless driver + workspace writer lock" gap is still open (`gaps/audit/MASTER.md:166`).
+3. **The design body is teacher-derived and drift-free:** §1-§18 + the Testing section are FreeCut-source/web-research quotes (SCOUT-11's verified evidence, incl. the AUDIT-11 §15.L correction trail) — no live-repo claims to go stale. `19-code-references.md` exists as the §14R reconciliation home; the engine's Xvfb Decision-12 cross-ref (§4.1 item 6) resolves.
+4. **Spec 17 §13A's cloud-render facet rows re-verified present** (WYSIWYG "browser == cloud pixel diff" matrix row, "Memory ceiling (8K cloud render fits 4GB)", 4K/8K render-time perf rows, the nightly cloud-render job rows) — the activation-time acceptance contract is real.
+5. **§14R quotes that still verify verbatim at HEAD:** `run-nle-tests.mjs:8` ("headless Chrome REQUIRES Xvfb" — exactly line 8), `DECISIONS.md:29` (Clock/AudioContext), `DECISIONS.md:226` (`--headless=new` → null adapter), `G-test-coverage.md:26` ("Total error/boundary ≈ 12/128 (9%)"). The "no queue/supervisor" and "no Dockerfile" SPEC-ONLY rows remain true.
+
+## FIXED (stale LIVE claims → corrected at the pins)
+
+1. **§0 BASE "the fleet has ZERO cloud code" — refined to the honest split.** The fleet now carries BOTH browser-side halves of this spec's design (new since the R22 pin): (a) the headless harness — `src/lib/nle/headless/api.ts` (**2,757** LOC, not 2,820; the 9-method `window.freecut`-shaped `NleHeadlessApi`, `AbortSignal` + `HARNESS_READY_PREDICATE`, mounted in-page with the REAL render adapter at page.tsx's m24.9/m26.10 milestones); (b) the in-browser encode path = the spec's §11.4 **Path A** — `src/lib/nle/export/` (orchestrator 936 / settings 368 / audio-mixdown 369 / contracts 92; Wave 5B Export M1 + Stage-2 audio + m29 A/V mux; WebCodecs+mediabunny; decode-verified incl. pixel parity vs `renderFrameOffscreen` — MASTER rows 5B/5B-S2/5B-S2C). Path B (ffmpeg pipe), the queue/server/storage (§8-§10), real-GPU flags + RunPod/Dockerfile (§4.1/§18) remain SPEC-ONLY. The R23 pins added; the Deliver-pages' render-queue mock named as the standing UI reference (nle-ui + in-repo shell-variants DeliverPages — "Cloud render (headless Chrome + GPU)" preset, honest-mock queue, headers cite "specs 10-11").
+2. **§14R stale line-pins re-based:** `NleHeadlessApi` :88→**:111**; frame-grab doc :95→**:118**; MASTER's HTTP-driver row :101→**:166**; SwiftShader flag :30→**:66** (the runner grew a T6 count-pins header; flags now also `--use-vulkan=swiftshader` + `--enable-unsafe-swiftshader` — software WebGPU **by design**, the CORRECTIVE note stands).
+3. **§14R header** — "no cloud render" → "no cloud-SERVICE render … but it DOES carry both browser-side halves this spec designs against"; 2,820→2,757 LOC.
+4. **New §14R R23 re-verification block** (charge e): the landed seams the design consumes — `export/orchestrator.ts:524` `createRenderAdapter` (the RenderAdapter the §5.1 `createRenderEngine` design anticipates), `export/contracts.ts` (FX-4 moved `NleExportSettings`/`NleRenderWarning`/`NleRenderProgress` out of headless/api.ts), `export/audio-mixdown.ts` (Stage-2 offline mix), m29 A/V mux, the abort contract (`NleRenderOptions.signal` → `DOMException('Render cancelled','AbortError')`, netted by `render-abort.test.ts`); plus the still-open activation-time ENGINE-GAPs (P3 HTTP driver, Stage-3 worker/OPFS, Stage-5 smart-copy/remux).
+5. **Status line re-baselined to Round 23** (R22/SCOUT lineage preserved).
+
+## GAP flips / adds / re-tags (the §0 register, D24 vocabulary)
+
+- **RE-TAGGED** the single row: R-cloud → **r6 — unchartered** (dual-tag "was R-cloud"; the plan §2's r6 row quoted as the ruling; the old "spec 14 §3.3" citation re-pointed through the stub's §-redirect to the plan). Acceptance stays "n/a until re-scoped by the user". No work invented.
+- **Charge (c) — retired spec-14 §4 R-cloud row:** present ✓ — the unchartered ruling lives in the §0 GAP row verbatim-ish (explicitly annotated as the re-homed row; the battery's 11+13 exemption stays honored). No orphans; no other §4 cloud rows existed (the R22 v2.1 register had exactly the one unchartered row for this domain).
+- **No flips, no adds:** nothing upstream landed that constitutes cloud-SERVICE work (the harness/export landings are BASE refresh + K1/K2-side verification assets, not cloud rows); nothing re-scoped the stream. The only "new upstream work" charge-(e) items are recorded as BASE/§14R evidence, above.
+
+## REMAINS-OPEN (no action this round — registered)
+
+1. **The re-scope itself** — the user's call; until then the whole story is the posture row. Not a spec bug.
+2. **Engine P3 "Node-side HTTP headless driver + workspace writer lock"** — the one ENGINE-GAP this spec's activation would consume first (FreeCut's `serve.mjs`/`render-core.mjs` pattern, §12 Q1/§16.10). Owner: S-engine's queue; rides r6-entry or earlier engine waves, not this spec.
+3. **Engine export remainder** (worker offload + OPFS Stage 3, smart-copy/packet-remux Stage 5, per `gaps/audit/C-export-encode.md`) — media-half depth that Path A would inherit at activation; owner S-engine (already in the spec-10 report's open list — same seam, orthogonal).
+4. **RunPod/Dockerfile §18.2 remains UNTESTED** by design (no cloud box) — the AUDIT-11 Issue-3 annotation (fix inline RUN comments + apt-key deprecation when promoting) stays tracked in the spec's own §18.2 note.
+5. **`19-code-references.md`'s own BASE is R22-era** (engine 356 @ `f68ab8c` etc. in its header) — that file's refresh is its fleet owner's charge (it appears in no fleet report list yet; flagged for the battery's residue sweep).
+
+## NOTES
+
+- Edit discipline honored: ONLY `11-cloud-render.md` touched (status line, §0 triad, §14R header/rows + one new re-verification note); no git commands; no battery/test runs (counts trusted per the round context; features verified by reading code); the §0 triad structure preserved (BASE/GAP/ACCEPTANCE); all historical sections (§12-§18 teacher quotes, the AUDIT-11/REVISE-11 correction trail) kept verbatim.
+- The first MultiEdit partially applied then failed on a table row (nested-backtick match) — recovered with targeted single-row edits; final state re-checked (single §0, single re-verification note, no duplication; 2550→2554 lines).
+- The GAP row carries both `R-cloud` (old) and `r6` (new) tags — battery-safe under PHASE_VOCAB's dual-vocabulary window.
+- The engine's harness export-abort net (`render-abort.test.ts`, 9 tests) + `load-validation.test.ts` (32) + the frozen api-surface list (`createHeadlessApi` pinned) are the K1-side assets the future cloud driver would lean on — noted in §14R, not converted to GAP rows (no charter).
+
+**Verdict: VERIFIED-STRONG with BASE refresh — the unchartered r6 posture survives intact (zero cloud-service code re-verified at all five R23 pins, nothing re-scoped); the R22 "ZERO cloud code" claim honestly refined to the two-halves truth (the headless harness API + the §11.4 Path A encode path are LANDED engine-side, decode-verified), the §14R line-pins re-based to `b8c6f88`, and the retired spec-14 §4 R-cloud row re-homed + re-tagged r6 in the §0 register.**

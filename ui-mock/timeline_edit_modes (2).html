@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline Edit Modes Replica</title>
+<style>
+  body {
+    background-color: #111111;
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 40px 20px;
+    box-sizing: border-box;
+  }
+
+  /* Tab Navigation */
+  .tab-nav {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 40px;
+    background: #1c1d21;
+    padding: 6px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .tab-button {
+    background: transparent;
+    color: #8c8c8c;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+
+  .tab-button:hover {
+    color: #ffffff;
+  }
+
+  .tab-button.active {
+    background: #35373c;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+
+  /* Main Container */
+  .edit-ui-container {
+    width: 100%;
+    max-width: 600px;
+  }
+
+  .view-panel {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .view-panel.active {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Header Section */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .header h1 {
+    font-size: 32px;
+    margin: 0;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+  }
+
+  .description {
+    font-size: 16.5px;
+    color: #9a9a9a;
+    line-height: 1.6;
+    margin: 0 0 24px 0;
+    letter-spacing: 0.2px;
+  }
+
+  /* Timeline Graphic Area */
+  .timeline {
+    position: relative;
+    width: 100%;
+    height: 270px;
+    background-color: #26272b;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Ruler and Ticks */
+  .ruler-ticks {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 15px;
+    background-image: 
+      repeating-linear-gradient(to right, #5c5d62 0px, #5c5d62 1px, transparent 1px, transparent 95px),
+      repeating-linear-gradient(to right, #45474c 0px, #45474c 1px, transparent 1px, transparent 9.5px);
+    background-size: 100% 12px, 100% 6px;
+    background-repeat: no-repeat;
+    background-position: -35px 0;
+    z-index: 2;
+  }
+
+  .timecode {
+    position: absolute;
+    top: 22px;
+    font-size: 11px;
+    color: #7a7c81;
+    transform: translateX(-50%);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    z-index: 2;
+  }
+
+  .track-grid-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: #35373c;
+    z-index: 1;
+  }
+
+  /* Base Clip Styles */
+  .clip {
+    position: absolute;
+    border-radius: 4px;
+    overflow: hidden;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    z-index: 5;
+    transition: left 0.4s ease-in-out;
+  }
+
+  .clip-image {
+    flex-grow: 1;
+    position: relative;
+  }
+
+  /* Simulate muted images for inactive clips */
+  .clip:not(.sunset) .clip-image::after {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.25);
+  }
+
+  .clip-title {
+    height: 26px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    box-sizing: border-box;
+    letter-spacing: 0.3px;
+  }
+
+  /* Specific Clips Defaults */
+  .clip.desert {
+    left: -5px;
+    top: 140px;
+    width: 160px;
+    height: 110px;
+  }
+  .clip.desert .clip-image { background: radial-gradient(ellipse at 70% 80%, #765e52 0%, transparent 50%), linear-gradient(to bottom, #a38c82 0%, #8b7367 100%); }
+  .clip.desert .clip-title { background: #506173; color: #8ba2b8; }
+
+  .clip.turtle {
+    top: 140px;
+    width: 105px;
+    height: 110px;
+  }
+  .clip.turtle .clip-image { background: radial-gradient(circle at 50% 30%, #35889a 0%, transparent 60%), linear-gradient(to bottom, #1d4e66 0%, #0d2836 100%); }
+  .clip.turtle .clip-title { background: #506173; color: #8ba2b8; }
+
+  .clip.surf {
+    top: 140px;
+    width: 155px;
+    height: 110px;
+  }
+  .clip.surf .clip-image { background: radial-gradient(circle at 20% 80%, #d8eff5 0%, transparent 50%), linear-gradient(to bottom, #a5d3e0 0%, #4f96ab 100%); }
+  .clip.surf .clip-title { background: #506173; color: #8ba2b8; }
+
+  /* Sunset (Active) Clip */
+  .clip.sunset {
+    top: 60px;
+    width: 175px;
+    height: 110px;
+    z-index: 10;
+    border: 2px solid #6ba4d8;
+    border-radius: 6px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+  }
+  .clip.sunset .clip-image { background: linear-gradient(to bottom, transparent 65%, #181515 65%), linear-gradient(180deg, #f07f4a 0%, #e2ab5b 35%, #87463f 70%); }
+  .clip.sunset .clip-title { background: #6ba4d8; color: #ffffff; }
+
+  /* Ghost Box */
+  .clip-ghost {
+    position: absolute;
+    top: 140px;
+    width: 175px;
+    height: 110px;
+    border: 2px dashed #646464;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+
+  /* Playhead */
+  .playhead-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 155px;
+    width: 2px;
+    background-color: #ff3b30;
+    transform: translateX(-50%);
+    z-index: 15;
+  }
+  .playhead-top {
+    position: absolute;
+    top: -1px;
+    left: 155px;
+    transform: translateX(-50%);
+    z-index: 16;
+  }
+
+  /* Arrows */
+  .arrow-svg {
+    position: absolute;
+    filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.6));
+    z-index: 20;
+  }
+  .down-arrow {
+    top: 170px;
+  }
+
+  /* ==================================
+     STATE-SPECIFIC OVERRIDES
+     ================================== */
+     
+  /* INSERT MODE */
+  .view-insert .clip.sunset { left: 155px; }
+  .view-insert .clip-ghost { left: 155px; z-index: 4; }
+  .view-insert .clip.turtle { left: 335px; }
+  .view-insert .clip.surf { left: 445px; }
+  .view-insert .down-arrow { left: 234.5px; }
+  .view-insert .right-arrow {
+    position: absolute;
+    left: 330px;
+    top: 149px;
+    display: block;
+  }
+
+  /* OVERWRITE MODE */
+  .view-overwrite .clip.sunset { left: 155px; }
+  .view-overwrite .clip-ghost { left: 155px; z-index: 8; }
+  .view-overwrite .clip.turtle { left: 155px; }
+  .view-overwrite .clip.surf { left: 260px; }
+  .view-overwrite .down-arrow { left: 234.5px; }
+  .view-overwrite .right-arrow { display: none; }
+
+  /* REPLACE MODE */
+  .view-replace .clip.sunset { left: 155px; width: 105px; }
+  /* Show split effect on sunset popover in Replace mode */
+  .view-replace .clip.sunset .clip-image {
+    background: linear-gradient(90deg, 
+      linear-gradient(180deg, #f07f4a 0%, #e2ab5b 35%, #87463f 70%) 0%, 
+      linear-gradient(180deg, #f07f4a 0%, #e2ab5b 35%, #87463f 70%) 100%
+    );
+    /* Dual pane background preview effect */
+    background-image: linear-gradient(to bottom, transparent 65%, #181515 65%), linear-gradient(180deg, #f07f4a 0%, #e2ab5b 35%, #87463f 70%);
+  }
+  .view-replace .clip.sunset .clip-image::after {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0; left: 50%;
+    width: 50%;
+    background: linear-gradient(to bottom, transparent 65%, #181515 65%), linear-gradient(180deg, #e5723b 0%, #d49c4c 35%, #7a3d35 70%);
+    filter: brightness(0.85);
+    border-left: 1px solid rgba(255,255,255,0.3);
+  }
+  .view-replace .clip-ghost { left: 155px; width: 105px; z-index: 4; }
+  .view-replace .clip.turtle { left: 260px; }
+  .view-replace .clip.surf { left: 365px; }
+  .view-replace .down-arrow { left: 202.5px; }
+  .view-replace .right-arrow { display: none; }
+
+  /* APPEND AT END MODE */
+  .view-append .clip.desert { left: -5px; }
+  .view-append .clip.turtle { left: 160px; }
+  .view-append .clip.surf { left: 270px; }
+  .view-append .clip.sunset { left: 430px; width: 105px; }
+  .view-append .clip-ghost { left: 430px; width: 105px; z-index: 4; }
+  .view-append .down-arrow { left: 474.5px; }
+  .view-append .right-arrow { display: none; }
+
+  /* RIPPLE OVERWRITE MODE */
+  .view-ripple .clip.desert { left: -5px; }
+  .view-ripple .clip.turtle { left: 155px; }
+  .view-ripple .clip.surf { left: 335px; }
+  .view-ripple .clip.sunset { left: 155px; }
+  .view-ripple .clip-ghost { left: 155px; z-index: 8; }
+  .view-ripple .down-arrow { left: 234.5px; }
+  .view-ripple .right-arrow {
+    position: absolute;
+    left: 306px;
+    top: 187px;
+    display: block;
+  }
+
+  /* FIT TO FILL MODE */
+  .view-fitfill .clip.desert { left: -5px; }
+  .view-fitfill .clip.surf { left: 270px; }
+  .view-fitfill .clip.sunset { left: 155px; }
+  .view-fitfill .down-arrow { left: 199.5px; }
+  .view-fitfill .right-arrow { display: none; }
+  .view-fitfill .speed-badge { display: flex; }
+
+  /* Fit-to-fill target slot: dashed outline with dimmed source frame */
+  .fit-slot {
+    position: absolute;
+    top: 140px;
+    left: 155px;
+    width: 105px;
+    height: 110px;
+    border: 2px dashed #646464;
+    border-radius: 4px;
+    box-sizing: border-box;
+    z-index: 6;
+  }
+  .fit-slot .slot-image {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 26px;
+    background:
+      linear-gradient(to bottom, transparent 65%, #181515 65%),
+      linear-gradient(180deg, #f07f4a 0%, #e2ab5b 35%, #87463f 70%);
+    filter: brightness(.45);
+  }
+  .fit-slot .slot-title {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 26px;
+    background: rgba(107, 164, 216, .4);
+    color: rgba(255, 255, 255, .75);
+    font-size: 11.5px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    box-sizing: border-box;
+    letter-spacing: .3px;
+  }
+  .fit-slot .speed-badge { display: flex; bottom: 34px; }
+
+  /* Speed badge (Fit to Fill) */
+  .speed-badge {
+    position: absolute;
+    left: 9px;
+    bottom: 34px;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    background: rgba(17, 17, 17, .62);
+    border: 1px solid rgba(255, 255, 255, .28);
+    border-radius: 10px;
+    padding: 2px 8px 2px 6px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    z-index: 6;
+  }
+
+</style>
+</head>
+<body>
+
+<!-- Tab Controller -->
+<div class="tab-nav">
+  <button class="tab-button active" onclick="switchMode('insert')">Insert Edit</button>
+  <button class="tab-button" onclick="switchMode('overwrite')">Overwrite Edit</button>
+  <button class="tab-button" onclick="switchMode('replace')">Replace Edit</button>
+  <button class="tab-button" onclick="switchMode('append')">Append at End</button>
+  <button class="tab-button" onclick="switchMode('ripple')">Ripple Overwrite</button>
+  <button class="tab-button" onclick="switchMode('fitfill')">Fit to Fill</button>
+</div>
+
+<!-- Main UI Replicas -->
+<div class="edit-ui-container">
+
+  <!-- ==================== INSERT VIEW ==================== -->
+  <div id="view-insert" class="view-panel active view-insert">
+    <div class="header">
+      <svg class="header-icon" width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="14" width="10" height="18" fill="none" stroke="#8c8c8c" stroke-width="2.5" rx="1"/>
+        <rect x="32" y="14" width="10" height="18" fill="none" stroke="#8c8c8c" stroke-width="2.5" rx="1"/>
+        <rect x="14" y="4" width="16" height="18" fill="none" stroke="#ffffff" stroke-width="2.5" rx="1"/>
+        <path d="M 18 26 L 22 30 L 26 26" fill="none" stroke="#8c8c8c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1>Insert</h1>
+    </div>
+    
+    <p class="description">
+      Inserts a clip into the timeline at the location of the playhead<br>
+      and pushes everything else down to make room for it. If the<br>
+      playhead is in the middle of a clip, it will split the clip and<br>
+      place the new clip in the middle.
+    </p>
+
+    <div class="timeline">
+      <div class="track-grid-line" style="left: -35px;"></div>
+      <div class="track-grid-line" style="left: 155px;"></div>
+      <div class="track-grid-line" style="left: 345px;"></div>
+      <div class="track-grid-line" style="left: 535px;"></div>
+      <div class="ruler-ticks"></div>
+      <div class="timecode" style="left: 155px;">01:00:02:00</div>
+      <div class="timecode" style="left: 345px;">01:00:04:00</div>
+      
+      <div class="clip desert"><div class="clip-image"></div><div class="clip-title">Desert.mp4</div></div>
+      <div class="clip-ghost"></div>
+      <div class="clip turtle"><div class="clip-image"></div><div class="clip-title">Turtle.mov</div></div>
+      <div class="clip surf"><div class="clip-image"></div><div class="clip-title">Surf.mov</div></div>
+      <div class="clip sunset"><div class="clip-image"></div><div class="clip-title">Sunset.mov</div></div>
+      
+      <div class="playhead-line"></div>
+      <svg class="playhead-top" width="14" height="16" viewBox="0 0 14 16">
+        <path d="M 0 0 L 14 0 L 14 10 L 7 16 L 0 10 Z" fill="#ff3b30"/>
+      </svg>
+      
+      <svg class="arrow-svg down-arrow" width="16" height="28" viewBox="0 0 16 28">
+        <path d="M 5 0 L 11 0 L 11 16 L 16 16 L 8 28 L 0 16 L 5 16 Z" fill="#ffffff" />
+      </svg>
+      
+      <svg class="arrow-svg right-arrow" width="28" height="16" viewBox="0 0 28 16">
+        <path d="M 0 5 L 16 5 L 16 0 L 28 8 L 16 16 L 16 11 L 0 11 Z" fill="#ffffff" />
+      </svg>
+    </div>
+  </div>
+
+
+  <!-- ==================== OVERWRITE VIEW ==================== -->
+  <div id="view-overwrite" class="view-panel view-overwrite">
+    <div class="header">
+      <svg class="header-icon" width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 6 12 h 18 v 14 h -18 z" fill="none" stroke="#8c8c8c" stroke-width="2.5" rx="1"/>
+        <path d="M 14 20 h 18 v 14 h -18 z" fill="#111111" stroke="#ffffff" stroke-width="2.5" rx="1"/>
+        <path d="M 36 6 v 8 m -3 -3 l 3 3 l 3 -3" fill="none" stroke="#8c8c8c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1>Overwrite</h1>
+    </div>
+    
+    <p class="description">
+      The overwrite edit is one of the most common types of edits.<br>
+      When you perform an overwrite, it will place a new clip on<br>
+      the timeline at the location of the playhead, writing over<br>
+      whatever clip or clips were there before.
+    </p>
+
+    <div class="timeline">
+      <div class="track-grid-line" style="left: -35px;"></div>
+      <div class="track-grid-line" style="left: 155px;"></div>
+      <div class="track-grid-line" style="left: 345px;"></div>
+      <div class="track-grid-line" style="left: 535px;"></div>
+      <div class="ruler-ticks"></div>
+      <div class="timecode" style="left: 155px;">01:00:02:00</div>
+      <div class="timecode" style="left: 345px;">01:00:04:00</div>
+      
+      <div class="clip desert"><div class="clip-image"></div><div class="clip-title">Desert.mp4</div></div>
+      <div class="clip-ghost"></div>
+      <div class="clip turtle"><div class="clip-image"></div><div class="clip-title">Turtle.mov</div></div>
+      <div class="clip surf"><div class="clip-image"></div><div class="clip-title">Surf.mov</div></div>
+      <div class="clip sunset"><div class="clip-image"></div><div class="clip-title">Sunset.mov</div></div>
+      
+      <div class="playhead-line"></div>
+      <svg class="playhead-top" width="14" height="16" viewBox="0 0 14 16">
+        <path d="M 0 0 L 14 0 L 14 10 L 7 16 L 0 10 Z" fill="#ff3b30"/>
+      </svg>
+      
+      <svg class="arrow-svg down-arrow" width="16" height="28" viewBox="0 0 16 28">
+        <path d="M 5 0 L 11 0 L 11 16 L 16 16 L 8 28 L 0 16 L 5 16 Z" fill="#ffffff" />
+      </svg>
+    </div>
+  </div>
+
+
+  <!-- ==================== REPLACE VIEW ==================== -->
+  <div id="view-replace" class="view-panel view-replace">
+    <div class="header">
+      <svg class="header-icon" width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+        <!-- Left (outgoing) clip -->
+        <rect x="2.5" y="13.5" width="18" height="15" rx="2.5" fill="none" stroke="#8c8c8c" stroke-width="2"/>
+        <!-- Right (incoming) clip -->
+        <rect x="23.5" y="13.5" width="18" height="15" rx="2.5" fill="none" stroke="#ffffff" stroke-width="2"/>
+        <!-- Knockout gaps where arrow shafts cross the clip edges -->
+        <line x1="11.5" y1="27" x2="11.5" y2="33.25" stroke="#111111" stroke-width="6.5"/>
+        <line x1="32.5" y1="10.75" x2="32.5" y2="17" stroke="#111111" stroke-width="6.5"/>
+        <!-- Up arrow: chevron head in left clip, tail curls under toward the right clip -->
+        <path d="M 11.5 19.5 L 11.5 31 Q 11.5 33.75 14.25 33.75 L 17.25 33.75 Q 20 33.75 20 31" fill="none" stroke="#8c8c8c" stroke-width="2" stroke-linecap="round"/>
+        <path d="M 7.25 22 L 11.5 17 L 15.75 22" fill="none" stroke="#8c8c8c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Down arrow: chevron head in right clip, tail arcs over toward the left clip -->
+        <path d="M 32.5 22.5 L 32.5 11 Q 32.5 8.25 29.75 8.25 L 26.75 8.25 Q 24 8.25 24 11" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+        <path d="M 28.25 20 L 32.5 25 L 36.75 20" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1>Replace</h1>
+    </div>
+    
+    <p class="description">
+      Replaces a single clip on the timeline with one of the exact<br>
+      same length. The "out" point of the clip you are editing into<br>
+      the timeline will be changed so it fits perfectly, making it<br>
+      the same duration as the one it replaces.
+    </p>
+
+    <div class="timeline">
+      <div class="track-grid-line" style="left: -35px;"></div>
+      <div class="track-grid-line" style="left: 155px;"></div>
+      <div class="track-grid-line" style="left: 345px;"></div>
+      <div class="track-grid-line" style="left: 535px;"></div>
+      <div class="ruler-ticks"></div>
+      <div class="timecode" style="left: 155px;">01:00:02:00</div>
+      <div class="timecode" style="left: 345px;">01:00:04:00</div>
+      
+      <div class="clip desert"><div class="clip-image"></div><div class="clip-title">Desert.mp4</div></div>
+      <div class="clip-ghost"></div>
+      <div class="clip turtle"><div class="clip-image"></div><div class="clip-title">Sunset.mov</div></div>
+      <div class="clip surf"><div class="clip-image"></div><div class="clip-title">Surf.mov</div></div>
+      <div class="clip sunset"><div class="clip-image"></div><div class="clip-title">Sunset.mov</div></div>
+      
+      <div class="playhead-line"></div>
+      <svg class="playhead-top" width="14" height="16" viewBox="0 0 14 16">
+        <path d="M 0 0 L 14 0 L 14 10 L 7 16 L 0 10 Z" fill="#ff3b30"/>
+      </svg>
+      
+      <svg class="arrow-svg down-arrow" width="16" height="28" viewBox="0 0 16 28">
+        <path d="M 5 0 L 11 0 L 11 16 L 16 16 L 8 28 L 0 16 L 5 16 Z" fill="#ffffff" />
+      </svg>
+    </div>
+  </div>
+
+
+  <!-- ==================== APPEND AT END VIEW ==================== -->
+  <div id="view-append" class="view-panel view-append">
+    <div class="header">
+      <svg class="header-icon" width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+        <!-- Back clip -->
+        <rect x="18.6" y="7.9" width="20.2" height="16.7" rx="2.5" fill="none" stroke="#8c8c8c" stroke-width="2"/>
+        <!-- Front clip (open corner where the back clip overlaps) -->
+        <path d="M 16.5 19.7 L 11.3 19.7 Q 8.3 19.7 8.3 22.7 L 8.3 32.7 Q 8.3 35.7 11.3 35.7 L 26.2 35.7 Q 29.2 35.7 29.2 32.7 L 29.2 27.1" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+        <!-- Append chevron -->
+        <path d="M 31.3 29.5 L 33.7 33.9 L 36.1 29.5" fill="none" stroke="#8c8c8c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1>Append at End</h1>
+    </div>
+
+    <p class="description">
+      Append at end places the source clip after the last edit on<br>
+      your timeline, regardless of where the playhead is located.<br>
+      You can also use it to add multiple clips from the media<br>
+      pool to the end of your timeline all at once!
+    </p>
+
+    <div class="timeline">
+      <div class="track-grid-line" style="left: -35px;"></div>
+      <div class="track-grid-line" style="left: 155px;"></div>
+      <div class="track-grid-line" style="left: 345px;"></div>
+      <div class="track-grid-line" style="left: 535px;"></div>
+      <div class="ruler-ticks"></div>
+      <div class="timecode" style="left: 155px;">01:00:02:00</div>
+      <div class="timecode" style="left: 345px;">01:00:04:00</div>
+
+      <div class="clip desert"><div class="clip-image"></div><div class="clip-title">Desert.mp4</div></div>
+      <div class="clip-ghost"></div>
+      <div class="clip turtle"><div class="clip-image"></div><div class="clip-title">Turtle.mov</div></div>
+      <div class="clip surf"><div class="clip-image"></div><div class="clip-title">Surf.mov</div></div>
+      <div class="clip sunset"><div class="clip-image"></div><div class="clip-title">Sunset.mov</div></div>
+
+      <div class="playhead-line"></div>
+      <svg class="playhead-top" width="14" height="16" viewBox="0 0 14 16">
+        <path d="M 0 0 L 14 0 L 14 10 L 7 16 L 0 10 Z" fill="#ff3b30"/>
+      </svg>
+
+      <svg class="arrow-svg down-arrow" width="16" height="28" viewBox="0 0 16 28">
+        <path d="M 5 0 L 11 0 L 11 16 L 16 16 L 8 28 L 0 16 L 5 16 Z" fill="#ffffff" />
+      </svg>
+    </div>
+  </div>
+
+
+  <!-- ==================== RIPPLE OVERWRITE VIEW ==================== -->
+  <div id="view-ripple" class="view-panel view-ripple">
+    <div class="header">
+      <svg class="header-icon" width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+        <!-- Push chevrons -->
+        <path d="M 10.2 19.05 L 5.3 22.6 L 10.2 26.1" fill="none" stroke="#8c8c8c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 34.4 19.05 L 38.7 22.6 L 34.4 26.1" fill="none" stroke="#8c8c8c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Incoming clip -->
+        <rect x="12.6" y="12.75" width="19.1" height="12.45" rx="2.2" fill="none" stroke="#ffffff" stroke-width="2"/>
+        <!-- Ripple tray beneath (open top) -->
+        <path d="M 13.1 27.3 L 13.1 30.65 Q 13.1 32.25 14.7 32.25 L 30.35 32.25 Q 31.95 32.25 31.95 30.65 L 31.95 27.3" fill="none" stroke="#8c8c8c" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <h1>Ripple Overwrite</h1>
+    </div>
+
+    <p class="description">
+      Ripple overwrite replaces a shot of one length with a shot<br>
+      of a different length. Longer clips replace the clip in the<br>
+      timeline and push everything down to make room, while<br>
+      shorter clips pull things in so there are no gaps.
+    </p>
+
+    <div class="timeline">
+      <div class="track-grid-line" style="left: -35px;"></div>
+      <div class="track-grid-line" style="left: 155px;"></div>
+      <div class="track-grid-line" style="left: 345px;"></div>
+      <div class="track-grid-line" style="left: 535px;"></div>
+      <div class="ruler-ticks"></div>
+      <div class="timecode" style="left: 155px;">01:00:02:00</div>
+      <div class="timecode" style="left: 345px;">01:00:04:00</div>
+
+      <div class="clip desert"><div class="clip-image"></div><div class="clip-title">Desert.mp4</div></div>
+      <div class="clip turtle"><div class="clip-image"></div><div class="clip-title">Turtle.mov</div></div>
+      <div class="clip-ghost"></div>
+      <div class="clip surf"><div class="clip-image"></div><div class="clip-title">Surf.mov</div></div>
+      <div class="clip sunset"><div class="clip-image"></div><div class="clip-title">Sunset.mov</div></div>
+
+      <div class="playhead-line"></div>
+      <svg class="playhead-top" width="14" height="16" viewBox="0 0 14 16">
+        <path d="M 0 0 L 14 0 L 14 10 L 7 16 L 0 10 Z" fill="#ff3b30"/>
+      </svg>
+
+      <svg class="arrow-svg down-arrow" width="16" height="28" viewBox="0 0 16 28">
+        <path d="M 5 0 L 11 0 L 11 16 L 16 16 L 8 28 L 0 16 L 5 16 Z" fill="#ffffff" />
+      </svg>
+
+      <svg class="arrow-svg right-arrow" width="28" height="16" viewBox="0 0 28 16">
+        <path d="M 0 5 L 16 5 L 16 0 L 28 8 L 16 16 L 16 11 L 0 11 Z" fill="#ffffff" />
+      </svg>
+    </div>
+  </div>
+
+
+  <!-- ==================== FIT TO FILL VIEW ==================== -->
+  <div id="view-fitfill" class="view-panel view-fitfill">
+    <div class="header">
+      <svg class="header-icon" width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+        <!-- Side brackets -->
+        <path d="M 17.75 12.75 L 12.4 12.75 Q 9.4 12.75 9.4 15.75 L 9.4 30.1 Q 9.4 33.1 12.4 33.1 L 17.75 33.1" fill="none" stroke="#8c8c8c" stroke-width="2" stroke-linecap="round"/>
+        <path d="M 26.25 12.75 L 31.6 12.75 Q 34.6 12.75 34.6 15.75 L 34.6 30.1 Q 34.6 33.1 31.6 33.1 L 26.25 33.1" fill="none" stroke="#8c8c8c" stroke-width="2" stroke-linecap="round"/>
+        <!-- Speed-change chevrons -->
+        <path d="M 16.9 18.75 L 11.9 22.9 L 16.9 27.1" fill="none" stroke="#8c8c8c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 27.1 18.75 L 32.1 22.9 L 27.1 27.1" fill="none" stroke="#8c8c8c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Source clip -->
+        <rect x="20" y="13.1" width="17" height="19.4" rx="2.5" fill="none" stroke="#ffffff" stroke-width="2"/>
+      </svg>
+      <h1>Fit to Fill</h1>
+    </div>
+
+    <p class="description">
+      Fit to fill takes the portion of the clip that you have marked<br>
+      and adds a speed change to speed it up or slow it down.<br>
+      The speed change is automatically calculated so it fits<br>
+      into the space you have selected on the timeline.
+    </p>
+
+    <div class="timeline">
+      <div class="track-grid-line" style="left: -35px;"></div>
+      <div class="track-grid-line" style="left: 155px;"></div>
+      <div class="track-grid-line" style="left: 345px;"></div>
+      <div class="track-grid-line" style="left: 535px;"></div>
+      <div class="ruler-ticks"></div>
+      <div class="timecode" style="left: 155px;">01:00:02:00</div>
+      <div class="timecode" style="left: 345px;">01:00:04:00</div>
+
+      <div class="clip desert"><div class="clip-image"></div><div class="clip-title">Desert.mp4</div></div>
+      <div class="fit-slot">
+        <div class="slot-image"></div>
+        <div class="speed-badge">
+          <svg width="13" height="11" viewBox="0 0 14 12" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 2 10.5 A 5.5 5.5 0 1 1 12 10.5" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="7" y1="10" x2="9.9" y2="5.9" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <span>1.7x</span>
+        </div>
+        <div class="slot-title">Sunset.mov</div>
+      </div>
+      <div class="clip surf"><div class="clip-image"></div><div class="clip-title">Surf.mov</div></div>
+      <div class="clip sunset"><div class="clip-image"><div class="speed-badge">
+          <svg width="13" height="11" viewBox="0 0 14 12" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 2 10.5 A 5.5 5.5 0 1 1 12 10.5" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="7" y1="10" x2="9.9" y2="5.9" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <span>1x</span>
+        </div></div><div class="clip-title">Sunset.mov</div></div>
+
+      <div class="playhead-line"></div>
+      <svg class="playhead-top" width="14" height="16" viewBox="0 0 14 16">
+        <path d="M 0 0 L 14 0 L 14 10 L 7 16 L 0 10 Z" fill="#ff3b30"/>
+      </svg>
+
+      <svg class="arrow-svg down-arrow" width="16" height="28" viewBox="0 0 16 28">
+        <path d="M 5 0 L 11 0 L 11 16 L 16 16 L 8 28 L 0 16 L 5 16 Z" fill="#ffffff" />
+      </svg>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function switchMode(mode) {
+    // Update Tab Buttons
+    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // Update Views
+    document.querySelectorAll('.view-panel').forEach(view => view.classList.remove('active'));
+    document.getElementById(`view-${mode}`).classList.add('active');
+  }
+</script>
+
+</body>
+</html>

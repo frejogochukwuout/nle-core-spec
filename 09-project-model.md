@@ -1,13 +1,35 @@
 # 09 — Project Model: Schema, Persistence, Migrations (Refined)
 
 **Stream:** Project data model & persistence
-**Status:** Refined by sub-agent scout (SCOUT-09) — open questions answered with source code references
+**Status:** v-next (Round 24 — the R24 fleet re-audit: §0 re-pinned to the 2026-09-08 HEADs (OT `ded43c4` 536 — the code pin `c15a629`, src-identical, live-verified; app `c885ece` 174; engine `5036387` 458; nle-ui `fc4cc35` 674; WDC `85b81b0` 759) + the app consumer pins (engine `5036387`, the OT lock-copy `c15a629` byte-exact, nle-ui `fc4cc35`, WDC `85b81b0`); the R8 W2.3 REAL persistence landing PROMOTED TO BASE (`51592cf` + the W2.5 grade-sidecar extension `41f5bc9`) — the R23 "no localStorage surface exists app-side" row RETIRED (the contradiction resolved); the R8-b1 scene-switch rebuild fix (`c2be330`) recorded BASE; the phase tags stripped to the D24 set (the dual-vocabulary window closed this round; see `audits/ARCH-R24-timeline-strategy-and-topology.md`). **R27:** the fleet re-pin — OT HEAD `55c81c0`/`970948a` **632/632**, the census **31 = 28 routed + 3 exceptions**; app `c020b2a` **252/252**; engine `f9ac806` **748/748**; nle-ui `32abd58` **690/690**; WDC `ec8fd5c` **777/777**. **R33:** the engine seal-round re-pin (`audits/ENGINE-SEAL-R28-REVISION-NOTES.md` P3-31) — engine `2a0ecf4` **785/785** (749 classic + 33 property + 3 P-F2); app `7664603` **426/426** (22 test files); OT HEAD `008e7f3` **675/675** (BOTH app mirrors + the engine's own vendor @ `17a19f8`); nle-ui `1e0c30b` **743/743** (the R32 pin, UNCHANGED); WDC `ec8fd5c` (UNCHANGED). Round 23 — the R23 fleet re-audit: §0 re-baselined to the 2026-09-07 HEADs (OT `222532c` 489; app `70e99f0` 117; engine `b8c6f88` 440 — the persistence + load-validation suites now exist engine-side); the GAP register re-tagged per the D24 ladder (W-project→**w3**, W-media→**w2**, the C1(d) fixture-bridge rows→**K3**) and extended with the retired spec-14 §4 project-domain rows + the R23 seal artifacts (CORE-SEAMS §D, the otProject executable reference). Round 22 — the §0 forward inventory + the R22 re-baseline: the R15-amended schema is landed and consumed (OT+app pins); persistence + the multi-scene slice are w3 app work (was "W-project" — the R22 tag; see `audits/ARCH-R23-plan-and-bridge.md` D24). Refined by sub-agent scout (SCOUT-09) — open questions answered with source code references. **Round-15 amendments (§3.1 + new §3.1A + §7.2):** N1 inline `ElementJSON` container, A2 unified per-scene `Marker` (Bookmark absorbed), A3 `TrackJSON.volume` removed, A4 mute/solo S-authored/G-projected, A5 no V on audio tracks, B1 `linkedTo`+`syncLock`, B2 `pan`/`preservePitch`/volume unit, N3 `MediaRecord.importedAt`, multi-scene app-level ruling — per `.agents/SPEC-REVISION-CANDIDATES.md` (A/B/N series) and `audits/ARCH-R15-assembly-and-path.md` §2.4
 **Primary teacher:** OpenCut-classic types + our own storage layer (override OpenCut's IndexedDB)
 **Spec file:** `09-project-model.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 
 ---
 
-## 0. Refined-Spec Notes (new section by scout)
+## 0. FORWARD INVENTORY (R24 posture — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted, pinned 2026-09-08 — the R24 fleet re-pin per `audits/ARCH-R24-timeline-strategy-and-topology.md`; 00-master v8.0):**
+- The R15 amendment set — landed in THIS spec as the "(Round 15 amendment)" markers (§3.1/§3.1A/§7.2): marker unification (A2, per-scene `Marker`), track-gain home (A3 → the G layer), mute/solo S-authored/G-projected (A4), `linkedTo`+`syncLock` (B1), `pan`/`preservePitch` (B2). No suite of its own — the schema IS the contract; the consumers below are its regression form. **Live-consumed amendment evidence (R23 re-verification):** A2 executes app-side as `scene.markers` ⇄ OT `bookmarks` (the bridge's MARKER_HEX 8-color name⇄token-hex law, S4); A4's S-authored mute rides the OT track field + `setTracksMuted` (S3); B1's `linkedTo` rides the bridge sidecar + the engine-side `av-link` expansion family; B2's linear-persisted volume converts linear⇄dB at the engine boundary (D28-A2 — `params.volume` is the engine domain, `el.volume` the persisted linear form).
+- opencut-timeline (OT) @ HEAD **`008e7f3`** — **675/675** (R33, engine seal-round register P3-31 — the re-key: the s18 seal round [the lib-tree wave — linkage.ts NEW, the D42 pairwise model; edit-domains.ts NEW; api.ts +254, timeline-core.ts +144 — all additive, the components tree byte-unchanged, the wire census UNCHANGED 31 = 28 + 3 — live at the mirrors `17a19f8`] + the M58R flake fix; at HEAD, the m58 V-1 review-note settle — the range leg's unreachable `waitForSelectedIndicators(2)` wait closed, 6/6 re-verified; the lineage: R32 HEAD `39003d3` — the code pin MOVED, the D25.3a mini-theme wave LANDED: theme.ts mode maps + the waveform mode resolution + the Tier-2 residual overrides + the M60 pins; **649/649 = 632 classic + 17 M60**, the report json at HEAD the count authority) — was `3e18722` — **632/632** (72 milestone entries — the total only per the R27 counting convention; the report json committed at the code pin is the count authority), tsc 0; the OT-standalone "docs-only over `970948a`" claim is RETIRED (R33, engine seal-round register P3-31 — M60 moved code at `39003d3`, the s18 lib-tree wave moved it again at `17a19f8`; the engine's own vendor — now @ `17a19f8`, was `55c81c0` — is the checking pin for the §3.3A/census claims, all verified there): the SceneTracks model this spec's `SceneTracksJSON` mirrors (D12: one `TimelineCore` per scene — the single-scene editing SSOT). The W11 "complete-UI" round is at the code pin — every op wired via the wire-dispatch seam (`WIRE_COMMAND_TYPES`, **31 verbs = 28 routed + 3 exceptions**, M49C 28/3 @ `970948a` — the exported-registry consumption law per 00 §2A.10; D29's instrument set). The doc-model round-trip surfaces at the code pin (re-verified R27 at `970948a`): `toJSON(): TScene` (committed scene only, deep copy — a live preview never leaks into saved state) + `static fromJSON(scene, fps)` — **the scene-load boundary (§3.3A, D-HB2)**: the typed structural gate FIRST (rejected-whole), then the normalization set (strict-boolean `locked` — a truthy string never locks, S2-F7; missing `trimStart`/`trimEnd` default 0 — W9 E13; animations normalized at ingestion — SC-5/SE-4; the id counter seeded from element+track+**keyframe** ids — review-6 A3). Element-level persistence fields at the code pin: `params` (volume dB + muted — D28-A2/D-S5), `transitionOut` (S3, the engine-SSOT data home), `retime` (W2), `animations` (W5 — keyframe persistence). The S-round + T-round + F1 hardening (setTracksLocked D-T3, setTracksMuted **S3** with M46, the F1 whole-codebase review) all landed; the app consumes the vendored mirror — the declared historical lock-copy @ `c15a629` (UPSTREAM.lock: byte-exact upstream minus `testing/`, live-verified R24; retired at the R27 re-key: the mirror now @ `17a19f8` (re-keyed R33, the s18 lib-tree wave; was `55c81c0` [re-keyed R29, was `6e2b91a`]) + the owner's HEAD `008e7f3` — the two-truth form). **(R31: HEAD `31f2764` — 632 UNCHANGED, docs-only over the code pin `970948a`: the R31 queue filing = the carrier-reduction work order + the D25.3b structural-gap worklist + the data-test freeze ask)** **(R31: HEAD `31f2764` — 632/632 UNCHANGED, docs-only: the R31 queue filing = the carrier-reduction work order + the D25.3b worklist + the data-test freeze ask)**
+- nle-test-app @ `7664603` — **426/426** (the 22-file roof; R33, engine seal-round register P3-31 — the lockstep re-pin wave: engine vendor `e3f55bd`→`574d8d3` + BOTH OT mirrors `39003d3`→`17a19f8` + the census register amended (31 = 28 + 3 UNCHANGED, classes 32 zero-action + 9 carriers + 2 hosts); gates: vitest 426/426, tsc 0, boundary OK, census register-equality OK, mutation 8/8, build OK; the lineage: `876f2b8` 256/256 — the R8 D29 real-wiring round + the R9/R25-R27 waves, the 8-suite roof: GluedShell 104 + audioService 42 + sceneBridge 41 + deliverService 20 + persistenceService 20 + wire-coverage 9 + engineSeam 7 + waveformPeaks 9 → R30 `8f12cf9` 377/377 → R31 `f58147c` 418/418 → R32 `ce7cfc3` 426/426 → the current `7664603`), tsc 0, boundary green: the app's scene wiring — the ARCH-R15 §2.4 multi-scene-app-level ruling executing app-side. (Consumer pins at this HEAD: nle-ui @ `1e0c30b` (743/743 — the R32 C0 MiniShell composition + the D52 twin, UNCHANGED at the R33 re-key; lineage: `6754979` the AW1-2 absorb LANDED with the freshness re-pin; R30: `5779295` — 701/701; R31: `dc3644b` — 701 UNCHANGED, docs-only: the D29 DECISIONS first-party record + the C0 filing), the OT lock-copy @ `17a19f8` (byte-exact minus `testing/` per UPSTREAM.lock, live-verified — the s18 re-pin LANDED @ `7664603`; was `39003d3` [R32, the M60 wave], `55c81c0` [the s17 re-pin @ `876f2b8`], `6e2b91a` — the `970948a` re-pin the filed queue `c020b2a`), engine @ `574d8d3` (was `e3f55bd`), WDC @ `ec8fd5c` (UNCHANGED). R30: the app @ `8f12cf9` — 377/377, the 12-file roof; R31: `f58147c` — 418/418; R32: `ce7cfc3` — 426/426.) **The sceneBridge's state (re-verified R27)** (`src/sceneBridge.ts`, 582 LOC + a 41-test suite): a BIDIRECTIONAL bridge — `sceneToTScene` (mock `SceneJSON` → OT `TScene` + element/track sidecars) and `tSceneToScene` (engine → doc, re-merging sidecars), with the identity law (every track/element/scene id survives unchanged), the source-window law (`trimStart + duration + trimEnd == sourceDuration`), the field law D2e (structure engine-owned: startTime/duration/trims/track muted+hidden+**locked**/bookmarks/element name/transitionOut+retime+params; sidecar-owned: speed/opacity/fades/effects/linkedTo/solo/waveform), the marker⇄bookmark hex map, the W2 speed⇄retime mapping with the RR1-B-1 identity fix (rate projects even at 1; load maps speed 1 → no-retime), and the S3-C6 element-mute round-trip (`el.muted` ⇄ `params.muted`). **The R8-b1 scene-switch rebuild fix (`c2be330`):** the EngineMount load effect's `core`-dep removed + the prior-rate read via `useCommittedRef` — the infinite-rebuild loop (setCore self-retrigger, live since R5, exposed by the W2.5 per-scene grade pin) FIXED; a dedicated real-scene-switch regression pin + the per-scene grade isolation round-trip are live. The consumed mock doc model is nle-ui's spec-09-shaped `SceneJSON`/`TrackJSON`/`ElementJSON`/`Marker` (package @ `fc4cc35`, vendored at the same HEAD — the 2-scene sample project; REGISTERED-DELTA subset: flat kind-tagged `tracks[]` + `dirty` flag where the spec persists the nested `SceneTracksJSON`; display-shaped `MediaRecord` extras — see the GAP register's media row).
+- **The app-side persistence surface — the R8 W2.3 landing (BASE, promoted R24; re-verified R27 at `c020b2a`):** `src/persistenceService.ts` (410 LOC + a 20-test suite) — engine-free by law (the nle-ui store + localStorage only, synchronous writes; the doc slice = `scenes`, the G slice = `mixer`/`masterVolume`/`masterMuted`, view prefs + the W2.5 `color` grade sidecar ride the snapshot). The 2s debounce is keyed on the IDENTITY of `scenes`/`mixer`/`masterVolume`/`masterMuted`/`activeSceneId` (+ `color` since W2.5) — NEVER `docVersion` (the engine rebuild signal; mirror echo writes with same refs never dirty). The lifecycle `edit→dirty→debounce→saving→saved` drives the package's `saveState` seam (nle-ui W2.3 `9b0a36c`, now @ `6754979`; R30: `5779295`; R31: `dc3644b` (docs-only); R32: `1e0c30b` (743/743 — the C0 MiniShell composition + the D52 twin); R34: `cb04919` (747/747 — the DeliverPage blob-URL supersede contract + the Viewer's §4.2 empty-state pair); R35: `45d42fb` (754/754 — the C-1a edit-styles batch: the mediaInsert seam widening + the 4 pool insert rows + the 5 shortcutMap rows)). ⌘S = the real-dirty gate → immediate flush; beforeunload = the synchronous last-chance flush when dirty/saving; boot `hydrateFromStorage()` at App.tsx MODULE SCOPE (pre-render, no `docVersion` bump — beats EngineMount's first build); the baseline law = the current state IS the saved state; `loadSnapshotFile` (docVersion bump + scene.dirty cleared + re-baseline; never `loadSampleProject`) + `saveSnapshotFile` (JSON→Blob→`a[download]` — manual export ≠ autosave write). The BOTH-DOORS hostile-input validator (F3, audit H1-D P1): `isValidSceneShape`/`isValidSnapshot` (`persistenceService.ts:98-157`) validate the inner scene/track/element shape AND the W2.5 grade sidecar (finite-numbered per-scene grades, `:144-156`) at BOTH doors — the Load file path (`:386`) AND boot `hydrateFromStorage` (`:327`, via the shared `readStorage` gate `:159-166`) — a hostile file or hostile localStorage never hydrates (the probe-proven crash classes — dangling `activeSceneId`, non-array `markers`/`tracks` — closed at both doors). *(R33, engine seal-round register P3-32 — added; verified @ the current app pin `7664603`: 410 LOC, 20 `it(` sites, the debounce/⌘S/beforeunload/boot cites all exact.)* Landed `51592cf` (R8 W2.3, 132/132) + the W2.5 grade-sidecar extension `41f5bc9` (a grade write dirties like any authored change; pre-W2.5 snapshots hydrate neutral). The Save/Load FILE-AFFORDANCE wiring (the toolbar surface for these APIs) is the D30 W-E/R7 remainder — see the GAP row.
+- nle-engine @ `2a0ecf4` (code anchor `28aa387` — HEAD is the HANDOFF docs commit) — **785/785** (749 classic + 33 property + 3 P-F2 — the seal-round count-gate re-pin; REFERENCE, not canon — §10.3/§19 §7; the engine's own vendored OT is re-pinned to `17a19f8` (the s18 lib-tree wave; was `55c81c0` — the `970948a` absorption — at `e3f55bd`) — making the W11 wire surface importable at its test seam — zero engine mediation by design): the engine-side project loading now has its own fast-venue suites — `tests/vitest/engine/persistence.test.ts` (P1-P7: `migrateProject` version-gate laws, `hydrateTimeline` never-throws, `serializeTimeline` defensive-clean warnings, `normalizeProjectData` idempotence, P5 non-finite clip-numerics drop-verbs :262, P6 HW1-1 transform sub-fields :302, P7 HW1-3 sourceFps repair :423 — the `NLE_SCHEMA_VERSION`/`ProjectWarning` pins live HERE, :31-32/:77/:90/:105) + `load-validation.test.ts` (V1-V7: the `NleRenderWarning` finders — source overrun / source range / transition / transform-parent validation, the import block :39-50) + the property tier's `tests/vitest/property/persistence-roundtrip.property.test.ts` (the serialize⇄hydrate round-trip + the hydrate-normalized-both-sides law, inside the seal round's 33 property sites). *(R33, engine seal-round register P3-30 — re-keyed @ `2a0ecf4`: the count 749→785, the suite census P1-P4→P1-P7, the `NLE_SCHEMA_VERSION`/`ProjectWarning` pins re-attributed to the persistence suite (they were mis-filed under load-validation), vendor OT `55c81c0`→`17a19f8`; all line cites live-verified.)* The engine's FreeCut-shaped single-timeline `Project` stays the C8-adapter convergence task (engine D1 resolved AGAINST this spec — the corrective register owns it, spec 19 §7); N2b keyframed volume (gain automation driving real audio, `37cdd28`) landed — this spec's `KeyframeTrackJSON` `'volume'` property is consumed end-to-end engine-side.
+- The R23 seal artifacts (in-repo, `ui-mock/shell-mini`): CORE-SEAMS §D (S18 the mock project model — the spec-09-shaped subset, REGISTERED-DELTA by DESIGN D5; S19 the fixture bridge — `src/lib/otProject.ts`, a TESTED REFERENCE the app-side work copies, not an import target) + `otProject.ts`/`otProject.test.ts` (the registered formulas made executable — toTicks/fromTicks nearest-tick policy, projectClip/projectClipBack with the tick-arithmetic trim invariant; 12-test acceptance floor) + `mockData.ts` (the mini's Doc subset: Media/Track/Clip + seedDoc/multiTrackDoc + `laneForMedia`).
+
+**GAP (the work — owner + phase per the D24 ladder, `IMPLEMENTATION-PLAN.md` §2; acceptance in parentheses):**
+- **ProjectJSON persistence — the w3 REMAINDER (owner: nle-test-app, phase w3).** The R8 W2.3 localStorage surface is BASE (the row above) — the R23 claim "no OPFS/IndexedDB/localStorage surface exists anywhere app-side" is RETIRED (contradicted by `51592cf`, resolved R24). What REMAINS for w3: the §4–§6 OPFS layer (atomic write, the migration ladder, locks — localStorage is the current synchronous engine; zero OPFS/IndexedDB code app-side, re-grep-verified at the current pin `7664603`) and the persistence-format formalization (the doc slice is "spec-09-ish" per its own comment — the REGISTERED-DELTA mock subset travels: flat `tracks[]` + `dirty`; the nested `SceneTracksJSON` + schema-versioned wrapper are the w3 target). **(R33, engine seal-round register P2-20) The D30 W-E/R7 file-affordance wiring is DISCHARGED at the current app pin — the toolbar affordance LANDED** (the app's R9 W-E `b40216e`, "the Save/Load affordances CLOSE the W2.3 debt"; the register's `b5fe3b3` cite was the doc-committing-sessions commit — corrected here to `b40216e`): toolbar-save → `saveSnapshotFile`, toolbar-load → the hidden file input → the hostile-input-validated `loadSnapshotFile` (+ success/failure toasts, hostile JSON rejected), live at `7664603` as `src/timeline-port/EngineMount.tsx:29/:455-507` + `src/timeline-port/TimelineToolbar.tsx:263-273` (the `toolbar-save`/`toolbar-load` buttons); the pre-landing "zero `onSaveScene`/`onLoadScene` hits at `c885ece`" state is historical lineage only; the mock ⌘S theater survives only in the package's `'idle'` default world. (acceptance: project round-trip vs per-scene OT `toJSON`/`fromJSON` + the scene suite green — the plan §2 w3 gate, [P].)
+- **Multi-scene app slice: `scenes[]` ownership + scene wire ops (owner: nle-test-app, phase w3).** The mock-grade slice is LIVE (nle-ui store: `scenes[]` + `createScene`/`deleteScene`/`switchScene` + `docVersion` rebuilds + the 2-scene sample project; the app's EngineMount owns ONE `TimelineCore` for the active scene, rebuilt on scene switch/docVersion). The REAL w3 slice: the multi-scene lifetime policy (per-scene core reuse vs the current rebuild-on-switch — the R8-b1 fix `c2be330` makes the rebuild settle once, but it still resets engine undo per scene switch). (acceptance: the scene suite green; the ARCH-R15 §2.4 wiring against real persistence.)
+- **Cross-scene-undo law + history budget (owner: nle-test-app, phase w3).** The registered UX law — per-core undo NEVER crosses a scene switch — is currently satisfied trivially (the EngineMount's rebuild resets history; the mock's whole-doc undo snapshots carry `activeSceneId` so undo restores the scene switch as part of the snapshot). The law to BUILD: inactive cores' history budget-capped/evicted beyond a memory budget (§3.1A). (acceptance: the scene suite green + the budget law pinned.)
+- **Media layer: the MediaRecord registry + probe + lookup (owner: nle-test-app, phase w2; spec 15 §9.5 owns the event staircase half).** §7's import flow + the real `MediaRecord` shape (N3: numeric `size`, ISO `importedAt`, `colorInfo`, OPFS `storage` ref). STILL OPEN (re-verified R27 at `32abd58`): the app consumes nle-ui's DISPLAY-shaped mock records (`size: "1.8 GB"` string, `thumbnail` path, `offline` flag, `duration: number | null`, and the mock `Project.loop` field — the N12/N5 note's non-persisted loop is mock-only) + the EngineMount's deterministic `VirtualMediaAsset` table (virtual colors/sines, the mock-determinism law); real decode is r4 (N5, user-gated). (acceptance: media round-trip pins; the full-scope demo on virtual media re-gates — the plan §2 w2 gate, [P].)
+- **The K3 re-expression + fixture-bridge C1-entry rows (owner: the crawl's S-app/S-ot joint work, phase K3 — C1(d) per the D24 mapping).** The K3 work is UNSTARTED app-side, as the plan expects: zero LAW-NET re-expression, zero e2e (grep-verified at `c885ece`); the instrument framing per ARCH-R24 D29/D26 — K3's routed-verb completeness machine-check = the D30 W-F coverage-gate port (the M49C accumulator pattern), and the DOM-structural half gates on the `data-test` mapping row + D30's W-C, NOT on a props-upstreaming cycle. Two registered decisions from the R23 seal, NOT code: (a) the **track-shape mapping** for the mini's `otProject` copy — which mini video track becomes the OT `main` singleton vs `overlay[]` (recommended: bound video → main; other video → overlay; audio → `audio[]`; duration-sorted) — pinned when the OT snapshot is vendored (CORE-SEAMS S6/S19; the APP-side sceneBridge has already decided ITS mapping — mock `kind: 'main'|'overlay'|'audio'` → OT topology — the remaining decision is the mini-window one); (b) the **stills caveat** — an image media's duration is a SYNTHETIC extent (no intrinsic length), so `sourceDurationTicks` for stills is an edit decision, not decoded truth (README deviation #13). (acceptance: `otProject.ts` copied + bound against the vendored OT types; the mapping pinned.)
+- No-gap ruling, stated so it stops being asked: per-scene OT stays SINGLE-SCENE by design (D12) — scene-level concerns live app-side per §3.1A; nothing to build in OT. (Confirmed live at `c15a629` (R24; re-verified R27 @ `970948a`; re-verified R33 @ `344123a`; re-verified R34 @ `8f96ab2` — `src/lib/timeline/` byte-unchanged past the R33 code pin, the serialization surface unmoved): the core is one-scene; `toJSON()/fromJSON()` remain the whole serialization surface — W11 wired the op surface, not the doc model.)
+
+**ACCEPTANCE & TEST PLAN:** §9 (intent list) + the executable `## Testing` section (schema/round-trip/migration/autosave tiers + the 3 kimdogyeom gating regressions); spec 17 §3 matrix rows "Project save / load (JSON round-trip)" / "Project schema migration (v1 → v2)" / "OPFS persistence (media cache, project autosave)" + the §13A facet rows; battery posture: the OT + app + engine suites at the pins above stay green (the regression role — the engine's persistence/load-validation suites carry the engine-side half; the app's persistenceService 20-pin suite (R33, engine seal-round register P3-30 — re-counted @ `7664603`: 20 `it(` sites, was "17-pin") + the R8-b1 real-scene-switch pin carry the app-side persistence/scene half).
+
+---
+
+## 0A. Refined-Spec Notes (new section by scout)
 
 This file extends the seed `09-project-model.md`. Sections 1–7 are re-stated verbatim with light inline annotations. Section 8 (Open Questions) is fully rewritten with concrete source-code answers. Sections 9–13 are new:
 - **§10 Code References** — every file read by the scout, with one-line summary.
@@ -52,7 +74,8 @@ interface ProjectJSON {
   currentSceneId: string;
 
   media: MediaRecord[];          // media library (per-project)
-  markers: Marker[];
+  // (Round 15 amendment, A2) project-level `markers: Marker[]` is RETIRED —
+  // markers live PER SCENE (SceneJSON.markers). See the §3.1A note.
 
   // UI prefs (optional — not part of WYSIWYG contract)
   uiState?: ProjectUIState;
@@ -89,36 +112,68 @@ interface SceneJSON {
   isMain: boolean;
 
   tracks: SceneTracksJSON;
-  bookmarks: Bookmark[];
+  markers: Marker[];             // (Round 15 amendment, A2) per-scene markers —
+                                 // absorbs Bookmark; see the §3.1A note
 }
 
 interface SceneTracksJSON {
   overlay: OverlayTrackJSON[];
   main: VideoTrackJSON;
   audio: AudioTrackJSON[];
+  // (Round 28 amendment, D49/ARCH-R28 — the captions family) the FOURTH
+  // family: 0..n caption tracks, ONE PER LANGUAGE (BCP-47 tag; descriptive
+  // v1 — addTrack does NOT reject a duplicate language, export merges
+  // deterministically; enforced uniqueness is registered to r5). Carries
+  // `type:'text'` elements with the first-class `text` body field (see
+  // ElementJSON.text below). The OpenCut-classic `SubtitleSegmentItem`
+  // element path is REJECTED v1. See §3.1A's D49 ruling note.
+  captions: CaptionTrackJSON[];
 }
 
 interface TrackJSON {
   id: string;
   name: string;
-  muted: boolean;
-  solo: boolean;
+  muted: boolean;                // (Round 15 amendment, A4) mute/solo are AUTHORED
+  solo: boolean;                 // here (S layer) and PROJECTED into the G slice at
+                                 // materialization — the G layer (20 §4.2) carries
+                                 // no second authored copy
   locked: boolean;
-  visible: boolean;
-  volume: number;
-  elements: string[];            // element IDs in time order
+  visible: boolean;              // (Round 15 amendment, A5) non-audio kinds only
+  syncLock?: boolean;            // (Round 15 amendment, B1) 06 §6's sync-lock flag —
+                                 // default true (FreeCut `syncLock !== false`)
+  // (Round 15 amendment, A3) `volume` is REMOVED: per-track gain is owned by the
+  // G layer (20 §4.2 MixerTrackSettings.fader). Round-trips persist the fader
+  // with the per-scene audio-settings sidecar, never via TrackJSON. See §3.1A.
+  elements: ElementJSON[];       // (Round 15 amendment, N1) INLINE element records
+                                 // in time order — the string[]-IDs reading is retired
 }
 
 interface VideoTrackJSON extends TrackJSON {}
 interface OverlayTrackJSON extends TrackJSON {}
-interface AudioTrackJSON extends TrackJSON {
+// (Round 15 amendment, A5) audio tracks carry NO V (visibility) — M/S/L on all
+// kinds, V on non-audio only (cross-ref 18 §4.7's correction):
+interface AudioTrackJSON extends Omit<TrackJSON, 'visible'> {
   audioEq?: AudioEq;
+}
+// (Round 28 amendment, D49/ARCH-R28 — the captions track kind) one per
+// language, BCP-47. `language?` is OPTIONAL because one-track-per-language is
+// DESCRIPTIVE in v1 (15 §4.3.22's addTrack row carries the same law). The
+// lane renders TOP (05 §12.1); the burn-in pass excludes the family from the
+// composite walk (the one-line kind filter).
+interface CaptionTrackJSON extends TrackJSON {
+  language?: string;              // BCP-47 ('en', 'fr-CA', ...)
 }
 
 interface ElementJSON {
   id: string;
   type: 'video' | 'audio' | 'text' | 'image' | 'shape' | 'adjustment';
   trackId: string;
+  linkedTo?: string;             // (Round 15 amendment, B1) A/V link — id of the linked
+                                 // companion element (05 §12.3 linked selection; 16
+                                 // §3.4 toggleAVLink). `linkGroupId` alternative
+                                 // REJECTED — one companion is the v1 shape (mock).
+                                 // (R28/D42) the field's HOME is OT's own
+                                 // BaseTimelineElement — see §3.1A B1's D42 note
 
   // Timeline position
   startTime: MediaTime;
@@ -133,7 +188,18 @@ interface ElementJSON {
   speed: number;                 // 1.0 = normal, 2.0 = 2x, -1.0 = reverse
 
   // Audio
-  volume: number;
+  volume: number;                // (Round 15 amendment, B2; the volume-domain law,
+                                 // R27 fold — D38.2) persisted unit is LINEAR gain
+                                 // (1 = unity; the R15 "0..1" reading is corrected).
+                                 // The authoring/display domain is dB in [−60,+20]
+                                 // — ONE home: opencut's core/audio-params (see
+                                 // §3.1A B2). ABSENT ≡ unity (1 linear / 0 dB)
+  pan?: number;                  // (Round 15 amendment, B2) −100..100 (full L..full R)
+  preservePitch?: boolean;       // (Round 15 amendment, B2; the R9-b ruling, R27
+                                 // fold — D38.1) retime keeps pitch. ABSENT ≡ TRUE
+                                 // (the NLE default); explicit false = pitch-
+                                 // affected varispeed. A PROJECTION of the engine
+                                 // retime's maintainPitch — see §3.1A B2
   muted: boolean;
   audioFadeIn?: MediaTime;
   audioFadeOut?: MediaTime;
@@ -150,6 +216,14 @@ interface ElementJSON {
   // Transitions
   transitionIn?: TransitionJSON;
   transitionOut?: TransitionJSON;
+
+  // Text body (Round 28 amendment, D49/ARCH-R28) the caption/text element's
+  // body field — FIRST-CLASS here, NOT in `params` (10:544's `params?.text`
+  // stand-in RETIRES with it; OT's TextElement gains the body field at the
+  // r1 port — the register flip's full OT cost: TrackType + the captions
+  // family + this field + the addTrack machinery branches). Styling params
+  // (font/size/color/alignment) stay in `params`.
+  text?: string;
 
   // Name
   name: string;
@@ -205,7 +279,10 @@ interface MediaRecord {
   id: string;
   name: string;
   type: 'video' | 'audio' | 'image';
-  size: number;
+  size: number;                  // (Round 15 amendment, N3) numeric BYTES — the shell
+                                 // formats for display
+  importedAt: string;            // (Round 15 amendment, N3) ISO 8601 — 18 §4.2's
+                                 // import-date sort mode
   duration: MediaTime;            // for video/audio
   width?: number;                 // for video/image
   height?: number;
@@ -230,17 +307,22 @@ interface MediaStorageRef {
   // For remote: includes URL or signed URL
 }
 
-interface Marker {
-  id: string;
-  time: MediaTime;
+interface Marker {               // (Round 15 amendment, A2) the ONE marker type, PER
+  id: string;                    // SCENE (SceneJSON.markers) — absorbs Bookmark; the
+  time: MediaTime;               // separate Bookmark shape is DELETED (was here)
   label?: string;
-  color?: string;
-}
-
-interface Bookmark {
-  id: string;
-  time: MediaTime;
-  label: string;
+  color?: string;                // 16 §3.7's 8-color palette cycles this field
+  // (Round 28 amendment, D48/ARCH-R28 — the marker model v2, the OT-aligned
+  // subset) ONE family, point/range by `duration`: absent = point; present =
+  // range with `end = time + duration`, >= 1 frame, <= scene duration
+  // (write-time invariant; the scene-shrink law is 05 §11.1's keep-and-
+  // display-clamp). `notes?` is USER CONTENT that round-trips OT's
+  // `Bookmark.note` (the D48/F1 disposition) while `label` is DOC-SIDE-
+  // SYNTHESIZED (the `id` pattern). `keyword` is REJECTED — no OT home, no
+  // consumer (the registered deviation). Clip markers are RE-QUEUED to
+  // r5-entry as one field+re-offset-laws bundle. See §3.1A's D48 note.
+  duration?: MediaTime;
+  notes?: string;
 }
 
 interface ColorRGBA {
@@ -279,6 +361,36 @@ interface KeyframeJSON {
 }
 ```
 
+### 3.1A Round-15 amendments — data-model rulings
+
+*(Amendments per `.agents/SPEC-REVISION-CANDIDATES.md` A2/A3/A4/A5/B1/B2/N1/N3 + E.1 strengthenings, and `audits/ARCH-R15-assembly-and-path.md` §2.4. The schema above carries the field-level changes; this section is the ruling text each one cites.)*
+
+**N1 — the ElementJSON container (P1).** `TrackJSON.elements` is an INLINE array of `ElementJSON` records, in time order. The earlier `string[]`-of-IDs reading is retired: under it no field anywhere held the records themselves, while spec 05's own examples (`§6.1`'s `track.elements.filter(el => el.startTime…)` and `§7.3`'s `TimelineElement({element…})`) and the opencut-timeline `SceneTracks` producer both read inline objects. This ruling reconciles 05 §6.1/§7.3 with the schema: their `track.elements` / `element` shapes ARE `ElementJSON`, not IDs. Mock evidence: `mockData.ts` inlines `elements: ElementJSON[]`.
+
+**A2 — one marker family, per scene.** ONE type — `Marker {id, time, label?, color?}` — stored PER SCENE (`SceneJSON.markers`), absorbing `Bookmark` (the separate project-level `Marker` array and the `Bookmark` shape are both retired; mock and opencut-timeline store markers per scene). The wire form is spec 15 §13.3's `addMarker`/`deleteMarker`/`updateMarker` command family; 16 §3.7's `toggleBookmark`/`removeBookmark`/`updateBookmark` trio and 15 §13.15's bookmark rows RENAME into this family (toggle ≈ add/delete, move ≈ update position). No project-level marker surface remains (ARCH-R15 §2.4 sub-gate (c)). 05 §11.1 carries the UI-side cross-reference. **A2-rename execution note (single owner — dated 2026-09-06, R15 fix wave; shared verbatim by 16 §3.7):** the 16 §3.7 binding rows now speak the unified marker family's verbs (`deleteMarker`, `updateMarker`, `Marker.color`); the union's Bookmark block (spec 15 §4.3.39-42) retires at the next union-version bump per §4.1A's Bookmark row. ONE owner for the remaining fold: **spec 15 §13.15's C7 worklist** (the OT-side rename pass at A2). **(Round 28 amendment note, D48/ARCH-R28 — the marker model v2: the OT-aligned subset; the ruling text the schema's D48 fields cite):** the family WIDENS to `Marker {id, time, label?, color?, duration?, notes?}` per scene — **one family, point/range by `duration`** (absent = point; `end = time + duration`, ≥ 1 frame, ≤ scene duration — the write-time invariant; the scene-shrink law is 05 §11.1's keep-and-display-clamp, landed R28). Decisive evidence: OT's own `Bookmark {time, note?, color?, duration?}` + `getBookmarksActiveAtTime` already carry the range semantic — the flat spec Marker was narrower than its own SSOT, and the app bridge silently dropped OT's `duration` (the fleet-r23 09-report's flag). **The D48/F1 disposition (the notes/label round-trip): `notes` OWNS OT's `Bookmark.note`; `label` is DOC-SIDE-SYNTHESIZED (the `id` pattern)** — `notes` is user content that MUST round-trip while `label` is a display name; zero OT change for `duration` only, and if r5's marker v2 wants a persistent label, `Bookmark` gains `label?` THEN (registered, not now). **`keyword` is REJECTED** (no OT home, no consumer — the registered deviation; the mock's ~3-pin keyword churn named in the register's row-5 deviation text). **Clip markers are RE-QUEUED to r5-entry** as ONE field+re-offset-laws bundle (the C35 precedent's STRONGER form: the field alone corrupts offsets on split/trim; C33b's r5 acceptance pins carried — the 4 Clip.test pins + the insertPlan re-offset laws). Zero new wire verbs (`Partial<Marker>` rides `updateMarker`; markers stay absent from r1's ten-mode leverage map — the plan phase-tags marker v2 at r5-entry). The ⇧M start-match reading + the ⌥M inspector field set are 16 §3.7's (landed R28); the export fold (per-scene read + duration/note mapping) is 10 §4.7's (landed R28).
+
+**A3 — track gain has one home.** `TrackJSON.volume` is removed; per-track gain is owned by the G layer (spec 20 §4.2 `MixerTrackSettings.fader`). For round-trips, the persisted projection of the fader is the per-scene audio-settings sidecar serialized with the scene — never a TrackJSON field. Mock evidence: `mockMixer.ts` keeps gain only in the G slice; TrackJSON has no volume.
+
+**A4 — mute/solo are S-authored, G-projected.** Mute/solo are authored on the S layer (the TrackJSON flags above) and PROJECTED into the G slice at materialization; the G slice carries no second authored copy (per 20 §4.2 and the mock's one-command-family pattern — `toggleTrackMute`/`toggleTrackSolo` mutate S; the mix graph reads the projection).
+
+**A5 — visibility is non-audio-only.** M/S/L on ALL track kinds; V on non-audio kinds only — audio tracks carry no visibility flag (18 §4.7's unqualified M/S/L/V is wrong in both directions; the mock ships S on all kinds and V only on non-audio headers).
+
+**B1 — link + sync-lock fields.** `ElementJSON.linkedTo?: string` backs 05 §12.3 linked selection and 16 §3.4 `toggleAVLink` (the `linkGroupId` alternative was REJECTED — one linked companion is the v1 shape, matching the mock). **(Round 25 amendment note, D32.5/ARCH-R25 — the model-shape reconciliation; the field definition is unchanged):** the persistence form is PAIRWISE (`linkedTo` — this field; the rejection above was the persisted-shape question); the runtime expansion is GROUPS — the engine's `linkedGroupId`, expanded from the pairwise links at load (pairwise at rest → groups at runtime), never persisted here; a split relinks BOTH halves, each half carrying the link (06 §5.0's split-link law — cross-cite). A DUPLICATE severs the copy's `linkedTo` — the copy enters unlinked, the original keeps its pair (the F4/R14 twin of the split law; mock `useUiStore.ts:938-945`; OT-side severing is by construction — new ids carry no sidecar meta). **(Round 28 amendment note, D42/ARCH-R28 — the field's home + the runtime closure; the field shape is unchanged):** the linkage model lives IN opencut-timeline — `linkedTo?: string` on OT's own `BaseTimelineElement` (this `ElementJSON` field is its persistence form; D32.5's pairwise-at-rest consummated OT-side at the port). The runtime group is DERIVED PER OP by a pure closure helper in OT's `ops/` — the app's av-link law ported: symmetric, live-id-only, order-stable, cycle-free, **locked-partner-skip** — and the groups→pairs mapping happens at the port per 00-master Decision 12 clause 3 (linked-groups take SceneTracks shapes per specs 06/07; OT's ops layer is the one algorithm home); the engine's `linkedGroupId` stays VENUE-INTERNAL, never persisted here. The app's dispatch-level expansion and the `linkedTo` sidecar (sceneBridge's `ElementMeta`) RETIRE into the field at the port — the carried E1/E2/F6 pins assert link values through undo/redo/serialization, impossible without a field in the SSOT. One correction to the D32.5 note above: with the field OT's own, DUPLICATE severing is NO LONGER by construction — OT's `duplicateElements` must delete the field explicitly (the `{...element}` spread would carry it to the copy; the F4 sever law, 06 §5.0). **(R33, engine seal-round register P2-19 — the B1/D42 status marker, re-keyed past the register's own filing): LANDED — Stage-0 EXECUTED in OT.** OT @ `008e7f3` (seal18; the mechanism set landed `dcb4951`, the L1.5 Stage-0 wave) carries the full D42 model: `linkedTo?: string` on `BaseTimelineElement` (`src/lib/timeline/types/index.ts:202`), the pure closure `ops/linkage.ts` (symmetric / transitive / live-id-only / order-stable / cycle-free / locked-partner-skip + `findInboundLinks`), the move fan-out, the split re-pair mint, the DUPLICATE SEVER (`duplicateElements` deletes the field explicitly — `timeline-core.ts:1431`, this note's own spread-correction EXECUTED), the delete survivor-prune, the `updateElements` linkedTo patch surface (`timeline-core.ts:431-458`), and the `toJSON`/`fromJSON` round-trip — all pinned by the M63 family (`src/lib/timeline/testing/milestones-linkage.ts`; 11 pins inside OT's 675/675 at the seal18 FINAL `ee55a87` (the report json — the dcb4951 commit prose said 10 discriminating + the split control makes 11)); the app's OT mirrors were re-pinned to `17a19f8` at the app's `7664603` — the vendored trees carry it. What stays OPEN is the r1 consumer port only: the app's sceneBridge `ElementMeta.linkedTo` sidecar (`src/sceneBridge.ts:80`) + dispatch-level expansion RETIRE into the field, and the engine bridge's `av-link.ts` closure (the five laws, `av-link.ts:26-37` + the locked-partner-skip `:143-153` @ `2a0ecf4`) converges onto OT's ops as its one algorithm home. `TrackJSON.syncLock?: boolean` backs 06 §6's sync-lock (default true, FreeCut's `syncLock !== false`).
+
+**B2 — audio element fields (R27 amendment: the R9-b preservePitch ruling + the volume-domain law — the model-coherence pair, registered D38.1/D38.2).** `ElementJSON.pan?: number` (−100..100) and `preservePitch?: boolean` join `volume`.
+
+*preservePitch (D38.1 — the R9-b model ruling; the R26-filed ask, resolved in code: nle-ui `af32e69` + app `94d5a2e`/`2de34ac`/`d8d1b2b`):* **ABSENT ≡ TRUE** — the NLE default (speed changes keep pitch); explicit `false` is pitch-affected varispeed (the chipmunk law). The doc field is a **PROJECTION of the engine's `retime.maintainPitch`** (the D-T5 pattern): authored through the engine patch surface, carried back by the mirror — the back-projection writes ONLY explicit `false` (true/absent project no doc field). A dormant `false` at rate 1 does not survive reload: that drop is the **APP's load-bridge identity law** (sceneBridge skips authoring retimes at speed 1 — `sceneBridge.ts:229-262`), NOT engine law: the engine stores a committed `{rate: 1}` retime verbatim and `fromJSON` never normalizes retimes (§3.3A). Writing the default onto an absent field is identity (the absent-≡-default class — no history entry). The toggle is the retime's COMPANION, not an independent element property; 06 §5.12 carries the op-side law; 18 §4.4 the Video-tab editor.
+
+*volume (D38.2 — the D28-A2 dual-representation + the [−60, +20] domain law):* the persisted unit is LINEAR gain (**1 = unity**; the linear span of the dB domain is [0.001, 10]). The AUTHORING/display domain is dB **[−60, +20]** — the fleet-coherent domain with **ONE HOME: opencut-timeline's `src/lib/timeline/core/audio-params.ts`** (`VOLUME_DB_MIN/-MAX`, `DEFAULT_VOLUME_DB = 0`, `clampVolumeDb`, `volumeDbToLinear` — the zero-import leaf every consumer bridge deep-imports; nle-engine's OV-01/OV-02 collapsed its replicas onto it: `opencut-laws.ts:54-79`). The engine's `params.volume` is the RUNTIME PROJECTION in dB (the bridge converts linear⇄dB both directions — D28-A2: **display dB, commit linear**). **ABSENT ≡ unity on BOTH sides, with two numerically distinct defaults (the two-field law):** the doc model's `el.volume` (LINEAR) is absent ≡ **1**; OT's `params.volume` (dB) is absent ≡ **0 dB** (the D-S5 header, `audio-params.ts:4`) — both ≡ unity gain; the one-home owns the dB domain + the conversions, NOT the persistence shape. Non-finite never poisons the fold: **NaN → DEFAULT (0 dB) at the clamp** (`audio-params.ts:39-43`) and **read-as-absent at the engine fold** (`scene-to-segments.ts:170-173`), plus the UI's linear floor 0.001 (≡ −60 dB, `Inspector.tsx:1007`). Cross-refs: 20 §4.1/§N2b (the fold law, incl. the lane-replaces-static rule), 18 §4.4 (the authoring rail), 10 §4.4 (the export fold — absent omits the `<adjust-volume>`).
+
+**N3 — MediaRecord.** `importedAt` (ISO 8601) is added (18 §4.2's import-date sort); `size` stays numeric bytes — display formatting ("1.8 GB") is the shell's job, never a persisted string.
+
+**D49 — the captions family (Round 28 amendment, ARCH-R28 §4 — the track-kind hybrid; the ruling text the schema's D49 fields cite).** `SceneTracksJSON` gains the FOURTH family `captions: CaptionTrackJSON[]` — **0..n, one per language (BCP-47 tag), carrying `type:'text'` elements with the `text` body field** (C34's "track kind + body field" — both halves; the body's home is first-class `ElementJSON.text`, above). The OpenCut-classic `SubtitleSegmentItem` element path is REJECTED v1. Why track-kind: every consumer surface requires a track — export granularity is file-per-language (SRT/ASS/VTT; FCPXML `<caption>` — the rationale is r5-forward; the current export surface is FCPXML-only per 10 §8's re-keyed row), the inspector/style/language are track-scoped, the burn-in pass excludes captions from the composite walk as a one-line kind filter, and the TextNode render path comes free (captions ARE text elements). Sub-rulings: **the lane position is TOP** (the reference + z-mirror; the mock's bottom fixture re-normalizes at the r5 touch — the one churn item); **the v1 render home is the burn-in pass** (viewer-side, the topmost VISUAL layer via the burn-in pass — z-above the composite; the TextNode composite path is the r5 styled-subtitle vehicle); **the language law is DESCRIPTIVE v1** (addTrack does NOT reject a duplicate language; export merges deterministically — enforced uniqueness registered to r5; the D49/F1 ruling); **the mode matrix needs zero new rows** (text's membership decides — shape ops apply, source-window ops don't); **D32: no A/V pairs v1; sync-lock participates** (linkedTo permitted-not-authored). The full OT r1 cost (the register flip's set): `TrackType +'caption'` + `SceneTracks.captions` + the `TextElement` body field + the addTrack machinery branches — 15 §4.3.22's wire row (landed R28) and 05 §12/18 §4.4/§4.7/10 §8 are the cross-spec folds.
+
+**Multi-scene is app-level (ARCH-R15 §2.4).** The app owns `scenes[]` + the scene wire ops; per-scene editing state is exactly ONE opencut-timeline `TimelineCore` (state-isolated by construction). Per-core undo NEVER crosses a scene switch (registered UX law, mock-consistent); inactive cores' history is budget-capped/evicted beyond a memory budget; scene persistence rides per-scene `toJSON`/`fromJSON`. `ProjectJSON.scenes[]` above is the persisted form of that ruling.
+
+**Loop/in-out state is NOT a ProjectJSON field (N12/N5 note).** In/out points are `setLoop` halves (15 §4.3.29; 16 §3.1; 18 §4.3/§4.9) — no `InOutPoints` shape persists here (05 §11.2's dedicated model is superseded). The `setLoop` invariant `end > start` (else INVALID_PARAMS, or the halves swap — N5) is the law wherever loop windows are authored.
+
 ### 3.2 MediaTime and FrameRate serialization
 
 In JSON, `MediaTime` (which is a branded `number`) serializes as a plain number. `FrameRate` (rational) serializes as `{numerator, denominator}`. The schema is straightforward — no special handling needed.
@@ -306,7 +418,10 @@ export const ProjectSchema = z.object({
   scenes: z.array(SceneSchema),
   currentSceneId: z.string().uuid(),
   media: z.array(MediaRecordSchema),
-  markers: z.array(MarkerSchema),
+  // (R28/D48 amendment — the stale-zod cleanup) the project-level
+  // `markers: z.array(MarkerSchema)` row is DELETED: markers are PER SCENE
+  // (SceneJSON.markers — A2; the R15 retirement comment at the ProjectJSON
+  // shape above). This illustrative schema had contradicted A2 since R15.
   uiState: ProjectUIStateSchema.optional(),
 });
 
@@ -325,6 +440,18 @@ export const ProjectMetadataSchema = z.object({
 // Type inference
 export type ProjectJSON = z.infer<typeof ProjectSchema>;
 ```
+
+### 3.3A The scene-load boundary (D-HB2 — Round 27 amendment)
+
+The per-scene load boundary is opencut-timeline's `TimelineCore.fromJSON(scene, fps)` — wire-equivalent validation discipline at the SECOND JSON boundary (the wire being the first). It validates the STRUCTURAL invariants and **rejects the scene WHOLE** with the typed error form `[Timeline] fromJSON: <reason>` — never partial-loads (the throw fires before any normalization/counter-seeding; a rejected scene leaves nothing behind; the Load surface shows the message, exactly like a `JSON.parse` throw).
+
+**REJECTED (whole):** duplicate element/track ids (global — ids are lookup keys); duplicate keyframe ids WITHIN one element; non-positive / non-integer / non-finite durations; negative `startTime`; non-finite (or negative) structural tick fields (trims, `sourceDuration`, key times); overlapping elements on a track; keyframes outside the element's `[0, duration]` bounds; structurally invalid `retime` / `transitionOut` shapes.
+
+**NORMALIZED (kept):** id-counter seeding (element + track + **keyframe** ids), missing trims → 0, strict-boolean lock coercion, unknown extra fields ride opaque, animation canonicalization — but **never retimes** (a committed `{rate: 1}` retime survives verbatim — the preservePitch B2/D38.1 attribution).
+
+**THE ROUND-TRIP LAW:** `toJSON()` output must ALWAYS pass this validation — the validator may never reject anything our own scenes contain (pinned: OT M53 hostile-class table + M49R load-surface pins @ `344123a` — re-keyed R33, was `970948a`). The raw constructor remains the documented escape hatch (test-fixture / synthetic-state venues).
+
+Code: OT `ops/timeline-core.ts:2561-2655` @ `344123a` (R33 re-key — was `:2443-2537` @ `970948a`; the M60 mini-theme + s18 lib-tree waves grew the file above the fromJSON boundary; the validator its own `validateSceneForLoad` `:2733-3012`, called at `:2589`). The PROJECT-layer boundary composes with this: project JSON validates + migrates at the ProjectManager (§5.1 `migrateProject` → `ProjectSchema.parse`), then each scene re-validates at `fromJSON` on engine mount. (Mirror one line in spec 17's round-trip matrix row — cross-spec.)
 
 ---
 
@@ -711,7 +838,10 @@ interface MediaRecord {
   id: string;                    // UUID v4
   name: string;                  // original filename
   type: 'video' | 'audio' | 'image';
-  size: number;                  // bytes
+  size: number;                  // bytes — stays NUMERIC (Round 15 amendment, N3); the
+                                 // shell formats for display ("1.8 GB" is 18 §4.2's job)
+  importedAt: string;            // (Round 15 amendment, N3) ISO 8601 — 18 §4.2's
+                                 // "import date" sort mode
   duration: MediaTime;
   width?: number;
   height?: number;
@@ -1913,21 +2043,23 @@ Every file read by the scout with a one-line summary.
 ### 10.3 Code References — nle-engine (reference, NOT canon)
 
 > nle-engine (github.com/bearachprema/nle-engine) is an in-between clean-room port used to de-risk implementation. It is **NOT canon**; where it conflicts with this spec, **the spec wins**. The engine's own persistence-gap audit (`gaps/audit/E2-persistence-serialization.md`) is the delta record. Full reconciliation: `19-code-references.md` (§7 answers the engine's D1/D5 decisions from this spec).
+>
+> **(R33, engine seal-round register P2-18)** — the §10.3 anchors re-verified against the engine @ `2a0ecf4` (785/785; the register's own cites were pinned @ `e3f55bd`): the two lifecycle-zod rows are RETIRED-REPLACED (the schemas were DELETED — `api.ts:1808-1809` documents the removal, P1.13; the old `:1737`/`:1745` anchors now land inside the zod CLIP-op schemas, `:1734-1748` — they no longer carry `schemaVersion`/`fps`), and every drifted anchor refreshed in place (the E2:156 row is the one anchor that did NOT drift).
 
 | Spec section | Engine file:line (or gaps/audit) | Verified quote | Status | Note |
 |---|---|---|---|---|
-| §3.1 ProjectJSON schema | `src/lib/nle/core/types.ts:1451` | `export interface Project {` | CORRECTIVE | FreeCut-shaped single-timeline container; spec's metadata/settings/scenes wins (engine D1 resolved AGAINST the spec — the C8 adapter is the convergence task, spec 19 §7) |
-| §3.3 Zod validation | `src/lib/nle/headless/api.ts:2319` | `export async function normalizeProjectForHeadless(raw: unknown): Promise<Project> {` | CORRECTIVE | Presence-style normalization (now delegated, richer than the 3-field stub); full ProjectSchema wins |
-| §3.3 version literal | `src/lib/nle/headless/api.ts:1737` | `schemaVersion: z.number().int().positive().optional(),` | CORRECTIVE | Optional vs z.literal(N); spec wins |
-| §5.1 migration framework | `src/lib/nle/persistence/index.ts:65-67/:162-183` (Round-8 re-cite; was `gaps/audit/MASTER.md:65`) | migrate gate + normalize + warnings channel (1,174 LOC, Wave 4B) | ALIGNED-semantics / CORRECTIVE-shape | The migrate/normalize/warnings SEMANTICS match spec §5; the serialized JSON shape is engine-native v2 — the C8 adapter re-targets it to spec 09 ProjectJSON (spec 19 §7 D1) |
-| §4.1/§4.4 OPFS | `gaps/audit/MASTER.md:85` (pre-4B quote) | (Wave 4B landed the module; D5 storage plane still OPEN) | PARTIAL | Storage-agnostic module exists; spec's OPFS layout + host MediaStore is the D5 answer when the engine attaches storage |
-| §4 save path integrity | `src/lib/nle/headless/api.ts:2818` | `async editProject(input: NleEditInput): Promise<NleEditResult> {` | RESOLVED (was CORRECTIVE) | **The fake round-trip is RETIRED (Wave 4B)** — editProject now serializes the post-edit timeline (api.ts:1070-1130 per scout R8-B); the counter-example stays documented in spec 19 §6 |
-| storage seam | `src/lib/nle/headless/api.ts:2578` | `serializeProject?: () => Project;` | ALIGNED | Optional serialize hook reserved (unwired) |
-| wire shape (D1) | `src/lib/nle/headless/api.ts:1745` | `fps: z.number().int().min(1).max(240),` | CORRECTIVE | Two conflicting Project shapes in one module; spec 15's ProjectJSON answers D1 |
-| §6 autosave ↔ undo | `src/lib/nle/timeline/timeline.ts:1772` | `function snapshotsEqual(a: TimelineData, b: TimelineData): boolean {` | RESOLVED (was CORRECTIVE) | **P0.6 FIXED (Wave 4A)** — equality now covers keyframes + compositions + backgroundColor (jsonDeepEqual :1798-1803); m20 20.7 regression-tested; counter-example retained in spec 19 §6 |
-| §5 load normalization | `src/lib/nle/persistence/index.ts:352-387` (Round-8 re-cite; was MASTER.md:85) | hydrate: sanitize + orphan-prune + warnings (4B) | ALIGNED-semantics | The weak `restore()` path is retired; normalization now inline — shape still engine-native (C8) |
+| §3.1 ProjectJSON schema | `src/lib/nle/core/types.ts:1486` (R33 re-cite; was :1451) | `export interface Project {` | CORRECTIVE | FreeCut-shaped single-timeline container; spec's metadata/settings/scenes wins (engine D1 resolved AGAINST the spec — the C8 adapter is the convergence task, spec 19 §7) |
+| §3.3 Zod validation | `src/lib/nle/headless/api.ts:2179` (R33 re-cite; was :2319) | `export async function normalizeProjectForHeadless(raw: unknown): Promise<Project> {` | CORRECTIVE | Presence-style normalization (now delegated, richer than the 3-field stub); full ProjectSchema wins |
+| §3.3 version literal | `src/lib/nle/core/types.ts:1497` (R33 REPLACE — the old `api.ts:1737` cite was the DELETED lifecycle zod schema) | `schemaVersion?: number;` | CORRECTIVE | Optional number vs z.literal(N); spec's Correction #10 wins. The lifecycle zod family (`lifecycleTimelineSchema`/`lifecycleProjectSchema`…) was REMOVED — `api.ts:1808-1809` documents the deletion (P1.13); the corrective re-anchors to the ONE `Project`'s own optional field |
+| §5.1 migration framework | `src/lib/nle/persistence/index.ts:361/:424` + `:78` (NLE_SCHEMA_VERSION)/`:91` (ProjectWarning) (R33 re-cite; was `:65-67/:162-183` Round-8, was `gaps/audit/MASTER.md:65`) | migrate gate + normalize + warnings channel (1,451 LOC, Wave 4B — the module grew past the R8 note's 1,174) | ALIGNED-semantics / CORRECTIVE-shape | The migrate/normalize/warnings SEMANTICS match spec §5; the serialized JSON shape is engine-native v2 — the C8 adapter re-targets it to spec 09 ProjectJSON (spec 19 §7 D1) |
+| §4.1/§4.4 OPFS | `gaps/audit/MASTER.md:79` (R33 re-cite; was :85, the pre-4B quote) | (Wave 4B landed the module; D5 storage plane still OPEN) | PARTIAL | Storage-agnostic module exists; spec's OPFS layout + host MediaStore is the D5 answer when the engine attaches storage |
+| §4 save path integrity | `src/lib/nle/headless/api.ts:1065` (R33 re-cite; was :2818) | `async editProject(input: NleEditInput): Promise<NleEditResult> {` | RESOLVED (was CORRECTIVE) | **The fake round-trip is RETIRED (Wave 4B)** — editProject now serializes the post-edit timeline (the `serializeTimeline` call at api.ts:1112, the R33 re-cite of scout R8-B's :1070-1130 block); the counter-example stays documented in spec 19 §6 |
+| storage seam | `src/lib/nle/headless/api.ts:2499` (R33 re-cite; was :2578) | `serializeProject?: () => Project;` | ALIGNED | Optional serialize hook reserved (unwired) |
+| wire shape (D1) | `src/lib/nle/core/types.ts:1486` (R33 REPLACE — the old `api.ts:1745` cite was the DELETED lifecycle wire schema) | `export interface Project {` | RESOLVED (was CORRECTIVE) | **"Two conflicting Project shapes in one module" is OBSOLETE** — the lifecycle wire family (the second shape) was REMOVED (`api.ts:1808-1809`, P1.13 second half); ONE `Project` remains; spec 15's ProjectJSON still answers D1 at the C8 adapter |
+| §6 autosave ↔ undo | `src/lib/nle/timeline/timeline.ts:1665` (R33 re-cite; was :1772) | `function snapshotsEqual(a: TimelineData, b: TimelineData): boolean {` | RESOLVED (was CORRECTIVE) | **P0.6 FIXED (Wave 4A)** — equality now covers keyframes + compositions + backgroundColor (jsonDeepEqual :1691-1697, R33 re-cite of :1798-1803); m20 20.7 regression-tested; counter-example retained in spec 19 §6 |
+| §5 load normalization | `src/lib/nle/persistence/index.ts:321-340` + `:424` (R33 re-cite; was `:352-387` Round-8, was MASTER.md:85) | hydrate: sanitize + orphan-prune + warnings (4B) | ALIGNED-semantics | The weak `restore()` path is retired; normalization now inline — shape still engine-native (C8) |
 | §7.2 media persistence | `gaps/audit/E2-persistence-serialization.md:156` | `No media persistence plane` | ENGINE-GAP | Spec's MediaRecord[] answers it |
-| §7.1 import probe | `src/lib/nle/headless/api.ts:2775` | `// Wave 1 stub: the real impl uses OPFS + mediabunny to decode + probe.` | CORRECTIVE | Engine probe is a stub; spec §7.1's flow is the growth path |
+| §7.1 import probe | `src/lib/nle/headless/api.ts:2732` (R33 re-cite; was :2775) | `// Wave 1 stub: the real impl uses OPFS + mediabunny to decode + probe.` | CORRECTIVE | Engine probe is a stub; spec §7.1's flow is the growth path |
 
 ### 10.4 GitHub issues (kimdogyeom)
 

@@ -1,13 +1,31 @@
 # 10 — FCPXML Export: Format, Mappings, Handoff Contract (Refined)
 
 **Stream:** FCPXML exporter
-**Status:** Refined by sub-agent scout (SCOUT-10-RETRY) — open questions answered with DTD + Apple doc references
+**Status:** v-next (Round 24 — the fleet audit re-baseline: design-of-record only — zero FCPXML writer/parser/fixture code in the fleet, the whole module is **r5** greenfield; the export seam's MEDIA half is now landed at BOTH layers — engine-side since R23, and app-side since the app's R8 W2.4 (`deliverService.ts` drives the engine's `renderCompositionCore` via the deep import; see §0 BASE) — while the FORMAT half stays zero-anywhere; Round 23's re-baseline + Round 22's + the SCOUT-10-RETRY refinement remain the design lineage — open questions answered with DTD + Apple doc references) Round 27 — the Z2 flip + the worklet-flush law + the model-coherence fold (see `audits/fleet-r27/spec-10.md`)
 **Primary teacher:** Apple FCPXML 1.10 DTD (mirrored in CommandPost repo) + Apple developer docs + project model
 **Spec file:** `10-fcpxml-export.md` (single canon file — renamed from `.refined.md` in R9 per 00-master §2.5; seed text recoverable in git history)
 
 ---
 
-## 0. Refined-Spec Notes (new section by scout)
+## 0. FORWARD INVENTORY (the R22 posture, R24 re-audited — what needs to be done; the BASE is accepted, not re-explained)
+
+**BASE (accepted; re-verified at the R27 pins, 2026-09-14 — engine `f9ac806` (748/748), OT HEAD `55c81c0` (632/632; code pin `970948a`), WDC `ec8fd5c` (777/777), nle-ui `32abd58` (690/690), app `c020b2a` (377/377 (R30 re-key — was 252 at the R26 pin; the K3 corpus round)); the R24 pins were engine `5036387` (458/458) / OT `ded43c4` (536/536; code pin `c15a629`) / WDC `85b81b0` (759/759) / nle-ui `fc4cc35` (674/674) / app `c885ece` (174/174); the R23 pins were engine `b8c6f88` / OT `222532c` / nle-ui `85dcf57` / app `70e99f0`):**
+- This spec IS the design-of-record: the FCPXML 1.10 shape rules (the DTD-not-XSD finding, §14), the §4 ProjectJSON→FCPXML mappings (asset/clip/lane/marker/transition/`timeMap`), the §6 validation strategy, the §8 limitations — the contract text stays the acceptance form.
+- The export seam is now HALF-real (FCPXML is the interchange FORMAT, the engine's export is the MEDIA render — spec 15 §4.2's export row states the same split), and the R23→R24 delta deepens the media half to BOTH layers: the **engine half** (landed R23, re-verified @ `f9ac806` — 748/748; the export subsystem grew 1,785→1,806 LOC since the R24 note, HW1-8 + F2-7 — §12.8's R27 note) renders real A/V via WebCodecs + mediabunny (`src/lib/nle/export/` orchestrator/settings/audio-mixdown/contracts/index: Wave 5B m24 + Stage 2 audio + m29 A/V mux — MP4/WebM/MKV + audio-only, decode-verified incl. pixel parity (the container SURFACE is wider: mp4/mov/webm/mkv + mp3/wav/aac-ADTS — `settings.ts:33`, `headless/api.ts:1840`; MOV is surface-only, zero mov test rows, its decode-verify rides C-export-encode Stage 4 `:105`; R33, engine seal-round register P3-34), per the engine's `gaps/audit/MASTER.md`; Stage 3 worker/OPFS + Stage 5 smart-copy still sequenced in `gaps/audit/C-export-encode.md`) — and, since the engine's v2 D-4, the **BGM-score export path** (`score` on the adapter's render verbs: `orchestrator.ts:561` renderComposition / `:579` renderAudioOnly — the instrument notes ride the SAME offline mixdown, `AudioMixdownScore {clips: ScoredNoteClip[]}` `audio-mixdown.ts:214-217`, `:357-359`; a notes-only timeline is a real score export, `orchestrator.ts:804-806`, the ctx sized to max(timeline, `scoreClipEndSec`) `:641-645`; pinned H18d — `tests/vitest/nle-bridge.test.ts:2247`, the C-major arpeggio + dialogue + mute fold) (R33, engine seal-round register P2-22 — added; verified @ engine `2a0ecf4`, 785/785), and the **app half** (the app's R8 W2.4, commit `278b95b`, "Pins ×17" — service 15 + the GluedShell seam 2): `src/deliverService.ts` maps the nle-ui DeliverPage `exportRequest` seam onto the engine's `renderCompositionCore` **via the deep import** (the app drives the CORE directly; the vendored engine has no node_modules — **mediabunny@1.50.8 EXACT** is the app's own install, package.json:28 — R33, engine seal-round register P3-33, re-anchored @ `7664603`, was :23; the 1.50.8-EXACT claim unchanged — re-verified R34 @ `d28847c` (package.json:28 exact; re-verified R35 @ `0510eac` — the edit-styles wave docs-only for the deliver surface) — 'master' = avc/aac/mp4 quality high (the orchestrator probes `canEncodeVideo` and falls back with a CODEC_FALLBACK warning; the file name's ext follows the **EFFECTIVE container** — a vp9 fallback never ships a .mp4 label), 'frame' = the same painter at the CURRENT playhead → `canvas.toBlob('image/png')`, audio = a **FRESH `SceneMixer.renderOffline`** over the app's REAL segment pipeline (flatten → foldSidecars → transition windows → segments — never the live mixer, the one-engine law), abort = the engine's `DOMException AbortError` shape propagated to the page's cancelled row state. The **format half is still ZERO code** (honest staleness: untouched since R23 — no writer, no parser, no fixture corpus): re-grepped at the R24 pins, 0 FCPXML matches in nle-engine, opencut-timeline, and web-daw-core; the app's only FCPXML-shaped code is deliverService's **DEFENSIVE row** (throws "FCPXML export is not implemented (spec-10 future)" — pinned) + its 2 seam tests; nle-ui's are the honest MOCK rails that defer to this spec: the `DeliverPage` (preset `fcpxml` active by default, "Bundle media with FCPXML", mock queue rows — **fcpxml stays page-mock in BOTH worlds**: with `exportRequest` present the fcpxml CTA pushes the "FCPXML writer is a spec-10 future — not wired yet" toast, never the contract) + the shell-variants' `DeliverPage` (the R22 W5 export/queue grammar — presets left / the queue replaces the preview while rendering / the deliver inspector right), plus the app's `GluedDeliver` story rendering the package rail around the engine timeline; ⌘E toasts "FCPXML export lands with spec 10". The BASE is the CONTRACT, not an implementation.
+- The serialization source exists and is netted: opencut-timeline @ `ded43c4` (536/536; code pin `c15a629`, src diff empty — the W11 wire-dispatch round changed no `SceneTracks`/serialization surface) — the `SceneTracks` doc model (main single-track / `overlay[]` above / `audio[]` below — §4's lane mapping 1:1) serialized per-scene via `TimelineCore.toJSON`/`fromJSON` (round-trip pinned by OT's own M-suites); time base = integer ticks at 120,000/sec (MediaTime, spec 09 — the same law OT carries). ProjectJSON (spec 09) rides per-scene `toJSON` persistence.
+- The app @ `c020b2a` (252/252; R30: `8f12cf9` — 377/377, the K3 corpus round) — R31: `f58147c` (418/418 — the DOM-structural tranche + the e2e-crawl suite: the REAL DeliverPage + deliverService export leg pinned; the master-venue gap registered browser-only) — R32: `ce7cfc3` (426/426, 22 files — the K4 exit verdict LANDED + the move-drag LEG 2b (the chain's cut clause 4-of-4 literally) + the doc-committing session registry + the D52 shell twin; the w1-entry deliverables: the human-rounds protocol + the annotakit review loop + the side-by-side fixtures + the VLM net 7/7 captured 0 REAL-BUG) HAS the deliver CTA wired to a REAL export (App.tsx:57, `exportRequest={deliverService.exportRequest}` — the R8 W2.4 landing above; the path is `renderCompositionCore`'s deep import, still no `renderTimeline`/`renderProject` consumer in `engineService.ts`; R33, engine seal-round register P3-33 — re-anchored @ `7664603`, was App.tsx:56, substance unchanged — re-verified R34 @ `d28847c` (App.tsx:57 exact; re-verified R35 @ `0510eac`) and no FCPXML surface beyond the defensive row — the K4 GAP row below is now the e2e leg ONLY (CORE-SEAMS S15).
+
+**GAP (the work — owner + phase per the D24 ladder, `IMPLEMENTATION-PLAN.md` §2; acceptance in parentheses):**
+- The whole module (owner: nle-test-app, phase **r5**; interchange + polish; re-checked R24 — ladder position unchanged, the plan's r5 row still carries the phase-entry artifact verbatim): greenfield exporter + validation; the parser+fixture-corpus choice is the PHASE-ENTRY artifact — decided at entry, recorded in `IMPLEMENTATION-PLAN.md` §2's r5 row (spec 14 is retired to a redirect stub, D23) BEFORE work starts (acceptance: the export validates vs the chosen reference parser on the corpus + the deliver e2e).
+- The export-seam wiring (owner: nle-test-app; phase **K4**; the crawl exit's export leg; CORE-SEAMS S15): the CTA half LANDED at the app's R8 W2.4 (`278b95b` — deliverService drives `renderCompositionCore`; the deliver rail's queue rows run the real job promise: queued→running→done/cancelled/failed with per-row retry; the honest-mock toast survives ONLY for the fcpxml preset, by design). **(R33, engine seal-round register P2-21)** The e2e half LANDED and the K4 exit SEALED: the e2e-crawl suite began at the app's R31 (`f58147c` — LEG 1–4 + the capstone: import(virtual) → cut → play → export over the REAL UI + the REAL deliverService) and grew at R32 (`ce7cfc3` — the move-drag LEG 2b, the cut clause 4-of-4 literally; 12 legs, all green inside the app's 426/426 22-file roof, live-verified at the current pin `7664603`), and the exit verdict LANDED — the app repo's `docs/decision-k4-exit-verdict.md` (adversarially reviewed APPROVE-WITH-AMENDMENTS, all amendments folded; the interpretation ruling ratified: zero mock paths — ONE venue-law `canvas.toBlob` jsdom stub, zero module mocks; zero human input). The residual is NOT an e2e gap: the master-preset venue stays browser-only BY LAW (`exportMaster`'s mediabunny mux needs OffscreenCanvas/WebCodecs — jsdom lacks both; pinned HONESTLY in e2e-crawl LEG 4b + `deliverService.test.ts`), and the forward clause is w2's full-scope demo re-gating by EXTENDING the suite (17 §31's own clause — the exit is not a freeze). (acceptance: the automated e2e green — MET.)
+- The grade→export gap (Z2; owner: S-app — the D30 W-E wave, feeding K3's export-parity pins): **CLOSED (the app's Z2 landing, re-verified R27 @ `c020b2a`):** the scene grade reaches the export as the CONSUMER-SIDE FINAL PASS — the same law ProgramCanvas's monitor uses: paint to a scratch canvas, then draw scratch→render with `ctx.filter = buildGradeFilterString(grade)` (`deliverService.ts:300-324`); ungraded scenes take the direct path (no scratch, no extra pass); Safari <18 no-ops the filter and the ungraded frame still exports. What you grade is what you get. The D29.5c engine-seam DECLINE stands (the compose-then-filter math law, engine `8a0b7fe`) — with the R27 note that the engine's R9-c re-filed the seam-side final-pass proposal (`paintCompositionFrame(…, { grade })`) as its possible evolution (04 §0's row is the twin). Orthogonal to the FORMAT half: FCPXML 1.10 doesn't carry grade state anyway (§3.4/§8 — v1 exports neutral + the LUT workaround).
+- Keyframed-volume mapping (owner: this spec; phase r5, decision at entry): N2b is LANDED (engine `37cdd28` + app `c8c875e` — `animations["volume"]` → `gainAutomation` breakpoints, lane-replaces-static) and has NO v1 FCPXML 1.10 mapping — v1 exports the static `<adjust-volume>` + fades and lists `gainAutomation` in `KNOWN_LOSSY_FIELDS`; the v2 `keyframeAnimation` mapping is §8's DEFERRED decision (acceptance: the lossy-fields list names it + the v1 fold rule stated at phase entry).
+
+**ACCEPTANCE & TEST PLAN:** §15 (the seed intent list) + the `## Testing` section (the executable contract); the §15 items 3–5 manual FCP/Resolve/Premiere open tests ride the phase's deliver gate; spec 17 §13A's FCPXML matrix rows; battery posture: no suite exists to hold — the phase-entry corpus CREATES the regression net. The Tier-2 UI surface exists TODAY in two forms (nle-ui's `DeliverPage` — the W2.4 `exportRequest` seam: the app's real-jobs world + the package's mock world, **fcpxml mock in BOTH** — + the shell-variants' `DeliverPage`; see the R23/R24 note in Tier 2); the real export e2e rides the K4 GAP row (the CTA wiring landed at the app's R8 W2.4).
+
+---
+
+## 0A. Refined-Spec Notes (new section by scout)
 
 This file extends the seed `10-fcpxml-export.md`. Sections 1–9 are re-stated verbatim with light inline annotations. Section 10 (Open Questions) is fully rewritten with concrete answers backed by:
 
@@ -380,16 +398,24 @@ private buildAssetClip(ctx: ExportContext, el: ElementJSON, lane: number): strin
   //     </timeMap>
   // Variable speed: 3+ timept entries with interp="linear" or "smooth2".
   const speedChildren = el.speed !== 1
-    ? this.buildTimeMap(el.speed, el.duration, el.sourceDuration, ctx.project.settings.fps)
+    ? this.buildTimeMap(el.speed, el.duration, el.sourceDuration, ctx.project.settings.fps, el.preservePitch)
     : '';
 
-  // Volume (refined — see §13 Correction #2).
+  // Volume (refined — see §13 Correction #2; the D38.2 volume-domain law, R27 fold).
   // FCPXML 1.10 has NO 'volume' attribute on asset-clip.
-  // Volume is a child <adjust-volume amount="<dB>dB"/> element.
+  // Volume is a child <adjust-volume amount="<dB>dB"/> element — ABSENT ≡ unity:
+  //   el.volume == null → OMIT <adjust-volume> entirely (FCP's default "0dB" — the
+  //     absent≡unity law, 09 §3.1A B2, D38.2; el.volume is the persisted LINEAR
+  //     form, absent ≡ 1);
+  //   else amount = clamp(20·log10(el.volume), −60, +20) dB — the fleet [−60,+20]
+  //     authoring domain, ONE home opencut core/audio-params; NaN → unity at that
+  //     clamp (never the −96 floor).
   let audioChildren = '';
   if (el.type === 'audio' || el.type === 'video') {
-    const volumeDb = this.gainToDb(el.volume);
-    audioChildren += `<adjust-volume amount="${volumeDb}dB"/>`;
+    if (el.volume != null) {
+      const volumeDb = this.gainToDb(el.volume);
+      audioChildren += `<adjust-volume amount="${volumeDb}dB"/>`;
+    }
     if (el.muted) {
       // Mute is a child <mute start=".." duration=".."/> element covering the full clip.
       audioChildren += `<mute start="0s" duration="${duration}"/>`;
@@ -433,9 +459,11 @@ private buildAssetClip(ctx: ExportContext, el: ElementJSON, lane: number): strin
   return `<asset-clip ${attrs}/>`;
 }
 
+// D38.2 (09 §3.1A B2): the fleet [−60,+20] dB domain — the `gain <= 0 → -96`
+// floor is DELETED (the linear unity floor 0.001 ≡ −60 dB replaces it); NaN →
+// unity at the one-home clamp (opencut core/audio-params — the deep-import leaf).
 private gainToDb(gain: number): number {
-  if (gain <= 0) return -96;  // effectively silent
-  return 20 * Math.log10(gain);
+  return clampVolumeDb(20 * Math.log10(gain));
 }
 ```
 
@@ -513,7 +541,11 @@ private buildNonAssetClip(ctx: ExportContext, el: ElementJSON, lane: number): st
 
     const offset = this.formatTime(el.startTime, ctx.project.settings.fps);
     const duration = this.formatTime(el.duration, ctx.project.settings.fps);
-    const textContent = (el as any).params?.text || 'Text';
+    // (R28 amendment, D49/ARCH-R28 — the captions model) the text body's home is the
+    // FIRST-CLASS `ElementJSON.text` field (09 §3.1 — OT's TextElement gains the body
+    // field at the r1 port); the params?.text stand-in RETIRES with it. Styling params
+    // (font/size/color/alignment below) stay in `params`.
+    const textContent = el.text || 'Text';
 
     // Text content + inline text-style-def
     const textStyleId = `ts1`;
@@ -551,6 +583,8 @@ private colorToFCPString(c: { r: number; g: number; b: number; a: number }): str
 
 ### 4.7 Marker generation (refined)
 
+**(Round 28 amendment, D48/ARCH-R28 — the marker model's export fold; see `audits/ARCH-R28-seal-round.md` §4):** markers are PER SCENE (`SceneJSON.markers`, 09 §3.1A A2 — the project-level array is retired; the generator reads the CURRENT scene's markers, never a project-global list), and the DTD's native `duration`/`note` attrs are MAPPED: a range marker (D48's `duration?` — absent = point; `end = time + duration`, ≥1 frame, ≤ scene duration) exports its real `duration`; `notes?` exports as the `note` attr (the D48/F1 disposition: `notes` owns OT's `Bookmark.note`; `label` is doc-side-synthesized — the `value` attr keeps `label`).
+
 ```ts
 private buildMarkers(ctx: ExportContext, parentEl: ElementJSON): string {
   // Markers are CHILDREN of clips (asset-clip, audio, video, title, gap, etc.) — not standalone.
@@ -565,20 +599,28 @@ private buildMarkers(ctx: ExportContext, parentEl: ElementJSON): string {
   // Chapter markers: same shape but element name is <chapter-marker>, with extra posterOffset.
   // Analysis markers: <analysis-marker start=".." duration=".." type=".."/> — auto-generated by FCP.
 
-  if (ctx.project.markers.length === 0) return '';
+  // (R28/D48 amendment) PER-SCENE read: markers live on SceneJSON.markers (09 §3.1A
+  // A2) — the earlier ctx.project.markers read was the A2-retired project-global shape.
+  const scene = ctx.project.scenes.find(s => s.id === ctx.project.currentSceneId)!;
+  if (scene.markers.length === 0) return '';
 
   // Find markers within this clip's time range
   const fps = ctx.project.settings.fps;
   const clipStart = parentEl.startTime;
   const clipEnd = parentEl.startTime + parentEl.duration;
-  const markersInClip = ctx.project.markers.filter(m => m.time >= clipStart && m.time < clipEnd);
+  const markersInClip = scene.markers.filter(m => m.time >= clipStart && m.time < clipEnd);
 
   return markersInClip.map(m => {
     // 'start' here is RELATIVE to the clip's local timeline (parentEl.sourceStart = 0 if not retimed).
     const localStart = m.time - clipStart;
+    // (R28/D48) a range marker exports its REAL duration (end = time + duration);
+    // a point marker keeps the one-frame form. notes → the DTD's note attr
+    // (#IMPLIED — emitted only when present); value keeps label.
+    const duration = m.duration != null ? this.formatTime(m.duration, fps) : this.formatOneFrame(fps);
+    const note = m.notes ? ` note="${this.escapeXML(m.notes)}"` : '';
     return `<marker start="${this.formatTime(localStart, fps)}" ` +
-      `duration="${this.formatOneFrame(fps)}" ` +
-      `value="${this.escapeXML(m.label || 'Marker')}"/>`;
+      `duration="${duration}" ` +
+      `value="${this.escapeXML(m.label || 'Marker')}"${note}/>`;
   }).join('\n');
 }
 
@@ -766,7 +808,8 @@ This must be done manually as part of the test matrix (see `12-testing-strategy.
 - ❌ **Audio EQ.** Per-track EQ settings. (FCPXML 1.10 supports `<adjust-EQ>` with predefined modes like `voice_enhance`, `music_enhance` — but custom EQ bands require Motion templates.)
 - ❌ **Animation keyframes for transforms.** FCPXML supports keyframes via `<keyframeAnimation>` for any `<param>` (DTD lines 195-202), so this is actually feasible. Implementation ⚠️ DEFERRED to v2.
 - ❌ **Multi-camera angles.** Deferred to v2.
-- ❌ **Subtitles/captions.** FCPXML 1.10 has `<caption>` support, but our project model doesn't yet.
+- ❌ **Subtitles/captions (v1 export surface).** (R28/D49 re-key — the blocker's model half is CLOSED: the project model NOW carries captions — `SceneTracksJSON.captions` (09 §3.1/§3.1A, one per language, `type:'text'` elements with the first-class `text` body field; 15 §4.3.22's addTrack `'caption'`+`language?`). What remains r5-SCHEDULED is the export corpus itself: the FCPXML `<caption>` mapping (the DTD lanes exist, §3's concept list) + the file-per-language SRT/ASS/VTT granularity — the rationale for the track-kind model (D49), stated r5-forward; the current export surface is FCPXML-only.)
+- ❌ **BGM score / instrument-note clips (v2 D-4).** No FCPXML 1.10 element exists for a musical score — the engine's landed BGM-score export path (§0's engine-half note: `score` on the adapter's render verbs) renders to AUDIO, not to notation. v1 lists `ScoredNoteClip` in `KNOWN_LOSSY_FIELDS` (or renders the score to a baked audio asset at phase entry — the decision is an r5 phase-entry artifact, like N2b). *(R33, engine seal-round register P2-22 — added; zero `bgm`/`scored`/`instrument`/`score clip` matches in this spec before this row.)*
 
 ### 8.2 The "include a LUT" workaround for color
 
@@ -1321,6 +1364,8 @@ Frame durations by fps (from FCP.cafe + Apple docs):
   <conform-rate srcFrameRate="25" frameSampling="frame-blending"/>
   ```
 
+- Pitch (`preservePitch`, D38.1): rides the same `<timeMap>` via the `preservesPitch` attribute — **emit `preservesPitch="0"` only when `el.preservePitch === false`** (absent≡true ⇔ the DTD default `"1"`; explicit false = pitch-affected varispeed — 09 §3.1A B2, D38.1; §4.4's `buildTimeMap` passes the flag through).
+
 ### 11.7 Marker, rating, keyword elements (DTD lines 655-680)
 
 ```xml
@@ -1396,9 +1441,9 @@ The DTD uses `CDATA` for almost every attribute. The following constraints must 
 
 | File | LOC | Purpose |
 |---|---|---|
-| `/home/z/my-project/nle-core-spec/00-master-spec.md` | 466 | Master spec — stream map, decisions, WYSIWYG contract (path updated from the original /download/nle-spec/ clone location) |
+| `/home/z/my-project/nle-core-spec/00-master-spec.md` | 863 | Master spec — stream map, decisions, WYSIWYG contract (path updated from the original /download/nle-spec/ clone location) |
 | `/home/z/my-project/nle-core-spec/10-fcpxml-export.md` | 727 | Seed spec for this stream (refined by this file; path updated) |
-| `/home/z/my-project/nle-core-spec/09-project-model.md` | 2379 | Dependency — `ProjectJSON`, `MediaColorInfo`, `ElementJSON`, `TransitionJSON` schema. SCOUT-09 flagged the need for sequence-level `colorSpace` (§8.13, §11 Correction #3) — addressed in this file's §10 Q8 / §13 Correction #7. (path updated) |
+| `/home/z/my-project/nle-core-spec/09-project-model.md` | 3,102 | Dependency — `ProjectJSON`, `MediaColorInfo`, `ElementJSON`, `TransitionJSON` schema. SCOUT-09 flagged the need for sequence-level `colorSpace` (§8.13, §11 Correction #3) — addressed in this file's §10 Q8 / §13 Correction #7. (path updated) (R27: 09's own audit re-based the schema blocks — 10's §4 must be re-derived against them; see `audits/fleet-r27/spec-10.md`) |
 
 ### 12.2 Apple documentation (markdown mirrors fetched successfully)
 
@@ -1461,7 +1506,7 @@ All URLs below were fetched during this scout task with HTTP 200 (markdown versi
 
 **Engine FCPXML surface: verified zero.** `grep -ri fcpxml /home/z/my-project/nle-engine/src` returns 0 matches — no exporter module, no `engine.export.*`, no XML emission anywhere. This entire spec is SPEC-ONLY relative to the engine. The mapping below records what the engine's project model already provides the future exporter, plus the gaps.
 
-> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests) is a clean-room FreeCut-port **in-between reference, NOT canon**. Where engine and spec conflict, **the spec wins**. Full reconciliation: `19-code-references.md`.
+> The private **nle-engine** repo (github.com/bearachprema/nle-engine, 37,958 LOC, 124 tests — a Round-7-era snapshot; at the R24 pin `5036387` it is 458/458 vitest + the browser milestone venue, see the R23/R24 notes below) is a clean-room FreeCut-port **in-between reference, NOT canon**. Where engine and spec conflict, **the spec wins**. Full reconciliation: `19-code-references.md`.
 
 | Spec section | nle-engine file:line | Verified quote | Status | Note |
 |---|---|---|---|---|
@@ -1475,6 +1520,59 @@ All URLs below were fetched during this scout task with HTTP 200 (markdown versi
 | §3.1 lane mapping | `core/types.ts:760` | `export type TrackKind = 'video' \| 'audio';` | ALIGNED (mapping needed) | Exporter must synthesize lanes from track.order (V3/V2/A1 per M2) |
 | §4.5 transitions | `core/types.ts:371` | `presentation: TransitionPresentation;` | ALIGNED (field presence) | Richer than spec 10's crossfade-only §4.5; only crossfade maps in v1 |
 | §8.1 non-exported item types | `core/types.ts:734` | `export interface CompositionItem extends BaseClip {` | ENGINE-GAP | Comps exist as types but render zero pixels (player.ts:1038) — consistent with §8.1 |
+
+> **R23 re-verification (2026-09-07 pins, engine @ `b8c6f88`):** the
+> Round-7 rows above are kept as the historical record (line numbers
+> are Round-7-era). Re-checked at HEAD: (1) the zero-FCPXML claim
+> STILL HOLDS — `rg -i fcpxml nle-engine/src` → 0 matches; the engine
+> remains FCPXML-free, so this spec is still SPEC-ONLY relative to the
+> engine. (2) The roadmap note above ("Engine export roadmap … is
+> MP4/WebM only") is superseded on the MEDIA side: Wave 5B Export M1
+> (m24, 13/13 green) + Stage 2 audio (m24 24.11-24.13) + the m29 A/V
+> mux are LANDED and decode-verified (real MP4/WebM/MKV + audio-only
+> containers; frame-count/duration/pixel-parity verification; per the
+> engine's `gaps/audit/MASTER.md` rows 5B/5B-S2 — the container SURFACE
+> is wider: `mp4/mov/webm/mkv` + mp3/wav/aac-ADTS (`settings.ts:33`,
+> `headless/api.ts:1840`); MOV is surface-only, zero mov test rows, its
+> decode-verify rides C-export-encode Stage 4 `:105` — R33, engine
+> seal-round register P3-34) — the engine's export
+> is the MEDIA half of the seam and FCPXML stays the FORMAT half,
+> still greenfield (spec 15 §4.2's export row: "engine export
+> orchestrator exists (mediabunny A/V); FCPXML is A6 greenfield").
+> Remaining engine-export roadmap (worker offload + OPFS Stage 3,
+> smart-copy/remux Stage 5) lives in `gaps/audit/C-export-encode.md` —
+> none of it touches FCPXML. (3) The `MediaMetadata` colorSpace
+> ENGINE-GAP row re-verified: still no colorSpace field at HEAD —
+> still the highest-value pre-export engine addition. (4) N2b
+> keyframed volume (LANDED `37cdd28`) adds `gainAutomation` — see the
+> §0 GAP row for the v1 known-lossy ruling.
+
+> **R24 re-verification (2026-09-08 pins, engine @ `5036387`, 458/458
+> static census):** (1) the zero-FCPXML claim STILL HOLDS — rg over
+> src/ + tests/ → 0 matches; the engine remains FCPXML-free. (2) The
+> export subsystem is UNCHANGED since the R23 note (5 files / 1,785
+> LOC, mediabunny lazy-imported — the only engine source deltas since
+> `b8c6f88` are the bridge's W2.5 effects sidecar + blur clamp, not
+> export). (3) The `MediaMetadata` colorSpace ENGINE-GAP row re-
+> verified OPEN — still no colorSpace field at HEAD; still the
+> highest-value pre-export engine addition. (4) The MEDIA half now
+> ALSO lands app-side (the app's R8 W2.4 deliverService deep-imports
+> `renderCompositionCore` — §0 BASE); the rows above are untouched by
+> it, and the Round-7 "MP4/WebM only" roadmap note stays superseded
+> as recorded at R23.
+
+> **R27 re-verification (2026-09-14, engine @ `f9ac806`, 748/748):** (1)
+> zero-FCPXML STILL HOLDS (src/ + tests/ → 0 matches; the engine remains
+> FCPXML-free). (2) The export subsystem grew 1,785 → 1,806 LOC — HW1-8
+> the pcm-s16 audio-only ladder (`84c909d`) + the F2-7 hostile-fold
+> batch (`1c04887`); the M2 Wave 1 flush law landed APP-side
+> (deliverService.ts:252) while the engine's own paths keep
+> workletFlushMs: 0 (orchestrator.ts:670 — the fast path). (3) The
+> `MediaMetadata` colorSpace ENGINE-GAP re-verified OPEN at
+> metadata.ts:48-102 (no colorSpace/colorInfo/primaries field). (4) The
+> R7-era line pins drifted (types.ts now 1,516 LOC); substance
+> re-anchored: speed :644, volume :656, markers :1373, TrackKind :1066,
+> presentation :422, CompositionItem :1008.
 
 ---
 
@@ -1662,7 +1760,7 @@ The `<sequence>` element only allows `(note?, spine, metadata?)` as children (DT
 
 The `start` attribute is relative to the parent clip's local timeline (not the sequence timeline).
 
-**Action:** Move marker emission into the clip-building functions (`buildAssetClip`, `buildAudioClip`, etc.). For project-level markers (not attached to a specific clip), emit them on the closest preceding clip in the spine, or on a `<gap>` element placed at the marker's timecode.
+**Action:** Move marker emission into the clip-building functions (`buildAssetClip`, `buildAudioClip`, etc.). For scene-scoped markers not attached to a specific clip (per the A2 amendment — markers are PER SCENE, not project-level), emit them on the closest preceding clip in the spine, or on a `<gap>` element placed at the marker's timecode.
 
 ### Correction #11: Seed's `media-rep kind="original-mediarep"` is wrong; valid kinds are `original-media` and `proxy-media`
 
@@ -1984,6 +2082,11 @@ Per the npm search (§12.6):
   same sourceStart/duration/startTime, same transitions, same markers);
   lossy fields (effects not in FCPXML vocabulary) are excluded from
   the comparison and listed in the test's `KNOWN_LOSSY_FIELDS` array
+  — which names `gainAutomation` (the N2b GAP row's ruling) and
+  `ScoredNoteClip` (§8.1's BGM-score/instrument-note row, v2 D-4)
+  unless the r5 phase-entry decision bakes the score to an audio asset
+  instead *(R33, engine seal-round register P2-22 — the lossy-fields
+  plan extended)*
 
 **Zod schema (DTD-level structure validation):**
 
@@ -2025,6 +2128,37 @@ written to disk correctly and that bundled media is co-located.
   `page.on('download')` event; the downloaded file has extension
   `.fcpxml` and a non-empty body that passes Tier 1's Zod schema
   check
+
+  > **R23 — the live mock references for this surface:** the Deliver
+  > page exists TODAY as two honest mocks (no encode, no download):
+  > nle-ui's `DeliverPage` (spec 18 §4.8's export/queue surface —
+  > presets with `fcpxml` active by default, "Bundle media with
+  > FCPXML", the `shell-deliver-btn-export-fcpxml` CTA, mock queue
+  > rows ending `.fcpxml`) and the shell-variants' `DeliverPage`
+  > (the R22 W5 grammar: presets left / the render queue replaces
+  > the preview while rendering / the deliver inspector right). The
+  > app renders the package rail around the engine timeline (its
+  > `GluedDeliver` story). Both toast that FCPXML "lands with spec
+  > 10" — the real CTA→engine wiring is the K4 GAP row in §0
+  > (CORE-SEAMS S15).
+
+  > **R24 — the seam is now DUAL-WORLD (the W2.4 `exportRequest`
+  > contract, same testid `shell-deliver-btn-export-fcpxml`):** the
+  > nle-ui `DeliverPage` accepts an OPTIONAL engine-free
+  > `exportRequest` prop — ABSENT = the mock world verbatim (all
+  > pre-W2.4 pins stand); PRESENT (the app, App.tsx:57 — R33, engine
+  > seal-round register P3-33: re-anchored @ `7664603`, was :56, re-verified R34 @ `d28847c` (App.tsx:57 exact; re-verified R35 @ `0510eac`),
+  > substance unchanged) = master and
+  > frame drive the app's real deliverService (job rows run the
+  > promise's truth: queued→running→done/cancelled/failed, retry
+  > re-runs the same settings, Cancel aborts → the service's
+  > DOMException AbortError maps to the cancelled row). **fcpxml
+  > stays mock in BOTH worlds**: with the seam present the fcpxml CTA
+  > pushes the info toast "FCPXML writer is a spec-10 future — not
+  > wired yet" (no job row, no encode); the app's deliverService
+  > throws defensively if routed anyway (pinned). This Tier-2 test (a
+  > REAL download event) still has no live surface anywhere — it
+  > lands with r5.
 - `export-with-media-bundling-copies-media-alongside-fcpxml` — when
   `bundleMedia: true` is passed to the export call, the download
   directory (simulated via OPFS or Playwright's `download.path()`)
@@ -2050,7 +2184,15 @@ written to disk correctly and that bundled media is co-located.
 > implementation remains the function-based export path
 > (`engine.export.exportFCPXML(project, opts)` — ExportManager, spec 01
 > §14.11). T3.2 below is **un-gated and runs as written**. The FACET-10
-> follow-up is closed.
+> follow-up is closed. (R33, engine seal-round register P3-35 —
+> greenfield: nothing here exists yet — no `engine.export.*`, no
+> `exportFCPXML` verb in any fleet engine (0 FCPXML matches in
+> nle-engine src+tests @ `2a0ecf4`; the app's only FCPXML-shaped code is
+> deliverService's defensive throw); the note describes the r5 dispatch
+> design, cf. 15 §4.3's greenfield tag (`:413` "greenfield —
+> ExportManager, spec 01 §14.11"; `:324` "FCPXML is r5 greenfield").
+> T3.2 "runs as written" = the test is executable as specified once r5
+> lands.)
 
 - `keyboard-cmd-e-triggers-fcpxml-export` — `Cmd+E` (macOS) /
   `Ctrl+E` (Windows/Linux) issues the export via `page.keyboard.press()`

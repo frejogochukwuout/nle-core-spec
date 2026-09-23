@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scopes</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+        :root {
+            --bg-window: #111111;
+            --bg-header: #1a1a1a;
+            --bg-panel: #0d0d0d;
+            --border-color: #000000;
+            --text-gold: #c29d38;
+            --text-gray: #a3a3a3;
+            --grid-line: #3a2e12;
+            --grid-line-dim: #261f0d;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            background-color: var(--border-color);
+            font-family: 'Inter', -apple-system, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .scope-container {
+            background-color: var(--bg-panel);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .scope-header {
+            height: 32px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-gray);
+            border-bottom: 1px solid #1a1a1a;
+            z-index: 10;
+        }
+
+        .scope-header span {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            margin-right: 16px;
+        }
+
+        .scope-header span:hover {
+            color: #fff;
+        }
+
+        .scope-header svg.dropdown {
+            width: 10px;
+            height: 10px;
+            margin-left: 4px;
+            fill: currentColor;
+        }
+
+        .scope-header svg.settings {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+            cursor: pointer;
+        }
+        
+        .scope-header svg.settings:hover {
+            fill: #fff;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        .canvas-wrapper {
+            position: relative;
+            flex: 1;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Top window bar */
+        .window-bar {
+            height: 36px;
+            background-color: var(--bg-header);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #d1d1d1;
+            font-size: 14px;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .window-controls {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            padding-right: 8px;
+        }
+
+        .window-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            color: #888;
+        }
+
+        .window-icon:hover {
+            color: #fff;
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 2px;
+            height: calc(100% - 36px);
+            background-color: var(--border-color);
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Main Window -->
+    <div class="flex flex-col w-full h-full">
+        
+        <!-- Window Title Bar -->
+        <div class="window-bar">
+            <span>Scopes</span>
+            <div class="window-controls">
+                <div class="window-icon">
+                    <svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.5" fill="none"><line x1="1" y1="6" x2="11" y2="6"></line></svg>
+                </div>
+                <div class="window-icon">
+                    <svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.5" fill="none"><rect x="1.5" y="1.5" width="9" height="9"></rect></svg>
+                </div>
+                <div class="window-icon">
+                    <svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.2" fill="none">
+                        <rect x="1" y="1" width="5" height="5"></rect>
+                        <rect x="8" y="1" width="5" height="5"></rect>
+                        <rect x="1" y="8" width="5" height="5"></rect>
+                        <rect x="8" y="8" width="5" height="5"></rect>
+                    </svg>
+                </div>
+                <div class="window-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2x2 Quadrant Layout -->
+        <div class="layout-grid">
+            
+            <!-- Parade -->
+            <div class="scope-container">
+                <div class="scope-header">
+                    <span>Parade <svg class="dropdown" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></span>
+                    <svg class="settings" viewBox="0 0 24 24">
+                        <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+                    </svg>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="paradeCanvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Waveform -->
+            <div class="scope-container">
+                <div class="scope-header">
+                    <span>Waveform <svg class="dropdown" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></span>
+                    <svg class="settings" viewBox="0 0 24 24">
+                        <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+                    </svg>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="waveformCanvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Vectorscope -->
+            <div class="scope-container">
+                <div class="scope-header">
+                    <span>Vectorscope <svg class="dropdown" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></span>
+                    <svg class="settings" viewBox="0 0 24 24">
+                        <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+                    </svg>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="vectorscopeCanvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Histogram -->
+            <div class="scope-container">
+                <div class="scope-header">
+                    <span>Histogram <svg class="dropdown" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></span>
+                    <svg class="settings" viewBox="0 0 24 24">
+                        <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+                    </svg>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="histogramCanvas"></canvas>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const TEXT_COLOR = '#c29d38';
+        const GRID_COLOR = '#3a2e12';
+        const DIM_GRID_COLOR = '#261f0d';
+        
+        // Setup high-DPI canvas
+        function setupCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.parentElement.getBoundingClientRect();
+            
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            
+            return { ctx, width: rect.width, height: rect.height, canvas };
+        }
+
+        // Draw standard vertical axes (0 to 1023)
+        function drawYAxis(ctx, width, height, margin) {
+            ctx.font = '10px Inter, sans-serif';
+            ctx.fillStyle = TEXT_COLOR;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            
+            const labels = [1023, 896, 768, 640, 512, 384, 256, 128, 0];
+            const graphHeight = height - margin.top - margin.bottom;
+            
+            labels.forEach((val, i) => {
+                const y = margin.top + (i / (labels.length - 1)) * graphHeight;
+                
+                // Draw text
+                ctx.fillText(val, margin.left - 8, y);
+                
+                // Draw horizontal line
+                ctx.beginPath();
+                ctx.strokeStyle = GRID_COLOR;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([2, 4]); // Dotted look
+                ctx.moveTo(margin.left, y);
+                ctx.lineTo(width - margin.right, y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            });
+            
+            // X-axis ticks (bottom)
+            ctx.strokeStyle = GRID_COLOR;
+            ctx.lineWidth = 1;
+            for(let i=0; i<=30; i++) {
+                const x = margin.left + (i/30) * (width - margin.left - margin.right);
+                ctx.beginPath();
+                ctx.moveTo(x, height - margin.bottom);
+                ctx.lineTo(x, height - margin.bottom + 4);
+                ctx.stroke();
+            }
+        }
+
+        // Simulates realistic waveform data based on visual curves
+        function generateWaveformData(points, width, channelShape) {
+            const data = [];
+            for(let i=0; i<points; i++) {
+                const nx = i / points;
+                // Add noise and structure based on shape function
+                data.push(channelShape(nx));
+            }
+            return data;
+        }
+
+        function drawWaveformDensity(ctx, x, w, h, bottomY, colorStyle, shapeFunc, intensity = 40) {
+            ctx.fillStyle = colorStyle;
+            for(let i=0; i<w; i+=0.5) {
+                const nx = i / w;
+                const baseHeight = shapeFunc(nx) * h;
+                
+                // Draw vertical lines with random opacity and spread to simulate trace
+                for(let j=0; j<intensity; j++) {
+                    const noiseY = (Math.random() - 0.5) * h * 0.4;
+                    const finalY = bottomY - baseHeight + noiseY;
+                    
+                    if(finalY < bottomY && finalY > bottomY - h) {
+                        ctx.globalAlpha = Math.random() * 0.15;
+                        ctx.fillRect(x + i, finalY, 1.5, Math.random() * 30 + 10);
+                    }
+                }
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        // Draw Parade
+        function drawParade() {
+            const { ctx, width, height } = setupCanvas('paradeCanvas');
+            const margin = { top: 20, right: 10, bottom: 20, left: 40 };
+            
+            ctx.clearRect(0, 0, width, height);
+            drawYAxis(ctx, width, height, margin);
+            
+            const graphW = width - margin.left - margin.right;
+            const graphH = height - margin.top - margin.bottom;
+            const bottomY = height - margin.bottom;
+            const colW = graphW / 3;
+
+            // Shapes matching the image
+            const redShape = (nx) => {
+                let v = Math.sin(nx * Math.PI) * 0.4;
+                if(nx > 0.7 && nx < 0.9) v += Math.pow(Math.sin((nx-0.7)*5 * Math.PI), 2) * 0.5; // right spike
+                v += Math.random() * 0.2;
+                return v;
+            };
+            const greenShape = (nx) => {
+                let v = Math.pow(Math.sin(nx * Math.PI), 1.5) * 0.7;
+                v += Math.random() * 0.2;
+                return v;
+            };
+            const blueShape = (nx) => {
+                let v = Math.pow(Math.sin(nx * Math.PI), 2) * 0.6;
+                if(nx > 0.5 && nx < 0.8) v += 0.3; // right shift
+                if(nx > 0.85) v += 0.2; // far right bump
+                v += Math.random() * 0.2;
+                return v;
+            };
+
+            ctx.globalCompositeOperation = 'lighter';
+            
+            // Draw Red
+            drawWaveformDensity(ctx, margin.left, colW, graphH, bottomY, '#ff3333', redShape, 60);
+            
+            // Draw Green
+            drawWaveformDensity(ctx, margin.left + colW, colW, graphH, bottomY, '#33ff33', greenShape, 60);
+            
+            // Draw Blue
+            drawWaveformDensity(ctx, margin.left + colW * 2, colW, graphH, bottomY, '#4444ff', blueShape, 60);
+            
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // Draw Waveform
+        function drawWaveform() {
+            const { ctx, width, height } = setupCanvas('waveformCanvas');
+            const margin = { top: 20, right: 10, bottom: 20, left: 40 };
+            
+            ctx.clearRect(0, 0, width, height);
+            drawYAxis(ctx, width, height, margin);
+            
+            const graphW = width - margin.left - margin.right;
+            const graphH = height - margin.top - margin.bottom;
+            const bottomY = height - margin.bottom;
+
+            // In waveform, R G B overlap across the whole width.
+            const redShape = (nx) => Math.pow(Math.sin(nx * Math.PI * 1.5), 2) * 0.5 + 0.1;
+            const greenShape = (nx) => Math.pow(Math.sin((nx + 0.2) * Math.PI), 2) * 0.6 + 0.1;
+            const blueShape = (nx) => Math.pow(Math.sin((nx - 0.1) * Math.PI), 2) * 0.7;
+
+            ctx.globalCompositeOperation = 'lighter';
+            
+            // Render overlapping traces
+            drawWaveformDensity(ctx, margin.left, graphW, graphH, bottomY, '#ff3333', redShape, 40);
+            drawWaveformDensity(ctx, margin.left, graphW, graphH, bottomY, '#33ff33', greenShape, 40);
+            drawWaveformDensity(ctx, margin.left, graphW, graphH, bottomY, '#4444ff', blueShape, 40);
+            
+            // Add the prominent right-side white/mixed spike seen in the reference
+            const spikeX = margin.left + graphW * 0.85;
+            for(let i=0; i<300; i++) {
+                const y = margin.top + Math.random() * graphH;
+                const xOffset = (Math.random() - 0.5) * 15;
+                
+                ctx.fillStyle = (Math.random() > 0.5) ? 'rgba(200,200,255,0.2)' : 'rgba(255,100,100,0.1)';
+                ctx.fillRect(spikeX + xOffset, y, 1, Math.random() * 20);
+                
+                // bright core
+                if (Math.random() > 0.8) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                    ctx.fillRect(spikeX + xOffset*0.3, y, 2, 5);
+                }
+            }
+
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // Draw Vectorscope
+        function drawVectorscope() {
+            const { ctx, width, height } = setupCanvas('vectorscopeCanvas');
+            ctx.clearRect(0, 0, width, height);
+            
+            const cx = width / 2;
+            const cy = height / 2;
+            const r = Math.min(cx, cy) * 0.8;
+
+            // Draw outer ticks
+            ctx.strokeStyle = GRID_COLOR;
+            ctx.lineWidth = 1;
+            
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Inner faint circle
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.75, 0, Math.PI * 2);
+            ctx.strokeStyle = DIM_GRID_COLOR;
+            ctx.stroke();
+
+            // Crosshairs
+            ctx.strokeStyle = GRID_COLOR;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
+            ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+            ctx.stroke();
+
+            // Tick marks
+            for(let i=0; i<360; i+=10) {
+                const angle = i * Math.PI / 180;
+                const isMajor = i % 90 === 0;
+                const isMed = i % 30 === 0;
+                
+                const innerR = isMajor ? r - 15 : (isMed ? r - 10 : r - 5);
+                
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
+                ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+                ctx.strokeStyle = isMajor ? TEXT_COLOR : GRID_COLOR;
+                ctx.stroke();
+            }
+
+            // Draw Targets
+            // Approximate angles for standard vectorscope (0 is right, going clockwise)
+            // R, Mg, B, Cy, G, Yl
+            const targets = [
+                { label: 'R', angle: -105, dist: 0.7 },
+                { label: 'M', angle: -45, dist: 0.7 },
+                { label: 'B', angle: 15, dist: 0.7 },
+                { label: 'C', angle: 75, dist: 0.7 },
+                { label: 'G', angle: 135, dist: 0.7 },
+                { label: 'Y', angle: 195, dist: 0.7 }
+            ];
+
+            ctx.font = '10px Inter, sans-serif';
+            ctx.fillStyle = GRID_COLOR;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            targets.forEach(t => {
+                const rad = t.angle * Math.PI / 180;
+                const tx = cx + Math.cos(rad) * (r * t.dist);
+                const ty = cy + Math.sin(rad) * (r * t.dist);
+                
+                // Draw target box brackets
+                const bs = 6; // bracket size
+                const bl = 3; // bracket line length
+                ctx.strokeStyle = GRID_COLOR;
+                ctx.beginPath();
+                // Top Left
+                ctx.moveTo(tx - bs + bl, ty - bs); ctx.lineTo(tx - bs, ty - bs); ctx.lineTo(tx - bs, ty - bs + bl);
+                // Top Right
+                ctx.moveTo(tx + bs - bl, ty - bs); ctx.lineTo(tx + bs, ty - bs); ctx.lineTo(tx + bs, ty - bs + bl);
+                // Bottom Left
+                ctx.moveTo(tx - bs + bl, ty + bs); ctx.lineTo(tx - bs, ty + bs); ctx.lineTo(tx - bs, ty + bs - bl);
+                // Bottom Right
+                ctx.moveTo(tx + bs - bl, ty + bs); ctx.lineTo(tx + bs, ty + bs); ctx.lineTo(tx + bs, ty + bs - bl);
+                ctx.stroke();
+
+                // Draw label offset slightly toward center
+                const lx = cx + Math.cos(rad) * (r * t.dist - 18);
+                const ly = cy + Math.sin(rad) * (r * t.dist - 18);
+                ctx.fillText(t.label, lx, ly);
+            });
+
+            // Draw Trace (The warm smear from center to top-left)
+            // It represents skin tones typically
+            ctx.globalCompositeOperation = 'screen';
+            for(let i=0; i<150; i++) {
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                
+                // Curve towards R/Y area (top left)
+                const cpx = cx - 30 + (Math.random() - 0.5) * 40;
+                const cpy = cy - 30 + (Math.random() - 0.5) * 40;
+                const endx = cx - 70 + (Math.random() - 0.5) * 30;
+                const endy = cy - 60 + (Math.random() - 0.5) * 30;
+
+                ctx.quadraticCurveTo(cpx, cpy, endx, endy);
+                
+                // Fade out color
+                const grad = ctx.createLinearGradient(cx, cy, endx, endy);
+                grad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+                grad.addColorStop(0.3, 'rgba(255, 180, 120, 0.15)');
+                grad.addColorStop(1, 'rgba(200, 100, 50, 0.0)');
+                
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = 1 + Math.random() * 2;
+                ctx.stroke();
+            }
+            
+            // Bright center point
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2, 0, Math.PI*2);
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.fill();
+            
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // Draw Histogram
+        function drawHistogram() {
+            const { ctx, width, height } = setupCanvas('histogramCanvas');
+            const margin = { top: 20, right: 20, bottom: 10, left: 20 };
+            
+            ctx.clearRect(0, 0, width, height);
+            
+            const graphW = width - margin.left - margin.right;
+            const graphH = height - margin.top - margin.bottom;
+            
+            // X-axis top labels
+            ctx.font = '10px Inter, sans-serif';
+            ctx.fillStyle = TEXT_COLOR;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            
+            const xLabels = [0, 102, 204, 306, 408, 510, 612, 714, 816, 918, 1023];
+            
+            xLabels.forEach((val, i) => {
+                const x = margin.left + (i / (xLabels.length - 1)) * graphW;
+                
+                // Label
+                ctx.fillText(val, x, margin.top - 5);
+                
+                // Tick above label
+                ctx.strokeStyle = TEXT_COLOR;
+                ctx.beginPath();
+                ctx.moveTo(x, margin.top - 18);
+                ctx.lineTo(x, margin.top - 15);
+                ctx.stroke();
+
+                // Vertical grid line through whole height
+                ctx.strokeStyle = GRID_COLOR;
+                ctx.beginPath();
+                ctx.moveTo(x, margin.top);
+                ctx.lineTo(x, height - margin.bottom);
+                ctx.stroke();
+            });
+
+            // Draw 3 horizontal tracks
+            const trackH = graphH / 3;
+            
+            const drawHistTrack = (startY, shapeFunc, colorFill, colorStroke) => {
+                ctx.beginPath();
+                ctx.moveTo(margin.left, startY + trackH);
+                
+                for(let i=0; i<=graphW; i+=2) {
+                    const nx = i / graphW;
+                    const val = shapeFunc(nx) * trackH * 0.9; // 90% max height
+                    ctx.lineTo(margin.left + i, startY + trackH - val);
+                }
+                
+                ctx.lineTo(margin.left + graphW, startY + trackH);
+                ctx.closePath();
+                
+                // Fill
+                ctx.fillStyle = colorFill;
+                ctx.fill();
+                
+                // Stroke top edge
+                ctx.strokeStyle = colorStroke;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                
+                // Track bottom border
+                ctx.beginPath();
+                ctx.moveTo(margin.left, startY + trackH);
+                ctx.lineTo(margin.left + graphW, startY + trackH);
+                ctx.strokeStyle = '#444';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            };
+
+            // Custom curve shapes mimicking the histogram image
+            const redCurve = (nx) => {
+                if(nx < 0.05) return 0.1;
+                if(nx < 0.15) return 0.9 + Math.random()*0.1; // peak
+                if(nx < 0.4) return 0.6 - (nx-0.15)*1.5 + Math.random()*0.1;
+                if(nx < 0.6) return 0.3 - (nx-0.4)*1.0 + Math.random()*0.05;
+                return 0;
+            };
+
+            const greenCurve = (nx) => {
+                if(nx < 0.05) return 0.1;
+                if(nx < 0.3) return 0.7 + Math.sin(nx*20)*0.1 + Math.random()*0.1;
+                if(nx < 0.7) return 0.6 - (nx-0.3)*1.2 + Math.random()*0.1;
+                return 0;
+            };
+
+            const blueCurve = (nx) => {
+                if(nx < 0.05) return 0.1;
+                if(nx < 0.15) return 0.6 + Math.random()*0.1;
+                if(nx < 0.3) return 0.4 + Math.random()*0.1;
+                if(nx < 0.5) return 0.5 + Math.random()*0.1;
+                if(nx < 0.8) return 0.3 - (nx-0.5)*0.5 + Math.random()*0.05;
+                return 0;
+            };
+
+            drawHistTrack(margin.top, redCurve, 'rgba(120, 30, 30, 0.7)', '#ff4444');
+            drawHistTrack(margin.top + trackH, greenCurve, 'rgba(30, 120, 30, 0.7)', '#44ff44');
+            drawHistTrack(margin.top + trackH * 2, blueCurve, 'rgba(30, 70, 140, 0.7)', '#4488ff');
+        }
+
+        function renderAll() {
+            drawParade();
+            drawWaveform();
+            drawVectorscope();
+            drawHistogram();
+        }
+
+        // Initialize and handle resize
+        window.addEventListener('load', renderAll);
+        
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(renderAll, 100);
+        });
+
+    </script>
+</body>
+</html>

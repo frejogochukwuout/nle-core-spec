@@ -1,0 +1,681 @@
+/* TimelineToolbar component tests — tool radio cluster (spec 16 keys /
+   18 §4.5), snap/link/lock-all toggles, marker + zoom clusters, the binary
+   mixer toggle (R24-W1: audio-page-only, toggleMixerOpen with lastVisual
+   memory), the master-audio cluster, the R23-WD (D-D2/#108) per-page
+   cluster matrix — presence/absence pinned at DOM level (every hidden
+   cluster is DOM-ABSENT, never display:none — the F6/rover dense laws) —
+   and the R24-W1 ViewOptionsPopover (#64/#62: the density re-home, the
+   clip-style radio pair, the waveforms converging flip — the APG menu
+   grammar from the ContextMenu family). */
+
+import { describe, expect, it } from 'vitest';
+import { fireEvent, screen, within } from '@testing-library/react';
+import { act } from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { TimelineToolbar } from './TimelineToolbar';
+import { renderShell, store, type UiPatch } from '../../test/helpers';
+import { useUi, pageTimelineViewFor } from '../../state/useUiStore';
+
+/* R24-W1: the popover reads the variant context — the toolbar needs the
+   provider stack now (renderShell, not renderPlain). */
+const boot = (patch: UiPatch = {}) => renderShell(<TimelineToolbar />, { patch });
+const scene1 = () => store().scenes.find((s) => s.id === 'sc-1')!;
+const track = (id: string) => scene1().tracks.find((t) => t.id === id)!;
+
+/* opens the view-options popover — returns the menu element */
+const openViewOptions = () => {
+  fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+  return screen.getByTestId('shell-menu-tl-view-options');
+};
+/* R25-W6-C: the compact item is now a FOUR-OPTION radio group (off / video /
+   audio / all) — one probe per scope */
+const compactRadio = (id: 'off' | 'video' | 'audio' | 'all') =>
+  screen.getByTestId(`shell-menu-tl-view-options-compact-${id}`);
+
+describe('TimelineToolbar', () => {
+  it('is a labelled toolbar with an 8-tool radio cluster (spec 18 §4.5 + R23-WA FX tool)', () => {
+    boot({});
+    expect(screen.getByRole('toolbar', { name: 'Timeline toolbar' })).toBeInTheDocument();
+    const group = screen.getByRole('radiogroup', { name: 'Edit tool' });
+    expect(within(group).getAllByRole('radio')).toHaveLength(8);
+    expect(screen.getByTestId('shell-timeline-toolbar-tool-select')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  /* R23-WA (DESIGN-R23 D-A1, Part IX ruling 2): the FX tool couples fxMode —
+     the setTool single source. Selecting it flips the engine on; selecting
+     any other tool flips it off; on the FX PAGE the page owns the flag. */
+  it('R23-WA: the FX tool joins the radio — clicking it couples fxMode on, another tool off (ruling 2)', () => {
+    boot({});
+    const fxBtn = screen.getByTestId('shell-timeline-toolbar-tool-fx');
+    fireEvent.click(fxBtn);
+    expect(store().tool).toBe('fx');
+    expect(store().fxMode).toBe(true);
+    expect(fxBtn).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-tool-blade'));
+    expect(store().fxMode).toBe(false);
+    /* R23-WD (D-D2): on the FX PAGE the radio itself is DOM-ABSENT (the
+       matrix gives the tools to Edit only) — the page owns fxMode, so tool
+       writes can never kill it (ruling 2; the coupling pin goes store-level
+       because the absent radio can no longer fire the click). */
+    act(() => { useUi.setState({ page: 'fx', fxMode: true, tool: 'select' }); });
+    expect(screen.queryByTestId('shell-timeline-toolbar-tool-blade')).toBeNull();
+    act(() => { useUi.getState().setTool('blade'); });
+    expect(store().fxMode).toBe(true);
+    act(() => { useUi.setState({ page: 'edit', tool: 'select', fxMode: false }); });
+  });
+
+  /* R23-WB (D-B3/#94) → R24-W1 (A3-R4) → R25-W6 (DESIGN-R25 §1 R3+R5 / §3
+     W6-A+W6-C; th_mtzp94ms + th_mtzors21 — RE-PINNED): the density law is
+     the ViewOptionsPopover's "Compact tracks" FOUR-OPTION RADIO GROUP now
+     (off / video / audio / all — the reviewer's hybrid scopes). The radio
+     state reads the ONE store resolver (honest — it reflects the timeline
+     actually rendered); the click writes the ACTIVE PAGE's entry (the
+     per-page memory — no global override exists anymore). */
+  it('R25-W6 RE-PIN: the Compact-tracks radio group is honest per page and writes the ACTIVE PAGE\'s entry — menu STAYS OPEN across flips', () => {
+    boot({ page: 'edit' });
+    openViewOptions();
+    for (const id of ['off', 'video', 'audio', 'all'] as const) {
+      expect(compactRadio(id)).toHaveAttribute('role', 'menuitemradio');
+    }
+    // edit's own default: 'off' — the radio honestly reads it
+    expect(compactRadio('off')).toHaveAttribute('aria-checked', 'true');
+    expect(compactRadio('all')).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(compactRadio('video'));
+    expect(store().pageTimelineView.edit.compact).toBe('video');
+    expect(compactRadio('video')).toHaveAttribute('aria-checked', 'true');
+    // the group KEEPS the menu open — flip/flip-back needs no reopen
+    fireEvent.click(compactRadio('audio'));
+    expect(store().pageTimelineView.edit.compact).toBe('audio');
+    fireEvent.click(compactRadio('all'));
+    expect(store().pageTimelineView.edit.compact).toBe('all');
+    fireEvent.click(compactRadio('off'));
+    expect(store().pageTimelineView.edit.compact).toBe('off');
+    expect(compactRadio('off')).toHaveAttribute('aria-checked', 'true');
+    // view state — never a history entry
+    expect(store().past).toHaveLength(0);
+  });
+
+  it('R25-W6 RE-PIN: the audio page boots compact-VIDEO (the reviewer\'s ask) — the radio honestly reads "Video"', () => {
+    boot({ page: 'audio' });
+    openViewOptions();
+    expect(compactRadio('video')).toHaveAttribute('aria-checked', 'true'); // the seeded default
+    expect(compactRadio('off')).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(compactRadio('off'));
+    expect(store().pageTimelineView.audio.compact).toBe('off');
+    expect(compactRadio('off')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  /* R23-FIX (review-sweep R-b, R3-P2#3 — RE-PINNED R25-W6): the Compact-tracks
+     GROUP is DOM-ABSENT on fx (the FX page forces the full Timeline; radios
+     there would advertise a compact the page can never render). */
+  it('R25-W6 RE-PIN: the Compact-tracks group renders on edit/color/audio/deliver and is DOM-ABSENT on fx', () => {
+    for (const p of ['edit', 'color', 'audio', 'deliver'] as const) {
+      const { unmount } = boot({ page: p });
+      openViewOptions();
+      expect(compactRadio('off')).toBeInTheDocument();
+      fireEvent.keyDown(screen.getByTestId('shell-menu-tl-view-options'), { key: 'Escape' });
+      unmount();
+    }
+    // fx: DOM-absent — the resolver returns 'off' on fx, no control may claim otherwise
+    const { unmount } = boot({ page: 'fx' });
+    openViewOptions();
+    for (const id of ['off', 'video', 'audio', 'all'] as const) {
+      expect(screen.queryByTestId(`shell-menu-tl-view-options-compact-${id}`)).toBeNull();
+    }
+    expect(screen.queryByRole('group', { name: 'Compact tracks' })).toBeNull();
+    // the clip-style + waveforms items stay (only the compact group is fx-absent)
+    expect(screen.getByTestId('shell-menu-tl-view-options-clip-filmstrip')).toBeInTheDocument();
+    expect(screen.getByTestId('shell-menu-tl-view-options-waveforms')).toBeInTheDocument();
+    unmount();
+  });
+
+  /* R24-W1: the RETIREMENT pins — the standalone density button's testid +
+     the collision glyph family are gone from the toolbar source (source-
+     text level, the shortcutMap/appLayers precedent; built via concatenation
+     so this file never matches its own needles). */
+  it('R24-W1: the standalone density button is RETIRED — zero btn-density / Rows3 / SlidersHorizontal in TimelineToolbar.tsx', () => {
+    const src = readFileSync(resolve(process.cwd(), 'src/components/timeline/TimelineToolbar.tsx'), 'utf8');
+    expect(src).not.toContain(['shell-timeline-toolbar', '-btn-density'].join(''));
+    expect(src).not.toContain(['Rows', '3'].join(''));
+    // this toolbar carries no Inspector — the SlidersHorizontal collision
+    // glyph must be GONE entirely (the mixer toggle now uses SlidersVertical)
+    expect(src).not.toContain(['Sliders', 'Horizontal'].join(''));
+    /* RE-PINNED (R25-W4-D): the old pin required SlidersVertical to be
+       present because the timeline-toolbar MIXER toggle used it — that
+       button is deleted (th_mtzoy9f9; the glyph law died with it —
+       Toolbar2's twin carries the glyphs now). The new law: the mixer
+       toggle's glyphs + testid + store seam are gone from this file
+       entirely (concatenated so this file never matches its own needles). */
+    expect(src).not.toContain(['Sliders', 'Vertical'].join(''));
+    expect(src).not.toContain(['Audio', 'Lines'].join(''));
+    expect(src).not.toContain(['btn', '-mixer-state'].join(''));
+    expect(src).not.toContain(['toggle', 'MixerOpen'].join(''));
+  });
+
+  it('clicking a tool switches the store tool and the radio state (spec 16 B/V keys)', () => {
+    boot({});
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-tool-blade'));
+    expect(store().tool).toBe('blade');
+    expect(screen.getByTestId('shell-timeline-toolbar-tool-blade')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('shell-timeline-toolbar-tool-select')).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('snap / link toggles flip the store and their aria-pressed state (spec 18 §4.5)', () => {
+    boot({});
+    const snap = screen.getByTestId('shell-timeline-toolbar-btn-snap');
+    /* RE-PINNED (R26-W-F1 F2, the GH regression sweep): snap boots OFF —
+       the reviewer's own R18e law ("snap toggle should be off by default").
+       The old pin asserted aria-pressed 'true' right after boot, pinning
+       the R20-reorg regression as law. */
+    expect(snap).toHaveAttribute('aria-pressed', 'false');
+    expect(store().snap).toBe(false);
+    fireEvent.click(snap);
+    expect(store().snap).toBe(true);
+    expect(snap).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle A/V link' }));
+    expect(store().link).toBe(false);
+  });
+
+  it('lock-all fans out to every track via one undoable batch (spec 18 §4.5 lock-all)', () => {
+    boot({});
+    fireEvent.click(screen.getByRole('button', { name: 'Lock all tracks' }));
+    expect(store().lockAll).toBe(true);
+    for (const t of scene1().tracks) expect(t.locked).toBe(true);
+    expect(store().past).toHaveLength(1);
+  });
+
+  it('the marker button adds a marker at the playhead (spec 16 M key)', () => {
+    boot({});
+    fireEvent.click(screen.getByRole('button', { name: 'Add marker' }));
+    expect(scene1().markers).toHaveLength(6);
+    expect(scene1().markers.at(-1)!.time).toBe(16);
+  });
+
+  it('zoom buttons step ×1.7 (canonical) and the slider maps exponentially vs the dynamic min (R15 T1)', () => {
+    boot({});
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(store().pxPerSec).toBeCloseTo(78.2, 0); // 46 × 1.7 (ZOOM_BUTTON_FACTOR)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    expect(store().pxPerSec).toBeCloseTo(46, 0);
+    // input[type=range] → implicit role=slider; disambiguates from the zoom-search button
+    fireEvent.change(screen.getByRole('slider', { name: 'Timeline zoom' }), { target: { value: '100' } });
+    expect(store().pxPerSec).toBeCloseTo(5000, 0); // slider top = 100× zoom (canonical domain)
+    fireEvent.change(screen.getByRole('slider', { name: 'Timeline zoom' }), { target: { value: '0' } });
+    // slider bottom = the DYNAMIC min (zoom-to-fit with 25% headroom, spec-05 §5.2)
+    expect(store().pxPerSec).toBeCloseTo(store().zoomMinPps, 1);
+  });
+
+  /* RE-PINNED (R25-W4-D, th_mtzoy9f9 "redundant we already have a Mixer
+     button at top"): the timeline-toolbar mixer button is DELETED — these
+     three pins were (1) the button is DOM-absent on edit, (2) the audio-page
+     BINARY toggle round-trip with lastVisual memory, (3) the glyph law
+     (AudioLines closed / SlidersVertical open). The toggle's behavior is
+     Toolbar2's pin now (shell-toolbar-btn-mixer — its existing pins stay
+     green); the store seam toggleMixerOpen is unchanged. */
+  it('R25-W4-D deletion pin: btn-mixer-state is DOM-ABSENT on EVERY page (the timeline-toolbar mixer toggle is dead — Toolbar2 owns the one toggle)', () => {
+    for (const p of ['edit', 'color', 'audio', 'fx', 'deliver'] as const) {
+      const { unmount } = boot({ page: p });
+      expect(screen.queryByTestId('btn-mixer-state')).toBeNull();
+      expect(screen.queryByRole('button', { name: /audio mixer/i })).toBeNull();
+      unmount();
+    }
+    // the store seam is untouched: the binary toggle (with lastVisual
+    // memory) still works — Toolbar2's button calls it (its own pins hold)
+    act(() => { useUi.getState().toggleMixerOpen(); });
+    expect(store().mixerState).toBe('full');
+    act(() => { useUi.getState().toggleMixerOpen(); });
+    expect(store().mixerState).toBe('collapsed');
+    act(() => { useUi.getState().toggleMixerOpen(); });
+    expect(store().mixerState).toBe('full');
+    act(() => { useUi.setState({ mixerState: 'collapsed' }); });
+  });
+
+  it('master mute + volume drive the shared store values (spec 18 §4.5 master bus)', () => {
+    boot({});
+    const mute = screen.getByRole('button', { name: 'Mute master' });
+    expect(mute).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(mute);
+    expect(store().masterMuted).toBe(true);
+    expect(mute).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.change(screen.getByLabelText('Master volume'), { target: { value: '50' } });
+    expect(store().masterVolume).toBe(0.5);
+  });
+
+  it('the toolbar micro-meter is a silent (aria-hidden) StripMeter on master values (design doc §3.2)', () => {
+    boot({});
+    const meter = screen.getByTitle(/Master: /);
+    expect(meter).toHaveAttribute('aria-hidden', 'true'); // never aria-live
+    expect(meter.getAttribute('title')).toContain('Master: -8.5 dB'); // 0.78 × 66 − 60
+  });
+
+  it('the micro-meter rides the ONE master engine key and swaps 3px LEDs for 4 coarse chunks (R15-A2)', () => {
+    boot({});
+    const meter = screen.getByTitle(/Master: -8\.5 dB/);
+    const l = meter.querySelector('[data-channel="l"]')!;
+    expect(l.querySelector('.meter-segments')).toBeNull(); // no 3px LED lines at 14px
+    expect(l.querySelector('.meter-segments-coarse')).not.toBeNull(); // 4 coarse chunks
+    // same palette/engine as the strip meters: token gradient anchored to the
+    // R20-W1 B9 taper positions (amber 37.2% = −18, red 69.2% = −6)
+    expect((l.querySelector('div') as HTMLElement).style.background).toContain('var(--meter-green)');
+    expect((l.querySelector('div') as HTMLElement).style.background).toContain('var(--meter-amber) 37.2%');
+  });
+});
+
+/* R14 no-op sweep wiring — the marker-color dropdown (shared §4.9 palette),
+   the zoom cluster (fit / selection / magnifier-focus), the DIM chip honesty
+   contract, slider aria-valuetext, and the ⌘M tooltip. The view-options
+   button's R14 dev-jargon toast is DEAD — the ViewOptionsPopover describe
+   below owns its real grammar now. */
+describe('TimelineToolbar R14 wiring', () => {
+  it('the marker-color button opens the shared §4.9 palette; a pick adds a colored marker at the playhead', () => {
+    boot({});
+    const btn = screen.getByTestId('shell-timeline-toolbar-btn-marker-color');
+    expect(btn).toHaveAttribute('aria-haspopup', 'menu');
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(btn);
+    expect(screen.getByTestId('shell-menu-tb-marker-color')).toBeInTheDocument();
+    expect(btn).toHaveAttribute('aria-expanded', 'true');
+    // the SAME 8-dot row the ruler menu renders (markerColorItems builder)
+    for (const c of ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray']) {
+      expect(screen.getByTestId(`shell-menu-tb-marker-color-${c}`)).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByTestId('shell-menu-tb-marker-color-purple'));
+    const added = scene1().markers.at(-1)!;
+    expect(added.color).toBe('purple');
+    expect(added.time).toBe(16); // at the playhead
+    expect(screen.queryByTestId('shell-menu-tb-marker-color')).not.toBeInTheDocument(); // closed
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('zoom-to-fit solves px/s from the measured viewport (900 fallback) + scene duration', () => {
+    boot({});
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-zoom-fit'));
+    // sc-1 duration = 30 s → zoomFit(900, 30) = (900-24)/(30+2)
+    expect(store().pxPerSec).toBeCloseTo((900 - 24) / 32, 5);
+  });
+
+  it('zoom-to-selection fits the selection span at ~80% of the viewport', () => {
+    boot({}); // boot selection = ['el-2'] → span 8.5 s (8.5 → 17)
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-zoom-selection'));
+    expect(store().pxPerSec).toBeCloseTo((900 * 0.8) / 8.5, 5);
+  });
+
+  it('zoom-to-selection with no selection explains itself with an info toast, zoom untouched', () => {
+    boot({ selection: [] });
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-zoom-selection'));
+    expect(store().pxPerSec).toBe(46);
+    const t = store().toasts.at(-1)!;
+    expect(t.kind).toBe('info');
+    expect(t.title).toBe('Zoom to selection');
+    expect(t.detail).toBe('No selection — select clips to zoom to their span');
+  });
+
+  it('the magnifier button focuses the zoom slider (distinct honest effect)', () => {
+    boot({});
+    const slider = screen.getByRole('slider', { name: 'Timeline zoom' });
+    fireEvent.click(screen.getByRole('button', { name: 'Focus zoom slider' }));
+    expect(slider).toHaveFocus();
+  });
+
+  it('the zoom + master sliders expose aria-valuetext (spec 18 §11.3 slider contract)', () => {
+    boot({});
+    expect(screen.getByRole('slider', { name: 'Timeline zoom' })).toHaveAttribute('aria-valuetext', '46 px/s');
+    expect(screen.getByRole('slider', { name: 'Master volume' })).toHaveAttribute('aria-valuetext', '78%');
+  });
+
+  it('the DIM chip is aria-disabled with the M2 explanation tip (honesty contract)', () => {
+    boot({});
+    const dim = screen.getByText('DIM');
+    expect(dim).toHaveAttribute('aria-disabled', 'true');
+    expect(dim).toHaveAttribute('data-tip', 'Master dim is M2 (spec 20 §12) — display-only in the mock');
+  });
+
+  it('the ⌘M tooltip tells the focused-track truth (spec 16 §3.5)', () => {
+    boot({});
+    expect(screen.getByRole('button', { name: 'Mute master' })).toHaveAttribute(
+      'data-tip',
+      'Mute focused track (⌘M — master when nothing focused)',
+    );
+  });
+});
+
+describe('R14: tool radiogroup arrow-key navigation (spec 18 §11.1)', () => {
+  it('ArrowRight moves the checked tool and roves focus; ArrowLeft wraps back', () => {
+    renderShell(<TimelineToolbar />);
+    const first = screen.getByTestId('shell-timeline-toolbar-tool-select');
+    first.focus();
+    fireEvent.keyDown(first.parentElement!, { key: 'ArrowRight' });
+    expect(useUi.getState().tool).toBe('blade'); // select → blade
+    expect(document.activeElement).toBe(screen.getByTestId('shell-timeline-toolbar-tool-blade'));
+    fireEvent.keyDown(document.activeElement!.parentElement!, { key: 'ArrowLeft' });
+    expect(useUi.getState().tool).toBe('select');
+    expect(document.activeElement).toBe(first);
+  });
+});
+
+/* ---------- R24-W1 (DESIGN-R24 §1.3 A3-R4; issues #64 + #62): the
+   ViewOptionsPopover — a ContextMenu-family APG menu. Its items are pinned
+   here (density re-home, clip-style radio pair, waveforms converging flip);
+   the keyboard grammar follows the house §4.9 law. ---------- */
+describe('R24-W1 (A3-R4/#64): the ViewOptionsPopover — APG menu grammar', () => {
+  const opener = () => screen.getByTestId('shell-timeline-toolbar-btn-view-options');
+  const menu = () => screen.getByTestId('shell-menu-tl-view-options');
+
+  it('the opener is an aria-haspopup=menu button; a click opens the real APG menu (the R14 dev-jargon toast is DEAD)', () => {
+    boot({ page: 'edit' });
+    expect(opener()).toHaveAttribute('aria-haspopup', 'menu');
+    expect(opener()).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(opener());
+    expect(menu()).toHaveAttribute('role', 'menu');
+    expect(menu()).toHaveAccessibleName('Timeline view options');
+    expect(opener()).toHaveAttribute('aria-expanded', 'true');
+    // NO toast — the popover IS the surface now
+    expect(store().toasts).toHaveLength(0);
+    // the items are menuitem-family roles, in DOM order (R25-W6-C: the
+    // compact group is four menuitemradio items)
+    expect(compactRadio('off')).toHaveAttribute('role', 'menuitemradio');
+    expect(compactRadio('video')).toHaveAttribute('role', 'menuitemradio');
+    expect(compactRadio('audio')).toHaveAttribute('role', 'menuitemradio');
+    expect(compactRadio('all')).toHaveAttribute('role', 'menuitemradio');
+    expect(screen.getByTestId('shell-menu-tl-view-options-clip-filmstrip')).toHaveAttribute('role', 'menuitemradio');
+    expect(screen.getByTestId('shell-menu-tl-view-options-clip-blocks')).toHaveAttribute('role', 'menuitemradio');
+    expect(screen.getByTestId('shell-menu-tl-view-options-waveforms')).toHaveAttribute('role', 'menuitemcheckbox');
+  });
+
+  it('Shift+F10 and ArrowDown both open; the FIRST ENABLED item takes focus', () => {
+    boot({ page: 'edit' });
+    opener().focus();
+    fireEvent.keyDown(opener(), { key: 'F10', shiftKey: true });
+    expect(menu()).toBeInTheDocument();
+    expect(compactRadio('off')).toHaveFocus(); // first item, enabled
+    fireEvent.keyDown(menu(), { key: 'Escape' });
+    // ArrowDown opens as well (the APG menu-button route)
+    fireEvent.keyDown(opener(), { key: 'ArrowDown' });
+    expect(menu()).toBeInTheDocument();
+    expect(compactRadio('off')).toHaveFocus();
+  });
+
+  it('Escape closes with focus returning to the opener; the outside click closes too', () => {
+    boot({ page: 'edit' });
+    fireEvent.click(opener());
+    fireEvent.keyDown(menu(), { key: 'Escape' });
+    expect(screen.queryByTestId('shell-menu-tl-view-options')).toBeNull();
+    expect(opener()).toHaveFocus(); // §4.9: focus returns to the opener
+    // outside click on the transparent overlay
+    fireEvent.click(opener());
+    const overlay = document.querySelector('.fixed.inset-0') as HTMLElement;
+    fireEvent.pointerDown(overlay);
+    expect(screen.queryByTestId('shell-menu-tl-view-options')).toBeNull();
+  });
+
+  it('Tab dismisses (menus are not tab stops) — and Enter activates the focused item natively', () => {
+    boot({ page: 'edit' });
+    fireEvent.click(opener());
+    fireEvent.keyDown(menu(), { key: 'Tab' });
+    expect(screen.queryByTestId('shell-menu-tl-view-options')).toBeNull();
+    expect(opener()).toHaveFocus();
+    // Enter on the focused item activates it natively — buttons activate on
+    // Enter/Space; the menu does not intercept those keys (R25-W6: rove to
+    // the "all" radio first so the activation carries a real write)
+    fireEvent.click(opener());
+    compactRadio('all').focus();
+    fireEvent.keyDown(compactRadio('all'), { key: 'Enter' });
+    expect(store().pageTimelineView.edit.compact).toBe('all');
+    // view state — no history mint on the Enter activation either
+    expect(store().past).toHaveLength(0);
+  });
+
+  it('↑/↓ rove with wrap and SKIP aria-disabled items (audio-compacted disables waveforms — the W6-C per-kind law)', () => {
+    // scope 'audio' compacts the AUDIO kind → waveforms disabled (scope 'video'
+    // would keep them enabled — the per-kind re-derivation)
+    boot({ page: 'edit', pageTimelineView: pageTimelineViewFor('edit', { compact: 'audio' }) });
+    fireEvent.click(opener());
+    const wave = screen.getByTestId('shell-menu-tl-view-options-waveforms');
+    expect(wave).toHaveAttribute('aria-disabled', 'true'); // honest disabled
+    expect(wave).toHaveAttribute('data-tip', 'Not available while audio tracks are compact');
+    // rove: compact-off → video → audio → all → filmstrip → block →
+    // (waveforms SKIPPED) → wraps to compact-off
+    fireEvent.keyDown(menu(), { key: 'ArrowDown' });
+    expect(compactRadio('video')).toHaveFocus();
+    fireEvent.keyDown(menu(), { key: 'ArrowDown' });
+    expect(compactRadio('audio')).toHaveFocus();
+    fireEvent.keyDown(menu(), { key: 'ArrowDown' });
+    expect(compactRadio('all')).toHaveFocus();
+    fireEvent.keyDown(menu(), { key: 'ArrowDown' });
+    expect(screen.getByTestId('shell-menu-tl-view-options-clip-filmstrip')).toHaveFocus();
+    fireEvent.keyDown(menu(), { key: 'ArrowDown' });
+    expect(screen.getByTestId('shell-menu-tl-view-options-clip-blocks')).toHaveFocus();
+    fireEvent.keyDown(menu(), { key: 'ArrowDown' }); // skips the disabled waveforms, wraps
+    expect(compactRadio('off')).toHaveFocus();
+    fireEvent.keyDown(menu(), { key: 'ArrowUp' }); // ← wraps back, skipping waveforms
+    expect(screen.getByTestId('shell-menu-tl-view-options-clip-blocks')).toHaveFocus();
+    // a disabled item is inert — no gate write, no doc write on click
+    fireEvent.click(wave);
+    expect(store().past).toHaveLength(0);
+    expect(store().pageTimelineView.edit.waveforms).toBe(true); // the gate untouched
+    expect(track('tr-audio-1').waveform).toBeUndefined(); // the doc untouched
+  });
+
+  it('R25-W6-C per-kind derivation: scope "video" keeps the waveforms option ENABLED (only the audio kind\'s compaction kills it)', () => {
+    boot({ page: 'edit', pageTimelineView: pageTimelineViewFor('edit', { compact: 'video' }) });
+    fireEvent.click(opener());
+    const wave = screen.getByTestId('shell-menu-tl-view-options-waveforms');
+    expect(wave).not.toHaveAttribute('aria-disabled');
+    expect(wave).toHaveAttribute('data-tip', 'Show waveform lanes on every audio track');
+  });
+});
+
+describe('R24-W1 (A3-R4/#62) → R25-W6-A (th_mtzp94ms): the ViewOptionsPopover items — clip style + waveforms (per-page)', () => {
+  it('R25-W6-A RE-PIN: Clip style — the pair reads the PAGE entry ?? variant and writes the page\'s own memory (the VARIANT stays the global default)', () => {
+    boot({ page: 'edit' });
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+    const filmstrip = screen.getByTestId('shell-menu-tl-view-options-clip-filmstrip');
+    const block = screen.getByTestId('shell-menu-tl-view-options-clip-blocks');
+    expect(filmstrip).toHaveAttribute('aria-checked', 'true'); // null entry → the variant default
+    expect(block).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(block);
+    expect(block).toHaveAttribute('aria-checked', 'true');
+    expect(filmstrip).toHaveAttribute('aria-checked', 'false');
+    // the write is the PAGE's memory (edit's entry) — the R24-W1 "ONE source
+    // with the debug overlay" law is RE-DERIVED per-page: the VARIANT is the
+    // global default (null entries inherit it), the entry is this page's
+    // own override, so the shell root's data-clipstyle still follows the
+    // VARIANT (filmstrip — untouched by the page write)
+    expect(store().pageTimelineView.edit.clipStyle).toBe('blocks');
+    expect(document.querySelector('[data-clipstyle]')!.getAttribute('data-clipstyle')).toBe('filmstrip');
+    // the radio is a setting: the menu STAYS OPEN
+    expect(screen.getByTestId('shell-menu-tl-view-options')).toBeInTheDocument();
+    fireEvent.click(filmstrip);
+    expect(filmstrip).toHaveAttribute('aria-checked', 'true');
+    expect(store().pageTimelineView.edit.clipStyle).toBe('filmstrip');
+  });
+
+  it('R25-W6-A RE-PIN: Audio waveforms — the view GATE + the §4.7 doc flags compose; OFF is the gate alone (no history, doc untouched — the per-page isolation), ON converges through the W5d batch', () => {
+    boot({ page: 'edit' });
+    fireEvent.click(screen.getByTestId('shell-timeline-toolbar-btn-view-options'));
+    const wave = screen.getByTestId('shell-menu-tl-view-options-waveforms');
+    expect(wave).toHaveAttribute('aria-checked', 'true'); // gate on + undefined flags boot as ON (the §4.7 fixture quirk)
+    expect(wave).not.toHaveAttribute('aria-disabled'); // edit 'off' scope → audio full → enabled
+    // OFF = the page's view gate ONLY (view state — no history mint, the doc
+    // flags NEVER carry a page's off: that was the global-atom leak the
+    // per-page memory replaces)
+    fireEvent.click(wave);
+    expect(store().pageTimelineView.edit.waveforms).toBe(false);
+    expect(wave).toHaveAttribute('aria-checked', 'false');
+    expect(store().past).toHaveLength(0);
+    expect(track('tr-audio-1').waveform).toBeUndefined(); // the doc untouched
+    expect(track('tr-audio-2').waveform).toBeUndefined();
+    // ON = the gate + the W5d batch convergence (ONE undoable write — "every
+    // audio track" is true after it; the undefined→true converge mints it)
+    fireEvent.click(wave);
+    expect(store().pageTimelineView.edit.waveforms).toBe(true);
+    expect(track('tr-audio-1').waveform).toBe(true);
+    expect(track('tr-audio-2').waveform).toBe(true);
+    expect(wave).toHaveAttribute('aria-checked', 'true');
+    expect(store().past).toHaveLength(1);
+    // mixed state: A2 off, A1 on → checked=false (the rendered convergence) →
+    // one click converges ALL to true — ONE more batch entry
+    act(() => { useUi.getState().toggleTrackCmd('sc-1', 'tr-audio-2', 'waveform'); });
+    expect(wave).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(wave);
+    expect(track('tr-audio-1').waveform).toBe(true);
+    expect(track('tr-audio-2').waveform).toBe(true);
+    expect(wave).toHaveAttribute('aria-checked', 'true');
+    expect(store().past).toHaveLength(3); // the first batch + the manual A2 flip + the re-converge batch — still ONE per convergence
+    // a FRESH track (A3) boots with addTrack's OWN law: explicit
+    // waveform=true (the undefined state is a FIXTURE-only quirk). With all
+    // three explicit-true the checkbox reads checked; the OFF click is the
+    // gate alone (A3's flag STAYS true — the per-page isolation law)
+    act(() => { useUi.getState().addTrack('audio'); });
+    // re-find after every write: withHistory clones the scenes graph, so a
+    // captured track object reference would go stale (the clone-on-write law)
+    const a3 = () => store().scenes.find((s) => s.id === 'sc-1')!.tracks.find((t) => t.badge === 'A3')!;
+    expect(a3().waveform).toBe(true); // the addTrack seed
+    expect(wave).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(wave); // the gate OFF — flags stay
+    expect(store().pageTimelineView.edit.waveforms).toBe(false);
+    expect(a3().waveform).toBe(true);
+    expect(track('tr-audio-1').waveform).toBe(true);
+    expect(track('tr-audio-2').waveform).toBe(true);
+    expect(wave).toHaveAttribute('aria-checked', 'false');
+    expect(store().past).toHaveLength(4); // 2 batches + the A2 flip + the addTrack — the gate OFF minted none
+  });
+});
+
+/* R23-WD (DESIGN-R23 D-D2, issue #108 + Part IX ruling 15) → R24-W1
+   (DESIGN-R24 §1.3 A3-R3/R4): the PER-PAGE cluster matrix, pinned at DOM
+   level. Every hidden cluster is DOM-ABSENT (queryByTestId/queryByRole →
+   null — never display:none, so the F6/rover dense laws hold). Matrix:
+   Edit = full; Color = zoom; Audio = snap + zoom + master;
+   FX = zoom (the Compact-tracks ITEM is DOM-absent — the page forces the
+   full Timeline); Deliver = zoom (read-mostly). The view-options opener
+   is a pre-matrix house button on EVERY page (pinned separately below);
+   the density cluster died with the standalone button (A3-R4). R25-W4-D
+   (th_mtzoy9f9): the mixer cluster died with the timeline-toolbar
+   toggle — the mixer probe below is the DELETION probe (null on every
+   page; the toggle lives in Toolbar2). */
+describe('R23-WD (D-D2/#108): the per-page TimelineToolbar cluster matrix', () => {
+  /** every cluster's DOM probes — null probe = the cluster is DOM-absent */
+  const probes = {
+    tools: () => screen.queryByRole('radiogroup', { name: 'Edit tool' }),
+    snap: () => screen.queryByTestId('shell-timeline-toolbar-btn-snap'),
+    link: () => screen.queryByRole('button', { name: 'Toggle A/V link' }),
+    lock: () => screen.queryByRole('button', { name: 'Lock all tracks' }),
+    markers: () => screen.queryByRole('button', { name: 'Add marker' }),
+    markerColor: () => screen.queryByTestId('shell-timeline-toolbar-btn-marker-color'),
+    viewOptions: () => screen.getByTestId('shell-timeline-toolbar-btn-view-options'),
+    zoom: () => screen.getByRole('slider', { name: 'Timeline zoom' }),
+    zoomFit: () => screen.getByTestId('shell-timeline-toolbar-btn-zoom-fit'),
+    /** R25-W4-D: the mixer probe is the DELETION probe — the cluster is
+     *  DOM-absent on every page (null); it stays in the probe set so every
+     *  matrix row keeps asserting the deletion. */
+    mixer: () => screen.queryByTestId('btn-mixer-state'),
+    master: () => screen.queryByRole('button', { name: 'Mute master' }),
+    masterVolume: () => screen.queryByRole('slider', { name: 'Master volume' }),
+    masterMeter: () => screen.queryByTitle(/Master: /),
+    dim: () => screen.queryByText('DIM'),
+  };
+  /** count the cluster separators — the vsep law (a separator renders only
+   *  between two PRESENT clusters; an absent cluster never dangles a bar) */
+  const vseps = (c: HTMLElement) => c.querySelectorAll('.vsep').length;
+
+  it('EDIT = full: tools radio + snap/link/lock + markers + zoom + master — the mixer cluster is DELETED now (R25-W4-D: every page)', () => {
+    const { container } = boot({ page: 'edit' });
+    expect(within(probes.tools()!).getAllByRole('radio')).toHaveLength(8); // the 8-tool radio is untouched
+    expect(probes.snap()).toBeInTheDocument();
+    expect(probes.link()).toBeInTheDocument();
+    expect(probes.lock()).toBeInTheDocument();
+    expect(probes.markers()).toBeInTheDocument();
+    expect(probes.markerColor()).toBeInTheDocument();
+    expect(probes.viewOptions()).toBeInTheDocument(); // the pre-matrix house button
+    expect(probes.zoom()).toBeInTheDocument();
+    expect(probes.zoomFit()).toBeInTheDocument();
+    expect(probes.mixer()).toBeNull(); // R25-W4-D: the cluster is deleted on EVERY page (Toolbar2 owns the toggle)
+    expect(probes.master()).toBeInTheDocument();
+    expect(probes.masterVolume()).toBeInTheDocument();
+    expect(probes.masterMeter()).toBeInTheDocument();
+    expect(probes.dim()).toBeInTheDocument();
+    expect(vseps(container)).toBe(4); // tools|snap, snap|markers, markers|zoom, zoom|master (mixer absent)
+  });
+
+  it('COLOR = zoom ONLY — no tools, no snap, no markers, no mixer, no master (ruling 15; the density cluster died with the standalone button)', () => {
+    const { container } = boot({ page: 'color' });
+    expect(probes.tools()).toBeNull();
+    expect(probes.snap()).toBeNull();
+    expect(probes.link()).toBeNull();
+    expect(probes.lock()).toBeNull();
+    expect(probes.markers()).toBeNull();
+    expect(probes.markerColor()).toBeNull();
+    expect(probes.mixer()).toBeNull();
+    expect(probes.master()).toBeNull();
+    expect(probes.masterVolume()).toBeNull();
+    expect(probes.masterMeter()).toBeNull();
+    expect(probes.dim()).toBeNull();
+    // zoom + the pre-matrix view-options opener survive (the every-page law)
+    expect(probes.viewOptions()).toBeInTheDocument();
+    expect(probes.zoom()).toBeInTheDocument();
+    expect(probes.zoomFit()).toBeInTheDocument();
+    expect(vseps(container)).toBe(0); // zoom alone — no separators to draw
+  });
+
+  it('AUDIO = snap + zoom + master — NO tools radio, NO link/lock, NO markers, NO mixer cluster (R25-W4-D deleted)', () => {
+    const { container } = boot({ page: 'audio' });
+    expect(probes.snap()).toBeInTheDocument();
+    expect(probes.viewOptions()).toBeInTheDocument();
+    expect(probes.zoom()).toBeInTheDocument();
+    expect(probes.mixer()).toBeNull(); // the DELETION probe (was the cluster's only home)
+    expect(probes.master()).toBeInTheDocument();
+    expect(probes.masterVolume()).toBeInTheDocument();
+    expect(probes.dim()).toBeInTheDocument();
+    expect(probes.tools()).toBeNull();
+    expect(probes.link()).toBeNull();
+    expect(probes.lock()).toBeNull();
+    expect(probes.markers()).toBeNull();
+    expect(probes.markerColor()).toBeNull();
+    expect(vseps(container)).toBe(2); // RE-PINNED (was 3): snap|zoom, zoom|master — the zoom|mixer + mixer|master pair died with the cluster
+  });
+
+  it('FX = zoom ONLY (the Compact-tracks ITEM is DOM-absent in the popover — the page forces the full Timeline) — no mixer, no master (ruling 15)', () => {
+    const { container } = boot({ page: 'fx' });
+    expect(screen.queryByTestId('shell-timeline-toolbar-btn-density')).toBeNull(); // the retired button stays dead
+    expect(screen.queryByRole('button', { name: 'Toggle compact timeline' })).toBeNull();
+    expect(probes.viewOptions()).toBeInTheDocument(); // the opener stays (clip-style + waveforms live)
+    expect(probes.zoom()).toBeInTheDocument();
+    expect(probes.mixer()).toBeNull();
+    expect(probes.master()).toBeNull();
+    expect(probes.masterMeter()).toBeNull();
+    expect(probes.dim()).toBeNull();
+    expect(probes.tools()).toBeNull();
+    expect(probes.snap()).toBeNull();
+    expect(probes.markers()).toBeNull();
+    expect(vseps(container)).toBe(0);
+  });
+
+  it('DELIVER = zoom (read-mostly) — and "read-mostly" is NOT disabled: zoom still works (the timeline is live)', () => {
+    const { container } = boot({ page: 'deliver' });
+    expect(probes.viewOptions()).toBeInTheDocument();
+    expect(probes.zoom()).toBeInTheDocument();
+    expect(probes.zoomFit()).toBeInTheDocument();
+    expect(probes.tools()).toBeNull();
+    expect(probes.snap()).toBeNull();
+    expect(probes.markers()).toBeNull();
+    expect(probes.mixer()).toBeNull();
+    expect(probes.master()).toBeNull();
+    expect(vseps(container)).toBe(0);
+    // the deliver timeline renders the loop in/out export range — zoom in
+    // still steps ×1.7 through the zoom bus (live, not read-only)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(store().pxPerSec).toBeCloseTo(78.2, 0);
+    useUi.setState({ page: 'edit', pxPerSec: 46 });
+  });
+
+  it('the pre-matrix view-options house button stays on every page (it is not a D-D2 cluster)', () => {
+    for (const p of ['edit', 'color', 'audio', 'fx', 'deliver'] as const) {
+      const { unmount } = boot({ page: p });
+      expect(screen.getByTestId('shell-timeline-toolbar-btn-view-options')).toBeInTheDocument();
+      unmount();
+    }
+    useUi.setState({ page: 'edit' });
+  });
+});
