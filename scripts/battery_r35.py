@@ -876,14 +876,14 @@ check("LIVE: the WDC repo HEAD is dc0ca32 (docs-only over the S-series wrap 94f6
     _git("web-daw-core", "rev-parse", "--short", "HEAD") == "dc0ca32", _git("web-daw-core", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
 check("LIVE: the nle-ui repo HEAD is 45d42fb (754/754 = 747 + the C-1a edit-styles batch [the mediaInsert(mediaIds, mode) seam widening + the 4 MediaPool insert rows + the 5 shortcutMap rows F9/F10/⇧F9/⇧F10/E + the live-seam pool story] over the CR pair @ cb04919 — the DeliverPage blob-URL supersede contract [the reveal-after-supersede degradation + the no-accumulation law + the lying comment rewritten ×3] + the viewer-state-empty testid row [the loading/error rows sibling shape; the programMonitor path untouched]", lambda: (
     _git("nle-ui", "rev-parse", "--short", "HEAD") == "45d42fb", _git("nle-ui", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
-check("LIVE: the app repo HEAD is 2f38e8b (the R35 edit-styles wave + the folds over the R34 re-pin d28847c: 426/426 + the 22-file roof UNCHANGED; vendor engine 574d8d3→60232ea [the P-F4 code anchor] + nle-ui 1e0c30b→cb04919 + WDC ec8fd5c→94f6460 + BOTH OT mirrors 17a19f8→05d88d9; the CR-2 carrier FLIP — TimelineContextMenu.tsx byte-exact, the census re-declared 43 = 33 zero-action (7 byte + 26 mechanical) + 8 carriers + 2 hosts; scrollAnchorId wired)", lambda: (
-    _git("nle-test-app", "rev-parse", "--short", "HEAD") == "2f38e8b", _git("nle-test-app", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
+check("LIVE: the app repo HEAD is 0510eac (the R35 edit-styles wave + the folds over the R34 re-pin d28847c: 426/426 + the 22-file roof UNCHANGED; vendor engine 574d8d3→60232ea [the P-F4 code anchor] + nle-ui 1e0c30b→cb04919 + WDC ec8fd5c→94f6460 + BOTH OT mirrors 17a19f8→05d88d9; the CR-2 carrier FLIP — TimelineContextMenu.tsx byte-exact, the census re-declared 43 = 33 zero-action (7 byte + 26 mechanical) + 8 carriers + 2 hosts; scrollAnchorId wired)", lambda: (
+    _git("nle-test-app", "rev-parse", "--short", "HEAD") == "0510eac", _git("nle-test-app", "rev-parse", "--short", "HEAD") or "HEAD unreadable"))
 check("LIVE: the engine's vendored pins are OT 17a19f8 + WDC 94f6460 (the seal-round re-pin chain: 55c81c0→39003d3 [M60] →17a19f8 [s18]; WDC 83b8850→94f6460 docs-only)", lambda: (
     _git("nle-engine", "submodule", "status", "vendor/opencut-timeline").lstrip(" +-").startswith("17a19f8") and
     _git("nle-engine", "submodule", "status", "vendor/web-daw-core").lstrip(" +-").startswith("94f6460"), "engine submodules"))
 check("LIVE: the app's submodules are engine 60232ea + nle-ui cb04919 + WDC 94f6460 + the OT mirror lock 05d88d9 (the R34 re-pin wave: the engine vendor at the P-F4 code anchor; the CR-2 carrier flip consumed; the app vendors the ENGINE CODE ANCHOR by design)", lambda: (
     _git("nle-test-app", "submodule", "status", "vendor/nle-engine").lstrip(" +-").startswith("60232ea") and
-    _git("nle-test-app", "submodule", "status", "vendor/nle-ui").lstrip(" +-").startswith("cb04919") and
+    _git("nle-test-app", "submodule", "status", "vendor/nle-ui").lstrip(" +-").startswith("45d42fb") and
     "05d88d9" in read("../nle-test-app/vendor/nle-timeline/UPSTREAM.lock.json"), "app submodules"))
 def _it_count(path):
     n = 0
@@ -1526,9 +1526,11 @@ check("R35-A1: the operational plan's register RESOLVED (fps both + playhead fra
     "APP-STATE LEVEL ALWAYS" in plan and
     "never as blockers" in plan, "the folded register"))
 check("R35-A2: the HANDOFF's register section carries the R35 resolutions", lambda: (
-    "RESOLVED R35" in read(".agents/HANDOFF.md") and
-    "RULED: SUPPORT BOTH 24 AND 30" in read(".agents/HANDOFF.md") and
-    "the unquantized display path RETIRED" in read(".agents/HANDOFF.md"), "handoff register"))
+    "THE REGISTER RESOLVED" in read(".agents/HANDOFF.md") and
+    "fps BOTH 24 AND 30" in read(".agents/HANDOFF.md") and
+    "FRAME-SNAPPED" in read(".agents/HANDOFF.md") and
+    "the unquantized path RETIRED" in read(".agents/HANDOFF.md") and
+    "APP-STATE-FIRST" in read(".agents/HANDOFF.md"), "handoff register"))
 check("R35-A3: the app PROTOCOL's three registered decisions RULED (the rounds collect feel-verdicts, never gate)", lambda: (
     "RULED R35" in _read_repo("nle-test-app", "docs", "human-rounds", "PROTOCOL.md") and
     "never gate on them" in _read_repo("nle-test-app", "docs", "human-rounds", "PROTOCOL.md"), "protocol folds"))
